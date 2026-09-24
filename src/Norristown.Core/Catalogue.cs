@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Reflection;
 
 namespace Norristown;
@@ -14,23 +15,17 @@ namespace Norristown;
 /// </summary>
 public static class Catalogue
 {
-    // The area most recently opened. Each entry takes the area whose heading is declared above
-    // it, rather than naming its area, which would add a line to every entry. This works
-    // because static initializers run in the order they appear in the file, so each heading is
-    // set before the entries below it are created.
-    private static DiagnosticArea? opening;
-
     /// <summary>Gets every area, in the order the areas are declared here and printed.</summary>
     public static IReadOnlyList<DiagnosticArea> Areas =>
     [
-        ReadingALine, Names, Values, Macros, Data, Placement,
-        Instructions, ControlFlow, ProcessorState, Output, TheProjectFile, Signatures,
+        Area.ReadingALine, Area.Names, Area.Values, Area.Macros, Area.Data, Area.Placement,
+        Area.Instructions, Area.ControlFlow, Area.ProcessorState, Area.Output, Area.TheProjectFile, Area.Signatures,
     ];
 
-    private static DiagnosticArea ReadingALine { get; } =
-        Opens("Reading a line", "Syntax: numbers, text, braces, and what may appear where on a line.");
+    // Reading a line
 
     internal static DiagnosticDescriptor NumberInvalid { get; } = Entry(
+        Area.ReadingALine,
         "number-invalid",
         Severity.Error,
         "invalid {0} number `{1}`",
@@ -40,6 +35,7 @@ public static class Catalogue
             + "new. Check for a typo or a missing `$`.");
 
     internal static DiagnosticDescriptor NumberSeparator { get; } = Entry(
+        Area.ReadingALine,
         "number-separator",
         Severity.Error,
         "`{0}` has a misplaced `_`: a digit separator needs a digit on each side",
@@ -47,6 +43,7 @@ public static class Catalogue
             + "a digit on each side, so it cannot start or end the number or stand next to another `_`.");
 
     internal static DiagnosticDescriptor DigitsMissing { get; } = Entry(
+        Area.ReadingALine,
         "digits-missing",
         Severity.Error,
         "expected {0} digits after `{1}`{2}",
@@ -54,6 +51,7 @@ public static class Catalogue
             + "`%1010`. In nt65 `%` is only a binary prefix; the remainder operator is `.mod`.");
 
     internal static DiagnosticDescriptor NameAfterAt { get; } = Entry(
+        Area.ReadingALine,
         "name-after-at",
         Severity.Error,
         "expected a name after `@`",
@@ -61,12 +59,14 @@ public static class Catalogue
             + "directly, as in `@loop`.");
 
     internal static DiagnosticDescriptor StrayDot { get; } = Entry(
+        Area.ReadingALine,
         "stray-dot",
         Severity.Error,
         "unexpected `.`",
         "A `.` begins a directive or a built-in function, and a `..` a range. On its own it is neither.");
 
     internal static DiagnosticDescriptor UnexpectedCharacter { get; } = Entry(
+        Area.ReadingALine,
         "unexpected-character",
         Severity.Error,
         "unexpected character `{0}`",
@@ -74,6 +74,7 @@ public static class Catalogue
             + "literal or a comment, but nowhere else.");
 
     internal static DiagnosticDescriptor EscapeHexDigits { get; } = Entry(
+        Area.ReadingALine,
         "escape-hex-digits",
         Severity.Error,
         "`\\x` must be followed by two hexadecimal digits",
@@ -81,6 +82,7 @@ public static class Catalogue
             + "leading zero for a value below `$10`.");
 
     internal static DiagnosticDescriptor EscapeUnknown { get; } = Entry(
+        Area.ReadingALine,
         "escape-unknown",
         Severity.Error,
         "unknown escape `\\{0}`",
@@ -89,6 +91,7 @@ public static class Catalogue
             + "separately, since each needs its own correction.");
 
     internal static DiagnosticDescriptor TextUnterminated { get; } = Entry(
+        Area.ReadingALine,
         "text-unterminated",
         Severity.Error,
         "unterminated {0}",
@@ -96,12 +99,14 @@ public static class Catalogue
             + "lines. Add the closing quote.");
 
     internal static DiagnosticDescriptor CharacterEmpty { get; } = Entry(
+        Area.ReadingALine,
         "character-empty",
         Severity.Error,
         "empty character literal",
         "A character literal is one character, which is one value. Text goes in double quotes.");
 
     internal static DiagnosticDescriptor CharacterTooLong { get; } = Entry(
+        Area.ReadingALine,
         "character-too-long",
         Severity.Error,
         "a character literal holds exactly one character",
@@ -109,6 +114,7 @@ public static class Catalogue
             + "declaration emits their bytes.");
 
     internal static DiagnosticDescriptor BlockNotClosed { get; } = Entry(
+        Area.ReadingALine,
         "block-not-closed",
         Severity.Error,
         "missing `}}` to close this block",
@@ -116,12 +122,14 @@ public static class Catalogue
             + "at the line that opens it rather than at the end of the file.");
 
     internal static DiagnosticDescriptor UnmatchedBrace { get; } = Entry(
+        Area.ReadingALine,
         "unmatched-brace",
         Severity.Error,
         "unmatched `}}`",
         "A `}` closes a block, and there is no open one here.");
 
     internal static DiagnosticDescriptor UnexpectedToken { get; } = Entry(
+        Area.ReadingALine,
         "unexpected-token",
         Severity.Error,
         "unexpected {0}",
@@ -130,6 +138,7 @@ public static class Catalogue
             + "unexpected token on a line is reported.");
 
     internal static DiagnosticDescriptor BlockBraceEndsTheLine { get; } = Entry(
+        Area.ReadingALine,
         "block-brace-ends-the-line",
         Severity.Error,
         "a block's `{{` must end its line: move {0} and the rest to the next line, and put `}}` on a line of its own",
@@ -138,12 +147,14 @@ public static class Catalogue
             + "file readable from its indentation and braces alone.");
 
     internal static DiagnosticDescriptor Ca65Spelling { get; } = Entry(
+        Area.ReadingALine,
         "ca65-spelling",
         Severity.Error,
         "ca65's `{0}` is `{1}` in nt65",
         "nt65 has this directive under a different name. The fix replaces it with the nt65 spelling.");
 
     internal static DiagnosticDescriptor Ca65Tag { get; } = Entry(
+        Area.ReadingALine,
         "ca65-tag",
         Severity.Error,
         "`.tag T` is `.type T` in nt65, and `.tag T, n` is `.type T[n]`",
@@ -151,6 +162,7 @@ public static class Catalogue
             + "as every other count does.");
 
     internal static DiagnosticDescriptor Ca65BlockEnd { get; } = Entry(
+        Area.ReadingALine,
         "ca65-block-end",
         Severity.Error,
         "nt65 closes blocks with `}}`, not `{0}`",
@@ -158,6 +170,7 @@ public static class Catalogue
             + "`.endif`. Replace the directive with `}`; the fix does this.");
 
     internal static DiagnosticDescriptor DataNeedsAName { get; } = Entry(
+        Area.ReadingALine,
         "data-needs-a-name",
         Severity.Error,
         "`.data` declares data, and needs a name: the segment is `.segment DATA`",
@@ -165,6 +178,7 @@ public static class Catalogue
             + "`.segment` line.");
 
     internal static DiagnosticDescriptor DataValuesNeedBraces { get; } = Entry(
+        Area.ReadingALine,
         "data-values-need-braces",
         Severity.Error,
         "{0}",
@@ -173,6 +187,7 @@ public static class Catalogue
             + "the count.");
 
     internal static DiagnosticDescriptor ExpectedName { get; } = Entry(
+        Area.ReadingALine,
         "expected-name",
         Severity.Error,
         "expected {0}",
@@ -181,6 +196,7 @@ public static class Catalogue
             + "after the missing one on the line is read.");
 
     internal static DiagnosticDescriptor ExpectedStatement { get; } = Entry(
+        Area.ReadingALine,
         "expected-statement",
         Severity.Error,
         "expected {0}",
@@ -189,6 +205,7 @@ public static class Catalogue
             + "macro call.");
 
     internal static DiagnosticDescriptor ExpectedExpression { get; } = Entry(
+        Area.ReadingALine,
         "expected-expression",
         Severity.Error,
         "expected an expression",
@@ -196,6 +213,7 @@ public static class Catalogue
             + "bracket, or nothing at all.");
 
     internal static DiagnosticDescriptor ExpectedElementIndex { get; } = Entry(
+        Area.ReadingALine,
         "expected-element-index",
         Severity.Error,
         "expected an index between the brackets: `name[i]` is element `i` of `name`",
@@ -203,12 +221,14 @@ public static class Catalogue
             + "goes on the declaration; an index goes on a use of it.");
 
     internal static DiagnosticDescriptor ExpectedParenthesis { get; } = Entry(
+        Area.ReadingALine,
         "expected-parenthesis",
         Severity.Error,
         "expected {0}",
         "A parameter list, an argument list or a parenthesised expression is unbalanced or unopened.");
 
     internal static DiagnosticDescriptor ExpectedBrace { get; } = Entry(
+        Area.ReadingALine,
         "expected-brace",
         Severity.Error,
         "expected {0}",
@@ -216,6 +236,7 @@ public static class Catalogue
             + "braced value such as `{ 1, 2 }` opens and closes on one line. One of the two braces is missing here.");
 
     internal static DiagnosticDescriptor ExpectedBracket { get; } = Entry(
+        Area.ReadingALine,
         "expected-bracket",
         Severity.Error,
         "expected {0}",
@@ -223,12 +244,14 @@ public static class Catalogue
             + "not closed or not opened.");
 
     internal static DiagnosticDescriptor ExpectedDotDot { get; } = Entry(
+        Area.ReadingALine,
         "expected-dot-dot",
         Severity.Error,
         "expected {0}",
         "A range gives its lower end first and its higher end second, with `..` between them.");
 
     internal static DiagnosticDescriptor ExpectedEquals { get; } = Entry(
+        Area.ReadingALine,
         "expected-equals",
         Severity.Error,
         "expected {0}",
@@ -237,6 +260,7 @@ public static class Catalogue
             + "the message shows the expected form.");
 
     internal static DiagnosticDescriptor ExpectedColon { get; } = Entry(
+        Area.ReadingALine,
         "expected-colon",
         Severity.Error,
         "expected {0}",
@@ -244,6 +268,7 @@ public static class Catalogue
             + "type, a frame from the record it is laid out as.");
 
     internal static DiagnosticDescriptor ExpectedComma { get; } = Entry(
+        Area.ReadingALine,
         "expected-comma",
         Severity.Error,
         "expected {0}",
@@ -251,12 +276,14 @@ public static class Catalogue
             + "between them.");
 
     internal static DiagnosticDescriptor ExpectedText { get; } = Entry(
+        Area.ReadingALine,
         "expected-text",
         Severity.Error,
         "expected {0}",
         "A message, or a linker name, goes in double quotes. nt65 has no bare-word text.");
 
     internal static DiagnosticDescriptor ExpectedDataType { get; } = Entry(
+        Area.ReadingALine,
         "expected-data-type",
         Severity.Error,
         "expected {0}",
@@ -265,18 +292,21 @@ public static class Catalogue
             + "also include a file with `.incbin`. What is here is none of those.");
 
     internal static DiagnosticDescriptor ExpectedMemberValue { get; } = Entry(
+        Area.ReadingALine,
         "expected-member-value",
         Severity.Error,
         "expected `member = value`",
         "Each line of a multi-line record initializer gives one member a value.");
 
     internal static DiagnosticDescriptor ExpectedCpu { get; } = Entry(
+        Area.ReadingALine,
         "expected-cpu",
         Severity.Error,
         "expected {0}",
         "`.cpu` names one of the processors nt65 knows, spelled as in the project file.");
 
     internal static DiagnosticDescriptor ExpectedAddressSize { get; } = Entry(
+        Area.ReadingALine,
         "expected-address-size",
         Severity.Error,
         "expected {0}",
@@ -285,6 +315,7 @@ public static class Catalogue
             + "in place of a size.");
 
     internal static DiagnosticDescriptor ImportNeedsAnElementType { get; } = Entry(
+        Area.ReadingALine,
         "import-needs-an-element-type",
         Severity.Error,
         "`{0}` is not an element type: an import states what its bytes are as `.byte`, `.word`, `.addr` or `.type T`",
@@ -293,6 +324,7 @@ public static class Catalogue
             + "emits none.");
 
     internal static DiagnosticDescriptor ImportHoldsNoValues { get; } = Entry(
+        Area.ReadingALine,
         "import-holds-no-values",
         Severity.Error,
         "an import describes its `{0}` data but cannot give it values: the bytes are defined in another object file",
@@ -300,6 +332,7 @@ public static class Catalogue
             + "its members. The bytes themselves belong to whoever defines it.");
 
     internal static DiagnosticDescriptor ExpectedSegmentAttribute { get; } = Entry(
+        Area.ReadingALine,
         "expected-segment-attribute",
         Severity.Error,
         "expected {0}",
@@ -308,6 +341,7 @@ public static class Catalogue
             + "the address space it is in.");
 
     internal static DiagnosticDescriptor ExpectedPlacement { get; } = Entry(
+        Area.ReadingALine,
         "expected-placement",
         Severity.Error,
         "expected {0}",
@@ -316,6 +350,7 @@ public static class Catalogue
             + "Nothing else may go there.");
 
     internal static DiagnosticDescriptor ExpectedParameterKind { get; } = Entry(
+        Area.ReadingALine,
         "expected-parameter-kind",
         Severity.Error,
         "expected {0}",
@@ -324,12 +359,14 @@ public static class Catalogue
             + "parameter that declares no kind takes an expression.");
 
     internal static DiagnosticDescriptor ExpectedStateItem { get; } = Entry(
+        Area.ReadingALine,
         "expected-state-item",
         Severity.Error,
         "expected {0}",
         "A signature, a `.state` and an `.ensure` are made of processor-state items, and this is not one.");
 
     internal static DiagnosticDescriptor ExpectedKeptRegisters { get; } = Entry(
+        Area.ReadingALine,
         "expected-kept-registers",
         Severity.Error,
         "expected {0}",
@@ -337,6 +374,7 @@ public static class Catalogue
             + "x, y`. It must list at least one register.");
 
     internal static DiagnosticDescriptor ExpectedLabel { get; } = Entry(
+        Area.ReadingALine,
         "expected-label",
         Severity.Error,
         "expected {0}",
@@ -345,6 +383,7 @@ public static class Catalogue
             + "which ends the path so that nothing beyond it is checked.");
 
     internal static DiagnosticDescriptor NestingTooDeep { get; } = Entry(
+        Area.ReadingALine,
         "nesting-too-deep",
         Severity.Error,
         "expression nested more than {0} levels deep: nt65 reads no further",
@@ -353,6 +392,7 @@ public static class Catalogue
             + "assembler or the editor's language server.");
 
     internal static DiagnosticDescriptor UnnamedLabel { get; } = Entry(
+        Area.ReadingALine,
         "unnamed-label",
         Severity.Error,
         "unnamed labels (`:`, `:+`, `:-`) are not supported: use a cheap local instead, `@name:`",
@@ -361,6 +401,7 @@ public static class Catalogue
             + "and branch to `@loop`; it is private to the routine around it and costs nothing more in the output.");
 
     internal static DiagnosticDescriptor DirectiveUnknown { get; } = Entry(
+        Area.ReadingALine,
         "directive-unknown",
         Severity.Error,
         "unknown directive `{0}`",
@@ -368,6 +409,7 @@ public static class Catalogue
             + "one.");
 
     internal static DiagnosticDescriptor DirectiveAfterLabel { get; } = Entry(
+        Area.ReadingALine,
         "directive-after-label",
         Severity.Error,
         "`{0}` may not follow a label",
@@ -375,6 +417,7 @@ public static class Catalogue
             + "instruction, a data directive or a macro call.");
 
     internal static DiagnosticDescriptor ElseIfMisplaced { get; } = Entry(
+        Area.ReadingALine,
         "elseif-misplaced",
         Severity.Error,
         "`{0}` must follow the `}}` that closes the previous branch, on the same line",
@@ -382,6 +425,7 @@ public static class Catalogue
             + "or `} .else {`, so that the shape of the block is readable without matching braces by eye.");
 
     internal static DiagnosticDescriptor AssertLevel { get; } = Entry(
+        Area.ReadingALine,
         "assert-level",
         Severity.Error,
         "nt65's `.assert` takes no level: remove `{0}`, since a failed assertion is always an error",
@@ -391,6 +435,7 @@ public static class Catalogue
             + "fix removes the level.");
 
     internal static DiagnosticDescriptor SegmentNameQuoted { get; } = Entry(
+        Area.ReadingALine,
         "segment-name-quoted",
         Severity.Error,
         "a segment name takes no quotes: `.segment {0}`",
@@ -398,12 +443,14 @@ public static class Catalogue
             + "word. The quotes are ca65's habit.");
 
     internal static DiagnosticDescriptor ModuleNameQuoted { get; } = Entry(
+        Area.ReadingALine,
         "module-name-quoted",
         Severity.Error,
         "a module name takes no quotes: `.module hw::vic`",
         "A module name is a path of plain names, such as `hw::vic`, with no quotes.");
 
     internal static DiagnosticDescriptor ExportDeclaresNothing { get; } = Entry(
+        Area.ReadingALine,
         "export-declares-nothing",
         Severity.Error,
         "`.export` goes before a declaration, and `{0}` declares nothing to export",
@@ -411,6 +458,7 @@ public static class Catalogue
             + "be one that declares something.");
 
     internal static DiagnosticDescriptor DataBodyHoldsValues { get; } = Entry(
+        Area.ReadingALine,
         "data-body-holds-values",
         Severity.Error,
         "`{0}` cannot appear in an array body, which holds only values: the element type goes on the declaration "
@@ -420,6 +468,7 @@ public static class Catalogue
             + "a second time. Remove the directive and keep the values.");
 
     internal static DiagnosticDescriptor DataBodyNeedsACount { get; } = Entry(
+        Area.ReadingALine,
         "data-body-needs-a-count",
         Severity.Error,
         "values in a body need a count: `{0}[] {{` counts them",
@@ -427,6 +476,7 @@ public static class Catalogue
             + "values given, which is what a body without a count usually meant.");
 
     internal static DiagnosticDescriptor StateItemUnknown { get; } = Entry(
+        Area.ReadingALine,
         "state-item-unknown",
         Severity.Error,
         "`{0}` is not a processor-state item",
@@ -435,6 +485,7 @@ public static class Catalogue
             + "its spelling. A plain word that is not an item is read as the name of a signature set.");
 
     internal static DiagnosticDescriptor OperatorsNeedParentheses { get; } = Entry(
+        Area.ReadingALine,
         "operators-need-parentheses",
         Severity.Error,
         "`{0}` and `{1}` need parentheses to show which applies first",
@@ -443,6 +494,7 @@ public static class Catalogue
             + "mixed. Add parentheses to show which applies first; the fix can add them.");
 
     internal static DiagnosticDescriptor ByteOperatorNeedsParentheses { get; } = Entry(
+        Area.ReadingALine,
         "byte-operator-needs-parentheses",
         Severity.Error,
         "unary `{0}` binds tighter than `{1}`: use `({0}x) {1} y` or `{2}(x {1} y)` to show which is meant",
@@ -451,16 +503,17 @@ public static class Catalogue
             + "parentheses rather than guessing.");
 
     internal static DiagnosticDescriptor NotAFunction { get; } = Entry(
+        Area.ReadingALine,
         "not-a-function",
         Severity.Error,
         "`{0}` is not a function",
         "The built-in functions are a fixed set. A function the program declares is a `.func`, and its name "
             + "has no leading `.`.");
 
-    private static DiagnosticArea Names { get; } =
-        Opens("Names", "Declarations, scopes, modules and what a path reaches.");
+    // Names
 
     internal static DiagnosticDescriptor NotDeclared { get; } = Entry(
+        Area.Names,
         "not-declared",
         Severity.Error,
         "`{0}` is not declared{1}",
@@ -468,6 +521,7 @@ public static class Catalogue
             + "exports it, the message reports it, because that is nearly always what was meant.");
 
     internal static DiagnosticDescriptor NotDeclaredIn { get; } = Entry(
+        Area.Names,
         "not-declared-in",
         Severity.Error,
         "`{0}` is not declared in {1}{2}",
@@ -476,6 +530,7 @@ public static class Catalogue
             + "name a scope declares can be reached, wherever in the scope it is declared.");
 
     internal static DiagnosticDescriptor NotExported { get; } = Entry(
+        Area.Names,
         "not-exported",
         Severity.Error,
         "`{0}` is not exported by module `{1}`",
@@ -483,6 +538,7 @@ public static class Catalogue
             + "declaration in the module that owns it.");
 
     internal static DiagnosticDescriptor DeclaredInAnotherModule { get; } = Entry(
+        Area.Names,
         "declared-in-another-module",
         Severity.Error,
         "`{0}` is not declared here, and module `{1}` exports it: use `{2}::{3}`, or bring it in with `.use {4}::{5}`",
@@ -490,6 +546,7 @@ public static class Catalogue
             + "always the one meant.");
 
     internal static DiagnosticDescriptor ModuleNotInTheBuild { get; } = Entry(
+        Area.Names,
         "module-not-in-the-build",
         Severity.Error,
         "`{0}` is not declared, and no module `{1}` is in this build",
@@ -497,6 +554,7 @@ public static class Catalogue
             + "`files` do not name is not part of the program.");
 
     internal static DiagnosticDescriptor ModuleUnknown { get; } = Entry(
+        Area.Names,
         "module-unknown",
         Severity.Error,
         "no module `{0}` is in this build",
@@ -504,6 +562,7 @@ public static class Catalogue
             + "`files` do not name is not part of the program.");
 
     internal static DiagnosticDescriptor ExportAmbiguous { get; } = Entry(
+        Area.Names,
         "export-ambiguous",
         Severity.Error,
         "`{0}` is ambiguous: modules `{1}` and `{2}` both export it, and both are brought in with `::*`; use "
@@ -513,6 +572,7 @@ public static class Catalogue
             + "with `.use module::name`, which takes precedence over `::*`.");
 
     internal static DiagnosticDescriptor NotAScope { get; } = Entry(
+        Area.Names,
         "not-a-scope",
         Severity.Error,
         "`{0}` is {1}, not a scope",
@@ -520,6 +580,7 @@ public static class Catalogue
             + "so nothing can be reached through it.");
 
     internal static DiagnosticDescriptor NameAlreadyDeclared { get; } = Entry(
+        Area.Names,
         "name-already-declared",
         Severity.Error,
         "`{0}` is already declared in this scope",
@@ -527,6 +588,7 @@ public static class Catalogue
             + "it is shown beside this one.");
 
     internal static DiagnosticDescriptor IdentParameterDeclared { get; } = Entry(
+        Area.Names,
         "ident-parameter-declared",
         Severity.Error,
         "`{0}` is an `ident` parameter, so the macro body may not declare it: that would declare the caller's name",
@@ -536,6 +598,7 @@ public static class Catalogue
             + "local.");
 
     internal static DiagnosticDescriptor RegisterName { get; } = Entry(
+        Area.Names,
         "register-name",
         Severity.Error,
         "`{0}` is a register name and cannot be used as a name",
@@ -544,6 +607,7 @@ public static class Catalogue
             + "reserved; register names are. Rename the symbol.");
 
     internal static DiagnosticDescriptor MnemonicName { get; } = Entry(
+        Area.Names,
         "mnemonic-name",
         Severity.Warning,
         "`{0}` is an instruction on the {1}; as a name it is legal and easy to misread",
@@ -555,12 +619,14 @@ public static class Catalogue
             + "`\"error\"` under `diagnostics` in nt65.json.");
 
     internal static DiagnosticDescriptor CheapLocalOutsideAScope { get; } = Entry(
+        Area.Names,
         "cheap-local-outside-a-scope",
         Severity.Error,
         "`{0}` is a cheap local, which needs an enclosing `.proc` or `.scope`",
         "A `@name` is private to the routine or scope around it, so there has to be one for it to be private to.");
 
     internal static DiagnosticDescriptor CheapLocalInAPath { get; } = Entry(
+        Area.Names,
         "cheap-local-in-a-path",
         Severity.Error,
         "`{0}` is a cheap local and cannot be reached with `::`",
@@ -568,12 +634,14 @@ public static class Catalogue
             + "Use an ordinary label if other code needs to refer to it.");
 
     internal static DiagnosticDescriptor ModuleUsedAsAName { get; } = Entry(
+        Area.Names,
         "module-used-as-a-name",
         Severity.Error,
         "`{0}` is a module: a name in it is `{1}::name`",
         "A module is not a value and has no address. What is wanted is a name inside it.");
 
     internal static DiagnosticDescriptor NameAloneOnALine { get; } = Entry(
+        Area.Names,
         "name-alone-on-a-line",
         Severity.Error,
         "`{0}` is {1}, and only a `block` parameter may stand alone on a line",
@@ -581,6 +649,7 @@ public static class Catalogue
             + "on the line: `name:` declares a label, `name = value` a constant, and `name!` calls a macro.");
 
     internal static DiagnosticDescriptor NotAMacro { get; } = Entry(
+        Area.Names,
         "not-a-macro",
         Severity.Error,
         "`{0}` is {1}, not a macro: only a macro is called with `!`",
@@ -588,6 +657,7 @@ public static class Catalogue
             + "else is called that way: a routine is called with `jsr` or `jsl`.");
 
     internal static DiagnosticDescriptor DeclarationInABlockArgument { get; } = Entry(
+        Area.Names,
         "declaration-in-a-block-argument",
         Severity.Error,
         "`{0}` is declared in a block argument, which may declare only cheap locals: the macro may insert the "
@@ -596,6 +666,7 @@ public static class Catalogue
             + "then be declared more than once. A cheap local is renamed per expansion, so it is safe.");
 
     internal static DiagnosticDescriptor ModuleMissing { get; } = Entry(
+        Area.Names,
         "module-missing",
         Severity.Error,
         "this file has no `.module` line: start it with `.module name`",
@@ -603,6 +674,7 @@ public static class Catalogue
             + "file declares has a path such as `name::symbol`.");
 
     internal static DiagnosticDescriptor MultiprocMisplaced { get; } = Entry(
+        Area.Names,
         "multiproc-misplaced",
         Severity.Error,
         "`.multiproc` declares routines, and this one is inside {0}: a routine belongs at file level or in a "
@@ -611,18 +683,21 @@ public static class Catalogue
             + "`.proc`: at file level or inside a `.scope`, not inside a routine, a `.data` block or a type.");
 
     internal static DiagnosticDescriptor ModuleDeclaredTwice { get; } = Entry(
+        Area.Names,
         "module-declared-twice",
         Severity.Error,
         "this file already has a `.module` line: a file is exactly one module",
         "A file is one module. A large module is split into submodules, each its own file.");
 
     internal static DiagnosticDescriptor ModuleNotFirst { get; } = Entry(
+        Area.Names,
         "module-not-first",
         Severity.Error,
         "`.module` must come before everything else in the file",
         "Everything a file declares belongs to the module it names, so the name comes before the declarations.");
 
     internal static DiagnosticDescriptor ModuleNameTaken { get; } = Entry(
+        Area.Names,
         "module-name-taken",
         Severity.Error,
         "module `{0}` is already declared by `{1}`: a module is one file, and a large one is split into submodules",
@@ -630,6 +705,7 @@ public static class Catalogue
             + "two files may not share one.");
 
     internal static DiagnosticDescriptor ModuleNameReserved { get; } = Entry(
+        Area.Names,
         "module-name-reserved",
         Severity.Error,
         "module `{0}` is under `nt65`, which is reserved for the modules that come with nt65",
@@ -637,6 +713,7 @@ public static class Catalogue
             + "A module of the program's own under that root could collide with one, now or in a later version.");
 
     internal static DiagnosticDescriptor ModuleNamesDifferInCase { get; } = Entry(
+        Area.Names,
         "module-names-differ-in-case",
         Severity.Error,
         "modules `{0}` and `{1}` differ only in case, and a file system that ignores case writes both to one file",
@@ -644,6 +721,7 @@ public static class Catalogue
             + "The build would depend on which ran last.");
 
     internal static DiagnosticDescriptor PlaceMisplaced { get; } = Entry(
+        Area.Names,
         "place-misplaced",
         Severity.Error,
         "`.place` must be at file level, outside every block: which modules are assembled together cannot depend "
@@ -654,6 +732,7 @@ public static class Catalogue
             + "configuration needs, place the module unconditionally and put its contents under an `.if`.");
 
     internal static DiagnosticDescriptor PlaceNotPlaceable { get; } = Entry(
+        Area.Names,
         "place-not-placeable",
         Severity.Error,
         "module `{0}` is not marked as placeable: declare it `.module {0}: placed` so that another module can "
@@ -664,6 +743,7 @@ public static class Catalogue
             + "at most one module may place it, and if none does, it gets its own output. The fix marks it `placed`.");
 
     internal static DiagnosticDescriptor PlacedTwice { get; } = Entry(
+        Area.Names,
         "placed-twice",
         Severity.Error,
         "module `{0}` is already placed by `{1}`: a module can be placed only once",
@@ -671,6 +751,7 @@ public static class Catalogue
             + "programs share is a module that each program places once.");
 
     internal static DiagnosticDescriptor PlacementCycle { get; } = Entry(
+        Area.Names,
         "placement-cycle",
         Severity.Error,
         "this `.place` would make a module place itself: {0}",
@@ -678,6 +759,7 @@ public static class Catalogue
             + "lines, which a cycle cannot be.");
 
     internal static DiagnosticDescriptor PlacedNowhere { get; } = Entry(
+        Area.Names,
         "placed-nowhere",
         Severity.Error,
         "module `{0}` is declared `placed`, and nothing places it: `.place {0}` goes where its bytes belong, or `placeable` lets it stand alone",
@@ -685,6 +767,7 @@ public static class Catalogue
             + "it. One that nothing places would be written nowhere.");
 
     internal static DiagnosticDescriptor NameIsAModulePath { get; } = Entry(
+        Area.Names,
         "name-is-a-module-path",
         Severity.Error,
         "`{0}` is the path of a module, and module `{1}` may not declare `{2}` as well",
@@ -692,6 +775,7 @@ public static class Catalogue
             + "start of another module's path.");
 
     internal static DiagnosticDescriptor UseMisplaced { get; } = Entry(
+        Area.Names,
         "use-misplaced",
         Severity.Error,
         "`.use` belongs at the top level of a module",
@@ -699,6 +783,7 @@ public static class Catalogue
             + "level, not under a block.");
 
     internal static DiagnosticDescriptor UseBringsInTwice { get; } = Entry(
+        Area.Names,
         "use-brings-in-twice",
         Severity.Error,
         "a `.use` already brings in `{0}`",
@@ -706,6 +791,7 @@ public static class Catalogue
             + "them a name of its own.");
 
     internal static DiagnosticDescriptor UseCollidesWithDeclaration { get; } = Entry(
+        Area.Names,
         "use-collides-with-declaration",
         Severity.Error,
         "`{0}` is already declared in this module, so a `.use` cannot bring in another: use `as` to give it a "
@@ -714,12 +800,14 @@ public static class Catalogue
             + "mean both. Use `.use module::name as other` to bring it in under a different name.");
 
     internal static DiagnosticDescriptor UseStarNotAModule { get; } = Entry(
+        Area.Names,
         "use-star-not-a-module",
         Severity.Error,
         "`.use {0}::*` brings in what a module exports, and `{1}` is {2}",
         "`::*` brings in everything a module exports, so what is before it has to be a whole module name.");
 
     internal static DiagnosticDescriptor ReexportStar { get; } = Entry(
+        Area.Names,
         "reexport-star",
         Severity.Error,
         "`.export .use` must name what it re-exports: `*` would re-export everything the other module exports, "
@@ -728,6 +816,7 @@ public static class Catalogue
             + "interface whatever the other module exports later, which is not a promise this module can keep.");
 
     internal static DiagnosticDescriptor ReexportModule { get; } = Entry(
+        Area.Names,
         "reexport-module",
         Severity.Error,
         "`{0}` is a module: `.export .use` re-exports names in a module, not the module itself",
@@ -735,6 +824,7 @@ public static class Catalogue
             + "by one, `.export .use module::name`.");
 
     internal static DiagnosticDescriptor ReexportNeeded { get; } = Entry(
+        Area.Names,
         "reexport-needed",
         Severity.Error,
         "`{0}` is declared in module `{1}`, not this one: re-export it with `.export .use {2}`",
@@ -743,6 +833,7 @@ public static class Catalogue
             + "`.export .use`, which records where it came from.");
 
     internal static DiagnosticDescriptor LabelOutsideARoutine { get; } = Entry(
+        Area.Names,
         "label-outside-a-routine",
         Severity.Error,
         "`{0}` is a label outside a `.proc`: labels mark positions in code{1}",
@@ -750,6 +841,7 @@ public static class Catalogue
             + "`.data` declaration, such as `.data name: .byte 1, 2`; the fix can rewrite the line as one.");
 
     internal static DiagnosticDescriptor LabelInData { get; } = Entry(
+        Area.Names,
         "label-in-data",
         Severity.Error,
         "`{0}` is a label in `.data`: a named member is `.data {1}: ...`, and a position is `@{2}:`",
@@ -758,6 +850,7 @@ public static class Catalogue
             + "allowed there.");
 
     internal static DiagnosticDescriptor SegmentRegionMisplaced { get; } = Entry(
+        Area.Names,
         "segment-region-misplaced",
         Severity.Error,
         "a `.segment NAME` region belongs at file level, outside every block: inside one, `.segment NAME {{ }}` places what it holds",
@@ -765,6 +858,7 @@ public static class Catalogue
             + "level. Inside a block, the block form places what it holds.");
 
     internal static DiagnosticDescriptor SignatureSetNameIsAnItem { get; } = Entry(
+        Area.Names,
         "signature-set-name-is-an-item",
         Severity.Error,
         "`{0}` is a signature item, and cannot name a signature set",
@@ -773,6 +867,7 @@ public static class Catalogue
             + "ambiguous. Choose another name.");
 
     internal static DiagnosticDescriptor SignatureItemNeeds65816 { get; } = Entry(
+        Area.Names,
         "signature-item-needs-65816",
         Severity.Error,
         "`{0}` describes 65816 state, which the {1} does not have",
@@ -780,6 +875,7 @@ public static class Catalogue
             + "eight-bit registers and none of that state.");
 
     internal static DiagnosticDescriptor FamilyMisplaced { get; } = Entry(
+        Area.Names,
         "family-misplaced",
         Severity.Error,
         "{0}",
@@ -789,6 +885,7 @@ public static class Catalogue
             + "declared names.");
 
     internal static DiagnosticDescriptor FamilyNotOverAnEnum { get; } = Entry(
+        Area.Names,
         "family-not-over-an-enum",
         Severity.Error,
         "a family needs a named enum to walk, and `{0}` {1}",
@@ -796,6 +893,7 @@ public static class Catalogue
             + "members, so the enum has to be one whose members have names.");
 
     internal static DiagnosticDescriptor FamilyDeclaresTooMuch { get; } = Entry(
+        Area.Names,
         "family-declares-too-much",
         Severity.Error,
         "`{0}` would declare one {1} per member, repeating everything inside it: a family declares only routines "
@@ -805,6 +903,7 @@ public static class Catalogue
             + "in one. Declare one family per role instead, each inside the scope for that role.");
 
     internal static DiagnosticDescriptor FamilyMemberCollides { get; } = Entry(
+        Area.Names,
         "family-member-collides",
         Severity.Error,
         "`{0}` is a member of `{1}` and is already declared in this scope: a family declares one name per member",
@@ -812,6 +911,7 @@ public static class Catalogue
             + "declared twice.");
 
     internal static DiagnosticDescriptor MacroMisplaced { get; } = Entry(
+        Area.Names,
         "macro-misplaced",
         Severity.Error,
         "a `.macro` belongs at file level or in a `.scope`, not inside {0}",
@@ -820,6 +920,7 @@ public static class Catalogue
             + "level or in a `.scope`.");
 
     internal static DiagnosticDescriptor DefinedAsksAboutDefines { get; } = Entry(
+        Area.Names,
         "defined-asks-about-defines",
         Severity.Error,
         "`.defined` tests only build defines, and `{0}` is declared by the program: to check the program, use "
@@ -829,6 +930,7 @@ public static class Catalogue
             + "defines. To check something about the program, use `.assert`, which the analysis can answer.");
 
     internal static DiagnosticDescriptor DefineRedeclared { get; } = Entry(
+        Area.Names,
         "define-redeclared",
         Severity.Error,
         "`{0}` is already a define, visible in every file: a file may not declare it again",
@@ -836,6 +938,7 @@ public static class Catalogue
             + "would shadow it in one file and not in another.");
 
     internal static DiagnosticDescriptor SignatureMissing { get; } = Entry(
+        Area.Names,
         "signature-missing",
         Severity.Error,
         "`{0}` is {1} with no processor-state signature: nt65 cannot see its body, so declare what it expects and "
@@ -846,6 +949,7 @@ public static class Catalogue
             + "$E10000: a16, i16`. `?` states that nothing is known.");
 
     internal static DiagnosticDescriptor ExportNarrowsAddressSize { get; } = Entry(
+        Area.Names,
         "export-narrows-address-size",
         Severity.Error,
         "`{0}` is `{1}`, and an export may widen an address size but not narrow it: `{2}: {3}` or wider",
@@ -853,6 +957,7 @@ public static class Catalogue
             + "one byte reads the wrong place. Widening is safe; narrowing is not.");
 
     internal static DiagnosticDescriptor LinkerNameIsAnInstruction { get; } = Entry(
+        Area.Names,
         "linker-name-is-an-instruction",
         Severity.Error,
         "cannot export as `{0}`: ca65 reads it as an instruction, and an `as` name is written to the output "
@@ -863,6 +968,7 @@ public static class Catalogue
             + "warning, because there is no other spelling to fall back on.");
 
     internal static DiagnosticDescriptor UnusedSymbol { get; } = Entry(
+        Area.Names,
         "unused-symbol",
         Severity.Warning,
         "`{0}` is never used: nothing names it, and it is not exported",
@@ -872,16 +978,17 @@ public static class Catalogue
             + "reported there instead, as an error.");
 
     internal static DiagnosticDescriptor UnusedUseItem { get; } = Entry(
+        Area.Names,
         "unused-use-item",
         Severity.Warning,
         "`{0}` is brought in and nothing names it: the `.use` item may go",
         "The `.use` brings the name in and the file never uses it. A `.export .use` re-exports rather than "
             + "uses, and is not reported.");
 
-    private static DiagnosticArea Values { get; } =
-        Opens("Values", "Constants, expressions, built-in functions and the build configuration.");
+    // Values
 
     internal static DiagnosticDescriptor DefinedInTermsOfItself { get; } = Entry(
+        Area.Values,
         "defined-in-terms-of-itself",
         Severity.Error,
         "`{0}` is defined in terms of itself",
@@ -890,6 +997,7 @@ public static class Catalogue
             + "once, at one of its declarations, and the other names in it are shown as related locations.");
 
     internal static DiagnosticDescriptor NumberTooWide { get; } = Entry(
+        Area.Values,
         "number-too-wide",
         Severity.Error,
         "{0} does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff",
@@ -898,6 +1006,7 @@ public static class Catalogue
             + "place it is used.");
 
     internal static DiagnosticDescriptor ArithmeticOverflow { get; } = Entry(
+        Area.Values,
         "arithmetic-overflow",
         Severity.Error,
         "{0} overflows nt65's 64-bit signed arithmetic",
@@ -905,6 +1014,7 @@ public static class Catalogue
             + "rather than wrapping around, because a wrapped result is almost never what was meant.");
 
     internal static DiagnosticDescriptor ShiftCountOutOfRange { get; } = Entry(
+        Area.Values,
         "shift-count-out-of-range",
         Severity.Error,
         "shift count {0} is out of range: a shift moves 0 to 63 places",
@@ -912,6 +1022,7 @@ public static class Catalogue
             + "a negative one, is an error rather than being reduced or clamped.");
 
     internal static DiagnosticDescriptor SqrtOfANegative { get; } = Entry(
+        Area.Values,
         "sqrt-of-a-negative",
         Severity.Error,
         "`.sqrt({0})` has no result: the argument cannot be negative",
@@ -919,6 +1030,7 @@ public static class Catalogue
             + "must be 0 or more.");
 
     internal static DiagnosticDescriptor StrsubOutOfRange { get; } = Entry(
+        Area.Values,
         "strsub-out-of-range",
         Severity.Error,
         "`.strsub` reaches outside the text: it asks for {0}, and the text is {1}",
@@ -926,6 +1038,7 @@ public static class Catalogue
             + "whole range must lie inside the text; nt65 reports an error rather than returning a shorter result.");
 
     internal static DiagnosticDescriptor StrcatNotAByte { get; } = Entry(
+        Area.Values,
         "strcat-not-a-byte",
         Severity.Error,
         "`.strcat` adds a number as a single byte, and {0} is not in the range 0 to 255",
@@ -934,6 +1047,7 @@ public static class Catalogue
             + "with `& $ff`, or use `<` for its low byte, if that is what was meant.");
 
     internal static DiagnosticDescriptor TurnOrScaleOutOfRange { get; } = Entry(
+        Area.Values,
         "turn-or-scale-out-of-range",
         Severity.Error,
         "`{0}` needs a turn from 1 to {1} and a scale from -{1} to {1}",
@@ -942,6 +1056,7 @@ public static class Catalogue
             + "anything written to the ca65 output has to fit in 32 bits anyway.");
 
     internal static DiagnosticDescriptor CyclesNeedsAPosition { get; } = Entry(
+        Area.Values,
         "cycles-needs-a-position",
         Severity.Error,
         "`{0}` is {1}, not a position in code: a cycle count runs from one label or routine name to another",
@@ -949,6 +1064,7 @@ public static class Catalogue
             + "code to another, so each argument must be a label or a routine's name.");
 
     internal static DiagnosticDescriptor CyclesSpanHasNoBound { get; } = Entry(
+        Area.Values,
         "cycles-span-has-no-bound",
         Severity.Error,
         "`{0}` cannot count the cycles between these positions: {1}",
@@ -959,12 +1075,14 @@ public static class Catalogue
             + "and the same segment block, with the start before the end.");
 
     internal static DiagnosticDescriptor BuiltinArguments { get; } = Entry(
+        Area.Values,
         "builtin-arguments",
         Severity.Error,
         "`{0}` takes {1}",
         "The built-in function was given the wrong number or kind of arguments. The message states what it takes.");
 
     internal static DiagnosticDescriptor DivisionByZero { get; } = Entry(
+        Area.Values,
         "division-by-zero",
         Severity.Error,
         "division by zero",
@@ -972,6 +1090,7 @@ public static class Catalogue
             + "output. Check the divisor.");
 
     internal static DiagnosticDescriptor OperatorOnText { get; } = Entry(
+        Area.Values,
         "operator-on-text",
         Severity.Error,
         "`{0}` cannot be used on a string",
@@ -979,6 +1098,7 @@ public static class Catalogue
             + "numbers: `.strcat` joins texts, `.strsub` takes part of one, and `.strat` reads one of its bytes.");
 
     internal static DiagnosticDescriptor ScopeHasNoAddress { get; } = Entry(
+        Area.Values,
         "scope-has-no-address",
         Severity.Error,
         "`{0}` is a scope and has no address: name a routine or data inside it instead",
@@ -986,6 +1106,7 @@ public static class Catalogue
             + "or a declaration inside it, such as `scope::name`.");
 
     internal static DiagnosticDescriptor EnumMemberIsNotAnAddress { get; } = Entry(
+        Area.Values,
         "enum-member-is-not-an-address",
         Severity.Error,
         "`{0}` is an enum member, so its value must be a constant, and this is an address",
@@ -994,6 +1115,7 @@ public static class Catalogue
             + "enum, or refer to the routine or data declared for that member.");
 
     internal static DiagnosticDescriptor NotIndexable { get; } = Entry(
+        Area.Values,
         "not-indexable",
         Severity.Error,
         "`{0}` cannot be indexed with `[i]`: it is {1}",
@@ -1001,6 +1123,7 @@ public static class Catalogue
             + "`.byte[8]` or `.type Point[4]`. Anything else, including mixed data, has no elements to select.");
 
     internal static DiagnosticDescriptor ElementIndexNotConstant { get; } = Entry(
+        Area.Values,
         "element-index-not-constant",
         Severity.Error,
         "an element index must be a constant: to index at run time, use indexed addressing such as `{0},x`",
@@ -1009,12 +1132,14 @@ public static class Catalogue
             + "register.");
 
     internal static DiagnosticDescriptor ElementIndexOutOfRange { get; } = Entry(
+        Area.Values,
         "element-index-out-of-range",
         Severity.Error,
         "{0}",
         "The declaration states how many elements it holds, and this index is not one of them.");
 
     internal static DiagnosticDescriptor NothingToMeasure { get; } = Entry(
+        Area.Values,
         "nothing-to-measure",
         Severity.Error,
         "`{0}` is {1} and takes no bytes of its own, so `{2}` has nothing to measure",
@@ -1023,6 +1148,7 @@ public static class Catalogue
             + "nothing to measure.");
 
     internal static DiagnosticDescriptor CountofHasNoElements { get; } = Entry(
+        Area.Values,
         "countof-has-no-elements",
         Severity.Error,
         "`{0}` is {1}, which has bytes and no elements: `.sizeof({2})` is how many bytes it takes",
@@ -1030,6 +1156,7 @@ public static class Catalogue
             + "elements is measured with `.sizeof`.");
 
     internal static DiagnosticDescriptor SizeofDependsOnExpansion { get; } = Entry(
+        Area.Values,
         "sizeof-depends-on-expansion",
         Severity.Error,
         "cannot compute `.sizeof({0})`: a macro call inside it is expanded only after constants are known; "
@@ -1039,6 +1166,7 @@ public static class Catalogue
             + "constant. `.spanof` asks the linker for the size instead, which makes it a link-time value.");
 
     internal static DiagnosticDescriptor SizeofDependsOnAlignment { get; } = Entry(
+        Area.Values,
         "sizeof-depends-on-alignment",
         Severity.Error,
         "cannot compute `.sizeof({0})`: its `.align` padding depends on where it is placed; `.spanof({1})` gives "
@@ -1048,6 +1176,7 @@ public static class Catalogue
             + "for the size instead, which makes it a link-time value.");
 
     internal static DiagnosticDescriptor MeasuresADeclaration { get; } = Entry(
+        Area.Values,
         "measures-a-declaration",
         Severity.Error,
         "`{0}` takes a whole declaration, not an element of one like `{1}`",
@@ -1056,6 +1185,7 @@ public static class Catalogue
             + "own; measure the element type instead, or the whole declaration.");
 
     internal static DiagnosticDescriptor NotMeasurable { get; } = Entry(
+        Area.Values,
         "not-measurable",
         Severity.Error,
         "`{0}` is {1}: `{2}` measures a `.data` declaration, a routine or a type",
@@ -1065,18 +1195,21 @@ public static class Catalogue
             + "name: .byte[n]`.");
 
     internal static DiagnosticDescriptor FunctionArgumentCount { get; } = Entry(
+        Area.Values,
         "function-argument-count",
         Severity.Error,
         "`{0}` takes {1} argument(s), and {2} were given",
         "A `.func` takes exactly the parameters it declares. There are no defaults and no overloads.");
 
     internal static DiagnosticDescriptor ConditionIsText { get; } = Entry(
+        Area.Values,
         "condition-is-text",
         Severity.Error,
         "an `.if` condition must be a number, not text",
         "An `.if` or `.elseif` condition is true when its value is nonzero, so it must evaluate to a number.");
 
     internal static DiagnosticDescriptor ConditionNamesTheProgram { get; } = Entry(
+        Area.Values,
         "condition-names-the-program",
         Severity.Error,
         "`{0}` is not a define or a `.config` setting: an `.if` condition can only test the build configuration; "
@@ -1088,6 +1221,7 @@ public static class Catalogue
             + "program is complete.");
 
     internal static DiagnosticDescriptor ConditionAsksAboutTheProgram { get; } = Entry(
+        Area.Values,
         "condition-asks-about-the-program",
         Severity.Error,
         "`{0}` asks about the program, which an `.if` condition cannot do: use `.assert` to check the program",
@@ -1097,6 +1231,7 @@ public static class Catalogue
             + "complete.");
 
     internal static DiagnosticDescriptor ConditionCallsAFunction { get; } = Entry(
+        Area.Values,
         "condition-calls-a-function",
         Severity.Error,
         "an `.if` condition cannot call a `.func`",
@@ -1105,18 +1240,21 @@ public static class Catalogue
             + "condition itself.");
 
     internal static DiagnosticDescriptor SelectArguments { get; } = Entry(
+        Area.Values,
         "select-arguments",
         Severity.Error,
         "`.select` takes a condition and the two values it chooses between: `.select(c, a, b)`",
         "`.select(c, a, b)` is `a` when `c` is nonzero and `b` otherwise, so it takes exactly three arguments.");
 
     internal static DiagnosticDescriptor SelectConditionIsText { get; } = Entry(
+        Area.Values,
         "select-condition-is-text",
         Severity.Error,
         "a `.select` condition must be a number, not text",
         "`.select(c, a, b)` chooses `a` when `c` is nonzero and `b` otherwise, so `c` must evaluate to a number.");
 
     internal static DiagnosticDescriptor SelectConditionNotConstant { get; } = Entry(
+        Area.Values,
         "select-condition-not-constant",
         Severity.Error,
         "a `.select` condition must be a constant",
@@ -1124,6 +1262,7 @@ public static class Catalogue
             + "while nt65 builds, not only at link time or at run time.");
 
     internal static DiagnosticDescriptor CpuUnderACondition { get; } = Entry(
+        Area.Values,
         "cpu-under-a-condition",
         Severity.Error,
         "`.cpu` cannot be inside an `.if`: conditions can test the processor, so it must be set first",
@@ -1132,6 +1271,7 @@ public static class Catalogue
             + "or on the command line.");
 
     internal static DiagnosticDescriptor CpuDisagrees { get; } = Entry(
+        Area.Values,
         "cpu-disagrees",
         Severity.Error,
         "`.cpu {1}` conflicts with the processor this program is built for, the {0}",
@@ -1139,6 +1279,7 @@ public static class Catalogue
             + "`.cpu` in a source file must name the same processor. Change or remove the `.cpu`.");
 
     internal static DiagnosticDescriptor ElseWithoutIf { get; } = Entry(
+        Area.Values,
         "else-without-if",
         Severity.Error,
         "`{0}` has no `.if` before it",
@@ -1146,6 +1287,7 @@ public static class Catalogue
             + "for a missing `.if` or a misplaced closing brace.");
 
     internal static DiagnosticDescriptor ConfigMisplaced { get; } = Entry(
+        Area.Values,
         "config-misplaced",
         Severity.Error,
         "`.config` must be at file level, outside every block",
@@ -1154,12 +1296,14 @@ public static class Catalogue
             + "the file.");
 
     internal static DiagnosticDescriptor ConfigIsText { get; } = Entry(
+        Area.Values,
         "config-is-text",
         Severity.Error,
         "a `.config` value must be a number, not text",
         "A setting is a number, so that the project file or the command line can override it.");
 
     internal static DiagnosticDescriptor SettingUnknown { get; } = Entry(
+        Area.Values,
         "setting-unknown",
         Severity.Error,
         "`{0}` is not a `.config` setting of that module: the build can only set a setting a module declares and "
@@ -1168,6 +1312,7 @@ public static class Catalogue
             + "`.config`. The module declares no `.config` by that name; check the spelling and the module path.");
 
     internal static DiagnosticDescriptor SettingNotExported { get; } = Entry(
+        Area.Values,
         "setting-not-exported",
         Severity.Error,
         "`{0}` is not exported by module `{1}`, so the build cannot set it",
@@ -1176,6 +1321,7 @@ public static class Catalogue
             + "it.");
 
     internal static DiagnosticDescriptor DeclarationInARepetition { get; } = Entry(
+        Area.Values,
         "declaration-in-a-repetition",
         Severity.Error,
         "{0} cannot be inside a `.repeat` or `.each` body: {1}",
@@ -1184,6 +1330,7 @@ public static class Catalogue
             + "makes no sense. Move the statement outside the body.");
 
     internal static DiagnosticDescriptor RepeatCountNotConstant { get; } = Entry(
+        Area.Values,
         "repeat-count-not-constant",
         Severity.Error,
         "a `.repeat` count must be a constant",
@@ -1191,18 +1338,21 @@ public static class Catalogue
             + "while nt65 builds.");
 
     internal static DiagnosticDescriptor RepeatCountNegative { get; } = Entry(
+        Area.Values,
         "repeat-count-negative",
         Severity.Error,
         "a `.repeat` count cannot be negative, and this one is {0}",
         "A repetition runs its body a whole number of times, and that number cannot be negative.");
 
     internal static DiagnosticDescriptor EachNotOverAList { get; } = Entry(
+        Area.Values,
         "each-not-over-a-list",
         Severity.Error,
         "`.each` walks a list or an enum, and this is neither",
         "`.each` walks something with items in a fixed order: a `.list`, or the members of an enum.");
 
     internal static DiagnosticDescriptor BindingNotOverAnEnum { get; } = Entry(
+        Area.Values,
         "binding-not-over-an-enum",
         Severity.Error,
         "`{0}` does not iterate over an enum, so it cannot end a path: only an `.each` over an enum names a member "
@@ -1212,6 +1362,7 @@ public static class Catalogue
             + "variable stands for a value rather than a name, so it cannot be used at the end of a path.");
 
     internal static DiagnosticDescriptor FamilyMemberMissing { get; } = Entry(
+        Area.Values,
         "family-member-missing",
         Severity.Error,
         "`{0}` has no member `{1}`, which `{2}` names on this iteration",
@@ -1220,6 +1371,7 @@ public static class Catalogue
             + "declaration inside it.");
 
     internal static DiagnosticDescriptor IncbinUnreadable { get; } = Entry(
+        Area.Values,
         "incbin-unreadable",
         Severity.Error,
         "cannot read `{0}` for `.incbin`",
@@ -1228,6 +1380,7 @@ public static class Catalogue
             + "assembles the output.");
 
     internal static DiagnosticDescriptor CharmapHasNoEntry { get; } = Entry(
+        Area.Values,
         "charmap-has-no-entry",
         Severity.Error,
         "charmap `{0}` has no entry for `{1}`",
@@ -1235,6 +1388,7 @@ public static class Catalogue
             + "character the charmap leaves out. Add an entry for the character, or remove it from the text.");
 
     internal static DiagnosticDescriptor MemberHasNoValue { get; } = Entry(
+        Area.Values,
         "member-has-no-value",
         Severity.Error,
         "`{0}` is a struct member and cannot have a value: for several `{1}` elements, use `{1}[n]`",
@@ -1243,6 +1397,7 @@ public static class Catalogue
             + "elements of one type take a count, `colors: .word[16]`.");
 
     internal static DiagnosticDescriptor MemberCountNotANumber { get; } = Entry(
+        Area.Values,
         "member-count-not-a-number",
         Severity.Error,
         "`{0}` needs an element count: use `{1}[n]`",
@@ -1250,6 +1405,7 @@ public static class Catalogue
             + "which counts the values given, has nothing to count in a `.struct`.");
 
     internal static DiagnosticDescriptor MemberReservesNothing { get; } = Entry(
+        Area.Values,
         "member-reserves-nothing",
         Severity.Error,
         "`{0}` reserves no room: declare a member with a type such as `.byte`, `.word[n]` or `.res n`",
@@ -1257,6 +1413,7 @@ public static class Catalogue
             + "`.res`. A directive that emits data, such as `.strz`, reserves nothing a member can use.");
 
     internal static DiagnosticDescriptor TargetArgument { get; } = Entry(
+        Area.Values,
         "target-argument",
         Severity.Error,
         "`.target` takes {0}",
@@ -1264,6 +1421,7 @@ public static class Catalogue
             + "file.");
 
     internal static DiagnosticDescriptor HasArgument { get; } = Entry(
+        Area.Values,
         "has-argument",
         Severity.Error,
         "`.has` takes a mnemonic, such as `.has(phx)`",
@@ -1271,10 +1429,10 @@ public static class Catalogue
             + "instruction, rather than listing the processors that have it, keeps code that targets several "
             + "processors correct.");
 
-    private static DiagnosticArea Macros { get; } =
-        Opens("Macros", "Macro declarations, calls, arguments and expansion.");
+    // Macros
 
     internal static DiagnosticDescriptor DeclarationInAMacroBody { get; } = Entry(
+        Area.Macros,
         "declaration-in-a-macro-body",
         Severity.Error,
         "{0} cannot be inside a macro body: {1}",
@@ -1283,6 +1441,7 @@ public static class Catalogue
             + "many times the macro is called. Move the statement outside the macro.");
 
     internal static DiagnosticDescriptor MacroRecursive { get; } = Entry(
+        Area.Macros,
         "macro-recursive",
         Severity.Error,
         "`{0}` calls itself{1}: a macro cannot be recursive",
@@ -1291,6 +1450,7 @@ public static class Catalogue
             + "`list` parameter with `.each` instead of recursion.");
 
     internal static DiagnosticDescriptor MacroNamesUnexported { get; } = Entry(
+        Area.Macros,
         "macro-names-unexported",
         Severity.Error,
         "`{0}!` is exported but uses `{1}`, which is not exported: the macro expands in the caller's module, where "
@@ -1299,30 +1459,35 @@ public static class Catalogue
             + "there. Export the name it uses, or stop exporting the macro.");
 
     internal static DiagnosticDescriptor ParameterUnknown { get; } = Entry(
+        Area.Macros,
         "parameter-unknown",
         Severity.Error,
         "`{0}` has no parameter called `{1}`",
         "A named argument names a parameter the macro declares.");
 
     internal static DiagnosticDescriptor BlockParameterUnknown { get; } = Entry(
+        Area.Macros,
         "block-parameter-unknown",
         Severity.Error,
         "`{0}` has no `block` parameter called `{1}`",
         "A block argument after the parentheses names a `block` parameter the macro declares.");
 
     internal static DiagnosticDescriptor ArgumentGivenTwice { get; } = Entry(
+        Area.Macros,
         "argument-given-twice",
         Severity.Error,
         "parameter `{0}` is given twice",
         "Each parameter takes one argument, either by position or by name, not both.");
 
     internal static DiagnosticDescriptor ArgumentMissing { get; } = Entry(
+        Area.Macros,
         "argument-missing",
         Severity.Error,
         "`{0}` needs an argument for {1}",
         "A parameter with no default must be given an argument at every call, by position or by name.");
 
     internal static DiagnosticDescriptor ArgumentAfterANamedOne { get; } = Entry(
+        Area.Macros,
         "argument-after-a-named-one",
         Severity.Error,
         "a positional argument cannot follow a named one",
@@ -1330,12 +1495,14 @@ public static class Catalogue
             + "Move this argument before the named ones, or give it by name.");
 
     internal static DiagnosticDescriptor ArgumentCount { get; } = Entry(
+        Area.Macros,
         "argument-count",
         Severity.Error,
         "`{0}` takes {1}, and this call gives more",
         "The call gives more positional arguments than the macro has parameters to bind them to.");
 
     internal static DiagnosticDescriptor BlockArgumentInParentheses { get; } = Entry(
+        Area.Macros,
         "block-argument-in-parentheses",
         Severity.Error,
         "`{0}` is a `block` parameter: put its block after the parentheses, not inside them",
@@ -1343,12 +1510,14 @@ public static class Catalogue
             + "any other block of code.");
 
     internal static DiagnosticDescriptor BlockArgumentUnexpected { get; } = Entry(
+        Area.Macros,
         "block-argument-unexpected",
         Severity.Error,
         "`{0}` takes no block, and this call gives it one",
         "The macro declares no `block` parameter, so there is nowhere for the block to go.");
 
     internal static DiagnosticDescriptor BlockContinuesNothing { get; } = Entry(
+        Area.Macros,
         "block-continues-nothing",
         Severity.Error,
         "this block argument does not follow a macro call",
@@ -1356,6 +1525,7 @@ public static class Catalogue
             + "for the block to belong to.");
 
     internal static DiagnosticDescriptor BlockChangesState { get; } = Entry(
+        Area.Macros,
         "block-changes-state",
         Severity.Error,
         "the block given to `{0}!` must leave the processor state as it found it: it starts with `{1}` and ends "
@@ -1364,18 +1534,21 @@ public static class Catalogue
             + "widths and mode are the same after the block as before it. Restore them at the end of the block.");
 
     internal static DiagnosticDescriptor ParameterAfterBlock { get; } = Entry(
+        Area.Macros,
         "parameter-after-block",
         Severity.Error,
         "`{0}` comes after the `block` parameter `{1}`, and a block goes after the parentheses",
         "A block goes after the parentheses, so a `block` parameter is the last one.");
 
     internal static DiagnosticDescriptor ParameterAfterList { get; } = Entry(
+        Area.Macros,
         "parameter-after-list",
         Severity.Error,
         "`{0}` comes after the `list` parameter `{1}`, which takes every remaining argument",
         "A `list` parameter takes every remaining argument, so nothing after it could ever be given one.");
 
     internal static DiagnosticDescriptor OperandArgumentParenthesized { get; } = Entry(
+        Area.Macros,
         "operand-argument-parenthesized",
         Severity.Error,
         "`{0}` takes an operand, and `{1}` is read as an expression in parentheses: put it in braces to pass "
@@ -1384,12 +1557,14 @@ public static class Catalogue
             + "operand, including indirection and an index register, put it in braces, as in `load!({(ptr),y})`.");
 
     internal static DiagnosticDescriptor WordArgumentNotListed { get; } = Entry(
+        Area.Macros,
         "word-argument-not-listed",
         Severity.Error,
         "`{0}` takes one of {1}, and this is {2}",
         "A `one(...)` parameter takes one of the words it lists, and the words are never looked up.");
 
     internal static DiagnosticDescriptor WordArgumentAmbiguous { get; } = Entry(
+        Area.Macros,
         "word-argument-ambiguous",
         Severity.Error,
         "`{0}` takes only {1}, but `{2}` can also be {3}",
@@ -1398,12 +1573,14 @@ public static class Catalogue
             + "the enclosing parameter's list, or add the missing words to this one.");
 
     internal static DiagnosticDescriptor IdentArgumentNotAName { get; } = Entry(
+        Area.Macros,
         "ident-argument-not-a-name",
         Severity.Error,
         "`{0}` takes a name, and this is not one",
         "An `ident` parameter stands for a name the body declares or uses, so the argument has to be one.");
 
     internal static DiagnosticDescriptor ExpressionArgumentBraced { get; } = Entry(
+        Area.Macros,
         "expression-argument-braced",
         Severity.Error,
         "`{0}` takes an expression, so its argument cannot be in braces: braces pass a whole operand",
@@ -1411,6 +1588,7 @@ public static class Catalogue
             + "an expression takes it without braces.");
 
     internal static DiagnosticDescriptor ConstArgumentOutOfRange { get; } = Entry(
+        Area.Macros,
         "const-argument-out-of-range",
         Severity.Error,
         "`{0}` takes a constant from {1} to {2}, and {3}",
@@ -1418,6 +1596,7 @@ public static class Catalogue
             + "the limits, rather than by an `.assert` in the body.");
 
     internal static DiagnosticDescriptor EnumArgumentNotAMember { get; } = Entry(
+        Area.Macros,
         "enum-argument-not-a-member",
         Severity.Error,
         "`{0}` takes a member of `{1}`, and {2}",
@@ -1425,6 +1604,7 @@ public static class Catalogue
             + "else of the same value.");
 
     internal static DiagnosticDescriptor OperandArgumentMode { get; } = Entry(
+        Area.Macros,
         "operand-argument-mode",
         Severity.Error,
         "`{0}` takes {1}, and this is `{2}`",
@@ -1432,12 +1612,14 @@ public static class Catalogue
             + "and `zpy` for a direct-page address, so a call in another mode is reported at the call.");
 
     internal static DiagnosticDescriptor ParameterRangeInvalid { get; } = Entry(
+        Area.Macros,
         "parameter-range-invalid",
         Severity.Error,
         "`{0}` is not a range: a `const` range is two constants, the lower first",
         "The range a `const(low..high)` parameter takes is worked out once, where the macro is declared.");
 
     internal static DiagnosticDescriptor ParameterKindNotAnEnum { get; } = Entry(
+        Area.Macros,
         "parameter-kind-not-an-enum",
         Severity.Error,
         "`{0}` is {1}, and a parameter's kind is one of the kind words or an enum",
@@ -1445,6 +1627,7 @@ public static class Catalogue
             + "parameter takes.");
 
     internal static DiagnosticDescriptor OperandModeUnknown { get; } = Entry(
+        Area.Macros,
         "operand-mode-unknown",
         Severity.Error,
         "`{0}` is not an addressing mode an `operand` takes: {1}",
@@ -1452,6 +1635,7 @@ public static class Catalogue
             + "`abs`, `absx` and `absy`.");
 
     internal static DiagnosticDescriptor ComparisonNeverHolds { get; } = Entry(
+        Area.Macros,
         "comparison-never-holds",
         Severity.Warning,
         "`{0}` is never `{1}`, so this comparison {2}: {3}",
@@ -1462,6 +1646,7 @@ public static class Catalogue
             + "possible, with `zp`, `zpx` and `zpy` reported as `abs`, `absx` and `absy`.");
 
     internal static DiagnosticDescriptor ExpansionLimit { get; } = Entry(
+        Area.Macros,
         "expansion-limit",
         Severity.Error,
         "the expansions in this file come to more than {0} statements, which is as far as nt65 goes",
@@ -1469,6 +1654,7 @@ public static class Catalogue
             + "repetition or a nest of macros is multiplying out further than was meant.");
 
     internal static DiagnosticDescriptor RepeatTooMany { get; } = Entry(
+        Area.Macros,
         "repeat-too-many",
         Severity.Error,
         "this repetition runs {0} times, more than the limit of {1}",
@@ -1476,10 +1662,10 @@ public static class Catalogue
             + "of source can expand to. The limit is far beyond anything typed by hand; reaching it usually "
             + "means the count is wrong.");
 
-    private static DiagnosticArea Data { get; } =
-        Opens("Data", "Declarations, records, arrays, text and padding.");
+    // Data
 
     internal static DiagnosticDescriptor ElementCountEmpty { get; } = Entry(
+        Area.Data,
         "element-count-empty",
         Severity.Error,
         "`[]` takes its count from the values given, and there are none: use `{0}[n]` to reserve n elements",
@@ -1487,6 +1673,7 @@ public static class Catalogue
             + "values, give the count, as in `.byte[16]`; the elements are filled with zeros.");
 
     internal static DiagnosticDescriptor ElementCountNotConstant { get; } = Entry(
+        Area.Data,
         "element-count-not-constant",
         Severity.Error,
         "an array's element count must be a constant",
@@ -1494,12 +1681,14 @@ public static class Catalogue
             + "nt65 builds.");
 
     internal static DiagnosticDescriptor ElementCountNegative { get; } = Entry(
+        Area.Data,
         "element-count-negative",
         Severity.Error,
         "an array's count cannot be negative, and this one is {0}",
         "A count is how many elements the declaration holds, and a negative number of them is not one.");
 
     internal static DiagnosticDescriptor ElementCountMismatch { get; } = Entry(
+        Area.Data,
         "element-count-mismatch",
         Severity.Error,
         "this array is declared with {0} {1}, but {2} given",
@@ -1507,12 +1696,14 @@ public static class Catalogue
             + "extra ones. Correct the count, or use `[]` to take the count from the values.");
 
     internal static DiagnosticDescriptor ElementNotAValue { get; } = Entry(
+        Area.Data,
         "element-not-a-value",
         Severity.Error,
         "a `{0}` element is a single value, not a braced record or list",
         "Braces hold a record or a list, and an element of this type is one plain value. Remove the braces.");
 
     internal static DiagnosticDescriptor ElementNotARecord { get; } = Entry(
+        Area.Data,
         "element-not-a-record",
         Severity.Error,
         "each element of {0} is {1}, given as `{{ member = value }}`",
@@ -1520,6 +1711,7 @@ public static class Catalogue
             + "stated.");
 
     internal static DiagnosticDescriptor ElementIsOneValue { get; } = Entry(
+        Area.Data,
         "element-is-one-value",
         Severity.Error,
         "each element of `{0}` is a single `{1}` value, not a braced record or list",
@@ -1527,36 +1719,42 @@ public static class Catalogue
             + "element.");
 
     internal static DiagnosticDescriptor MemberUnknown { get; } = Entry(
+        Area.Data,
         "member-unknown",
         Severity.Error,
         "`{0}` has no member `{1}`",
         "A record initializer names the members of the type it initializes.");
 
     internal static DiagnosticDescriptor MemberGivenTwice { get; } = Entry(
+        Area.Data,
         "member-given-twice",
         Severity.Error,
         "`{0}` is given a value twice: a member is named at most once",
         "A record initializer gives each member at most one value. Remove the duplicate.");
 
     internal static DiagnosticDescriptor UnionManyMembersGiven { get; } = Entry(
+        Area.Data,
         "union-many-members-given",
         Severity.Error,
         "`{0}` is a union, whose members all start at offset 0, so it takes a value for at most one of them",
         "A union's members share the same bytes, so giving two of them values would write each over the other.");
 
     internal static DiagnosticDescriptor MemberNeedsARecord { get; } = Entry(
+        Area.Data,
         "member-needs-a-record",
         Severity.Error,
         "`{0}` is a `{1}` record, so its value goes in braces: `{{ member = value }}`",
         "The member is itself a record, so its value is given as one, naming its members.");
 
     internal static DiagnosticDescriptor MemberNeedsAList { get; } = Entry(
+        Area.Data,
         "member-needs-a-list",
         Severity.Error,
         "`{0}` is an array, which takes a braced list: `{1} = {{ … }}`",
         "The member holds several elements, so its value is a braced list of them.");
 
     internal static DiagnosticDescriptor MemberTakesOneValue { get; } = Entry(
+        Area.Data,
         "member-takes-one-value",
         Severity.Error,
         "`{0}` holds a single value, so it cannot be given a braced record or list",
@@ -1564,30 +1762,35 @@ public static class Catalogue
             + "remove them.");
 
     internal static DiagnosticDescriptor MemberCountMismatch { get; } = Entry(
+        Area.Data,
         "member-count-mismatch",
         Severity.Error,
         "`{0}` holds {1} {2}, and this list gives {3}",
         "A member holds exactly as many elements as its type states.");
 
     internal static DiagnosticDescriptor MemberTextTooLong { get; } = Entry(
+        Area.Data,
         "member-text-too-long",
         Severity.Error,
         "`{0}` has room for {1} bytes, and this text is {2} bytes",
         "Text given to a member must fit in the room the member reserves. Shorten the text or reserve more room.");
 
     internal static DiagnosticDescriptor MemberNotText { get; } = Entry(
+        Area.Data,
         "member-not-text",
         Severity.Error,
         "`{0}` is one `{1}`, and this text is {2} bytes: text takes a member reserved with `.res`",
         "A member of a plain type holds one value. Room for text is reserved with `.res`, which states how much.");
 
     internal static DiagnosticDescriptor StrzNotText { get; } = Entry(
+        Area.Data,
         "strz-not-text",
         Severity.Error,
         "`.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one",
         "`.strz` writes text and the zero that ends it, so it takes exactly one text.");
 
     internal static DiagnosticDescriptor StrzZeroInText { get; } = Entry(
+        Area.Data,
         "strz-zero-in-text",
         Severity.Error,
         "{0}: `.strz` writes the zero that ends it",
@@ -1595,6 +1798,7 @@ public static class Catalogue
             + "middle.");
 
     internal static DiagnosticDescriptor TextNotAscii { get; } = Entry(
+        Area.Data,
         "text-not-ascii",
         Severity.Error,
         "text is ASCII outside a charmap; use `\\xHH` for a byte above $7f",
@@ -1602,6 +1806,7 @@ public static class Catalogue
             + "what the bytes are, and `\\xHH` gives one directly.");
 
     internal static DiagnosticDescriptor CharmapValueNotAByte { get; } = Entry(
+        Area.Data,
         "charmap-value-not-a-byte",
         Severity.Error,
         "a charmap maps a character of this text to {0}, which is not a byte: a charmap value must be 0 to 255",
@@ -1609,6 +1814,7 @@ public static class Catalogue
             + "entry.");
 
     internal static DiagnosticDescriptor FarAddressInWord { get; } = Entry(
+        Area.Data,
         "far-address-in-word",
         Severity.Error,
         "`{0}` is a far address, and `{1}` holds 16 bits: `.faraddr` holds all of it, and `.loword({2})` the low 16 bits",
@@ -1616,6 +1822,7 @@ public static class Catalogue
             + "silently, so nt65 asks which was meant.");
 
     internal static DiagnosticDescriptor AddressDoesNotFit { get; } = Entry(
+        Area.Data,
         "address-does-not-fit",
         Severity.Error,
         "`{0}` is {1} address, and {2}: {3}",
@@ -1623,12 +1830,14 @@ public static class Catalogue
             + "part of the address that fits, as the message suggests.");
 
     internal static DiagnosticDescriptor AddressNegative { get; } = Entry(
+        Area.Data,
         "address-negative",
         Severity.Error,
         "an address cannot be negative, but this one is {0}",
         "`.addr` and `.faraddr` hold addresses, which are never negative.");
 
     internal static DiagnosticDescriptor ValueTooWide { get; } = Entry(
+        Area.Data,
         "value-too-wide",
         Severity.Error,
         "{0} does not fit in {1}",
@@ -1636,12 +1845,14 @@ public static class Catalogue
             + "operators, shows which part was meant.");
 
     internal static DiagnosticDescriptor ResCountNotConstant { get; } = Entry(
+        Area.Data,
         "res-count-not-constant",
         Severity.Error,
         "a `.res` count must be a constant",
         "How much room is reserved decides where everything after it goes, so it is decided while nt65 builds.");
 
     internal static DiagnosticDescriptor ResCountOutOfRange { get; } = Entry(
+        Area.Data,
         "res-count-out-of-range",
         Severity.Error,
         "a `.res` count must be between 0 and $ffff, not {0}",
@@ -1650,18 +1861,21 @@ public static class Catalogue
             + "several directives.");
 
     internal static DiagnosticDescriptor AlignBoundaryNotConstant { get; } = Entry(
+        Area.Data,
         "align-boundary-not-constant",
         Severity.Error,
         "an `.align` boundary must be a constant",
         "Where the padding ends is worked out from the boundary, so the boundary is known while nt65 builds.");
 
     internal static DiagnosticDescriptor AlignBoundaryNotPowerOfTwo { get; } = Entry(
+        Area.Data,
         "align-boundary-not-power-of-two",
         Severity.Error,
         "an `.align` boundary must be a power of two from 1 to $10000, not {0}",
         "ld65 aligns only on powers of two, and nt65 accepts boundaries up to $10000.");
 
     internal static DiagnosticDescriptor ResNotADeclaration { get; } = Entry(
+        Area.Data,
         "res-not-a-declaration",
         Severity.Error,
         "a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros "
@@ -1670,16 +1884,17 @@ public static class Catalogue
             + "type: `buf: .res 16` in ca65 becomes `.data buf: .byte[16]`, which reserves the same room.");
 
     internal static DiagnosticDescriptor AlignNotADeclaration { get; } = Entry(
+        Area.Data,
         "align-not-a-declaration",
         Severity.Error,
         "`.align` cannot be a named declaration: put it between declarations",
         "An `.align` is padding that positions the next declaration. It has no content of its own to name, so it "
             + "stands on its own between declarations.");
 
-    private static DiagnosticArea Placement { get; } =
-        Opens("Placement", "Segments, where a declaration sits and how wide an address is.");
+    // Placement
 
     internal static DiagnosticDescriptor SegmentUndeclared { get; } = Entry(
+        Area.Placement,
         "segment-undeclared",
         Severity.Error,
         "segment \"{0}\" is not declared",
@@ -1688,6 +1903,7 @@ public static class Catalogue
             + "line names it. Declare the segment, or check the spelling of its name.");
 
     internal static DiagnosticDescriptor SegmentDeclaredTwice { get; } = Entry(
+        Area.Placement,
         "segment-declared-twice",
         Severity.Error,
         "segment \"{0}\" is already declared",
@@ -1696,6 +1912,7 @@ public static class Catalogue
             + "Remove the size from this line, or remove one of the declarations.");
 
     internal static DiagnosticDescriptor CodeInADataSpace { get; } = Entry(
+        Area.Placement,
         "code-in-a-data-space",
         Severity.Error,
         "segment \"{0}\" is in space `{1}`, which holds data, not code for this processor: put another "
@@ -1706,6 +1923,7 @@ public static class Catalogue
             + "declared as `\"code\"`.");
 
     internal static DiagnosticDescriptor TransferToAnotherSpace { get; } = Entry(
+        Area.Placement,
         "transfer-to-another-space",
         Severity.Error,
         "`{0}` targets {1}, in segment \"{2}\" of {3}, but this code runs in {4}: that code belongs to another "
@@ -1716,6 +1934,7 @@ public static class Catalogue
             + "in data instead, for example to send it to the other processor.");
 
     internal static DiagnosticDescriptor OperandInAnotherSpace { get; } = Entry(
+        Area.Placement,
         "operand-in-another-space",
         Severity.Error,
         "{0} is in segment \"{1}\" of {2}, and this code runs in {3}: here it can only be used as an immediate "
@@ -1725,6 +1944,7 @@ public static class Catalogue
             + "bytes as this processor holds them, before they are sent across, use `.loadof`.");
 
     internal static DiagnosticDescriptor SpaceUndeclared { get; } = Entry(
+        Area.Placement,
         "space-undeclared",
         Severity.Error,
         "space `{0}` is not declared",
@@ -1733,6 +1953,7 @@ public static class Catalogue
             + "the space there, or check the spelling.");
 
     internal static DiagnosticDescriptor SpaceNotAName { get; } = Entry(
+        Area.Placement,
         "space-not-a-name",
         Severity.Error,
         "`space` takes the name of an address space",
@@ -1740,6 +1961,7 @@ public static class Catalogue
             + "plain name, not a number or an expression; in the project file it is a non-empty string.");
 
     internal static DiagnosticDescriptor SegmentStandardSize { get; } = Entry(
+        Area.Placement,
         "segment-standard-size",
         Severity.Error,
         "\"{0}\" is a standard segment and is always `{1}`",
@@ -1748,6 +1970,7 @@ public static class Catalogue
             + "mirrors, but only at that size. Use a segment of your own for a different size.");
 
     internal static DiagnosticDescriptor SegmentAttributeTwice { get; } = Entry(
+        Area.Placement,
         "segment-attribute-twice",
         Severity.Error,
         "segment \"{0}\" already has a `{1}`",
@@ -1755,6 +1978,7 @@ public static class Catalogue
             + "List every mirrored bank in a single `mirrors = [...]`.");
 
     internal static DiagnosticDescriptor SegmentDpNotZp { get; } = Entry(
+        Area.Placement,
         "segment-dp-not-zp",
         Severity.Error,
         "segment \"{0}\" is not `zp`, and only a `zp` segment takes a `dp`",
@@ -1763,6 +1987,7 @@ public static class Catalogue
             + "nothing there. Declare the segment `zp`, or remove the `dp`.");
 
     internal static DiagnosticDescriptor SegmentAttributeNotConstant { get; } = Entry(
+        Area.Placement,
         "segment-attribute-not-constant",
         Severity.Error,
         "`{0}` must be a constant",
@@ -1770,12 +1995,14 @@ public static class Catalogue
             + "must be numbers nt65 can work out while it builds, not addresses the linker decides.");
 
     internal static DiagnosticDescriptor SegmentAttributeOutOfRange { get; } = Entry(
+        Area.Placement,
         "segment-attribute-out-of-range",
         Severity.Error,
         "{0}",
         "The direct page is a 16-bit address, from $0000 to $ffff, and a bank is one byte, from $00 to $ff.");
 
     internal static DiagnosticDescriptor SegmentMirrorInvalid { get; } = Entry(
+        Area.Placement,
         "segment-mirror-invalid",
         Severity.Error,
         "each mirror must be a constant bank, or a range of banks given lower first, such as `$00..$3f`",
@@ -1784,6 +2011,7 @@ public static class Catalogue
             + "`$00..$3f`.");
 
     internal static DiagnosticDescriptor SegmentMirrorsNeedABank { get; } = Entry(
+        Area.Placement,
         "segment-mirrors-need-a-bank",
         Severity.Error,
         "segment \"{0}\" has `mirrors` but no `bank`: mirrors repeat a home bank, so give the segment a `bank`",
@@ -1791,6 +2019,7 @@ public static class Catalogue
             + "given with `bank = ...`.");
 
     internal static DiagnosticDescriptor SegmentBlockRedundant { get; } = Entry(
+        Area.Placement,
         "segment-block-redundant",
         Severity.Error,
         "this block names \"{0}\", the segment it is already in, so it moves nothing: its contents stay inline, "
@@ -1800,6 +2029,7 @@ public static class Catalogue
             + "contents stay where the code above runs into them. Name a different segment, or remove the block.");
 
     internal static DiagnosticDescriptor OutsideEverySegment { get; } = Entry(
+        Area.Placement,
         "outside-every-segment",
         Severity.Error,
         "{0} is not in any segment: put a `.segment NAME` line above it, or place it in a `.segment NAME` block",
@@ -1808,6 +2038,7 @@ public static class Catalogue
             + "`.segment` line, such as `.segment CODE`, above it.");
 
     internal static DiagnosticDescriptor InstructionInData { get; } = Entry(
+        Area.Placement,
         "instruction-in-data",
         Severity.Error,
         "{0} in a `.proc`, not in a `.data` declaration",
@@ -1815,6 +2046,7 @@ public static class Catalogue
             + "can follow them. Hand-assembled opcodes belong in data as `.byte` values.");
 
     internal static DiagnosticDescriptor InstructionOutsideARoutine { get; } = Entry(
+        Area.Placement,
         "instruction-outside-a-routine",
         Severity.Error,
         "{0} in a `.proc`: nt65 follows and checks code only inside routines",
@@ -1822,6 +2054,7 @@ public static class Catalogue
             + "the code in a `.proc`, or, if the bytes are data, declare them with `.data`.");
 
     internal static DiagnosticDescriptor PaddingOutsideARoutine { get; } = Entry(
+        Area.Placement,
         "padding-outside-a-routine",
         Severity.Error,
         "`{0}` outside a `.proc` must be part of a `.data` declaration{1}",
@@ -1830,6 +2063,7 @@ public static class Catalogue
             + "own, as padding between declarations.");
 
     internal static DiagnosticDescriptor FarNeeds65816 { get; } = Entry(
+        Area.Placement,
         "far-needs-65816",
         Severity.Error,
         "{0} is declared `far`, and a far address needs the 65816",
@@ -1837,10 +2071,10 @@ public static class Catalogue
             + "processor, so nt65 reports it where it is declared rather than emitting output ca65 would reject. "
             + "Declare the segment or import `abs` or `zp`, or build for the 65816.");
 
-    private static DiagnosticArea Instructions { get; } =
-        Opens("Instructions", "Mnemonics, operands, addressing modes and branch range.");
+    // Instructions
 
     internal static DiagnosticDescriptor InstructionNotOnCpu { get; } = Entry(
+        Area.Instructions,
         "instruction-not-on-cpu",
         Severity.Error,
         "`{0}` is not available on the {1}{2}",
@@ -1848,12 +2082,14 @@ public static class Catalogue
             + "nt65 knows has it, the message names that processor.");
 
     internal static DiagnosticDescriptor OperandMissing { get; } = Entry(
+        Area.Instructions,
         "operand-missing",
         Severity.Error,
         "`{0}` needs an operand",
         "This instruction has no form without an operand, so it needs one.");
 
     internal static DiagnosticDescriptor OperandNotTaken { get; } = Entry(
+        Area.Instructions,
         "operand-not-taken",
         Severity.Error,
         "`{0}` does not take this operand on the {1}",
@@ -1861,6 +2097,7 @@ public static class Catalogue
             + "without `,y` needs a 65C02. Check the operand, or the processor the program is built for.");
 
     internal static DiagnosticDescriptor OperandIsText { get; } = Entry(
+        Area.Instructions,
         "operand-is-text",
         Severity.Error,
         "`{0}` is a string, and an instruction's operand must be a number or an address",
@@ -1868,6 +2105,7 @@ public static class Catalogue
             + "directive emits in a `.data` declaration.");
 
     internal static DiagnosticDescriptor OperandHasNoNextByte { get; } = Entry(
+        Area.Instructions,
         "operand-has-no-next-byte",
         Severity.Error,
         "{0} needs a later byte of `{1}`, and `{1}` is a `{2}` operand here, which has none",
@@ -1877,6 +2115,7 @@ public static class Catalogue
             + "address at this call, or change the macro body.");
 
     internal static DiagnosticDescriptor BranchOperandNotTaken { get; } = Entry(
+        Area.Instructions,
         "branch-operand-not-taken",
         Severity.Error,
         "`{0}` takes only a target address as its operand",
@@ -1884,6 +2123,7 @@ public static class Catalogue
             + "addressing mode.");
 
     internal static DiagnosticDescriptor TransferPrefix { get; } = Entry(
+        Area.Instructions,
         "transfer-prefix",
         Severity.Error,
         "`{0}` does not take an address-size prefix: a jump, branch or call is sized by its target",
@@ -1892,6 +2132,7 @@ public static class Catalogue
             + "and use the mnemonic for the distance you mean.");
 
     internal static DiagnosticDescriptor TargetTooFar { get; } = Entry(
+        Area.Instructions,
         "target-too-far",
         Severity.Error,
         "`{0}` reaches only a near target, in the current bank, and this one is far",
@@ -1900,6 +2141,7 @@ public static class Catalogue
             + "a routine that returns with `rtl`.");
 
     internal static DiagnosticDescriptor TargetTooNear { get; } = Entry(
+        Area.Instructions,
         "target-too-near",
         Severity.Error,
         "`{0}` is for a far target, and this one is {1}: use `{2}`",
@@ -1908,6 +2150,7 @@ public static class Catalogue
             + "$008000` is allowed.");
 
     internal static DiagnosticDescriptor BranchOutOfReach { get; } = Entry(
+        Area.Instructions,
         "branch-out-of-reach",
         Severity.Error,
         "`{0}` would branch {1} bytes, and a branch reaches only -128 to 127{2}",
@@ -1917,6 +2160,7 @@ public static class Catalogue
             + "over a `jmp` where it does not.");
 
     internal static DiagnosticDescriptor AddressingModeMissing { get; } = Entry(
+        Area.Instructions,
         "addressing-mode-missing",
         Severity.Error,
         "`{0}` has no {1} form of this operand on the {2}: remove the address-size prefix",
@@ -1925,6 +2169,7 @@ public static class Catalogue
             + "prefix it cannot honour. Remove the prefix, or give the operand a shape that has that form.");
 
     internal static DiagnosticDescriptor AddressingModeTooNarrow { get; } = Entry(
+        Area.Instructions,
         "addressing-mode-too-narrow",
         Severity.Error,
         "`{0}` has only a {1} form of this operand, and `{2}` is {3}",
@@ -1933,6 +2178,7 @@ public static class Catalogue
             + "segment, or use a different addressing mode.");
 
     internal static DiagnosticDescriptor AddressSizeUnreachable { get; } = Entry(
+        Area.Instructions,
         "address-size-unreachable",
         Severity.Error,
         "`{0}` cannot reach a {1} address on the {2}",
@@ -1941,6 +2187,7 @@ public static class Catalogue
             + "reach, or reach it another way.");
 
     internal static DiagnosticDescriptor ImmediateTooWide { get; } = Entry(
+        Area.Instructions,
         "immediate-too-wide",
         Severity.Error,
         "{1} does not fit: {0}",
@@ -1949,6 +2196,7 @@ public static class Catalogue
             + "fits, take one byte of it with `<` or `>`, or widen the register.");
 
     internal static DiagnosticDescriptor DirectPageNeeds65816 { get; } = Entry(
+        Area.Instructions,
         "direct-page-needs-65816",
         Severity.Error,
         "`d:` needs the 65816, and this program is built for the {0}: use `z:` for a zero-page address",
@@ -1956,6 +2204,7 @@ public static class Catalogue
             + "Earlier processors have a fixed zero page, which `z:` asks for.");
 
     internal static DiagnosticDescriptor DirectPagePrefixOnSymbol { get; } = Entry(
+        Area.Instructions,
         "direct-page-prefix-on-symbol",
         Severity.Error,
         "`d:` takes only a constant address: to reach a symbol through the direct page, declare it in a `zp` segment",
@@ -1964,6 +2213,7 @@ public static class Catalogue
             + "mean editing every line that uses it. `d:` is for a literal address, such as `d:$05`.");
 
     internal static DiagnosticDescriptor DirectPageFormMissing { get; } = Entry(
+        Area.Instructions,
         "direct-page-form-missing",
         Severity.Error,
         "`{0}` has no direct-page form of this operand, which `d:` asks for",
@@ -1972,6 +2222,7 @@ public static class Catalogue
             + "that has a direct-page form.");
 
     internal static DiagnosticDescriptor DirectPageOnly { get; } = Entry(
+        Area.Instructions,
         "direct-page-only",
         Severity.Error,
         "`{0}` is in \"{1}\", reached through the direct page at {2}, so it works only as a direct-page operand: "
@@ -1983,6 +2234,7 @@ public static class Catalogue
             + "addressing mode.");
 
     internal static DiagnosticDescriptor AssertionFailed { get; } = Entry(
+        Area.Instructions,
         "assertion-failed",
         Severity.Error,
         "{0}",
@@ -1990,6 +2242,7 @@ public static class Catalogue
             + "that depends on final addresses is passed on for the linker to check.");
 
     internal static DiagnosticDescriptor ConfigRefused { get; } = Entry(
+        Area.Instructions,
         "config-refused",
         Severity.Error,
         "{0}",
@@ -1997,15 +2250,16 @@ public static class Catalogue
             + "does not support. The message is the file's own text.");
 
     internal static DiagnosticDescriptor ConfigWarned { get; } = Entry(
+        Area.Instructions,
         "config-warned",
         Severity.Warning,
         "{0}",
         "The build reached a `.warning` directive. The message is the file's own text, and the build continues.");
 
-    private static DiagnosticArea ControlFlow { get; } =
-        Opens("Control flow", "Where execution goes, and the annotations the analysis needs where it cannot see.");
+    // Control flow
 
     internal static DiagnosticDescriptor AnnotationAboutNothing { get; } = Entry(
+        Area.ControlFlow,
         "annotation-about-nothing",
         Severity.Error,
         "`{0}` applies to the statement above it, and there is none",
@@ -2014,6 +2268,7 @@ public static class Catalogue
             + "statement it is about.");
 
     internal static DiagnosticDescriptor CodeUnreachable { get; } = Entry(
+        Area.ControlFlow,
         "code-unreachable",
         Severity.Warning,
         "this code is never reached: execution does not fall into a nested segment block, so start it with a label "
@@ -2024,6 +2279,7 @@ public static class Catalogue
             + "as an entry point. Without one, the code is assembled but never runs.");
 
     internal static DiagnosticDescriptor LabelUnreachable { get; } = Entry(
+        Area.ControlFlow,
         "label-unreachable",
         Severity.Warning,
         "`{0}` is never reached: no code falls into it and nothing refers to it",
@@ -2032,6 +2288,7 @@ public static class Catalogue
             + "declare it an entry point; otherwise the code is dead and can be removed.");
 
     internal static DiagnosticDescriptor RunsIntoData { get; } = Entry(
+        Area.ControlFlow,
         "runs-into-data",
         Severity.Error,
         "the instruction above falls through into this data: add a `.next` after the data stating where flow goes "
@@ -2042,6 +2299,7 @@ public static class Catalogue
             + "a conditional branch that is always taken, put a `.next` naming its target under the branch instead.");
 
     internal static DiagnosticDescriptor RoutineRunsOffTheEnd { get; } = Entry(
+        Area.ControlFlow,
         "routine-runs-off-the-end",
         Severity.Warning,
         "`{0}` runs off {1} into whatever {2}: {3}, or use `.next ?` to end the path",
@@ -2052,6 +2310,7 @@ public static class Catalogue
             + "claiming anything.");
 
     internal static DiagnosticDescriptor NextTargetNotCode { get; } = Entry(
+        Area.ControlFlow,
         "next-target-not-code",
         Severity.Error,
         "`{0}` is {1}, and `{2}` must name a code label, a routine, or a table of them",
@@ -2059,6 +2318,7 @@ public static class Catalogue
             + "them. What is named here is not somewhere flow can go.");
 
     internal static DiagnosticDescriptor NextTableHasNoLabels { get; } = Entry(
+        Area.ControlFlow,
         "next-table-has-no-labels",
         Severity.Error,
         "table `{0}` holds no code labels for `.next` to follow",
@@ -2067,6 +2327,7 @@ public static class Catalogue
             + "table with code labels.");
 
     internal static DiagnosticDescriptor NextTargetNotATable { get; } = Entry(
+        Area.ControlFlow,
         "next-target-not-a-table",
         Severity.Error,
         "`{0}` is not a table of addresses: `.next` can name data only when it is declared with `.addr` or "
@@ -2075,6 +2336,7 @@ public static class Catalogue
             + "addresses, declared with `.addr` or `.faraddr`.");
 
     internal static DiagnosticDescriptor NextSuccessorsKnown { get; } = Entry(
+        Area.ControlFlow,
         "next-successors-known",
         Severity.Error,
         "`.next` is not allowed here: nt65 already knows that {0} {1}{2}",
@@ -2086,6 +2348,7 @@ public static class Catalogue
             + "may end a path after any statement.");
 
     internal static DiagnosticDescriptor NextNotTheBranchTarget { get; } = Entry(
+        Area.ControlFlow,
         "next-not-the-branch-target",
         Severity.Error,
         "`.next` after {0} can name only the branch's own target, `{1}`, to state that the branch is always taken",
@@ -2095,6 +2358,7 @@ public static class Catalogue
             + "use `.next ?`.");
 
     internal static DiagnosticDescriptor FallthroughMisplaced { get; } = Entry(
+        Area.ControlFlow,
         "fallthrough-misplaced",
         Severity.Error,
         "`.fallthrough` must be the last line of a `.proc` body, once `.if` conditions are resolved",
@@ -2105,12 +2369,14 @@ public static class Catalogue
             + "body, a block argument or a repetition, and nothing may follow it or the chain it ends.");
 
     internal static DiagnosticDescriptor FallthroughNotARoutine { get; } = Entry(
+        Area.ControlFlow,
         "fallthrough-not-a-routine",
         Severity.Error,
         "`{0}` is {1}, not a routine: `.fallthrough` names the routine execution runs into",
         "`.fallthrough` states that this routine runs on into the first byte of another routine, so it must name a `.proc`.");
 
     internal static DiagnosticDescriptor FallthroughNotAdjacent { get; } = Entry(
+        Area.ControlFlow,
         "fallthrough-not-adjacent",
         Severity.Error,
         "`{0}` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly "
@@ -2122,6 +2388,7 @@ public static class Catalogue
             + "`jmp`.");
 
     internal static DiagnosticDescriptor FallthroughOtherSegment { get; } = Entry(
+        Area.ControlFlow,
         "fallthrough-other-segment",
         Severity.Error,
         "`{0}` is in segment \"{2}\", and this routine ends in \"{1}\": a routine can only run into what comes "
@@ -2132,6 +2399,7 @@ public static class Catalogue
             + "module's first routine in this segment, or what the placing file puts next in it.");
 
     internal static DiagnosticDescriptor FallthroughNotPlaced { get; } = Entry(
+        Area.ControlFlow,
         "fallthrough-not-placed",
         Severity.Error,
         "`{0}` is in module `{1}`, and the two modules are separate translation units, whose order only the linker "
@@ -2142,6 +2410,7 @@ public static class Catalogue
             + "module's routine is checked as it is within a file.");
 
     internal static DiagnosticDescriptor IndirectCallUnchecked { get; } = Entry(
+        Area.ControlFlow,
         "indirect-call-unchecked",
         Severity.Error,
         "{0} is an indirect call, which nt65 cannot follow: add a `.next` naming the routines it may call",
@@ -2150,6 +2419,7 @@ public static class Catalogue
             + "them; each is then checked as a call.");
 
     internal static DiagnosticDescriptor IndirectJumpUnchecked { get; } = Entry(
+        Area.ControlFlow,
         "indirect-jump-unchecked",
         Severity.Error,
         "{0} is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or "
@@ -2159,6 +2429,7 @@ public static class Catalogue
             + "and nothing beyond it is checked.");
 
     internal static DiagnosticDescriptor ComputedJumpUnchecked { get; } = Entry(
+        Area.ControlFlow,
         "computed-jump-unchecked",
         Severity.Error,
         "{0} jumps to a computed address, which nt65 cannot follow: add a `.next` naming the labels it may reach, "
@@ -2168,6 +2439,7 @@ public static class Catalogue
             + "instruction, such as a jump into the middle of one, use `.next ?` to end the path there.");
 
     internal static DiagnosticDescriptor PushedReturnUnchecked { get; } = Entry(
+        Area.ControlFlow,
         "pushed-return-unchecked",
         Severity.Error,
         "`{0}` returns to an address pushed in this block, so it is really a jump: add a `.next` naming where it "
@@ -2176,6 +2448,7 @@ public static class Catalogue
             + "trick\"), so nt65 cannot tell where it goes. A `.next` after it names the labels it may reach.");
 
     internal static DiagnosticDescriptor JumpTargetNotALabel { get; } = Entry(
+        Area.ControlFlow,
         "jump-target-not-a-label",
         Severity.Error,
         "{0} goes to `{1}`, which is {2}, not a label, so nt65 cannot follow it: add a `.next` naming the labels "
@@ -2185,6 +2458,7 @@ public static class Catalogue
             + "?` ends the path.");
 
     internal static DiagnosticDescriptor JumpIntoData { get; } = Entry(
+        Area.ControlFlow,
         "jump-into-data",
         Severity.Error,
         "`{0}` labels data, and this jumps to it: add a `.state` after the label and a `.next` after the data "
@@ -2194,6 +2468,7 @@ public static class Catalogue
             + "flow goes from there.");
 
     internal static DiagnosticDescriptor EntryNotDeclared { get; } = Entry(
+        Area.ControlFlow,
         "entry-not-declared",
         Severity.Error,
         "`{0}` is inside routine `{1}`: to jump into another routine, declare the label an entry point with a "
@@ -2203,6 +2478,7 @@ public static class Catalogue
             + "and both the jump and the routine are then checked against it.");
 
     internal static DiagnosticDescriptor ExportedEntryNotDeclared { get; } = Entry(
+        Area.ControlFlow,
         "exported-entry-not-declared",
         Severity.Error,
         "`{0}` is inside routine `{1}`, and exporting it lets other modules jump into it: declare it an entry "
@@ -2212,6 +2488,7 @@ public static class Catalogue
             + "what the processor state is there, so the routine is checked from it.");
 
     internal static DiagnosticDescriptor CodeLabelAsData { get; } = Entry(
+        Area.ControlFlow,
         "code-label-as-data",
         Severity.Error,
         "the address of code label `{0}` is taken here, so it may be jumped to where nt65 cannot see: add a "
@@ -2222,6 +2499,7 @@ public static class Catalogue
             + "follows flow to it.");
 
     internal static DiagnosticDescriptor SelfModifyingUnchecked { get; } = Entry(
+        Area.ControlFlow,
         "self-modifying-unchecked",
         Severity.Error,
         "{0} modifies the instruction at `{1}`: add `.patch {2}` after it to mark the self-modifying code",
@@ -2230,6 +2508,7 @@ public static class Catalogue
             + "reader that the instruction is changed at run time.");
 
     internal static DiagnosticDescriptor HandlerCalled { get; } = Entry(
+        Area.ControlFlow,
         "handler-called",
         Severity.Error,
         "`{0}` is an interrupt handler and cannot be called: it returns with `rti`, which would not return to the "
@@ -2239,6 +2518,7 @@ public static class Catalogue
             + "would pull the wrong bytes and not return to the caller.");
 
     internal static DiagnosticDescriptor HandlerReturnsNotRti { get; } = Entry(
+        Area.ControlFlow,
         "handler-returns-not-rti",
         Severity.Error,
         "`{0}` is an interrupt handler and must return with `rti`, not `{1}`",
@@ -2246,6 +2526,7 @@ public static class Catalogue
             + "`rtl` would leave the flags on the stack and return to the wrong address.");
 
     internal static DiagnosticDescriptor NoreturnReturns { get; } = Entry(
+        Area.ControlFlow,
         "noreturn-returns",
         Severity.Error,
         "`{0}` is declared `noreturn`, but `{1}` returns from it",
@@ -2254,6 +2535,7 @@ public static class Catalogue
             + "from its signature.");
 
     internal static DiagnosticDescriptor InlineDataMissing { get; } = Entry(
+        Area.ControlFlow,
         "inline-data-missing",
         Severity.Error,
         "`{0}` expects {1} directly after each call, and {2}",
@@ -2262,6 +2544,7 @@ public static class Catalogue
             + "bytes. Put the data directly after the call, in the same segment and with no label between.");
 
     internal static DiagnosticDescriptor InlineCountNotConstant { get; } = Entry(
+        Area.ControlFlow,
         "inline-count-not-constant",
         Severity.Error,
         "`{0}` has `{1}`, and the byte count it gives must be a constant",
@@ -2269,6 +2552,7 @@ public static class Catalogue
             + "N` must be a number nt65 knows while it builds, and not negative.");
 
     internal static DiagnosticDescriptor TailCallToHandler { get; } = Entry(
+        Area.ControlFlow,
         "tail-call-to-handler",
         Severity.Error,
         "{0} is a tail call into interrupt handler `{1}`, whose `rti` would not return to this routine's caller: "
@@ -2279,6 +2563,7 @@ public static class Catalogue
             + "another handler or a `noreturn` routine.");
 
     internal static DiagnosticDescriptor TailCallDistanceMismatch { get; } = Entry(
+        Area.ControlFlow,
         "tail-call-distance-mismatch",
         Severity.Error,
         "{0} is a tail call, but `{1}` is {2} and `{3}` is {4}, so `{1}` would return the wrong way to `{3}`'s "
@@ -2288,6 +2573,7 @@ public static class Catalogue
             + "would get the wrong kind of return. Call it with `jsr` or `jsl` and return normally instead.");
 
     internal static DiagnosticDescriptor KeepsBroken { get; } = Entry(
+        Area.ControlFlow,
         "keeps-broken",
         Severity.Error,
         "`{0}` promises `keeps {1}`, but {2} {3} not the same as on entry here{4}",
@@ -2297,18 +2583,17 @@ public static class Catalogue
             + "restored in a way the analysis cannot see, add `.state keeps REG` at that point.");
 
     internal static DiagnosticDescriptor KeepsRedundant { get; } = Entry(
+        Area.ControlFlow,
         "keeps-redundant",
         Severity.Warning,
         "`{0}` is redundant here: {1} already holds its value from entry",
         "The analysis already knows the register holds the value it had when the routine was entered, so the "
             + "`.state keeps` adds nothing. Remove it.");
 
-    private static DiagnosticArea ProcessorState { get; } =
-        Opens(
-            "Processor state",
-            "65816 register widths, emulation mode, direct page, data bank, stack frames, calls and returns.");
+    // Processor state
 
     internal static DiagnosticDescriptor WidthUnknown { get; } = Entry(
+        Area.ProcessorState,
         "width-unknown",
         Severity.Error,
         "`{0} #` needs the width of {1}, and {2}",
@@ -2320,6 +2605,7 @@ public static class Catalogue
             + "width in the routine's signature.");
 
     internal static DiagnosticDescriptor ImmediateInEmulation { get; } = Entry(
+        Area.ProcessorState,
         "immediate-in-emulation",
         Severity.Error,
         "`{0} #` has a 16-bit width here, but the processor is in emulation mode, where A, X and Y are always 8-bit",
@@ -2329,6 +2615,7 @@ public static class Catalogue
             + "the `xce` that entered emulation mode.");
 
     internal static DiagnosticDescriptor WidthInEmulation { get; } = Entry(
+        Area.ProcessorState,
         "width-in-emulation",
         Severity.Error,
         "{0} is impossible in emulation mode, where A, X and Y are always 8-bit",
@@ -2337,6 +2624,7 @@ public static class Catalogue
             + "cannot be in. Declare `a8` and `i8`, or leave the widths out: `emu` already implies them.");
 
     internal static DiagnosticDescriptor EnsureNeedsNative { get; } = Entry(
+        Area.ProcessorState,
         "ensure-needs-native",
         Severity.Error,
         "`.ensure {0}` needs native mode, and {1}",
@@ -2346,6 +2634,7 @@ public static class Catalogue
             + "signature or a `.state native`.");
 
     internal static DiagnosticDescriptor EnsureItemNotAWidth { get; } = Entry(
+        Area.ProcessorState,
         "ensure-item-not-a-width",
         Severity.Error,
         "`.ensure` takes only `a8`, `a16`, `i8` and `i16`, not `{0}`",
@@ -2354,6 +2643,7 @@ public static class Catalogue
             + "use `.state`.");
 
     internal static DiagnosticDescriptor StateItemNotAPoint { get; } = Entry(
+        Area.ProcessorState,
         "state-item-not-a-point",
         Severity.Error,
         "`{0}` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`",
@@ -2363,6 +2653,7 @@ public static class Catalogue
             + "routine's name.");
 
     internal static DiagnosticDescriptor StateOutsideARoutine { get; } = Entry(
+        Area.ProcessorState,
         "state-outside-a-routine",
         Severity.Error,
         "`{0}` is only allowed inside a `.proc`: it describes a point in a routine's code",
@@ -2371,6 +2662,7 @@ public static class Catalogue
             + "the routine it belongs to.");
 
     internal static DiagnosticDescriptor StateModeMismatch { get; } = Entry(
+        Area.ProcessorState,
         "state-mode-mismatch",
         Severity.Error,
         "`.state {0}` does not match: the processor is in {1} mode here",
@@ -2379,6 +2671,7 @@ public static class Catalogue
             + "or correct the `.state`.");
 
     internal static DiagnosticDescriptor StateWidthMismatch { get; } = Entry(
+        Area.ProcessorState,
         "state-width-mismatch",
         Severity.Error,
         "`.state {0}` does not match: {1} {2} {3} here",
@@ -2387,6 +2680,7 @@ public static class Catalogue
             + "for example with `.ensure`, or correct the `.state`.");
 
     internal static DiagnosticDescriptor StateValueMismatch { get; } = Entry(
+        Area.ProcessorState,
         "state-value-mismatch",
         Severity.Error,
         "`.state {0}` does not match: {1} is {2} here",
@@ -2395,6 +2689,7 @@ public static class Catalogue
             + "a different value. Fix the code on that path, or correct the `.state`.");
 
     internal static DiagnosticDescriptor StateValueNotConstant { get; } = Entry(
+        Area.ProcessorState,
         "state-value-not-constant",
         Severity.Error,
         "`.state {0}` needs a constant, because the analysis tracks {1} as an exact value",
@@ -2403,6 +2698,7 @@ public static class Catalogue
             + "dbr = ...` must be a constant expression that nt65 can evaluate while it builds.");
 
     internal static DiagnosticDescriptor StateValueOutOfRange { get; } = Entry(
+        Area.ProcessorState,
         "state-value-out-of-range",
         Severity.Error,
         "`.state {0}` is out of range: {1}",
@@ -2410,6 +2706,7 @@ public static class Catalogue
             + "byte, $00 to $ff.");
 
     internal static DiagnosticDescriptor CallStateMismatch { get; } = Entry(
+        Area.ProcessorState,
         "call-state-mismatch",
         Severity.Error,
         "{0} needs `{1}`, but {2}",
@@ -2418,6 +2715,7 @@ public static class Catalogue
             + "call, for example with `.ensure a16`, or correct the callee's signature if it is wrong.");
 
     internal static DiagnosticDescriptor ReturnStateMismatch { get; } = Entry(
+        Area.ProcessorState,
         "return-state-mismatch",
         Severity.Error,
         "{0}`{1}` declares it returns {2}, but {3}",
@@ -2427,6 +2725,7 @@ public static class Catalogue
             + "the signature.");
 
     internal static DiagnosticDescriptor AssertedItemNotRestored { get; } = Entry(
+        Area.ProcessorState,
         "asserted-item-not-restored",
         Severity.Error,
         "{0}`{1}` declares `{2}`, so {3} must be {4}, but {5} it may not be",
@@ -2436,6 +2735,7 @@ public static class Catalogue
             + "width change, or by saving and restoring D or B.");
 
     internal static DiagnosticDescriptor CallTargetUnknown { get; } = Entry(
+        Area.ProcessorState,
         "call-target-unknown",
         Severity.Error,
         "`{0}` must call a named routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import, whose "
@@ -2446,6 +2746,7 @@ public static class Catalogue
             + "import.");
 
     internal static DiagnosticDescriptor CallTargetNotARoutine { get; } = Entry(
+        Area.ProcessorState,
         "call-target-not-a-routine",
         Severity.Error,
         "`{0}` is not a routine: on the 65816 a call must target a `.proc`, an extern proc or a `proc(...)` "
@@ -2455,6 +2756,7 @@ public static class Catalogue
             + "import instead.");
 
     internal static DiagnosticDescriptor CallDistanceMismatch { get; } = Entry(
+        Area.ProcessorState,
         "call-distance-mismatch",
         Severity.Error,
         "`{0}` is {1}, so call it with `{2}`",
@@ -2464,6 +2766,7 @@ public static class Catalogue
             + "message names, or change `near` or `far` in the routine's signature.");
 
     internal static DiagnosticDescriptor ReturnDistanceMismatch { get; } = Entry(
+        Area.ProcessorState,
         "return-distance-mismatch",
         Severity.Error,
         "`{0}` is {1}, so it returns with `{2}`",
@@ -2472,6 +2775,7 @@ public static class Catalogue
             + "instruction the message names, or change `near` or `far` in the routine's signature.");
 
     internal static DiagnosticDescriptor JumpDistanceMismatch { get; } = Entry(
+        Area.ProcessorState,
         "jump-distance-mismatch",
         Severity.Error,
         "`{0}` is {1}: jump to it with `{2} {3}`",
@@ -2479,6 +2783,7 @@ public static class Catalogue
             + "`jml`, and a near one in the same bank with `jmp`.");
 
     internal static DiagnosticDescriptor JumpAcrossBanks { get; } = Entry(
+        Area.ProcessorState,
         "jump-across-banks",
         Severity.Error,
         "`{0}` is near and in another bank: after this `jml` its `rts` would return inside its own bank, not to "
@@ -2490,6 +2795,7 @@ public static class Catalogue
             + "with `rtl`, or place it in this bank.");
 
     internal static DiagnosticDescriptor JumpLeavesBank { get; } = Entry(
+        Area.ProcessorState,
         "jump-leaves-bank",
         Severity.Error,
         "`{0}` cannot leave bank {1}, and `{2}` is in segment \"{3}\" in bank {4}: {5}",
@@ -2499,6 +2805,7 @@ public static class Catalogue
             + "to the target.");
 
     internal static DiagnosticDescriptor RelativeCallNeedsPhk { get; } = Entry(
+        Area.ProcessorState,
         "relative-call-needs-phk",
         Severity.Error,
         "`{0}` is far: push the bank with `phk` before the `per` of this relative call",
@@ -2507,6 +2814,7 @@ public static class Catalogue
             + "the bank. Put a `phk` before the `per` so the bank is on the stack.");
 
     internal static DiagnosticDescriptor RelativeCallExtraPhk { get; } = Entry(
+        Area.ProcessorState,
         "relative-call-extra-phk",
         Severity.Error,
         "`{0}` is near: remove the `phk` from this relative call",
@@ -2514,6 +2822,7 @@ public static class Catalogue
             + "byte `phk` pushed would be left on the stack. Remove the `phk`, or make the routine `far`.");
 
     internal static DiagnosticDescriptor ArgsNotPushed { get; } = Entry(
+        Area.ProcessorState,
         "args-not-pushed",
         Severity.Error,
         "`{0}` declares `args {1}`, bytes the caller pushes before the call, but {2}",
@@ -2522,6 +2831,7 @@ public static class Catalogue
             + "counting what the calling routine has pushed since its entry. Push the arguments before the call.");
 
     internal static DiagnosticDescriptor DirectPageMismatch { get; } = Entry(
+        Area.ProcessorState,
         "direct-page-mismatch",
         Severity.Error,
         "`{0}` is in segment \"{1}\", which expects the direct page at {2}, but D is {3} here",
@@ -2531,6 +2841,7 @@ public static class Catalogue
             + "...` in the routine's signature.");
 
     internal static DiagnosticDescriptor DirectPageUnknown { get; } = Entry(
+        Area.ProcessorState,
         "direct-page-unknown",
         Severity.Error,
         "{0}, and {1}",
@@ -2539,6 +2850,7 @@ public static class Catalogue
             + "routine's signature.");
 
     internal static DiagnosticDescriptor DirectPageOutOfReach { get; } = Entry(
+        Area.ProcessorState,
         "direct-page-out-of-reach",
         Severity.Error,
         "{0} at {1}, which covers only {2} to {3}",
@@ -2546,6 +2858,7 @@ public static class Catalogue
             + "this address is outside them. Change D, or use an absolute operand.");
 
     internal static DiagnosticDescriptor BankMismatch { get; } = Entry(
+        Area.ProcessorState,
         "bank-mismatch",
         Severity.Error,
         "`{0}` is in segment \"{1}\", which is {2}, but B is {3} here",
@@ -2555,6 +2868,7 @@ public static class Catalogue
             + "...`, or use a long operand such as `f:`.");
 
     internal static DiagnosticDescriptor RangeBankMismatch { get; } = Entry(
+        Area.ProcessorState,
         "range-bank-mismatch",
         Severity.Error,
         "{0} is reachable only from banks {1}, but B is {2} here",
@@ -2563,6 +2877,7 @@ public static class Catalogue
             + "the operand would reach something else. Set B to one of the listed banks, or use a long operand.");
 
     internal static DiagnosticDescriptor MirrorBankMismatch { get; } = Entry(
+        Area.ProcessorState,
         "mirror-bank-mismatch",
         Severity.Error,
         "`{0}` is in segment \"{1}\", {2}, but this reaches it through bank {3}",
@@ -2571,6 +2886,7 @@ public static class Catalogue
             + "address in the segment's bank or in one of its mirrors.");
 
     internal static DiagnosticDescriptor FrameNotARecord { get; } = Entry(
+        Area.ProcessorState,
         "frame-not-a-record",
         Severity.Error,
         "`.frame {0}` needs a struct or union type: its size gives how many stack bytes the frame covers",
@@ -2579,6 +2895,7 @@ public static class Catalogue
             + "type.");
 
     internal static DiagnosticDescriptor FramePastTheStack { get; } = Entry(
+        Area.ProcessorState,
         "frame-past-the-stack",
         Severity.Error,
         "frame `{0}` is {1} bytes, but only {2} bytes are pushed here",
@@ -2587,6 +2904,7 @@ public static class Catalogue
             + "the frame's bytes before the `.frame`, or use a smaller type.");
 
     internal static DiagnosticDescriptor FrameDepthUnknown { get; } = Entry(
+        Area.ProcessorState,
         "frame-depth-unknown",
         Severity.Error,
         "`{0}` is an offset from the stack pointer, but how many bytes are pushed here is not known{1}",
@@ -2596,6 +2914,7 @@ public static class Catalogue
             + "the `.frame` after the point where the stack changes.");
 
     internal static DiagnosticDescriptor FrameGone { get; } = Entry(
+        Area.ProcessorState,
         "frame-gone",
         Severity.Error,
         "`{0}` is in frame `{1}`, which has been pulled off the stack here",
@@ -2603,6 +2922,7 @@ public static class Catalogue
             + "anything. Use the member before those pulls, or add a new `.frame` for what is on the stack now.");
 
     internal static DiagnosticDescriptor FrameMemberNotStackRelative { get; } = Entry(
+        Area.ProcessorState,
         "frame-member-not-stack-relative",
         Severity.Error,
         "`{0}` is a stack slot, usable only on its own as a stack-relative operand: `{1},s`",
@@ -2610,10 +2930,10 @@ public static class Catalogue
             + "of a stack-relative instruction, as in `lda locals::count,s` or `lda (locals::ptr,s),y`. It cannot "
             + "be used in an expression or with another addressing mode.");
 
-    private static DiagnosticArea Output { get; } =
-        Opens("Output", "Names that clash in the ca65 output, and the C header.");
+    // Output
 
     internal static DiagnosticDescriptor OutputNameCollision { get; } = Entry(
+        Area.Output,
         "output-name-collision",
         Severity.Error,
         "`{0}` and {1} both become `{2}` in the ca65 output",
@@ -2621,6 +2941,7 @@ public static class Catalogue
             + "flatten to the same ca65 symbol, so the output would define it twice. Rename one of them.");
 
     internal static DiagnosticDescriptor CHeaderUntyped { get; } = Entry(
+        Area.Output,
         "c-header-untyped",
         Severity.Warning,
         "`{0}` has type `{1}`, which is not exported, so the C header declares `{0}` as bytes",
@@ -2629,6 +2950,7 @@ public static class Catalogue
             + "same size. Export the type to give the data its C type.");
 
     internal static DiagnosticDescriptor CHeaderNameLeftOut { get; } = Entry(
+        Area.Output,
         "c-header-name-left-out",
         Severity.Warning,
         "the C header leaves out {2} `{0}`: its linker name `{1}` has no leading `_`, so C cannot name it; export "
@@ -2638,6 +2960,7 @@ public static class Catalogue
             + "warning off in the project's `diagnostics` if C does not need it.");
 
     internal static DiagnosticDescriptor ExportNameTaken { get; } = Entry(
+        Area.Output,
         "export-name-taken",
         Severity.Error,
         "`{0}` and `{1}` are both exported to the linker as `{2}`",
@@ -2649,6 +2972,7 @@ public static class Catalogue
     /// the build configuration leaves out, and nothing else reports on those lines.
     /// </summary>
     public static DiagnosticDescriptor OmittedBranch { get; } = Entry(
+        Area.Output,
         "omitted-branch",
         Severity.Info,
         "the build configuration leaves this branch out",
@@ -2656,6 +2980,7 @@ public static class Catalogue
             + "shows them faded.");
 
     internal static DiagnosticDescriptor CannotBeTranslated { get; } = Entry(
+        Area.Output,
         "cannot-be-translated",
         Severity.Error,
         "`{0}` cannot be translated to ca65, and no other error explains why: this is a bug in nt65",
@@ -2663,10 +2988,10 @@ public static class Catalogue
             + "reported as an error first. Reaching this means neither happened, which is a bug in nt65 rather "
             + "than in the program. Please report it with the line that triggers it.");
 
-    private static DiagnosticArea TheProjectFile { get; } =
-        Opens("The project file", "`nt65.json` and the command line that adds to it.");
+    // The project file
 
     internal static DiagnosticDescriptor ProjectJsonInvalid { get; } = Entry(
+        Area.TheProjectFile,
         "project-json-invalid",
         Severity.Error,
         "{0}",
@@ -2675,6 +3000,7 @@ public static class Catalogue
             + "stopped.");
 
     internal static DiagnosticDescriptor ProjectNotAnObject { get; } = Entry(
+        Area.TheProjectFile,
         "project-not-an-object",
         Severity.Error,
         "{0} must hold one JSON object",
@@ -2682,6 +3008,7 @@ public static class Catalogue
             + "how.");
 
     internal static DiagnosticDescriptor ProjectKeyUnknown { get; } = Entry(
+        Area.TheProjectFile,
         "project-key-unknown",
         Severity.Error,
         "`{0}` is not a key of {1}{2}",
@@ -2690,12 +3017,14 @@ public static class Catalogue
             + "unknown key is an error, so that a misspelt setting does not silently do nothing.");
 
     internal static DiagnosticDescriptor ProjectCpuUnknown { get; } = Entry(
+        Area.TheProjectFile,
         "project-cpu-unknown",
         Severity.Error,
         "`{0}` is not a supported `cpu`: use {1}",
         "`cpu` names the processor the program is built for, spelt exactly as one of the listed names.");
 
     internal static DiagnosticDescriptor ProjectNotAList { get; } = Entry(
+        Area.TheProjectFile,
         "project-not-a-list",
         Severity.Error,
         "`{0}` must be a list of strings",
@@ -2703,12 +3032,14 @@ public static class Catalogue
             + "program's source files.");
 
     internal static DiagnosticDescriptor ProjectNotAString { get; } = Entry(
+        Area.TheProjectFile,
         "project-not-a-string",
         Severity.Error,
         "`{0}` must be a string",
         "This key takes a JSON string: `cpu` a processor name, `out` the directory the build writes its output into.");
 
     internal static DiagnosticDescriptor ProjectValueNotAnObject { get; } = Entry(
+        Area.TheProjectFile,
         "project-value-not-an-object",
         Severity.Error,
         "`{0}` must be an object",
@@ -2716,6 +3047,7 @@ public static class Catalogue
             + "configuration names, segment names, space names or address ranges.");
 
     internal static DiagnosticDescriptor DefineNameInvalid { get; } = Entry(
+        Area.TheProjectFile,
         "define-name-invalid",
         Severity.Error,
         "`{0}` is not a valid define name: use letters, digits and `_`, optionally after a module path such as "
@@ -2724,6 +3056,7 @@ public static class Catalogue
             + "module's path in front of it, as in `hw::SOUND`, to set that module's `.config`.");
 
     internal static DiagnosticDescriptor DefineNotANumber { get; } = Entry(
+        Area.TheProjectFile,
         "define-not-a-number",
         Severity.Error,
         "`{0}`: a define's value must be a number",
@@ -2732,6 +3065,7 @@ public static class Catalogue
             + "takes the same syntax, and `-D NAME` alone sets it to 1.");
 
     internal static DiagnosticDescriptor ConfigurationNameInvalid { get; } = Entry(
+        Area.TheProjectFile,
         "configuration-name-invalid",
         Severity.Error,
         "`{0}` is not a valid configuration name: use only letters, digits, `_` and `-`",
@@ -2739,6 +3073,7 @@ public static class Catalogue
             + "characters that need no quoting.");
 
     internal static DiagnosticDescriptor ConfigurationNotAnObject { get; } = Entry(
+        Area.TheProjectFile,
         "configuration-not-an-object",
         Severity.Error,
         "configuration `{0}` must be an object, with any of `defines`, `diagnostics` and `out`",
@@ -2747,6 +3082,7 @@ public static class Catalogue
             + "the project's, and its `out` replaces the project's.");
 
     internal static DiagnosticDescriptor ConfigurationKeyUnknown { get; } = Entry(
+        Area.TheProjectFile,
         "configuration-key-unknown",
         Severity.Error,
         "configuration `{0}` cannot set `{1}`: a configuration may set only `defines`, `diagnostics` and `out`",
@@ -2755,6 +3091,7 @@ public static class Catalogue
             + "whole project.");
 
     internal static DiagnosticDescriptor ConfigurationUnknown { get; } = Entry(
+        Area.TheProjectFile,
         "configuration-unknown",
         Severity.Error,
         "`{0}` is not a configuration: {1}",
@@ -2762,6 +3099,7 @@ public static class Catalogue
             + "project file. Check the spelling against the names listed.");
 
     internal static DiagnosticDescriptor ProjectSegmentNotAnObject { get; } = Entry(
+        Area.TheProjectFile,
         "project-segment-not-an-object",
         Severity.Error,
         "segment \"{0}\" must be an object with a `size`",
@@ -2769,6 +3107,7 @@ public static class Catalogue
             + "and optionally `dp`, `bank`, `mirrors` and `space`.");
 
     internal static DiagnosticDescriptor ProjectSegmentSizeMissing { get; } = Entry(
+        Area.TheProjectFile,
         "project-segment-size-missing",
         Severity.Error,
         "segment \"{0}\" needs a `size` of \"zp\", \"abs\" or \"far\"",
@@ -2777,6 +3116,7 @@ public static class Catalogue
             + "segment's contents is assembled, so every segment has to give one.");
 
     internal static DiagnosticDescriptor ProjectSpaceHoldsUnknown { get; } = Entry(
+        Area.TheProjectFile,
         "project-space-holds-unknown",
         Severity.Error,
         "space `{0}` must be \"code\" or \"data\"",
@@ -2785,6 +3125,7 @@ public static class Catalogue
             + "for another processor, which nt65 treats as data and macro calls.");
 
     internal static DiagnosticDescriptor ProjectSegmentKeyUnknown { get; } = Entry(
+        Area.TheProjectFile,
         "project-segment-key-unknown",
         Severity.Error,
         "segment \"{0}\" cannot set `{1}`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`",
@@ -2793,6 +3134,7 @@ public static class Catalogue
             + "key is an error, so that a misspelt one does not silently do nothing.");
 
     internal static DiagnosticDescriptor DiagnosticNameUnknown { get; } = Entry(
+        Area.TheProjectFile,
         "diagnostic-name-unknown",
         Severity.Error,
         "`{0}` is not a diagnostic nt65 reports{1}",
@@ -2800,6 +3142,7 @@ public static class Catalogue
             + "`nt65 explain` lists them.");
 
     internal static DiagnosticDescriptor DiagnosticSeverityUnknown { get; } = Entry(
+        Area.TheProjectFile,
         "diagnostic-severity-unknown",
         Severity.Error,
         "the severity of `{0}` must be \"off\", \"warning\" or \"error\"",
@@ -2807,6 +3150,7 @@ public static class Catalogue
             + "\"warning\" to report it without failing the build, or \"error\" to fail the build.");
 
     internal static DiagnosticDescriptor DiagnosticNotTurnedDown { get; } = Entry(
+        Area.TheProjectFile,
         "diagnostic-not-turned-down",
         Severity.Error,
         "`{0}` is an error, and a project cannot turn an error into a warning or off",
@@ -2815,6 +3159,7 @@ public static class Catalogue
             + "`diagnostics` can change only warnings.");
 
     internal static DiagnosticDescriptor RangeInvalid { get; } = Entry(
+        Area.TheProjectFile,
         "range-invalid",
         Severity.Error,
         "`{0}` is not a range of absolute addresses, such as \"$2100-$21ff\"",
@@ -2822,6 +3167,7 @@ public static class Catalogue
             + "$0000 to $ffff.");
 
     internal static DiagnosticDescriptor RangesOverlap { get; } = Entry(
+        Area.TheProjectFile,
         "ranges-overlap",
         Severity.Error,
         "`{0}` overlaps `{1}-{2}`: an address can be in only one range",
@@ -2829,6 +3175,7 @@ public static class Catalogue
             + "answers. Change the ranges so they do not overlap.");
 
     internal static DiagnosticDescriptor BanksNotAList { get; } = Entry(
+        Area.TheProjectFile,
         "banks-not-a-list",
         Severity.Error,
         "`{0}` must be a list of banks, such as [\"$00-$3f\", \"$80-$bf\"]",
@@ -2836,15 +3183,16 @@ public static class Catalogue
             + "range of banks such as \"$00-$3f\".");
 
     internal static DiagnosticDescriptor BankInvalid { get; } = Entry(
+        Area.TheProjectFile,
         "bank-invalid",
         Severity.Error,
         "`{0}`: {1} is not a bank or a range of banks",
         "A bank is one byte, $00 to $ff, and a range of banks is two of them with a `-` between them, lowest first.");
 
-    private static DiagnosticArea Signatures { get; } =
-        Opens("Signatures", "What a routine or macro signature may declare, and what a signature set may hold.");
+    // Signatures
 
     internal static DiagnosticDescriptor SignatureSetSelfReference { get; } = Entry(
+        Area.Signatures,
         "signature-set-self-reference",
         Severity.Error,
         "signature set `{0}` names `{1}`, which leads back to `{2}`: a set cannot include itself",
@@ -2852,6 +3200,7 @@ public static class Catalogue
             + "that replacement never ends. Remove the reference that closes the loop.");
 
     internal static DiagnosticDescriptor AliasDistanceMismatch { get; } = Entry(
+        Area.Signatures,
         "alias-distance-mismatch",
         Severity.Error,
         "`{0}` is declared {1}, but `{2}`, the routine it names, is {3}",
@@ -2861,6 +3210,7 @@ public static class Catalogue
             + "routine's.");
 
     internal static DiagnosticDescriptor AliasSignatureMismatch { get; } = Entry(
+        Area.Signatures,
         "alias-signature-mismatch",
         Severity.Error,
         "`{0}` is declared `{1}`, but `{2}`, the routine it names, is `{3}`: another name for a routine must "
@@ -2870,6 +3220,7 @@ public static class Catalogue
             + "the routine's signature, or leave its signature out to take the routine's.");
 
     internal static DiagnosticDescriptor ArgsNotConstant { get; } = Entry(
+        Area.Signatures,
         "args-not-constant",
         Severity.Error,
         "`{0}` needs a constant: the byte count has to be known while nt65 builds",
@@ -2878,12 +3229,14 @@ public static class Catalogue
             + "expression that nt65 can evaluate while it builds.");
 
     internal static DiagnosticDescriptor ArgsOutOfRange { get; } = Entry(
+        Area.Signatures,
         "args-out-of-range",
         Severity.Error,
         "`{0}` is out of range: the byte count must be from 0 to $ffff",
         "`args n` counts bytes on the stack, so n has to be from 0 to $ffff, the largest amount the 65816's stack can hold.");
 
     internal static DiagnosticDescriptor NoreturnDeclaresAnExit { get; } = Entry(
+        Area.Signatures,
         "noreturn-declares-an-exit",
         Severity.Error,
         "a `noreturn` routine never returns, so it cannot declare a state after `->`",
@@ -2892,6 +3245,7 @@ public static class Catalogue
             + "follows it.");
 
     internal static DiagnosticDescriptor HandlerAssumesState { get; } = Entry(
+        Area.Signatures,
         "handler-assumes-state",
         Severity.Error,
         "`{0}`: an interrupt handler can be entered at any instruction, so its signature can give only the mode: "
@@ -2902,6 +3256,7 @@ public static class Catalogue
             + "Remove the item and set the state inside the handler.");
 
     internal static DiagnosticDescriptor HandlerDistance { get; } = Entry(
+        Area.Signatures,
         "handler-distance",
         Severity.Error,
         "`{0}` describes how a routine is called, and an interrupt handler is never called: the processor enters "
@@ -2911,6 +3266,7 @@ public static class Catalogue
             + "item.");
 
     internal static DiagnosticDescriptor HandlerNoreturn { get; } = Entry(
+        Area.Signatures,
         "handler-noreturn",
         Severity.Error,
         "`{0}` does not apply to an interrupt handler, which leaves with `rti` and has no caller to return to",
@@ -2918,6 +3274,7 @@ public static class Catalogue
             + "processor enters it, and `rti` resumes the interrupted code. Remove `noreturn`.");
 
     internal static DiagnosticDescriptor HandlerKeeps { get; } = Entry(
+        Area.Signatures,
         "handler-keeps",
         Severity.Error,
         "`{0}` does not apply to an interrupt handler: give the mode it is entered in, `native` or `emu`, or nothing",
@@ -2926,6 +3283,7 @@ public static class Catalogue
             + "entered in with `native` or `emu`, or leave the mode out.");
 
     internal static DiagnosticDescriptor HandlerDeclaresAnExit { get; } = Entry(
+        Area.Signatures,
         "handler-declares-an-exit",
         Severity.Error,
         "an interrupt handler cannot declare a state after `->`: it leaves with `rti`, which restores the "
@@ -2935,6 +3293,7 @@ public static class Catalogue
             + "nothing reads the state the handler leaves. Remove the `->` and what follows it.");
 
     internal static DiagnosticDescriptor SignatureValueNotConstant { get; } = Entry(
+        Area.Signatures,
         "signature-value-not-constant",
         Severity.Error,
         "`{0}` needs a constant, because the analysis tracks D and B as exact values",
@@ -2943,6 +3302,7 @@ public static class Catalogue
             + "signature has to be a constant expression that nt65 can evaluate while it builds.");
 
     internal static DiagnosticDescriptor SignatureValueOutOfRange { get; } = Entry(
+        Area.Signatures,
         "signature-value-out-of-range",
         Severity.Error,
         "`{0}` is out of range: {1}",
@@ -2950,6 +3310,7 @@ public static class Catalogue
             + "byte, $00 to $ff.");
 
     internal static DiagnosticDescriptor StateBanksNotDbr { get; } = Entry(
+        Area.Signatures,
         "state-banks-not-dbr",
         Severity.Error,
         "`{0}`: only `dbr` can be given a set of banks; `dp` takes one address",
@@ -2958,6 +3319,7 @@ public static class Catalogue
             + "has to be a single value.");
 
     internal static DiagnosticDescriptor StateBanksInvalid { get; } = Entry(
+        Area.Signatures,
         "state-banks-invalid",
         Severity.Error,
         "`{0}` is not a valid set of banks: each item is a constant bank, or a range given low to high, such as "
@@ -2966,6 +3328,7 @@ public static class Catalogue
             + "bank number or a range `low..high`, and the set names at least one bank.");
 
     internal static DiagnosticDescriptor SignatureSetNotFirst { get; } = Entry(
+        Area.Signatures,
         "signature-set-not-first",
         Severity.Error,
         "signature set `{0}` must come first in its list: the items after it change what it gives",
@@ -2973,6 +3336,7 @@ public static class Catalogue
             + "set comes first in its list, and the rest read as changes to it.");
 
     internal static DiagnosticDescriptor SignatureSetNotASet { get; } = Entry(
+        Area.Signatures,
         "signature-set-not-a-set",
         Severity.Error,
         "`{0}` is {1}, not a signature set: a bare name among a signature's items has to name a `.signature` set",
@@ -2980,6 +3344,7 @@ public static class Catalogue
             + "in. Anything else in a signature is given as an item, such as `a16` or `dbr = $7e`.");
 
     internal static DiagnosticDescriptor MacroKeeps { get; } = Entry(
+        Area.Signatures,
         "macro-keeps",
         Severity.Error,
         "`{0}` does not apply to a macro: its body becomes part of the routine it is expanded into, whose "
@@ -2988,6 +3353,7 @@ public static class Catalogue
             + "keeps, and `keeps` belongs in the routine's signature. Remove it from the macro's.");
 
     internal static DiagnosticDescriptor MacroNoreturn { get; } = Entry(
+        Area.Signatures,
         "macro-noreturn",
         Severity.Error,
         "`noreturn` does not apply to a macro: a macro is expanded in place, not called",
@@ -2995,6 +3361,7 @@ public static class Catalogue
             + "`noreturn` describes routines that never return to a caller. Remove it from the macro's signature.");
 
     internal static DiagnosticDescriptor MacroDistance { get; } = Entry(
+        Area.Signatures,
         "macro-distance",
         Severity.Error,
         "`{0}` does not apply to a macro: it describes how a routine is called, and a macro is expanded in place",
@@ -3003,6 +3370,7 @@ public static class Catalogue
             + "apply to it. Remove the item.");
 
     internal static DiagnosticDescriptor DistanceDisagrees { get; } = Entry(
+        Area.Signatures,
         "distance-disagrees",
         Severity.Error,
         "`{0}` contradicts the earlier `{1}`: a routine is either near or far",
@@ -3011,6 +3379,7 @@ public static class Catalogue
             + "of them.");
 
     internal static DiagnosticDescriptor SignatureItemTwice { get; } = Entry(
+        Area.Signatures,
         "signature-item-twice",
         Severity.Error,
         "`{0}` and `{1}` both describe the same part of the state",
@@ -3018,6 +3387,7 @@ public static class Catalogue
             + "order its items are read in. Keep one of the two items.");
 
     internal static DiagnosticDescriptor UnchangedNeedsEntry { get; } = Entry(
+        Area.Signatures,
         "unchanged-needs-entry",
         Severity.Error,
         "`{0}` after `->` needs `{1}` before it too: a routine can promise to return a part unchanged only if it "
@@ -3027,6 +3397,7 @@ public static class Catalogue
             + "If the entry gives a value, put that value after the arrow instead.");
 
     internal static DiagnosticDescriptor ItemBelongsAtEntry { get; } = Entry(
+        Area.Signatures,
         "item-belongs-at-entry",
         Severity.Error,
         "`{0}` {1}, and belongs before `->`",
@@ -3043,26 +3414,65 @@ public static class Catalogue
             .Select(property => (DiagnosticDescriptor)property.GetValue(null)!)
             .OrderBy(descriptor => descriptor.Id, StringComparer.Ordinal)]);
 
+    // Find is called for every name in a project file and on every nt65 explain, so the names are
+    // looked up in a dictionary. It is built from All, on first use, for the same reason All is.
+    private static readonly Lazy<FrozenDictionary<string, DiagnosticDescriptor>> byId = new(() =>
+        All.ToFrozenDictionary(descriptor => descriptor.Id, StringComparer.Ordinal));
+
     /// <summary>Gets every descriptor, in name order.</summary>
     public static IReadOnlyList<DiagnosticDescriptor> All => all.Value;
 
     /// <summary>
     /// Returns the descriptor named <paramref name="id"/>, or null when no diagnostic has that name.
     /// </summary>
-    public static DiagnosticDescriptor? Find(string id) =>
-        All.FirstOrDefault(descriptor => descriptor.Id == id);
+    public static DiagnosticDescriptor? Find(string id) => byId.Value.GetValueOrDefault(id);
+
+    /// <summary>Creates one entry in the given area.</summary>
+    private static DiagnosticDescriptor Entry(
+        DiagnosticArea area, string id, Severity severity, string format, string explanation) =>
+        new(id, area, severity, format, explanation);
 
     /// <summary>
-    /// Opens an area. The entries declared below it, down to the next heading, belong to it.
+    /// Holds the areas. Each entry names its area, so an entry keeps its area wherever it is
+    /// declared. The areas live in their own class so that they are created before any entry
+    /// asks for one, whatever order the entries are declared in.
     /// </summary>
-    private static DiagnosticArea Opens(string name, string about) => opening = new(name, about);
+    private static class Area
+    {
+        public static DiagnosticArea ReadingALine { get; } =
+            new("Reading a line", "Syntax: numbers, text, braces, and what may appear where on a line.");
 
-    /// <summary>Creates one entry, under the heading declared above it.</summary>
-    private static DiagnosticDescriptor Entry(string id, Severity severity, string format, string explanation) =>
-        new(
-            id,
-            opening ?? throw new InvalidOperationException($"`{id}` is declared above the first heading"),
-            severity,
-            format,
-            explanation);
+        public static DiagnosticArea Names { get; } =
+            new("Names", "Declarations, scopes, modules and what a path reaches.");
+
+        public static DiagnosticArea Values { get; } =
+            new("Values", "Constants, expressions, built-in functions and the build configuration.");
+
+        public static DiagnosticArea Macros { get; } =
+            new("Macros", "Macro declarations, calls, arguments and expansion.");
+
+        public static DiagnosticArea Data { get; } = new("Data", "Declarations, records, arrays, text and padding.");
+
+        public static DiagnosticArea Placement { get; } =
+            new("Placement", "Segments, where a declaration sits and how wide an address is.");
+
+        public static DiagnosticArea Instructions { get; } =
+            new("Instructions", "Mnemonics, operands, addressing modes and branch range.");
+
+        public static DiagnosticArea ControlFlow { get; } =
+            new("Control flow", "Where execution goes, and the annotations the analysis needs where it cannot see.");
+
+        public static DiagnosticArea ProcessorState { get; } = new(
+            "Processor state",
+            "65816 register widths, emulation mode, direct page, data bank, stack frames, calls and returns.");
+
+        public static DiagnosticArea Output { get; } =
+            new("Output", "Names that clash in the ca65 output, and the C header.");
+
+        public static DiagnosticArea TheProjectFile { get; } =
+            new("The project file", "`nt65.json` and the command line that adds to it.");
+
+        public static DiagnosticArea Signatures { get; } =
+            new("Signatures", "What a routine or macro signature may declare, and what a signature set may hold.");
+    }
 }
