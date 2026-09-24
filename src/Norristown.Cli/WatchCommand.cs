@@ -33,6 +33,11 @@ internal static class WatchCommand
             ? Path.GetDirectoryName(file)!
             : directory;
 
+        // A project named in a folder that does not exist cannot be watched, and the build
+        // reports why before returning the usage error.
+        if (!Directory.Exists(root))
+            return BuildCommand.Run(command, directory, output, error, colour).Code;
+
         // The watcher is started before the first build, so a file saved while that build is
         // running still triggers a rebuild rather than being missed.
         var watched = new HashSet<string>(FilePaths.Comparer);

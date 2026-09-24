@@ -56,6 +56,16 @@ public static class FormatCommand
             }
             var root = Path.GetDirectoryName(projectFile)!;
             var project = ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile));
+
+            // An error in the project file is why no files would be found, so it is reported
+            // in place of saying there are none.
+            var errors = project.Diagnostics.Where(d => d.Severity == Severity.Error).ToList();
+            if (errors.Count > 0)
+            {
+                foreach (var d in errors)
+                    error.WriteLine(Reported.Line(d, ProjectRoot.Shown(directory, projectFile), colour: false));
+                return ExitCode.InputError;
+            }
             files = [.. project.Files
                 .SelectMany(glob => SourceGlobs.Matching(root, glob))
                 .Select(path => Path.Combine(root, path))

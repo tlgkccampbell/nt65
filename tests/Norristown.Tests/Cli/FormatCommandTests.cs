@@ -83,6 +83,13 @@ public sealed class FormatCommandTests : IDisposable
         (code, printed) = Run(root.FullName, "fmt", "gone.nt65");
         Assert.Equal((ExitCode.InputError, "gone.nt65: error: file not found\n"), (code, printed));
 
+        // A project file that cannot be read is why no files were found, and it is what is reported.
+        root.Write("nt65.json", """{ "files": ["*.nt65"] """);
+        (code, printed) = Run(root.FullName, "fmt");
+        Assert.Equal(ExitCode.InputError, code);
+        Assert.StartsWith("nt65.json:1:", printed);
+        Assert.DoesNotContain("no files to format", printed);
+
         (code, printed) = Run(root.FullName, "fmt", "--write");
         Assert.Equal((ExitCode.UsageError, "nt65: `--write` is not an option\nsee `nt65 --help`\n"), (code, printed));
     }

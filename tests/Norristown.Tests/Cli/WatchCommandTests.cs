@@ -74,6 +74,51 @@ public sealed class WatchCommandTests : IDisposable
     }
 
     /// <summary>
+    /// A project named in a folder that does not exist is a wrong command line, and is reported
+    /// as one rather than crashing on the folder it cannot watch.
+    /// </summary>
+    [Fact]
+    public async Task AProjectInAMissingFolderComesStraightBack()
+    {
+        var timeout = TestTimeout.Token();
+        var printed = new Lines();
+
+        var code = await Task.Run(
+            () => Commands.Run(["build", "--watch", "--project", "nope/nt65.json"], root.FullName, TextWriter.Null, printed, false, timeout),
+            CancellationToken.None);
+
+        Assert.Equal(ExitCode.UsageError, code);
+        Assert.Contains("does not exist", await printed.NextAsync(timeout), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A project file that cannot be read is a problem with the input, which a change can fix, so
+    /// the watch waits for that change rather than ending.
+    /// </summary>
+    [Fact]
+    public async Task ABrokenProjectFileIsWaitedOn()
+    {
+        var timeout = TestTimeout.Token();
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build" """);
+        root.Write("src/main.nt65", Good);
+
+        var printed = new Lines();
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
+        var watching = Task.Run(
+            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, stopping.Token),
+            CancellationToken.None);
+
+        Assert.NotEmpty(await WaitAsync(printed, timeout));
+
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build" }""");
+        Assert.Empty(await WaitAsync(printed, timeout));
+        Assert.True(File.Exists(Path.Combine(root.FullName, "build", "main.s")));
+
+        await stopping.CancelAsync();
+        Assert.Equal(ExitCode.Success, await watching);
+    }
+
+    /// <summary>
     /// Returns the lines the build printed, up to the line that says it is waiting for the next
     /// change.
     /// </summary>

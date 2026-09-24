@@ -58,9 +58,7 @@ public static class OutputManifest
         if (!before.SequenceEqual(now, StringComparer.Ordinal))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(record)!);
-            var beside = $"{record}.{Environment.ProcessId}.tmp";
-            File.WriteAllText(beside, string.Concat(now.Select(path => path + "\n")));
-            File.Move(beside, record, overwrite: true);
+            AtomicFile.Write(record, string.Concat(now.Select(path => path + "\n")));
         }
         return deleted;
     }

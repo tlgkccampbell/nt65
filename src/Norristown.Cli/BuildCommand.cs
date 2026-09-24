@@ -35,6 +35,27 @@ public static class BuildCommand
     internal static BuildResult Run(
         CommandLine command, string directory, TextWriter output, TextWriter error, bool colour)
     {
+        try
+        {
+            return Built(command, directory, output, error, colour);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A file that cannot be read or written is a problem with the files, not a bug in
+            // nt65. On Windows it is common: an editor holds a source, or an emulator holds an
+            // output. A watch goes on watching, and builds again once something changes.
+            error.WriteLine($"nt65: error: {e.Message}");
+            return new BuildResult(ExitCode.InputError, directory, []);
+        }
+    }
+
+    /// <summary>
+    /// Runs one build as <see cref="Run"/> does, letting a failure to read or write a file
+    /// propagate to it.
+    /// </summary>
+    private static BuildResult Built(
+        CommandLine command, string directory, TextWriter output, TextWriter error, bool colour)
+    {
         // The project file is the one named, or the nearest one at or above where nt65 runs;
         // with none, the directory nt65 runs in is the root.
         var projectFile = ProjectRoot.Chosen(command.Project, directory);
@@ -62,10 +83,7 @@ public static class BuildCommand
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
 
         if (paths.Count == 0)
-        {
-            ReportNoInput(run, project, projectFile);
-            return new BuildResult(ExitCode.UsageError, run.Root, watched);
-        }
+            return new BuildResult(ReportNoInput(run, project, projectFile), run.Root, watched);
 
         var header = command.Header is { } headerPath ? Path.GetFullPath(headerPath, directory) : null;
         var (analysis, compilation) = Compile(run, project, paths, header);
@@ -166,20 +184,26 @@ public static class BuildCommand
 
     /// <summary>
     /// Reports that the build found no files to read, along with the project file's diagnostics,
-    /// which are the likelier cause.
+    /// which are the likelier cause, and returns the exit code. The code is
+    /// <see cref="ExitCode.InputError"/> when the project file has an error, and
+    /// <see cref="ExitCode.UsageError"/> otherwise.
     /// </summary>
-    private static void ReportNoInput(Context run, ProjectSettings project, string? projectFile)
+    private static ExitCode ReportNoInput(Context run, ProjectSettings project, string? projectFile)
     {
         // When a build finds no files, an error in the project file is a far more common
         // cause than a missing `files`, so the project file's diagnostics are reported first.
-        // The usage text is printed only when there are none, since then the command line is
-        // what needs fixing.
+        // An error there is the whole story: the input is wrong, and fixing the file fixes the
+        // build, which a watch goes on waiting for. The usage text is printed only when there
+        // are no diagnostics, since then the command line is what needs fixing.
         Report(run, project.Diagnostics);
+        if (project.Diagnostics.Any(d => d.Severity == Severity.Error))
+            return ExitCode.InputError;
         run.Error.WriteLine(projectFile is null ? $"nt65: no input files, and no {ProjectFile.Name}"
             : project.Files.Count == 0 ? $"nt65: no input files, and no `files` in {ProjectFile.Name}"
             : $"nt65: no file matched the `files` globs in {ProjectFile.Name}");
         if (project.Diagnostics.Count == 0)
             run.Error.WriteLine(CommandLine.Usage);
+        return ExitCode.UsageError;
     }
 
     /// <summary>
@@ -318,9 +342,7 @@ public static class BuildCommand
         }
         if (Path.GetDirectoryName(path) is { Length: > 0 } parent)
             Directory.CreateDirectory(parent);
-        var written = $"{path}.{Environment.ProcessId}.tmp";
-        File.WriteAllText(written, text);
-        File.Move(written, path, overwrite: true);
+        AtomicFile.Write(path, text);
     }
 
     /// <summary>

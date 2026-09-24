@@ -159,21 +159,48 @@ public sealed class BuildCommandTests : IDisposable
 
     /// <summary>
     /// When a build finds no files, an error in the project file is a far more common cause than a
-    /// missing <c>files</c>. The project file's diagnostics therefore come first, and the forty
-    /// lines of usage text are not printed, because the command line is not what needs fixing.
+    /// missing <c>files</c>. The project file's errors are then the whole report, with no note that
+    /// nothing matched and none of the forty lines of usage text. The build fails as a program
+    /// with errors does, since fixing the file fixes it, and a watch waits for that.
+    /// </summary>
+    [Theory]
+    [InlineData("""{ "cpu": "6502", "files": ["*.nt65"], "flies": [] }""", "nt65.json:1:39: error: `flies` is not a key of nt65.json")]
+    [InlineData("""{ "cpu": "6502", "files": ["*.nt65"] """, "nt65.json:1:")]
+    public void AProjectFilesOwnErrorIsReportedInPlaceOfThereBeingNoFiles(string project, string starts)
+    {
+        Project(project);
+
+        var (code, printed) = Run(Path.Combine(root.FullName, "app"), "build");
+
+        Assert.Equal(ExitCode.InputError, code);
+        Assert.StartsWith(starts, printed);
+        Assert.DoesNotContain("no file matched", printed);
+        Assert.DoesNotContain("usage: nt65 build", printed);
+    }
+
+    /// <summary>
+    /// A file nt65 cannot write, such as an output an emulator holds open on Windows, is reported
+    /// as a problem with the files rather than as a bug in nt65, and leaves no temporary file
+    /// beside it.
     /// </summary>
     [Fact]
-    public void AProjectFilesOwnProblemIsReportedBeforeThereAreNoFiles()
+    public void AnOutputThatCannotBeWrittenIsReported()
     {
-        Project("""{ "cpu": "6502", "files": ["*.nt65"], "flies": [] }""");
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows refuses to replace a file another program holds open");
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", ".const BORDER = $d020", StringComparison.Ordinal));
         var app = Path.Combine(root.FullName, "app");
+        Assert.Equal(ExitCode.Success, Run(app, "build").Code);
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", ".const BORDER = $d021", StringComparison.Ordinal));
 
-        var (code, printed) = Run(app, "build");
+        ExitCode code;
+        string printed;
+        using (new FileStream(root.PathOf("app/build/main.s"), FileMode.Open, FileAccess.Read, FileShare.None))
+            (code, printed) = Run(app, "build");
 
-        Assert.Equal(ExitCode.UsageError, code);
-        Assert.StartsWith("nt65.json:1:39: error: `flies` is not a key of nt65.json", printed);
-        Assert.Contains("nt65: no file matched the `files` globs in nt65.json", printed);
-        Assert.DoesNotContain("usage: nt65 build", printed);
+        Assert.Equal(ExitCode.InputError, code);
+        Assert.StartsWith("nt65: error: ", printed);
+        Assert.Empty(Directory.GetFiles(root.PathOf("app/build"), "*.tmp"));
     }
 
     /// <summary>
