@@ -79,7 +79,7 @@ internal sealed partial class Evaluator
         if (name is ".loadof" or ".runof")
         {
             if (arguments.Count != 1)
-                Report(function, Catalogue.BuiltinArguments.Says(name, "a segment"));
+                Report(function, Catalogue.BuiltinArguments.Message(name, "a segment"));
             return Value.Unknown;
         }
 
@@ -95,7 +95,7 @@ internal sealed partial class Evaluator
                 return Value.Unknown;
             if (!HasBytesOfItsOwn(laid))
             {
-                Report(arguments[0], Catalogue.NothingToMeasure.Says(laid.Name, laid.KindPhrase, name));
+                Report(arguments[0], Catalogue.NothingToMeasure.Message(laid.Name, laid.KindPhrase, name));
                 return Value.Unknown;
             }
             return name == ".spanof" && spans?.Invoke(laid) is { } span ? Value.Of(span) : Value.Unknown;
@@ -108,7 +108,7 @@ internal sealed partial class Evaluator
         {
             if (arguments.Count != 2)
             {
-                Report(function, Catalogue.BuiltinArguments.Says(name, $"`{name}(from, to)`"));
+                Report(function, Catalogue.BuiltinArguments.Message(name, $"`{name}(from, to)`"));
                 return Value.Unknown;
             }
             if (SymbolOf(arguments[0]) is not { } start || SymbolOf(arguments[1]) is not { } end)
@@ -117,7 +117,7 @@ internal sealed partial class Evaluator
             {
                 if (symbol.Kind is not (SymbolKind.Label or SymbolKind.Proc))
                 {
-                    Report(at, Catalogue.CyclesNeedsAPosition.Says(symbol.DisplayName, symbol.KindPhrase));
+                    Report(at, Catalogue.CyclesNeedsAPosition.Message(symbol.DisplayName, symbol.KindPhrase));
                     return Value.Unknown;
                 }
             }
@@ -125,7 +125,7 @@ internal sealed partial class Evaluator
                 return Value.Unknown;
             if (counted.Problem is { } problem)
             {
-                Report(function, Catalogue.CyclesSpanHasNoBound.Says(name, problem));
+                Report(function, Catalogue.CyclesSpanHasNoBound.Message(name, problem));
                 return Value.Unknown;
             }
             return counted.Value is { } number ? Value.Of(number) : Value.Unknown;
@@ -152,20 +152,20 @@ internal sealed partial class Evaluator
             var bytesOnly = measured.Kind == SymbolKind.Proc || measured is { Kind: SymbolKind.Data, Data: null };
             if (name == ".countof" && bytesOnly)
             {
-                Report(arguments[0], Catalogue.CountofHasNoElements.Says(
+                Report(arguments[0], Catalogue.CountofHasNoElements.Message(
                     measured.Name, (measured.Kind == SymbolKind.Proc ? "a routine" : "mixed data"), measured.Name));
                 return Value.Unknown;
             }
             if (measured.Kind == SymbolKind.Proc)
                 return spans?.Invoke(measured) is { } body ? Value.Of(body) : Value.Unknown;
 
-            Settle(measured);
+            EnsureEvaluated(measured);
             var room = name == ".sizeof" ? measured.Size : measured.Count;
             if (room is null && measured is { Kind: SymbolKind.Data, Data: null })
             {
                 Report(arguments[0], Expands(measured)
-                    ? Catalogue.SizeofDependsOnExpansion.Says(measured.Name, measured.Name)
-                    : Catalogue.SizeofDependsOnAlignment.Says(measured.Name, measured.Name));
+                    ? Catalogue.SizeofDependsOnExpansion.Message(measured.Name, measured.Name)
+                    : Catalogue.SizeofDependsOnAlignment.Message(measured.Name, measured.Name));
             }
             return room is { } number ? Value.Of(number) : Value.Unknown;
         }
@@ -181,7 +181,7 @@ internal sealed partial class Evaluator
             // Outside an expansion the parameter has been given no operand yet, which is not an
             // error.
             if (arguments.Count != 1 || Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
-                Report(function, Catalogue.BuiltinArguments.Says(".exprof", "an `operand` parameter"));
+                Report(function, Catalogue.BuiltinArguments.Message(".exprof", "an `operand` parameter"));
             return Value.Unknown;
         }
 
@@ -253,7 +253,7 @@ internal sealed partial class Evaluator
                 || values[1].Kind is ValueKind.String or ValueKind.Word
                 || values[2].Kind is ValueKind.String or ValueKind.Word)
             {
-                Report(function, Catalogue.BuiltinArguments.Says(name, "`.strsub(text, start, count)`: a text and two numbers"));
+                Report(function, Catalogue.BuiltinArguments.Message(name, "`.strsub(text, start, count)`: a text and two numbers"));
                 return Value.Unknown;
             }
             if (values is not [{ Kind: ValueKind.String, Text: { } whole }, { Kind: ValueKind.Number } from,
@@ -263,7 +263,7 @@ internal sealed partial class Evaluator
             }
             if (from.Number < 0 || taken.Number < 0 || from.Number + taken.Number > whole.Length)
             {
-                Report(function, Catalogue.StrsubOutOfRange.Says(
+                Report(function, Catalogue.StrsubOutOfRange.Message(
                     $"{taken.Number} {(taken.Number == 1 ? "byte" : "bytes")} from {from.Number}",
                     $"{whole.Length} {(whole.Length == 1 ? "byte" : "bytes")} long"));
                 return Value.Unknown;
@@ -273,7 +273,7 @@ internal sealed partial class Evaluator
 
         if (values.Length == 0)
         {
-            Report(function, Catalogue.BuiltinArguments.Says(name, "`.strcat(part, ...)`: at least one text or number"));
+            Report(function, Catalogue.BuiltinArguments.Message(name, "`.strcat(part, ...)`: at least one text or number"));
             return Value.Unknown;
         }
         var joined = new System.Text.StringBuilder();
@@ -289,11 +289,11 @@ internal sealed partial class Evaluator
                     joined.Append((char)one.Number);
                     break;
                 case { Kind: ValueKind.Number } wide:
-                    Report(arguments[i], Catalogue.StrcatNotAByte.Says(wide));
+                    Report(arguments[i], Catalogue.StrcatNotAByte.Message(wide));
                     known = false;
                     break;
                 case { Kind: ValueKind.Word }:
-                    Report(arguments[i], Catalogue.BuiltinArguments.Says(name, "texts and numbers"));
+                    Report(arguments[i], Catalogue.BuiltinArguments.Message(name, "texts and numbers"));
                     known = false;
                     break;
                 default:
@@ -320,7 +320,7 @@ internal sealed partial class Evaluator
             case ".sqrt" when values is [var n]:
                 worked = IntegerMath.Sqrt(n.Number);
                 if (worked is null)
-                    Report(function, Catalogue.SqrtOfANegative.Says(n.Number));
+                    Report(function, Catalogue.SqrtOfANegative.Message(n.Number));
                 break;
             case ".muldiv" when values is [var a, var b, var c]:
                 if (c.Number == 0)
@@ -330,12 +330,12 @@ internal sealed partial class Evaluator
                 }
                 worked = IntegerMath.MulDiv(a.Number, b.Number, c.Number);
                 if (worked is null)
-                    Report(function, Catalogue.ArithmeticOverflow.Says($"`{name}`"));
+                    Report(function, Catalogue.ArithmeticOverflow.Message($"`{name}`"));
                 break;
             case ".sin" or ".cos" when values is [var angle, var turn, var scale]:
                 if (!IntegerMath.InRange(turn.Number, scale.Number))
                 {
-                    Report(function, Catalogue.TurnOrScaleOutOfRange.Says(name, IntegerMath.Limit));
+                    Report(function, Catalogue.TurnOrScaleOutOfRange.Message(name, IntegerMath.Limit));
                     return Value.Unknown;
                 }
                 worked = name == ".sin"
@@ -343,7 +343,7 @@ internal sealed partial class Evaluator
                     : IntegerMath.Cos(angle.Number, turn.Number, scale.Number);
                 break;
             default:
-                Report(function, Catalogue.BuiltinArguments.Says(name, name switch
+                Report(function, Catalogue.BuiltinArguments.Message(name, name switch
                 {
                     ".sqrt" => "one number",
                     ".muldiv" => "`.muldiv(a, b, c)`",
@@ -366,7 +366,7 @@ internal sealed partial class Evaluator
             return Value.Of(value);
         if (asked.Setting(name, Report) is { } setting)
             return setting;
-        Report(name, Catalogue.ConditionNamesTheProgram.Says(name.GetText().Trim()));
+        Report(name, Catalogue.ConditionNamesTheProgram.Message(name.GetText().Trim()));
         return Value.Unknown;
     }
 
@@ -418,7 +418,7 @@ internal sealed partial class Evaluator
         // `.sizeof(Point)` is one mistake, not that plus a `Point` that is not a define.
         if (!Answerable(name))
         {
-            Report(function, Catalogue.ConditionAsksAboutTheProgram.Says(function.Text));
+            Report(function, Catalogue.ConditionAsksAboutTheProgram.Message(function.Text));
             return Value.Unknown;
         }
         return Plain(name, function, given);
@@ -482,7 +482,7 @@ internal sealed partial class Evaluator
     {
         if (at is NameExpressionSyntax { IsIndexed: true })
         {
-            Report(at, Catalogue.MeasuresADeclaration.Says(function, at.GetText().Trim()));
+            Report(at, Catalogue.MeasuresADeclaration.Message(function, at.GetText().Trim()));
             return true;
         }
         var what = symbol.Kind switch
@@ -498,7 +498,7 @@ internal sealed partial class Evaluator
         };
         if (what is null)
             return false;
-        Report(at, Catalogue.NotMeasurable.Says(symbol.DisplayName, what, function));
+        Report(at, Catalogue.NotMeasurable.Message(symbol.DisplayName, what, function));
         return true;
     }
 
@@ -560,8 +560,8 @@ internal sealed partial class Evaluator
     /// substituting what a binding gave it.
     /// </summary>
     private Symbol? Parameter(SyntaxNode name) =>
-        name is NameExpressionSyntax { Names.Length: 1, SimpleName: { } only } written
-        && resolved.TryGetValue((written.Tree, only.Span.Start), out var symbol)
+        name is NameExpressionSyntax { Names.Length: 1, SimpleName: { } only } nameExpression
+        && resolved.TryGetValue((nameExpression.Tree, only.Span.Start), out var symbol)
             ? symbol
             : null;
 
@@ -589,7 +589,7 @@ internal sealed partial class Evaluator
             return Value.Unknown;
         if (symbol.ParameterSymbols.Count != given.Count)
         {
-            Report(callee, Catalogue.FunctionArgumentCount.Says(
+            Report(callee, Catalogue.FunctionArgumentCount.Message(
                 symbol.Name, symbol.ParameterSymbols.Count, given.Count));
             return Value.Unknown;
         }

@@ -68,7 +68,7 @@ public sealed class CodeActionsTests
 
     [Theory]
     [MemberData(nameof(Fixes))]
-    public async Task AFixWritesWhatTheDiagnosticNames(string title, string body, string fixedBody)
+    public async Task AFixAppliesWhatTheDiagnosticNames(string title, string body, string fixedBody)
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Header + body));
@@ -89,7 +89,7 @@ public sealed class CodeActionsTests
     /// one it does export gets a <c>.use</c> here.
     /// </summary>
     [Fact]
-    public async Task TheMissingExportOrUseIsWrittenWhereItBelongs()
+    public async Task TheMissingExportOrUseIsInsertedWhereItBelongs()
     {
         var timeout = TestTimeout.Token();
         const string Gfx = ".module gfx\n.segment CODE\n.proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";

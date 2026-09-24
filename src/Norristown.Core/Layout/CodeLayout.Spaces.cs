@@ -26,7 +26,7 @@ public sealed partial class CodeLayout
         if (here is { HoldsCode: false } && segment is not null && routine is not null
             && codeInData.Add((routine, segment)))
         {
-            Report(mnemonic, Catalogue.CodeInADataSpace.Says(segment, here.Name));
+            Report(mnemonic, Catalogue.CodeInADataSpace.Message(segment, here.Name));
         }
 
         // An immediate is a value, a block move's banks are values, and `pea` and `per` push
@@ -51,10 +51,10 @@ public sealed partial class CodeLayout
                 if (there?.Name == here?.Name)
                     continue;
                 Report(expression, transfer
-                    ? Catalogue.TransferToAnotherSpace.Says(
-                        mnemonic.Text, name, segmentName, AddressSpace.Spell(there?.Name), AddressSpace.Spell(here?.Name))
-                    : Catalogue.OperandInAnotherSpace.Says(
-                        name, segmentName, AddressSpace.Spell(there?.Name), AddressSpace.Spell(here?.Name)));
+                    ? Catalogue.TransferToAnotherSpace.Message(
+                        mnemonic.Text, name, segmentName, AddressSpace.Format(there?.Name), AddressSpace.Format(here?.Name))
+                    : Catalogue.OperandInAnotherSpace.Message(
+                        name, segmentName, AddressSpace.Format(there?.Name), AddressSpace.Format(here?.Name)));
             }
         }
     }
@@ -68,8 +68,8 @@ public sealed partial class CodeLayout
     {
         foreach (var symbol in AddressSymbols.In(model, expression, expansion))
         {
-            if (symbol.Segment is { } placed)
-                yield return ($"`{symbol.QualifiedName}`", placed);
+            if (symbol.Segment is { } segment)
+                yield return ($"`{symbol.QualifiedName}`", segment);
         }
         foreach (var call in new[] { expression }.Concat(expression.DescendantNodes()).OfType<CallExpressionSyntax>())
         {

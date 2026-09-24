@@ -133,7 +133,7 @@ internal static class Operators
             refused = null;
             return (long)result;
         }
-        refused = Overflows(Written(op, a, b));
+        refused = Overflows(Format(op, a, b));
         return null;
     }
 
@@ -141,7 +141,7 @@ internal static class Operators
     /// Formats an operation the way the overflow message quotes it. A shift count is formatted as
     /// a small decimal number, unlike every other value, which may be a mask or an address.
     /// </summary>
-    private static string Written(SyntaxToken op, long a, long b) => op.Kind == SyntaxKind.LessLess
+    private static string Format(SyntaxToken op, long a, long b) => op.Kind == SyntaxKind.LessLess
         ? $"{Value.Of(a)} {op.Text} {b.ToString(CultureInfo.InvariantCulture)}"
         : $"{Value.Of(a)} {op.Text} {Value.Of(b)}";
 
@@ -152,12 +152,12 @@ internal static class Operators
     private static bool Counted(long places, out DiagnosticMessage? refused)
     {
         refused = places is < 0 or > 63
-            ? Catalogue.ShiftCountOutOfRange.Says(places.ToString(CultureInfo.InvariantCulture))
+            ? Catalogue.ShiftCountOutOfRange.Message(places.ToString(CultureInfo.InvariantCulture))
             : (DiagnosticMessage?)null;
         return refused is null;
     }
 
-    private static DiagnosticMessage Overflows(string written) => Catalogue.ArithmeticOverflow.Says(written);
+    private static DiagnosticMessage Overflows(string expression) => Catalogue.ArithmeticOverflow.Message(expression);
 
     private static long Truth(bool condition) => condition ? 1 : 0;
 }

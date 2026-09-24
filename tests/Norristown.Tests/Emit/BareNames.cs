@@ -42,7 +42,7 @@ internal static partial class BareNames
                 && instructions.Contains(definition.Groups["name"].Value))
             {
                 yield return $"[{label}] {path}:{i + 1}: `{definition.Groups["name"].Value}` is an instruction "
-                    + $"to ca65 under `.setcpu \"{CpuNames.SpellForCa65(cpu)}\"`, and this line defines it:\n  {lines[i]}";
+                    + $"to ca65 under `.setcpu \"{CpuNames.FormatForCa65(cpu)}\"`, and this line defines it:\n  {lines[i]}";
             }
         }
     }
@@ -58,7 +58,7 @@ internal static partial class BareNames
             if (SetCpu().Match(line) is { Success: true } header)
             {
                 return CpuNames.All.Cast<Cpu?>()
-                    .FirstOrDefault(cpu => CpuNames.SpellForCa65(cpu!.Value) == header.Groups["cpu"].Value);
+                    .FirstOrDefault(cpu => CpuNames.FormatForCa65(cpu!.Value) == header.Groups["cpu"].Value);
             }
         }
         return null;

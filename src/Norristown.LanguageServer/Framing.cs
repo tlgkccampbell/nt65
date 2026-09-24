@@ -276,15 +276,15 @@ internal sealed class Framing : MessageHandlerBase
     /// </summary>
     private async ValueTask<bool> FillAsync(byte[] content, CancellationToken cancellationToken)
     {
-        var written = 0;
-        while (written < content.Length)
+        var filled = 0;
+        while (filled < content.Length)
         {
             if (at == have && !await ReadMoreAsync(cancellationToken).ConfigureAwait(false))
                 return false;
-            var take = Math.Min(have - at, content.Length - written);
-            buffer.AsSpan(at, take).CopyTo(content.AsSpan(written));
+            var take = Math.Min(have - at, content.Length - filled);
+            buffer.AsSpan(at, take).CopyTo(content.AsSpan(filled));
             at += take;
-            written += take;
+            filled += take;
         }
         return true;
     }

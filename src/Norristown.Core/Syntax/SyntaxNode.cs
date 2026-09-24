@@ -296,13 +296,13 @@ public abstract class SyntaxNode
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode NormalizeWhitespace()
     {
-        var written = new List<(SyntaxToken Token, bool Tight)>();
-        Flatten(this, written);
-        var spaced = ImmutableArray.CreateBuilder<SyntaxToken>(written.Count);
-        for (var i = 0; i < written.Count; i++)
+        var tokens = new List<(SyntaxToken Token, bool Tight)>();
+        Flatten(this, tokens);
+        var spaced = ImmutableArray.CreateBuilder<SyntaxToken>(tokens.Count);
+        for (var i = 0; i < tokens.Count; i++)
         {
-            var (token, tight) = written[i];
-            SyntaxTrivia[] after = !tight && i + 1 < written.Count && Apart(token.Kind, written[i + 1].Token.Kind)
+            var (token, tight) = tokens[i];
+            SyntaxTrivia[] after = !tight && i + 1 < tokens.Count && Apart(token.Kind, tokens[i + 1].Token.Kind)
                 ? [SyntaxFactory.Space]
                 : [];
             spaced.Add(token.WithLeadingTrivia().WithTrailingTrivia(after));
@@ -406,7 +406,7 @@ public abstract class SyntaxNode
     /// </summary>
     /// <param name="annotation">The annotation to look for.</param>
     public IEnumerable<SyntaxNodeOrToken> GetAnnotatedNodesAndTokens(SyntaxAnnotation annotation) =>
-        AnnotatedPieces(carried => carried.Contains(annotation));
+        AnnotatedPieces(annotations => annotations.Contains(annotation));
 
     /// <summary>
     /// Returns every node and token at or below this node that has an annotation of kind
@@ -414,7 +414,7 @@ public abstract class SyntaxNode
     /// </summary>
     /// <param name="kind">The kind to look for.</param>
     public IEnumerable<SyntaxNodeOrToken> GetAnnotatedNodesAndTokens(string kind) =>
-        AnnotatedPieces(carried => carried.Any(annotation => annotation.Kind == kind));
+        AnnotatedPieces(annotations => annotations.Any(annotation => annotation.Kind == kind));
 
     /// <summary>Returns the node's full text, including trivia, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
@@ -582,7 +582,7 @@ public abstract class SyntaxNode
     /// Returns every node and token at or below this node that has an annotation of any kind, in
     /// source order. A rewrite reads these so that the annotations survive a reparse.
     /// </summary>
-    internal IEnumerable<SyntaxNodeOrToken> AnnotatedPieces() => AnnotatedPieces(carried => !carried.IsEmpty);
+    internal IEnumerable<SyntaxNodeOrToken> AnnotatedPieces() => AnnotatedPieces(annotations => !annotations.IsEmpty);
 
     /// <summary>
     /// Returns every node and token at or below this node whose annotations
@@ -782,20 +782,20 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Adds every token under <paramref name="node"/> to <paramref name="written"/>, in source
+    /// Adds every token under <paramref name="node"/> to <paramref name="tokens"/>, in source
     /// order. Each token is paired with a value indicating whether its parent allows no space
     /// before the next token. nt65 puts no space between a prefix operator and its operand, inside
     /// an instruction operand, or inside an address prefix.
     /// </summary>
-    private static void Flatten(SyntaxNode node, List<(SyntaxToken Token, bool Tight)> written)
+    private static void Flatten(SyntaxNode node, List<(SyntaxToken Token, bool Tight)> tokens)
     {
         var tight = node is UnaryExpressionSyntax or OperandSyntax or AddressPrefixSyntax;
         foreach (var child in node.ChildNodesAndTokens())
         {
             if (child.AsNode() is { } inner)
-                Flatten(inner, written);
+                Flatten(inner, tokens);
             else
-                written.Add((child.AsToken(), tight));
+                tokens.Add((child.AsToken(), tight));
         }
     }
 

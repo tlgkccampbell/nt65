@@ -40,7 +40,7 @@ internal static class Lsp
     /// The number of pushes a hover lists before it says how many more there are. A reader cares
     /// most about the top of the stack, which holds what the routine will pull next.
     /// </summary>
-    private const int MostPushes = 6;
+    private const int MaximumPushes = 6;
 
     /// <summary>
     /// The keys of the rows that lead an instruction's hover, which give what a reader hovers an
@@ -92,7 +92,7 @@ internal static class Lsp
     /// it does not export prefixed the same way. Every other name is unchanged, so no row is
     /// added for it.
     /// </summary>
-    private static void Written(Card card, ProgramAnalysis analysis, Symbol symbol)
+    private static void OutputName(Card card, ProgramAnalysis analysis, Symbol symbol)
     {
         if (symbol is { IsReachableByPath: true, LinkerName: null }
             && Emit.FlatNames.Prefixed(symbol.FlatName, analysis.Cpu, symbol.Module) is { } prefixed)
@@ -226,7 +226,7 @@ internal static class Lsp
         var text = word.Text.ToLowerInvariant();
         var card = new Card(isMode ? $"mode {text}" : $"word {word.Text}", new HashSet<string>(["mode", "never"], StringComparer.Ordinal));
         if (isMode)
-            card.Row("mode", ParameterKinds.Mode(text) is { } written ? $"{text}: {written}" : null);
+            card.Row("mode", ParameterKinds.Mode(text) is { } meaning ? $"{text}: {meaning}" : null);
         card.Row("compared with", compared.Compared);
         card.Row("takes", ParameterKinds.Takes(compared.Accepts));
         if (!compared.CanHold)
@@ -256,8 +256,8 @@ internal static class Lsp
         }
         var mode = token.Parent is IdentifierNameSyntax { Parent: ParameterKindSyntax { Keyword.Text: var keyword } }
             && keyword.Equals("operand", StringComparison.OrdinalIgnoreCase)
-            && ParameterKinds.Mode(token.Text) is { } written
-                ? $"{token.Text.ToLowerInvariant()}: {written}"
+            && ParameterKinds.Mode(token.Text) is { } meaning
+                ? $"{token.Text.ToLowerInvariant()}: {meaning}"
                 : null;
         var hover = ToName(analysis, model, declared, mode);
         return hover with { Range = ToRange(model.Tree, token.Span) };
@@ -296,9 +296,9 @@ internal static class Lsp
         if (symbol.Kind == SymbolKind.Member)
             card.Row("offset", symbol.Value.ToString());
         else if (symbol.Value.IsKnown)
-            card.Row("value", Spell(symbol.Value));
+            card.Row("value", Format(symbol.Value));
         else if (symbol.Kind == SymbolKind.Func && Called(model, reference) is { IsKnown: true } called)
-            card.Row("value", Spell(called));
+            card.Row("value", Format(called));
         if (symbol.Type is { } type)
             card.Row("type", type.QualifiedName);
 
@@ -319,11 +319,11 @@ internal static class Lsp
         // a routine in ROM, has no bytes here, so the segment its line sits in says nothing.
         if (symbol.AddressSize is { } size)
         {
-            card.Row("address", $"{Spell(size)} ({(int)size} byte{((int)size == 1 ? "" : "s")})"
+            card.Row("address", $"{Format(size)} ({(int)size} byte{((int)size == 1 ? "" : "s")})"
                 + (symbol is { IsAddress: true, ValueExpression: null, Segment: { } segment } ? $" in {segment}" : ""));
         }
         Declares(card, model, reference);
-        Written(card, analysis, symbol);
+        OutputName(card, analysis, symbol);
 
         // A macro call is the only name whose hover says more than its declaration does: what
         // it expands to. MacroCallHover computes the summary row above and appends the
@@ -413,7 +413,7 @@ internal static class Lsp
         {
             line = line[..at] + named + line[(at + symbol.NameSpan.Length)..];
         }
-        return Written(line);
+        return Headline(line);
     }
 
     /// <summary>
@@ -421,7 +421,7 @@ internal static class Lsp
     /// the end of it or the brace that opens the block it heads. None of these is what was asked
     /// about.
     /// </summary>
-    private static string Written(string line)
+    private static string Headline(string line)
     {
         if (LineComments.Start(line) is var comment and >= 0)
             line = line[..comment];
@@ -453,9 +453,9 @@ internal static class Lsp
             .Where(region => region.Routine.Tree == symbol.Tree && names.Contains(region.Routine.FlatName))
             .Select(region => (
                 region.Routine.Name,
-                Cost: CodeLenses.Spell(region.Cost, region.Total, "never returns", false),
+                Cost: CodeLenses.Format(region.Cost, region.Total, "never returns", false),
                 Excluded: region.Cost.IsKnown ? region.Total.Excluded ?? [] : [],
-                Kept: region.Total.Ends ? Spell(region.Registers.Kept, region.Registers.Complete) : null))
+                Kept: region.Total.Ends ? Format(region.Registers.Kept, region.Registers.Complete) : null))
             .ToList();
         Rows(card, "cost", found.Select(region => (region.Name, region.Cost)));
 
@@ -516,10 +516,10 @@ internal static class Lsp
                 if (position < scope.Opener.Start || position >= scope.Opener.End)
                     continue;
                 var card = new Card(
-                    Written(model.Tree.Text[scope.Opener.Start..scope.Opener.End]), ScopeAsked);
+                    Headline(model.Tree.Text[scope.Opener.Start..scope.Opener.End]), ScopeAsked);
                 var cost = region.Scopes.FirstOrDefault(costed => costed.Opener == scope.Opener).Cost;
-                card.Row("cost", CodeLenses.Spell(cost, null, null, false));
-                card.Row("preserves", Spell(scope.Kept, scope.Complete));
+                card.Row("cost", CodeLenses.Format(cost, null, null, false));
+                card.Row("preserves", Format(scope.Kept, scope.Complete));
                 return new Protocol.Hover(
                     Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, scope.Opener));
             }
@@ -551,7 +551,7 @@ internal static class Lsp
         // Show the instruction's full datasheet name as a trailing comment, since a reader who
         // already knows what `xba` stands for is not the one hovering it.
         var mnemonic = (statement as InstructionStatementSyntax)?.MnemonicKind;
-        var line = Written(model.Tree.Text[statement.Span.Start..statement.Span.End]);
+        var line = Headline(model.Tree.Text[statement.Span.Start..statement.Span.End]);
         var card = new Card(
             mnemonic is { } named && Mnemonics.Name(named) is { } called ? $"{line}  ; {called}" : line,
             laid.Ensured is null ? TimingAsked : EnsureAsked);
@@ -592,7 +592,7 @@ internal static class Lsp
         {
             card.Gap();
             foreach (var register in RegisterEffects.Each(Registers.All))
-                card.Row(RegisterEffects.Spell(register), Held(held.Of(register), register));
+                card.Row(RegisterEffects.Format(register), Held(held.Of(register), register));
         }
         Pushed(card, analysis, registers, state);
         return new Protocol.Hover(
@@ -662,13 +662,13 @@ internal static class Lsp
         if (rows.Count == 0)
             return;
         card.Gap();
-        for (var i = 0; i < rows.Count && i < MostPushes; i++)
+        for (var i = 0; i < rows.Count && i < MaximumPushes; i++)
             card.Row(i == 0 ? "stack" : "", rows[i]);
 
         // A routine that has pushed a lot holds more than a reader can take in at a glance, and
         // the pushes it will pull back next are the ones on top, so only those are listed.
-        if (rows.Count > MostPushes)
-            card.Row("", $"and {rows.Count - MostPushes} more");
+        if (rows.Count > MaximumPushes)
+            card.Row("", $"and {rows.Count - MaximumPushes} more");
     }
 
     /// <summary>
@@ -749,7 +749,7 @@ internal static class Lsp
             return frame;
         var entry = entries[top];
         if (entry.IsStatus)
-            return (1, $"status {ProcessorState.Spell("a", entry.A)}, {ProcessorState.Spell("i", entry.Index)}");
+            return (1, $"status {ProcessorState.Format("a", entry.A)}, {ProcessorState.Format("i", entry.Index)}");
         if (entry is { Size: > 0, Byte: 0, Held.IsKnown: true } && entry.Size <= top + 1)
             return (entry.Size, StateValue.Hex(entry.Held.Value, entry.Size * 2));
         return (hint is { } wide && wide <= top + 1 ? wide : 1, null);
@@ -812,7 +812,7 @@ internal static class Lsp
         else if (value.Entry != Registers.None)
         {
             words.Add(
-                string.Join(" or ", RegisterEffects.Each(value.Entry).Select(RegisterEffects.Spell)) + " as entered");
+                string.Join(" or ", RegisterEffects.Each(value.Entry).Select(RegisterEffects.Format)) + " as entered");
         }
         if (value.IsWritten)
             words.Add("new");
@@ -832,17 +832,17 @@ internal static class Lsp
     /// everywhere else.
     /// </para>
     /// </summary>
-    internal static string Spell(Registers kept, bool complete)
+    internal static string Format(Registers kept, bool complete)
     {
-        var names = RegisterEffects.Each(kept).Select(RegisterEffects.Spell).ToList();
+        var names = RegisterEffects.Each(kept).Select(RegisterEffects.Format).ToList();
         if (!complete)
             names.Add("?");
         return names.Count == 0 ? "none" : string.Join(", ", names);
     }
 
     /// <summary>Formats a cycle count as it is shown, such as <c>4 cycles</c> or <c>4-5 cycles</c>.</summary>
-    internal static string Spell(CycleCount cycles) =>
-        cycles is { IsExact: true, Least: 1 } ? "1 cycle" : $"{cycles} cycles";
+    internal static string Format(CycleCount cycles) =>
+        cycles is { IsExact: true, Minimum: 1 } ? "1 cycle" : $"{cycles} cycles";
 
     /// <summary>
     /// Returns where the name at <paramref name="position"/> is declared, or null. The declaration
@@ -976,10 +976,10 @@ internal static class Lsp
             symbol = member;
         if (reference.IsAlias)
         {
-            var written = model.Tree.Text.Substring(reference.Span.Start, reference.Span.Length);
+            var aliasText = model.Tree.Text.Substring(reference.Span.Start, reference.Span.Length);
             return model.References
                 .Where(other => other.IsAlias && program.Current(other.Symbol) == symbol
-                    && model.Tree.Text.Substring(other.Span.Start, other.Span.Length) == written)
+                    && model.Tree.Text.Substring(other.Span.Start, other.Span.Length) == aliasText)
                 .Select(other => (model, other));
         }
 
@@ -999,12 +999,12 @@ internal static class Lsp
     /// an address or a mask is read. Since it may also be a count, the decimal is shown beside it
     /// from ten upward, because below ten the two are the same digit.
     /// </summary>
-    private static string Spell(Value value) => value.AsNumber() is { } number && number >= 10
+    private static string Format(Value value) => value.AsNumber() is { } number && number >= 10
         ? $"{value} ({number.ToString(CultureInfo.InvariantCulture)})"
         : value.ToString();
 
     /// <summary>Formats an address size in the language's syntax.</summary>
-    private static string Spell(AddressSize size) => size switch
+    private static string Format(AddressSize size) => size switch
     {
         AddressSize.ZeroPage => "zp",
         AddressSize.Absolute => "abs",
@@ -1147,7 +1147,7 @@ internal static class Lsp
         public void Gap() => rows.Add((null, leading));
 
         /// <summary>Sets the comment above the declaration, which is what its author had to say.</summary>
-        public void Prose(string? written) => prose = written;
+        public void Prose(string? comment) => prose = comment;
 
         /// <inheritdoc/>
         public override string ToString()
@@ -1167,13 +1167,13 @@ internal static class Lsp
             if (prose is { Length: > 0 })
                 above.Add(prose);
             if (lead.Count > 0)
-                above.Add(Written(lead, column));
+                above.Add(Table(lead, column));
             // The rule separates the leading rows from the rest, so without leading rows there is
             // nothing for it to separate, and the rest follows as the leading rows would.
             if (lead.Count == 0)
-                return string.Join("\n\n", rest.Count == 0 ? above : [.. above, Written(rest, column)]);
+                return string.Join("\n\n", rest.Count == 0 ? above : [.. above, Table(rest, column)]);
             var answer = string.Join("\n\n", above);
-            return rest.Count == 0 ? answer : $"{answer}\n---\n{Written(rest, column)}";
+            return rest.Count == 0 ? answer : $"{answer}\n---\n{Table(rest, column)}";
         }
 
         private static IReadOnlyList<(string Key, string Value)?> Trimmed(
@@ -1187,7 +1187,7 @@ internal static class Lsp
             return rows;
         }
 
-        private static string Written(IReadOnlyList<(string Key, string Value)?> rows, int column) =>
+        private static string Table(IReadOnlyList<(string Key, string Value)?> rows, int column) =>
             $"```{Grid}\n"
                 + string.Join("\n", rows.Select(row => row is { } has ? has.Key.PadRight(column) + has.Value : ""))
                 + "\n```";

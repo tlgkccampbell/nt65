@@ -189,7 +189,7 @@ public sealed class ConstantTests
     /// import that gives neither is absolute.
     /// </summary>
     [Fact]
-    public void ImportsCarryTheirValueOrTheirSize()
+    public void ImportsKeepTheirValueOrTheirSize()
     {
         var model = Analysis.Model(".module main\n.import VIC_BORDER = $d020\n.import scratch: zp\n.import table: far\n.import raw\n");
 

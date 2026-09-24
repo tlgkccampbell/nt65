@@ -84,13 +84,13 @@ public sealed class Placements
                 var at = tree.GetSpan(place.Name.Span);
                 if (!modules.TryGetValue(path, out var target))
                 {
-                    diagnostics.Add(new Diagnostic(at, Catalogue.ModuleUnknown.Says(path)));
+                    diagnostics.Add(new Diagnostic(at, Catalogue.ModuleUnknown.Message(path)));
                     continue;
                 }
                 named.Add(target.Path);
                 if (declared[target.Path] == ModulePlacement.Alone)
                 {
-                    diagnostics.Add(new Diagnostic(at, Catalogue.PlaceNotPlaceable.Says(path, path))
+                    diagnostics.Add(new Diagnostic(at, Catalogue.PlaceNotPlaceable.Message(path, path))
                     {
                         Fix = new DiagnosticFix(FixKind.Placed, "placed", target.GetSpan(declarations[target.Path].Name.Span)),
                     });
@@ -99,13 +99,13 @@ public sealed class Placements
                 if (placedBy.TryGetValue(target.Path, out var already))
                 {
                     diagnostics.Add(new Diagnostic(
-                        at, Catalogue.PlacedTwice.Says(path, ModuleOf(already.Item1, declarations)),
+                        at, Catalogue.PlacedTwice.Message(path, ModuleOf(already.Item1, declarations)),
                         [new RelatedSpan(already.Item1.GetSpan(already.Item2.Name.Span), "placed here")]));
                     continue;
                 }
                 if (Cycle(tree, target, placedBy, declarations) is { } cycle)
                 {
-                    diagnostics.Add(new Diagnostic(at, Catalogue.PlacementCycle.Says(cycle)));
+                    diagnostics.Add(new Diagnostic(at, Catalogue.PlacementCycle.Message(cycle)));
                     continue;
                 }
                 placedBy[target.Path] = (tree, place);
@@ -124,7 +124,7 @@ public sealed class Placements
                 && PathOf(declarations[tree.Path].Name) is { } name)
             {
                 diagnostics.Add(new Diagnostic(
-                    tree.GetSpan(declarations[tree.Path].Name.Span), Catalogue.PlacedNowhere.Says(name, name)));
+                    tree.GetSpan(declarations[tree.Path].Name.Span), Catalogue.PlacedNowhere.Message(name, name)));
             }
         }
 

@@ -117,7 +117,7 @@ internal sealed partial class Parser
     {
         var parser = new Parser(line, context);
         var node = parser.ParseLine(line.LineKind);
-        parser.Settle(node);
+        parser.AttachPending(node);
         return new Result(context, parser.exportKeyword, node, parser.skippedTokens);
     }
 
@@ -161,7 +161,7 @@ internal sealed partial class Parser
     {
         if (nesting <= MaximumNesting)
             return null;
-        ReportOnce(Catalogue.NestingTooDeep.Says(MaximumNesting));
+        ReportOnce(Catalogue.NestingTooDeep.Message(MaximumNesting));
         return new ErrorExpressionSyntax(null);
     }
 
@@ -208,7 +208,7 @@ internal sealed partial class Parser
     /// over a token of the statement that no inner node contains, and the rare diagnostic about a
     /// place outside the statement.
     /// </summary>
-    private void Settle(GreenNode statement)
+    private void AttachPending(GreenNode statement)
     {
         if (pending.Count == 0)
             return;
@@ -305,7 +305,7 @@ internal sealed partial class Parser
             // splice. So it is read as a splice everywhere, and the binder decides where it
             // belongs.
             LineKind.BareIdentifier => Finish(new BlockSpliceSyntax(Advance())),
-            _ => ErrorLine(Catalogue.ExpectedStatement.Says("a label, a constant, an instruction or a directive")),
+            _ => ErrorLine(Catalogue.ExpectedStatement.Message("a label, a constant, an instruction or a directive")),
         };
     }
 
@@ -336,8 +336,8 @@ internal sealed partial class Parser
         if (reported == 0)
         {
             Report(!opensBlock && index > 0 && tokens[index - 1].Kind == SyntaxKind.OpenBrace
-                ? Catalogue.BlockBraceEndsTheLine.Says(Describe(Current))
-                : Catalogue.UnexpectedToken.Says(Describe(Current)));
+                ? Catalogue.BlockBraceEndsTheLine.Message(Describe(Current))
+                : Catalogue.UnexpectedToken.Message(Describe(Current)));
         }
         skippedTokens = Own(new SkippedTokensSyntax(TakeRest()));
     }
@@ -422,7 +422,7 @@ internal sealed partial class Parser
         var (start, width) = Caret(index);
         reported++;
         return GreenToken.Missing(
-            kind, new GreenDiagnostic(start - FullStart(index), width, message, fix ?? Writes(kind)));
+            kind, new GreenDiagnostic(start - FullStart(index), width, message, fix ?? InsertionFix(kind)));
     }
 
     /// <summary>
@@ -431,7 +431,7 @@ internal sealed partial class Parser
     /// so the editor can be told to insert it there. Anything else, such as a name, a number or a
     /// message in quotes, has to be typed by the programmer, and has no fix.
     /// </summary>
-    private static DiagnosticFix? Writes(SyntaxKind kind) =>
+    private static DiagnosticFix? InsertionFix(SyntaxKind kind) =>
         kind is SyntaxKind.OpenBrace or SyntaxKind.CloseBrace or SyntaxKind.OpenParen
             or SyntaxKind.CloseParen or SyntaxKind.OpenBracket or SyntaxKind.CloseBracket
             ? new DiagnosticFix(FixKind.MissingPiece, SyntaxFacts.FixedText(kind))
@@ -441,7 +441,7 @@ internal sealed partial class Parser
     /// Returns the <c>{</c> that opens a block. This is the one place the parser reports that a
     /// brace is expected.
     /// </summary>
-    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Says("`{`"));
+    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Message("`{`"));
 
     /// <summary>
     /// Parses the items of a comma-separated list and the commas between them as one list, or

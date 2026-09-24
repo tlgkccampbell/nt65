@@ -12,16 +12,16 @@ public sealed class ExplainCommandTests
     [Fact]
     public void ANameIsExplained()
     {
-        var (code, said, problems) = Run("explain", "unused-symbol");
+        var (code, output, problems) = Run("explain", "unused-symbol");
 
         Assert.Equal(0, code);
         Assert.Empty(problems);
-        Assert.StartsWith("unused-symbol, a warning by default", said, StringComparison.Ordinal);
-        Assert.Contains(Catalogue.Find("unused-symbol")!.Explanation.Split(' ')[0], said, StringComparison.Ordinal);
+        Assert.StartsWith("unused-symbol, a warning by default", output, StringComparison.Ordinal);
+        Assert.Contains(Catalogue.Find("unused-symbol")!.Explanation.Split(' ')[0], output, StringComparison.Ordinal);
 
         // Numbered placeholders such as `{0}` mean nothing to a reader, so they are shown as `...`.
-        Assert.DoesNotContain("{0}", said, StringComparison.Ordinal);
-        Assert.Contains("\"diagnostics\": { \"unused-symbol\": \"off\" }", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("{0}", output, StringComparison.Ordinal);
+        Assert.Contains("\"diagnostics\": { \"unused-symbol\": \"off\" }", output, StringComparison.Ordinal);
     }
 
     /// <summary>Every entry can be explained, no matter what its message format contains.</summary>
@@ -30,31 +30,31 @@ public sealed class ExplainCommandTests
     {
         foreach (var descriptor in Catalogue.All)
         {
-            var (code, said, _) = Run("explain", descriptor.Id);
+            var (code, output, _) = Run("explain", descriptor.Id);
             Assert.Equal(0, code);
-            Assert.StartsWith(descriptor.Id + ",", said, StringComparison.Ordinal);
+            Assert.StartsWith(descriptor.Id + ",", output, StringComparison.Ordinal);
         }
     }
 
     [Fact]
     public void NamedNothingItListsThem()
     {
-        var (code, said, problems) = Run("explain");
+        var (code, output, problems) = Run("explain");
 
         Assert.Equal(0, code);
         Assert.Empty(problems);
         foreach (var descriptor in Catalogue.All)
-            Assert.Contains(descriptor.Id, said, StringComparison.Ordinal);
+            Assert.Contains(descriptor.Id, output, StringComparison.Ordinal);
     }
 
     /// <summary>An unknown name is treated as a mistake, and the closest known name is suggested.</summary>
     [Fact]
-    public void ANameItHasNoEntryForSaysWhichOneIsNear()
+    public void ANameWithNoEntryIsReportedWithTheNearestOne()
     {
-        var (code, said, problems) = Run("explain", "unused-symbols");
+        var (code, output, problems) = Run("explain", "unused-symbols");
 
         Assert.Equal(2, code);
-        Assert.Empty(said);
+        Assert.Empty(output);
         Assert.Contains("no diagnostic is named `unused-symbols`; did you mean `unused-symbol`?", problems, StringComparison.Ordinal);
         Assert.Contains("`nt65 explain` with no name lists every diagnostic", problems, StringComparison.Ordinal);
     }
@@ -71,13 +71,13 @@ public sealed class ExplainCommandTests
     [Fact]
     public void HelpIsTheUsageText()
     {
-        var (code, said, _) = Run("explain", "--help");
+        var (code, output, _) = Run("explain", "--help");
 
         Assert.Equal(0, code);
-        Assert.Contains("nt65 explain [<diagnostic> | --markdown]", said, StringComparison.Ordinal);
+        Assert.Contains("nt65 explain [<diagnostic> | --markdown]", output, StringComparison.Ordinal);
     }
 
-    private static (int Code, string Said, string Problems) Run(params string[] arguments)
+    private static (int Code, string Output, string Problems) Run(params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

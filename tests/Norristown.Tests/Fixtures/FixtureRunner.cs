@@ -81,12 +81,12 @@ internal static class FixtureRunner
                 // As in an editor, only the edited file is parsed again and the rest of the program
                 // is reused. Only that file is emitted again, because the edit is inside one
                 // routine, so no other file's output can have changed.
-                var written = source.Text[..edit.Span.Start] + edit.Text + source.Text[edit.Span.End..];
+                var edited = source.Text[..edit.Span.Start] + edit.Text + source.Text[edit.Span.End..];
                 var after = Compiler.Analyze(
                     [.. analysis.Program.Files.Select(file => file.Tree)
                         .Where(tree => tree != analysis.Defines)
                         .Select(tree => tree.Path == source.Path
-                            ? SyntaxTree.Parse(tree.Path, written)
+                            ? SyntaxTree.Parse(tree.Path, edited)
                             : tree)],
                     project, binaryLength, analysis);
                 var where = $"[{name}] writing out the call on "

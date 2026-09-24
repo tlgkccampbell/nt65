@@ -20,7 +20,7 @@ public sealed class TypedGreenNodeTests
     /// empty, and it sits at the position where it belongs.
     /// </summary>
     [Fact]
-    public void ARequiredTokenNotWrittenIsMissingInItsSlot()
+    public void ARequiredTokenNotInTheSourceIsMissingInItsSlot()
     {
         const string text = ".proc {";
         var tokens = HandBuilt.Tokens(text);
@@ -163,12 +163,12 @@ public sealed class TypedGreenNodeTests
     public void ANodesWidthIsTheWidthOfItsSlots()
     {
         var tokens = HandBuilt.Tokens(".scope name {");
-        var written = new Green.ScopeDeclarationSyntax(tokens[0], tokens[1], tokens[2]);
-        Assert.Equal(".scope name {".Length, written.FullWidth);
+        var complete = new Green.ScopeDeclarationSyntax(tokens[0], tokens[1], tokens[2]);
+        Assert.Equal(".scope name {".Length, complete.FullWidth);
 
-        var unwritten = new Green.ScopeDeclarationSyntax(tokens[0], null, GreenToken.Missing(SyntaxKind.OpenBrace));
-        Assert.Equal(".scope ".Length, unwritten.FullWidth);
-        Assert.Equal(".scope ", unwritten.ToFullString());
+        var incomplete = new Green.ScopeDeclarationSyntax(tokens[0], null, GreenToken.Missing(SyntaxKind.OpenBrace));
+        Assert.Equal(".scope ".Length, incomplete.FullWidth);
+        Assert.Equal(".scope ", incomplete.ToFullString());
     }
 
     /// <summary>A walk of a typed node reaches the items of its lists and no list node.</summary>

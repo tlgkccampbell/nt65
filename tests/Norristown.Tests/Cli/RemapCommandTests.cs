@@ -40,9 +40,9 @@ public sealed class RemapCommandTests : IDisposable
         Write("build/main.s.lines", Map);
         Write("game.dbg", Linked);
 
-        var (code, said) = Run("remap-dbg", "game.dbg");
+        var (code, printed) = Run("remap-dbg", "game.dbg");
 
-        Assert.Equal((0, ""), (code, said));
+        Assert.Equal((0, ""), (code, printed));
         Assert.Contains("name=\"src/main.nt65\"", Read("game.dbg"));
         Assert.Contains("line\tid=1,file=1,line=9,type=1,span=0", Read("game.dbg"));
     }
@@ -81,7 +81,7 @@ public sealed class RemapCommandTests : IDisposable
     [InlineData(new[] { "remap-dbg", "a.dbg", "b.dbg" }, 2, "nt65: `remap-dbg` takes one debug file, and was given more than one")]
     [InlineData(new[] { "remap-dbg", "--out" }, 2, "nt65: `--out` needs a file to write")]
     [InlineData(new[] { "remap-dbg", "--bogus", "game.dbg" }, 2, "nt65: `--bogus` is not an option")]
-    public void WhatItCannotDoItSays(string[] arguments, int expected, string said)
+    public void EachFailureIsReportedWithItsExitCode(string[] arguments, int expected, string message)
     {
         Write("a.dbg", Linked);
         Write("game.dbg", Linked);
@@ -89,7 +89,7 @@ public sealed class RemapCommandTests : IDisposable
         var result = Run(arguments);
 
         Assert.Equal(expected, result.Code);
-        Assert.StartsWith(said, result.Said);
+        Assert.StartsWith(message, result.Printed);
     }
 
     /// <summary>A debug file that is not one ld65 wrote is refused rather than half rewritten.</summary>
@@ -98,13 +98,13 @@ public sealed class RemapCommandTests : IDisposable
     {
         Write("game.dbg", "not a debug file at all\n");
 
-        var (code, said) = Run("remap-dbg", "game.dbg");
+        var (code, printed) = Run("remap-dbg", "game.dbg");
 
         Assert.Equal(1, code);
-        Assert.StartsWith("game.dbg: error: it is not a version 2.0 ld65 debug file", said);
+        Assert.StartsWith("game.dbg: error: it is not a version 2.0 ld65 debug file", printed);
     }
 
-    private (int Code, string Said) Run(params string[] arguments)
+    private (int Code, string Printed) Run(params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

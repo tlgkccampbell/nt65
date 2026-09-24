@@ -111,7 +111,7 @@ public sealed partial class CodeLayout
         return false;
     }
 
-    private static string Spell(AddressSize size) => size switch
+    private static string Format(AddressSize size) => size switch
     {
         AddressSize.ZeroPage => "direct-page",
         AddressSize.Absolute => "absolute",
@@ -136,19 +136,19 @@ public sealed partial class CodeLayout
             // honour is an error rather than being quietly dropped. For example, `lda z:($10),y`
             // has no direct form, and ca65 would read the text as `(dp),y`. A `d:` prefix is
             // checked separately, where its direct-page offset is worked out.
-            if (Operands.WrittenPrefix(operand) is { } written && !ThroughDirectPage(operand)
-                && Instructions.Width(candidates[0]) is { } width && width != written
+            if (Operands.PrefixSize(operand) is { } prefixSize && !ThroughDirectPage(operand)
+                && Instructions.Width(candidates[0]) is { } width && width != prefixSize
                 && !Instructions.IsControlTransfer(mnemonic.MnemonicKind))
             {
-                Report(operand, Catalogue.AddressingModeMissing.Says(
-                    mnemonic.Text, Spell(written), CpuNames.Spell(cpu)));
+                Report(operand, Catalogue.AddressingModeMissing.Message(
+                    mnemonic.Text, Format(prefixSize), CpuNames.Format(cpu)));
             }
 
             // The only available form reaches an address of its own width and no wider. For
             // example, `(ptr),y` takes a zero-page pointer, and the linker would cut an absolute
             // pointer to its low byte, if it noticed at all. A control transfer's target is
             // checked for distance instead.
-            else if (Operands.WrittenPrefix(operand) is null
+            else if (Operands.PrefixSize(operand) is null
                 && !(Instructions.IsControlTransfer(mnemonic.MnemonicKind) && candidates[0] is AddressingMode.Absolute
                     or AddressingMode.Long or AddressingMode.Relative or AddressingMode.RelativeLong
                     or AddressingMode.DirectRelative)
@@ -156,14 +156,14 @@ public sealed partial class CodeLayout
                 && Expression(operand) is { } pointer
                 && model.AddressSizeOf(pointer, segment, expansion) is { } wide && wide > reach)
             {
-                Report(operand, Catalogue.AddressingModeTooNarrow.Says(
-                    mnemonic.Text, Spell(reach), pointer.GetText().Trim(), Spell(wide)));
+                Report(operand, Catalogue.AddressingModeTooNarrow.Message(
+                    mnemonic.Text, Format(reach), pointer.GetText().Trim(), Format(wide)));
             }
             CheckOperand(mnemonic, operand, candidates[0], substituted, bits, sizeUnknown);
             return candidates[0];
         }
 
-        var required = Operands.WrittenPrefix(operand) ?? (Expression(operand) is { } expression
+        var required = Operands.PrefixSize(operand) ?? (Expression(operand) is { } expression
             ? model.AddressSizeOf(expression, segment, expansion)
             : null);
 
@@ -175,7 +175,7 @@ public sealed partial class CodeLayout
         if (required is { } size && Instructions.Width(chosen) < size)
         {
             Report(operand,
-                Catalogue.AddressSizeUnreachable.Says(mnemonic.Text, Spell(size), CpuNames.Spell(cpu)));
+                Catalogue.AddressSizeUnreachable.Message(mnemonic.Text, Format(size), CpuNames.Format(cpu)));
         }
         CheckOperand(mnemonic, operand, chosen, substituted, bits, sizeUnknown);
         return chosen;
@@ -195,7 +195,7 @@ public sealed partial class CodeLayout
         // Text can only be emitted as data. An operand is a number or an address.
         if (model.ValueOf(expression, expansion, SpanOf, CyclesOf).IsString)
         {
-            Report(expression, Catalogue.OperandIsText.Says(expression.GetText().Trim()));
+            Report(expression, Catalogue.OperandIsText.Message(expression.GetText().Trim()));
             return;
         }
 
@@ -204,10 +204,10 @@ public sealed partial class CodeLayout
                 or AddressingMode.AbsoluteIndirectLong
             && Instructions.IsControlTransfer(mnemonic.MnemonicKind))
         {
-            if (Operands.WrittenPrefix(operand) is not null)
+            if (Operands.PrefixSize(operand) is not null)
             {
                 Report(operand,
-                    Catalogue.TransferPrefix.Says(mnemonic.Text));
+                    Catalogue.TransferPrefix.Message(mnemonic.Text));
             }
 
             // On the 65816 whether a routine is called near or far is decided by its signature,
@@ -238,7 +238,7 @@ public sealed partial class CodeLayout
             return;
         if (value < low || value > high)
         {
-            Report(expression, Catalogue.ImmediateTooWide.Says(
+            Report(expression, Catalogue.ImmediateTooWide.Message(
                 bits == 16 ? "this immediate is two bytes" : "an immediate is one byte", Value.Of(value)));
         }
     }
@@ -253,7 +253,7 @@ public sealed partial class CodeLayout
         if (mode != AddressingMode.Long)
         {
             if (size == AddressSize.Far)
-                Report(expression, Catalogue.TargetTooFar.Says(mnemonic.Text));
+                Report(expression, Catalogue.TargetTooFar.Message(mnemonic.Text));
             return;
         }
 
@@ -262,7 +262,7 @@ public sealed partial class CodeLayout
         if (size is null or AddressSize.Far || model.ValueOf(expression, expansion, SpanOf, CyclesOf).AsNumber() is not null)
             return;
         var near = SyntaxFacts.TextOf(mnemonic.MnemonicKind == MnemonicKind.Jsl ? MnemonicKind.Jsr : MnemonicKind.Jmp);
-        Report(expression, Catalogue.TargetTooNear.Says(mnemonic.Text, Spell(size.Value), near));
+        Report(expression, Catalogue.TargetTooNear.Message(mnemonic.Text, Format(size.Value), near));
     }
 
     /// <summary>
@@ -276,7 +276,7 @@ public sealed partial class CodeLayout
             return null;
         if (cpu != Cpu.Wdc65816)
         {
-            Report(operand, Catalogue.DirectPageNeeds65816.Says(CpuNames.Spell(cpu)));
+            Report(operand, Catalogue.DirectPageNeeds65816.Message(CpuNames.Format(cpu)));
             return null;
         }
         if (model.ValueOf(expression, expansion, SpanOf, CyclesOf).AsNumber() is not { } address)
@@ -286,7 +286,7 @@ public sealed partial class CodeLayout
         }
         if (Instructions.Width(mode) != AddressSize.ZeroPage)
         {
-            Report(operand, Catalogue.DirectPageFormMissing.Says(mnemonic.Text));
+            Report(operand, Catalogue.DirectPageFormMissing.Message(mnemonic.Text));
             return null;
         }
         return state?.D is { IsKnown: true } page && address >= page.Value && address <= page.Value + 0xff
@@ -312,7 +312,7 @@ public sealed partial class CodeLayout
         {
             if (symbol.Segment is not { } name || model.Segments.Find(name) is not { DirectPage: { } page and not 0 } segment)
                 continue;
-            Report(expression, Catalogue.DirectPageOnly.Says(
+            Report(expression, Catalogue.DirectPageOnly.Message(
                 symbol.DisplayName,
                 segment.Name,
                 StateValue.Hex(page, 4),
@@ -341,7 +341,7 @@ public sealed partial class CodeLayout
         // The problem lies in pairing this body line with this argument, so it is reported at
         // the call, which is the side that can change it, and the body line is named.
         var what = given.ByteOf ? "`.byteof`" : $"`{given.Parameter.Name} + n`";
-        ReportPaired(given.At, Catalogue.OperandHasNoNextByte.Says(what, given.Parameter.Name, given.Mode));
+        ReportPaired(given.At, Catalogue.OperandHasNoNextByte.Message(what, given.Parameter.Name, given.Mode));
     }
 
     /// <summary>

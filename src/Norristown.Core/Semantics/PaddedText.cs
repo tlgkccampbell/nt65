@@ -19,8 +19,8 @@ public static class PaddedText
     public static (long Zeros, long Count)? Padding(DataDirectiveSyntax directive, SemanticModel model, Expansion? on = null)
     {
         if (DataSyntax.NameOf(directive) != ".byte"
-            || directive.Count?.Count is not { } written
-            || model.ValueOf(written, on).AsNumber() is not { } count
+            || directive.Count?.Count is not { } countExpression
+            || model.ValueOf(countExpression, on).AsNumber() is not { } count
             || OnlyValueOf(directive) is not { } value
             || !IsText(value, model, on)
             || model.BytesOf(value, on) is not { } bytes)
@@ -49,9 +49,9 @@ public static class PaddedText
                 return null;
             if (line is not LineSyntax { Statement: DataValuesSyntax values })
                 continue;
-            if (only is not null || values.Values is not [var written])
+            if (only is not null || values.Values is not [var single])
                 return null;
-            only = written;
+            only = single;
         }
         return only;
     }

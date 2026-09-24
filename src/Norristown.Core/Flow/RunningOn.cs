@@ -13,7 +13,7 @@ namespace Norristown.Flow;
 /// The <see cref="Expansion"/> that contains the statement, where it is emitted more than once.
 /// </param>
 /// <param name="Routine">The routine the <c>.fallthrough</c> names.</param>
-/// <param name="Written">
+/// <param name="Target">
 /// The node where the <c>.fallthrough</c> names the routine, which is where a mistake is reported.
 /// </param>
-public sealed record RunningOn(SyntaxNode Statement, Expansion? On, Symbol Routine, SyntaxNode Written);
+public sealed record RunningOn(SyntaxNode Statement, Expansion? On, Symbol Routine, SyntaxNode Target);

@@ -31,7 +31,7 @@ internal static class InlayHints
     /// the margin and starts pushing the line it is about off the screen. Whatever does not fit is
     /// in the tooltip.
     /// </summary>
-    private const int MostCharacters = 12;
+    private const int MaximumCharacters = 12;
 
     /// <summary>
     /// Returns the hints for the lines <paramref name="first"/> to <paramref name="last"/>,
@@ -119,7 +119,7 @@ internal static class InlayHints
     /// has the whole label.
     /// </summary>
     private static string Shortened(string label) =>
-        label.Length <= MostCharacters ? label : label[..(MostCharacters - 1)].TrimEnd() + "…";
+        label.Length <= MaximumCharacters ? label : label[..(MaximumCharacters - 1)].TrimEnd() + "…";
 
     /// <summary>
     /// Maps each statement to what runs after it. That is the next step of its basic block, or,
@@ -167,15 +167,15 @@ internal static class InlayHints
         }
         var parts = new List<string>();
         if (now.A != was.A)
-            parts.Add(ProcessorState.Spell("a", now.A));
+            parts.Add(ProcessorState.Format("a", now.A));
         if (now.Index != was.Index)
-            parts.Add(ProcessorState.Spell("i", now.Index));
+            parts.Add(ProcessorState.Format("i", now.Index));
         if (now.E != was.E)
-            parts.Add(ProcessorState.Spell(now.E));
+            parts.Add(ProcessorState.Format(now.E));
         if (now.D != was.D)
-            parts.Add(now.D.Spell("dp"));
+            parts.Add(now.D.Format("dp"));
         if (now.B != was.B)
-            parts.Add(now.B.Spell("dbr"));
+            parts.Add(now.B.Format("dbr"));
         if (parts.Count == 0)
             return null;
 
@@ -198,7 +198,7 @@ internal static class InlayHints
             return null;
         var mnemonic = SyntaxFacts.TextOf(branch.MnemonicKind);
         var over = SyntaxFacts.TextOf(Instructions.FormsOf(branch.MnemonicKind).Skipped);
-        var cost = laid.Cycles is { } cycles ? $" and {Lsp.Spell(cycles)}" : "";
+        var cost = laid.Cycles is { } cycles ? $" and {Lsp.Format(cycles)}" : "";
         return new Mark(
             "long",
             $"`{mnemonic}` cannot reach its target in the two-byte form, so it is written as a "
@@ -225,8 +225,8 @@ internal static class InlayHints
                         + $"`{member.Scope.Owner?.DisplayName ?? "the layout"}`.",
                     Protocol.InlayHintKind.Type);
         }
-        if (statement is EnumMemberSyntax { Value: null } written
-            && model.SymbolAt(written.Name) is { Value.IsKnown: true } named)
+        if (statement is EnumMemberSyntax { Value: null } declaration
+            && model.SymbolAt(declaration.Name) is { Value.IsKnown: true } named)
         {
             return new Mark(
                 $"= {named.Value}",
@@ -243,7 +243,7 @@ internal static class InlayHints
         {
             return new Mark(
                 $"= {value.Value}",
-                $"`{value.Name}` works out to {Spell(value.Value)}.",
+                $"`{value.Name}` works out to {Format(value.Value)}.",
                 Protocol.InlayHintKind.Type);
         }
         return null;
@@ -262,7 +262,7 @@ internal static class InlayHints
             var why = laid.Causes is { Count: > 0 } causes && !cycles.IsExact
                 ? " " + string.Join(", ", causes) + "."
                 : "";
-            return new Mark(cycles.ToString(), $"This line takes {Lsp.Spell(cycles)}.{why}");
+            return new Mark(cycles.ToString(), $"This line takes {Lsp.Format(cycles)}.{why}");
         }
         if (statement is not LabeledLineSyntax { Statement: null } labelled
             || model.SymbolAt(labelled.Label.Name) is not { } label)
@@ -275,7 +275,7 @@ internal static class InlayHints
         return block?.Cycles is not { } total
             ? null
             : new Mark($"block {total}", $"The lines under `{label.DisplayName}`, as far as the next "
-                + $"label or branch, take {Lsp.Spell(total)} together.");
+                + $"label or branch, take {Lsp.Format(total)} together.");
     }
 
     /// <summary>
@@ -313,9 +313,9 @@ internal static class InlayHints
     private static IReadOnlyList<(string Parameter, SyntaxNode Argument)> Given(
         SemanticModel model, MacroCallSyntax call)
     {
-        if (call.Arguments is not { } written || model.MacroAt(call) is not { } macro
+        if (call.Arguments is not { } arguments || model.MacroAt(call) is not { } macro
             || macro.Parameters.Count(parameter => !parameter.IsBlock) < 2
-            || written.Arguments.Any(argument => argument is NamedArgumentSyntax))
+            || arguments.Arguments.Any(argument => argument is NamedArgumentSyntax))
         {
             return [];
         }
@@ -326,7 +326,7 @@ internal static class InlayHints
         return
         [
             .. invocation.Arguments
-                .Where(given => given is { Written: true, Value: not null } && !given.Parameter.IsBlock
+                .Where(given => given is { IsGiven: true, Value: not null } && !given.Parameter.IsBlock
                     && !Matches(given.Value, given.Parameter.Name))
                 .Select(given => (given.Parameter.Name, given.Value!)),
         ];
@@ -377,7 +377,7 @@ internal static class InlayHints
     /// Formats a value as a tooltip sentence shows it, in nt65's own form, followed by its
     /// decimal value from 10 upward, where the two differ.
     /// </summary>
-    private static string Spell(Value value) => value.AsNumber() is { } number && number >= 10
+    private static string Format(Value value) => value.AsNumber() is { } number && number >= 10
         ? $"`{value}`, which is {number.ToString(CultureInfo.InvariantCulture)}"
         : $"`{value}`";
 

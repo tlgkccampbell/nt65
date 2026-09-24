@@ -118,25 +118,25 @@ public static class CallCosts
         // An upper bound that leaves anything out would not be one, so there is then no upper
         // bound.
         var excluded = new List<Exclusion>();
-        var (least, _, ends) = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, true));
-        var most = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, false)).Most;
+        var (lowerBound, _, ends) = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, true));
+        var upperBound = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, false)).Maximum;
         walking.Remove(name);
         var cost = new RoutineCost(
-            least, excluded.Count > 0 ? null : most, Calls(region), ends && returns.Contains(name),
+            lowerBound, excluded.Count > 0 ? null : upperBound, Calls(region), ends && returns.Contains(name),
             region.Cost.Uncounted, excluded);
         totals[name] = cost;
         return cost;
 
-        CycleCount? Weighed(BasicBlock block, bool fewest)
+        CycleCount? Weighed(BasicBlock block, bool forLowerBound)
         {
             if (Paths.Costing(block) is not { } own)
                 return null;
-            var with = fewest ? own.Least : own.Most;
+            var with = forLowerBound ? own.Minimum : own.Maximum;
 
             // Where the call goes is not known, so all it costs is the call instruction itself.
             if (block.CallsUnknown)
             {
-                if (!fewest)
+                if (!forLowerBound)
                     return null;
                 Exclude(new Exclusion(
                     block.Steps[^1].Statement.GetText().Trim(), "nt65 cannot tell where it goes"));
@@ -152,7 +152,7 @@ public static class CallCosts
                     // A callee declared never to return ends the pass like any other.
                     if (callee.Signature is { NeverReturns: true })
                         continue;
-                    if (!fewest)
+                    if (!forLowerBound)
                         return null;
                     Exclude(new Exclusion(callee.QualifiedName, "no code in the program"));
                     continue;
@@ -167,28 +167,28 @@ public static class CallCosts
                 // decides, so each time round is left out.
                 if (walking.Contains(name))
                 {
-                    if (!fewest)
+                    if (!forLowerBound)
                         return null;
                     Exclude(new Exclusion("recursion", $"{callee.QualifiedName} can call itself"));
                     continue;
                 }
                 var total = Total(called, regions, returns, totals, walking);
-                if (!fewest)
+                if (!forLowerBound)
                 {
-                    if (total.Most is not { } longest)
+                    if (total.Maximum is not { } longest)
                         return null;
-                    with += longest * (block.Turns ?? 1);
+                    with += longest * (block.Iterations ?? 1);
                     continue;
                 }
 
                 // A callee with no count of its own is left out whole. A callee whose calls leave
                 // something out still counts the rest, and this routine leaves out the same items.
-                if (total.Least is not { } shortest)
+                if (total.Minimum is not { } shortest)
                 {
                     Exclude(new Exclusion(callee.QualifiedName, called.Cost.Uncounted ?? "it has no count"));
                     continue;
                 }
-                with += shortest * (block.Turns ?? 1);
+                with += shortest * (block.Iterations ?? 1);
                 foreach (var exclusion in total.Excluded ?? [])
                     Exclude(exclusion);
             }

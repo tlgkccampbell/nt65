@@ -92,7 +92,7 @@ public sealed class FixesTests
 
     [Theory]
     [MemberData(nameof(Fixes))]
-    public void AFixWritesWhatTheDiagnosticNames(string title, string body, string fixedBody)
+    public void AFixAppliesWhatTheDiagnosticNames(string title, string body, string fixedBody)
     {
         var (analysis, model) = Analyzed(Header + body);
 
@@ -113,7 +113,7 @@ public sealed class FixesTests
     /// one.
     /// </summary>
     [Fact]
-    public void ExportingWhatNothingNamesWritesTheExportUnderTheModule()
+    public void ExportingWhatNothingNamesInsertsTheExportUnderTheModule()
     {
         var (analysis, model) = Analyzed(Header + "SPARE = 1\n");
 
@@ -187,14 +187,14 @@ public sealed class FixesTests
     [InlineData(".export .proc main: a8, i8 {\n    lda [dp\n    rts\n}\n", "Write the `]`",
         ".export .proc main: a8, i8 {\n    lda [dp]\n    rts\n}\n")]
     [InlineData(".use gfx::{clear\n", "Write the `}`", ".use gfx::{clear}\n")]
-    public void AMissingBracketIsWrittenWhereTheTreeHoldsItsPlace(string body, string title, string written)
+    public void AMissingBracketIsInsertedWhereTheTreeHoldsItsPlace(string body, string title, string repaired)
     {
         var (analysis, model) = Analyzed(Header + body);
 
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == title);
 
         Assert.Equal("quickfix", action.Kind);
-        Assert.Equal(Header + written, Editing.Apply(Header + body, action.Edit.Changes[Uri]));
+        Assert.Equal(Header + repaired, Editing.Apply(Header + body, action.Edit.Changes[Uri]));
     }
 
     /// <summary>
@@ -202,15 +202,15 @@ public sealed class FixesTests
     /// parses and means what it appears to mean.
     /// </summary>
     [Fact]
-    public void WritingTheMissingBraceLeavesAFileWithNothingWrong()
+    public void InsertingTheMissingBraceLeavesAFileWithNothingWrong()
     {
         const string Body = ".export .proc main: a8, i8\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + Body);
 
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Write the `{`");
 
-        var written = Editing.Apply(Header + Body, action.Edit.Changes[Uri]);
-        var (after, _) = Analyzed(written);
+        var repaired = Editing.Apply(Header + Body, action.Edit.Changes[Uri]);
+        var (after, _) = Analyzed(repaired);
         Assert.Empty(after.Diagnostics.Select(diagnostic => diagnostic.Message));
     }
 
@@ -220,7 +220,7 @@ public sealed class FixesTests
     /// should be is for the programmer to decide, not for the server to guess.
     /// </summary>
     [Fact]
-    public void AMnemonicNameOffersARenameAndWritesNothing()
+    public void AMnemonicNameOffersARenameAndEditsNothing()
     {
         var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8 {\nlda:\n    bra lda\n}\n");
 

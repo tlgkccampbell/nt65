@@ -61,7 +61,7 @@ public sealed class CycleTests
     // Two not taken, three taken, and one more when a taken branch crosses a page.
     [InlineData(MnemonicKind.Beq, AddressingMode.Relative, "2-4")]
     [InlineData(MnemonicKind.Bcc, AddressingMode.Relative, "2-4")]
-    public void The6502TakesAsLongAsItsTableSays(MnemonicKind mnemonic, AddressingMode mode, string cycles)
+    public void The6502TakesTheCyclesItsTableLists(MnemonicKind mnemonic, AddressingMode mode, string cycles)
     {
         Assert.Equal(cycles, Cycles.Of(Cpu.Mos6502, mnemonic, mode)?.Count.ToString());
     }
@@ -105,7 +105,7 @@ public sealed class CycleTests
     // crossing only when it crosses one, like any other read.
     [InlineData(MnemonicKind.Nop, AddressingMode.Direct, "3")]
     [InlineData(MnemonicKind.Nop, AddressingMode.AbsoluteX, "4-5")]
-    public void The6502xTakesAsLongAsItsTableSays(MnemonicKind mnemonic, AddressingMode mode, string cycles)
+    public void The6502xTakesTheCyclesItsTableLists(MnemonicKind mnemonic, AddressingMode mode, string cycles)
     {
         Assert.Equal(cycles, Cycles.Of(Cpu.Mos6502X, mnemonic, mode)?.Count.ToString());
     }
@@ -152,7 +152,7 @@ public sealed class CycleTests
     [InlineData(MnemonicKind.Sbc, AddressingMode.Absolute, "4-5")]
     [InlineData(MnemonicKind.Adc, AddressingMode.AbsoluteX, "4-6")]
     [InlineData(MnemonicKind.And, AddressingMode.Immediate, "2")]
-    public void The65C02TakesAsLongAsItsTableSays(MnemonicKind mnemonic, AddressingMode mode, string cycles)
+    public void The65C02TakesTheCyclesItsTableLists(MnemonicKind mnemonic, AddressingMode mode, string cycles)
     {
         Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65C02, mnemonic, mode)?.Count.ToString());
     }
@@ -213,7 +213,7 @@ public sealed class CycleTests
     [InlineData(MnemonicKind.Bne, AddressingMode.Relative, "a8, i8, native", "2-3")]
     [InlineData(MnemonicKind.Bne, AddressingMode.Relative, "a8, i8, emu", "2-4")]
     [InlineData(MnemonicKind.Bra, AddressingMode.Relative, "a8, i8, native", "3")]
-    public void The65816TakesAsLongAsItsWidthsSay(MnemonicKind mnemonic, AddressingMode mode, string state, string cycles)
+    public void The65816TakesTheCyclesItsWidthsImply(MnemonicKind mnemonic, AddressingMode mode, string state, string cycles)
     {
         var parts = state.Split(", ");
         var processor = new ProcessorState(Width(parts[0]), Width(parts[1]), parts[2] switch

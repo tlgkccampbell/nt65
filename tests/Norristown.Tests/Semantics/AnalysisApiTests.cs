@@ -93,7 +93,7 @@ public sealed class AnalysisApiTests
     /// Checks what a name in the file refers to, and what a name at a caret could refer to.
     /// </summary>
     [Fact]
-    public void WhatANameMeans()
+    public void TheModelResolvesANameAtACaretAndListsTheNamesInScope()
     {
         var model = Compile().ModelFor("main.nt65")!;
         var caret = model.Tree.Text.IndexOf("lda cells,x", StringComparison.Ordinal) + 4;

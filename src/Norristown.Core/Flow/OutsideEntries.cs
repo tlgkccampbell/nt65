@@ -39,7 +39,7 @@ public sealed class OutsideEntries
     /// state there but has no way to declare what is on the stack, so nothing reconciles the two
     /// paths.
     /// </summary>
-    public static Cause Carried(Symbol label, Symbol routine) => new(
+    public static Cause UnknownStack(Symbol label, Symbol routine) => new(
         $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and a jump in has not "
             + "pushed what the path above the label has",
         $"the pushes above `{label.DisplayName}` belong on the same side of it as what reads them, and `args n` "

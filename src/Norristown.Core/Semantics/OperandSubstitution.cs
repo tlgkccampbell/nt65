@@ -69,5 +69,5 @@ public sealed record OperandSubstitution(
     };
 
     private static bool IsStack(SyntaxToken? register) =>
-        register is { } written && written.Text.Equals("s", StringComparison.OrdinalIgnoreCase);
+        register is { } token && token.Text.Equals("s", StringComparison.OrdinalIgnoreCase);
 }

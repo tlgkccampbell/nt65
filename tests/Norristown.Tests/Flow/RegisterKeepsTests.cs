@@ -94,7 +94,7 @@ public sealed class RegisterKeepsTests
     /// counts, which come out unknown for such routines.
     /// </summary>
     [Fact]
-    public void TwoRoutinesThatCallEachOtherSettle()
+    public void TwoRoutinesThatCallEachOtherConverge()
     {
         var text = ".proc p {\n    ldx #1\n    jsr q\n    rts\n}\n.proc q {\n    ldy #1\n    jsr p\n    rts\n}\n";
 
@@ -107,7 +107,7 @@ public sealed class RegisterKeepsTests
     /// marked incomplete, so that the absence of a complaint is not mistaken for safety.
     /// </summary>
     [Fact]
-    public void ACallThatCannotBeFollowedIsSaidToBeUnknown()
+    public void ACallThatCannotBeFollowedIsMarkedUnknown()
     {
         var registers = Found(".proc CHROUT = $FFD2\n.proc p {\n    jsr CHROUT+3\n    rts\n}\n", "p");
 
@@ -142,7 +142,7 @@ public sealed class RegisterKeepsTests
     /// register and where.
     /// </summary>
     [Fact]
-    public void ABodyThatBreaksItsPromiseIsTold()
+    public void ARoutineThatChangesAKeptRegisterIsReported()
     {
         Assert.Equal(
             ["main.nt65:3: `p` promises `keeps x`, but X is not the same as on entry here: "
@@ -152,7 +152,7 @@ public sealed class RegisterKeepsTests
 
     /// <summary>A body that keeps what it promises draws no diagnostic.</summary>
     [Fact]
-    public void ABodyThatKeepsItsPromiseIsToldNothing()
+    public void ARoutineThatRestoresAKeptRegisterIsNotReported()
     {
         Assert.Empty(Problems(".proc p: keeps x {\n    pha\n    txa\n    pha\n    ldx #1\n    pla\n"
             + "    tax\n    pla\n    rts\n}\n"));
@@ -164,7 +164,7 @@ public sealed class RegisterKeepsTests
     /// A `.state keeps` asserts the restore instead.
     /// </summary>
     [Fact]
-    public void ARestoreThroughMemoryNeedsSaying()
+    public void ARestoreThroughMemoryNeedsAStateKeeps()
     {
         var saved = ".segment BSS\n.data xsave: .byte\n.segment CODE\n";
 
@@ -181,7 +181,7 @@ public sealed class RegisterKeepsTests
     /// redundant.
     /// </summary>
     [Fact]
-    public void ARedundantStateKeepsIsSaidToSayNothing()
+    public void ARedundantStateKeepsIsReported()
     {
         Assert.Equal(
             ["main.nt65:3: `keeps x` is redundant here: X already holds its value from entry"],

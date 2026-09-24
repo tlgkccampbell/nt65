@@ -137,7 +137,7 @@ public readonly record struct SyntaxToken
     {
         var own = Green.Annotations;
         var wanted = own.AddRange(annotations.Where(annotation => !own.Contains(annotation)).Distinct());
-        return wanted.Length == own.Length ? this : Carrying(wanted);
+        return wanted.Length == own.Length ? this : Annotated(wanted);
     }
 
     /// <summary>
@@ -150,7 +150,7 @@ public readonly record struct SyntaxToken
     {
         var own = Green.Annotations;
         var kept = own.RemoveRange(annotations);
-        return kept.Length == own.Length ? this : Carrying(kept);
+        return kept.Length == own.Length ? this : Annotated(kept);
     }
 
     /// <summary>Returns a copy of this token without its annotations of <paramref name="kind"/>.</summary>
@@ -160,7 +160,7 @@ public readonly record struct SyntaxToken
     {
         var own = Green.Annotations;
         var kept = own.RemoveAll(annotation => annotation.Kind == kind);
-        return kept.Length == own.Length ? this : Carrying(kept);
+        return kept.Length == own.Length ? this : Annotated(kept);
     }
 
     /// <summary>Checks whether this token has <paramref name="annotation"/>.</summary>
@@ -198,7 +198,7 @@ public readonly record struct SyntaxToken
     /// Returns a detached copy of this token with <paramref name="wanted"/> in place of its
     /// annotations.
     /// </summary>
-    private SyntaxToken Carrying(ImmutableArray<SyntaxAnnotation> wanted) =>
+    private SyntaxToken Annotated(ImmutableArray<SyntaxAnnotation> wanted) =>
         SyntaxFactory.Detached((GreenToken)Green.WithAnnotations(wanted));
 
     /// <summary>
@@ -221,7 +221,7 @@ public readonly record struct SyntaxToken
     /// Checks whether <paramref name="token"/> is the same green token, at the same position, as
     /// <paramref name="sought"/>.
     /// </summary>
-    private static bool Written(SyntaxToken token, SyntaxToken sought) =>
+    private static bool SameToken(SyntaxToken token, SyntaxToken sought) =>
         token.Position == sought.Position && ReferenceEquals(token.Green, sought.Green);
 
     /// <summary>
@@ -244,9 +244,9 @@ public readonly record struct SyntaxToken
         // parent instead, so when nothing matches by parent, match by position alone.
         var self = this;
         var (found, beside) = Beside(owner, direction,
-            token => Written(token, self) && ReferenceEquals(token.Parent, self.Parent));
+            token => SameToken(token, self) && ReferenceEquals(token.Parent, self.Parent));
         if (!found)
-            (found, beside) = Beside(owner, direction, token => Written(token, self));
+            (found, beside) = Beside(owner, direction, token => SameToken(token, self));
         if (!found)
             return null;
         if (beside is { } neighbour)

@@ -29,7 +29,7 @@ public static class ArgumentChecks
         var passed = true;
         foreach (var argument in invocation.Arguments)
         {
-            if (!argument.Written)
+            if (!argument.IsGiven)
                 continue;
             var accepts = argument.Parameter.Accepts;
             var name = argument.Parameter.Name;
@@ -54,7 +54,7 @@ public static class ArgumentChecks
                     if (given is { } number && number >= range.Low && number <= range.High)
                         break;
                     passed = false;
-                    report(value, Catalogue.ConstArgumentOutOfRange.Says(
+                    report(value, Catalogue.ConstArgumentOutOfRange.Message(
                         name, accepts.Low!.GetText().Trim(), accepts.High!.GetText().Trim(),
                         given is { } wrong ? $"this is {wrong}" : "this is not a constant"));
                     break;
@@ -63,7 +63,7 @@ public static class ArgumentChecks
                     if (model.MemberOf(accepts, value, caller) is null)
                     {
                         passed = false;
-                        report(value, Catalogue.EnumArgumentNotAMember.Says(
+                        report(value, Catalogue.EnumArgumentNotAMember.Message(
                             name, named.Name, $"`{value.GetText().Trim()}` is not one"));
                     }
                     break;
@@ -73,8 +73,8 @@ public static class ArgumentChecks
                         && !accepts.Words.Contains(mode.Mode) && (mode.Direct is not { } direct || !accepts.Words.Contains(direct)))
                     {
                         passed = false;
-                        report(value, Catalogue.OperandArgumentMode.Says(
-                            name, Spell(accepts.Words), mode.Direct ?? mode.Mode));
+                        report(value, Catalogue.OperandArgumentMode.Message(
+                            name, Format(accepts.Words), mode.Direct ?? mode.Mode));
                     }
                     break;
 
@@ -101,23 +101,23 @@ public static class ArgumentChecks
             switch (accepts.Kind)
             {
                 case ParameterKind.Const when accepts is { Low: { } low, High: { } high }:
-                    if (valueOf(low) is not { } least || valueOf(high) is not { } most || least > most)
-                        report(low.Parent!.Span, Catalogue.ParameterRangeInvalid.Says(accepts.ToString()));
+                    if (valueOf(low) is not { } minimum || valueOf(high) is not { } maximum || minimum > maximum)
+                        report(low.Parent!.Span, Catalogue.ParameterRangeInvalid.Message(accepts.ToString()));
                     break;
                 case ParameterKind.Enum when accepts.Enum is { } name:
                     if (symbolOf(name) is { Kind: not SymbolKind.Enum } other)
-                        report(name.Span, Catalogue.ParameterKindNotAnEnum.Says(name.GetText().Trim(), other.KindPhrase));
+                        report(name.Span, Catalogue.ParameterKindNotAnEnum.Message(name.GetText().Trim(), other.KindPhrase));
                     break;
                 case ParameterKind.Operand:
                     foreach (var word in accepts.Words.Where(word => !ArgumentKind.OperandModes.Contains(word)))
                     {
-                        var written = macro.Definition is BlockSyntax { Opener.Statement: MacroDeclarationSyntax declaration }
+                        var inHeader = macro.Definition is BlockSyntax { Opener.Statement: MacroDeclarationSyntax declaration }
                             ? declaration.DescendantNodes().OfType<IdentifierNameSyntax>()
                                 .FirstOrDefault(node => node.Parent is ParameterKindSyntax
                                     && node.Name.Text.Equals(word, StringComparison.OrdinalIgnoreCase))
                             : null;
-                        if (written is not null)
-                            report(written.Span, Catalogue.OperandModeUnknown.Says(word, Spell(ArgumentKind.OperandModes)));
+                        if (inHeader is not null)
+                            report(inHeader.Span, Catalogue.OperandModeUnknown.Message(word, Format(ArgumentKind.OperandModes)));
                     }
                     break;
                 case ParameterKind.List when accepts.Element is { } element:
@@ -144,11 +144,11 @@ public static class ArgumentChecks
         {
             var comparison = compared.Word.Parent!.AncestorsAndSelf().OfType<BinaryExpressionSyntax>().First();
             var why = compared.IsMode && !ComparedWord.Modes.Contains(compared.Word.Text.ToLowerInvariant())
-                ? $"`.mode` gives {Spell(ComparedWord.Modes)}"
+                ? $"`.mode` gives {Format(ComparedWord.Modes)}"
                 : compared.IsMode
-                    ? $"`{compared.Name}` takes an operand in {Spell(compared.Choices)}"
-                    : $"`{compared.Name}` is {Spell(compared.Choices)}";
-            report(compared.Word.Span, Catalogue.ComparisonNeverHolds.Says(
+                    ? $"`{compared.Name}` takes an operand in {Format(compared.Choices)}"
+                    : $"`{compared.Name}` is {Format(compared.Choices)}";
+            report(compared.Word.Span, Catalogue.ComparisonNeverHolds.Message(
                 compared.Compared, compared.Word.Text,
                 comparison.OperatorToken.Kind == SyntaxKind.EqualsEquals ? "never holds" : "always holds", why));
         }
@@ -160,8 +160,8 @@ public static class ArgumentChecks
     /// </summary>
     private static (long Low, long High)? Range(SemanticModel model, ArgumentKind accepts) =>
         accepts is { Low: { } low, High: { } high }
-        && model.ValueOf(low).AsNumber() is { } least && model.ValueOf(high).AsNumber() is { } most && least <= most
-            ? (least, most)
+        && model.ValueOf(low).AsNumber() is { } minimum && model.ValueOf(high).AsNumber() is { } maximum && minimum <= maximum
+            ? (minimum, maximum)
             : null;
 
     /// <summary>
@@ -193,8 +193,8 @@ public static class ArgumentChecks
         if (mode is not ("abs" or "absx" or "absy"))
             return (mode, null);
         var direct = "zp" + mode[3..];
-        if (Operands.WrittenPrefix(operand) is { } written)
-            return written == AddressSize.ZeroPage ? (mode, direct) : (mode, null);
+        if (Operands.PrefixSize(operand) is { } prefixSize)
+            return prefixSize == AddressSize.ZeroPage ? (mode, direct) : (mode, null);
         var expression = operand is AbsoluteOperandSyntax absolute ? absolute.Address : operand;
         return model.AddressSizeOf(expression, segment, at) == AddressSize.ZeroPage ? (mode, direct) : (mode, null);
     }
@@ -203,6 +203,6 @@ public static class ArgumentChecks
     /// Formats words as a message lists them, such as <c>`imm`</c> or
     /// <c>one of `imm`, `zp`, `abs`</c>.
     /// </summary>
-    private static string Spell(IReadOnlyList<string> words) =>
+    private static string Format(IReadOnlyList<string> words) =>
         words.Count == 1 ? $"`{words[0]}`" : "one of " + string.Join(", ", words.Select(word => $"`{word}`"));
 }

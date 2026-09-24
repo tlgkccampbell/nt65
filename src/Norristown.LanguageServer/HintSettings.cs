@@ -56,8 +56,8 @@ internal sealed record HintSettings(
             Flag(hints, "cycles", Default.Cycles));
     }
 
-    private static bool Flag(JsonElement hints, string name, bool unsaid) =>
-        hints.TryGetProperty(name, out var said) && said.ValueKind is JsonValueKind.True or JsonValueKind.False
-            ? said.ValueKind == JsonValueKind.True
-            : unsaid;
+    private static bool Flag(JsonElement hints, string name, bool fallback) =>
+        hints.TryGetProperty(name, out var setting) && setting.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? setting.ValueKind == JsonValueKind.True
+            : fallback;
 }

@@ -75,10 +75,10 @@ internal sealed partial class Evaluator
             // `{a:ptr}`, or otherwise as wide as the expression it stands for.
             if (node is CallExpressionSyntax exprOf && Operands.IsExprOf(exprOf))
             {
-                if (OperandOf(exprOf) is { } operand && Operands.WrittenPrefix(operand) is { } written)
+                if (OperandOf(exprOf) is { } operand && Operands.PrefixSize(operand) is { } prefixSize)
                 {
                     named = true;
-                    widest = Widest(widest, written);
+                    widest = Widest(widest, prefixSize);
                 }
                 else if (ExprOf(exprOf) is { } inner)
                 {
@@ -144,7 +144,7 @@ internal sealed partial class Evaluator
         {
             if (resolved.TryGetValue((name.Tree, token.Span.Start), out var part) && part.IsAddress)
             {
-                Settle(part);
+                EnsureEvaluated(part);
                 return part;
             }
         }

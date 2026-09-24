@@ -51,7 +51,7 @@ public sealed class StateAnalysis : IProcessorStates
     /// counting the walk that found nothing had changed. This measures how quickly the analysis
     /// converges.
     /// </summary>
-    public int MostWalks { get; private set; }
+    public int MaximumWalks { get; private set; }
 
     /// <summary>
     /// Works out the processor state through every routine of <paramref name="flow"/>'s file.
@@ -155,7 +155,7 @@ public sealed class StateAnalysis : IProcessorStates
                     ? StateValue.Among(banks)
                     : StateValue.Unknown;
         }
-        return item.Expression is { } written && model.ValueOf(written).AsNumber() is { } value
+        return item.Expression is { } given && model.ValueOf(given).AsNumber() is { } value
             ? StateValue.Of(value)
             : StateValue.Unknown;
     }
@@ -233,7 +233,7 @@ public sealed class StateAnalysis : IProcessorStates
             reached[0] = Entry(signature, region.Routine);
             pending.Add(0);
         }
-        Settle();
+        Converge();
 
         // A label a `.state` declares is an entry point in its own right. If no path reaches
         // it, it starts from what the directive says, over an otherwise unknown state and the
@@ -261,7 +261,7 @@ public sealed class StateAnalysis : IProcessorStates
                 continue;
             }
             pending.Add(block.Index);
-            Settle();
+            Converge();
         }
 
         checks.Final = true;
@@ -273,9 +273,9 @@ public sealed class StateAnalysis : IProcessorStates
                 checks.Unreached(block, region);
         }
         checks.Final = false;
-        MostWalks = Math.Max(MostWalks, walks.DefaultIfEmpty().Max());
+        MaximumWalks = Math.Max(MaximumWalks, walks.DefaultIfEmpty().Max());
 
-        void Settle()
+        void Converge()
         {
             while (pending.Count > 0)
             {
@@ -284,7 +284,7 @@ public sealed class StateAnalysis : IProcessorStates
                 walks[index]++;
                 var block = blocks[index];
                 var after = Walk(block, reached[index]!, region);
-                foreach (var edge in Carried(block))
+                foreach (var edge in FlowsTo(block))
                 {
                     var merged = FlowState.Merge(reached[edge], after);
                     if (merged.Equals(reached[edge]))
@@ -299,7 +299,7 @@ public sealed class StateAnalysis : IProcessorStates
         // it calls, which is checked against its signature rather than walked into. A jump to a
         // routine's entry, the routine's own included, is treated the same way, because it is a
         // tail call.
-        IEnumerable<int> Carried(BasicBlock block)
+        IEnumerable<int> FlowsTo(BasicBlock block)
         {
             var calls = block.Steps.Count > 0
                 && (IsCallOrIndirectCall(block.Steps[^1]) || flow.RelativeCallAt(block.Steps[^1]) is not null);
@@ -348,7 +348,7 @@ public sealed class StateAnalysis : IProcessorStates
             WhyIndex = index == Width.Unknown && !given.Contains(StatePart.Index)
                 ? Undeclared(label, routine, "X and Y", "i")
                 : reached.WhyIndex,
-            WhyStack = stack is null ? OutsideEntries.Carried(label, routine) : reached.WhyStack,
+            WhyStack = stack is null ? OutsideEntries.UnknownStack(label, routine) : reached.WhyStack,
         };
 
         static Width Met(Width here, Width outside) => here == outside ? here : Width.Unknown;
@@ -381,33 +381,33 @@ public sealed class StateAnalysis : IProcessorStates
     };
 
     private Cause? Why(
-        Step step, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? carried)
+        Step step, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? inherited)
     {
         if (after != Width.Unknown)
             return null;
         if (before == Width.Unknown)
-            return carried;
+            return inherited;
 
         if (step.Statement is StateDirectiveSyntax)
             return new("a `.state` says so", "the `.state` can say what it is");
         if (step.Statement is not InstructionStatementSyntax statement)
             return null;
         var mode = state.Processor.E;
-        var written = $"`{statement.GetText().Trim()}`";
+        var quoted = $"`{statement.GetText().Trim()}`";
         return statement.MnemonicKind switch
         {
             // A `plp` that finds no saved P because the stack itself is not known reports what
             // lost the stack, which is nearer the mistake than the `php` above it.
             MnemonicKind.Plp when state.Stack is null && state.WhyStack is { } lost => lost,
-            MnemonicKind.Plp => new($"{written} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
-            MnemonicKind.Xce => new($"{written} follows neither `clc` nor `sec`", "a `.state` after it says what it is"),
+            MnemonicKind.Plp => new($"{quoted} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
+            MnemonicKind.Xce => new($"{quoted} follows neither `clc` nor `sec`", "a `.state` after it says what it is"),
             MnemonicKind.Rep when mode != ProcessorMode.Native && Constant(step) is not null
-                => new($"{written} widens nothing in emulation mode, and the mode is not known", "a `.state` before it says which mode it is"),
-            MnemonicKind.Rep or MnemonicKind.Sep => new($"{written} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
+                => new($"{quoted} widens nothing in emulation mode, and the mode is not known", "a `.state` before it says which mode it is"),
+            MnemonicKind.Rep or MnemonicKind.Sep => new($"{quoted} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
             MnemonicKind.Jsr or MnemonicKind.Jsl when next is not null && statement.Operand is not AbsoluteOperandSyntax
-                => new($"{written} calls through a pointer, and its `.next` names no routine", "a `.next` naming them carries their exit state here"),
-            MnemonicKind.Jsr or MnemonicKind.Jsl => new($"{written} returns with it unknown", "an `.ensure` after it sets it"),
-            _ => new($"{written} makes it unknown", "a `.state` after it says what it is"),
+                => new($"{quoted} calls through a pointer, and its `.next` names no routine", "a `.next` naming them carries their exit state here"),
+            MnemonicKind.Jsr or MnemonicKind.Jsl => new($"{quoted} returns with it unknown", "an `.ensure` after it sets it"),
+            _ => new($"{quoted} makes it unknown", "a `.state` after it says what it is"),
         };
     }
 
@@ -814,7 +814,7 @@ public sealed class StateAnalysis : IProcessorStates
             if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Arguments
                 or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set)
             {
-                checks.ReportAt(item.Node, step, Catalogue.StateItemNotAPoint.Says(item.Text));
+                checks.ReportAt(item.Node, step, Catalogue.StateItemNotAPoint.Message(item.Text));
                 continue;
             }
             switch (item.Part)
@@ -828,7 +828,7 @@ public sealed class StateAnalysis : IProcessorStates
                 case StatePart.E:
                     if (StateChecks.IsKnown(item.Mode) && StateChecks.IsKnown(processor.E) && item.Mode != processor.E)
                     {
-                        checks.ReportAt(item.Node, step, Catalogue.StateModeMismatch.Says(
+                        checks.ReportAt(item.Node, step, Catalogue.StateModeMismatch.Message(
                             item.Text, StateChecks.Mode(processor.E)));
                     }
                     processor = processor with { E = item.Mode };
@@ -854,7 +854,7 @@ public sealed class StateAnalysis : IProcessorStates
         if (processor.E == ProcessorMode.Emulation)
         {
             if (processor.A == Width.Sixteen || processor.Index == Width.Sixteen)
-                checks.Report(step, Catalogue.WidthInEmulation.Says("a 16-bit width"));
+                checks.Report(step, Catalogue.WidthInEmulation.Message("a 16-bit width"));
             processor = processor with { A = Width.Eight, Index = Width.Eight };
         }
         return state with { Processor = processor };
@@ -867,12 +867,12 @@ public sealed class StateAnalysis : IProcessorStates
                 return StateValue.Unknown;
             if (model.ValueOf(expression, step.On).AsNumber() is not { } value)
             {
-                checks.ReportAt(expression, step, Catalogue.StateValueNotConstant.Says(item.Text, register));
+                checks.ReportAt(expression, step, Catalogue.StateValueNotConstant.Message(item.Text, register));
                 return StateValue.Unknown;
             }
             if (value < 0 || value > (register == "D" ? 0xffff : 0xff))
             {
-                checks.ReportAt(expression, step, Catalogue.StateValueOutOfRange.Says(
+                checks.ReportAt(expression, step, Catalogue.StateValueOutOfRange.Message(
                     item.Text,
                     register == "D" ? "the direct page is a 16-bit address" : "a bank is one byte"));
                 return StateValue.Unknown;
@@ -880,7 +880,7 @@ public sealed class StateAnalysis : IProcessorStates
             if (here.IsBounded && !here.Values.Contains(value))
             {
                 checks.ReportAt(item.Node, step,
-                    Catalogue.StateValueMismatch.Says(item.Text, register, here.Describe(register == "D" ? 4 : 2)));
+                    Catalogue.StateValueMismatch.Message(item.Text, register, here.Describe(register == "D" ? 4 : 2)));
             }
             return StateValue.Of(value);
         }
@@ -890,17 +890,17 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (register == "D")
             {
-                checks.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Says(item.Text));
+                checks.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Message(item.Text));
                 return StateValue.Unknown;
             }
             if (item.BanksOf(expression => model.ValueOf(expression, step.On).AsNumber(), out var invalid) is not { } banks)
             {
-                checks.ReportAt(invalid!, step, Catalogue.StateBanksInvalid.Says(item.Text));
+                checks.ReportAt(invalid!, step, Catalogue.StateBanksInvalid.Message(item.Text));
                 return StateValue.Unknown;
             }
             if (here.Narrowed(banks) is { } narrowed)
                 return narrowed;
-            checks.ReportAt(item.Node, step, Catalogue.StateValueMismatch.Says(item.Text, register, here.Describe(2)));
+            checks.ReportAt(item.Node, step, Catalogue.StateValueMismatch.Message(item.Text, register, here.Describe(2)));
             return StateValue.Among(banks);
         }
 
@@ -908,8 +908,8 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (StateChecks.IsKnown(item.Width) && StateChecks.IsKnown(here) && item.Width != here)
             {
-                checks.ReportAt(item.Node, step, Catalogue.StateWidthMismatch.Says(
-                    item.Text, register, (register == "A" ? "is" : "are"), StateChecks.Spell(here)));
+                checks.ReportAt(item.Node, step, Catalogue.StateWidthMismatch.Message(
+                    item.Text, register, (register == "A" ? "is" : "are"), StateChecks.Format(here)));
             }
             return item.Width;
         }
@@ -927,12 +927,12 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (item.Part is not (StatePart.A or StatePart.Index) || !StateChecks.IsKnown(item.Width))
             {
-                checks.ReportAt(item.Node, step, Catalogue.EnsureItemNotAWidth.Says(item.Text));
+                checks.ReportAt(item.Node, step, Catalogue.EnsureItemNotAWidth.Message(item.Text));
                 continue;
             }
             if (item.Width == Width.Sixteen && processor.E != ProcessorMode.Native)
             {
-                checks.ReportAt(item.Node, step, Catalogue.EnsureNeedsNative.Says(
+                checks.ReportAt(item.Node, step, Catalogue.EnsureNeedsNative.Message(
                     item.Text,
                     processor.E == ProcessorMode.Emulation
                         ? "the processor is in emulation mode here, where both widths are 8 bits"
@@ -960,14 +960,14 @@ public sealed class StateAnalysis : IProcessorStates
         if (directive.Type is not { } type
             || model.SymbolOf(type) is not { IsLayout: true, Size: { } size })
         {
-            checks.Report(step, Catalogue.FrameNotARecord.Says(frame.DisplayName));
+            checks.Report(step, Catalogue.FrameNotARecord.Message(frame.DisplayName));
             return state;
         }
         if (state.Stack is not { } stack)
             return state with { Stack = AnalysisStack.OnlyFrame(frame, (int)size) };
         if (stack.Framed(frame, (int)size) is { } framed)
             return state with { Stack = framed };
-        checks.Report(step, Catalogue.FramePastTheStack.Says(frame.DisplayName, size, stack.Depth));
+        checks.Report(step, Catalogue.FramePastTheStack.Message(frame.DisplayName, size, stack.Depth));
         return state;
     }
 
@@ -988,21 +988,21 @@ public sealed class StateAnalysis : IProcessorStates
             {
                 continue;
             }
-            var written = name.GetText().Trim();
+            var text = name.GetText().Trim();
             if (mode is not (AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
                 || name.Parent is not OperandSyntax)
             {
-                checks.ReportAt(name, step, Catalogue.FrameMemberNotStackRelative.Says(written, written));
+                checks.ReportAt(name, step, Catalogue.FrameMemberNotStackRelative.Message(text, text));
                 continue;
             }
             if (stack is null)
             {
-                checks.ReportAt(name, step, Catalogue.FrameDepthUnknown.Says(written, Cause.Because(state.WhyStack)));
+                checks.ReportAt(name, step, Catalogue.FrameDepthUnknown.Message(text, Cause.Because(state.WhyStack)));
                 continue;
             }
             if (stack.Above(frame) is not { } above)
             {
-                checks.ReportAt(name, step, Catalogue.FrameGone.Says(written, frame.DisplayName));
+                checks.ReportAt(name, step, Catalogue.FrameGone.Message(text, frame.DisplayName));
                 continue;
             }
             var size = frame.TypeExpression is { } type ? model.SymbolOf(type)?.Size ?? 0 : 0;
@@ -1034,7 +1034,7 @@ public sealed class StateAnalysis : IProcessorStates
             else if (started.TryGetValue(key, out var before) && before != processor
                 && step.On?.NearestCall is { } call && model.MacroAt(call) is { } owner)
             {
-                checks.Report(step, Catalogue.BlockChangesState.Says(owner.DisplayName, before, processor));
+                checks.Report(step, Catalogue.BlockChangesState.Message(owner.DisplayName, before, processor));
             }
             return state;
         }

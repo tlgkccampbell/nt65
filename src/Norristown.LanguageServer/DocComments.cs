@@ -27,10 +27,10 @@ internal static class DocComments
         var lines = new List<string>();
         for (var i = tree.GetLineIndex(position) - 1; i >= 0; i--)
         {
-            var written = Text(tree, i).Trim();
-            if (!written.StartsWith(';'))
+            var line = Text(tree, i).Trim();
+            if (!line.StartsWith(';'))
                 break;
-            lines.Add(Stripped(written));
+            lines.Add(Stripped(line));
         }
         lines.Reverse();
 
@@ -53,9 +53,9 @@ internal static class DocComments
     /// usually follows are removed, and any further indentation is kept, so that a list or an
     /// example keeps its shape.
     /// </summary>
-    private static string Stripped(string written)
+    private static string Stripped(string line)
     {
-        var text = written.TrimStart(';');
+        var text = line.TrimStart(';');
         return text.StartsWith(' ') ? text[1..] : text;
     }
 }

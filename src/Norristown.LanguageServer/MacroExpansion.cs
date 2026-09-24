@@ -97,9 +97,9 @@ internal sealed class MacroExpansion
         if (model.MacroAt(call) is not { Definition: BlockSyntax definition } macro)
             return null;
         var (bytes, cycles) = Laid(analysis, model, call);
-        var written = new MacroExpansion(analysis, model, macro, call, all) { Bytes = bytes, Cycles = cycles };
-        written.Body(definition, Expansion.Of(null, call, definition), "", into ?? [], []);
-        return written;
+        var expansion = new MacroExpansion(analysis, model, macro, call, all) { Bytes = bytes, Cycles = cycles };
+        expansion.Body(definition, Expansion.Of(null, call, definition), "", into ?? [], []);
+        return expansion;
     }
 
     /// <summary>
@@ -121,12 +121,12 @@ internal sealed class MacroExpansion
     /// </summary>
     public string Becomes()
     {
-        var written = lines.Count == 1 ? "1 line" : $"{lines.Count} lines";
+        var lineCount = lines.Count == 1 ? "1 line" : $"{lines.Count} lines";
         var bytes = Bytes == 1 ? "1 byte" : $"{Bytes} bytes";
         var cycles = Cycles is { } count
-            ? $" · {count} cycle{(count is { IsExact: true, Least: 1 } ? "" : "s")}"
+            ? $" · {count} cycle{(count is { IsExact: true, Minimum: 1 } ? "" : "s")}"
             : "";
-        return $"{written} · {bytes}{cycles}";
+        return $"{lineCount} · {bytes}{cycles}";
     }
 
     /// <summary>
@@ -147,11 +147,11 @@ internal sealed class MacroExpansion
         CycleCount? cycles = null;
         foreach (var step in layout.Steps)
         {
-            if (step.IsMarker || !Within(step.On, call) || layout.Of(step.Statement, step.On) is not { } written)
+            if (step.IsMarker || !Within(step.On, call) || layout.Of(step.Statement, step.On) is not { } laid)
                 continue;
-            if (written.Length > 0)
-                bytes += written.Length;
-            if (written.Cycles is { } count)
+            if (laid.Length > 0)
+                bytes += laid.Length;
+            if (laid.Cycles is { } count)
                 cycles = cycles is { } running ? running + count : count;
         }
         return (bytes, cycles);
@@ -238,8 +238,8 @@ internal sealed class MacroExpansion
         // the reader asked what this call becomes rather than what the body says.
         if (block.BlockKind is BlockKind.Repeat or BlockKind.Each or BlockKind.MultiProc)
         {
-            foreach (var turn in Repetitions.Of(model, block, at, null))
-                Members(Macros.LinesOf(block), turn, indent, into, reached, counter);
+            foreach (var iteration in Repetitions.Of(model, block, at, null))
+                Members(Macros.LinesOf(block), iteration, indent, into, reached, counter);
             return;
         }
 
@@ -253,7 +253,7 @@ internal sealed class MacroExpansion
             return;
         }
 
-        Written(block.Opener.Statement, at, indent);
+        AddStatement(block.Opener.Statement, at, indent);
         Members(Macros.LinesOf(block), at, indent + Step, into, reached, counter);
         Emit(indent + "}");
     }
@@ -281,7 +281,7 @@ internal sealed class MacroExpansion
                 Called(null, inner, at, indent, into, reached, counter);
                 return;
             default:
-                Written(line.Statement, at, indent);
+                AddStatement(line.Statement, at, indent);
                 return;
         }
     }
@@ -349,8 +349,8 @@ internal sealed class MacroExpansion
         // A call left unexpanded adds the call line itself, then the block arguments under it.
         // Those arguments are code of this body rather than of the called macro, and are
         // expanded like any other line of the body.
-        var written = Written(call, at, indent);
-        links.Add(new Link(lines.Count - 1, written.TrimEnd('{').Trim(), way));
+        var callText = AddStatement(call, at, indent);
+        links.Add(new Link(lines.Count - 1, callText.TrimEnd('{').Trim(), way));
         if (opened is null)
             return;
         Members(Macros.LinesOf(opened), at, indent + Step, [], way, new Counter());
@@ -379,7 +379,7 @@ internal sealed class MacroExpansion
     /// Adds one statement as it would have been written by hand, at <paramref name="indent"/>,
     /// and returns its text.
     /// </summary>
-    private string Written(SyntaxNode statement, Expansion at, string indent)
+    private string AddStatement(SyntaxNode statement, Expansion at, string indent)
     {
         var text = Substituted(statement, at);
         if (text.Length > 0)
@@ -405,8 +405,8 @@ internal sealed class MacroExpansion
         var edits = new SortedDictionary<int, (int End, string Text)>();
         foreach (var operand in Under(statement).OfType<AbsoluteOperandSyntax>())
         {
-            if (Operands.Substituted(model, operand, at) is { } given && Argument(given) is { } written)
-                edits[operand.Span.Start] = (operand.Span.End, written);
+            if (Operands.Substituted(model, operand, at) is { } given && Argument(given) is { } replacement)
+                edits[operand.Span.Start] = (operand.Span.End, replacement);
         }
         // `.exprof(p)` is replaced by the expression inside the operand the call passed as `p`:
         // `5` for `{#5}`, `ptr` for `{(ptr),y}`.
@@ -421,19 +421,19 @@ internal sealed class MacroExpansion
                 continue;
             if (model.SymbolOf(name) is not { Kind: SymbolKind.MacroParameter, Parameter: { } parameter })
                 continue;
-            if (Given(parameter, name, at) is { } written)
-                edits[name.Span.Start] = (name.Span.End, written);
+            if (Given(parameter, name, at) is { } replacement)
+                edits[name.Span.Start] = (name.Span.End, replacement);
             else
-                Refuse($"the argument for `{parameter.Name}` cannot be written out as text here");
+                Refuse($"the argument for `{parameter.Name}` cannot be replacement out as text here");
         }
 
         var built = new StringBuilder();
         var was = span.Start;
-        foreach (var (start, (end, written)) in edits)
+        foreach (var (start, (end, replacement)) in edits)
         {
             if (start < was || end > span.End)
                 continue;
-            built.Append(text, was, start - was).Append(written);
+            built.Append(text, was, start - was).Append(replacement);
             was = end;
         }
         return built.Append(text, was, span.End - was).ToString().Trim();
@@ -474,9 +474,9 @@ internal sealed class MacroExpansion
             return member.Tree == model.Tree ? member.QualifiedName : "::" + member.PathName;
         }
 
-        var written = (value as BracedOperandSyntax)?.Operand ?? value;
-        var text = written.GetText().Trim();
-        return name.Parent is ExpressionSyntax && written is BinaryExpressionSyntax or UnaryExpressionSyntax
+        var unbraced = (value as BracedOperandSyntax)?.Operand ?? value;
+        var text = unbraced.GetText().Trim();
+        return name.Parent is ExpressionSyntax && unbraced is BinaryExpressionSyntax or UnaryExpressionSyntax
             ? $"({text})"
             : text;
     }
@@ -507,10 +507,10 @@ internal sealed class MacroExpansion
         if (given.Expression is not { } addressed)
             return null;
         var index = given.Index is { } register ? "," + register.Text : "";
-        var written = addressed.GetText().Trim();
+        var address = addressed.GetText().Trim();
         return given.Offset > 0
-            ? string.Create(CultureInfo.InvariantCulture, $"{written}+{given.Offset}{index}")
-            : string.Create(CultureInfo.InvariantCulture, $"{written}{given.Offset}{index}");
+            ? string.Create(CultureInfo.InvariantCulture, $"{address}+{given.Offset}{index}")
+            : string.Create(CultureInfo.InvariantCulture, $"{address}{given.Offset}{index}");
     }
 
     /// <summary>Adds one line of the expansion.</summary>

@@ -25,7 +25,7 @@ public sealed class CorpusTests
     /// The fixtures check each construct; these are the combinations real code uses.
     /// </summary>
     [Fact]
-    public void WritingOutEveryCallLeavesTheProgramsTheSame()
+    public void InliningEveryCallLeavesTheProgramsTheSame()
     {
         var programs = CorpusProgram.All();
         Repo.RequireAny(programs);
@@ -84,8 +84,8 @@ public sealed class CorpusTests
         var compilation = Compiler.Compile(program.Sources, program.Project, _ => 16, "nt65.h");
         Assert.NotNull(compilation.Header);
 
-        var said = Ca65Oracle.Pinned.CompileC(Path.Combine(program.Directory, "c", "main.c"), [("nt65.h", compilation.Header)]);
-        Assert.True(said.Length == 0, $"cc65 reported:\n{said}\nagainst:\n{compilation.Header}");
+        var reported = Ca65Oracle.Pinned.CompileC(Path.Combine(program.Directory, "c", "main.c"), [("nt65.h", compilation.Header)]);
+        Assert.True(reported.Length == 0, $"cc65 reported:\n{reported}\nagainst:\n{compilation.Header}");
     }
 
     private static IEnumerable<string> Check(CorpusProgram program, Compilation compilation)

@@ -93,8 +93,8 @@ internal static class Lexer
             if (word.IsEmpty)
             {
                 return (SyntaxKind.NumberLiteral, One(hex
-                    ? Catalogue.DigitsMissing.Says("hexadecimal", "$", "")
-                    : Catalogue.DigitsMissing.Says("binary", "%", " (the remainder operator is `.mod`)")));
+                    ? Catalogue.DigitsMissing.Message("hexadecimal", "$", "")
+                    : Catalogue.DigitsMissing.Message("binary", "%", " (the remainder operator is `.mod`)")));
             }
             return (SyntaxKind.NumberLiteral, One(Digits(
                 word, c, hex ? "hexadecimal" : "binary", hex ? char.IsAsciiHexDigit : static digit => digit is '0' or '1')));
@@ -175,7 +175,7 @@ internal static class Lexer
         // One whole character, so a surrogate pair is not split.
         Rune.DecodeFromUtf16(text[pos..], out var rune, out var consumed);
         pos += consumed;
-        return (SyntaxKind.BadToken, One(Catalogue.UnexpectedCharacter.Says(rune)));
+        return (SyntaxKind.BadToken, One(Catalogue.UnexpectedCharacter.Message(rune)));
     }
 
     /// <summary>
@@ -207,15 +207,15 @@ internal static class Lexer
             if (digits[i] == '_')
             {
                 if (i == 0 || i == digits.Length - 1 || digits[i - 1] == '_')
-                    return Catalogue.NumberSeparator.Says(Written(digits, prefix));
+                    return Catalogue.NumberSeparator.Message(InSource(digits, prefix));
                 continue;
             }
             if (!isDigit(digits[i]))
-                return Catalogue.NumberInvalid.Says(radix, Written(digits, prefix));
+                return Catalogue.NumberInvalid.Message(radix, InSource(digits, prefix));
         }
         return null;
 
-        static string Written(ReadOnlySpan<char> digits, char prefix) =>
+        static string InSource(ReadOnlySpan<char> digits, char prefix) =>
             prefix == '\0' ? digits.ToString() : prefix + digits.ToString();
     }
 
@@ -237,7 +237,7 @@ internal static class Lexer
             if (pos >= text.Length)
             {
                 if (errors is null)
-                    return One(Catalogue.TextUnterminated.Says(isChar ? "character literal" : "string"));
+                    return One(Catalogue.TextUnterminated.Message(isChar ? "character literal" : "string"));
                 return errors;
             }
             var c = text[pos];
@@ -271,7 +271,7 @@ internal static class Lexer
                     break;
                 default:
                     Rune.DecodeFromUtf16(text[(pos + 1)..], out var rune, out var consumed);
-                    (errors ??= []).Add(Catalogue.EscapeUnknown.Says(rune));
+                    (errors ??= []).Add(Catalogue.EscapeUnknown.Message(rune));
                     pos += 1 + consumed;
                     break;
             }

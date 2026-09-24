@@ -100,7 +100,7 @@ public sealed class RepetitionTests
     /// iteration's line is sized on its own.
     /// </summary>
     [Fact]
-    public void ATurnDecidesHowMuchRoomALineTakes()
+    public void EachIterationDecidesHowMuchRoomALineTakes()
     {
         var main = Output(".data room {\n.repeat 3, n {\n    .res n + 1\n}\n}\n");
 
@@ -128,7 +128,7 @@ public sealed class RepetitionTests
     /// parser's error.
     /// </summary>
     [Fact]
-    public void ALineThatOpensNoRepetitionStandsForNoTurns()
+    public void ALineThatOpensNoRepetitionStandsForNoIterations()
     {
         var program = Analysis.Program(("main.nt65", ".module main\n.segment RODATA\nfoo: .repeat 3 {\n}\n"));
 
@@ -140,7 +140,7 @@ public sealed class RepetitionTests
     /// each iteration's label gets a name of its own in the output.
     /// </summary>
     [Fact]
-    public void ANameDeclaredInsideARepetitionIsOneNamePerTurn()
+    public void ANameDeclaredInsideARepetitionIsOneNamePerIteration()
     {
         var main = Output(".proc p {\n.repeat 2, i {\n@wait:\n    dex\n    bne @wait\n}\n    rts\n}\n");
 
@@ -155,7 +155,7 @@ public sealed class RepetitionTests
     /// many iterations there are. The clearest case is a table of the index values themselves.
     /// </summary>
     [Fact]
-    public void ARepetitionSaidOnceIsThreeLinesHoweverManyTurnsItRuns()
+    public void ARepetitionEmittedOnceIsThreeLinesHoweverManyIterationsItRuns()
     {
         var main = Output(".data ramp: .byte[] {\n.repeat 256, i {\n    i\n}\n}\n");
 
@@ -169,7 +169,7 @@ public sealed class RepetitionTests
     /// are all written out, because a ca65 <c>.repeat</c> could not express them.
     /// </summary>
     [Fact]
-    public void TurnsThatCameOutDifferentlyAreAllWrittenOut()
+    public void IterationsThatCameOutDifferentlyAreAllWrittenOut()
     {
         var main = Output(".data room {\n.repeat 3, n {\n    .res n + 1\n}\n}\n");
 
@@ -182,7 +182,7 @@ public sealed class RepetitionTests
     /// three iterations to be written once.
     /// </summary>
     [Fact]
-    public void TwoTurnsAreWrittenOut()
+    public void TwoIterationsAreWrittenOut()
     {
         var main = Output(".proc p {\n.repeat 2 {\n    nop\n}\n    rts\n}\n");
 

@@ -19,7 +19,7 @@ internal static class Paths
     /// Returns what one pass through a whole routine costs, with each block weighted by
     /// <see cref="Costing"/>.
     /// </summary>
-    public static (int? Least, int? Most, bool Ends) Through(IReadOnlyList<BasicBlock> blocks) =>
+    public static (int? Minimum, int? Maximum, bool Ends) Through(IReadOnlyList<BasicBlock> blocks) =>
         Through(blocks, 0, _ => true, Costing);
 
     /// <summary>
@@ -36,7 +36,7 @@ internal static class Paths
     /// <paramref name="weight"/> giving what each block costs. A path ends where nothing follows it
     /// or where what follows is outside.
     /// </summary>
-    public static (int? Least, int? Most, bool Ends) Through(
+    public static (int? Minimum, int? Maximum, bool Ends) Through(
         IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside, Func<BasicBlock, CycleCount?> weight)
     {
         if (entry < 0 || entry >= blocks.Count || !inside(entry))
@@ -58,7 +58,7 @@ internal static class Paths
             if (reached[i] && weight(blocks[i]) is null)
                 return (null, null, true);
         }
-        return (Least(blocks, entry, inside, weight), Most(blocks, reached, inside, weight), true);
+        return (Minimum(blocks, entry, inside, weight), Maximum(blocks, reached, inside, weight), true);
     }
 
     /// <summary>Returns which blocks a path from <paramref name="entry"/> can reach without leaving.</summary>
@@ -103,23 +103,23 @@ internal static class Paths
     /// Returns the cost of the shortest path to an end. No block has a negative cost, so this works
     /// for any arrangement of blocks, including one that forms loops.
     /// </summary>
-    private static int? Least(
+    private static int? Minimum(
         IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside, Func<BasicBlock, CycleCount?> weight)
     {
         var best = new int?[blocks.Count];
         var pending = new PriorityQueue<int, int>();
-        best[entry] = weight(blocks[entry])!.Value.Least;
+        best[entry] = weight(blocks[entry])!.Value.Minimum;
         pending.Enqueue(entry, best[entry]!.Value);
-        int? least = null;
+        int? minimum = null;
         while (pending.TryDequeue(out var at, out var cost))
         {
             if (cost > best[at])
                 continue;
             if (Leaves(blocks[at], inside))
-                least = least is { } found ? Math.Min(found, cost) : cost;
+                minimum = minimum is { } found ? Math.Min(found, cost) : cost;
             foreach (var to in Onward(blocks[at], inside))
             {
-                var through = cost + weight(blocks[to])!.Value.Least;
+                var through = cost + weight(blocks[to])!.Value.Minimum;
                 if (best[to] is null || through < best[to])
                 {
                     best[to] = through;
@@ -127,7 +127,7 @@ internal static class Paths
                 }
             }
         }
-        return least;
+        return minimum;
     }
 
     /// <summary>
@@ -135,7 +135,7 @@ internal static class Paths
     /// itself. The blocks are put in the order they can run in, and a cycle is what is left over
     /// when nothing can be put next.
     /// </summary>
-    private static int? Most(
+    private static int? Maximum(
         IReadOnlyList<BasicBlock> blocks, bool[] reached, Func<int, bool> inside, Func<BasicBlock, CycleCount?> weight)
     {
         var waiting = new int[blocks.Count];
@@ -155,23 +155,23 @@ internal static class Paths
         {
             if (reached[i] && waiting[i] == 0)
             {
-                high[i] = weight(blocks[i])!.Value.Most;
+                high[i] = weight(blocks[i])!.Value.Maximum;
                 pending.Enqueue(i);
             }
         }
-        var placed = 0;
-        int? most = null;
+        var visited = 0;
+        int? maximum = null;
         while (pending.Count > 0)
         {
             var at = pending.Dequeue();
-            placed++;
+            visited++;
             if (Leaves(blocks[at], inside) && high[at] is { } end)
-                most = most is { } found ? Math.Max(found, end) : end;
+                maximum = maximum is { } found ? Math.Max(found, end) : end;
             foreach (var to in Onward(blocks[at], inside))
             {
                 if (high[at] is { } from)
                 {
-                    var through = from + weight(blocks[to])!.Value.Most;
+                    var through = from + weight(blocks[to])!.Value.Maximum;
                     if (high[to] is null || through > high[to])
                         high[to] = through;
                 }
@@ -179,6 +179,6 @@ internal static class Paths
                     pending.Enqueue(to);
             }
         }
-        return placed == total ? most : null;
+        return visited == total ? maximum : null;
     }
 }

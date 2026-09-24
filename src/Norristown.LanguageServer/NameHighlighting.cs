@@ -93,12 +93,12 @@ internal static class NameHighlighting
             tail++;
         }
         var removed = before.Count - head - tail;
-        var written = after.Skip(head).Take(after.Count - head - tail).ToList();
+        var inserted = after.Skip(head).Take(after.Count - head - tail).ToList();
         return new Protocol.SemanticTokensDelta(
             id,
-            removed == 0 && written.Count == 0
+            removed == 0 && inserted.Count == 0
                 ? []
-                : [new Protocol.SemanticTokensEdit(head, removed, written.Count == 0 ? null : written)]);
+                : [new Protocol.SemanticTokensEdit(head, removed, inserted.Count == 0 ? null : inserted)]);
     }
 
     private static (int Type, int Modifiers) Classify(Symbol symbol)

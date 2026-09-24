@@ -66,7 +66,7 @@ public sealed partial class CodeLayout
     private void Laid(StatementSyntax statement, LineLayout laid)
     {
         lines[(statement.Position, expansion)] = laid;
-        anyWriting.TryAdd((statement.Tree, statement.Position), laid);
+        anyExpansion.TryAdd((statement.Tree, statement.Position), laid);
     }
 
     /// <summary>
@@ -77,7 +77,7 @@ public sealed partial class CodeLayout
     private void Place(StatementSyntax statement, int length)
     {
         var offset = filled.GetValueOrDefault(Measured);
-        placements[(statement.Position, expansion)] = new Placement(Measured, offset, length);
+        positions[(statement.Position, expansion)] = new BytePosition(Measured, offset, length);
         if (length == DataLengths.Unpredictable && segment is { } named)
             runs[named] = nextStream++;
         else if (length == DataLengths.Unpredictable)
@@ -93,7 +93,7 @@ public sealed partial class CodeLayout
     /// </summary>
     private void FallsThrough(FallthroughDirectiveSyntax directive)
     {
-        placements[(directive.Position, expansion)] = new Placement(Measured, filled.GetValueOrDefault(Measured), 0);
+        positions[(directive.Position, expansion)] = new BytePosition(Measured, filled.GetValueOrDefault(Measured), 0);
         steps.Add(new Step(directive, expansion, routine, Stream, segment, null));
     }
 
@@ -113,17 +113,17 @@ public sealed partial class CodeLayout
             && (declaration is ProcDeclarationSyntax or MultiProcDeclarationSyntax
                 || (routine is null && declaration is DataDeclarationSyntax)))
         {
-            Report(declaration.Tree, symbol.NameSpan, Catalogue.OutsideEverySegment.Says($"`{symbol.DisplayName}`"));
+            Report(declaration.Tree, symbol.NameSpan, Catalogue.OutsideEverySegment.Message($"`{symbol.DisplayName}`"));
         }
 
         // A label that a macro expansion puts outside any routine marks a position in no code.
         // Binding could not report it, because it sees only the macro body as declared.
         if (routine is null && inData == 0 && symbol.Kind == SymbolKind.Label && expansion?.NearestCall is not null)
         {
-            Report(declaration.Tree, symbol.NameSpan, Catalogue.LabelOutsideARoutine.Says(symbol.DisplayName, ""));
+            Report(declaration.Tree, symbol.NameSpan, Catalogue.LabelOutsideARoutine.Message(symbol.DisplayName, ""));
         }
         labels[(symbol, Expansion.Owning(expansion, symbol))] =
-            new Placement(Measured, filled.GetValueOrDefault(Measured), 0);
+            new BytePosition(Measured, filled.GetValueOrDefault(Measured), 0);
         steps.Add(new Step(declaration, expansion, routine, Stream, segment, symbol));
     }
 
@@ -134,7 +134,7 @@ public sealed partial class CodeLayout
     /// </summary>
     private int? Distance(Branch branch)
     {
-        if (placements.GetValueOrDefault((branch.Statement.Position, branch.On)) is not { Length: > 0 } from)
+        if (positions.GetValueOrDefault((branch.Statement.Position, branch.On)) is not { Length: > 0 } from)
             return null;
         return Located(branch.Target, branch.On) is { } to && to.Stream == from.Stream
             ? to.Offset - from.End
@@ -146,7 +146,7 @@ public sealed partial class CodeLayout
     /// argument the call passed. That argument appears in the caller, so it is looked up at the
     /// caller's expansion level rather than the macro body's.
     /// </summary>
-    private Placement? Located(SyntaxNode expression, Expansion? on)
+    private BytePosition? Located(SyntaxNode expression, Expansion? on)
     {
         if (expression is not NameExpressionSyntax || model.SymbolOf(expression) is not { } symbol)
             return null;
@@ -156,8 +156,8 @@ public sealed partial class CodeLayout
                 ? Located(given, caller)
                 : null;
         }
-        return labels.TryGetValue((symbol, Expansion.Owning(on, symbol)), out var placement)
-            ? placement
+        return labels.TryGetValue((symbol, Expansion.Owning(on, symbol)), out var position)
+            ? position
             : null;
     }
 
@@ -196,7 +196,7 @@ public sealed partial class CodeLayout
             var longer = Instructions.LongFormOf(branch.Statement.MnemonicKind) is { } form ? SyntaxFacts.TextOf(form) : null;
             var fix = longer is not null ? $": use `{longer}`, which reaches any near target" : "";
             ReportOnLine(branch.Target, branch.On,
-                Catalogue.BranchOutOfReach.Says(mnemonic, reach, fix),
+                Catalogue.BranchOutOfReach.Message(mnemonic, reach, fix),
 
                 // The fix changes the branch, so it is offered only where the branch appears in
                 // this file. In an expansion, the branch is the macro body's line, which is not
@@ -212,19 +212,19 @@ public sealed partial class CodeLayout
     /// No length in the layout depends on a span, so one more walk is enough for the spans to stop
     /// changing.
     /// </summary>
-    private bool Settle()
+    private bool RecordSpans()
     {
         var changed = false;
         foreach (var symbol in measured)
         {
             var now = extents.TryGetValue(symbol, out var span) ? span : (long?)null;
-            var before = settled.TryGetValue(symbol, out var was) ? was : (long?)null;
+            var before = spans.TryGetValue(symbol, out var was) ? was : (long?)null;
             if (now == before)
                 continue;
             if (now is { } value)
-                settled[symbol] = value;
+                spans[symbol] = value;
             else
-                settled.Remove(symbol);
+                spans.Remove(symbol);
             changed = true;
         }
         return changed;

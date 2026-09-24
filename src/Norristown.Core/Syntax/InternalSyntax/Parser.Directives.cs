@@ -15,10 +15,10 @@ internal sealed partial class Parser
         if (ParseDirective(SyntaxFacts.LineDirectiveKind(Current.Text)) is { } statement)
             return Finish(statement);
         if (SyntaxFacts.LineDirectiveKind(Current.Text) is SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective)
-            return ErrorLine(Catalogue.ElseIfMisplaced.Says(Current.Text));
+            return ErrorLine(Catalogue.ElseIfMisplaced.Message(Current.Text));
         return Replaced(Current.Text) is { } instead
             ? ErrorLine(instead.Message, Spelling(instead, wholeLine: true))
-            : ErrorLine(Catalogue.DirectiveUnknown.Says(Current.Text));
+            : ErrorLine(Catalogue.DirectiveUnknown.Message(Current.Text));
     }
 
     /// <summary>
@@ -69,8 +69,8 @@ internal sealed partial class Parser
     /// directive is the whole line. <c>.tag T, n</c> becomes <c>.type T[n]</c>, which moves the
     /// count as well as the word, so that fix is offered only for the plain form with no comma.
     /// </summary>
-    private DiagnosticFix? Spelling((DiagnosticMessage Message, string? Write) instead, bool wholeLine) =>
-        instead.Write is { } word && (word != "}" || wholeLine) && (word != ".type" || !RestHasComma())
+    private DiagnosticFix? Spelling((DiagnosticMessage Message, string? Replacement) instead, bool wholeLine) =>
+        instead.Replacement is { } word && (word != "}" || wholeLine) && (word != ".type" || !RestHasComma())
             ? new DiagnosticFix(FixKind.Spelling, word)
             : null;
 
@@ -90,17 +90,17 @@ internal sealed partial class Parser
     /// nt65 form and, when one word is enough, the word to use in its place. Returns null for any
     /// other directive.
     /// </summary>
-    private static (DiagnosticMessage Message, string? Write)? Replaced(string directive) => directive.ToLowerInvariant() switch
+    private static (DiagnosticMessage Message, string? Replacement)? Replaced(string directive) => directive.ToLowerInvariant() switch
     {
         ".zeropage" or ".code" or ".bss" or ".rodata" =>
-            (Catalogue.Ca65Spelling.Says(directive, $".segment {directive[1..].ToUpperInvariant()}"),
+            (Catalogue.Ca65Spelling.Message(directive, $".segment {directive[1..].ToUpperInvariant()}"),
                 $".segment {directive[1..].ToUpperInvariant()}"),
-        ".tag" => (Catalogue.Ca65Tag.Says(), ".type"),
-        ".asciiz" => (Catalogue.Ca65Spelling.Says(directive, ".strz"), ".strz"),
-        ".dbyt" => (Catalogue.Ca65Spelling.Says(directive, ".beword"), ".beword"),
+        ".tag" => (Catalogue.Ca65Tag.Message(), ".type"),
+        ".asciiz" => (Catalogue.Ca65Spelling.Message(directive, ".strz"), ".strz"),
+        ".dbyt" => (Catalogue.Ca65Spelling.Message(directive, ".beword"), ".beword"),
         ".endproc" or ".endscope" or ".endmacro" or ".endstruct" or ".endunion" or ".endenum"
             or ".endif" or ".endrep" or ".endrepeat" =>
-            (Catalogue.Ca65BlockEnd.Says(directive), "}"),
+            (Catalogue.Ca65BlockEnd.Message(directive), "}"),
         _ => null,
     };
 
@@ -143,7 +143,7 @@ internal sealed partial class Parser
             if (AtName)
                 name = Advance();
             else
-                Report(Catalogue.ExpectedName.Says("the name to bind"));
+                Report(Catalogue.ExpectedName.Message("the name to bind"));
         }
         var openBrace = ExpectOpenBrace();
         return kind == SyntaxKind.RepeatDirective
@@ -168,7 +168,7 @@ internal sealed partial class Parser
         GreenToken? levelComma = null;
         if (AtName && SyntaxFacts.IsAssertLevel(Current.Text))
         {
-            Report(Catalogue.AssertLevel.Says(Current.Text),
+            Report(Catalogue.AssertLevel.Message(Current.Text),
                 new DiagnosticFix(FixKind.AssertLevel));
             level = Advance();
             if (Kind != SyntaxKind.Comma)
@@ -180,7 +180,7 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.StringLiteral)
             message = Advance();
         else
-            Report(Catalogue.ExpectedText.Says("the message, in quotes"));
+            Report(Catalogue.ExpectedText.Message("the message, in quotes"));
         return new AssertDirectiveSyntax(keyword, condition, comma, level, levelComma, message);
     }
 
@@ -191,7 +191,7 @@ internal sealed partial class Parser
     private GreenNode ParseError()
     {
         var keyword = Advance();
-        return new ErrorDirectiveSyntax(keyword, Expect(SyntaxKind.StringLiteral, Catalogue.ExpectedText.Says(
+        return new ErrorDirectiveSyntax(keyword, Expect(SyntaxKind.StringLiteral, Catalogue.ExpectedText.Message(
             "the message, in quotes")));
     }
 
@@ -206,7 +206,7 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.Question)
             return new NextDirectiveSyntax(keyword, Advance(), null);
         return new NextDirectiveSyntax(
-            keyword, null, ParseSeparatedList(() => ParseTarget(Catalogue.ExpectedLabel.Says(
+            keyword, null, ParseSeparatedList(() => ParseTarget(Catalogue.ExpectedLabel.Message(
                 "a label flow continues at, or `?`"))));
     }
 
@@ -218,7 +218,7 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
         return new FallthroughDirectiveSyntax(
-            keyword, ParseTarget(Catalogue.ExpectedLabel.Says("the routine flow runs into")));
+            keyword, ParseTarget(Catalogue.ExpectedLabel.Message("the routine flow runs into")));
     }
 
     /// <summary>
@@ -249,8 +249,8 @@ internal sealed partial class Parser
     private GreenNode ParseFrame()
     {
         var keyword = Advance();
-        var name = Expect(SyntaxKind.Identifier, Catalogue.ExpectedName.Says("a name for the frame"));
-        var colon = Expect(SyntaxKind.Colon, Catalogue.ExpectedColon.Says(
+        var name = Expect(SyntaxKind.Identifier, Catalogue.ExpectedName.Message("a name for the frame"));
+        var colon = Expect(SyntaxKind.Colon, Catalogue.ExpectedColon.Message(
             "`:` and the struct the frame is laid out as"));
 
         // The struct comes after the `:`, so a line without the colon has no struct to read.
@@ -265,7 +265,7 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
         return new PatchDirectiveSyntax(
-            keyword, ParseTarget(Catalogue.ExpectedLabel.Says("the label of the instruction being written to")));
+            keyword, ParseTarget(Catalogue.ExpectedLabel.Message("the label of the instruction being written to")));
     }
 
     /// <summary>

@@ -44,7 +44,7 @@ public sealed partial class Ca65InstructionTests
         var problems = new List<string>();
         foreach (var cpu in CpuNames.All)
         {
-            var setcpu = CpuNames.SpellForCa65(cpu);
+            var setcpu = CpuNames.FormatForCa65(cpu);
             Assert.True(tables.TryGetValue("InsTab" + setcpu, out var theirs),
                 $"ca65's instr.c has no table InsTab{setcpu}");
             var ours = Ca65Instructions.Of(cpu);

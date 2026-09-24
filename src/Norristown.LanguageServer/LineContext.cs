@@ -14,7 +14,7 @@ internal sealed class LineContext
         Surrounding around, bool inText, bool first)
     {
         Caret = caret;
-        Place = around.Place;
+        Context = around.Context;
         InProc = around.InProc;
         InMacro = around.InMacro;
         InRepetition = around.InRepetition;
@@ -47,7 +47,7 @@ internal sealed class LineContext
     public IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> Before { get; }
 
     /// <summary>Gets the kind of context the line is in, which decides what may appear there.</summary>
-    public Place Place { get; }
+    public ContextKind Context { get; }
 
     /// <summary>
     /// Gets a value indicating whether the line is inside a routine, where a <c>.proc</c> or a
@@ -241,7 +241,7 @@ internal sealed class LineContext
     /// </summary>
     private static Surrounding Around(SyntaxTree tree, int line)
     {
-        var found = new Surrounding(Place.Item, false, false, false, false, null, false);
+        var found = new Surrounding(ContextKind.Item, false, false, false, false, null, false);
         foreach (var block in Edits.BlockAround(tree, line)?.AncestorsAndSelf().OfType<BlockSyntax>().Reverse() ?? [])
             found = found.Within(block);
         return found;
@@ -290,7 +290,7 @@ internal sealed class LineContext
             .Select(token => (token.Kind, token.Text, start + token.Span.Start))];
 
     /// <summary>Represents what the blocks around a line determine about what may appear in it.</summary>
-    /// <param name="Place">The kind of context the innermost block gives.</param>
+    /// <param name="Context">The kind of context the innermost block gives.</param>
     /// <param name="InProc">Whether a routine holds the line.</param>
     /// <param name="InMacro">Whether a macro body holds the line.</param>
     /// <param name="InRepetition">Whether a repetition holds the line.</param>
@@ -298,8 +298,8 @@ internal sealed class LineContext
     /// <param name="RecordType">The type a record initializer gives values to.</param>
     /// <param name="PastFileLevel">Whether a block other than a <c>.segment</c> region holds the line.</param>
     private readonly record struct Surrounding(
-        Place Place, bool InProc, bool InMacro, bool InRepetition, bool InBlock, IReadOnlyList<string>? RecordType,
-        bool PastFileLevel)
+        ContextKind Context, bool InProc, bool InMacro, bool InRepetition, bool InBlock,
+        IReadOnlyList<string>? RecordType, bool PastFileLevel)
     {
         /// <summary>
         /// Returns the surroundings one block further in. Every kind of block sets
@@ -310,17 +310,18 @@ internal sealed class LineContext
         {
             var inside = block.BlockKind switch
             {
-                BlockKind.Proc => this with { Place = Place.Code, InProc = true },
-                BlockKind.Macro => this with { Place = Place.Code, InMacro = true },
-                BlockKind.MacroBlock => this with { Place = Place.Code },
+                BlockKind.Proc => this with { Context = ContextKind.Code, InProc = true },
+                BlockKind.Macro => this with { Context = ContextKind.Code, InMacro = true },
+                BlockKind.MacroBlock => this with { Context = ContextKind.Code },
                 BlockKind.Scope or BlockKind.Segment or BlockKind.Region or BlockKind.If => this,
                 BlockKind.Repeat or BlockKind.Each => this with { InRepetition = true },
-                BlockKind.Data => this with { Place = Place.Data },
-                BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Place = Place.Values },
-                BlockKind.RecordInitializer => this with { Place = Place.Record, RecordType = TypeOf(block.Opener) },
-                BlockKind.Enum => this with { Place = Place.EnumMembers },
-                BlockKind.Struct or BlockKind.Union => this with { Place = Place.TypeMembers },
-                _ => this with { Place = Place.Unknown },
+                BlockKind.Data => this with { Context = ContextKind.Data },
+                BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Context = ContextKind.Values },
+                BlockKind.RecordInitializer =>
+                    this with { Context = ContextKind.Record, RecordType = TypeOf(block.Opener) },
+                BlockKind.Enum => this with { Context = ContextKind.EnumMembers },
+                BlockKind.Struct or BlockKind.Union => this with { Context = ContextKind.TypeMembers },
+                _ => this with { Context = ContextKind.Unknown },
             };
             return inside with { InBlock = true, PastFileLevel = PastFileLevel || block.BlockKind != BlockKind.Region };
         }

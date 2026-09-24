@@ -13,7 +13,7 @@ namespace Norristown.Tests.Syntax;
 public sealed class TreeDiagnosticsTests
 {
     [Fact]
-    public void AMissingTokenCarriesWhatTheLineWantedThere()
+    public void AMissingTokenRecordsWhatTheLineWantedThere()
     {
         var tree = SyntaxTree.Parse("test.nt65", ".proc p   ; note\n");
         var proc = Assert.IsType<ProcDeclarationSyntax>(Line(tree, 0).Statement);
@@ -100,15 +100,15 @@ public sealed class TreeDiagnosticsTests
         var errored = Lexer.LexLine("$1G").Tokens[0];
         Assert.True(errored.ContainsDiagnostics);
         Assert.NotSame(errored, Lexer.LexLine("$1G").Tokens[0]);
-        Assert.NotSame(errored, GreenCache.Token(errored.Kind, "$1G", [], [], [Catalogue.NumberInvalid.Says("hexadecimal", "$1G")]));
+        Assert.NotSame(errored, GreenCache.Token(errored.Kind, "$1G", [], [], [Catalogue.NumberInvalid.Message("hexadecimal", "$1G")]));
 
         // The missing token of a kind is shared only when it carries no diagnostic.
         var quiet = GreenToken.Missing(SyntaxKind.OpenBrace);
         Assert.False(quiet.ContainsDiagnostics);
         Assert.Same(quiet, GreenToken.Missing(SyntaxKind.OpenBrace));
-        var said = GreenToken.Missing(SyntaxKind.OpenBrace, new Green.GreenDiagnostic(0, 0, Catalogue.ExpectedBrace.Says("`{`")));
-        Assert.NotSame(quiet, said);
-        Assert.True(said.ContainsDiagnostics);
+        var flagged = GreenToken.Missing(SyntaxKind.OpenBrace, new Green.GreenDiagnostic(0, 0, Catalogue.ExpectedBrace.Message("`{`")));
+        Assert.NotSame(quiet, flagged);
+        Assert.True(flagged.ContainsDiagnostics);
         Assert.False(GreenToken.Missing(SyntaxKind.OpenBrace).ContainsDiagnostics);
     }
 

@@ -28,7 +28,7 @@ public sealed class GeneratedProgramTests
     private const int Programs = 120;
 
     [Fact]
-    public void AProgramNobodyWroteIsReadAndWrittenOut()
+    public void ARandomProgramIsAnalyzedAndEmittedWithoutThrowing()
     {
         var programs = Enumerable.Range(0, Programs).Select(Program).ToList();
         var failures = Repo.CollectFailures(programs, Problems);
@@ -92,7 +92,7 @@ public sealed class GeneratedProgramTests
         1 => $"K{at} = {Number(random)} {Operator(random)} {Number(random)}",
         2 => $".data d{at}: .byte {Literal(random)}",
         3 => $".data d{at}: .byte[] {{\n    {Literal(random)}, {Number(random)}\n}}",
-        4 => $".data d{at} {{\n    .repeat {Turns(random)}, i {{\n        .byte i\n    }}\n}}",
+        4 => $".data d{at} {{\n    .repeat {IterationCount(random)}, i {{\n        .byte i\n    }}\n}}",
 
         // A cycle of constants has no value, and a struct containing an instance of itself has
         // no size. Emission must skip what the analysis has already reported as cyclic instead of
@@ -124,7 +124,7 @@ public sealed class GeneratedProgramTests
     /// count just under the limit unrolls the body tens of thousands of times, which is slow
     /// rather than interesting.
     /// </summary>
-    private static string Turns(Random random) => TurnCounts[random.Next(TurnCounts.Length)];
+    private static string IterationCount(Random random) => IterationCounts[random.Next(IterationCounts.Length)];
 
     private static readonly int[] Depths = [1, 2, 99, 100, 101, 600, 800];
 
@@ -141,7 +141,7 @@ public sealed class GeneratedProgramTests
         "1", "'a'", @"'\xZZ'", @"'\q'", @"""\x4""", "'ab'", "''", @"""unterminated", "'é'",
     ];
 
-    private static readonly string[] TurnCounts =
+    private static readonly string[] IterationCounts =
     [
         "0", "3", "-1", "65537", "$7fffffff", "$7fffffffffffffff", "99999999999999999999",
     ];

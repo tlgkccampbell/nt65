@@ -25,7 +25,7 @@ public sealed class ExpansionTests
     /// substituted whole, index included.
     /// </summary>
     [Fact]
-    public void AnOperandArgumentGoesInWholeAndCarriesItsIndex()
+    public void AnOperandArgumentGoesInWholeAndKeepsItsIndex()
     {
         Assert.Equal(
             """
@@ -34,7 +34,7 @@ public sealed class ExpansionTests
             lda #>SCREEN
             sta ptr+1
             """,
-            Written("set16!(ptr, SCREEN)"));
+            Expanded("set16!(ptr, SCREEN)"));
 
         // `dest+1` given `{buf,x}` is `buf+1,x`. The offset goes on the address and the index
         // goes back after it, which is the line a person would have written.
@@ -45,7 +45,7 @@ public sealed class ExpansionTests
             lda #>$1234
             sta buf+1,x
             """,
-            Written("set16!({buf,x}, $1234)"));
+            Expanded("set16!({buf,x}, $1234)"));
     }
 
     /// <summary>
@@ -53,7 +53,7 @@ public sealed class ExpansionTests
     /// and a byte of the address for a mode that has one.
     /// </summary>
     [Fact]
-    public void ByteofIsWrittenAsTheByteItAsksFor()
+    public void ByteofExpandsToTheByteItAsksFor()
     {
         Assert.Equal(
             """
@@ -62,7 +62,7 @@ public sealed class ExpansionTests
             lda #>SCREEN
             sta ptr+1
             """,
-            Written("mov16!(ptr, {#SCREEN})"));
+            Expanded("mov16!(ptr, {#SCREEN})"));
         Assert.Equal(
             """
             lda other
@@ -70,7 +70,7 @@ public sealed class ExpansionTests
             lda other+1
             sta ptr+1
             """,
-            Written("mov16!(ptr, other)"));
+            Expanded("mov16!(ptr, other)"));
     }
 
     /// <summary>
@@ -79,7 +79,7 @@ public sealed class ExpansionTests
     /// branch it takes.
     /// </summary>
     [Fact]
-    public void ARepetitionOverTheArgumentsIsWrittenOut()
+    public void ARepetitionOverTheArgumentsIsExpanded()
     {
         Assert.Equal(
             """
@@ -87,7 +87,7 @@ public sealed class ExpansionTests
             phx
             phy
             """,
-            Written("push!(a, x, y)"));
+            Expanded("push!(a, x, y)"));
     }
 
     /// <summary>A block argument is the caller's own code, spliced where the body names it.</summary>
@@ -103,7 +103,7 @@ public sealed class ExpansionTests
             dex
             bne @loop
             """,
-            Written("times_x!(8)"));
+            Expanded("times_x!(8)"));
     }
 
     /// <summary>
@@ -138,20 +138,20 @@ public sealed class ExpansionTests
             inx
             @done:
             """,
-            Written("if!(cs)", link.Into));
+            Expanded("if!(cs)", link.Into));
     }
 
     /// <summary>A default fills in what a call leaves out, and a `const` argument goes in as written.</summary>
     [Fact]
     public void ADefaultFillsInWhatACallLeavesOut()
     {
-        Assert.Equal(".byte C4, 8", Written("note!(C4, frames = 8)"));
-        Assert.Equal(".byte E4, 1", Written("note!(E4)"));
+        Assert.Equal(".byte C4, 8", Expanded("note!(C4, frames = 8)"));
+        Assert.Equal(".byte E4, 1", Expanded("note!(E4)"));
     }
 
     /// <summary>The summary says how many lines, bytes and cycles the call expands to.</summary>
     [Fact]
-    public void TheSummarySaysWhatTheCallBecomes()
+    public void TheSummaryShowsWhatTheCallBecomes()
     {
         Assert.Equal("expands to 4 lines · 8 bytes · 10 cycles", At("set16!(ptr, SCREEN)").Summary());
 
@@ -161,7 +161,7 @@ public sealed class ExpansionTests
 
     /// <summary>Every call in the fixture is expanded, and what comes out re-parses as nt65.</summary>
     [Fact]
-    public void EveryCallInTheFixtureIsWrittenOutAsNt65()
+    public void EveryCallInTheFixtureExpandsToNt65ThatParses()
     {
         var (analysis, model) = Macros.Value;
         var calls = 0;
@@ -180,9 +180,9 @@ public sealed class ExpansionTests
                 var expansion = MacroExpansion.Of(analysis, model, node, null, all);
                 Assert.NotNull(expansion);
                 Assert.Null(expansion.Refusal);
-                var written = string.Join("\n", expansion.Lines);
+                var expanded = string.Join("\n", expansion.Lines);
                 var parsed = Norristown.Syntax.SyntaxTree.Parse(
-                    "expansion.nt65", $".module m\n.segment CODE\n.proc p {{\n{written}\n}}\n");
+                    "expansion.nt65", $".module m\n.segment CODE\n.proc p {{\n{expanded}\n}}\n");
                 Assert.Empty(parsed.Diagnostics.Select(d => $"{d.Span.Line}: {d.Message}"));
             }
         }
@@ -204,7 +204,7 @@ public sealed class ExpansionTests
     }
 
     /// <summary>Returns the expansion of the call at the text <paramref name="find"/>, as one string.</summary>
-    private static string Written(string find, IReadOnlyList<int>? into = null) =>
+    private static string Expanded(string find, IReadOnlyList<int>? into = null) =>
         string.Join("\n", At(find, into).Lines);
 
     /// <summary>Returns the expansion of the call at the text <paramref name="find"/>.</summary>

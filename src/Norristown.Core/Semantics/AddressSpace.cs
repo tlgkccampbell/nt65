@@ -19,5 +19,5 @@ public sealed record AddressSpace(string Name, bool HoldsCode, Span Declaration)
     /// Returns the name a diagnostic uses for a space, such as <c>space `spc`</c>, or "the host's
     /// space" when <paramref name="space"/> is null.
     /// </summary>
-    public static string Spell(string? space) => space is null ? "the host's space" : $"space `{space}`";
+    public static string Format(string? space) => space is null ? "the host's space" : $"space `{space}`";
 }

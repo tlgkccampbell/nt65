@@ -69,13 +69,13 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
     /// could not read is treated as an expression, the kind that accepts the most, so that
     /// arguments are not reported against a header that is already wrong.
     /// </summary>
-    public static ArgumentKind Read(ParameterKindSyntax? written)
+    public static ArgumentKind Read(ParameterKindSyntax? syntax)
     {
-        if (written?.Type is { } type)
+        if (syntax?.Type is { } type)
             return new ArgumentKind(ParameterKind.Enum, [], null) { Enum = type };
 
         // A `:` with no kind after it, or one the parser could not read, leaves the word missing.
-        if (written?.Keyword is not { IsMissing: false } keyword)
+        if (syntax?.Keyword is not { IsMissing: false } keyword)
             return Expression;
 
         var kind = keyword.Text.ToLowerInvariant() switch
@@ -91,13 +91,13 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
 
         // Every name inside the parentheses is a word it accepts, or for an operand a mode.
         if (kind == ParameterKind.One)
-            return new ArgumentKind(kind, [.. written.Words.Select(word => word.Name.Text)], null);
+            return new ArgumentKind(kind, [.. syntax.Words.Select(word => word.Name.Text)], null);
         if (kind == ParameterKind.Operand)
-            return new ArgumentKind(kind, [.. written.Words.Select(word => word.Name.Text.ToLowerInvariant())], null);
+            return new ArgumentKind(kind, [.. syntax.Words.Select(word => word.Name.Text.ToLowerInvariant())], null);
         if (kind == ParameterKind.List)
-            return new ArgumentKind(kind, [], Read(written.Element));
+            return new ArgumentKind(kind, [], Read(syntax.Element));
         if (kind == ParameterKind.Const)
-            return new ArgumentKind(kind, [], null) { Low = written.Low, High = written.High };
+            return new ArgumentKind(kind, [], null) { Low = syntax.Low, High = syntax.High };
         return new ArgumentKind(kind, [], null);
     }
 }

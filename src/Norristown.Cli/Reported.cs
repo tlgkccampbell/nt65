@@ -37,13 +37,13 @@ internal static class Reported
     /// </summary>
     public static string Line(Diagnostic diagnostic, string file, bool colour)
     {
-        var said = diagnostic.Severity.ToString().ToLowerInvariant();
-        var marked = !colour ? $"{said}:"
+        var severity = diagnostic.Severity.ToString().ToLowerInvariant();
+        var marked = !colour ? $"{severity}:"
             : diagnostic.Severity switch
             {
-                Severity.Error => $"{Red}{said}:{Plain}",
-                Severity.Warning => $"{Yellow}{said}:{Plain}",
-                _ => $"{said}:",
+                Severity.Error => $"{Red}{severity}:{Plain}",
+                Severity.Warning => $"{Yellow}{severity}:{Plain}",
+                _ => $"{severity}:",
             };
         return $"{file}:{diagnostic.Span.Line}:{diagnostic.Span.StartColumn}: {marked} {diagnostic.Message} "
             + $"[{diagnostic.Id}]";

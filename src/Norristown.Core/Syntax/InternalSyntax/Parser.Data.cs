@@ -24,7 +24,7 @@ internal sealed partial class Parser
             if (AtName || Kind == SyntaxKind.ColonColon)
                 type = ParseName();
             else
-                Report(Catalogue.ExpectedDataType.Says("the type: `.type T`"));
+                Report(Catalogue.ExpectedDataType.Message("the type: `.type T`"));
         }
         var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
@@ -35,7 +35,7 @@ internal sealed partial class Parser
             if (Next == SyntaxKind.EndOfLine)
             {
                 if (count is null && !record)
-                    ReportOnce(Catalogue.DataBodyNeedsACount.Says(directive.Text));
+                    ReportOnce(Catalogue.DataBodyNeedsACount.Message(directive.Text));
                 tail = new DataBodySyntax(Advance());
             }
             else
@@ -47,7 +47,7 @@ internal sealed partial class Parser
         {
             if (count is not null || record)
             {
-                ReportOnce(Catalogue.DataValuesNeedBraces.Says(count is not null
+                ReportOnce(Catalogue.DataValuesNeedBraces.Message(count is not null
                     ? $"the values of an array go in braces: `{directive.Text}[n] {{ 1, 2 }}`"
                     : "a record's values go in braces: `.type T { member = value }`"));
             }
@@ -68,7 +68,7 @@ internal sealed partial class Parser
     {
         var bracket = Advance();
         var count = Kind != SyntaxKind.CloseBracket && !AtEnd ? ParseExpression() : null;
-        return new ElementCountSyntax(bracket, count, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Says(
+        return new ElementCountSyntax(bracket, count, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message(
             "`]`")));
     }
 
@@ -81,8 +81,8 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
         var name = ExpectName(Kind == SyntaxKind.OpenBrace
-            ? Catalogue.DataNeedsAName.Says()
-            : Catalogue.ExpectedName.Says("a name: `.data name: .byte 1, 2` or `.data name { }`"));
+            ? Catalogue.DataNeedsAName.Message()
+            : Catalogue.ExpectedName.Message("a name: `.data name: .byte 1, 2` or `.data name { }`"));
 
         GreenToken? colon = null;
         DataDirectiveSyntax? element = null;
@@ -98,10 +98,10 @@ internal sealed partial class Parser
             {
                 var instead = Kind == SyntaxKind.Directive ? Replaced(Current.Text) : null;
                 ReportOnce(
-                    instead?.Message ?? Catalogue.ExpectedDataType.Says(
+                    instead?.Message ?? Catalogue.ExpectedDataType.Message(
                         "what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, "
                         + "`.type T`, or bytes such as `.incbin`"),
-                    instead is { } written ? Spelling(written, wholeLine: false) : null);
+                    instead is { } replacement ? Spelling(replacement, wholeLine: false) : null);
             }
         }
         else if (Kind == SyntaxKind.OpenBrace)
@@ -110,7 +110,7 @@ internal sealed partial class Parser
         }
         else
         {
-            ReportOnce(Catalogue.ExpectedColon.Says("`:` and what the data is, or `{` for mixed data"));
+            ReportOnce(Catalogue.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
         }
         return new DataDeclarationSyntax(keyword, name, colon, element, brace);
     }
@@ -122,7 +122,7 @@ internal sealed partial class Parser
     {
         if (Kind == SyntaxKind.Directive && !SyntaxFacts.IsBuiltinFunction(Current.Text))
         {
-            return ErrorLine(Catalogue.DataBodyHoldsValues.Says(Current.Text));
+            return ErrorLine(Catalogue.DataBodyHoldsValues.Message(Current.Text));
         }
         return Finish(new DataValuesSyntax(ParseSeparatedList(ParseDataValue)));
     }
@@ -154,7 +154,7 @@ internal sealed partial class Parser
         var items = Kind != SyntaxKind.CloseBrace && !AtEnd
             ? ParseSeparatedList(record ? ParseMemberValue : ParseDataValue)
             : null;
-        var closeBrace = Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Says("`}`"));
+        var closeBrace = Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Message("`}`"));
         return record
             ? new RecordValuesSyntax(openBrace, items, closeBrace)
             : new ValueListSyntax(openBrace, items, closeBrace);
@@ -168,11 +168,11 @@ internal sealed partial class Parser
     {
         if (!AtName)
         {
-            Report(Catalogue.ExpectedName.Says("a member name"));
+            Report(Catalogue.ExpectedName.Message("a member name"));
             return null;
         }
         var name = Advance();
-        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Says(
+        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
             "`=`"));
         return new MemberValueSyntax(name, equals, ParseDataValue());
     }
@@ -191,7 +191,7 @@ internal sealed partial class Parser
     private GreenNode ParseEnumMember()
     {
         if (!AtName)
-            return ErrorLine(Catalogue.ExpectedName.Says("a member name, or `name = expr`"));
+            return ErrorLine(Catalogue.ExpectedName.Message("a member name, or `name = expr`"));
         var name = Advance();
         if (Kind != SyntaxKind.Equals)
             return Finish(new EnumMemberSyntax(name, null, null));
@@ -213,7 +213,7 @@ internal sealed partial class Parser
             dotDot = Advance();
             last = ParseExpression();
         }
-        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Says(
+        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
             "`=`"));
         return Finish(new CharmapEntrySyntax(first, dotDot, last, equals, ParseExpression()));
     }

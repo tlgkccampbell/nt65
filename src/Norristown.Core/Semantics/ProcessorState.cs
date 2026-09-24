@@ -33,14 +33,14 @@ public readonly record struct ProcessorState(
     /// page and the data bank are included when they are anything other than unchanged.
     /// </summary>
     public override string ToString() =>
-        $"{Spell("a", A)}, {Spell("i", Index)}, {Spell(E)}"
-        + (D.Kind == StateValueKind.Unchanged ? "" : ", " + D.Spell("dp"))
-        + (B.Kind == StateValueKind.Unchanged ? "" : ", " + B.Spell("dbr"));
+        $"{Format("a", A)}, {Format("i", Index)}, {Format(E)}"
+        + (D.Kind == StateValueKind.Unchanged ? "" : ", " + D.Format("dp"))
+        + (B.Kind == StateValueKind.Unchanged ? "" : ", " + B.Format("dbr"));
 
     /// <summary>
     /// Formats one width as a signature item: <c>a8</c>, <c>a16</c>, <c>a?</c> or <c>a*</c>.
     /// </summary>
-    public static string Spell(string register, Width width) => width switch
+    public static string Format(string register, Width width) => width switch
     {
         Width.Eight => register + "8",
         Width.Sixteen => register + "16",
@@ -51,7 +51,7 @@ public readonly record struct ProcessorState(
     /// <summary>
     /// Formats the mode as a signature item: <c>native</c>, <c>emu</c>, <c>e?</c> or <c>e*</c>.
     /// </summary>
-    public static string Spell(ProcessorMode mode) => mode switch
+    public static string Format(ProcessorMode mode) => mode switch
     {
         ProcessorMode.Native => "native",
         ProcessorMode.Emulation => "emu",

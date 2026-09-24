@@ -20,13 +20,13 @@ internal static class DocumentLinks
             // already links to where it is declared.
             if (node is not DataDirectiveSyntax data
                 || !data.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
-                || data.Tail is not InlineDataSyntax { Values: [StringExpressionSyntax written, ..] }
-                || model.ValueOf(written) is not { Kind: ValueKind.String, Text: { Length: > 0 } path })
+                || data.Tail is not InlineDataSyntax { Values: [StringExpressionSyntax literal, ..] }
+                || model.ValueOf(literal) is not { Kind: ValueKind.String, Text: { Length: > 0 } path })
             {
                 continue;
             }
             links.Add(new Protocol.DocumentLink(
-                Lsp.ToRange(model.Tree, written.Span),
+                Lsp.ToRange(model.Tree, literal.Span),
                 Lsp.ToUri(Paths.Beside(model.Tree.Path, path))));
         }
         return links;

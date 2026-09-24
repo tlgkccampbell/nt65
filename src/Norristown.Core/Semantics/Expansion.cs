@@ -100,7 +100,7 @@ public sealed class Expansion : IEquatable<Expansion>
     /// Creates the expansion for one iteration of a repetition, with the name it binds and that
     /// name's value.
     /// </summary>
-    public static Expansion Turn(
+    public static Expansion Iteration(
         Expansion? outer, BlockSyntax block, Symbol? binding, Value value, SyntaxNode? item, int index,
         Symbol? member = null) =>
         new(outer, binding, value, item, index, null, block, member: member);
@@ -230,7 +230,7 @@ public sealed class Expansion : IEquatable<Expansion>
 
     /// <summary>Returns a description of what this expansion expands, for debugging.</summary>
     public override string ToString() =>
-        Call is not null ? $"expansion of {Call.GetText()}" : $"turn {Index}";
+        Call is not null ? $"expansion of {Call.GetText()}" : $"iteration {Index}";
 
     /// <summary>
     /// Represents what one name is bound to in one expansion. An item is kept as the expression

@@ -34,9 +34,9 @@ public sealed class MissingTokenTests
     [Fact]
     public void AMissingTokenIsNeverTheTokenTheSourceWrote()
     {
-        var written = Lexer.LexLine("{").Tokens[0];
-        Assert.False(written.IsMissing);
-        Assert.NotSame(GreenToken.Missing(SyntaxKind.OpenBrace), written);
+        var lexed = Lexer.LexLine("{").Tokens[0];
+        Assert.False(lexed.IsMissing);
+        Assert.NotSame(GreenToken.Missing(SyntaxKind.OpenBrace), lexed);
 
         // The cache shares the tokens the lexer asks for, and never hands back a missing token,
         // even for a token that is present in the source but has no text.
@@ -116,7 +116,7 @@ public sealed class MissingTokenTests
     /// diagnostic names no fix.
     /// </summary>
     [Fact]
-    public void AMissingBracketNamesTheFixThatWritesIt()
+    public void AMissingBracketNamesTheFixThatInsertsIt()
     {
         var tree = SyntaxTree.Parse("test.nt65", ".proc p   ; note\n}\n");
         var proc = Assert.IsType<ProcDeclarationSyntax>(tree.GetLine(0).Statement);

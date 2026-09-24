@@ -18,7 +18,7 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     // so a file with no annotated nodes pays no memory for them. Diagnostics use a field for the
     // opposite reason: the parser does report them, and a table lookup for every node that has
     // one would be paid on every parse.
-    private static readonly ConditionalWeakTable<GreenNode, SyntaxAnnotation[]> carried = new();
+    private static readonly ConditionalWeakTable<GreenNode, SyntaxAnnotation[]> annotationTable = new();
 
     private ImmutableArray<GreenDiagnostic> diagnostics;
 
@@ -49,7 +49,7 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
 
     /// <summary>Gets the annotations on this node itself, in the order they were added.</summary>
     public ImmutableArray<SyntaxAnnotation> Annotations =>
-        ContainsAnnotations && carried.TryGetValue(this, out var own)
+        ContainsAnnotations && annotationTable.TryGetValue(this, out var own)
             ? ImmutableCollectionsMarshal.AsImmutableArray(own)
             : ImmutableArray<SyntaxAnnotation>.Empty;
 
@@ -110,7 +110,7 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
             ? Flags | GreenFlags.ContainsAnnotations
             : Flags & ~GreenFlags.ContainsAnnotations;
         if (!wanted.IsEmpty)
-            carried.Add(copy, ImmutableCollectionsMarshal.AsArray(wanted)!);
+            annotationTable.Add(copy, ImmutableCollectionsMarshal.AsArray(wanted)!);
         return copy;
     }
 

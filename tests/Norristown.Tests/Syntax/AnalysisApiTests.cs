@@ -172,8 +172,8 @@ public sealed class AnalysisApiTests
     [Fact]
     public void ChangingATree()
     {
-        const string written = ".proc main {\n    lda #16 ; the mask\n    sta mask\n}\n";
-        var tree = SyntaxTree.Parse("main.nt65", written);
+        const string source = ".proc main {\n    lda #16 ; the mask\n    sta mask\n}\n";
+        var tree = SyntaxTree.Parse("main.nt65", source);
 
         // The fix changes every immediate in decimal to hex.
         var hex = new Hexadecimal().Visit(tree.Root)!;
@@ -186,7 +186,7 @@ public sealed class AnalysisApiTests
 
         // A rewritten file is a new tree. The tree it came from is unchanged.
         Assert.NotSame(tree, renamed.Tree);
-        Assert.Equal(written, tree.Text);
+        Assert.Equal(source, tree.Text);
 
         // A rewrite that finds nothing to do gives back the very node it was given.
         Assert.Same(renamed, new Hexadecimal().Visit(renamed));
@@ -233,10 +233,10 @@ public sealed class AnalysisApiTests
         // A token annotated and put in by a rewrite is found the same way.
         var name = root.DescendantTokens().Single(token => token.Text == "main");
         var renamed = new SyntaxAnnotation("renamed");
-        var written = root.ReplaceToken(name, SyntaxFactory.Identifier("start")
+        var replaced = root.ReplaceToken(name, SyntaxFactory.Identifier("start")
             .WithTriviaFrom(name)
             .WithAdditionalAnnotations(renamed));
-        Assert.Equal("start", written.GetAnnotatedTokens(renamed).Single().Text);
+        Assert.Equal("start", replaced.GetAnnotatedTokens(renamed).Single().Text);
     }
 
     /// <summary>
@@ -253,12 +253,12 @@ public sealed class AnalysisApiTests
 
             // The trailing trivia of the old last item belongs after the list, so it moves to the
             // new last item, and the space before the routine's `{` is kept.
-            var written = SyntaxFactory.StateFlagItem(
+            var added = SyntaxFactory.StateFlagItem(
                 SyntaxFactory.Identifier("i8").WithTrailingTrivia(a8.Name.TrailingTrivia));
             return node.WithItems(SyntaxFactory.SeparatedList(
             [
                 (StateItemSyntax)a8.ReplaceToken(a8.Name, a8.Name.WithTrailingTrivia()),
-                (StateItemSyntax)written.WithAdditionalAnnotations(tag),
+                (StateItemSyntax)added.WithAdditionalAnnotations(tag),
             ]));
         }
     }

@@ -2654,8 +2654,8 @@ public static class Catalogue
         "The build configuration does not take this branch, so its lines are parsed and nothing else. The editor "
             + "shows them faded.");
 
-    internal static DiagnosticDescriptor CannotBeWritten { get; } = Entry(
-        "cannot-be-written",
+    internal static DiagnosticDescriptor CannotBeTranslated { get; } = Entry(
+        "cannot-be-translated",
         Severity.Error,
         "`{0}` cannot be translated to ca65, and no other error explains why: this is a bug in nt65",
         "Everything nt65 accepts should have a ca65 translation, and anything it cannot translate should have been "

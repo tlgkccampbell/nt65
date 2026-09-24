@@ -12,7 +12,7 @@ internal static class WorkspaceSymbols
     /// <summary>
     /// The maximum number of results a search returns, which is already more than anyone reads.
     /// </summary>
-    private const int Most = 500;
+    private const int MaximumResults = 500;
 
     /// <summary>
     /// Returns the declarations in <paramref name="files"/> that match <paramref name="query"/>,
@@ -36,7 +36,7 @@ internal static class WorkspaceSymbols
         return [.. found
             .OrderBy(match => match.Score)
             .ThenBy(match => match.Symbol.Name, StringComparer.Ordinal)
-            .Take(Most)
+            .Take(MaximumResults)
             .Select(match => match.Symbol)];
     }
 
@@ -97,8 +97,8 @@ internal static class WorkspaceSymbols
         foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
         {
             if (line.Statement is ModuleDirectiveSyntax directive)
-                return directive.GetText().Split(';')[0].Trim() is var written && written.IndexOf(' ') is var space and > 0
-                    ? written[space..].Trim()
+                return directive.GetText().Split(';')[0].Trim() is var text && text.IndexOf(' ') is var space and > 0
+                    ? text[space..].Trim()
                     : null;
             if (line.Statement is not BlankLineSyntax)
                 return null;

@@ -55,16 +55,16 @@ internal sealed partial class Evaluator
     /// elements they form. Returns null when nt65 cannot determine it, as for an <c>.align</c>,
     /// whose size depends on where it lands, or for a directive whose operands do not add up.
     /// </summary>
-    private DataSize? RoomFor(StatementSyntax written)
+    private DataSize? RoomFor(StatementSyntax statement)
     {
         // A line in a data body holds values, each one element of the body's element type.
-        if (written is DataValuesSyntax values)
+        if (statement is DataValuesSyntax values)
         {
             return DataSyntax.DirectiveOfValues(values) is { } of && ElementWidth(of) is { } each
                 ? Spread(values.Values, each)
                 : null;
         }
-        if (written is not DataDirectiveSyntax directive)
+        if (statement is not DataDirectiveSyntax directive)
             return null;
         if (DataSyntax.IsElementType(directive))
             return RoomForElements(directive);
@@ -125,7 +125,7 @@ internal sealed partial class Evaluator
             return SyntaxFacts.ElementSize(DataSyntax.NameOf(directive));
         if (SymbolOf(named) is not { } type)
             return null;
-        Settle(type);
+        EnsureEvaluated(type);
         return type.IsLayout ? type.Size : null;
     }
 
@@ -149,7 +149,7 @@ internal sealed partial class Evaluator
                 : Total(body.Members, 1, statement =>
                     statement is DataValuesSyntax row ? Spread(row.Values, 1).Elements : 0, _ => null);
         }
-        return directive.Tail is InlineDataSyntax written ? Spread(written.Values, 1).Elements : null;
+        return directive.Tail is InlineDataSyntax inline ? Spread(inline.Values, 1).Elements : null;
     }
 
     /// <summary>
@@ -216,7 +216,7 @@ internal sealed partial class Evaluator
             if (child is not BlockSyntax nested)
             {
                 chaining = false;
-                part = child is LineSyntax written ? line(written.Statement) : 0;
+                part = child is LineSyntax childLine ? line(childLine.Statement) : 0;
             }
             else
             {
@@ -232,7 +232,7 @@ internal sealed partial class Evaluator
                         break;
                     case BlockKind.Repeat or BlockKind.Each when opener is RepetitionDirectiveSyntax repetition:
                         chaining = false;
-                        part = Turns(nested, repetition, () => Total(nested.Members, 1, line, block));
+                        part = Iterations(nested, repetition, () => Total(nested.Members, 1, line, block));
                         break;
                     default:
                         chaining = false;
@@ -268,16 +268,16 @@ internal sealed partial class Evaluator
     /// binding set to that iteration's index, item or member. Returns null when the iterations
     /// are unknown.
     /// </summary>
-    private long? Turns(BlockSyntax block, RepetitionDirectiveSyntax opener, Func<long?> body)
+    private long? Iterations(BlockSyntax block, RepetitionDirectiveSyntax opener, Func<long?> body)
     {
         var counted = opener.Expression;
         var binding = BindingIn(block, opener);
-        List<Action> turns = [];
+        List<Action> iterations = [];
         if (opener is RepeatDirectiveSyntax)
         {
             if (Evaluate(counted).AsNumber() is not { } count || count < 0)
                 return null;
-            if (count > Repetitions.MaximumTurns)
+            if (count > Repetitions.MaximumIterations)
             {
                 Report(counted, Repetitions.Beyond(count));
                 return null;
@@ -286,17 +286,17 @@ internal sealed partial class Evaluator
                 return body() * count;
             for (long i = 0; i < count; i++)
             {
-                var turn = i;
-                turns.Add(() => arguments[binding] = Value.Of(turn));
+                var index = i;
+                iterations.Add(() => arguments[binding] = Value.Of(index));
             }
         }
         else if (SymbolOf(counted) is { Kind: SymbolKind.List } list)
         {
-            turns.AddRange(list.Items.Select(item => (Action)(() => { if (binding is not null) items[binding] = item; })));
+            iterations.AddRange(list.Items.Select(item => (Action)(() => { if (binding is not null) items[binding] = item; })));
         }
         else if (SymbolOf(counted) is { Kind: SymbolKind.Enum, Body: { } walked })
         {
-            turns.AddRange(walked.Symbols.Select(member => (Action)(() =>
+            iterations.AddRange(walked.Symbols.Select(member => (Action)(() =>
             {
                 if (binding is null)
                     return;
@@ -312,9 +312,9 @@ internal sealed partial class Evaluator
         try
         {
             long total = 0;
-            foreach (var turn in turns)
+            foreach (var iteration in iterations)
             {
-                turn();
+                iteration();
                 if (body() is not { } part)
                     return null;
                 total += part;
@@ -389,7 +389,7 @@ internal sealed partial class Evaluator
         var from = Paths.Beside(directive.Tree.Path, path);
         if (binaryLength?.Invoke(from) is not { } length)
         {
-            Report(directive, Catalogue.IncbinUnreadable.Says(path));
+            Report(directive, Catalogue.IncbinUnreadable.Message(path));
             return null;
         }
 
@@ -453,7 +453,7 @@ internal sealed partial class Evaluator
         {
             if (!mapped.TryGetValue(character, out var b))
             {
-                Report(operand, Catalogue.CharmapHasNoEntry.Says(charmap.Name, (char)character));
+                Report(operand, Catalogue.CharmapHasNoEntry.Message(charmap.Name, (char)character));
                 return null;
             }
             bytes.Add(b);
@@ -526,16 +526,16 @@ internal sealed partial class Evaluator
                 };
                 if (valued is not null)
                 {
-                    Report(valued, Catalogue.MemberHasNoValue.Says(member.Name, spelled));
+                    Report(valued, Catalogue.MemberHasNoValue.Message(member.Name, spelled));
                 }
                 else if (element.Count is { Count: null } count)
                 {
-                    Report(count, Catalogue.MemberCountNotANumber.Says(member.Name, spelled));
+                    Report(count, Catalogue.MemberCountNotANumber.Message(member.Name, spelled));
                 }
             }
             if (room is null)
             {
-                Report(member.DeclarationSpan, Catalogue.MemberReservesNothing.Says(member.Name), []);
+                Report(member.DeclarationSpan, Catalogue.MemberReservesNothing.Message(member.Name), []);
                 continue;
             }
 

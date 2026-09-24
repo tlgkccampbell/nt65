@@ -25,7 +25,7 @@ internal static class CodeActions
         return [.. changes
             .Where(change => Wanted(only, change.Kind)
                 && (change.Edits.Count > 0 || change.Renames is not null || change.Refused is not null))
-            .Select(Spelled)];
+            .Select(ToCodeAction)];
     }
 
     /// <summary>
@@ -41,7 +41,7 @@ internal static class CodeActions
     /// Converts a change to the protocol's code action, with its edits grouped by the file each
     /// belongs to.
     /// </summary>
-    private static Protocol.CodeAction Spelled(Change change)
+    private static Protocol.CodeAction ToCodeAction(Change change)
     {
         var edits = change.Edits
             .GroupBy(edit => edit.Tree)
@@ -69,11 +69,11 @@ internal static class CodeActions
     {
         // A change that only prompts a rename makes no edits: the name already exists, so the
         // rename starts on it where it is.
-        if (change.Renames is { } written)
+        if (change.Renames is { } existing)
         {
             return new Protocol.Command(
                 "Rename", "nt65.rename",
-                [Lsp.ToUri(written.File), written.Line - 1, written.StartColumn - 1]);
+                [Lsp.ToUri(existing.File), existing.Line - 1, existing.StartColumn - 1]);
         }
         if (change.Names is not { } placeholder)
             return null;

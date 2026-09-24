@@ -340,12 +340,12 @@ internal sealed class Server : IDisposable
         RenameFilesParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        var (edit, said) = MovedFiles.For(
+        var (edit, messages) = MovedFiles.For(
             workspace,
             [.. request.Files.Select(file => (Workspace.PathOf(file.OldUri), Workspace.PathOf(file.NewUri)))]);
-        foreach (var message in said)
+        foreach (var message in messages)
             await ShowAsync(MessageType.Warning, message).ConfigureAwait(false);
-        return outgoing.Spell(edit);
+        return outgoing.ToClient(edit);
     }
 
     /// <summary>
@@ -387,7 +387,7 @@ internal sealed class Server : IDisposable
         cancellation.ThrowIfCancellationRequested();
         return LanguageServer.Output.Of(
             workspace.AnalysisFor(path), workspace.SettingsFor(path), path,
-            outgoing.Spell(uri), workspace.VersionOf(uri));
+            outgoing.ToClient(uri), workspace.VersionOf(uri));
     }
 
     /// <summary>
@@ -401,16 +401,16 @@ internal sealed class Server : IDisposable
     {
         if (At(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation) is not { } asked)
             return null;
-        var written = MacroExpansion.At(
+        var expansion = MacroExpansion.At(
             asked.Analysis, asked.Model, asked.Position, request.Into, request.All);
-        return written is null
+        return expansion is null
             ? null
             : new ExpansionResult(
-                written.Call.GetText().Trim().TrimEnd('{').TrimEnd(),
-                written.Summary(),
-                string.Join("\n", written.Lines) + "\n",
-                [.. written.Links.Select(link => new ExpansionLink(link.Line, link.Text, link.Into))],
-                written.Refusal);
+                expansion.Call.GetText().Trim().TrimEnd('{').TrimEnd(),
+                expansion.Summary(),
+                string.Join("\n", expansion.Lines) + "\n",
+                [.. expansion.Links.Select(link => new ExpansionLink(link.Line, link.Text, link.Into))],
+                expansion.Refusal);
     }
 
     [JsonRpcMethod("textDocument/didOpen")]
@@ -462,7 +462,7 @@ internal sealed class Server : IDisposable
     public object DocumentSymbols(DocumentSymbolParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return outgoing.Spell(
+        return outgoing.ToClient(
             request.TextDocument.Uri,
             workspace.Find(request.TextDocument.Uri) is { } document ? Lsp.ToSymbols(document.Tree) : []);
     }
@@ -483,13 +483,13 @@ internal sealed class Server : IDisposable
         At(request, cancellation) is { } asked
             && (Lsp.ToDefinition(asked.Program, asked.Model, asked.Position)
                 ?? Lsp.ToPlacedDefinition(asked.Analysis, asked.Model, asked.Position)) is { } where
-            ? outgoing.Spell(where)
+            ? outgoing.ToClient(where)
             : null;
 
     [JsonRpcMethod("textDocument/references")]
     public IReadOnlyList<Location> References(ReferenceParams request, CancellationToken cancellation) =>
         At(request, cancellation) is { } asked
-            ? outgoing.Spell(
+            ? outgoing.ToClient(
                 Lsp.ToReferences(asked.Program, asked.Model, asked.Position, request.Context.IncludeDeclaration))
             : [];
 
@@ -514,7 +514,7 @@ internal sealed class Server : IDisposable
         // A new name the language will not accept is returned as a failed request, which the
         // client shows for the programmer to correct, rather than as an empty edit.
         var (edit, problem) = Lsp.ToRename(asked.Program, asked.Model, asked.Position, request.NewName);
-        return problem is null ? outgoing.Spell(edit) : throw new LocalRpcException(problem);
+        return problem is null ? outgoing.ToClient(edit) : throw new LocalRpcException(problem);
     }
 
     [JsonRpcMethod("textDocument/completion")]
@@ -537,8 +537,8 @@ internal sealed class Server : IDisposable
     public CompletionItem Resolve(CompletionItem request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return described.TryGetValue(request.Label, out var written)
-            ? request with { Documentation = MarkupContent.Markdown(written) }
+        return described.TryGetValue(request.Label, out var documentation)
+            ? request with { Documentation = MarkupContent.Markdown(documentation) }
             : request;
     }
 
@@ -562,7 +562,7 @@ internal sealed class Server : IDisposable
     {
         cancellation.ThrowIfCancellationRequested();
         return Model(request.TextDocument.Uri) is { } model
-            ? outgoing.Spell(LanguageServer.DocumentLinks.In(model))
+            ? outgoing.ToClient(LanguageServer.DocumentLinks.In(model))
             : [];
     }
 
@@ -599,7 +599,7 @@ internal sealed class Server : IDisposable
     public IReadOnlyList<CallHierarchyItem> PrepareCallHierarchy(
         CallHierarchyPrepareParams request, CancellationToken cancellation) =>
         At(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation) is { } asked
-            ? outgoing.Spell(LanguageServer.CallHierarchy.Prepare(asked.Analysis, asked.Model, asked.Position))
+            ? outgoing.ToClient(LanguageServer.CallHierarchy.Prepare(asked.Analysis, asked.Model, asked.Position))
             : [];
 
     /// <summary>
@@ -612,7 +612,7 @@ internal sealed class Server : IDisposable
         CallHierarchyIncomingCallsParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return outgoing.Spell(LanguageServer.CallHierarchy.Incoming(
+        return outgoing.ToClient(LanguageServer.CallHierarchy.Incoming(
             workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item, cancellation));
     }
 
@@ -621,7 +621,7 @@ internal sealed class Server : IDisposable
         CallHierarchyOutgoingCallsParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return outgoing.Spell(LanguageServer.CallHierarchy.Outgoing(
+        return outgoing.ToClient(LanguageServer.CallHierarchy.Outgoing(
             workspace.AnalysisFor(Workspace.PathOf(request.Item.Uri)), request.Item, cancellation));
     }
 
@@ -631,7 +631,7 @@ internal sealed class Server : IDisposable
         var start = new TextDocumentPositionParams(request.TextDocument, request.Range.Start);
         if (At(start, cancellation) is not { } asked)
             return [];
-        return outgoing.Spell(
+        return outgoing.ToClient(
             LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, request.Context.Only));
     }
 
@@ -696,7 +696,7 @@ internal sealed class Server : IDisposable
     [JsonRpcMethod("workspace/symbol")]
     public IReadOnlyList<SymbolInformation> WorkspaceSymbols(
         WorkspaceSymbolParams request, CancellationToken cancellation) =>
-        outgoing.Spell(LanguageServer.WorkspaceSymbols.Matching(workspace.Files(), request.Query, cancellation));
+        outgoing.ToClient(LanguageServer.WorkspaceSymbols.Matching(workspace.Files(), request.Query, cancellation));
 
     [JsonRpcMethod("shutdown")]
     public object? Shutdown() => null;
@@ -831,7 +831,7 @@ internal sealed class Server : IDisposable
         await publishing.WaitAsync(cancellation).ConfigureAwait(false);
         try
         {
-            await PublishEverythingInTurnAsync(changed, refresh, cancellation).ConfigureAwait(false);
+            await PublishEverythingLockedAsync(changed, refresh, cancellation).ConfigureAwait(false);
         }
         finally
         {
@@ -842,7 +842,7 @@ internal sealed class Server : IDisposable
     /// <summary>
     /// Does the work of <see cref="PublishEverythingAsync"/> while it holds the publishing lock.
     /// </summary>
-    private async Task PublishEverythingInTurnAsync(string? changed, bool refresh, CancellationToken cancellation)
+    private async Task PublishEverythingLockedAsync(string? changed, bool refresh, CancellationToken cancellation)
     {
         var current = new HashSet<string>(StringComparer.Ordinal);
         foreach (var file in workspace.ToPublish())
@@ -918,12 +918,12 @@ internal sealed class Server : IDisposable
         cancellation.ThrowIfCancellationRequested();
         if (file.Version is { } version && newest.TryGetValue(file.Uri, out var latest) && latest > version)
             return false;
-        var diagnostics = outgoing.Spell(
+        var diagnostics = outgoing.ToClient(
             Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration));
-        var said = Signature(diagnostics);
-        if (!always && published.TryGetValue(file.Uri, out var before) && before == said)
+        var signature = Signature(diagnostics);
+        if (!always && published.TryGetValue(file.Uri, out var before) && before == signature)
             return false;
-        published[file.Uri] = said;
+        published[file.Uri] = signature;
         await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
             new PublishDiagnosticsParams(file.Uri, file.Version, diagnostics)).ConfigureAwait(false);
         return true;

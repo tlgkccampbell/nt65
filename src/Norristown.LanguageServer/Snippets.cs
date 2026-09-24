@@ -21,7 +21,7 @@ internal static class Snippets
     /// The snippet for each block opener, keyed by its directive. <c>.proc</c> is not here
     /// because on the 65816 its snippet depends on how the program's other routines are declared.
     /// </summary>
-    private static readonly Dictionary<string, string> Written = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> ByDirective = new(StringComparer.Ordinal)
     {
         [".macro"] = ".macro ${1:name}(${2:parameters}) {\n    $0\n}",
         // A `.func` is one line rather than a block, but it is here because its shape (a name, a
@@ -52,7 +52,7 @@ internal static class Snippets
     public static string? Of(string directive, ProgramModel program, Cpu cpu)
     {
         if (directive != ".proc")
-            return Written.GetValueOrDefault(directive);
+            return ByDirective.GetValueOrDefault(directive);
 
         // On the 65816 a routine is declared with the processor state it assumes, and most of a
         // program's routines declare the same one. The most common is the likeliest for a new
@@ -82,9 +82,9 @@ internal static class Snippets
             }
         }
         return counted
-            .OrderByDescending(written => written.Value)
-            .ThenBy(written => written.Key, StringComparer.Ordinal)
-            .Select(written => written.Key)
+            .OrderByDescending(pair => pair.Value)
+            .ThenBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => pair.Key)
             .FirstOrDefault();
     }
 
@@ -109,6 +109,6 @@ internal static class Snippets
             if (found >= 0)
                 item = item[..found];
         }
-        return item.Trim() is { Length: > 0 } written ? written : null;
+        return item.Trim() is { Length: > 0 } trimmed ? trimmed : null;
     }
 }

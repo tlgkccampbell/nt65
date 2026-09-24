@@ -43,7 +43,7 @@ public static class RegisterEffects
     /// Formats <paramref name="registers"/> as a message or a code lens names them, as the names
     /// <c>A</c>, <c>X</c>, <c>Y</c> and <c>C</c> separated by commas.
     /// </summary>
-    public static string Spell(Registers registers) =>
+    public static string Format(Registers registers) =>
         string.Join(", ", Each(registers).Select(register => register switch
         {
             Registers.A => "A",

@@ -43,11 +43,11 @@ internal sealed partial class Evaluator
     // that has laid out the file can provide it.
     private readonly Func<Symbol, Symbol, bool, CycleSpan>? cycles;
 
-    // For a program in which one file changed, `settled` identifies the symbols of the files
-    // that did not change, whose values are kept and not evaluated again. `settledReads`
+    // For a program in which one file changed, `unchanged` identifies the symbols of the files
+    // that did not change, whose values are kept and not evaluated again. `unchangedReads`
     // collects the ones this file's symbols read.
-    private readonly Func<Symbol, bool>? settled;
-    private readonly HashSet<Symbol> settledReads = [];
+    private readonly Func<Symbol, bool>? unchanged;
+    private readonly HashSet<Symbol> unchangedReads = [];
 
     // The file of the symbol being evaluated when each diagnostic was found, kept in step with
     // the diagnostics. A problem found while evaluating a symbol belongs to that symbol's file,
@@ -100,14 +100,14 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
         Func<Symbol, Symbol, bool, CycleSpan>? cycles = null,
-        Func<Symbol, bool>? settled = null,
+        Func<Symbol, bool>? unchanged = null,
         List<string>? owners = null,
         Configuration? configuration = null,
         Conditions? conditions = null)
     {
         this.conditions = conditions;
         this.configuration = configuration;
-        this.settled = settled;
+        this.unchanged = unchanged;
         this.owners = owners;
         this.segments = segments;
         this.resolved = resolved;
@@ -151,7 +151,7 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Assigns every symbol in <paramref name="symbols"/> its kind, value and address size,
     /// recording in <paramref name="owners"/> the file of the symbol that found each diagnostic.
-    /// When <paramref name="settled"/> reports that a symbol belongs to an unchanged file, its
+    /// When <paramref name="unchanged"/> reports that a symbol belongs to an unchanged file, its
     /// value is read as it stands rather than evaluated again.
     /// </summary>
     /// <returns>The symbols of unchanged files whose values were read.</returns>
@@ -161,15 +161,15 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         List<Diagnostic> diagnostics,
         List<string> owners,
-        Func<Symbol, bool>? settled,
+        Func<Symbol, bool>? unchanged,
         Func<string, long?>? binaryLength,
         Configuration? configuration = null)
     {
         var evaluator = new Evaluator(
-            segments, resolved, diagnostics, binaryLength, settled: settled, owners: owners, configuration: configuration);
+            segments, resolved, diagnostics, binaryLength, unchanged: unchanged, owners: owners, configuration: configuration);
         foreach (var symbol in symbols)
             evaluator.EvaluateSymbol(symbol);
-        return evaluator.settledReads;
+        return evaluator.unchangedReads;
     }
 
     /// <summary>
@@ -201,7 +201,7 @@ internal sealed partial class Evaluator
         {
             if (node is NameExpressionSyntax name && !InsideCall(name, operand)
                 && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.LastPart?.Name.Text == scope.Name)
-                Report(name, Catalogue.ScopeHasNoAddress.Says(scope.Name));
+                Report(name, Catalogue.ScopeHasNoAddress.Message(scope.Name));
         }
         Evaluate(operand);
     }
@@ -221,8 +221,8 @@ internal sealed partial class Evaluator
         SyntaxNode name,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        name is NameExpressionSyntax written
-            ? new Evaluator(SegmentTable.Standard, resolved, null, null, bound).SymbolOf(written)
+        name is NameExpressionSyntax nameExpression
+            ? new Evaluator(SegmentTable.Standard, resolved, null, null, bound).SymbolOf(nameExpression)
             : null;
 
     /// <summary>
@@ -273,14 +273,15 @@ internal sealed partial class Evaluator
     /// the symbols or the conditions of a build, evaluates through this method. A caller that
     /// only queries goes through <see cref="ValueOf"/>.
     /// </summary>
-    public Value Evaluate(SyntaxNode node) => declaring is null ? Evaluated(node) : Carried(node, Evaluated(node));
+    public Value Evaluate(SyntaxNode node) =>
+        declaring is null ? Evaluated(node) : CheckedForCa65(node, Evaluated(node));
 
     /// <summary>
     /// Checks a value on its way into the output against what ca65 can hold, and returns it.
     /// ca65 computes in 32 bits, and the output emits a declaration's expression as it appears in
     /// the source, so every step of the expression has to be a number that ca65 can also reach.
     /// </summary>
-    private Value Carried(SyntaxNode node, Value value)
+    private Value CheckedForCa65(SyntaxNode node, Value value)
     {
         // A name's value comes from its declaration, and a value too wide for ca65 is reported
         // there rather than again at every use of the name.
@@ -292,7 +293,7 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>Returns the diagnostic message for a value too wide for ca65 to hold.</summary>
-    private static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Says(Value.Of(number));
+    private static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Message(Value.Of(number));
 
     /// <summary>
     /// Reports a literal that contains a character above <c>$7f</c>, unless a charmap or layout
@@ -413,7 +414,7 @@ internal sealed partial class Evaluator
     /// every type laid out, and answering a query must never modify a symbol that another thread
     /// is reading.
     /// </summary>
-    private void Settle(Symbol symbol)
+    private void EnsureEvaluated(Symbol symbol)
     {
         if (diagnostics is not null)
             EvaluateSymbol(symbol);
@@ -421,9 +422,9 @@ internal sealed partial class Evaluator
 
     private void EvaluateSymbol(Symbol symbol)
     {
-        if (settled?.Invoke(symbol) == true)
+        if (unchanged?.Invoke(symbol) == true)
         {
-            settledReads.Add(symbol);
+            unchangedReads.Add(symbol);
             return;
         }
         var outer = owner;
@@ -547,7 +548,7 @@ internal sealed partial class Evaluator
             // every member after it a value that cannot be computed.
             if (symbol.IsEnumMember)
             {
-                Report(expression, Catalogue.EnumMemberIsNotAnAddress.Says(symbol.Name));
+                Report(expression, Catalogue.EnumMemberIsNotAnAddress.Message(symbol.Name));
                 symbol.Value = Value.Unknown;
                 return;
             }
@@ -578,7 +579,7 @@ internal sealed partial class Evaluator
         foreach (var member in ring)
             member.IsCyclic = true;
         var symbol = ring[0];
-        Report(symbol.DeclarationSpan, Catalogue.DefinedInTermsOfItself.Says(symbol.DisplayName),
+        Report(symbol.DeclarationSpan, Catalogue.DefinedInTermsOfItself.Message(symbol.DisplayName),
             [.. ring.Skip(1).Select(other =>
                 new RelatedSpan(other.DeclarationSpan, $"through `{other.DisplayName}`"))]);
     }
@@ -599,7 +600,7 @@ internal sealed partial class Evaluator
             // Binding did not report unresolved names in the values `.select` chooses between;
             // they are reported here, once evaluation has chosen the value they are in.
             if (choosing > 0 && name.SimpleName is { Kind: SyntaxKind.Identifier or SyntaxKind.CheapLocal } alone)
-                Report(alone, Catalogue.NotDeclared.Says(alone.Text, ""));
+                Report(alone, Catalogue.NotDeclared.Message(alone.Text, ""));
             return Value.Unknown;
         }
         // A binding that walks an enum stands for the member itself, whose value is requested
@@ -643,7 +644,7 @@ internal sealed partial class Evaluator
             if (!(symbol.IsTypedStorage || symbol.Kind == SymbolKind.Member)
                 || symbol is { Kind: SymbolKind.Data, Data: null })
             {
-                Report(index, Catalogue.NotIndexable.Says(
+                Report(index, Catalogue.NotIndexable.Message(
                     symbol.DisplayName,
                     symbol is { Kind: SymbolKind.Data, Data: null }
                         ? "mixed data, which has no elements"
@@ -652,29 +653,29 @@ internal sealed partial class Evaluator
             }
 
             // A count that nt65 cannot compute has already been reported where it appears.
-            Settle(symbol);
+            EnsureEvaluated(symbol);
             if (symbol.Count is not { } count || ElementIndexes.Stride(symbol) is not { } stride)
                 return null;
 
             // Empty brackets leave a missing index with no text, and it has already been
             // reported where the brackets are.
-            var written = index.Index;
-            if (written.Span.Length == 0)
+            var indexExpression = index.Index;
+            if (indexExpression.Span.Length == 0)
                 return null;
-            if (Evaluate(written).AsNumber() is not { } at)
+            if (Evaluate(indexExpression).AsNumber() is not { } at)
             {
                 // A name in the index that does not resolve has already been reported where it
                 // appears, and it is the only reason the index is not constant, so nothing more
                 // is reported.
-                if (Names(written))
+                if (Names(indexExpression))
                 {
-                    Report(written, Catalogue.ElementIndexNotConstant.Says(symbol.DisplayName));
+                    Report(indexExpression, Catalogue.ElementIndexNotConstant.Message(symbol.DisplayName));
                 }
                 return null;
             }
             if (at < 0 || at >= count)
             {
-                Report(written, Catalogue.ElementIndexOutOfRange.Says(at < 0
+                Report(indexExpression, Catalogue.ElementIndexOutOfRange.Message(at < 0
                     ? $"element index {at} is negative; indexes start at 0"
                     : $"index {at} is past the end of `{symbol.DisplayName}`: it holds {count} "
                         + $"{(count == 1 ? "element" : "elements")}, so the last index is {count - 1}"));
@@ -701,7 +702,7 @@ internal sealed partial class Evaluator
                 return Value.Unknown;
             if (part.Kind != SymbolKind.Member)
                 continue;
-            Settle(part);
+            EnsureEvaluated(part);
             if (part.Value.AsNumber() is not { } own)
                 return Value.Unknown;
             offset += own;
@@ -736,7 +737,7 @@ internal sealed partial class Evaluator
     /// </summary>
     private Value ValueOfSymbol(Symbol symbol)
     {
-        Settle(symbol);
+        EnsureEvaluated(symbol);
         return symbol.Value;
     }
 
@@ -756,9 +757,9 @@ internal sealed partial class Evaluator
     /// already a word, or otherwise the bare name on that side, which is compared as a word
     /// without being looked up.
     /// </summary>
-    private static string? WordOf(Value value, ExpressionSyntax written) => value.IsWord
+    private static string? WordOf(Value value, ExpressionSyntax expression) => value.IsWord
         ? value.Text
-        : written is NameExpressionSyntax { SimpleName: { } word }
+        : expression is NameExpressionSyntax { SimpleName: { } word }
             ? word.Text
             : null;
 
@@ -785,7 +786,7 @@ internal sealed partial class Evaluator
     private Value Reject(SyntaxToken op, Value operand)
     {
         if (operand.IsString)
-            Report(op, Catalogue.OperatorOnText.Says(op.Text));
+            Report(op, Catalogue.OperatorOnText.Message(op.Text));
         return Value.Unknown;
     }
 
@@ -817,7 +818,7 @@ internal sealed partial class Evaluator
     /// Returns the symbol that a node refers to when the node is a name, or null otherwise,
     /// because only a name can refer to a symbol.
     /// </summary>
-    private Symbol? SymbolOf(SyntaxNode written) => written is NameExpressionSyntax name ? SymbolOf(name) : null;
+    private Symbol? SymbolOf(SyntaxNode node) => node is NameExpressionSyntax name ? SymbolOf(name) : null;
 
     /// <summary>
     /// Returns the symbol that <c>actions::c</c> names when <c>c</c> walks an enum. This is the
@@ -837,13 +838,13 @@ internal sealed partial class Evaluator
         {
             if (items.ContainsKey(binding) || arguments.ContainsKey(binding))
             {
-                Report(name, Catalogue.BindingNotOverAnEnum.Says(binding.Name));
+                Report(name, Catalogue.BindingNotOverAnEnum.Message(binding.Name));
             }
             return null;
         }
         if (body.FindMember(member.Name) is { } namesake)
             return namesake;
-        Report(name, Catalogue.FamilyMemberMissing.Says(container.Name, member.Name, binding.Name));
+        Report(name, Catalogue.FamilyMemberMissing.Message(container.Name, member.Name, binding.Name));
         return null;
     }
 

@@ -157,7 +157,7 @@ public static class RegisterKeeps
             var pending = new SortedSet<int>();
             reached[0] = RegisterState.Entered;
             pending.Add(0);
-            Settle();
+            Converge();
 
             // A label a `.state` declares may be jumped into from another routine, so the
             // registers there hold nothing this routine put in them. The stack there is what a
@@ -179,7 +179,7 @@ public static class RegisterKeeps
                     continue;
                 reached[block.Index] = entered;
                 pending.Add(block.Index);
-                Settle();
+                Converge();
             }
 
             var kept = Registers.All;
@@ -207,12 +207,12 @@ public static class RegisterKeeps
                     var handed = of(into);
                     if (!handed.Complete)
                         complete = false;
-                    var carried = Handed(after, handed);
+                    var onExit = Handed(after, handed);
                     leaves = true;
                     left = true;
-                    kept &= carried.Kept;
+                    kept &= onExit.Kept;
                     if (report is not null)
-                        Check(region, block, carried, into, handed.Kept, report);
+                        Check(region, block, onExit, into, handed.Kept, report);
                 }
                 if (left || (!ends.Returns && !ends.Tail))
                     continue;
@@ -226,14 +226,14 @@ public static class RegisterKeeps
             // it can fail to keep. What it does to the registers matters to no one else.
             return leaves ? new RoutineRegisters(kept, complete) : RoutineRegisters.Everything;
 
-            void Settle()
+            void Converge()
             {
                 while (pending.Count > 0)
                 {
                     var index = pending.Min;
                     pending.Remove(index);
                     var after = Through(blocks[index], reached[index]!, of, null);
-                    foreach (var edge in Carried(blocks[index]))
+                    foreach (var edge in Onward(blocks[index]))
                     {
                         var merged = RegisterState.Merge(reached[edge], after);
                         if (merged.Equals(reached[edge]))
@@ -244,7 +244,7 @@ public static class RegisterKeeps
                 }
             }
 
-            IEnumerable<int> Carried(BasicBlock block) => CarriedTo(blocks, block);
+            IEnumerable<int> Onward(BasicBlock block) => FlowsTo(blocks, block);
         }
 
         /// <summary>
@@ -261,7 +261,7 @@ public static class RegisterKeeps
             {
                 Stack = stack,
                 WhyStack = stack is null
-                    ? OutsideEntries.Carried(block.Label!, routine)
+                    ? OutsideEntries.UnknownStack(block.Label!, routine)
                     : reached.WhyStack,
             };
         }
@@ -271,7 +271,7 @@ public static class RegisterKeeps
         /// After a call, flow goes on at the statement after it, and a jump to a routine's entry
         /// leaves this routine.
         /// </summary>
-        private IEnumerable<int> CarriedTo(IReadOnlyList<BasicBlock> blocks, BasicBlock block)
+        private IEnumerable<int> FlowsTo(IReadOnlyList<BasicBlock> blocks, BasicBlock block)
         {
             var calls = Ends(block).Calls;
             foreach (var edge in block.Successors)
@@ -348,7 +348,7 @@ public static class RegisterKeeps
                 var index = pending.Min;
                 pending.Remove(index);
                 var after = Through(blocks[index], reached[index]!, of, null);
-                foreach (var edge in CarriedTo(blocks, blocks[index]).Where(to => inside[to]))
+                foreach (var edge in FlowsTo(blocks, blocks[index]).Where(to => inside[to]))
                 {
                     var merged = RegisterState.Merge(reached[edge], after);
                     if (merged.Equals(reached[edge]))
@@ -370,7 +370,7 @@ public static class RegisterKeeps
                 // A block is an exit from the scope when what runs after it is outside the
                 // scope. A return, or a jump to another routine, is an exit too.
                 var left = Leaves(blocks[i], region.Routine).ToList();
-                if (left.Count == 0 && CarriedTo(blocks, blocks[i]).All(to => inside[to])
+                if (left.Count == 0 && FlowsTo(blocks, blocks[i]).All(to => inside[to])
                     && !Ends(blocks[i]).Returns)
                 {
                     continue;
@@ -430,7 +430,7 @@ public static class RegisterKeeps
             var at = block.Steps.Count > 0
                 ? block.Steps[^1].Statement.Tree.GetSpan(block.Steps[^1].Statement.Span)
                 : region.Routine.DeclarationSpan;
-            var names = RegisterEffects.Spell(broken);
+            var names = RegisterEffects.Format(broken);
             var items = names.ToLowerInvariant();
             var one = RegisterEffects.Each(broken).Count() == 1;
 
@@ -449,7 +449,7 @@ public static class RegisterKeeps
                     : $": restore {(one ? "it" : "them")} before returning, or add `.state keeps {items}` "
                         + "at the point where the entry value is back";
             report.Add(new Diagnostic(at,
-                Catalogue.KeepsBroken.Says(
+                Catalogue.KeepsBroken.Message(
                     region.Routine.DisplayName, items, names, one ? "is" : "are", fix)));
         }
 
@@ -462,7 +462,7 @@ public static class RegisterKeeps
         {
             var owner = Owner(into)!;
             var name = owner.DisplayName;
-            var items = RegisterEffects.Spell(missing).ToLowerInvariant();
+            var items = RegisterEffects.Format(missing).ToLowerInvariant();
             var one = RegisterEffects.Each(missing).Count() == 1;
 
             // Where the path names a label rather than the routine itself, the message gives both
@@ -551,7 +551,7 @@ public static class RegisterKeeps
                     {
                         report.Add(new Diagnostic(
                             step.Statement.Tree.GetSpan(item.Node.Span),
-                            Catalogue.KeepsRedundant.Says(item.Text, RegisterEffects.Spell(register))));
+                            Catalogue.KeepsRedundant.Message(item.Text, RegisterEffects.Format(register))));
                     }
                     state = state.With(register, RegisterValue.Of(register));
                 }

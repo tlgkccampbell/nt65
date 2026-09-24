@@ -88,11 +88,11 @@ public sealed class ControlFlow
 
             // A routine containing a line that layout could not lay out gets no count. The line
             // is missing from the stream, so counting the rest would pass off part as the whole.
-            var (least, most, ends) = layout.Unlaid.Contains(routine)
+            var (minimum, maximum, ends) = layout.Unlaid.Contains(routine)
                 ? (null, null, true)
                 : Paths.Through(blocks);
             var region = new FlowRegion(
-                routine, entered, blocks, new RoutineCost(least, most, Calls(blocks), ends, Uncounted(blocks)),
+                routine, entered, blocks, new RoutineCost(minimum, maximum, Calls(blocks), ends, Uncounted(blocks)),
                 flow.Costed(blocks, inline), inline);
             flow.regions.Add(region);
             flow.CheckTargets(units, diagnostics);
@@ -199,8 +199,8 @@ public sealed class ControlFlow
             if (inside[i] && i != entry && blocks[i].Predecessors.Any(from => !inside[from]))
                 return null;
         }
-        var (least, most, ends) = Paths.Through(blocks, entry, at => inside[at], Paths.Costing);
-        return least is null ? null : new RoutineCost(least, most, Calls(blocks, inside), ends);
+        var (minimum, maximum, ends) = Paths.Through(blocks, entry, at => inside[at], Paths.Costing);
+        return minimum is null ? null : new RoutineCost(minimum, maximum, Calls(blocks, inside), ends);
     }
 
     /// <summary>
@@ -247,7 +247,7 @@ public sealed class ControlFlow
             total += cycles;
             any = true;
         }
-        return any ? new RoutineCost(total.Least, total.Most, false, true) : null;
+        return any ? new RoutineCost(total.Minimum, total.Maximum, false, true) : null;
     }
 
     /// <summary>Returns whether any block of a part of a routine calls.</summary>
@@ -578,10 +578,10 @@ public sealed class ControlFlow
     /// </summary>
     internal IEnumerable<(Symbol Symbol, Expansion? At)> Named(NextDirectiveSyntax next, Expansion? on)
     {
-        foreach (var written in next.Targets)
+        foreach (var targetName in next.Targets)
         {
             // A `list` parameter names every label the call gave it.
-            if (model.SymbolOf(written, on) is { Kind: SymbolKind.MacroParameter, Parameter.Kind: ParameterKind.List } list
+            if (model.SymbolOf(targetName, on) is { Kind: SymbolKind.MacroParameter, Parameter.Kind: ParameterKind.List } list
                 && model.GivenAt(list, on) is { Argument: var given, Caller: var caller })
             {
                 foreach (var item in given.Items)
@@ -592,7 +592,7 @@ public sealed class ControlFlow
                 continue;
             }
 
-            if (Targets.Of(model, written, on) is not { } target)
+            if (Targets.Of(model, targetName, on) is not { } target)
                 continue;
             var spread = Spread(target.Symbol, on).ToList();
             if (spread.Count > 0)
@@ -685,23 +685,23 @@ public sealed class ControlFlow
     {
         foreach (var annotation in units.SelectMany(unit => unit.Annotations.Select(a => (unit.Step.On, a))))
         {
-            foreach (var written in Annotations.TargetsOf(annotation.a))
+            foreach (var targetName in Annotations.TargetsOf(annotation.a))
             {
-                if (Targets.Of(model, written, annotation.On) is not { } target)
+                if (Targets.Of(model, targetName, annotation.On) is not { } target)
                     continue;
                 if (IsDataWithoutCodeLabels(target.Symbol, annotation.On))
                 {
-                    diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
+                    diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
                         IsAddressData(target.Symbol)
-                            ? Catalogue.NextTableHasNoLabels.Says(target.Symbol.DisplayName)
-                            : Catalogue.NextTargetNotATable.Says(target.Symbol.DisplayName)));
+                            ? Catalogue.NextTableHasNoLabels.Message(target.Symbol.DisplayName)
+                            : Catalogue.NextTargetNotATable.Message(target.Symbol.DisplayName)));
                     continue;
                 }
                 if (target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
                     continue;
-                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
-                    Catalogue.NextTargetNotCode.Says(
-    target.Symbol.DisplayName, target.Symbol.KindPhrase, Annotations.Spell(annotation.a))));
+                diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
+                    Catalogue.NextTargetNotCode.Message(
+    target.Symbol.DisplayName, target.Symbol.KindPhrase, Annotations.Format(annotation.a))));
             }
         }
     }
@@ -738,7 +738,7 @@ public sealed class ControlFlow
             if (model.ReferencesTo(label).Any(reference => !reference.IsDeclaration))
                 continue;
             diagnostics.Add(new Diagnostic(label.DeclarationSpan,
-                Catalogue.LabelUnreachable.Says(label.DisplayName)));
+                Catalogue.LabelUnreachable.Message(label.DisplayName)));
         }
     }
 
@@ -806,11 +806,11 @@ public sealed class ControlFlow
     {
         if (branch is not { Step: { On: null, Statement: InstructionStatementSyntax statement } } || statement.Tree != model.Tree
             || BranchTarget(branch) is null
-            || Transfers.TargetOf(statement, layout.Of(statement, null)?.Mode) is not { } written)
+            || Transfers.TargetOf(statement, layout.Of(statement, null)?.Mode) is not { } targetExpression)
         {
             return null;
         }
-        return new DiagnosticFix(FixKind.AlwaysTaken, written.GetText().Trim(), statement.Tree.GetSpan(statement.Span));
+        return new DiagnosticFix(FixKind.AlwaysTaken, targetExpression.GetText().Trim(), statement.Tree.GetSpan(statement.Span));
     }
 
     /// <summary>
@@ -840,7 +840,7 @@ public sealed class ControlFlow
                 }
                 else
                 {
-                    Report(call, Catalogue.InlineDataMissing.Says(name, "one `.strz`", "none follows this one"));
+                    Report(call, Catalogue.InlineDataMissing.Message(name, "one `.strz`", "none follows this one"));
                 }
                 continue;
             }
@@ -848,7 +848,7 @@ public sealed class ControlFlow
             if (inline.Expression is not { } count
                 || model.ValueOf(count, units[i].Step.On).AsNumber() is not { } bytes || bytes < 0)
             {
-                Report(call, Catalogue.InlineCountNotConstant.Says(name, inline.Text));
+                Report(call, Catalogue.InlineCountNotConstant.Message(name, inline.Text));
                 continue;
             }
 
@@ -865,7 +865,7 @@ public sealed class ControlFlow
             }
             if (taken != bytes)
             {
-                Report(call, Catalogue.InlineDataMissing.Says(
+                Report(call, Catalogue.InlineDataMissing.Message(
                     name,
                     $"{Bytes(bytes)} of data",
                     taken == 0 ? "none follows this one" : $"{Bytes(taken)} {(taken == 1 ? "follows" : "follow")} this one"));
@@ -902,8 +902,8 @@ public sealed class ControlFlow
             {
                 var returned = SyntaxFacts.TextOf(instruction.MnemonicKind);
                 Report(statement, own.IsInterrupt
-                    ? Catalogue.HandlerReturnsNotRti.Says(routine.DisplayName, returned)
-                    : Catalogue.NoreturnReturns.Says(routine.DisplayName, returned),
+                    ? Catalogue.HandlerReturnsNotRti.Message(routine.DisplayName, returned)
+                    : Catalogue.NoreturnReturns.Message(routine.DisplayName, returned),
 
                     // A handler is left by `rti`, which is the instruction to use instead. A
                     // routine that never returns has no instruction that would do. It should
@@ -912,7 +912,7 @@ public sealed class ControlFlow
             }
             if (CalledAt(unit) is { Signature.IsInterrupt: true } handler)
             {
-                Report(statement, Catalogue.HandlerCalled.Says(handler.DisplayName));
+                Report(statement, Catalogue.HandlerCalled.Message(handler.DisplayName));
             }
         }
 
@@ -939,8 +939,8 @@ public sealed class ControlFlow
     /// Returns the routine a <c>.fallthrough</c> names, or null where it names something else or
     /// nothing.
     /// </summary>
-    private Symbol? RoutineNamed(NameExpressionSyntax written, Expansion? on) =>
-        Targets.Of(model, written, on)?.Symbol is { Kind: SymbolKind.Proc, Signature: not null } routine ? routine : null;
+    private Symbol? RoutineNamed(NameExpressionSyntax name, Expansion? on) =>
+        Targets.Of(model, name, on)?.Symbol is { Kind: SymbolKind.Proc, Signature: not null } routine ? routine : null;
 
     /// <summary>
     /// Reports each <c>.next</c> that is not needed, or that names something other than a
@@ -976,7 +976,7 @@ public sealed class ControlFlow
                     continue;
                 }
                 diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,
-                    Catalogue.NextNotTheBranchTarget.Says($"`{unit.Step.Statement.GetText().Trim()}`", target.DisplayName)));
+                    Catalogue.NextNotTheBranchTarget.Message($"`{unit.Step.Statement.GetText().Trim()}`", target.DisplayName)));
                 continue;
             }
             if (Known(unit) is not { } does)
@@ -988,7 +988,7 @@ public sealed class ControlFlow
             var rewrite = ends && next.Tree == model.Tree && next.Targets.Count == 1
                 && RoutineNamed(next.Targets[0], null) is not null;
             diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,
-                Catalogue.NextSuccessorsKnown.Says(
+                Catalogue.NextSuccessorsKnown.Message(
                     $"`{unit.Step.Statement.GetText().Trim()}`", does,
                     ends ? "; to say this routine runs into the one after it, use `.fallthrough`" : ""))
             {
@@ -1055,34 +1055,34 @@ public sealed class ControlFlow
     {
         foreach (var unit in units)
         {
-            if (unit.Step is not { Statement: FallthroughDirectiveSyntax { Target: { } written } directive, On: null } step)
+            if (unit.Step is not { Statement: FallthroughDirectiveSyntax { Target: { } targetName } directive, On: null } step)
                 continue;
-            if (Targets.Of(model, written, null) is not { } target)
+            if (Targets.Of(model, targetName, null) is not { } target)
                 continue;
-            if (RoutineNamed(written, null) is not { } routine)
+            if (RoutineNamed(targetName, null) is not { } routine)
             {
-                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
-                    Catalogue.FallthroughNotARoutine.Says(target.Symbol.DisplayName, target.Symbol.KindPhrase)));
+                diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
+                    Catalogue.FallthroughNotARoutine.Message(target.Symbol.DisplayName, target.Symbol.KindPhrase)));
                 continue;
             }
             if (step.Segment is { } here && routine.Segment is { } there && here != there)
             {
-                diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
-                    Catalogue.FallthroughOtherSegment.Says(routine.DisplayName, here, there)));
+                diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
+                    Catalogue.FallthroughOtherSegment.Message(routine.DisplayName, here, there)));
                 continue;
             }
-            if (layout.Placed(directive) is { } end && routine.Tree == model.Tree && layout.Placed(routine) is { } start
+            if (layout.PositionOf(directive) is { } end && routine.Tree == model.Tree && layout.PositionOf(routine) is { } start
                 && start.Stream == end.Stream && start.Offset == end.End)
             {
                 continue;
             }
             if (placing || routine.Tree != model.Tree)
             {
-                runningOn.Add(new RunningOn(directive, null, routine, written));
+                runningOn.Add(new RunningOn(directive, null, routine, targetName));
                 continue;
             }
-            diagnostics.Add(new Diagnostic(written.Tree.GetSpan(written.Span),
-                Catalogue.FallthroughNotAdjacent.Says(routine.DisplayName)));
+            diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
+                Catalogue.FallthroughNotAdjacent.Message(routine.DisplayName)));
         }
     }
 
@@ -1093,7 +1093,7 @@ public sealed class ControlFlow
     /// <c>.fallthrough</c> naming the next routine goes. It returns null where anything with bytes
     /// in that segment, or nothing at all, comes next.
     /// </summary>
-    internal (Symbol Routine, Span Closer)? WrittenAfter(FlowRegion region)
+    internal (Symbol Routine, Span Closer)? EmittedAfter(FlowRegion region)
     {
         var steps = layout.Steps;
         var opened = -1;
@@ -1108,7 +1108,7 @@ public sealed class ControlFlow
         if (opened < 0 || steps[opened].Statement.Parent?.Parent is not BlockSyntax { Closer: { } closer })
             return null;
         var segment = steps[opened].Segment;
-        var run = layout.Placed(region.Routine)?.Stream;
+        var run = layout.PositionOf(region.Routine)?.Stream;
         for (var i = last + 1; i < steps.Count; i++)
         {
             var step = steps[i];
@@ -1118,8 +1118,8 @@ public sealed class ControlFlow
             // An `.align` or a `.place` in between starts another run, and a routine in a
             // different run from this one's does not directly follow it.
             if (step.Label is { Kind: SymbolKind.Proc, Signature: not null } next && step.Statement is ProcDeclarationSyntax)
-                return layout.Placed(next)?.Stream == run ? (next, closer.Tree.GetSpan(closer.Span)) : null;
-            if (step.Label is not null || layout.Placed(step.Statement, step.On) is { Length: not 0 })
+                return layout.PositionOf(next)?.Stream == run ? (next, closer.Tree.GetSpan(closer.Span)) : null;
+            if (step.Label is not null || layout.PositionOf(step.Statement, step.On) is { Length: not 0 })
                 return null;
         }
         return null;

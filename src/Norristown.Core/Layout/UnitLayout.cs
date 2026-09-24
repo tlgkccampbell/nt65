@@ -48,18 +48,18 @@ public sealed class UnitLayout
     }
 
     /// <summary>
-    /// Translates <paramref name="placement"/>, a position in the layout of
+    /// Translates <paramref name="position"/>, a position in the layout of
     /// <paramref name="tree"/>, to a position in the unit. Returns the unit's run and the offset
     /// in it, or null where nothing the unit laid out is at a known distance from it.
     /// </summary>
-    public (int Run, int Offset)? Where(SyntaxTree tree, Placement placement)
+    public (int Run, int Offset)? Where(SyntaxTree tree, BytePosition position)
     {
-        if (!pieces.TryGetValue((tree.Path, placement.Stream), out var list))
+        if (!pieces.TryGetValue((tree.Path, position.Stream), out var list))
             return null;
         for (var i = list.Count - 1; i >= 0; i--)
         {
-            if (list[i].From <= placement.Offset)
-                return (list[i].Run, list[i].At + placement.Offset - list[i].From);
+            if (list[i].From <= position.Offset)
+                return (list[i].Run, list[i].At + position.Offset - list[i].From);
         }
         return null;
     }
@@ -80,15 +80,15 @@ public sealed class UnitLayout
             while (next < points.Count && points[next].Step == i)
                 Splice(tree, points[next++]);
             var step = layout.Steps[i];
-            if (step.Segment is not { } segment || layout.Placed(step.Statement, step.On) is not { } placed
+            if (step.Segment is not { } segment || layout.PositionOf(step.Statement, step.On) is not { } position
                 || !seen.Add((step.Statement.Position, step.On)))
             {
                 continue;
             }
             var (run, at) = Reached(segment);
-            if (Where(tree, placed) != (run, at))
-                Add(tree, placed.Stream, placed.Offset, run, at);
-            reached[segment] = placed.Length == DataLengths.Unpredictable ? (nextRun++, 0) : (run, at + placed.Length);
+            if (Where(tree, position) != (run, at))
+                Add(tree, position.Stream, position.Offset, run, at);
+            reached[segment] = position.Length == DataLengths.Unpredictable ? (nextRun++, 0) : (run, at + position.Length);
         }
         while (next < points.Count)
             Splice(tree, points[next++]);

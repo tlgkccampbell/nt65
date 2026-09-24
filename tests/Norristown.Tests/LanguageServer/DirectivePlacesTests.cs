@@ -22,7 +22,7 @@ public sealed class DirectivePlacesTests
     /// a number is appended to a name the snippet declares, so that snippets' names would not
     /// collide. A block opener closes its own block, so each snippet is complete by itself.
     /// </summary>
-    private static readonly Dictionary<string, string> Written = new(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> Snippets = new(StringComparer.Ordinal)
     {
         [".addr"] = ".addr 0",
         [".align"] = ".align 2",
@@ -110,11 +110,11 @@ public sealed class DirectivePlacesTests
 
     /// <summary>Every directive the server knows either has a complete form above or is listed as partial.</summary>
     [Fact]
-    public void EveryDirectiveTheListsKnowIsWrittenHere()
+    public void EveryDirectiveTheListsKnowHasASnippetHere()
     {
         Assert.Equal(
             Directives.All.Order(StringComparer.Ordinal),
-            Written.Keys.Concat(Partial).Order(StringComparer.Ordinal));
+            Snippets.Keys.Concat(Partial).Order(StringComparer.Ordinal));
     }
 
     [Theory]
@@ -126,7 +126,7 @@ public sealed class DirectivePlacesTests
     {
         var offered = Offered(place);
         var allowed = new List<string>();
-        foreach (var directive in Written.Keys.Order(StringComparer.Ordinal))
+        foreach (var directive in Snippets.Keys.Order(StringComparer.Ordinal))
         {
             if (Errors(place, directive).Count == 0)
                 allowed.Add(directive);
@@ -196,7 +196,7 @@ public sealed class DirectivePlacesTests
     /// </summary>
     private static IReadOnlyList<string> Errors(string place, string directive)
     {
-        var snippet = Written[directive].Replace("#", "1", StringComparison.Ordinal);
+        var snippet = Snippets[directive].Replace("#", "1", StringComparison.Ordinal);
         var (text, line) = Host(place, snippet);
         var analysis = Analysis.Program(
             (Analysis.Path, text),
@@ -212,12 +212,12 @@ public sealed class DirectivePlacesTests
     }
 
     /// <summary>
-    /// Builds a program that contains <paramref name="written"/> in <paramref name="place"/>, and
-    /// returns it with the line on which <paramref name="written"/> starts. The preamble declares
+    /// Builds a program that contains <paramref name="snippet"/> in <paramref name="place"/>, and
+    /// returns it with the line on which <paramref name="snippet"/> starts. The preamble declares
     /// the things a snippet names, so that what is reported about a line concerns where the line
     /// is and not a name it could not find.
     /// </summary>
-    private static (string Text, int Line) Host(string place, string written)
+    private static (string Text, int Line) Host(string place, string snippet)
     {
         const string Preamble = """
             .module main
@@ -240,6 +240,6 @@ public sealed class DirectivePlacesTests
             _ => throw new ArgumentOutOfRangeException(nameof(place), place, "no such place to write a snippet in"),
         };
         var head = Preamble.ReplaceLineEndings("\n") + before;
-        return (head + written + (written.Length > 0 ? "\n" : "") + after, head.Split('\n').Length - 1);
+        return (head + snippet + (snippet.Length > 0 ? "\n" : "") + after, head.Split('\n').Length - 1);
     }
 }

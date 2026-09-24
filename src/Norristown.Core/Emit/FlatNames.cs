@@ -94,7 +94,7 @@ public sealed class FlatNames
                 && other != symbol && other.QualifiedName != symbol.QualifiedName && other.Tree != symbol.Tree)
             {
                 diagnostics.Add(new Diagnostic(other.DeclarationSpan,
-                    Catalogue.OutputNameCollision.Says(other.QualifiedName, $"`{symbol.QualifiedName}`", symbol.OutputName)));
+                    Catalogue.OutputNameCollision.Message(other.QualifiedName, $"`{symbol.QualifiedName}`", symbol.OutputName)));
             }
             taken[symbol.OutputName] = symbol;
         }
@@ -103,7 +103,7 @@ public sealed class FlatNames
         // other way round.
         foreach (var symbol in model.Symbols.Where(symbol => symbol.IsReachableByPath))
         {
-            var name = symbol.LinkerName ?? flat.Spelled(flat.placedPrefix + symbol.FlatName);
+            var name = symbol.LinkerName ?? flat.Definable(flat.placedPrefix + symbol.FlatName);
             if (taken.TryGetValue(name, out var other))
             {
                 // Two declarations of the same name in the same scope are one problem, which
@@ -114,7 +114,7 @@ public sealed class FlatNames
                     && (other.LinkerName is null || symbol.LinkerName is null))
                 {
                     diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
-                        Catalogue.OutputNameCollision.Says(symbol.QualifiedName, $"`{other.QualifiedName}`", name),
+                        Catalogue.OutputNameCollision.Message(symbol.QualifiedName, $"`{other.QualifiedName}`", name),
                         [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
                 }
                 flat.names[symbol] = name;
@@ -129,7 +129,7 @@ public sealed class FlatNames
         foreach (var symbol in model.Symbols.Where(symbol =>
             !symbol.IsReachableByPath && !IsLocalToAnExpansion(symbol)))
         {
-            var basis = flat.Spelled(flat.placedPrefix + symbol.FlatName);
+            var basis = flat.Definable(flat.placedPrefix + symbol.FlatName);
             var name = basis;
             for (var n = 2; taken.ContainsKey(name); n++)
                 name = $"{basis}_{n}";
@@ -162,7 +162,7 @@ public sealed class FlatNames
         if (perExpansion.TryGetValue(at, out var already))
             return already;
 
-        var basis = Spelled(Basis(symbol, at.Item2));
+        var basis = Definable(Basis(symbol, at.Item2));
         var name = basis;
         for (var n = 2; taken.ContainsKey(name); n++)
             name = $"{basis}_{n}";
@@ -206,7 +206,7 @@ public sealed class FlatNames
     /// </summary>
     public string Generated(string basis)
     {
-        var name = basis = Spelled(basis);
+        var name = basis = Definable(basis);
         for (var n = 2; taken.ContainsKey(name); n++)
             name = $"{basis}_{n}";
         taken[name] = null;
@@ -220,7 +220,7 @@ public sealed class FlatNames
     /// module in front instead. That is the spelling an export already has, and it contains a
     /// <c>__</c> that no ca65 instruction name contains.
     /// </summary>
-    private string Spelled(string name) => Prefixed(name, instructions, module) ?? name;
+    private string Definable(string name) => Prefixed(name, instructions, module) ?? name;
 
     /// <summary>
     /// Returns the name the output gives <paramref name="name"/> in module

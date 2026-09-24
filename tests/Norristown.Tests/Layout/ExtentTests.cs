@@ -79,7 +79,7 @@ public sealed class ExtentTests
 
     /// <summary>A span may be used before the thing it measures, as any constant may.</summary>
     [Fact]
-    public void ASpanMayBeWrittenBeforeWhatItMeasures()
+    public void ASpanMayBeUsedBeforeWhatItMeasures()
     {
         var program = Analysis.Program(("main.nt65", """
             .module main

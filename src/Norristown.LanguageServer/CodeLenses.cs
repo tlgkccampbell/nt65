@@ -38,17 +38,17 @@ internal static class CodeLenses
         {
             if (region.Routine.Tree != tree || instances.Contains(region.Routine.NameSpan))
                 continue;
-            if (Spell(region.Cost, region.Total, "never returns", true) is { } cost)
+            if (Format(region.Cost, region.Total, "never returns", true) is { } cost)
                 Add(region.Routine.NameSpan, 0, cost);
             if (Kept(region) is { } kept)
                 Add(region.Routine.NameSpan, 1, kept);
             foreach (var scope in region.Scopes)
             {
-                if (Spell(scope.Cost, null, null, true) is { } inline)
+                if (Format(scope.Cost, null, null, true) is { } inline)
                     Add(scope.Opener, 0, inline);
             }
             foreach (var scope in region.ScopeRegisters)
-                Add(scope.Opener, 1, Spell(scope.Kept, scope.Complete));
+                Add(scope.Opener, 1, Format(scope.Kept, scope.Complete));
         }
 
         void Add(TextSpan at, int kind, string text) =>
@@ -68,7 +68,7 @@ internal static class CodeLenses
     /// with the reason for each, so it passes false for <paramref name="excluding"/>.
     /// </para>
     /// </summary>
-    internal static string? Spell(RoutineCost cost, RoutineCost? total, string? endless, bool excluding)
+    internal static string? Format(RoutineCost cost, RoutineCost? total, string? endless, bool excluding)
     {
         // A routine that no path leaves has no complete pass to cost. Report that, rather than
         // showing nothing and looking as though the lens failed.
@@ -76,9 +76,9 @@ internal static class CodeLenses
             return endless;
         // A routine containing an instruction whose cycle count is only known at run time has
         // no count; saying why is better than showing no lens at all.
-        if (cost is not { Least: { } least })
+        if (cost is not { Minimum: { } least })
             return cost.Uncounted is { } why ? $"not counted: {why}" : null;
-        var count = Count(least, cost.Most);
+        var count = Count(least, cost.Maximum);
         if (cost.Loops)
             count += ", loops";
         if (!cost.Calls)
@@ -86,7 +86,7 @@ internal static class CodeLenses
 
         // An inline scope has no cost with its calls, and a routine has none where its own
         // instructions have no count.
-        if (total is not { Least: { } with })
+        if (total is not { Minimum: { } with })
             return $"{count}, excluding calls";
 
         // Where a routine passes control to one that never returns, the count covers only the
@@ -97,10 +97,10 @@ internal static class CodeLenses
         // When the calls add nothing to the count, show the number once rather than repeating
         // it as the with-calls figure. The figure with calls is only a number, since the
         // count beside it already says what it counts.
-        if (with == cost.Least && total.Value.Most == cost.Most && excluded.Count == 0)
+        if (with == cost.Minimum && total.Value.Maximum == cost.Maximum && excluded.Count == 0)
             return count + ending;
         var left = excluding && excluded.Count > 0 ? $", excluding {Named(excluded)}" : "";
-        return $"{count}, {Number(with, total.Value.Most)} with calls{left}{ending}";
+        return $"{count}, {Number(with, total.Value.Maximum)} with calls{left}{ending}";
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ internal static class CodeLenses
     /// null when no path through the routine, including its calls, returns.
     /// </summary>
     private static string? Kept(FlowRegion region) => region.Total.Ends
-        ? Spell(region.Registers.Kept, region.Registers.Complete)
+        ? Format(region.Registers.Kept, region.Registers.Complete)
         : null;
 
     /// <summary>
@@ -128,19 +128,19 @@ internal static class CodeLenses
     /// way but leaves off the word "preserves", because the label beside it already says what the
     /// list is.
     /// </summary>
-    private static string Spell(Registers kept, bool complete) => $"preserves {Lsp.Spell(kept, complete)}";
+    private static string Format(Registers kept, bool complete) => $"preserves {Lsp.Format(kept, complete)}";
 
     /// <summary>
     /// Formats a cycle count as an interval, or as the minimum followed by a <c>+</c> when there
     /// is no maximum.
     /// </summary>
-    private static string Count(int least, int? most) =>
-        most is { } bound ? Lsp.Spell(new CycleCount(least, bound)) : $"{least}+ cycles";
+    private static string Count(int minimum, int? maximum) =>
+        maximum is { } bound ? Lsp.Format(new CycleCount(minimum, bound)) : $"{minimum}+ cycles";
 
     /// <summary>
     /// Formats a cycle count as an interval, or as the minimum followed by a <c>+</c> when there
     /// is no maximum, without the word <c>cycles</c>.
     /// </summary>
-    private static string Number(int least, int? most) =>
-        most is { } bound ? new CycleCount(least, bound).ToString() : $"{least}+";
+    private static string Number(int minimum, int? maximum) =>
+        maximum is { } bound ? new CycleCount(minimum, bound).ToString() : $"{minimum}+";
 }

@@ -129,16 +129,16 @@ public readonly record struct StateValue(StateValueKind Kind, long Value)
     /// <c>one of $00-$3f, $80-$bf</c>.
     /// </summary>
     public string Describe(int digits) =>
-        Kind is StateValueKind.Among or StateValueKind.Within ? "one of " + Banks.Spell() : Hex(Value, digits);
+        Kind is StateValueKind.Among or StateValueKind.Within ? "one of " + Banks.Format() : Hex(Value, digits);
 
     /// <summary>
     /// Formats the value as a state item, such as <c>dp = $2100</c>, <c>dbr = [$00..$3f]</c>,
     /// <c>dp?</c> or <c>dp*</c>.
     /// </summary>
-    public string Spell(string item) => Kind switch
+    public string Format(string item) => Kind switch
     {
         StateValueKind.Known => $"{item} = {Hex(Value, item == "dp" ? 4 : 2)}",
-        StateValueKind.Among or StateValueKind.Within => $"{item} = {Banks.Write()}",
+        StateValueKind.Among or StateValueKind.Within => $"{item} = {Banks.FormatAsItem()}",
         StateValueKind.Unknown => item + "?",
         _ => item + "*",
     };

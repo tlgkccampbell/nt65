@@ -17,7 +17,7 @@ public static class Repetitions
     /// statements a file's expansions produce. Past it, nt65 stops rather than filling memory
     /// with iterations nobody could assemble.
     /// </summary>
-    public const int MaximumTurns = 65536;
+    public const int MaximumIterations = 65536;
 
     /// <summary>
     /// Returns the iterations of <paramref name="block"/> inside <paramref name="outer"/>, one
@@ -48,7 +48,7 @@ public static class Repetitions
     /// too many.
     /// </summary>
     /// <param name="count">The number of iterations the repetition runs.</param>
-    public static DiagnosticMessage Beyond(long count) => Catalogue.RepeatTooMany.Says(count, MaximumTurns);
+    public static DiagnosticMessage Beyond(long count) => Catalogue.RepeatTooMany.Message(count, MaximumIterations);
 
     /// <summary>Returns the name a repetition binds, or null when it names none.</summary>
     public static Symbol? BindingOf(SemanticModel model, StatementSyntax opener)
@@ -82,19 +82,19 @@ public static class Repetitions
         }
         if (count < 0)
         {
-            Report(model, diagnostics, counted, outer, Catalogue.RepeatCountNegative.Says(count));
+            Report(model, diagnostics, counted, outer, Catalogue.RepeatCountNegative.Message(count));
             return [];
         }
-        if (count > MaximumTurns)
+        if (count > MaximumIterations)
         {
             Report(model, diagnostics, counted, outer, Beyond(count));
             return [];
         }
 
-        var turns = new List<Expansion>((int)count);
+        var iterations = new List<Expansion>((int)count);
         for (var i = 0; i < count; i++)
-            turns.Add(Expansion.Turn(outer, block, binding, Value.Of(i), null, i));
-        return turns;
+            iterations.Add(Expansion.Iteration(outer, block, binding, Value.Of(i), null, i));
+        return iterations;
     }
 
     /// <summary>
@@ -111,7 +111,7 @@ public static class Repetitions
         {
             return model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } enumerated }
                 ? [.. enumerated.Symbols.Where(member => member.IsEnumMember).Select(
-                    (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i, member))]
+                    (member, i) => Expansion.Iteration(outer, block, binding, member.Value, null, i, member))]
                 : [];
         }
 
@@ -123,18 +123,18 @@ public static class Repetitions
             if (model.ArgumentFor(parameter.Symbol, outer) is not { } argument)
                 return [];
             var words = parameter.Accepts.Element?.Kind == ParameterKind.One;
-            return [.. argument.Items.Select((item, i) => Expansion.Turn(
+            return [.. argument.Items.Select((item, i) => Expansion.Iteration(
                 outer, block, binding, words ? Value.Word(Word(item)) : Value.Unknown, words ? null : item, i))];
         }
 
         // A list item is kept as it was written, because the items may be labels, which have no
         // value at all, and a name bound to a label must behave as that label.
         if (model.ItemsOf(walked) is { } items)
-            return [.. items.Select((item, i) => Expansion.Turn(outer, block, binding, Value.Unknown, item, i))];
+            return [.. items.Select((item, i) => Expansion.Iteration(outer, block, binding, Value.Unknown, item, i))];
 
         if (model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } members })
             return [.. members.Symbols.Where(member => member.IsEnumMember).Select(
-                (member, i) => Expansion.Turn(outer, block, binding, member.Value, null, i, member))];
+                (member, i) => Expansion.Iteration(outer, block, binding, member.Value, null, i, member))];
 
         Report(model, diagnostics, walked, outer, Catalogue.EachNotOverAList);
         return [];
@@ -146,7 +146,7 @@ public static class Repetitions
     /// name on every iteration, and each forbidden statement is one thing for the whole file.
     /// </summary>
     public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
-        ? Catalogue.DeclarationInARepetition.Says(why.What, why.Because)
+        ? Catalogue.DeclarationInARepetition.Message(why.What, why.Because)
         : (DiagnosticMessage?)null;
 
     /// <summary>

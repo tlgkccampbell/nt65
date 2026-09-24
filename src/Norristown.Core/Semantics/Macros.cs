@@ -14,7 +14,7 @@ public static class Macros
     /// it has no default.
     /// </summary>
     public static SyntaxNode? DefaultOf(MacroParameterSyntax parameter) =>
-        parameter.Default is { } written and not EmptyBlockSyntax ? written : null;
+        parameter.Default is { } given and not EmptyBlockSyntax ? given : null;
 
     /// <summary>
     /// Returns <paramref name="parameter"/> as the analysis sees it, given the symbol its name
@@ -135,7 +135,7 @@ public static class Macros
             if (Back(macro) is { } at)
             {
                 var through = path.Skip(1).Select(step => $"`{step.Name}`").ToList();
-                report(macro, new Diagnostic(at, Catalogue.MacroRecursive.Says(
+                report(macro, new Diagnostic(at, Catalogue.MacroRecursive.Message(
                     macro.Name,
                     through.Count == 0 ? "" : $" through {string.Join(", ", through)}")));
             }
@@ -205,7 +205,7 @@ public static class Macros
                 if (used.Tree != macro.Tree || used.IsDefine || isExported(used))
                     continue;
                 diagnostics.Add(new Diagnostic(macro.DeclarationSpan,
-                    Catalogue.MacroNamesUnexported.Says(macro.Name, used.DisplayName),
+                    Catalogue.MacroNamesUnexported.Message(macro.Name, used.DisplayName),
                     [new RelatedSpan(at, "named here")]));
             }
         }
@@ -218,7 +218,7 @@ public static class Macros
     /// macro is called.
     /// </summary>
     public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
-        ? Catalogue.DeclarationInAMacroBody.Says(why.What, why.Because)
+        ? Catalogue.DeclarationInAMacroBody.Message(why.What, why.Because)
         : (DiagnosticMessage?)null;
 
     /// <summary>

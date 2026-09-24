@@ -18,7 +18,7 @@ public sealed class SegmentTable
 {
     // A file's segment declarations, read once per tree. After an edit, only one file of the
     // program has a tree that has not been read yet.
-    private static readonly ConditionalWeakTable<SyntaxTree, List<Declaration>> written = new();
+    private static readonly ConditionalWeakTable<SyntaxTree, List<Declaration>> declarationsByTree = new();
 
     private static readonly FrozenDictionary<string, AddressSize> standard = new Dictionary<string, AddressSize>(
         StringComparer.Ordinal)
@@ -79,9 +79,9 @@ public sealed class SegmentTable
         // declares spaces, because a program that links another processor's image has a project.
         foreach (var space in configuredSpaces.OrderBy(space => space.Name, StringComparer.Ordinal))
             table.spaces[space.Name] = space;
-        foreach (var written in configured.OrderBy(segment => segment.Name, StringComparer.Ordinal))
+        foreach (var configuredSegment in configured.OrderBy(segment => segment.Name, StringComparer.Ordinal))
         {
-            var segment = written;
+            var segment = configuredSegment;
             if (segments.TryGetValue(segment.Name, out var predeclared)
                 && !Redeclares(predeclared, segment.Size, segment.Declaration!.Value, diagnostics))
             {
@@ -89,7 +89,7 @@ public sealed class SegmentTable
             }
             if (segment.Space is { } named && !table.spaces.ContainsKey(named))
             {
-                diagnostics.Add(new Diagnostic(segment.Declaration!.Value, Catalogue.SpaceUndeclared.Says(named)));
+                diagnostics.Add(new Diagnostic(segment.Declaration!.Value, Catalogue.SpaceUndeclared.Message(named)));
                 segment = segment with { Space = null };
             }
             segments[segment.Name] = segment;
@@ -125,19 +125,19 @@ public sealed class SegmentTable
     {
         DiagnosticMessage? problem = null;
         if ((word == "dp" ? already.DirectPage : already.Bank) is not null)
-            problem = Catalogue.SegmentAttributeTwice.Says(segment, word);
+            problem = Catalogue.SegmentAttributeTwice.Message(segment, word);
         else if (word == "dp" && size != AddressSize.ZeroPage)
-            problem = Catalogue.SegmentDpNotZp.Says(segment);
+            problem = Catalogue.SegmentDpNotZp.Message(segment);
         else if (value is null)
-            problem = Catalogue.SegmentAttributeNotConstant.Says(word);
+            problem = Catalogue.SegmentAttributeNotConstant.Message(word);
         else if (value < 0 || value > (word == "dp" ? 0xffff : 0xff))
         {
-            problem = Catalogue.SegmentAttributeOutOfRange.Says(
+            problem = Catalogue.SegmentAttributeOutOfRange.Message(
                 word == "dp" ? "`dp` must be $0000 to $ffff: the direct page is a 16-bit address" : "`bank` must be $00 to $ff: a bank is one byte");
         }
-        if (problem is not { } said)
+        if (problem is not { } reported)
             return value;
-        diagnostics.Add(new Diagnostic(at, said));
+        diagnostics.Add(new Diagnostic(at, reported));
         return null;
     }
 
@@ -146,7 +146,7 @@ public sealed class SegmentTable
     /// mirror.
     /// </summary>
     public static DiagnosticMessage MirrorsNeedABank(string segment) =>
-        Catalogue.SegmentMirrorsNeedABank.Says(segment);
+        Catalogue.SegmentMirrorsNeedABank.Message(segment);
 
     /// <summary>
     /// Evaluates the <c>dp = e</c>, <c>bank = e</c> and <c>mirrors = [...]</c> attributes in the
@@ -154,11 +154,11 @@ public sealed class SegmentTable
     /// </summary>
     public void Evaluate(Func<ExpressionSyntax, long?> valueOf, List<Diagnostic> diagnostics)
     {
-        foreach (var (name, written) in attributes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        foreach (var (name, declaredAttributes) in attributes.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             var segment = segments[name];
             SegmentAttributeSyntax? mirrors = null;
-            foreach (var attribute in written)
+            foreach (var attribute in declaredAttributes)
             {
                 if (attribute.Name.IsMissing)
                     continue;
@@ -170,7 +170,7 @@ public sealed class SegmentTable
                 {
                     if (mirrors is not null)
                     {
-                        diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Says(name, "mirrors")));
+                        diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Message(name, "mirrors")));
                         continue;
                     }
                     mirrors = attribute;
@@ -228,7 +228,7 @@ public sealed class SegmentTable
             var at = attribute.Tree.GetSpan(attribute.Span);
             if (given)
             {
-                diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Says(segment, "space")));
+                diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Message(segment, "space")));
                 continue;
             }
             given = true;
@@ -239,7 +239,7 @@ public sealed class SegmentTable
             }
             if (!spaces.ContainsKey(name.Text))
             {
-                diagnostics.Add(new Diagnostic(attribute.Tree.GetSpan(name.Span), Catalogue.SpaceUndeclared.Says(name.Text)));
+                diagnostics.Add(new Diagnostic(attribute.Tree.GetSpan(name.Span), Catalogue.SpaceUndeclared.Message(name.Text)));
                 continue;
             }
             found = name.Text;
@@ -258,7 +258,7 @@ public sealed class SegmentTable
         foreach (var range in attribute.Ranges)
         {
             var start = valueOf(range.First);
-            var end = range.Last is { } written ? valueOf(written) : start;
+            var end = range.Last is { } lastExpression ? valueOf(lastExpression) : start;
             if (start is not { } first || end is not { } last || first is < 0 or > 0xff || last is < 0 or > 0xff
                 || first > last)
             {
@@ -282,18 +282,18 @@ public sealed class SegmentTable
         if (existing.Declaration is { } first)
         {
             diagnostics.Add(new Diagnostic(declared,
-                Catalogue.SegmentDeclaredTwice.Says(existing.Name), [new RelatedSpan(first, "declared here")]));
+                Catalogue.SegmentDeclaredTwice.Message(existing.Name), [new RelatedSpan(first, "declared here")]));
             return false;
         }
         if (size == existing.Size)
             return true;
         diagnostics.Add(new Diagnostic(declared,
-            Catalogue.SegmentStandardSize.Says(existing.Name, SpellSize(existing.Size))));
+            Catalogue.SegmentStandardSize.Message(existing.Name, FormatSize(existing.Size))));
         return false;
     }
 
     /// <summary>Formats an address size as a declaration gives it.</summary>
-    private static string SpellSize(AddressSize size) => size switch
+    private static string FormatSize(AddressSize size) => size switch
     {
         AddressSize.ZeroPage => "zp",
         AddressSize.Absolute => "abs",
@@ -304,7 +304,7 @@ public sealed class SegmentTable
         standard.ToDictionary(pair => pair.Key, pair => new Segment(pair.Key, pair.Value, null), StringComparer.Ordinal);
 
     private static List<Declaration> Declarations(SyntaxTree tree) =>
-        written.GetValue(tree, tree => [.. Read(tree)]);
+        declarationsByTree.GetValue(tree, tree => [.. Read(tree)]);
 
     private static IEnumerable<Declaration> Read(SyntaxTree tree)
     {

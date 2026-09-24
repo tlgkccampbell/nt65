@@ -44,7 +44,7 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     /// Formats the segment's banks for a message, such as <c>in bank $7e</c>, or <c>in bank $7e
     /// and mirrored in banks $00-$3f, $80-$bf</c>.
     /// </summary>
-    public string SpellBanks() =>
+    public string FormatBanks() =>
         $"in bank {StateValue.Hex(Bank ?? 0, 2)}"
         + (Mirrors.Count == 0 ? "" : " and mirrored in banks " + string.Join(", ", Mirrors.Select(mirror => mirror.First == mirror.Last
             ? StateValue.Hex(mirror.First, 2)

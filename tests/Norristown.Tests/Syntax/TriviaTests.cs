@@ -39,7 +39,7 @@ public sealed class TriviaTests
     }
 
     [Fact]
-    public void TriviaIsPlacedFromTheStartOfTheFileNotOfItsLine()
+    public void TriviaIsPositionedFromTheStartOfTheFileNotOfItsLine()
     {
         var tokens = Tokens("nop\n  lda $10", 1);
         Assert.Equal(new TextSpan(4, 2), tokens[0].LeadingTrivia[0].Span);

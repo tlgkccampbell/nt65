@@ -15,7 +15,7 @@ public sealed class NavigationTests
     /// The most problems each check reports for one variant. Beyond that, more reports would
     /// only repeat the same failure.
     /// </summary>
-    private const int Most = 5;
+    private const int MaximumProblems = 5;
 
     /// <summary>
     /// Every source, whole and cut short, put through every way of finding a place in it. The
@@ -23,7 +23,7 @@ public sealed class NavigationTests
     /// running the checks does.
     /// </summary>
     [Fact]
-    public void FindingAPlaceWorksOnWholeAndBrokenLines()
+    public void FindingAPositionWorksOnWholeAndBrokenLines()
     {
         // One variant of one source is the unit of work, rather than a whole source: a long file
         // costs more than a short one, so splitting them apart keeps every core busy to the end.
@@ -37,7 +37,7 @@ public sealed class NavigationTests
         {
             var tree = SyntaxTree.Parse(variant.Path, variant.Text);
             var problems = new List<string>();
-            EveryPositionFindsTheTokenWrittenThere(tree, problems);
+            EveryPositionFindsTheTokenAtIt(tree, problems);
             TheTokensOfTheRootAreTheFile(tree, problems);
             SteppingFromATokenWalksTheFile(tree, problems);
             EveryNodeIsFoundByItsSpanAndHeldByItsParent(tree, problems);
@@ -51,7 +51,7 @@ public sealed class NavigationTests
     /// trivia sits beside, and the trivia itself is found by the same position.
     /// </summary>
     [Fact]
-    public void ACaretInTriviaFindsTheTokenItIsWrittenBeside()
+    public void ACaretInTriviaFindsTheTokenItStandsBeside()
     {
         var tree = SyntaxTree.Parse("test.nt65", "    lda #$10   ; load\n");
         Assert.Equal("lda", tree.Root.FindToken(0).Text);
@@ -81,7 +81,7 @@ public sealed class NavigationTests
     /// of, so a walk of the file meets each of them once.
     /// </summary>
     [Fact]
-    public void ALineShowsThePiecesItIsWrittenIn()
+    public void ALineShowsThePiecesItIsMadeOf()
     {
         var tree = SyntaxTree.Parse("test.nt65", ".export .proc main {\n}\nlda #1 nop\n");
         var opener = ((BlockSyntax)tree.Root.Members[0]).Opener;
@@ -108,7 +108,7 @@ public sealed class NavigationTests
     /// text. A missing token stands in the tree where a child element belongs and has no text.
     /// </summary>
     [Fact]
-    public void TheFirstAndLastTokensSkipWhatWritesNothing()
+    public void TheFirstAndLastTokensSkipWhatHasNoText()
     {
         var tree = SyntaxTree.Parse("test.nt65", ".proc main\n");
         var proc = ((LineSyntax)tree.Root.Members[0]).Statement;
@@ -172,31 +172,31 @@ public sealed class NavigationTests
     /// position, never a missing one, and the same token the walk over the tree's tokens has at
     /// that place.
     /// </summary>
-    private static void EveryPositionFindsTheTokenWrittenThere(SyntaxTree tree, List<string> problems)
+    private static void EveryPositionFindsTheTokenAtIt(SyntaxTree tree, List<string> problems)
     {
         var tokens = tree.Root.DescendantTokens().ToList();
 
         // The walk over the tokens and the lookup by position read the same file, so they are
         // stepped through together rather than searched one against the other.
         var at = 0;
-        var said = problems.Count;
-        for (var position = 0; position < tree.Text.Length && problems.Count < said + Most; position++)
+        var earlier = problems.Count;
+        for (var position = 0; position < tree.Text.Length && problems.Count < earlier + MaximumProblems; position++)
         {
             var found = tree.Root.FindToken(position);
             while (at < tokens.Count && tokens[at].FullSpan.End <= position)
                 at++;
             if (!found.FullSpan.Contains(position))
-                problems.Add($"{position} finds {Told(found)}, which is not written there");
+                problems.Add($"{position} finds {Describe(found)}, which is not written there");
             else if (found.IsMissing)
                 problems.Add($"{position} finds the missing {found.Kind}");
             else if (at >= tokens.Count || found.Position != tokens[at].Position)
-                problems.Add($"{position} finds {Told(found)}, and the walk has {Told(tokens[at])}");
+                problems.Add($"{position} finds {Describe(found)}, and the walk has {Describe(tokens[at])}");
         }
 
         // The end of the file has no text, and the last token is the answer there.
         var end = tree.Root.FindToken(tree.Text.Length);
         if (end.Position != tokens[^1].Position)
-            problems.Add($"the end of the file finds {Told(end)}, not the last token {Told(tokens[^1])}");
+            problems.Add($"the end of the file finds {Describe(end)}, not the last token {Describe(tokens[^1])}");
     }
 
     /// <summary>
@@ -205,17 +205,17 @@ public sealed class NavigationTests
     /// </summary>
     private static void TheTokensOfTheRootAreTheFile(SyntaxTree tree, List<string> problems)
     {
-        var written = new StringBuilder();
+        var joined = new StringBuilder();
         var at = 0;
-        var said = problems.Count;
+        var earlier = problems.Count;
         foreach (var token in tree.Root.DescendantTokens())
         {
-            if (token.Position != at && problems.Count < said + Most)
-                problems.Add($"{Told(token)} starts at {token.Position}, and the token before it ended at {at}");
+            if (token.Position != at && problems.Count < earlier + MaximumProblems)
+                problems.Add($"{Describe(token)} starts at {token.Position}, and the token before it ended at {at}");
             at = token.FullSpan.End;
-            written.Append(token.ToFullString());
+            joined.Append(token.ToFullString());
         }
-        if (written.ToString() != tree.Text)
+        if (joined.ToString() != tree.Text)
             problems.Add("the tokens do not give back the file's text");
     }
 
@@ -226,18 +226,18 @@ public sealed class NavigationTests
     private static void SteppingFromATokenWalksTheFile(SyntaxTree tree, List<string> problems)
     {
         var tokens = tree.Root.DescendantTokens().ToList();
-        var said = problems.Count;
-        for (var i = 0; i < tokens.Count && problems.Count < said + Most; i++)
+        var earlier = problems.Count;
+        for (var i = 0; i < tokens.Count && problems.Count < earlier + MaximumProblems; i++)
         {
             var next = tokens[i].GetNextToken();
             var wanted = i + 1 < tokens.Count ? tokens[i + 1] : (SyntaxToken?)null;
             if (!Same(next, wanted))
-                problems.Add($"after {Told(tokens[i])} comes {Told(next)}, not {Told(wanted)}");
+                problems.Add($"after {Describe(tokens[i])} comes {Describe(next)}, not {Describe(wanted)}");
 
             var previous = tokens[i].GetPreviousToken();
             var before = i > 0 ? tokens[i - 1] : (SyntaxToken?)null;
             if (!Same(previous, before))
-                problems.Add($"before {Told(tokens[i])} comes {Told(previous)}, not {Told(before)}");
+                problems.Add($"before {Describe(tokens[i])} comes {Describe(previous)}, not {Describe(before)}");
         }
     }
 
@@ -247,10 +247,10 @@ public sealed class NavigationTests
     /// </summary>
     private static void EveryNodeIsFoundByItsSpanAndHeldByItsParent(SyntaxTree tree, List<string> problems)
     {
-        var said = problems.Count;
+        var earlier = problems.Count;
         foreach (var node in tree.Root.DescendantNodes())
         {
-            if (problems.Count >= said + Most)
+            if (problems.Count >= earlier + MaximumProblems)
                 break;
             if (tree.Root.FindNode(node.Span) is var found && found.Span != node.Span)
                 problems.Add($"{node.Kind} at {node.Span} is found as {found.Kind} at {found.Span}");
@@ -272,6 +272,6 @@ public sealed class NavigationTests
     /// <summary>
     /// Returns a token's name as a failure message gives it, or "nothing" where there is no token.
     /// </summary>
-    private static string Told(SyntaxToken? token) =>
-        token is { } written ? $"`{written.Text}` ({written.Kind} at {written.FullSpan})" : "nothing";
+    private static string Describe(SyntaxToken? token) =>
+        token is { } found ? $"`{found.Text}` ({found.Kind} at {found.FullSpan})" : "nothing";
 }

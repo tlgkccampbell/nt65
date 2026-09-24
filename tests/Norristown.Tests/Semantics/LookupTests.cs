@@ -33,15 +33,15 @@ public sealed class LookupTests
             ("other.nt65", ".module other\n.export LIMIT\nLIMIT = 1\n"),
             ("main.nt65", ".module main\n.use other::*\n.segment CODE\n.proc main {\n    lda #LIMIT\n    rts\n}\n"));
         var model = analysis.File("main.nt65");
-        var written = model.Offset("LIMIT");
+        var position = model.Offset("LIMIT");
 
         var bound = model.SymbolAt("LIMIT");
         Assert.True(bound.IsDefine);
-        Assert.Equal(bound, model.GetSymbolInfo(written, ["LIMIT"]).Symbol);
+        Assert.Equal(bound, model.GetSymbolInfo(position, ["LIMIT"]).Symbol);
 
         // The glob's name is a candidate the lookup passed over, and the define is the answer.
-        Assert.Equal(bound, model.LookupSymbols(written, "LIMIT")[0]);
-        Assert.Contains(model.LookupSymbols(written, "LIMIT"), symbol => symbol.Module == "other");
+        Assert.Equal(bound, model.LookupSymbols(position, "LIMIT")[0]);
+        Assert.Contains(model.LookupSymbols(position, "LIMIT"), symbol => symbol.Module == "other");
     }
 
     /// <summary>
@@ -56,15 +56,15 @@ public sealed class LookupTests
             ("other.nt65", ".module other\n.export hw\nhw = 5\n"),
             ("main.nt65", ".module main\n.use other::*\n.segment CODE\n.proc main {\n    lda hw::BORDER\n    rts\n}\n"));
         var model = analysis.File("main.nt65");
-        var written = model.Offset("hw::BORDER");
+        var position = model.Offset("hw::BORDER");
 
         var bound = model.SymbolAt("BORDER");
         Assert.Equal("hw", bound.Module);
-        Assert.Equal(bound, model.GetSymbolInfo(written, ["hw", "BORDER"]).Symbol);
+        Assert.Equal(bound, model.GetSymbolInfo(position, ["hw", "BORDER"]).Symbol);
 
         // On its own, `hw` is the constant. A module is not a value, so it means the name the `*`
         // brought in. Whether a part of a path means the module depends on the part after it.
-        Assert.Equal("other", model.GetSymbolInfo(written, ["hw"]).Symbol?.Module);
+        Assert.Equal("other", model.GetSymbolInfo(position, ["hw"]).Symbol?.Module);
     }
 
     /// <summary>
@@ -110,13 +110,13 @@ public sealed class LookupTests
             ("other.nt65", ".module other\n.export SCREEN\nSCREEN = $0400\n"),
             ("main.nt65", ".module main\n.use other::SCREEN as VRAM\n.segment CODE\n.proc main {\n    lda VRAM\n    rts\n}\n"));
         var model = analysis.File("main.nt65");
-        var written = model.Offset("lda VRAM") + 4;
+        var position = model.Offset("lda VRAM") + 4;
 
         var bound = model.SymbolAt("VRAM");
         Assert.Equal("SCREEN", bound.Name);
-        Assert.Equal(bound, model.GetSymbolInfo(written, ["VRAM"]).Symbol);
-        Assert.Contains(model.LookupNames(written), found => found.Name == "VRAM" && found.Means.Symbol == bound);
-        Assert.DoesNotContain(model.LookupNames(written), found => found.Name == "SCREEN");
+        Assert.Equal(bound, model.GetSymbolInfo(position, ["VRAM"]).Symbol);
+        Assert.Contains(model.LookupNames(position), found => found.Name == "VRAM" && found.Means.Symbol == bound);
+        Assert.DoesNotContain(model.LookupNames(position), found => found.Name == "SCREEN");
     }
 
     /// <summary>A path into a type's members, which is what a record initializer is completed from.</summary>
@@ -132,11 +132,11 @@ public sealed class LookupTests
             .segment BSS
             .data here: .type Point
             """);
-        var written = model.Offset(".data here");
+        var position = model.Offset(".data here");
 
-        Assert.Equal(model.Symbol("y"), model.GetSymbolInfo(written, ["Point", "y"]).Symbol);
-        Assert.Equal(model.Symbol("x"), model.GetSymbolInfo(written, ["here", "x"]).Symbol);
-        Assert.True(model.GetSymbolInfo(written, ["here", "z"]).IsNone);
+        Assert.Equal(model.Symbol("y"), model.GetSymbolInfo(position, ["Point", "y"]).Symbol);
+        Assert.Equal(model.Symbol("x"), model.GetSymbolInfo(position, ["here", "x"]).Symbol);
+        Assert.True(model.GetSymbolInfo(position, ["here", "z"]).IsNone);
     }
 
     /// <summary>
@@ -144,7 +144,7 @@ public sealed class LookupTests
     /// name in this file, and the same fix puts it right.
     /// </summary>
     [Fact]
-    public void AMisspelledNameInAnotherModuleIsToldWhatItWasNearly()
+    public void AMisspelledNameInAnotherModuleIsGivenTheNearestName()
     {
         var analysis = Analysis.Program(
             ("other.nt65", ".module other\n.export SCREEN\nSCREEN = $0400\n"),

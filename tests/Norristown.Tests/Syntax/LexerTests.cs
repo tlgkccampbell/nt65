@@ -81,7 +81,7 @@ public sealed class LexerTests
     [InlineData(@"""\x4\q""", new[] { @"`\x` must be followed by two hexadecimal digits", @"unknown escape `\q`" })]
     [InlineData(@"'\xZZ'", new[] { @"`\x` must be followed by two hexadecimal digits" })]
     [InlineData(@"""\q", new[] { @"unknown escape `\q`" })]
-    public void EveryEscapeALiteralGetsWrongIsSaid(string text, string[] errors)
+    public void EveryEscapeALiteralGetsWrongIsReported(string text, string[] errors)
     {
         var token = Lexer.LexLine(text).Tokens[0];
         Assert.Equal(errors, token.Diagnostics.Select(diagnostic => diagnostic.Message.Text));

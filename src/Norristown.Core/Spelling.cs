@@ -9,23 +9,23 @@ namespace Norristown;
 public static class Spelling
 {
     /// <summary>
-    /// Returns the candidate in <paramref name="candidates"/> that <paramref name="written"/> most
+    /// Returns the candidate in <paramref name="candidates"/> that <paramref name="typed"/> most
     /// nearly matches, or null when no candidate differs from it by only a letter or two. A short
     /// name has to match more closely than a long one, because most short names are within two
     /// letters of each other. When two candidates are equally near, the ordinally earlier one
     /// wins, so the same file always gives the same suggestion.
     /// </summary>
-    public static string? Nearest(string written, IEnumerable<string> candidates)
+    public static string? Nearest(string typed, IEnumerable<string> candidates)
     {
         // How many single-letter changes still count as nearly the same name.
-        var allowed = written.Length <= 4 ? 1 : 2;
+        var allowed = typed.Length <= 4 ? 1 : 2;
         string? nearest = null;
         var best = allowed + 1;
         foreach (var name in candidates)
         {
-            if (name == written)
+            if (name == typed)
                 continue;
-            var distance = Distance(written, name, allowed + 1);
+            var distance = Distance(typed, name, allowed + 1);
             if (distance > allowed || distance > best)
                 continue;
             if (distance < best || string.CompareOrdinal(name, nearest) < 0)

@@ -75,7 +75,7 @@ internal static partial class Ca65Conversion
         if (last == first && range.Start.Character == range.End.Character)
             yield break;
 
-        var written = new List<string>();
+        var converted = new List<string>();
         var changed = false;
         for (var line = first; line <= last; line++)
         {
@@ -84,12 +84,12 @@ internal static partial class Ca65Conversion
             var read = Converted(text);
             changed |= read != text;
             if (read is not null)
-                written.Add(read);
+                converted.Add(read);
         }
         if (!changed)
             yield break;
 
-        var body = string.Join("\n", written);
+        var body = string.Join("\n", converted);
         yield return new Change("Read the selection as nt65", CodeActionKinds.Rewrite,
             [Edits.RemoveLines(tree, first, last) with { Text = body.Length == 0 ? "" : body + "\n" }]);
     }
@@ -110,13 +110,13 @@ internal static partial class Ca65Conversion
         if (first is not null && closers.Contains(first))
             return indent + "}" + comment;
 
-        var written = code;
+        var converted = code;
         if (first is not null && segments.TryGetValue(first, out var segment) && Rest(code, first).Length == 0)
-            written = $".segment {segment}";
+            converted = $".segment {segment}";
         else if (first is not null)
-            written = Opened(Renamed(code, first), first);
+            converted = Opened(Renamed(code, first), first);
 
-        return indent + Operators(written) + comment;
+        return indent + Operators(converted) + comment;
     }
 
     /// <summary>Returns the line with its leading directive rewritten in nt65's form.</summary>
@@ -209,7 +209,7 @@ internal static partial class Ca65Conversion
     /// <summary>Replaces ca65's operator words and directive names with their nt65 forms.</summary>
     private static string Operators(string code)
     {
-        var written = new StringBuilder();
+        var result = new StringBuilder();
         var at = 0;
         while (at < code.Length)
         {
@@ -220,7 +220,7 @@ internal static partial class Ca65Conversion
                 while (end < code.Length && code[end] != c)
                     end += code[end] == '\\' ? 2 : 1;
                 end = Math.Min(end + 1, code.Length);
-                written.Append(code[at..end]);
+                result.Append(code[at..end]);
                 at = end;
                 continue;
             }
@@ -230,7 +230,7 @@ internal static partial class Ca65Conversion
                 while (end < code.Length && (char.IsLetterOrDigit(code[end]) || code[end] == '_'))
                     end++;
                 var word = code[at..end];
-                written.Append(operators.TryGetValue(word, out var symbol) ? symbol : word);
+                result.Append(operators.TryGetValue(word, out var symbol) ? symbol : word);
                 at = end;
                 continue;
             }
@@ -239,14 +239,14 @@ internal static partial class Ca65Conversion
             // `=`, which nt65 reads as assignment; that is not rewritten here.)
             if (c == '<' && at + 1 < code.Length && code[at + 1] == '>')
             {
-                written.Append("!=");
+                result.Append("!=");
                 at += 2;
                 continue;
             }
-            written.Append(c);
+            result.Append(c);
             at++;
         }
-        return written.ToString();
+        return result.ToString();
     }
 
     /// <summary>

@@ -23,7 +23,7 @@ internal static class UseItems
     public static IEnumerable<Change> Organized(SemanticModel model, int caretLine)
     {
         var tree = model.Tree;
-        var lines = Written(model);
+        var lines = UseLines(model);
         if (!lines.Any(line => line.Index == caretLine))
             yield break;
 
@@ -43,12 +43,12 @@ internal static class UseItems
         }
         kept.Sort(StringComparer.Ordinal);
 
-        var written = lines.Select(line => line.Indent + line.Code + line.Comment).ToList();
-        var placed = kept.Select(code => lines[0].Indent + code).ToList();
-        if (written.SequenceEqual(placed, StringComparer.Ordinal))
+        var current = lines.Select(line => line.Indent + line.Code + line.Comment).ToList();
+        var sorted = kept.Select(code => lines[0].Indent + code).ToList();
+        if (current.SequenceEqual(sorted, StringComparer.Ordinal))
             yield break;
 
-        var edits = new List<Edit> { Edits.RemoveLines(tree, lines[0].Index, lines[0].Index) with { Text = string.Join("\n", placed) + (placed.Count > 0 ? "\n" : "") } };
+        var edits = new List<Edit> { Edits.RemoveLines(tree, lines[0].Index, lines[0].Index) with { Text = string.Join("\n", sorted) + (sorted.Count > 0 ? "\n" : "") } };
         foreach (var line in lines.Skip(1))
             edits.Add(Edits.RemoveLines(tree, line.Index, line.Index));
         yield return new Change("Organize the `.use` items", CodeActionKinds.Rewrite, edits);
@@ -61,7 +61,7 @@ internal static class UseItems
     /// </summary>
     public static IReadOnlyList<Edit> Without(SemanticModel model, string name)
     {
-        foreach (var line in Written(model))
+        foreach (var line in UseLines(model))
         {
             if (!line.Items.Any(item => item.Name == name))
                 continue;
@@ -110,8 +110,8 @@ internal static class UseItems
     /// </summary>
     private static string Code(Line line, IReadOnlyList<Item> items) =>
         items.Count == 1
-            ? $".use {line.Path}::{items[0].Written}"
-            : $".use {line.Path}::{{{string.Join(", ", items.Select(item => item.Written))}}}";
+            ? $".use {line.Path}::{items[0].Text}"
+            : $".use {line.Path}::{{{string.Join(", ", items.Select(item => item.Text))}}}";
 
     /// <summary>
     /// Returns an edit that rewrites the line to bring in <paramref name="items"/> in place of the
@@ -124,15 +124,15 @@ internal static class UseItems
     /// Returns every <c>.use</c> at the file's top level, in source order. A <c>.export .use</c> is
     /// an export rather than something this file uses, so it is not included.
     /// </summary>
-    private static IReadOnlyList<Line> Written(SemanticModel model)
+    private static IReadOnlyList<Line> UseLines(SemanticModel model)
     {
         var tree = model.Tree;
         var lines = new List<Line>();
         foreach (var child in tree.Root.Members)
         {
-            if (child is not LineSyntax { Statement: UseDirectiveSyntax { IsExported: false } use } written)
+            if (child is not LineSyntax { Statement: UseDirectiveSyntax { IsExported: false } use } statementLine)
                 continue;
-            if (Read(tree, written.LineIndex, use) is { } line)
+            if (Read(tree, statementLine.LineIndex, use) is { } line)
                 lines.Add(line);
         }
         return lines;
@@ -194,6 +194,6 @@ internal static class UseItems
 
     /// <summary>Represents one name that a <c>.use</c> brings in.</summary>
     /// <param name="Name">The name this file uses for it.</param>
-    /// <param name="Written">The item as the source spells it, including any <c>as</c> clause.</param>
-    private sealed record Item(string Name, string Written);
+    /// <param name="Text">The item as the source spells it, including any <c>as</c> clause.</param>
+    private sealed record Item(string Name, string Text);
 }

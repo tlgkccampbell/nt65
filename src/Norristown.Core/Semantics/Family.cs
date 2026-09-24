@@ -117,14 +117,14 @@ public sealed class Family
                 counted[(found[i].Span, found[i].Severity, general[i])] = counted.GetValueOrDefault((found[i].Span, found[i].Severity, general[i])) + 1;
         }
 
-        var said = new HashSet<(Span, Severity, string)>();
+        var reported = new HashSet<(Span, Severity, string)>();
         var kept = new List<Diagnostic>(found.Count);
         for (var i = 0; i < found.Count; i++)
         {
             var key = (found[i].Span, found[i].Severity, general[i]);
             if (counted.GetValueOrDefault(key) < 2)
                 kept.Add(found[i]);
-            else if (said.Add(key))
+            else if (reported.Add(key))
                 kept.Add(found[i] with { Message = general[i] });
         }
         return kept;

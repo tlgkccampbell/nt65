@@ -227,7 +227,7 @@ public sealed class BindingTests
     }
 
     [Fact]
-    public void APathIntoSomethingThatIsNotAScopeSaysSo()
+    public void APathIntoSomethingThatIsNotAScopeIsReported()
     {
         var model = Analysis.Model(".module main\nSIZE = 1\n.proc p {\n    lda SIZE::inner\n}\n");
 

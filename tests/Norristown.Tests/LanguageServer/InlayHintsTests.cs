@@ -149,7 +149,7 @@ public sealed class InlayHintsTests
     /// there is one, because a hint a few characters long cannot say that itself.
     /// </summary>
     [Fact]
-    public async Task AHintSaysWhatItMeansWhenItIsPointedAt()
+    public async Task AHintExplainsWhatItMeansWhenItIsPointedAt()
     {
         var timeout = TestTimeout.Token();
         await using var client = await StartAsync(null, timeout);
@@ -311,14 +311,14 @@ public sealed class InlayHintsTests
     /// <summary>Returns one line with its hints drawn into it, as a reader sees it.</summary>
     private static string Drawn(string line, IEnumerable<InlayHint> hints)
     {
-        var written = line;
+        var drawn = line;
         foreach (var hint in hints.OrderByDescending(hint => hint.Position.Character))
         {
-            written = written[..hint.Position.Character]
+            drawn = drawn[..hint.Position.Character]
                 + (hint.PaddingLeft == true ? " " : "") + hint.Label + (hint.PaddingRight == true ? " " : "")
-                + written[hint.Position.Character..];
+                + drawn[hint.Position.Character..];
         }
-        return written.TrimStart();
+        return drawn.TrimStart();
     }
 
     private static async Task<TestClient> StartAsync(object? inlayHints, CancellationToken cancellation)

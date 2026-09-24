@@ -14,7 +14,7 @@ public static class ProgramCpu
 
     // A file's `.cpu` items, read once per tree and cached. Every analysis of the program reads
     // every file, and after an edit only one of them is a tree that has not been seen before.
-    private static readonly ConditionalWeakTable<SyntaxTree, List<(Cpu Cpu, TextSpan Span)>> written = new();
+    private static readonly ConditionalWeakTable<SyntaxTree, List<(Cpu Cpu, TextSpan Span)>> cpuItems = new();
 
     /// <summary>
     /// Returns the program's CPU. <paramref name="configured"/> is the CPU the command line or
@@ -31,7 +31,7 @@ public static class ProgramCpu
                 if (chosen is { } already && cpu != already)
                 {
                     diagnostics.Add(new Diagnostic(tree.GetSpan(span),
-                        Catalogue.CpuDisagrees.Says(CpuNames.Spell(already), CpuNames.Spell(cpu))));
+                        Catalogue.CpuDisagrees.Message(CpuNames.Format(already), CpuNames.Format(cpu))));
                     continue;
                 }
                 chosen = cpu;
@@ -48,7 +48,7 @@ public static class ProgramCpu
 
     /// <summary>Returns every <c>.cpu</c> item in a file, in source order.</summary>
     private static List<(Cpu Cpu, TextSpan Span)> Statements(SyntaxTree tree) =>
-        written.GetValue(tree, tree => [.. Read(tree)]);
+        cpuItems.GetValue(tree, tree => [.. Read(tree)]);
 
     private static IEnumerable<(Cpu Cpu, TextSpan Span)> Read(SyntaxTree tree)
     {

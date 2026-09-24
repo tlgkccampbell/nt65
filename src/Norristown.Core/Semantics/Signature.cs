@@ -92,13 +92,13 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// <summary>Returns the signature formatted in full.</summary>
     public override string ToString()
     {
-        var entry = IsInterrupt ? $"interrupt, {ProcessorState.Spell(Entry.E)}" : $"{Entry}, {Distance}";
+        var entry = IsInterrupt ? $"interrupt, {ProcessorState.Format(Entry.E)}" : $"{Entry}, {Distance}";
         if (Arguments > 0)
             entry += $", args {Arguments}";
         if (NeverReturns)
             entry += ", noreturn";
         if (Keeps != Processor.Registers.None)
-            entry += $", keeps {Processor.RegisterEffects.Spell(Keeps).ToLowerInvariant()}";
+            entry += $", keeps {Processor.RegisterEffects.Format(Keeps).ToLowerInvariant()}";
         return entry + (NeverReturns || IsInterrupt || Exit == Entry ? "" : $" -> {Exit}");
     }
 
@@ -150,7 +150,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (item.Part == StatePart.Set && setOf(item.SetName!) is { Kind: SymbolKind.SignatureSet } named
                 && Reaches(named, set, setOf, []))
             {
-                report(item.Node.Span, Catalogue.SignatureSetSelfReference.Says(set.Name, item.Text, set.Name));
+                report(item.Node.Span, Catalogue.SignatureSetSelfReference.Message(set.Name, item.Text, set.Name));
             }
         }
         Read(declaration, forMacro: false, valueOf, setOf, report);
@@ -207,9 +207,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         if (entry.Arguments is { Expression: { } count } args && valueOf is not null && Here(args))
         {
             if (valueOf(count) is not { } bytes)
-                report(count.Span, Catalogue.ArgsNotConstant.Says(args.Text));
+                report(count.Span, Catalogue.ArgsNotConstant.Message(args.Text));
             else if (bytes < 0 || bytes > 0xffff)
-                report(count.Span, Catalogue.ArgsOutOfRange.Says(args.Text));
+                report(count.Span, Catalogue.ArgsOutOfRange.Message(args.Text));
             else
                 arguments = (int)bytes;
         }
@@ -282,22 +282,22 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 if (other is { } given)
                 {
-                    report(At(entry, given), Catalogue.HandlerAssumesState.Says(given.Text));
+                    report(At(entry, given), Catalogue.HandlerAssumesState.Message(given.Text));
                 }
             }
             foreach (var other in new[] { entry.Far, entry.Inline, entry.Arguments })
             {
                 if (other is { } given)
                 {
-                    report(At(entry, given), Catalogue.HandlerDistance.Says(given.Text));
+                    report(At(entry, given), Catalogue.HandlerDistance.Message(given.Text));
                 }
             }
             if (entry.NoReturn is { } never)
             {
-                report(At(entry, never), Catalogue.HandlerNoreturn.Says(never.Text));
+                report(At(entry, never), Catalogue.HandlerNoreturn.Message(never.Text));
             }
             if (entry.E is { IsUnchanged: true } kept)
-                report(At(entry, kept), Catalogue.HandlerKeeps.Says(kept.Text));
+                report(At(entry, kept), Catalogue.HandlerKeeps.Message(kept.Text));
             if (exitList is not null)
                 report(exitList.Span, Catalogue.HandlerDeclaresAnExit);
 
@@ -335,14 +335,14 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (valueOf(expression) is not { } value)
             {
                 if (Here(given))
-                    report(expression.Span, Catalogue.SignatureValueNotConstant.Says(given.Text));
+                    report(expression.Span, Catalogue.SignatureValueNotConstant.Message(given.Text));
                 return StateValue.Unknown;
             }
             if (value < 0 || value > largest)
             {
                 if (Here(given))
                 {
-                    report(expression.Span, Catalogue.SignatureValueOutOfRange.Says(
+                    report(expression.Span, Catalogue.SignatureValueOutOfRange.Message(
                         given.Text,
                         largest == 0xff ? "a bank is one byte" : "the direct page is a 16-bit address"));
                 }
@@ -368,7 +368,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (largest != 0xff)
             {
                 if (Here(given))
-                    report(given.Node.Span, Catalogue.StateBanksNotDbr.Says(given.Text));
+                    report(given.Node.Span, Catalogue.StateBanksNotDbr.Message(given.Text));
                 return StateValue.Unknown;
             }
             if (valueOf is null)
@@ -376,7 +376,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (given.BanksOf(valueOf, out var invalid) is { } banks)
                 return StateValue.Among(banks);
             if (Here(given))
-                report(invalid!.Span, Catalogue.StateBanksInvalid.Says(given.Text));
+                report(invalid!.Span, Catalogue.StateBanksInvalid.Message(given.Text));
             return StateValue.Unknown;
         }
 
@@ -396,7 +396,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 }
                 if (!first)
                 {
-                    report(item.Node.Span, Catalogue.SignatureSetNotFirst.Says(item.Text));
+                    report(item.Node.Span, Catalogue.SignatureSetNotFirst.Message(item.Text));
                     continue;
                 }
                 first = false;
@@ -428,7 +428,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 if (Here(reference))
                 {
-                    report(reference.Node.Span, Catalogue.SignatureSetNotASet.Says(reference.Text, set.KindPhrase));
+                    report(reference.Node.Span, Catalogue.SignatureSetNotASet.Message(reference.Text, set.KindPhrase));
                 }
                 return items;
             }
@@ -469,11 +469,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     break;
 
                 case StatePart.Keeps when forMacro:
-                    report(item.Node.Span, Catalogue.MacroKeeps.Says(item.Text));
+                    report(item.Node.Span, Catalogue.MacroKeeps.Message(item.Text));
                     break;
                 case StatePart.Keeps when isExit:
                     report(item.Node.Span,
-                        Catalogue.ItemBelongsAtEntry.Says(item.Text, "is about a routine from entry to exit"));
+                        Catalogue.ItemBelongsAtEntry.Message(item.Text, "is about a routine from entry to exit"));
                     break;
                 case StatePart.Keeps:
                     if (item.Registers == Processor.Registers.None)
@@ -485,12 +485,12 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     report(item.Node.Span, Catalogue.MacroNoreturn);
                     break;
                 case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt when forMacro:
-                    report(item.Node.Span, Catalogue.MacroDistance.Says(item.Text));
+                    report(item.Node.Span, Catalogue.MacroDistance.Message(item.Text));
                     break;
                 case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt
                     or StatePart.NoReturn when isExit:
                     report(item.Node.Span,
-                        Catalogue.ItemBelongsAtEntry.Says(item.Text, "describes how a routine is called, entered or left"));
+                        Catalogue.ItemBelongsAtEntry.Message(item.Text, "describes how a routine is called, entered or left"));
                     break;
                 case StatePart.NoReturn:
                     parts.NoReturn = Once(parts, parts.NoReturn, item, fromSet);
@@ -505,13 +505,14 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     parts.Interrupt = Once(parts, parts.Interrupt, item, fromSet);
                     break;
                 case StatePart.Distance:
-                    if (!fromSet && parts.Written.Contains(StatePart.Distance) && parts.Far is { } said && said.IsFar != item.IsFar)
+                    if (!fromSet && parts.Given.Contains(StatePart.Distance)
+                        && parts.Far is { } earlierDistance && earlierDistance.IsFar != item.IsFar)
                     {
                         report(item.Node.Span,
-                            Catalogue.DistanceDisagrees.Says(item.Text, (said.IsFar ? "far" : "near")));
+                            Catalogue.DistanceDisagrees.Message(item.Text, (earlierDistance.IsFar ? "far" : "near")));
                     }
                     if (!fromSet)
-                        parts.Written.Add(StatePart.Distance);
+                        parts.Given.Add(StatePart.Distance);
                     parts.Far = item;
                     break;
                 default:
@@ -525,9 +526,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         {
             if (fromSet)
                 return item;
-            if (earlier is { } first && !parts.Written.Add(item.Part))
-                report(item.Node.Span, Catalogue.SignatureItemTwice.Says(first.Text, item.Text));
-            parts.Written.Add(item.Part);
+            if (earlier is { } first && !parts.Given.Add(item.Part))
+                report(item.Node.Span, Catalogue.SignatureItemTwice.Message(first.Text, item.Text));
+            parts.Given.Add(item.Part);
             return item;
         }
 
@@ -536,7 +537,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         {
             if (exitItem is not { IsUnchanged: true } kept || keptAtEntry)
                 return true;
-            report(At(exit, kept), Catalogue.UnchangedNeedsEntry.Says(kept.Text, kept.Text));
+            report(At(exit, kept), Catalogue.UnchangedNeedsEntry.Message(kept.Text, kept.Text));
             return false;
         }
 
@@ -552,7 +553,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             foreach (var wide in new[] { parts.A, parts.Index })
             {
                 if (wide is { Width: Width.Sixteen } item)
-                    report(At(parts, item), Catalogue.WidthInEmulation.Says($"`{item.Text}`"));
+                    report(At(parts, item), Catalogue.WidthInEmulation.Message($"`{item.Text}`"));
             }
         }
     }
@@ -579,6 +580,6 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         public readonly List<(StateItem Item, bool FromSet)> Keeps = [];
 
         // The parts the list gives itself, rather than taking from the set.
-        public readonly HashSet<StatePart> Written = [];
+        public readonly HashSet<StatePart> Given = [];
     }
 }

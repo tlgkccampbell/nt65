@@ -54,13 +54,13 @@ public sealed class ProgramSymbols
                 continue;
             if (StandardModules.IsReserved(name) && !StandardModules.IsStandard(module.Tree.Path))
             {
-                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan), Catalogue.ModuleNameReserved.Says(name)));
+                diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan), Catalogue.ModuleNameReserved.Message(name)));
                 continue;
             }
             if (byName.TryGetValue(name, out var other))
             {
                 diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan),
-                    Catalogue.ModuleNameTaken.Says(name, FileName(other.Tree)),
+                    Catalogue.ModuleNameTaken.Message(name, FileName(other.Tree)),
                     [new RelatedSpan(other.Tree.GetSpan(other.NameSpan), "declared here")]));
                 continue;
             }
@@ -69,7 +69,7 @@ public sealed class ProgramSymbols
             if (byName.Values.FirstOrDefault(named => string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase)) is { } same)
             {
                 diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan),
-                    Catalogue.ModuleNamesDifferInCase.Says(name, same.Name),
+                    Catalogue.ModuleNamesDifferInCase.Message(name, same.Name),
                     [new RelatedSpan(same.Tree.GetSpan(same.NameSpan), "the other module")]));
             }
             byName[name] = module;
@@ -87,7 +87,7 @@ public sealed class ProgramSymbols
                 if (!symbol.IsCheapLocal && (byName.ContainsKey(path) || prefixes.Contains(path)))
                 {
                     diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
-                        Catalogue.NameIsAModulePath.Says(path, module.Name, symbol.Name)));
+                        Catalogue.NameIsAModulePath.Message(path, module.Name, symbol.Name)));
                 }
             }
         }
@@ -102,7 +102,7 @@ public sealed class ProgramSymbols
                 if (byLinkerName.TryGetValue(linked, out var other))
                 {
                     diagnostics.Add(new Diagnostic(symbol.ExportSpan is { } at ? symbol.Tree.GetSpan(at) : symbol.DeclarationSpan,
-                        Catalogue.ExportNameTaken.Says(symbol.PathName, other.PathName, linked),
+                        Catalogue.ExportNameTaken.Message(symbol.PathName, other.PathName, linked),
                         [new RelatedSpan(other.DeclarationSpan, "the other export")]));
                     continue;
                 }

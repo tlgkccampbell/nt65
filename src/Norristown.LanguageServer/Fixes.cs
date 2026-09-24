@@ -57,15 +57,15 @@ internal static class Fixes
                     [Edits.InsertAfter(tree, after, $"{Edits.IndentOf(tree, after)}.next {target}")]);
                 break;
 
-            case FixKind.Mnemonic when fix.Text is { } mnemonic && Written(tree, line, mnemonic) is { } call:
+            case FixKind.Mnemonic when fix.Text is { } mnemonic && ReplaceMnemonic(tree, line, mnemonic) is { } call:
                 yield return Fix(diagnostic, $"Call with `{mnemonic}`", [call]);
                 break;
 
-            case FixKind.Branch when fix.Text is { } longer && Written(tree, line, longer) is { } branch:
+            case FixKind.Branch when fix.Text is { } longer && ReplaceMnemonic(tree, line, longer) is { } branch:
                 yield return Fix(diagnostic, $"Branch with `{longer}`", [branch]);
                 break;
 
-            case FixKind.Return when fix.Text is { } leaves && Written(tree, line, leaves) is { } returned:
+            case FixKind.Return when fix.Text is { } leaves && ReplaceMnemonic(tree, line, leaves) is { } returned:
                 yield return Fix(diagnostic, $"Leave with `{leaves}`", [returned]);
                 break;
 
@@ -172,8 +172,8 @@ internal static class Fixes
                 break;
 
             case FixKind.MissingPiece when fix.Text is { } piece:
-                if (Piece(tree, diagnostic, piece) is { } written)
-                    yield return Fix(diagnostic, $"Write the `{piece}`", [written]);
+                if (Piece(tree, diagnostic, piece) is { } inserted)
+                    yield return Fix(diagnostic, $"Write the `{piece}`", [inserted]);
                 break;
 
             default:
@@ -192,15 +192,15 @@ internal static class Fixes
     /// Returns an edit that replaces the line's mnemonic with <paramref name="mnemonic"/>, in
     /// upper case where the line has it in upper case, or null for a line that has no mnemonic.
     /// </summary>
-    private static Edit? Written(SyntaxTree tree, int line, string mnemonic)
+    private static Edit? ReplaceMnemonic(SyntaxTree tree, int line, string mnemonic)
     {
         if (LineContext.TokensOf(tree, line).FirstOrDefault(token => token.Kind == SyntaxKind.Mnemonic)
-            is not { Text: not null } written)
+            is not { Text: not null } mnemonicToken)
         {
             return null;
         }
-        var spelled = written.Text.All(char.IsUpper) ? mnemonic.ToUpperInvariant() : mnemonic;
-        return new Edit(tree, new TextSpan(written.Start, written.Text.Length), spelled);
+        var cased = mnemonicToken.Text.All(char.IsUpper) ? mnemonic.ToUpperInvariant() : mnemonic;
+        return new Edit(tree, new TextSpan(mnemonicToken.Start, mnemonicToken.Text.Length), cased);
     }
 
     /// <summary>
@@ -267,7 +267,7 @@ internal static class Fixes
         if ((reaching ?? symbol?.Routine?.Signature?.Entry) is not { } state)
             return null;
 
-        var items = Edits.SpellState(state);
+        var items = Edits.FormatState(state);
         var name = symbol?.DisplayName ?? "the label";
         var title = $"Declare `{name}` with `.state {items}`";
 
@@ -356,10 +356,10 @@ internal static class Fixes
     private static Edit? Storage(SyntaxTree tree, Span at)
     {
         var span = Edits.SpanOf(tree, at);
-        var written = tree.Text[span.Start..span.End];
-        if (!written.StartsWith(".res", StringComparison.OrdinalIgnoreCase))
+        var text = tree.Text[span.Start..span.End];
+        if (!text.StartsWith(".res", StringComparison.OrdinalIgnoreCase))
             return null;
-        var count = written[".res".Length..].Trim();
+        var count = text[".res".Length..].Trim();
         return count.Length == 0 ? null : new Edit(tree, span, $".byte[{count}]");
     }
 
@@ -434,9 +434,9 @@ internal static class Fixes
 
         foreach (var (open, close) in readings)
         {
-            var written = tree.Text[outer.Span.Start..open] + "(" + tree.Text[open..close] + ")"
+            var grouped = tree.Text[outer.Span.Start..open] + "(" + tree.Text[open..close] + ")"
                 + tree.Text[close..outer.Span.End];
-            yield return Fix(diagnostic, $"Write it as `{written.Trim()}`",
+            yield return Fix(diagnostic, $"Write it as `{grouped.Trim()}`",
                 [new Edit(tree, new TextSpan(open, 0), "("), new Edit(tree, new TextSpan(close, 0), ")")],
                 preferred: false);
         }

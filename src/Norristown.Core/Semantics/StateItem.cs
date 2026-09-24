@@ -65,7 +65,7 @@ public readonly record struct StateItem(
                 foreach (var item in Read(nested))
                     yield return item;
             }
-            else if (node is StateItemSyntax written && Of(written) is { } item)
+            else if (node is StateItemSyntax syntax && Of(syntax) is { } item)
             {
                 yield return item;
             }
@@ -97,10 +97,10 @@ public readonly record struct StateItem(
     public BankSet? BanksOf(Func<ExpressionSyntax, long?> valueOf, out SyntaxNode? invalid)
     {
         invalid = Node;
-        if (Node is not StateBanksItemSyntax written || written.Ranges.Count == 0)
+        if (Node is not StateBanksItemSyntax banksItem || banksItem.Ranges.Count == 0)
             return null;
         var banks = default(BankSet);
-        foreach (var range in written.Ranges)
+        foreach (var range in banksItem.Ranges)
         {
             var start = valueOf(range.First);
             var end = range.Last is { } last ? valueOf(last) : start;

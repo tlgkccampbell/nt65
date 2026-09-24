@@ -203,10 +203,10 @@ public sealed class EditingRequestsTests
 
     [Theory]
     [MemberData(nameof(Completions))]
-    public async Task CompletionOffersWhatMayBeWrittenThere(string where, string line, string[] offered, string[] notOffered)
+    public async Task CompletionOffersWhatMayBeTypedThere(string where, string line, string[] offered, string[] notOffered)
     {
         var timeout = TestTimeout.Token();
-        var (text, position) = Place(where, line);
+        var (text, position) = WithLine(where, line);
         await using var client = await OpenAsync(text, timeout);
 
         var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
@@ -222,10 +222,10 @@ public sealed class EditingRequestsTests
     /// <c>=</c>.
     /// </summary>
     [Fact]
-    public async Task ACompletionReplacesWhatIsTypedAndWritesWhatTheItemNeeds()
+    public async Task ACompletionReplacesWhatIsTypedAndInsertsWhatTheItemNeeds()
     {
         var timeout = TestTimeout.Token();
-        var (text, position) = Place("body", "    poke!(val|");
+        var (text, position) = WithLine("body", "    poke!(val|");
         await using var client = await OpenAsync(text, timeout);
 
         var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
@@ -246,7 +246,7 @@ public sealed class EditingRequestsTests
     public async Task AnInstructionThatTakesAnOperandLeadsOnToIt()
     {
         var timeout = TestTimeout.Token();
-        var (text, position) = Place("body", "|");
+        var (text, position) = WithLine("body", "|");
         await using var client = await OpenAsync(text, timeout);
 
         var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
@@ -305,10 +305,10 @@ public sealed class EditingRequestsTests
 
     [Theory]
     [MemberData(nameof(Calls))]
-    public async Task SignatureHelpSaysWhatTheCallTakes(string where, string line, string signature, int active)
+    public async Task SignatureHelpShowsWhatTheCallTakes(string where, string line, string signature, int active)
     {
         var timeout = TestTimeout.Token();
-        var (text, position) = Place(where, line);
+        var (text, position) = WithLine(where, line);
         await using var client = await OpenAsync(text, timeout);
 
         var help = await client.RequestAsync<SignatureHelp?>("textDocument/signatureHelp",
@@ -324,7 +324,7 @@ public sealed class EditingRequestsTests
     public async Task SignatureHelpIsNothingOutsideACall()
     {
         var timeout = TestTimeout.Token();
-        var (text, position) = Place("body", "    lda (vic::BORDER),y|");
+        var (text, position) = WithLine("body", "    lda (vic::BORDER),y|");
         await using var client = await OpenAsync(text, timeout);
 
         Assert.Null(await client.RequestAsync<SignatureHelp?>("textDocument/signatureHelp",
@@ -337,7 +337,7 @@ public sealed class EditingRequestsTests
     /// where it loops. The lens also notes what the count leaves out.
     /// </summary>
     [Fact]
-    public async Task ALensAboveEachRoutineSaysWhatOnePassThroughItCosts()
+    public async Task ALensAboveEachRoutineShowsWhatOnePassThroughItCosts()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -406,7 +406,7 @@ public sealed class EditingRequestsTests
     /// two at most, then says how many more.
     /// </summary>
     [Fact]
-    public async Task ALensSaysWhatARoutineCostsWithWhatItCalls()
+    public async Task ALensShowsWhatARoutineCostsWithWhatItCalls()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -529,7 +529,7 @@ public sealed class EditingRequestsTests
     /// thing with why nt65 cannot count it.
     /// </summary>
     [Fact]
-    public async Task TheHoverSaysWhyEachThingACostWithCallsLeavesOutIsLeftOut()
+    public async Task TheHoverShowsWhyEachThingACostWithCallsLeavesOutIsLeftOut()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -575,7 +575,7 @@ public sealed class EditingRequestsTests
     /// being left out, because a missing lens reads as though the analysis failed.
     /// </summary>
     [Fact]
-    public async Task ALensSaysWhyARoutineWithABlockMoveHasNoCount()
+    public async Task ALensShowsWhyARoutineWithABlockMoveHasNoCount()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -630,7 +630,7 @@ public sealed class EditingRequestsTests
     /// no lens.
     /// </summary>
     [Fact]
-    public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutineCosts()
+    public async Task ALensAboveAnInlineScopeShowsWhatThatPartOfTheRoutineCosts()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -666,7 +666,7 @@ public sealed class EditingRequestsTests
     /// would read as though the routine were safe to call.
     /// </summary>
     [Fact]
-    public async Task ALensSaysWhichRegistersARoutineHandsBack()
+    public async Task ALensShowsWhichRegistersARoutineHandsBack()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -832,7 +832,7 @@ public sealed class EditingRequestsTests
     public async Task WorkspaceSymbolsFindDeclarationsByTheirLetters()
     {
         var timeout = TestTimeout.Token();
-        var (text, _) = Place("body", "");
+        var (text, _) = WithLine("body", "");
         await using var client = await OpenAsync(text, timeout);
 
         var found = await client.RequestAsync<IReadOnlyList<SymbolInformation>>("workspace/symbol",
@@ -853,7 +853,7 @@ public sealed class EditingRequestsTests
     /// the routine around it does not.
     /// </summary>
     [Fact]
-    public async Task ALensAboveAnInlineScopeSaysWhatThatPartOfTheRoutinePreserves()
+    public async Task ALensAboveAnInlineScopeShowsWhatThatPartOfTheRoutinePreserves()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -888,7 +888,7 @@ public sealed class EditingRequestsTests
     /// <c>.scope</c> block preserves is shown on hover as well as in the lens above the line.
     /// </summary>
     [Fact]
-    public async Task HoverOnARoutineAndOnAScopeSaysWhatItPreserves()
+    public async Task HoverOnARoutineAndOnAScopeShowsWhatItPreserves()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -923,7 +923,7 @@ public sealed class EditingRequestsTests
     /// (by copying it to A), and naming that register makes the save readable.
     /// </summary>
     [Fact]
-    public async Task HoverSaysWhatTheRegistersHoldAtTheLine()
+    public async Task HoverShowsWhatTheRegistersHoldAtTheLine()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -960,7 +960,7 @@ public sealed class EditingRequestsTests
     /// save that is still valid on one path, so both descriptions are shown, joined by "or".
     /// </summary>
     [Fact]
-    public async Task HoverSpellsOutWhatTwoPathsLeaveInARegister()
+    public async Task HoverShowsWhatTwoPathsLeaveInARegister()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -1021,7 +1021,7 @@ public sealed class EditingRequestsTests
     /// means the stack is empty, and a stack nothing is known about is not an empty one.
     /// </summary>
     [Fact]
-    public async Task HoverSaysSoWhereTheStackIsNotKnown()
+    public async Task HoverShowsWhereTheStackIsNotKnown()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -1107,7 +1107,7 @@ public sealed class EditingRequestsTests
     /// register, which decides whether a later pull restores the value at all.
     /// </summary>
     [Fact]
-    public async Task HoverNamesA65816PushAndSaysHowWideItWas()
+    public async Task HoverNamesA65816PushAndShowsHowWideItWas()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -1146,7 +1146,7 @@ public sealed class EditingRequestsTests
     /// everything else. Any other name the file does not mark is a mistake in the test and
     /// throws, so that a misspelled place cannot quietly test top level instead.
     /// </summary>
-    private static (string Text, Position Position) Place(string where, string line)
+    private static (string Text, Position Position) WithLine(string where, string line)
     {
         var text = Main.ReplaceLineEndings("\n");
         var lines = text.Split('\n').ToList();

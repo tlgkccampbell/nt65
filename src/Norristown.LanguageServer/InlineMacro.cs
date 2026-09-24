@@ -68,11 +68,11 @@ internal static class InlineMacro
         // would declare it twice. An anonymous scope is inline code and keeps them apart.
         var scoped = MacroExpansion.Declares(analysis, definition);
         var inner = scoped ? indent + Edits.Indent : indent;
-        var written = expansion.Lines.Select(line => line.Length == 0 ? "" : inner + line).ToList();
+        var inlined = expansion.Lines.Select(line => line.Length == 0 ? "" : inner + line).ToList();
         if (scoped)
-            written = [indent + ".scope {", .. written, indent + "}"];
+            inlined = [indent + ".scope {", .. inlined, indent + "}"];
         yield return new Change(title, CodeActionKinds.Rewrite,
-            [Edits.RemoveLines(tree, first, last) with { Text = written.Count == 0 ? "" : string.Join("\n", written) + "\n" }]);
+            [Edits.RemoveLines(tree, first, last) with { Text = inlined.Count == 0 ? "" : string.Join("\n", inlined) + "\n" }]);
     }
 
     /// <summary>

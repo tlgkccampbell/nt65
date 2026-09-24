@@ -44,7 +44,7 @@ public static class Instructions
     /// <paramref name="mnemonic"/>. A program may use the CPU's own instructions and the long
     /// branches, which nt65 emits on every CPU.
     /// </summary>
-    public static bool Writable(Cpu cpu, MnemonicKind mnemonic) =>
+    public static bool Available(Cpu cpu, MnemonicKind mnemonic) =>
         Has(cpu, mnemonic) || SyntaxFacts.IsLongBranch(mnemonic);
 
     /// <summary>

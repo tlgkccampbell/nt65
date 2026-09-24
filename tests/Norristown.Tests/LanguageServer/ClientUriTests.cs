@@ -9,7 +9,7 @@ namespace Norristown.Tests.LanguageServer;
 /// list for a file nobody opens. So every answer names a file exactly as the client did, and this
 /// test asks for every kind of answer that names a file.
 /// </summary>
-public sealed class UriSpellingTests
+public sealed class ClientUriTests
 {
     private const string GfxUri = "file:///c%3A/work/gfx.nt65";
 
@@ -38,7 +38,7 @@ public sealed class UriSpellingTests
         """;
 
     [Fact]
-    public async Task EveryAnswerSpellsAFileTheWayTheClientDid()
+    public async Task EveryAnswerNamesAFileTheWayTheClientDid()
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(TestClient.Capable(), timeout);

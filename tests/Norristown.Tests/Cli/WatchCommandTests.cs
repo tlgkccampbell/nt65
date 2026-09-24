@@ -30,25 +30,25 @@ public sealed class WatchCommandTests : IDisposable
         Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build" }""");
         Write("src/main.nt65", Good);
 
-        var said = new Lines();
+        var printed = new Lines();
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
         var watching = Task.Run(
-            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, said, false, stopping.Token),
+            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, stopping.Token),
             CancellationToken.None);
 
-        Assert.Empty(await WaitAsync(said, timeout));
+        Assert.Empty(await WaitAsync(printed, timeout));
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "main.s")));
 
         Write("src/main.nt65", Wrong);
         Assert.Equal(
-            ["src/main.nt65:5:9: error: `nowhere` is not declared [not-declared]"], await WaitAsync(said, timeout));
+            ["src/main.nt65:5:9: error: `nowhere` is not declared [not-declared]"], await WaitAsync(printed, timeout));
 
         Write("src/main.nt65", Good);
-        Assert.Empty(await WaitAsync(said, timeout));
+        Assert.Empty(await WaitAsync(printed, timeout));
 
         // A module written after the watch began is part of the program from the next build on.
         Write("src/gfx.nt65", ".module gfx\n.export clear\n.segment CODE\n.proc clear {\n    rts\n}\n");
-        Assert.Empty(await WaitAsync(said, timeout));
+        Assert.Empty(await WaitAsync(printed, timeout));
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "gfx.s")));
 
         await stopping.CancelAsync();
@@ -63,24 +63,24 @@ public sealed class WatchCommandTests : IDisposable
     public async Task AWrongCommandLineComesStraightBack()
     {
         var timeout = TestTimeout.Token();
-        var said = new Lines();
+        var printed = new Lines();
 
         var code = await Task.Run(
-            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, said, false, timeout),
+            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, timeout),
             CancellationToken.None);
 
         Assert.Equal(2, code);
-        Assert.Equal("nt65: no input files, and no nt65.json", await said.NextAsync(timeout));
+        Assert.Equal("nt65: no input files, and no nt65.json", await printed.NextAsync(timeout));
     }
 
     /// <summary>
     /// Returns the lines the build printed, up to the line that says it is waiting for the next
     /// change.
     /// </summary>
-    private static async Task<IReadOnlyList<string>> WaitAsync(Lines said, CancellationToken timeout)
+    private static async Task<IReadOnlyList<string>> WaitAsync(Lines printed, CancellationToken timeout)
     {
         var lines = new List<string>();
-        while (await said.NextAsync(timeout) is var line && !line.StartsWith("nt65: watching", StringComparison.Ordinal))
+        while (await printed.NextAsync(timeout) is var line && !line.StartsWith("nt65: watching", StringComparison.Ordinal))
             lines.Add(line);
         return lines;
     }

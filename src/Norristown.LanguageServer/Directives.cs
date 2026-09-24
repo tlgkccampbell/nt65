@@ -125,14 +125,14 @@ internal static class Directives
     /// <summary>Returns the directives that may begin the statement the caret is at the start of.</summary>
     public static IEnumerable<(string Name, string Detail)> At(LineContext line)
     {
-        string[] names = line.Place switch
+        string[] names = line.Context switch
         {
-            Place.Item => line.IsFirstLine ? [.. Items, ".module"] : Items,
-            Place.Code or Place.Unknown => InCode(line),
-            Place.Data => [.. Data, ".data", ".if", ".repeat", ".each"],
-            Place.Values => [".if", ".repeat", ".each"],
-            Place.TypeMembers => [".struct", ".union"],
-            Place.EnumMembers => [".if"],
+            ContextKind.Item => line.IsFirstLine ? [.. Items, ".module"] : Items,
+            ContextKind.Code or ContextKind.Unknown => InCode(line),
+            ContextKind.Data => [.. Data, ".data", ".if", ".repeat", ".each"],
+            ContextKind.Values => [".if", ".repeat", ".each"],
+            ContextKind.TypeMembers => [".struct", ".union"],
+            ContextKind.EnumMembers => [".if"],
             _ => [],
         };
 
@@ -148,7 +148,7 @@ internal static class Directives
     /// directive is offered, including <c>.module</c>.
     /// </summary>
     private static string[] InCode(LineContext line) =>
-        line.Place == Place.Unknown
+        line.Context == ContextKind.Unknown
             ? [.. Items, ".module", .. Data, .. CodeOnly]
             : [.. Items.Except([".cpu", ".config", ".place"], StringComparer.Ordinal), .. Data, .. CodeOnly];
 
@@ -158,7 +158,7 @@ internal static class Directives
     /// </summary>
     private static IEnumerable<string> Without(IEnumerable<string> names, LineContext line)
     {
-        if (line.Place == Place.Unknown)
+        if (line.Context == ContextKind.Unknown)
             return names;
         var barred = new HashSet<string>(StringComparer.Ordinal);
 

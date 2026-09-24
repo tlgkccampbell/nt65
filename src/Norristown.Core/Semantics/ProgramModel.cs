@@ -370,11 +370,13 @@ public sealed class ProgramModel
         // affects the file that declares the name, because that file starts or stops reporting
         // that nothing uses it. Nothing else tracks this, because the cause is in one file and the
         // diagnostic it suppresses is in another.
-        var written = new Dictionary<string, IReadOnlySet<UnexportedName>>(this.unexported, StringComparer.Ordinal);
+        var unexportedNow =
+            new Dictionary<string, IReadOnlySet<UnexportedName>>(this.unexported, StringComparer.Ordinal);
         foreach (var (path, binder) in binders)
         {
-            written[path] = Unexported(binder);
-            foreach (var name in written[path].Except(this.unexported[path]).Concat(this.unexported[path].Except(written[path])))
+            unexportedNow[path] = Unexported(binder);
+            var was = this.unexported[path];
+            foreach (var name in unexportedNow[path].Except(was).Concat(was.Except(unexportedNow[path])))
             {
                 if (!dirty.Contains(name.Path))
                     affected.Add(name.Path);
@@ -388,7 +390,7 @@ public sealed class ProgramModel
         // names it never uses. So that file is read again with the others.
         foreach (var path in Named(this.tables).Union(Named(tables), StringComparer.Ordinal))
         {
-            if (!dirty.Contains(path) && !Spelled(this.tables, path).SequenceEqual(Spelled(tables, path), StringComparer.Ordinal))
+            if (!dirty.Contains(path) && !Format(this.tables, path).SequenceEqual(Format(tables, path), StringComparer.Ordinal))
                 affected.Add(path);
         }
         if (affected.Count > 0)
@@ -409,7 +411,7 @@ public sealed class ProgramModel
         if (affected.Count > 0 || EditMap.Moved(segmentValues, moved) is not { } segmentValuesNow)
             return null;
 
-        var named = NamedElsewhere(written);
+        var named = NamedElsewhere(unexportedNow);
         var all = byFile.Values.SelectMany(diagnostics => diagnostics).Concat(tables).Concat(segmentValuesNow).ToList();
         var files = Files
             .Select(file => dirty.Contains(file.Tree.Path)
@@ -422,7 +424,7 @@ public sealed class ProgramModel
         foreach (var (path, binder) in binders)
             lookups[path] = binder.LookedUp;
         return new ProgramModel(
-            files, Segments, symbols, cpu, replaced, resolved, declared, forwarding, lookups, written, byFile, tables,
+            files, Segments, symbols, cpu, replaced, resolved, declared, forwarding, lookups, unexportedNow, byFile, tables,
             segmentValuesNow);
     }
 
@@ -448,7 +450,7 @@ public sealed class ProgramModel
     private static Dictionary<string, HashSet<string>> NamedElsewhere(
         IReadOnlyDictionary<string, IReadOnlySet<UnexportedName>> unexported) =>
         unexported.Values
-            .SelectMany(written => written)
+            .SelectMany(names => names)
             .GroupBy(name => name.Path, StringComparer.Ordinal)
             .ToDictionary(
                 group => group.Key,
@@ -470,7 +472,7 @@ public sealed class ProgramModel
     /// Returns the program-wide diagnostics about <paramref name="path"/>, in order, formatted as
     /// text to compare.
     /// </summary>
-    private static IEnumerable<string> Spelled(IEnumerable<Diagnostic> tables, string path) =>
+    private static IEnumerable<string> Format(IEnumerable<Diagnostic> tables, string path) =>
         tables
             .Where(diagnostic => string.Equals(diagnostic.Span.File, path, StringComparison.Ordinal))
             .Select(diagnostic => $"{diagnostic.Span} {diagnostic.Severity} {diagnostic.Message}");
@@ -549,13 +551,13 @@ public sealed class ProgramModel
                 alias.Signature = actual;
                 continue;
             }
-            DiagnosticMessage? said = declared.IsFar != actual.IsFar
-                ? Catalogue.AliasDistanceMismatch.Says(
+            DiagnosticMessage? mismatch = declared.IsFar != actual.IsFar
+                ? Catalogue.AliasDistanceMismatch.Message(
                     alias.Name, declared.Distance, routine.DisplayName, actual.Distance)
                 : declared != actual
-                    ? Catalogue.AliasSignatureMismatch.Says(alias.Name, declared, routine.DisplayName, actual)
+                    ? Catalogue.AliasSignatureMismatch.Message(alias.Name, declared, routine.DisplayName, actual)
                     : (DiagnosticMessage?)null;
-            if (said is { } problem)
+            if (mismatch is { } problem)
                 byFile[alias.Tree.Path].Add(new Diagnostic(alias.Tree.GetSpan(value.Span), problem));
         }
     }
@@ -619,11 +621,11 @@ public sealed class ProgramModel
     /// </summary>
     private static IEnumerable<Symbol> Named(Symbol symbol, SymbolMap resolved)
     {
-        var written = new SyntaxNode?[] { symbol.ValueExpression, symbol.Data, symbol.TypeExpression }
+        var declaredNodes = new SyntaxNode?[] { symbol.ValueExpression, symbol.Data, symbol.TypeExpression }
             .Concat(symbol.Items)
             .Concat(symbol.Entries)
             .OfType<SyntaxNode>();
-        foreach (var node in written.SelectMany(node => node.DescendantNodes().Prepend(node)))
+        foreach (var node in declaredNodes.SelectMany(node => node.DescendantNodes().Prepend(node)))
         {
             foreach (var token in node.ChildTokens)
             {
@@ -662,7 +664,7 @@ public sealed class ProgramModel
             }
             var kind = symbol.Kind == SymbolKind.ExternProc ? "an extern proc" : "an imported routine";
             byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.DeclarationSpan,
-                Catalogue.SignatureMissing.Says(symbol.Name, kind)));
+                Catalogue.SignatureMissing.Message(symbol.Name, kind)));
         }
     }
 
@@ -682,16 +684,16 @@ public sealed class ProgramModel
             if (actual is { } size && given < size)
             {
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(at),
-                    Catalogue.ExportNarrowsAddressSize.Says(symbol.Name, Spell(size), symbol.Name, Spell(size)))
+                    Catalogue.ExportNarrowsAddressSize.Message(symbol.Name, Format(size), symbol.Name, Format(size)))
                 {
-                    Fix = new DiagnosticFix(FixKind.ExportSize, Spell(size)),
+                    Fix = new DiagnosticFix(FixKind.ExportSize, Format(size)),
                 });
             }
         }
     }
 
     /// <summary>Formats an address size as an export or an import gives it.</summary>
-    private static string Spell(AddressSize size) => size switch
+    private static string Format(AddressSize size) => size switch
     {
         AddressSize.ZeroPage => "zp",
         AddressSize.Absolute => "abs",
@@ -719,7 +721,7 @@ public sealed class ProgramModel
                 if (!symbol.IsCheapLocal && configured.ContainsKey(symbol.Name))
                 {
                     diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
-                        Catalogue.DefineRedeclared.Says(symbol.Name)));
+                        Catalogue.DefineRedeclared.Message(symbol.Name)));
                 }
             }
         }

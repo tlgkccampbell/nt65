@@ -95,7 +95,7 @@ public static class InitCommand
     /// </summary>
     private static string Describing(Cpu cpu) => $$"""
         {
-          "cpu": "{{CpuNames.Spell(cpu)}}",
+          "cpu": "{{CpuNames.Format(cpu)}}",
           "files": ["src/**/*.nt65"],
           "out": "build"
         }

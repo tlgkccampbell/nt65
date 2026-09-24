@@ -49,24 +49,24 @@ public sealed class CompletionStructureTests
     /// that most of the program's other routines declare.
     /// </summary>
     [Fact]
-    public async Task ABlockOpenerIsWrittenAsTheBlock()
+    public async Task ABlockOpenerInsertsTheWholeBlock()
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
         var items = await CompletionAsync(client, new Position(5, 0), timeout);
-        Assert.Equal(".proc ${1:name}: ${2:std} {\n    $0\n}", Written(items, ".proc"));
-        Assert.Equal(".scope ${1:name} {\n    $0\n}", Written(items, ".scope"));
-        Assert.Equal(".func ${1:name}(${2:parameters}) = $0", Written(items, ".func"));
+        Assert.Equal(".proc ${1:name}: ${2:std} {\n    $0\n}", InsertedText(items, ".proc"));
+        Assert.Equal(".scope ${1:name} {\n    $0\n}", InsertedText(items, ".scope"));
+        Assert.Equal(".func ${1:name}(${2:parameters}) = $0", InsertedText(items, ".func"));
         Assert.All(Openers, name => Assert.Equal(InsertTextFormat.Snippet, One(items, name).InsertTextFormat));
 
         // A directive that opens no block is inserted as its plain name, as is everything else.
         Assert.Null(One(items, ".res").InsertTextFormat);
-        Assert.Equal(".res", Written(items, ".res"));
+        Assert.Equal(".res", InsertedText(items, ".res"));
 
         var inside = await CompletionAsync(client, Locate.At(Source, "rts", 2), timeout);
         Assert.Null(One(inside, "lda").InsertTextFormat);
-        Assert.Equal("lda ", Written(inside, "lda"));
+        Assert.Equal("lda ", InsertedText(inside, "lda"));
     }
 
     /// <summary>A client that did not declare snippet support gets the plain word, even for a block opener.</summary>
@@ -79,7 +79,7 @@ public sealed class CompletionStructureTests
         await client.NextDiagnosticsAsync(Uri, timeout);
 
         var items = await CompletionAsync(client, new Position(5, 0), timeout);
-        Assert.Equal(".proc", Written(items, ".proc"));
+        Assert.Equal(".proc", InsertedText(items, ".proc"));
         Assert.Null(One(items, ".proc").InsertTextFormat);
     }
 
@@ -114,7 +114,7 @@ public sealed class CompletionStructureTests
     private static CompletionItem One(IReadOnlyList<CompletionItem> items, string label) =>
         Assert.Single(items, item => item.Label == label);
 
-    private static string Written(IReadOnlyList<CompletionItem> items, string label) =>
+    private static string InsertedText(IReadOnlyList<CompletionItem> items, string label) =>
         One(items, label).TextEdit.NewText;
 
     private static Task<IReadOnlyList<CompletionItem>> CompletionAsync(

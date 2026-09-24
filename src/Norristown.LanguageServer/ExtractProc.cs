@@ -46,9 +46,9 @@ internal static class ExtractProc
         var name = Edits.UnusedName(model, Called(tree, first) ?? "extracted");
         var indent = Edits.IndentOf(tree, block.LineIndex);
         var body = Edits.BodyIndent(tree, block.LineIndex);
-        var written = string.Join("\n", lines.Select(line => Written(tree, line)));
+        var moved = string.Join("\n", lines.Select(line => LineText(tree, line)));
         var signature = Signature(analysis, model, lines, last);
-        var declaration = $"\n{indent}.proc {name}{signature} {{\n{written}\n{body}rts\n{indent}}}\n";
+        var declaration = $"\n{indent}.proc {name}{signature} {{\n{moved}\n{body}rts\n{indent}}}\n";
 
         // The call goes where the lines were, indented as they were, unless they started with a
         // label at the left margin, which is no indentation for an instruction; then the call
@@ -180,12 +180,12 @@ internal static class ExtractProc
             return "";
         }
 
-        var items = Edits.SpellState(entry);
+        var items = Edits.FormatState(entry);
         if (items.Length == 0)
             return "";
         var after = StatementAfter(model.Tree, last);
         var exit = after is not null ? states.AnyBefore(after)?.Processor : null;
-        return exit is { } left && left != entry && Edits.SpellState(left) is { Length: > 0 } leaving
+        return exit is { } left && left != entry && Edits.FormatState(left) is { Length: > 0 } leaving
             ? $": {items} -> {leaving}"
             : $": {items}";
     }
@@ -195,7 +195,7 @@ internal static class ExtractProc
     /// at the same level as the old one, so its body keeps the old body's indentation, and a label
     /// at the margin stays there.
     /// </summary>
-    private static string Written(SyntaxTree tree, int line) =>
+    private static string LineText(SyntaxTree tree, int line) =>
         tree.Text[tree.LineStarts[line]..LineEnd(tree, line)].TrimEnd();
 
     /// <summary>Returns the instruction statements of the selected lines, in order.</summary>

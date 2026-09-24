@@ -18,7 +18,7 @@ public sealed class AnnotationTests
     /// stay the same.
     /// </summary>
     [Fact]
-    public void AnAnnotationChangesNothingAboutWhatANodeSays()
+    public void AnAnnotationChangesNothingElseAboutANode()
     {
         var tree = SyntaxTree.Parse("main.nt65", Program);
         var number = tree.Root.DescendantNodes().OfType<NumberExpressionSyntax>().Single();
@@ -84,7 +84,7 @@ public sealed class AnnotationTests
     /// and a tag on a token outlives that token being given other text.
     /// </summary>
     [Fact]
-    public void RebuildingANodeKeepsWhatItCarries()
+    public void RebuildingANodeKeepsItsAnnotations()
     {
         var tree = SyntaxTree.Parse("main.nt65", Program);
         var instruction = tree.Root.DescendantNodes().OfType<InstructionStatementSyntax>().First();
@@ -165,7 +165,7 @@ public sealed class AnnotationTests
     /// discarded with the old parse, as Roslyn does too.
     /// </summary>
     [Fact]
-    public void AnEditKeepsWhatTheLinesItLeavesAloneCarry()
+    public void AnEditKeepsTheAnnotationsOfTheLinesItLeavesAlone()
     {
         var tree = SyntaxTree.Parse("main.nt65", Program);
         var number = tree.Root.DescendantNodes().OfType<NumberExpressionSyntax>().Single();
@@ -193,23 +193,23 @@ public sealed class AnnotationTests
         var tree = SyntaxTree.Parse("main.nt65", Program);
         var line = tree.GetLine(2);
         var number = tree.Root.DescendantNodes().OfType<NumberExpressionSyntax>().Single();
-        var written = new SyntaxAnnotation("on what is written");
+        var inner = new SyntaxAnnotation("on what is written");
         var whole = new SyntaxAnnotation("on the line");
 
         var root = tree.Root.ReplaceNodes<SyntaxNode>(
             [line, number],
             (old, _) => ReferenceEquals(old, line)
                 ? line.WithAdditionalAnnotations(whole)
-                : number.WithAdditionalAnnotations(written));
+                : number.WithAdditionalAnnotations(inner));
         Assert.Equal(Program, root.ToFullString());
-        Assert.Equal("16", Assert.Single(root.GetAnnotatedNodes(written)).GetText());
+        Assert.Equal("16", Assert.Single(root.GetAnnotatedNodes(inner)).GetText());
         Assert.Empty(root.GetAnnotatedNodes(whole));
         Assert.False(root.Tree.GetLine(2).ContainsAnnotations);
     }
 
     /// <summary>Normalizing throws the trivia away and keeps the tags, which are not trivia.</summary>
     [Fact]
-    public void NormalizingKeepsWhatAPieceCarries()
+    public void NormalizingKeepsAnnotationsAndDropsTrivia()
     {
         var instruction = SyntaxFactory.InstructionStatement(
             SyntaxFactory.Mnemonic("lda"),
@@ -288,9 +288,9 @@ public sealed class AnnotationTests
                 return [];
 
             var tag = new SyntaxAnnotation("sweep", node.Kind.ToString());
-            var said = node.GetText();
+            var text = node.GetText();
             var root = tree.Root.ReplaceNode(node, node.WithAdditionalAnnotations(tag));
-            var problems = new List<string>(Found(Repo.Named(path), "tagging it", root, tag, node.Kind, said));
+            var problems = new List<string>(Found(Repo.Named(path), "tagging it", root, tag, node.Kind, text));
             if (root.ToFullString() != tree.Text)
                 problems.Add($"{Repo.Named(path)}: tagging a node rewrote the file");
 
@@ -300,8 +300,8 @@ public sealed class AnnotationTests
                 problems.Add($"{Repo.Named(path)}: a rewrite of nothing gave back another root");
 
             // A token is replaced somewhere else, on the tagged node's line and on another.
-            foreach (var (what, written) in Elsewhere(root, node))
-                problems.AddRange(Found(Repo.Named(path), what, written, tag, node.Kind, said));
+            foreach (var (what, replaced) in Elsewhere(root, node))
+                problems.AddRange(Found(Repo.Named(path), what, replaced, tag, node.Kind, text));
             return problems;
         });
         Assert.True(failures.Count == 0, string.Join("\n", failures.Take(20)));
@@ -326,7 +326,7 @@ public sealed class AnnotationTests
     /// an <see cref="IdentifierNameSyntax"/> is replaced, because renaming a word that is a name
     /// wherever it stands cannot change how the line parses.
     /// </summary>
-    private static IEnumerable<(string What, SyntaxNode Written)> Elsewhere(SyntaxNode root, SyntaxNode tagged)
+    private static IEnumerable<(string What, SyntaxNode Replaced)> Elsewhere(SyntaxNode root, SyntaxNode tagged)
     {
         var line = root.Tree.GetLineIndex(tagged.Position);
         var names = root.DescendantTokens()
@@ -346,16 +346,16 @@ public sealed class AnnotationTests
 
     /// <summary>
     /// Returns the problems, if any, with finding <paramref name="tag"/> on exactly one node, of
-    /// kind <paramref name="kind"/> and with the text <paramref name="said"/>.
+    /// kind <paramref name="kind"/> and with the text <paramref name="text"/>.
     /// </summary>
     private static IEnumerable<string> Found(
-        string named, string what, SyntaxNode root, SyntaxAnnotation tag, SyntaxKind kind, string said)
+        string named, string what, SyntaxNode root, SyntaxAnnotation tag, SyntaxKind kind, string text)
     {
         var found = root.GetAnnotatedNodes(tag).ToList();
         if (found.Count != 1)
             yield return $"{named}: after {what}, {found.Count} nodes carry the tag";
-        else if (found[0].Kind != kind || found[0].GetText() != said)
-            yield return $"{named}: after {what}, the tag is on a {found[0].Kind} saying {found[0].GetText()}, not a {kind} saying {said}";
+        else if (found[0].Kind != kind || found[0].GetText() != text)
+            yield return $"{named}: after {what}, the tag is on a {found[0].Kind} saying {found[0].GetText()}, not a {kind} saying {text}";
     }
 
     /// <summary>

@@ -24,7 +24,7 @@ public sealed class SeparatedListParsingTests
     [InlineData("f(1, 2,)", 3, 2)]
     // A list cut off after a comma keeps the comma, and the item after it is empty.
     [InlineData("f(1,", 2, 1)]
-    public void AListOfExpressionsKeepsAPlaceForEveryComma(string call, int items, int separators)
+    public void AListOfExpressionsKeepsAnItemForEveryComma(string call, int items, int separators)
     {
         var arguments = Call(call).Arguments.Arguments;
         Assert.Equal(items, arguments.Count);
@@ -45,7 +45,7 @@ public sealed class SeparatedListParsingTests
     [InlineData(".export a, b,,c", 2, 2, ",c")]
     [InlineData(".export ,a", 0, 0, ",a")]
     [InlineData(".export", 0, 0, "")]
-    public void AListOfWrittenItemsEndsAtTheFirstGap(string source, int items, int separators, string left)
+    public void AListOfNamesEndsAtTheFirstGap(string source, int items, int separators, string left)
     {
         var line = Line(source);
         var export = Assert.IsType<ExportDirectiveSyntax>(line.Statement);
@@ -92,7 +92,7 @@ public sealed class SeparatedListParsingTests
 
     /// <summary>A <c>.func</c>'s parameters and a <c>one(...)</c>'s words are nodes, as every item is.</summary>
     [Fact]
-    public void AnItemWrittenAsOneWordIsStillANode()
+    public void AnItemSpelledAsOneWordIsStillANode()
     {
         var func = Assert.IsType<FuncDeclarationSyntax>(Line(".func f(a, b) = a").Statement);
         Assert.Equal(["a", "b"], func.Parameters!.Parameters.Select(parameter => parameter.Name.Text));

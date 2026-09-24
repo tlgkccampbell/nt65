@@ -63,8 +63,8 @@ public sealed class FamilyRequestsTests
         Assert.Equal(Locate.Span(Source, ".multiproc Channel, |ch"), folded?.Range);
 
         // `stop::triangle` on line 24, and the `ch` of the `.proc` on line 16.
-        var written = await client.DefinitionAsync(Uri, Locate.At(Source, "stop::|triangle"), timeout);
-        Assert.Equal(Locate.Span(Source, ".proc |ch"), written?.Range);
+        var unfolded = await client.DefinitionAsync(Uri, Locate.At(Source, "stop::|triangle"), timeout);
+        Assert.Equal(Locate.Span(Source, ".proc |ch"), unfolded?.Range);
     }
 
     /// <summary>
@@ -114,12 +114,12 @@ public sealed class FamilyRequestsTests
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(Uri)), timeout);
         var folded = await client.HoverAsync(Uri, Locate.At(Source, ".multiproc Channel, |ch"), timeout);
-        var written = await client.HoverAsync(Uri, Locate.At(Source, ".proc |ch"), timeout);
+        var unfolded = await client.HoverAsync(Uri, Locate.At(Source, ".proc |ch"), timeout);
 
         // Only `main`, on line 22, has lenses. The hover is the same in either form, on the
         // `.multiproc`'s binding on line 9 and on the name of the `.each`'s `.proc` on line 16.
         Assert.Equal([22], lenses.Select(lens => lens.Range.Start.Line).Distinct());
-        foreach (var (hover, scope) in new[] { (folded, "play"), (written, "stop") })
+        foreach (var (hover, scope) in new[] { (folded, "play"), (unfolded, "stop") })
         {
             Assert.Equal($"""
                 ```nt65

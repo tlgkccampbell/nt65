@@ -65,10 +65,10 @@ public sealed partial class OracleTests
         // that silently produced nothing would be checked by nobody. A fixture that expects no
         // output, such as one whose modules have nothing to write, is checked for that by the
         // fixture runner.
-        var written = outputs.Select(o => o.Fixture.Name).ToHashSet(StringComparer.Ordinal);
+        var produced = outputs.Select(o => o.Fixture.Name).ToHashSet(StringComparer.Ordinal);
         var missing = fixtures
             .Where(f => f.ExpectedDiagnostics().Count == 0 && f.Sources.Count > 0 && f.ExpectedOutputs().Count > 0
-                && !written.Contains(f.Name))
+                && !produced.Contains(f.Name))
             .Select(f => f.Name)
             .ToList();
         Assert.True(missing.Count == 0, $"produced no output, so nothing checked it: {string.Join(", ", missing)}");

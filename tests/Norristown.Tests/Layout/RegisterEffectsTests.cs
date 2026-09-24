@@ -32,7 +32,7 @@ public sealed class RegisterEffectsTests
 
     /// <summary>Each mnemonic writes what the table says it writes.</summary>
     [Fact]
-    public void EachMnemonicWritesWhatTheTableSays()
+    public void EachMnemonicWritesWhatTheTableLists()
     {
         foreach (var (mnemonic, written) in Writes)
         {

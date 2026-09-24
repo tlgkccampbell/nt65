@@ -86,17 +86,17 @@ public sealed class MacroInvocation
             var parameter = macro.Parameters.FirstOrDefault(p => p.Name == name.Text);
             if (parameter is null)
             {
-                Report(name.Span, Catalogue.ParameterUnknown.Says(macro.Name, name.Text));
+                Report(name.Span, Catalogue.ParameterUnknown.Message(macro.Name, name.Text));
                 return;
             }
             if (parameter.IsBlock)
             {
-                Report(name.Span, Catalogue.BlockArgumentInParentheses.Says(parameter.Name));
+                Report(name.Span, Catalogue.BlockArgumentInParentheses.Message(parameter.Name));
                 return;
             }
             if (given.ContainsKey(parameter.Symbol) || listed.ContainsKey(parameter.Symbol))
             {
-                Report(name.Span, Catalogue.ArgumentGivenTwice.Says(parameter.Name));
+                Report(name.Span, Catalogue.ArgumentGivenTwice.Message(parameter.Name));
                 return;
             }
             Take(parameter, argument.Value);
@@ -135,7 +135,7 @@ public sealed class MacroInvocation
             }
             if (value is not null)
                 Check(parameter.Accepts, parameter, value);
-            given[parameter.Symbol] = new MacroArgument(parameter, value, [], null, Written: true);
+            given[parameter.Symbol] = new MacroArgument(parameter, value, [], null, IsGiven: true);
         }
 
         void BindBlocks()
@@ -154,12 +154,12 @@ public sealed class MacroInvocation
                     parameter = parameters.FirstOrDefault(p => p.Name == name.Text);
                     if (parameter is null)
                     {
-                        Report(name.Span, Catalogue.BlockParameterUnknown.Says(macro.Name, name.Text));
+                        Report(name.Span, Catalogue.BlockParameterUnknown.Message(macro.Name, name.Text));
                         continue;
                     }
                     if (given.ContainsKey(parameter.Symbol))
                     {
-                        Report(name.Span, Catalogue.ArgumentGivenTwice.Says(parameter.Name));
+                        Report(name.Span, Catalogue.ArgumentGivenTwice.Message(parameter.Name));
                         continue;
                     }
                 }
@@ -170,10 +170,10 @@ public sealed class MacroInvocation
                 else
                 {
                     Report(blocks[i].Opener.Span,
-                        Catalogue.BlockArgumentUnexpected.Says(macro.Name));
+                        Catalogue.BlockArgumentUnexpected.Message(macro.Name));
                     continue;
                 }
-                given[parameter.Symbol] = new MacroArgument(parameter, null, [], blocks[i], Written: true);
+                given[parameter.Symbol] = new MacroArgument(parameter, null, [], blocks[i], IsGiven: true);
             }
         }
 
@@ -185,7 +185,7 @@ public sealed class MacroInvocation
             {
                 if (listed.TryGetValue(parameter.Symbol, out var items))
                 {
-                    arguments.Add(new MacroArgument(parameter, null, items, null, Written: true));
+                    arguments.Add(new MacroArgument(parameter, null, items, null, IsGiven: true));
                 }
                 else if (given.TryGetValue(parameter.Symbol, out var argument))
                 {
@@ -193,7 +193,7 @@ public sealed class MacroInvocation
                 }
                 else if (parameter.IsOptional)
                 {
-                    arguments.Add(new MacroArgument(parameter, parameter.Default, [], null, Written: false));
+                    arguments.Add(new MacroArgument(parameter, parameter.Default, [], null, IsGiven: false));
                 }
                 else
                 {
@@ -206,7 +206,7 @@ public sealed class MacroInvocation
             if (missing.Count > 0)
             {
                 Report(NameSpan(call),
-                    Catalogue.ArgumentMissing.Says(
+                    Catalogue.ArgumentMissing.Message(
                         macro.Name, string.Join(", ", missing.Select(name => $"`{name}`"))));
             }
         }
@@ -224,7 +224,7 @@ public sealed class MacroInvocation
                     // indirect addressing, so it can only be a mistake here.
                     if (value is ParenthesizedExpressionSyntax)
                     {
-                        Report(value.Span, Catalogue.OperandArgumentParenthesized.Says(
+                        Report(value.Span, Catalogue.OperandArgumentParenthesized.Message(
                             parameter.Name, value.GetText()));
                     }
                     break;
@@ -243,7 +243,7 @@ public sealed class MacroInvocation
                             .ToList();
                         if (missing.Count > 0)
                         {
-                            Report(value.Span, Catalogue.WordArgumentAmbiguous.Says(
+                            Report(value.Span, Catalogue.WordArgumentAmbiguous.Message(
                                 parameter.Name,
                                 string.Join(", ", accepts.Words.Select(w => $"`{w}`")),
                                 word,
@@ -254,7 +254,7 @@ public sealed class MacroInvocation
 
                     if (word is null || !accepts.Words.Any(w => w.Equals(word, StringComparison.OrdinalIgnoreCase)))
                     {
-                        Report(value.Span, Catalogue.WordArgumentNotListed.Says(
+                        Report(value.Span, Catalogue.WordArgumentNotListed.Message(
                             parameter.Name,
                             string.Join(", ", accepts.Words.Select(w => $"`{w}`")),
                             word is null ? "not a word" : $"`{word}`"));
@@ -263,7 +263,7 @@ public sealed class MacroInvocation
 
                 case ParameterKind.Ident:
                     if (value is not NameExpressionSyntax)
-                        Report(value.Span, Catalogue.IdentArgumentNotAName.Says(parameter.Name));
+                        Report(value.Span, Catalogue.IdentArgumentNotAName.Message(parameter.Name));
                     break;
 
                 case ParameterKind.Expr:
@@ -271,7 +271,7 @@ public sealed class MacroInvocation
                 case ParameterKind.Enum:
                     if (value is BracedOperandSyntax)
                     {
-                        Report(value.Span, Catalogue.ExpressionArgumentBraced.Says(parameter.Name));
+                        Report(value.Span, Catalogue.ExpressionArgumentBraced.Message(parameter.Name));
                     }
                     break;
 
@@ -289,7 +289,7 @@ public sealed class MacroInvocation
     {
         var positional = macro.Parameters.Count(parameter => !parameter.IsBlock);
         var least = macro.Parameters.Count(parameter => !parameter.IsBlock && !parameter.IsOptional);
-        return Catalogue.ArgumentCount.Says(
+        return Catalogue.ArgumentCount.Message(
             macro.Name,
             positional == least ? $"{positional} argument(s)" : $"{least} to {positional} arguments");
     }

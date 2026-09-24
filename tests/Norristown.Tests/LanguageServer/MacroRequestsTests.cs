@@ -183,7 +183,7 @@ public sealed class MacroRequestsTests
     /// is written.
     /// </summary>
     [Fact]
-    public async Task HoverSaysWhatAParameterTakes()
+    public async Task HoverShowsWhatAParameterTakes()
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Typed));
@@ -213,7 +213,7 @@ public sealed class MacroRequestsTests
     /// parameter can never be that word.
     /// </summary>
     [Fact]
-    public async Task HoverOnAComparedWordSaysWhatItIs()
+    public async Task HoverOnAComparedWordShowsWhatItIs()
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Typed));
@@ -244,8 +244,8 @@ public sealed class MacroRequestsTests
         await client.OpenAsync(Uri, Typed);
 
         // The only diagnostic is a warning on the comparison `src` can never make true.
-        var said = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
-        Assert.Equal(("comparison-never-holds", DiagnosticSeverity.Warning, 8), (said.Code, said.Severity, said.Range.Start.Line));
+        var reported = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        Assert.Equal(("comparison-never-holds", DiagnosticSeverity.Warning, 8), (reported.Code, reported.Severity, reported.Range.Start.Line));
 
         var definition = await client.DefinitionAsync(Uri, Locate.At(Typed, "play!(k|ick"), timeout);
         Assert.Equal(2, definition?.Range.Start.Line);

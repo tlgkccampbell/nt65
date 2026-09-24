@@ -81,7 +81,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             items.Add(rewritten);
         }
         if (dropped && items.Count > 0)
-            items[^1] = Carrying(items[^1], list[^1]);
+            items[^1] = WithTrailingTriviaOf(items[^1], list[^1]);
         return moved ? SyntaxFactory.List<T>(items) : list;
     }
 
@@ -116,9 +116,9 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             if (i >= list.SeparatorCount)
                 continue;
             var separator = list.GetSeparator(i);
-            var written = VisitToken(separator);
-            moved |= !ReferenceEquals(written.Green, separator.Green);
-            separators.Add(written);
+            var visited = VisitToken(separator);
+            moved |= !ReferenceEquals(visited.Green, separator.Green);
+            separators.Add(visited);
         }
 
         // A list the source did not end with a separator must not end with one now, because the
@@ -129,7 +129,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         // The trivia after the last item separated the list from the rest of the line, so
         // dropping that item hands its trailing whitespace to the item now at the end.
         if (dropped && items.Count > 0)
-            items[^1] = Carrying(items[^1], list[^1]);
+            items[^1] = WithTrailingTriviaOf(items[^1], list[^1]);
         return moved ? SyntaxFactory.SeparatedList<T>(items, separators) : list;
     }
 
@@ -144,9 +144,9 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         var moved = false;
         foreach (var token in list)
         {
-            var written = VisitToken(token);
-            moved |= !ReferenceEquals(written.Green, token.Green);
-            tokens.Add(written);
+            var visited = VisitToken(token);
+            moved |= !ReferenceEquals(visited.Green, token.Green);
+            tokens.Add(visited);
         }
         return moved ? SyntaxFactory.TokenList(tokens) : list;
     }
@@ -179,7 +179,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     /// appended. A list that loses its last item keeps the trivia that separated the list from the
     /// rest of the line, so that the text that follows does not run up against the new last item.
     /// </summary>
-    private static T Carrying<T>(T kept, T removed) where T : SyntaxNode
+    private static T WithTrailingTriviaOf<T>(T kept, T removed) where T : SyntaxNode
     {
         if (removed.GetLastToken(includeZeroWidth: true) is not { } after || after.TrailingTrivia.Count == 0)
             return kept;
@@ -189,7 +189,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     }
 
     /// <summary>Rewrites the token in an optional slot; an empty slot stays empty.</summary>
-    private SyntaxToken? VisitToken(SyntaxToken? token) => token is { } written ? VisitToken(written) : null;
+    private SyntaxToken? VisitToken(SyntaxToken? token) => token is { } present ? VisitToken(present) : null;
 
     /// <summary>
     /// Returns the rewritten list item, after checking that it has the type of the list's items.
@@ -224,11 +224,11 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             // A single change spans from the first changed node or token to the last, so that the
             // file is parsed once no matter how many the rewrite touched, and the lines outside
             // that range keep the green nodes they have.
-            var written = new int[changes.Count];
-            var joined = Joined(node.Tree.Text, changes, written);
-            Between(node.Tree, changes, written);
+            var offsets = new int[changes.Count];
+            var joined = Joined(node.Tree.Text, changes, offsets);
+            Between(node.Tree, changes, offsets);
             var tree = node.Tree.WithChange(joined);
-            return Corresponding(node, tagged.Count == 0 ? tree : Reattached(tree, written, tagged));
+            return Corresponding(node, tagged.Count == 0 ? tree : Reattached(tree, offsets, tagged));
         }
         finally
         {
@@ -240,10 +240,10 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     /// <summary>
     /// Returns a single change equivalent to all of <paramref name="changes"/>. It spans from the
     /// start of the first change to the end of the last, keeping the original text between them
-    /// where nothing changed. The method fills <paramref name="written"/> with the offset in the
+    /// where nothing changed. The method fills <paramref name="offsets"/> with the offset in the
     /// file where each change's own text lands.
     /// </summary>
-    private static TextChange Joined(string text, List<TextChange> changes, int[] written)
+    private static TextChange Joined(string text, List<TextChange> changes, int[] offsets)
     {
         var start = changes[0].Start;
         var end = changes[^1].Start + changes[^1].Length;
@@ -253,7 +253,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
         {
             var change = changes[i];
             built.Append(text, at, change.Start - at);
-            written[i] = start + built.Length;
+            offsets[i] = start + built.Length;
             built.Append(change.NewText);
             at = change.Start + change.Length;
         }
@@ -268,14 +268,14 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     /// dropped.
     /// </summary>
     /// <param name="tree">The file after the change.</param>
-    /// <param name="written">The offset in that file where each change's own text lands.</param>
+    /// <param name="offsets">The offset in that file where each change's own text lands.</param>
     /// <param name="tagged">The annotated nodes and tokens in the rewrite's output.</param>
-    private static SyntaxTree Reattached(SyntaxTree tree, int[] written, List<Tagged> tagged)
+    private static SyntaxTree Reattached(SyntaxTree tree, int[] offsets, List<Tagged> tagged)
     {
         var byLine = new Dictionary<int, List<Tagged>>();
         foreach (var mark in tagged)
         {
-            var at = Math.Clamp(mark.Change < 0 ? mark.At : written[mark.Change] + mark.At, 0, tree.Text.Length);
+            var at = Math.Clamp(mark.Change < 0 ? mark.At : offsets[mark.Change] + mark.At, 0, tree.Text.Length);
             var line = tree.GetLineIndex(at);
             if (line >= tree.LineCount)
                 continue;
@@ -312,7 +312,7 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
             kept[line] = parsed with { Node = node ?? parsed.Node, SkippedTokens = rest ?? parsed.SkippedTokens };
             any = true;
         }
-        return any ? tree.WithCarried(ImmutableCollectionsMarshal.AsImmutableArray(kept)) : tree;
+        return any ? tree.WithKeptParses(ImmutableCollectionsMarshal.AsImmutableArray(kept)) : tree;
     }
 
     /// <summary>
@@ -390,33 +390,33 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     /// shows the line will be parsed again, and the child has an annotation. Then a change that
     /// reproduces it unchanged is recorded, so that its annotations are tracked.
     /// </summary>
-    private void Kept(SyntaxNode written, SyntaxNode? rewritten, bool moved)
+    private void Kept(SyntaxNode original, SyntaxNode? rewritten, bool moved)
     {
-        if (moved && rewritten is not null && ReferenceEquals(written.Green, rewritten.Green) && written.ContainsAnnotations)
+        if (moved && rewritten is not null && ReferenceEquals(original.Green, rewritten.Green) && original.ContainsAnnotations)
         {
-            Tag(written.Green, changes!.Count, 0);
-            changes.Add(new TextChange(written.FullSpan.Start, written.FullSpan.Length, written.ToFullString()));
+            Tag(original.Green, changes!.Count, 0);
+            changes.Add(new TextChange(original.FullSpan.Start, original.FullSpan.Length, original.ToFullString()));
             return;
         }
-        Changed(written, rewritten);
+        Changed(original, rewritten);
     }
 
-    private void Changed(SyntaxToken written, SyntaxToken rewritten)
+    private void Changed(SyntaxToken original, SyntaxToken rewritten)
     {
-        if (ReferenceEquals(written.Green, rewritten.Green))
+        if (ReferenceEquals(original.Green, rewritten.Green))
             return;
         Tag(rewritten.Green, changes!.Count, 0);
-        changes.Add(new TextChange(written.FullSpan.Start, written.FullSpan.Length, rewritten.ToFullString()));
+        changes.Add(new TextChange(original.FullSpan.Start, original.FullSpan.Length, rewritten.ToFullString()));
     }
 
-    private void Changed(SyntaxNode written, SyntaxNode? rewritten)
+    private void Changed(SyntaxNode original, SyntaxNode? rewritten)
     {
-        if (rewritten is not null && ReferenceEquals(written.Green, rewritten.Green))
+        if (rewritten is not null && ReferenceEquals(original.Green, rewritten.Green))
             return;
         if (rewritten is not null)
             Tag(rewritten.Green, changes!.Count, 0);
         changes!.Add(new TextChange(
-            written.FullSpan.Start, written.FullSpan.Length, rewritten?.ToFullString() ?? ""));
+            original.FullSpan.Start, original.FullSpan.Length, rewritten?.ToFullString() ?? ""));
     }
 
     /// <summary>
@@ -427,8 +427,8 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
     /// </summary>
     /// <param name="tree">The file before the changes.</param>
     /// <param name="changes">The rewrite's changes, in source order.</param>
-    /// <param name="written">The offset in the new file where each change's own text lands.</param>
-    private void Between(SyntaxTree tree, List<TextChange> changes, int[] written)
+    /// <param name="offsets">The offset in the new file where each change's own text lands.</param>
+    private void Between(SyntaxTree tree, List<TextChange> changes, int[] offsets)
     {
         if (changes.Count < 2 || !tree.Root.ContainsAnnotations)
             return;
@@ -441,14 +441,14 @@ public abstract partial class SyntaxRewriter : SyntaxVisitor<SyntaxNode>
 
             // This is how far the gap's text has moved: where it starts in the new text, minus
             // where it started in the old.
-            var moved = written[i] + changes[i].NewText.Length - from;
+            var moved = offsets[i] + changes[i].NewText.Length - from;
             foreach (var piece in tree.Root.AnnotatedPieces())
             {
                 var span = piece.FullSpan;
                 if (span.Start < from || span.End > to)
                     continue;
-                var carried = piece.AsNode() is { } inner ? inner.Green.Annotations : piece.AsToken().Green.Annotations;
-                tagged!.Add(new Tagged(-1, span.Start + moved, span.Length, piece.Kind, piece.IsToken, carried));
+                var annotations = piece.AsNode() is { } inner ? inner.Green.Annotations : piece.AsToken().Green.Annotations;
+                tagged!.Add(new Tagged(-1, span.Start + moved, span.Length, piece.Kind, piece.IsToken, annotations));
             }
         }
     }

@@ -157,14 +157,14 @@ internal static class Edits
     /// Formats a processor state as a signature or a <c>.state</c> gives it. Only the parts that
     /// are not unchanged are included, in the order the language uses.
     /// </summary>
-    public static string SpellState(ProcessorState state) =>
+    public static string FormatState(ProcessorState state) =>
         string.Join(", ", new[]
         {
-            state.A == Width.Unchanged ? null : ProcessorState.Spell("a", state.A),
-            state.Index == Width.Unchanged ? null : ProcessorState.Spell("i", state.Index),
-            state.E == ProcessorMode.Unchanged ? null : ProcessorState.Spell(state.E),
-            state.D.Kind == StateValueKind.Unchanged ? null : state.D.Spell("dp"),
-            state.B.Kind == StateValueKind.Unchanged ? null : state.B.Spell("dbr"),
+            state.A == Width.Unchanged ? null : ProcessorState.Format("a", state.A),
+            state.Index == Width.Unchanged ? null : ProcessorState.Format("i", state.Index),
+            state.E == ProcessorMode.Unchanged ? null : ProcessorState.Format(state.E),
+            state.D.Kind == StateValueKind.Unchanged ? null : state.D.Format("dp"),
+            state.B.Kind == StateValueKind.Unchanged ? null : state.B.Format("dbr"),
         }.OfType<string>());
 
     /// <summary>

@@ -213,8 +213,10 @@ internal sealed partial class Ca65Oracle
             foreach (var (name, text) in headers)
                 WriteText(work.FullName, name, text);
             var include = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(cc65)!)!, "include");
-            var (code, said) = Execute(cc65, ["-t", "none", "-I", ".", "-I", include, "-o", "compiled.s", source], work.FullName);
-            return code == 0 && said.Trim().Length == 0 ? "" : said.Trim() + (code == 0 ? "" : $"\n(exit code {code})");
+            var (code, printed) = Execute(cc65, ["-t", "none", "-I", ".", "-I", include, "-o", "compiled.s", source], work.FullName);
+            return code == 0 && printed.Trim().Length == 0
+                ? ""
+                : printed.Trim() + (code == 0 ? "" : $"\n(exit code {code})");
         }
         finally
         {
@@ -232,7 +234,7 @@ internal sealed partial class Ca65Oracle
     /// never used, is kept. nt65 imports only what a file uses, so that warning would mean an
     /// nt65 bug.
     /// </summary>
-    private static string Said(string output) =>
+    private static string Messages(string output) =>
         string.Join('\n', output.ReplaceLineEndings("\n").Split('\n')
             .Where(line => !line.Contains("is defined but never used", StringComparison.Ordinal))
             .Where(line => line.Trim().Length > 0));
@@ -296,9 +298,9 @@ internal sealed partial class Ca65Oracle
                 var include = Path.GetDirectoryName(name) is { Length: > 0 } directory ? directory : ".";
                 var (code, assembled) = Execute(ca65,
                     ["-g", .. options?.Invoke(name) ?? [], "-I", include, "-o", target, name], work.FullName);
-                var said = Said(assembled);
-                if (code != 0 || said.Length > 0)
-                    return new LinkResult(false, $"ca65 on {name}:\n{said}", []);
+                var messages = Messages(assembled);
+                if (code != 0 || messages.Length > 0)
+                    return new LinkResult(false, $"ca65 on {name}:\n{messages}", []);
                 objects.Add(target);
             }
 

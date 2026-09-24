@@ -98,9 +98,9 @@ internal static class FileInterface
         if (symbol is { Kind: SymbolKind.Macro, Definition: { } body })
             text.Append($"{indent}at line {body.LineIndex + 1}\n");
         if (symbol.Signature is { } signature)
-            text.Append($"{indent}signature {Spell(signature)}\n");
+            text.Append($"{indent}signature {Format(signature)}\n");
         if (symbol.MacroSignature is { } macroSignature)
-            text.Append($"{indent}macro signature {Spell(macroSignature)}\n");
+            text.Append($"{indent}macro signature {Format(macroSignature)}\n");
         foreach (var parameter in symbol.Parameters)
             text.Append($"{indent}parameter {parameter.Symbol.Name} {parameter.Accepts} {parameter.Default?.GetText()} {parameter.Empty}\n");
         foreach (var parameter in symbol.ParameterSymbols)
@@ -110,15 +110,15 @@ internal static class FileInterface
         foreach (var (used, _) in symbol.Uses)
             text.Append($"{indent}uses {used.Tree.Path} {used.QualifiedName}\n");
 
-        var written = new[] { symbol.ValueExpression, symbol.Data, symbol.StateDeclaration, symbol.TypeExpression, symbol.Definition }
+        var declaredNodes = new[] { symbol.ValueExpression, symbol.Data, symbol.StateDeclaration, symbol.TypeExpression, symbol.Definition }
             .Concat(symbol.Items)
             .Concat(symbol.Entries)
             .Concat(symbol.Parameters.Select(parameter => parameter.Default))
             .OfType<SyntaxNode>()
             .ToList();
-        foreach (var node in written)
+        foreach (var node in declaredNodes)
             text.Append($"{indent}{node.Kind} {node.GetText()}\n");
-        foreach (var node in written.SelectMany(node => node.DescendantNodes().Prepend(node)))
+        foreach (var node in declaredNodes.SelectMany(node => node.DescendantNodes().Prepend(node)))
         {
             foreach (var token in node.ChildTokens)
             {
@@ -136,6 +136,6 @@ internal static class FileInterface
     }
 
     // A signature is compared by what it declares, not by the syntax it was read from.
-    private static string Spell(Signature signature) =>
+    private static string Format(Signature signature) =>
         $"{signature.Entry} -> {signature.Exit} {signature.Distance} {signature.Inline?.Text} {signature.Arguments} {signature.NeverReturns} {signature.Keeps}";
 }

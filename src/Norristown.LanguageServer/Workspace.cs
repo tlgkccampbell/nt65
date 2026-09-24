@@ -190,7 +190,7 @@ internal sealed class Workspace
         {
             if (open.TryGetValue(uri, out var document))
                 return document;
-            return named.TryGetValue(PathOf(uri), out var spelled) ? open.GetValueOrDefault(spelled) : null;
+            return named.TryGetValue(PathOf(uri), out var canonical) ? open.GetValueOrDefault(canonical) : null;
         }
     }
 

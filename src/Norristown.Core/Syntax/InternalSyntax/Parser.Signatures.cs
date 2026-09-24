@@ -41,7 +41,7 @@ internal sealed partial class Parser
         // `a` and `i` are the accumulator and index widths; `a` arrives as a register token.
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register))
         {
-            Report(Catalogue.ExpectedStateItem.Says("a processor-state item, such as `a8`, `i16` or `dp = 0`"));
+            Report(Catalogue.ExpectedStateItem.Message("a processor-state item, such as `a8`, `i16` or `dp = 0`"));
             return null;
         }
 
@@ -59,14 +59,14 @@ internal sealed partial class Parser
             {
                 var openBracket = Advance();
                 var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseBankRange) : null;
-                var closeBracket = Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Says("`]`"));
+                var closeBracket = Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`"));
                 if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
-                    Report(nameIndex, Catalogue.StateItemUnknown.Says(name.Text));
+                    Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
                 return Own(new StateBanksItemSyntax(name, equals, openBracket, ranges, closeBracket));
             }
             var given = ParseExpression();
             if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
-                Report(nameIndex, Catalogue.StateItemUnknown.Says(name.Text));
+                Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
 
             // The misspelled-name diagnostic is about the item, so the item takes it.
             return Own(new StateValueItemSyntax(name, equals, given));
@@ -75,7 +75,7 @@ internal sealed partial class Parser
         GreenToken? suffix = Kind is SyntaxKind.Star or SyntaxKind.Question ? Advance() : null;
         if (!SyntaxFacts.IsStateItem(name.Text, suffix?.Kind ?? SyntaxKind.None))
         {
-            Report(nameIndex, Catalogue.StateItemUnknown.Says(name.Text));
+            Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
             return Own(new StateFlagItemSyntax(name, suffix));
         }
         else if (name.Text.Equals("args", StringComparison.OrdinalIgnoreCase))
@@ -106,7 +106,7 @@ internal sealed partial class Parser
     {
         if (!AtKeptRegister(index))
         {
-            Report(Catalogue.ExpectedKeptRegisters.Says("the registers it keeps: `keeps a`, `keeps x, y`"));
+            Report(Catalogue.ExpectedKeptRegisters.Message("the registers it keeps: `keeps a`, `keeps x, y`"));
             return null;
         }
         var pieces = ImmutableArray.CreateBuilder<GreenNode>();

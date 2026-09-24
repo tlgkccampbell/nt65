@@ -79,7 +79,7 @@ public sealed class StateAnalysisTests
     /// may have run first.
     /// </summary>
     [Fact]
-    public void AClcInAnotherBlockSaysNothingAboutTheXce()
+    public void AClcInAnotherBlockDoesNotDecideTheXce()
     {
         var state = StateAt(".proc p: emu -> e?, a?, i? {\n    clc\n@here:\n    xce\n    nop\n    rts\n}\n", "nop");
 
@@ -202,7 +202,7 @@ public sealed class StateAnalysisTests
     /// A conditional branch to a routine is a tail call when taken, and continues when not.
     /// </summary>
     [Fact]
-    public void ABranchToARoutineIsATailCallThatCarriesOn()
+    public void ABranchToARoutineIsATailCallOrFallsThrough()
     {
         const string Text = """
             .proc wide: a16 {
@@ -314,13 +314,13 @@ public sealed class StateAnalysisTests
     /// makes unknown.
     /// </summary>
     [Fact]
-    public void TheAnalysisSettlesInAFewWalksPerBlock()
+    public void TheAnalysisConvergesInAFewWalksPerBlock()
     {
-        Assert.Equal(1, MostWalks(".proc p: a8, i8 {\n    rep #$20\n    lda #1\n    sep #$20\n    rts\n}\n"));
+        Assert.Equal(1, MaximumWalks(".proc p: a8, i8 {\n    rep #$20\n    lda #1\n    sep #$20\n    rts\n}\n"));
 
         // In a loop whose body does not change the state, the state along its back edge is what
         // the head already has, so the head is not walked again.
-        Assert.Equal(1, MostWalks("""
+        Assert.Equal(1, MaximumWalks("""
             .proc p: a8, i8 {
                 ldx #8
             @loop:
@@ -332,7 +332,7 @@ public sealed class StateAnalysisTests
 
         // In a loop that changes a width, the back edge tells the loop head that A may be either
         // width, and the head is walked once more with that.
-        Assert.Equal(2, MostWalks("""
+        Assert.Equal(2, MaximumWalks("""
             .proc p: a8, i8 {
             @loop:
                 rep #$20
@@ -344,7 +344,7 @@ public sealed class StateAnalysisTests
 
         // With two nested loops, each pushing, the stack depth at each loop head becomes unknown
         // on the first round, and nothing is left to change after that.
-        Assert.Equal(2, MostWalks("""
+        Assert.Equal(2, MaximumWalks("""
             .proc p: a8, i8 {
                 php
             @outer:
@@ -366,7 +366,7 @@ public sealed class StateAnalysisTests
         // saved status to find, the second round's `plp` loses the index width too, which the
         // loop head learns only on a third walk. Each part can change at most twice, so the
         // bound is one walk more than the number of parts, not two.
-        Assert.Equal(3, MostWalks("""
+        Assert.Equal(3, MaximumWalks("""
             .proc p: a8, i8 {
                 php
             @loop:
@@ -423,17 +423,17 @@ public sealed class StateAnalysisTests
     /// in a routine that declares them the label's `.state` must as well.
     /// </summary>
     [Fact]
-    public void ADeclaredLabelStartsFromWhatTheRoutineSaysOfDAndB()
+    public void ADeclaredLabelStartsFromWhatTheRoutineDeclaresOfDAndB()
     {
         Assert.Empty(Problems(".proc p: a8, i8 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
         Assert.Contains("main.nt65:5: `rts`: `p` declares it returns with `dp = $2100`, but D is not known here",
             Problems(".proc p: dp = $2100 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
     }
 
-    private static int MostWalks(string text)
+    private static int MaximumWalks(string text)
     {
         var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
-        return Assert.Single(analysis.States).MostWalks;
+        return Assert.Single(analysis.States).MaximumWalks;
     }
 
     private static IReadOnlyList<string> Problems(string text) =>

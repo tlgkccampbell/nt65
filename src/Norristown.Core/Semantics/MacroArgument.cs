@@ -14,7 +14,7 @@ namespace Norristown.Semantics;
 /// </param>
 /// <param name="Items">The items a <c>list</c> parameter was given, in order; empty for every other kind.</param>
 /// <param name="Block">The block a <c>block</c> parameter was given, or null when it was left out.</param>
-/// <param name="Written">
+/// <param name="IsGiven">
 /// Whether the call supplied the argument, as opposed to taking the parameter's default.
 /// </param>
 public sealed record MacroArgument(
@@ -22,7 +22,7 @@ public sealed record MacroArgument(
     SyntaxNode? Value,
     IReadOnlyList<SyntaxNode> Items,
     BlockSyntax? Block,
-    bool Written)
+    bool IsGiven)
 {
     /// <summary>
     /// Gets the word a <c>one</c> parameter was given, or null when the parameter is of another

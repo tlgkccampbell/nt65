@@ -126,7 +126,7 @@
         "call-state-mismatch",
         "call-target-not-a-routine",
         "call-target-unknown",
-        "cannot-be-written",
+        "cannot-be-translated",
         "character-empty",
         "character-too-long",
         "charmap-has-no-entry",

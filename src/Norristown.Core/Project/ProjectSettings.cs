@@ -73,7 +73,7 @@ public sealed record ProjectSettings(
             };
         }
         var named = Configurations.Select(configuration => $"`{configuration.Name}`").ToList();
-        var message = Catalogue.ConfigurationUnknown.Says(
+        var message = Catalogue.ConfigurationUnknown.Message(
             name,
             named.Count == 0
                 ? $"{ProjectFile.Name} names none"
@@ -90,10 +90,10 @@ public sealed record ProjectSettings(
     {
         if (over.Count == 0)
             return Severities;
-        var said = new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
+        var merged = new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
         foreach (var (id, level) in Severities.Concat(over))
-            said[id] = level;
-        return said;
+            merged[id] = level;
+        return merged;
     }
 
     /// <summary>

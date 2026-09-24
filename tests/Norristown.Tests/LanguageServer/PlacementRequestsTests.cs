@@ -25,7 +25,7 @@ public sealed class PlacementRequestsTests
     /// into, and go to definition leads to where the module is declared.
     /// </summary>
     [Fact]
-    public void ThePathAPlaceWritesNamesTheModule()
+    public void ThePathInAPlaceNamesTheModule()
     {
         const string Part = ".module part: placed\n\n.segment CODE\n.export .proc tail {\n    rts\n}\n";
         var (analysis, model) = Analyzed(Main, Part);
@@ -46,7 +46,7 @@ public sealed class PlacementRequestsTests
 
     /// <summary>The path is coloured as a module, which the grammar alone cannot tell from any other name.</summary>
     [Fact]
-    public void ThePathAPlaceWritesIsColouredAsAModule()
+    public void ThePathInAPlaceIsColouredAsAModule()
     {
         var (_, model) = Analyzed(Main, ".module part: placed\n");
         var data = NameHighlighting.In(model).Data;

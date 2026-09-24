@@ -20,9 +20,9 @@ public sealed class InitCommandTests : IDisposable
     [Fact]
     public void WhatItWritesBuilds()
     {
-        var (code, said) = Run(root.FullName, "init");
+        var (code, printed) = Run(root.FullName, "init");
 
-        Assert.Equal((0, "nt65.json\nsrc/main.nt65\n"), (code, said));
+        Assert.Equal((0, "nt65.json\nsrc/main.nt65\n"), (code, printed));
         Assert.Equal((0, ""), Run(root.FullName, "build"));
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "main.s")));
     }
@@ -49,9 +49,9 @@ public sealed class InitCommandTests : IDisposable
     [Fact]
     public void ItWritesIntoTheDirectoryItIsGiven()
     {
-        var (code, said) = Run(root.FullName, "init", "game", "--cpu", "65816");
+        var (code, printed) = Run(root.FullName, "init", "game", "--cpu", "65816");
 
-        Assert.Equal((0, "game/nt65.json\ngame/src/main.nt65\n"), (code, said));
+        Assert.Equal((0, "game/nt65.json\ngame/src/main.nt65\n"), (code, printed));
         Assert.Contains("\"cpu\": \"65816\"", Read("game/nt65.json"));
         Assert.Equal(0, Run(Path.Combine(root.FullName, "game"), "build").Code);
     }
@@ -65,9 +65,9 @@ public sealed class InitCommandTests : IDisposable
     {
         Repo.WriteText(Path.Combine(root.FullName, "src", "main.nt65"), ".module mine\n");
 
-        var (code, said) = Run(root.FullName, "init");
+        var (code, printed) = Run(root.FullName, "init");
 
-        Assert.Equal((1, "nt65: src/main.nt65 exists already\n"), (code, said));
+        Assert.Equal((1, "nt65: src/main.nt65 exists already\n"), (code, printed));
         Assert.Equal(".module mine\n", Read("src/main.nt65"));
         Assert.False(File.Exists(Path.Combine(root.FullName, ProjectFile.Name)));
 
@@ -79,7 +79,7 @@ public sealed class InitCommandTests : IDisposable
 
     /// <summary>A processor nt65 does not have, and a second directory, are command-line mistakes.</summary>
     [Fact]
-    public void WhatItCannotBeAskedForSaysSo()
+    public void WhatItCannotBeAskedForIsReportedAndNothingIsWritten()
     {
         Assert.Equal(
             (2, "nt65: `z80` is not a processor nt65 knows; `--cpu` takes 6502, 6502x, 65sc02, r65c02, 65c02 or 65816\nsee `nt65 --help`\n"),
@@ -89,7 +89,7 @@ public sealed class InitCommandTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(root.FullName));
     }
 
-    private static (int Code, string Said) Run(string directory, params string[] arguments)
+    private static (int Code, string Printed) Run(string directory, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

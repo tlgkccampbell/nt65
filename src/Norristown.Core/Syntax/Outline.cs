@@ -72,8 +72,8 @@ public static class Outline
             case SegmentBlockSyntax or SegmentRegionSyntax:
                 // A segment name in quotes is an error, but it still names the segment.
                 // It cannot contain escapes, so removing the quotes is enough.
-                var written = (SegmentStatementSyntax)opener;
-                var segment = written.Name.IsMissing ? written.Keyword : written.Name;
+                var segmentStatement = (SegmentStatementSyntax)opener;
+                var segment = segmentStatement.Name.IsMissing ? segmentStatement.Keyword : segmentStatement.Name;
                 return new OutlineItem(OutlineKind.Segment, segment.Text.Trim('"'), null, block.Span, segment.Span, children);
 
             case DataDeclarationSyntax { Name: { IsMissing: false } data }:

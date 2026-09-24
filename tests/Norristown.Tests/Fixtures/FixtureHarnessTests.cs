@@ -17,7 +17,7 @@ public sealed class FixtureHarnessTests : IDisposable
             "a.nt65", "lda #1\r\n  brx ;! error[unknown-thing]: unknown mnemonic\n;!warning[loose]:  spaced out  \n");
         Assert.Equal(
             ["a.nt65:2: error[unknown-thing]: unknown mnemonic", "a.nt65:3: warning[loose]: spaced out"],
-            FixtureCase.ParseInlineDiagnostics(file).Select(said => said.ToString()));
+            FixtureCase.ParseInlineDiagnostics(file).Select(diagnostic => diagnostic.ToString()));
     }
 
     [Fact]

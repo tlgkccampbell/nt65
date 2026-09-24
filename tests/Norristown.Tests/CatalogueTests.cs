@@ -36,15 +36,15 @@ public sealed partial class CatalogueTests
     /// reporting site passes appears in the message.
     /// </summary>
     [Fact]
-    public void EverySentenceCanBeSaid()
+    public void EveryMessageFormatHasContiguousPlaceholders()
     {
         foreach (var descriptor in Catalogue.All)
         {
             var holes = Holes(descriptor.Format);
             object?[] arguments = [.. Enumerable.Range(0, holes).Select(object? (i) => $"<{i}>")];
-            var said = descriptor.Says(arguments).Text;
+            var message = descriptor.Message(arguments).Text;
             for (var i = 0; i < holes; i++)
-                Assert.Contains($"<{i}>", said, StringComparison.Ordinal);
+                Assert.Contains($"<{i}>", message, StringComparison.Ordinal);
         }
     }
 

@@ -36,7 +36,7 @@ public sealed class GeneratedSyntaxTests
     /// is an empty list, never a missing one.
     /// </summary>
     [Fact]
-    public void APieceSaysItsTypeAndItsKinds()
+    public void APieceRecordsItsTypeAndItsKinds()
     {
         foreach (var piece in Table().SelectMany(node => node.Slots).Where(slot => slot.IsPiece))
         {

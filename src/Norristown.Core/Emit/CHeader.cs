@@ -203,7 +203,7 @@ public sealed class CHeader
             if (type is not null)
             {
                 diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
-                    Catalogue.CHeaderUntyped.Says(symbol.Name, type.PathName)));
+                    Catalogue.CHeaderUntyped.Message(symbol.Name, type.PathName)));
             }
             return $"unsigned char {name}[{size}]";
         }
@@ -226,7 +226,7 @@ public sealed class CHeader
             return true;
         var span = symbol.ExportSpan is { } at ? symbol.Tree.GetSpan(at) : symbol.DeclarationSpan;
         diagnostics.Add(new Diagnostic(span,
-            Catalogue.CHeaderNameLeftOut.Says(symbol.PathName, symbol.OutputName, what, symbol.Name)));
+            Catalogue.CHeaderNameLeftOut.Message(symbol.PathName, symbol.OutputName, what, symbol.Name)));
         return false;
     }
 

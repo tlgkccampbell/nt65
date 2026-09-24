@@ -73,7 +73,7 @@ public sealed class ViewRequestsTests
     /// could be written, under a first line that says the output is incomplete and why.
     /// </summary>
     [Fact]
-    public async Task TheOutputFollowsTheEditorAndSaysWhenItIsIncomplete()
+    public async Task TheOutputFollowsTheEditorAndReportsWhenItIsIncomplete()
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
@@ -86,8 +86,8 @@ public sealed class ViewRequestsTests
 
         // Once the output has been requested, the server reports when the program has finished
         // being analyzed after each edit.
-        var said = await client.NextOutputChangedAsync(timeout);
-        Assert.Equal(Uri, said.GetProperty("uri").GetString());
+        var changed = await client.NextOutputChangedAsync(timeout);
+        Assert.Equal(Uri, changed.GetProperty("uri").GetString());
 
         var output = await OutputAsync(client, timeout);
         Assert.NotNull(output);
@@ -103,7 +103,7 @@ public sealed class ViewRequestsTests
     /// summary of what the call becomes. A hover over the call shows the same thing.
     /// </summary>
     [Fact]
-    public async Task ACallIsWrittenOutAsNt65()
+    public async Task TheExpansionOfACallIsShownAsNt65()
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
@@ -157,14 +157,14 @@ public sealed class ViewRequestsTests
 
         var hover = await client.HoverAsync(Uri, Locate.At(Text, "cl|ear!"), timeout);
         Assert.NotNull(hover);
-        var said = hover.Contents.Value;
-        Assert.Matches(@"expands to\s+10 lines · ", said);
-        Assert.Contains("[Show expansion](command:nt65.showExpansion?", said, StringComparison.Ordinal);
-        Assert.Contains("— 2 more lines", said, StringComparison.Ordinal);
+        var shown = hover.Contents.Value;
+        Assert.Matches(@"expands to\s+10 lines · ", shown);
+        Assert.Contains("[Show expansion](command:nt65.showExpansion?", shown, StringComparison.Ordinal);
+        Assert.Contains("— 2 more lines", shown, StringComparison.Ordinal);
 
         // The hover shows eight lines and no more, because the listing is the detail and the
         // summary line is the answer.
-        var listing = said.Split("```nt65")[^1].Split("```")[0].Trim().Split('\n');
+        var listing = shown.Split("```nt65")[^1].Split("```")[0].Trim().Split('\n');
         Assert.Equal(8, listing.Length);
         Assert.Equal("lda #0", listing[0].Trim());
     }
@@ -176,7 +176,7 @@ public sealed class ViewRequestsTests
     /// the caret.
     /// </summary>
     [Fact]
-    public async Task TheHoversLinkOpensTheExpansionHoweverTheEditorSpellsTheFile()
+    public async Task TheHoversLinkOpensTheExpansionHoweverTheEditorNamesTheFile()
     {
         const string escaped = "file:///c%3A/work/main.nt65";
         var timeout = TestTimeout.Token();
@@ -202,12 +202,12 @@ public sealed class ViewRequestsTests
         Assert.NotNull(hover);
         var link = hover.Contents.Value.Split("command:nt65.showExpansion?")[1].Split(')')[0];
         using var parsed = JsonDocument.Parse(System.Uri.UnescapeDataString(link));
-        var carried = parsed.RootElement;
+        var arguments = parsed.RootElement;
 
         var expansion = await client.RequestAsync<ExpansionResult?>("nt65/expansion",
             new ExpansionParams(
-                new TextDocumentIdentifier(carried[0].GetString()!),
-                new Position(carried[1].GetInt32(), carried[2].GetInt32())),
+                new TextDocumentIdentifier(arguments[0].GetString()!),
+                new Position(arguments[1].GetInt32(), arguments[2].GetInt32())),
             timeout);
         Assert.NotNull(expansion);
         Assert.Equal("clear!(5)", expansion.Title);

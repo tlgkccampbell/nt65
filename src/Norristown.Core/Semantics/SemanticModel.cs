@@ -24,7 +24,7 @@ public sealed class SemanticModel
     // What the file may name in the other modules, and the places its `.use` items reach.
     // Together they answer a lookup at a position.
     private readonly ProgramSymbols program;
-    private readonly IReadOnlyDictionary<string, Place> used;
+    private readonly IReadOnlyDictionary<string, Resolution> used;
 
     internal SemanticModel(
         SyntaxTree tree,
@@ -264,7 +264,7 @@ public sealed class SemanticModel
     public SymbolInfo GetSymbolInfo(int position, IReadOnlyList<string> path, bool fromRoot = false)
     {
         var at = ScopeAt(position);
-        Place? found = null;
+        Resolution? found = null;
         for (var i = 0; i < path.Count; i++)
         {
             var last = i == path.Count - 1;
@@ -272,12 +272,12 @@ public sealed class SemanticModel
                 ? fromRoot
                     ? Lookup.ModuleRoot(path[0], program)
                     : at.Lookup(path[0]) is { } local
-                        ? new Place(local)
+                        ? new Resolution(local)
                         : Lookup.Outside(path[0], last, program, used, Globs)
                 : found!.Value.Module is { } prefix
                     ? Lookup.InModule(path[i], prefix, program)
                     : Lookup.BodyOf(found.Value.Symbol!)?.FindMember(path[i]) is { } member
-                        ? new Place(member)
+                        ? new Resolution(member)
                         : null;
             if (found is null or { IsReported: true })
                 return SymbolInfo.None;
@@ -473,14 +473,14 @@ public sealed class SemanticModel
                 continue;
             }
             var inMacro = call.Ancestors().Any(node => node is BlockSyntax { Opener.Statement: MacroDeclarationSyntax });
-            foreach (var argument in invocation.Arguments.Where(argument => argument.Written))
+            foreach (var argument in invocation.Arguments.Where(argument => argument.IsGiven))
             {
                 var accepts = argument.Parameter.Accepts;
                 var kind = accepts.Kind == ParameterKind.List ? accepts.Element : accepts;
                 if (kind is not { Kind: ParameterKind.Enum } || EnumOf(kind) is not { Body: { } body })
                     continue;
-                var written = accepts.Kind == ParameterKind.List ? argument.Items : argument.Value is { } value ? [value] : [];
-                foreach (var name in written)
+                var givenNodes = accepts.Kind == ParameterKind.List ? argument.Items : argument.Value is { } value ? [value] : [];
+                foreach (var name in givenNodes)
                 {
                     if (name is NameExpressionSyntax { Names.Length: 1, GlobalToken: null, SimpleName: { Kind: SyntaxKind.Identifier } word }
                         && body.FindMember(word.Text) is { Kind: SymbolKind.Constant } member)
@@ -516,14 +516,14 @@ public sealed class SemanticModel
         MemberOf(argument.Parameter.Accepts, argument.Value, caller);
 
     /// <summary>
-    /// Returns the member of the enum of <paramref name="kind"/> that <paramref name="written"/>
+    /// Returns the member of the enum of <paramref name="kind"/> that <paramref name="argument"/>
     /// names, resolved in the caller's expansion <paramref name="caller"/>. The expression is an
     /// argument of an enum kind, or an item of a <c>list</c> of that kind. Returns null when it
     /// names no member of the enum.
     /// </summary>
-    public Symbol? MemberOf(ArgumentKind kind, SyntaxNode? written, Expansion? caller)
+    public Symbol? MemberOf(ArgumentKind kind, SyntaxNode? argument, Expansion? caller)
     {
-        if (EnumOf(kind) is not { Body: { } members } || written is not NameExpressionSyntax name)
+        if (EnumOf(kind) is not { Body: { } members } || argument is not NameExpressionSyntax name)
             return null;
         if (name is { Names.Length: 1, GlobalToken: null, SimpleName: { Kind: SyntaxKind.Identifier } word }
             && members.FindMember(word.Text) is { Kind: SymbolKind.Constant } bare)

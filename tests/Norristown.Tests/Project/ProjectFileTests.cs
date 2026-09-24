@@ -35,7 +35,7 @@ public sealed class ProjectFileTests
 
     /// <summary>An empty object is a project that sets nothing, not a broken one.</summary>
     [Fact]
-    public void AnEmptyObjectIsAProjectThatSaysNothing()
+    public void AnEmptyObjectIsAProjectThatSetsNothing()
     {
         var project = Read("{}");
 
@@ -133,7 +133,7 @@ public sealed class ProjectFileTests
 
     /// <summary>A define a configuration gets wrong is reported where the configuration gives it.</summary>
     [Fact]
-    public void AConfigurationsDefineIsReportedWhereItIsWritten()
+    public void AConfigurationsDefineIsReportedWhereItIsDeclared()
     {
         var project = Read("""
             {
@@ -196,7 +196,7 @@ public sealed class ProjectFileTests
     /// project's setting, so that a release build can be stricter than the everyday one.
     /// </summary>
     [Fact]
-    public void ADiagnosticIsReportedAsTheProjectAndItsConfigurationSay()
+    public void ADiagnosticIsReportedAsTheProjectAndItsConfigurationSet()
     {
         var project = Read("""
             {
@@ -208,10 +208,10 @@ public sealed class ProjectFileTests
             """);
 
         Assert.Empty(project.Diagnostics);
-        Assert.Equal([("mnemonic-name", Severity.Warning), ("unused-symbol", null)], Said(project));
+        Assert.Equal([("mnemonic-name", Severity.Warning), ("unused-symbol", null)], Severities(project));
         Assert.Equal(
             [("mnemonic-name", Severity.Warning), ("unused-symbol", Severity.Error)],
-            Said(project.Configured("release", default)));
+            Severities(project.Configured("release", default)));
     }
 
     /// <summary>
@@ -220,17 +220,17 @@ public sealed class ProjectFileTests
     /// a warning on another processor, cannot be switched off.
     /// </summary>
     [Fact]
-    public void WhatTheProjectSaysIsWhatEachDiagnosticIsReportedAs()
+    public void EachDiagnosticIsReportedAtTheSeverityTheProjectSets()
     {
         var project = Read("""{ "diagnostics": { "unused-symbol": "off", "mnemonic-name": "error" } }""");
-        Diagnostic Said(DiagnosticDescriptor descriptor, Severity severity) =>
-            new(new Span("main.nt65", 1, 1, 2), severity, descriptor.Says("x", "y", "z"));
+        Diagnostic Create(DiagnosticDescriptor descriptor, Severity severity) =>
+            new(new Span("main.nt65", 1, 1, 2), severity, descriptor.Message("x", "y", "z"));
 
         var reported = Norristown.Diagnostics.WithSeverities(
             [
-                Said(Catalogue.UnusedSymbol, Severity.Warning),
-                Said(Catalogue.MnemonicName, Severity.Warning),
-                Said(Catalogue.UnusedSymbol, Severity.Error),
+                Create(Catalogue.UnusedSymbol, Severity.Warning),
+                Create(Catalogue.MnemonicName, Severity.Warning),
+                Create(Catalogue.UnusedSymbol, Severity.Error),
             ],
             project.Severities);
         Assert.Equal(
@@ -253,8 +253,8 @@ public sealed class ProjectFileTests
         Assert.Empty(project.Severities);
     }
 
-    private static IEnumerable<(string Id, Severity? Level)> Said(ProjectSettings project) =>
-        project.Severities.Select(pair => (pair.Key, pair.Value)).OrderBy(said => said.Key, StringComparer.Ordinal);
+    private static IEnumerable<(string Id, Severity? Level)> Severities(ProjectSettings project) =>
+        project.Severities.Select(pair => (pair.Key, pair.Value)).OrderBy(entry => entry.Key, StringComparer.Ordinal);
 
     private static ProjectSettings Read(string text) => ProjectFile.Read(ProjectFile.Name, text);
 }

@@ -19,7 +19,7 @@ namespace Norristown.Semantics;
 public sealed class Configuration
 {
     // A file's `.config` items, wherever they appear, read once per tree.
-    private static readonly ConditionalWeakTable<SyntaxTree, List<ConfigDeclarationSyntax>> written = new();
+    private static readonly ConditionalWeakTable<SyntaxTree, List<ConfigDeclarationSyntax>> settingsByTree = new();
 
     private readonly Dictionary<SyntaxTree, List<TextSpan>> omitted;
     private readonly HashSet<(SyntaxTree Tree, int Position)> answered;
@@ -111,9 +111,9 @@ public sealed class Configuration
         switch (name)
         {
             case ".target":
-                if (given.Count != 1 || Alone(given[0]) is not { } written || CpuNames.Parse(written.Text) is not { } named)
+                if (given.Count != 1 || Alone(given[0]) is not { } cpuName || CpuNames.Parse(cpuName.Text) is not { } named)
                 {
-                    report(function.Span, Catalogue.TargetArgument.Says(CpuNames.Listed));
+                    report(function.Span, Catalogue.TargetArgument.Message(CpuNames.Listed));
                     return Value.Unknown;
                 }
                 return Value.Of(named == cpu);
@@ -127,7 +127,7 @@ public sealed class Configuration
                     report(function.Span, Catalogue.HasArgument);
                     return Value.Unknown;
                 }
-                return Value.Of(Processor.Instructions.Writable(cpu, mnemonic.MnemonicKind));
+                return Value.Of(Processor.Instructions.Available(cpu, mnemonic.MnemonicKind));
 
             default:
                 return null;
@@ -191,7 +191,7 @@ public sealed class Configuration
     }
 
     private static List<ConfigDeclarationSyntax> SettingsIn(SyntaxTree tree) =>
-        written.GetValue(tree, tree => [.. tree.Root.DescendantNodes().OfType<ConfigDeclarationSyntax>()]);
+        settingsByTree.GetValue(tree, tree => [.. tree.Root.DescendantNodes().OfType<ConfigDeclarationSyntax>()]);
 
     /// <summary>
     /// Reads one file's conditions. A chain is a run of sibling blocks, made up of the
@@ -240,7 +240,7 @@ public sealed class Configuration
                     case ElseDirectiveSyntax:
                         if (!chaining)
                         {
-                            Report(opener.Span, Catalogue.ElseWithoutIf.Says(Directive(opener)));
+                            Report(opener.Span, Catalogue.ElseWithoutIf.Message(Directive(opener)));
                             Leave(block);
                             continue;
                         }
@@ -380,12 +380,12 @@ public sealed class Configuration
                 if (!settings.byName.TryGetValue(key, out var setting))
                 {
                     diagnostics.Add(new Diagnostic(define.Declaration,
-                        Catalogue.SettingUnknown.Says(define.Name)));
+                        Catalogue.SettingUnknown.Message(define.Name)));
                 }
                 else if (!setting.IsExported)
                 {
                     diagnostics.Add(new Diagnostic(define.Declaration,
-                        Catalogue.SettingNotExported.Says(define.Name, key.Item1)));
+                        Catalogue.SettingNotExported.Message(define.Name, key.Item1)));
                 }
                 else
                 {
@@ -471,7 +471,7 @@ public sealed class Configuration
                 return (null, false);
             if (!found.IsExported && found.Tree != tree)
             {
-                report(name, Catalogue.NotExported.Says(name.GetText().Trim(), modules[found.Tree]));
+                report(name, Catalogue.NotExported.Message(name.GetText().Trim(), modules[found.Tree]));
                 return (null, true);
             }
             return (found, false);
@@ -488,18 +488,18 @@ public sealed class Configuration
             var reader = readerFor!(setting.Tree);
             if (evaluating.Contains(setting))
             {
-                reader.Report(setting.Name.Span, Catalogue.DefinedInTermsOfItself.Says(setting.Name.Text));
+                reader.Report(setting.Name.Span, Catalogue.DefinedInTermsOfItself.Message(setting.Name.Text));
                 values[setting] = null;
                 return null;
             }
             evaluating.Add(setting);
-            var written = setting.Expression is { } expression ? reader.Evaluate(expression) : Value.Unknown;
+            var evaluated = setting.Expression is { } expression ? reader.Evaluate(expression) : Value.Unknown;
             evaluating.Remove(setting);
-            if (written.IsString && setting.Expression is { } text)
+            if (evaluated.IsString && setting.Expression is { } text)
                 reader.Report(text.Span, Catalogue.ConfigIsText);
             if (values.TryGetValue(setting, out var already))
                 return already;
-            return values[setting] = setting.Given ?? written.AsNumber();
+            return values[setting] = setting.Given ?? evaluated.AsNumber();
         }
 
         private static string ModuleOf(SyntaxTree tree)

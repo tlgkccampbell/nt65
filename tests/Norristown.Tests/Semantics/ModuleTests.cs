@@ -68,17 +68,17 @@ public sealed class ModuleTests
     [InlineData(".use gfx::clear as wipe", "wipe", "")]
     [InlineData(".use gfx::{clear as wipe}", "wipe", "")]
     [InlineData(".use gfx as g", "g::clear", "")]
-    public void AUseBringsNamesIn(string use, string written, string alsoNamed)
+    public void AUseBringsNamesIn(string use, string called, string alsoNamed)
     {
         // Everything a `.use` brings in is used, because a name brought in and never used is
         // reported as an item that may be removed.
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", $".module main\n{use}\n.segment CODE\n.export .proc main {{\n{alsoNamed}    jsr {written}\n    rts\n}}\n"));
+            ("main.nt65", $".module main\n{use}\n.segment CODE\n.export .proc main {{\n{alsoNamed}    jsr {called}\n    rts\n}}\n"));
 
         Assert.Empty(program.Problems());
         var main = program.File("main.nt65");
-        var reference = main.ReferenceAt(main.Tree.Text.LastIndexOf(written.Split("::")[^1], StringComparison.Ordinal));
+        var reference = main.ReferenceAt(main.Tree.Text.LastIndexOf(called.Split("::")[^1], StringComparison.Ordinal));
         Assert.Equal("gfx::clear", reference?.Symbol.PathName);
     }
 
@@ -380,15 +380,15 @@ public sealed class ModuleTests
     /// unused warning is for a declaration nothing names, and removing the use brings it back.
     /// </summary>
     [Fact]
-    public void ANameAnotherModuleWritesWithoutTheExportIsNotAlsoReportedUnused()
+    public void ANameAnotherModuleUsesWithoutTheExportIsNotAlsoReportedUnused()
     {
         const string Lib = ".module lib\nhidden = 2\n";
-        const string Writes = ".module main\n.segment CODE\n.export .proc main {\n    lda #lib::hidden\n    rts\n}\n";
+        const string Uses = ".module main\n.segment CODE\n.export .proc main {\n    lda #lib::hidden\n    rts\n}\n";
         const string Leaves = ".module main\n.segment CODE\n.export .proc main {\n    lda #1\n    rts\n}\n";
 
         Assert.Equal(
             ["main.nt65:4: `lib::hidden` is not exported by module `lib`"],
-            Analysis.Program(("lib.nt65", Lib), ("main.nt65", Writes)).Problems());
+            Analysis.Program(("lib.nt65", Lib), ("main.nt65", Uses)).Problems());
         Assert.Equal(
             ["lib.nt65:2: `hidden` is never used: nothing names it, and it is not exported"],
             Analysis.Program(("lib.nt65", Lib), ("main.nt65", Leaves)).Problems());

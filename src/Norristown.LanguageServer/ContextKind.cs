@@ -6,7 +6,7 @@ namespace Norristown.LanguageServer;
 /// repetition allows whatever the block around it allows, and every other block sets the context
 /// itself.
 /// </summary>
-internal enum Place
+internal enum ContextKind
 {
     /// <summary>
     /// A file's top level, which holds declarations and the items that configure the program.

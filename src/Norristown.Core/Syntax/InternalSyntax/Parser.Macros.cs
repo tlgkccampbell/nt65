@@ -10,12 +10,12 @@ internal sealed partial class Parser
     private GreenNode ParseMacro()
     {
         var keyword = Advance();
-        var name = ExpectName(Catalogue.ExpectedName.Says("a macro name"));
+        var name = ExpectName(Catalogue.ExpectedName.Message("a macro name"));
         MacroParameterListSyntax? parameters = null;
         if (Kind == SyntaxKind.OpenParen)
             parameters = ParseMacroParameterList();
         else
-            ReportOnce(Catalogue.ExpectedParenthesis.Says("`(` and the parameters"));
+            ReportOnce(Catalogue.ExpectedParenthesis.Message("`(` and the parameters"));
         var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
         return new MacroDeclarationSyntax(keyword, name, parameters, signature, ExpectOpenBrace());
     }
@@ -25,7 +25,7 @@ internal sealed partial class Parser
         var openParen = Advance();
         var parameters = Kind != SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseMacroParameter) : null;
         return new MacroParameterListSyntax(
-            openParen, parameters, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`")));
+            openParen, parameters, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`")));
     }
 
     /// <summary>
@@ -36,7 +36,7 @@ internal sealed partial class Parser
     {
         if (!AtName)
         {
-            Report(Catalogue.ExpectedName.Says("a parameter name"));
+            Report(Catalogue.ExpectedName.Message("a parameter name"));
             return null;
         }
         var name = Advance();
@@ -77,7 +77,7 @@ internal sealed partial class Parser
         {
             return new ParameterKindSyntax(
                 Missing(SyntaxKind.Identifier,
-                    Catalogue.ExpectedParameterKind.Says(
+                    Catalogue.ExpectedParameterKind.Message(
                         "`expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)`, `block` or an enum's name")),
                 null, null, null, null, null, null, null, null);
         }
@@ -94,7 +94,7 @@ internal sealed partial class Parser
             return new ParameterKindSyntax(keyword, null, null, null, null, null, null, null, null);
         if (Kind != SyntaxKind.OpenParen)
         {
-            Report(Catalogue.ExpectedParenthesis.Says("`(`"));
+            Report(Catalogue.ExpectedParenthesis.Message("`(`"));
             return new ParameterKindSyntax(keyword, null, null, null, null, null, null, null, null);
         }
 
@@ -102,11 +102,11 @@ internal sealed partial class Parser
         if (ranged)
         {
             var low = ParseExpression();
-            var dotDot = Expect(SyntaxKind.DotDot, Catalogue.ExpectedDotDot.Says("`..` and the greatest value: `const(0..15)`"));
+            var dotDot = Expect(SyntaxKind.DotDot, Catalogue.ExpectedDotDot.Message("`..` and the greatest value: `const(0..15)`"));
             var high = ParseExpression();
             return new ParameterKindSyntax(
                 keyword, null, openParen, null, null, low, dotDot, high,
-                Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`")));
+                Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`")));
         }
 
         // The words a `one` accepts are never looked up, so a register or a mnemonic
@@ -115,7 +115,7 @@ internal sealed partial class Parser
         var element = nested ? ParseParameterKind() : null;
         return new ParameterKindSyntax(
             keyword, null, openParen, words, element, null, null, null,
-            Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`")));
+            Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`")));
     }
 
     /// <summary>
@@ -126,7 +126,7 @@ internal sealed partial class Parser
     {
         if (AtName)
             return new IdentifierNameSyntax(Advance(), null);
-        Report(Catalogue.ExpectedName.Says("a word"));
+        Report(Catalogue.ExpectedName.Message("a word"));
         return null;
     }
 
@@ -143,7 +143,7 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.OpenParen)
             arguments = ParseMacroArguments();
         else
-            Report(Catalogue.ExpectedParenthesis.Says("`(` and the arguments"));
+            Report(Catalogue.ExpectedParenthesis.Message("`(` and the arguments"));
         return new MacroCallSyntax(name, bang, arguments, Kind == SyntaxKind.OpenBrace ? Advance() : null);
     }
 
@@ -151,7 +151,7 @@ internal sealed partial class Parser
     {
         var openParen = Advance();
         var arguments = Kind != SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseArgument) : null;
-        return new ArgumentListSyntax(openParen, arguments, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says(
+        return new ArgumentListSyntax(openParen, arguments, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message(
             "`)`")));
     }
 
@@ -178,7 +178,7 @@ internal sealed partial class Parser
         braced = true;
         var operand = ParseOperand();
         braced = outer;
-        return new BracedOperandSyntax(openBrace, operand, Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Says(
+        return new BracedOperandSyntax(openBrace, operand, Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Message(
             "`}`")));
     }
 }

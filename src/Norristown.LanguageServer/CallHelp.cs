@@ -90,11 +90,12 @@ internal static class CallHelp
     private static Protocol.SignatureHelp ForMacro(
         Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
     {
-        var written = macro.Definition is BlockSyntax definition
+        var declared = macro.Definition is BlockSyntax definition
             ? ((definition.Opener.Statement as MacroDeclarationSyntax)?.Parameters?.Parameters ?? [])
                 .Select(parameter => parameter.GetText().Trim()).ToList()
             : [.. macro.Parameters.Select(parameter => parameter.Name)];
-        return Help($"{macro.Name}!(", written, ")", macro.KindText, Math.Max(0, Active(macro, before, open, end, argument)));
+        return Help(
+            $"{macro.Name}!(", declared, ")", macro.KindText, Math.Max(0, Active(macro, before, open, end, argument)));
     }
 
     /// <summary>

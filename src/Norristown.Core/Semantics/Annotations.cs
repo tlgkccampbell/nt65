@@ -52,11 +52,11 @@ public static class Annotations
             var above = siblings[i];
             if (above is BlockSyntax { BlockKind: BlockKind.MacroBlock } block)
                 return block.Opener;
-            if (above is not LineSyntax { Statement: var statement } written)
+            if (above is not LineSyntax { Statement: var statement } candidate)
                 return null;
             if (statement is BlankLineSyntax || Is(statement))
                 continue;
-            return IsAnnotatable(statement) ? written : null;
+            return IsAnnotatable(statement) ? candidate : null;
         }
         return null;
     }
@@ -67,9 +67,9 @@ public static class Annotations
     /// statement ends. An annotation with no statement above it has nothing to apply to.
     /// </summary>
     public static DiagnosticMessage? Misplaced(LineSyntax line, StatementSyntax directive) =>
-        Annotated(line) is not null ? null : (DiagnosticMessage?)Catalogue.AnnotationAboutNothing.Says(Spell(directive));
+        Annotated(line) is not null ? null : (DiagnosticMessage?)Catalogue.AnnotationAboutNothing.Message(Format(directive));
 
     /// <summary>Returns the directive's name as it appears in the source, for a message that names it.</summary>
-    public static string Spell(StatementSyntax directive) =>
+    public static string Format(StatementSyntax directive) =>
         directive is PatchDirectiveSyntax ? ".patch" : ".next";
 }

@@ -26,6 +26,6 @@ public sealed record DiagnosticDescriptor(
     /// Returns this descriptor's message, with <paramref name="arguments"/> filled into its
     /// placeholders.
     /// </summary>
-    public DiagnosticMessage Says(params object?[] arguments) =>
+    public DiagnosticMessage Message(params object?[] arguments) =>
         new(this, string.Format(CultureInfo.InvariantCulture, Format, arguments));
 }

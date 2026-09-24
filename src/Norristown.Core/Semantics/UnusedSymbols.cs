@@ -70,7 +70,7 @@ public static class UnusedSymbols
             if (omitted.Count > 0 && omitted.Any(new Regex($@"(?<![\w@.]){Regex.Escape(symbol.DisplayName)}(?!\w)").IsMatch))
                 continue;
             yield return new Diagnostic(symbol.DeclarationSpan,
-                Catalogue.UnusedSymbol.Says(symbol.DisplayName))
+                Catalogue.UnusedSymbol.Message(symbol.DisplayName))
             {
                 Fix = new DiagnosticFix(FixKind.Unused, symbol.DisplayName),
                 IsUnnecessary = true,
@@ -103,13 +103,13 @@ public static class UnusedSymbols
         if (items.Count == 0)
             yield break;
 
-        var written = Written(tree);
+        var used = NamesIn(tree);
         foreach (var (name, brought) in items)
         {
-            if (written.Contains(name))
+            if (used.Contains(name))
                 continue;
             yield return new Diagnostic(tree.GetSpan(brought.At),
-                Catalogue.UnusedUseItem.Says(name))
+                Catalogue.UnusedUseItem.Message(name))
             {
                 Fix = new DiagnosticFix(FixKind.UseItem, name),
                 IsUnnecessary = true,
@@ -132,7 +132,7 @@ public static class UnusedSymbols
     /// <c>.use a::b as c</c> brought in. The tokens are what all of these cases have in common.
     /// </para>
     /// </summary>
-    private static HashSet<string> Written(SyntaxTree tree)
+    private static HashSet<string> NamesIn(SyntaxTree tree)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
         for (var index = 0; index < tree.LineCount; index++)

@@ -13,7 +13,7 @@ internal static class ParameterKinds
     /// Gets the kinds a parameter may have, as completion inserts them, each with a description of
     /// what it accepts.
     /// </summary>
-    public static IReadOnlyList<(string Written, string Takes)> Written { get; } =
+    public static IReadOnlyList<(string Keyword, string Takes)> Keywords { get; } =
     [
         ("expr", "an expression, constant or address"),
         ("const", "a constant, which a condition may test; const(lo..hi) takes one in a range"),

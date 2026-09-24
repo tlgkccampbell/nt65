@@ -53,8 +53,8 @@ internal sealed partial class Parser
     private OperandSyntax? TryParseIndirect()
     {
         var start = index;
-        var said = reported;
-        var placed = pending.Count;
+        var reportedBefore = reported;
+        var pendingBefore = pending.Count;
         var openParen = Advance();
         var address = ParseExpression();
 
@@ -83,9 +83,9 @@ internal sealed partial class Parser
         // and the nodes it built are discarded along with the diagnostics reported while building
         // them, so no diagnostic about a missing token from the attempt survives it.
         index = start;
-        if (pending.Count > placed)
-            pending.RemoveRange(placed, pending.Count - placed);
-        reported = said;
+        if (pending.Count > pendingBefore)
+            pending.RemoveRange(pendingBefore, pending.Count - pendingBefore);
+        reported = reportedBefore;
         return null;
     }
 
@@ -95,7 +95,7 @@ internal sealed partial class Parser
         var address = ParseExpression();
         var closeBracket = Kind == SyntaxKind.CloseBracket
             ? Advance()
-            : Missing(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Says("`]`"));
+            : Missing(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`"));
         return Kind == SyntaxKind.Comma && IsRegister(1, "y")
             ? new LongIndirectOperandSyntax(openBracket, address, closeBracket, Advance(), Advance())
             : new LongIndirectOperandSyntax(openBracket, address, closeBracket, null, null);

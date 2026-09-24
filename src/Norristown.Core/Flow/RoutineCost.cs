@@ -5,8 +5,8 @@ namespace Norristown.Flow;
 /// path ends. A routine that loops has no upper bound, because the program does not say how many
 /// times the loop runs. A routine containing an instruction with no count has neither bound.
 /// </summary>
-/// <param name="Least">The fewest cycles a path through it can take, or null when unknown.</param>
-/// <param name="Most">
+/// <param name="Minimum">The fewest cycles a path through it can take, or null when unknown.</param>
+/// <param name="Maximum">
 /// The most cycles a path through it can take, or null when the routine loops or the count is
 /// unknown.
 /// </param>
@@ -31,18 +31,18 @@ namespace Norristown.Flow;
 /// null when nothing is left out.
 /// </param>
 public readonly record struct RoutineCost(
-    int? Least, int? Most, bool Calls, bool Ends, string? Uncounted = null,
+    int? Minimum, int? Maximum, bool Calls, bool Ends, string? Uncounted = null,
     IReadOnlyList<Exclusion>? Excluded = null)
 {
     /// <summary>
     /// Gets a value indicating whether nt65 has a count for every instruction a path through the
     /// routine runs.
     /// </summary>
-    public bool IsKnown => Least is not null;
+    public bool IsKnown => Minimum is not null;
 
     /// <summary>
     /// Gets a value indicating whether a path through the routine can come back on itself, so
     /// there is no upper bound.
     /// </summary>
-    public bool Loops => Least is not null && Most is null;
+    public bool Loops => Minimum is not null && Maximum is null;
 }

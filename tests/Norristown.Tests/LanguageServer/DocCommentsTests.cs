@@ -111,7 +111,7 @@ public sealed class DocCommentsTests
     /// would be mostly prose nobody is reading.
     /// </summary>
     [Fact]
-    public async Task ACompletionCarriesTheComment()
+    public async Task ACompletionIncludesTheComment()
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Source, timeout);

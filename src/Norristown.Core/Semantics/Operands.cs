@@ -86,7 +86,7 @@ public static class Operands
     /// deciding the size. <c>d:</c> makes a direct operand of a constant address, reached through
     /// the direct page.
     /// </summary>
-    public static AddressSize? WrittenPrefix(SyntaxNode operand)
+    public static AddressSize? PrefixSize(SyntaxNode operand)
     {
         if (operand is not AbsoluteOperandSyntax { Prefix: { } prefix })
             return null;
@@ -122,7 +122,7 @@ public static class Operands
     };
 
     private static bool Is(SyntaxToken? register, string name) =>
-        register is { } written && written.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
+        register is { } token && token.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Returns a value indicating whether <paramref name="call"/> calls <c>.byteof</c>.</summary>
     public static bool IsByteOf(CallExpressionSyntax call) =>

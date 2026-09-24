@@ -28,7 +28,8 @@ public static class Diagnostics
             return diagnostics;
         return diagnostics
             .Where(d => d.Severity == Severity.Error || !severities.TryGetValue(d.Id, out var off) || off is not null)
-            .Select(d => d.Severity != Severity.Error && severities.TryGetValue(d.Id, out var said) && said is { } level
+            .Select(d => d.Severity != Severity.Error
+                && severities.TryGetValue(d.Id, out var configured) && configured is { } level
                 ? d with { Severity = level }
                 : d);
     }

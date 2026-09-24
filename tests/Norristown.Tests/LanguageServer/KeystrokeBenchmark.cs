@@ -100,18 +100,18 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         Workspace workspace, string uri, ref int version, string what, int line, int start, int end, string text, string? undo)
     {
         var atOnce = new List<double>();
-        var settled = new List<double>();
+        var wholeProgram = new List<double>();
         var analyzed = new SortedSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < 30; i++)
         {
-            var (range, written) = i % 2 == 0
+            var (range, typed) = i % 2 == 0
                 ? (new Range(new Position(line, start), new Position(line, end)), text)
                 : undo is null
                     ? (new Range(new Position(line, 0), new Position(line + 1, 0)), "")
                     : (new Range(new Position(line, start), new Position(line, start + text.Length)), undo);
             var watch = Stopwatch.StartNew();
             workspace.Change(new VersionedTextDocumentIdentifier(uri, ++version),
-                [new TextDocumentContentChangeEvent(range, written)]);
+                [new TextDocumentContentChangeEvent(range, typed)]);
 
             // The typist waits for the edited file's own diagnostics, from the analysis the edit
             // requested.
@@ -122,14 +122,15 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             var analysis = workspace.AnalysisFor(Workspace.PathOf(uri));
             foreach (var file in workspace.ToPublish())
                 _ = Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration);
-            settled.Add(watch.Elapsed.TotalMilliseconds);
+            wholeProgram.Add(watch.Elapsed.TotalMilliseconds);
             analyzed.Add(analysis.WholeProgram is { } reason ? $"all ({reason})" : $"{analysis.Reanalyzed} file(s)");
             Assert.Empty(analysis.Diagnostics);
         }
         atOnce.Sort();
-        settled.Sort();
+        wholeProgram.Sort();
         output.WriteLine($"{what}: at once median {Median(atOnce):0.0} ms (min {atOnce[0]:0.0}, max {atOnce[^1]:0.0}); "
-            + $"whole program median {Median(settled):0.0} ms (min {settled[0]:0.0}, max {settled[^1]:0.0}); "
+            + $"whole program median {Median(wholeProgram):0.0} ms "
+            + $"(min {wholeProgram[0]:0.0}, max {wholeProgram[^1]:0.0}); "
             + $"analyzed {string.Join(", ", analyzed)}");
     }
 }

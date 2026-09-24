@@ -21,7 +21,7 @@ public sealed class HostileOptionTests
     /// memory model that changes default address sizes, smart mode, automatic imports, a define
     /// of a name that a program's own configuration uses, and every emulation feature at once.
     /// </summary>
-    private static readonly (string Name, string[] Options, bool MaySayTheSegmentsDisagree)[] Sets =
+    private static readonly (string Name, string[] Options, bool MayReportASegmentMismatch)[] Sets =
     [
         ("plain", [], false),
         ("-t c64", ["-t", "c64"], false),
@@ -70,7 +70,7 @@ public sealed class HostileOptionTests
     }
 
     private static IEnumerable<string> Check(
-        (string Name, string[] Options, bool MaySayTheSegmentsDisagree) set, IReadOnlyList<CorpusProgram> programs,
+        (string Name, string[] Options, bool MayReportASegmentMismatch) set, IReadOnlyList<CorpusProgram> programs,
         IReadOnlyDictionary<string, byte[]> baselines)
     {
         foreach (var program in programs)
@@ -86,7 +86,7 @@ public sealed class HostileOptionTests
             // Every segment nt65 writes states its address size, so a memory model that disagrees
             // with the segment table produces an error naming the segment rather than a silent
             // change of addressing modes. That error keeps the promise, so it is accepted here.
-            if (set.MaySayTheSegmentsDisagree
+            if (set.MayReportASegmentMismatch
                 && result.Messages.Contains("Segment attribute mismatch", StringComparison.Ordinal))
             {
                 continue;

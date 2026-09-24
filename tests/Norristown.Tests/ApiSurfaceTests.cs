@@ -129,7 +129,7 @@ public sealed class ApiSurfaceTests
         FieldInfo field => field.IsPublic || field.IsFamily || field.IsFamilyOrAssembly,
         MethodBase method => method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly,
         PropertyInfo property => property.GetAccessors(nonPublic: true).Any(Visible),
-        EventInfo tell => new[] { tell.AddMethod, tell.RemoveMethod }.OfType<MethodInfo>().Any(Visible),
+        EventInfo eventInfo => new[] { eventInfo.AddMethod, eventInfo.RemoveMethod }.OfType<MethodInfo>().Any(Visible),
         _ => false,
     };
 
@@ -141,7 +141,7 @@ public sealed class ApiSurfaceTests
         PropertyInfo property => [property.PropertyType, .. property.GetIndexParameters().Select(p => p.ParameterType)],
         MethodInfo method => [method.ReturnType, .. method.GetParameters().Select(p => p.ParameterType)],
         MethodBase constructor => [.. constructor.GetParameters().Select(p => p.ParameterType)],
-        EventInfo tell => tell.EventHandlerType is { } handler ? [handler] : [],
+        EventInfo eventInfo => eventInfo.EventHandlerType is { } handler ? [handler] : [],
         _ => [],
     };
 

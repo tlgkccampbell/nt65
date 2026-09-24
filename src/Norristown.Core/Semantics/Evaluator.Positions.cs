@@ -28,7 +28,7 @@ internal sealed partial class Evaluator
     /// </summary>
     private long? Distance(BinaryExpressionSyntax difference)
     {
-        if (PlaceOf(difference.Left) is not { } to || PlaceOf(difference.Right) is not { } from)
+        if (PositionOf(difference.Left) is not { } to || PositionOf(difference.Right) is not { } from)
             return null;
         if (to.Data == from.Data)
             return to.Offset - from.Offset;
@@ -197,19 +197,19 @@ internal sealed partial class Evaluator
     /// far into it that location is. Returns null when the expression names no such location, or
     /// one whose offset nt65 cannot determine.
     /// </summary>
-    private (Symbol Data, long Offset)? PlaceOf(SyntaxNode node)
+    private (Symbol Data, long Offset)? PositionOf(SyntaxNode node)
     {
         switch (node)
         {
             case ParenthesizedExpressionSyntax parenthesized:
-                return PlaceOf(parenthesized.Expression);
+                return PositionOf(parenthesized.Expression);
 
             // A location a constant distance from another location is also a location.
             case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } moved:
                 var minus = moved.OperatorToken.Kind == SyntaxKind.Minus;
-                if (PlaceOf(moved.Left) is { } left && Evaluate(moved.Right).AsNumber() is { } by)
+                if (PositionOf(moved.Left) is { } left && Evaluate(moved.Right).AsNumber() is { } by)
                     return (left.Data, minus ? left.Offset - by : left.Offset + by);
-                if (!minus && Evaluate(moved.Left).AsNumber() is { } ahead && PlaceOf(moved.Right) is { } right)
+                if (!minus && Evaluate(moved.Left).AsNumber() is { } ahead && PositionOf(moved.Right) is { } right)
                     return (right.Data, right.Offset + ahead);
                 return null;
 
@@ -218,11 +218,11 @@ internal sealed partial class Evaluator
                 when function.Text.Equals(".endof", StringComparison.OrdinalIgnoreCase)
                     && call.Arguments.Arguments is [NameExpressionSyntax measured]
                     && SymbolOf(measured) is { Kind: SymbolKind.Data } ended:
-                Settle(ended);
-                return ended.Size is { } size && PlaceOf(ended) is { } start ? (start.Data, start.Offset + size) : null;
+                EnsureEvaluated(ended);
+                return ended.Size is { } size && PositionOf(ended) is { } start ? (start.Data, start.Offset + size) : null;
 
             case NameExpressionSyntax name:
-                return PlaceOfName(name);
+                return PositionOfName(name);
 
             default:
                 return null;
@@ -234,7 +234,7 @@ internal sealed partial class Evaluator
     /// elements its indexes step over, or a member reached through a record, with the member
     /// offsets along the path added to the record's own location.
     /// </summary>
-    private (Symbol Data, long Offset)? PlaceOfName(NameExpressionSyntax name)
+    private (Symbol Data, long Offset)? PositionOfName(NameExpressionSyntax name)
     {
         if (BoundItem(name) is not null)
             return null;
@@ -252,12 +252,12 @@ internal sealed partial class Evaluator
             }
             if (address is null || part.Kind != SymbolKind.Member)
                 continue;
-            Settle(part);
+            EnsureEvaluated(part);
             if (part.Value.AsNumber() is not { } offset)
                 return null;
             along += offset;
         }
-        if (address is null || PlaceOf(address) is not { } place)
+        if (address is null || PositionOf(address) is not { } position)
             return null;
         if (name.IsIndexed)
         {
@@ -265,7 +265,7 @@ internal sealed partial class Evaluator
                 return null;
             along += stepped;
         }
-        return (place.Data, place.Offset + along);
+        return (position.Data, position.Offset + along);
     }
 
     /// <summary>
@@ -273,7 +273,7 @@ internal sealed partial class Evaluator
     /// at the top level stands at its own start, and a member or a position is as far in as the
     /// bytes above it in every body around it. A label outside every declaration is in none.
     /// </summary>
-    private (Symbol Data, long Offset)? PlaceOf(Symbol symbol)
+    private (Symbol Data, long Offset)? PositionOf(Symbol symbol)
     {
         var outermost = symbol;
         while (outermost.Scope is { Kind: ScopeKind.Data, Owner: { Kind: SymbolKind.Data } around } && around.Tree == symbol.Tree)
@@ -315,7 +315,7 @@ internal sealed partial class Evaluator
                 chaining = false;
                 if (holds)
                     return true;
-                part = child is LineSyntax written ? BytesOnLine(written.Statement) : 0;
+                part = child is LineSyntax childLine ? BytesOnLine(childLine.Statement) : 0;
             }
             else
             {
@@ -335,7 +335,7 @@ internal sealed partial class Evaluator
                         chaining = false;
                         if (holds)
                             return null;
-                        part = Turns(nested, repetition, () => Total(nested.Members, 1, BytesOnLine, NestedBytes));
+                        part = Iterations(nested, repetition, () => Total(nested.Members, 1, BytesOnLine, NestedBytes));
                         break;
                     case BlockKind.Data when holds:
                         return nested.Opener.FullSpan.Contains(position) ? true : Seek(nested.Members, 1, position, ref offset);

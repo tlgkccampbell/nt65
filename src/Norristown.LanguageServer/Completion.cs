@@ -93,8 +93,8 @@ internal static class Completion
         var about = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (label, suggestion) in items)
         {
-            if (suggestion.Documentation is { Length: > 0 } written)
-                about[label] = written;
+            if (suggestion.Documentation is { Length: > 0 } documentation)
+                about[label] = documentation;
         }
         return (
             [.. items
@@ -117,9 +117,9 @@ internal static class Completion
         foreach (var (name, suggestion) in items.ToList())
         {
             if (suggestion.Kind == Protocol.CompletionItemKind.Keyword
-                && Snippets.Of(name, program, cpu) is { } written)
+                && Snippets.Of(name, program, cpu) is { } snippet)
             {
-                items[name] = suggestion with { Text = written, IsSnippet = true };
+                items[name] = suggestion with { Text = snippet, IsSnippet = true };
             }
         }
     }
@@ -178,7 +178,7 @@ internal static class Completion
         }
         if (directive == ".cpu" && before.Count == line.Start + 1)
         {
-            AddWords([.. CpuNames.All.Select(CpuNames.Spell)], "processor", items);
+            AddWords([.. CpuNames.All.Select(CpuNames.Format)], "processor", items);
             return;
         }
         if (directive == ".state")
@@ -211,9 +211,9 @@ internal static class Completion
         {
             return;
         }
-        else if (AfterMark(line, directive) is { } written)
+        else if (AfterMark(line, directive) is { } mark)
         {
-            AddWords(written.Words, written.Detail, items);
+            AddWords(mark.Words, mark.Detail, items);
             return;
         }
         else if (directive is { } declaring && Declaring.Contains(declaring)
@@ -354,8 +354,8 @@ internal static class Completion
     /// </summary>
     private static void Kinds(SemanticModel model, LineContext line, Dictionary<string, Suggestion> items)
     {
-        foreach (var (written, takes) in ParameterKinds.Written)
-            AddWord(written, takes, items);
+        foreach (var (keyword, takes) in ParameterKinds.Keywords)
+            AddWord(keyword, takes, items);
         AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Enum);
     }
 
@@ -403,19 +403,19 @@ internal static class Completion
         foreach (var (name, detail) in Directives.At(line))
             items.TryAdd(name, new Suggestion(Protocol.CompletionItemKind.Keyword, detail, name));
 
-        switch (line.Place)
+        switch (line.Context)
         {
             // Code may begin with an instruction this CPU has, a macro in scope, or a block
             // that a macro body splices in by naming its parameter.
-            case Place.Code or Place.Unknown:
+            case ContextKind.Code or ContextKind.Unknown:
                 foreach (var mnemonic in SyntaxFacts.Mnemonics)
                 {
-                    if (!Instructions.Writable(cpu, mnemonic))
+                    if (!Instructions.Available(cpu, mnemonic))
                         continue;
                     var takes = ModesOf(cpu, mnemonic).Any(Takes);
-                    var written = SyntaxFacts.TextOf(mnemonic);
-                    items.TryAdd(written, new Suggestion(
-                        Protocol.CompletionItemKind.Text, "instruction", takes ? written + " " : written,
+                    var text = SyntaxFacts.TextOf(mnemonic);
+                    items.TryAdd(text, new Suggestion(
+                        Protocol.CompletionItemKind.Text, "instruction", takes ? text + " " : text,
                         Band: Suggestion.Instruction));
                 }
                 AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Macro
@@ -424,18 +424,18 @@ internal static class Completion
                 break;
 
             // A `.data` block holds data, the declarations that name it, and macro calls.
-            case Place.Data:
+            case ContextKind.Data:
                 AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Macro);
                 Called(items);
                 break;
 
             // A line of values, of a list or of a charmap starts with an expression.
-            case Place.Values:
+            case ContextKind.Values:
                 AddExpression(program, model, line, items);
                 break;
 
             // A record initializer gives the type's members their values, one a line.
-            case Place.Record:
+            case ContextKind.Record:
                 if (line.RecordType is { } path && model.GetSymbolInfo(line.Caret, path) is { IsNone: false } found)
                     AddMembers(program, model, found, modulesToo: false, items);
                 break;
@@ -476,8 +476,8 @@ internal static class Completion
 
         // The operand so far is checked for whether it starts inside a `(` or a `[`, whether
         // that has been closed again, and whether a `#` has made it a value.
-        var written = line.Before.Skip(line.Start + 1).ToList();
-        var opened = written.Count == 0 ? '\0' : written[0].Kind switch
+        var operand = line.Before.Skip(line.Start + 1).ToList();
+        var opened = operand.Count == 0 ? '\0' : operand[0].Kind switch
         {
             SyntaxKind.OpenParen => '(',
             SyntaxKind.OpenBracket => '[',
@@ -485,7 +485,7 @@ internal static class Completion
         };
         var depth = 0;
         var value = false;
-        foreach (var token in written)
+        foreach (var token in operand)
         {
             depth += token.Kind switch
             {
@@ -496,7 +496,7 @@ internal static class Completion
             value |= token.Kind == SyntaxKind.Hash;
         }
 
-        if (written.Count == 0)
+        if (operand.Count == 0)
         {
             Forms(modes, cpu, mnemonic, items);
 
@@ -506,7 +506,7 @@ internal static class Completion
                 AddExpression(program, model, line, items);
             return;
         }
-        if (written[^1].Kind == SyntaxKind.Comma)
+        if (operand[^1].Kind == SyntaxKind.Comma)
         {
             Indexing(modes, opened, depth, value, items);
 
@@ -515,7 +515,7 @@ internal static class Completion
                 AddExpression(program, model, line, items);
             return;
         }
-        if (!Ends(written[^1].Kind))
+        if (!Ends(operand[^1].Kind))
             AddExpression(program, model, line, items);
     }
 
@@ -638,7 +638,7 @@ internal static class Completion
             ".import" => ([.. Directives.Sizes, "proc("], "how the name is reached"),
             ".export" or ".segment" => (Directives.Sizes, "address size"),
             ".data" => (Directives.Data, "what it holds"),
-            null when line.Place == Place.TypeMembers => ([.. Directives.Elements, ".res"], "what it holds"),
+            null when line.Context == ContextKind.TypeMembers => ([.. Directives.Elements, ".res"], "what it holds"),
             _ => null,
         };
     }

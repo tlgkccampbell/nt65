@@ -113,7 +113,7 @@ public sealed class BasicBlock
     /// counting a register down from an immediate. It is null for every other block, whose
     /// iteration count the program does not state.
     /// </summary>
-    public int? Turns { get; internal set; }
+    public int? Iterations { get; internal set; }
 
     /// <summary>
     /// Gets what running the block for all of those iterations costs, or null where they are not

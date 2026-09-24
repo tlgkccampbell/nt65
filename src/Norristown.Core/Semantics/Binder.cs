@@ -81,7 +81,7 @@ internal sealed partial class Binder
 
     // The file's `.use` items, what they bring in once resolved, and what it re-exports.
     private readonly List<UseDirectiveSyntax> useDirectives = [];
-    private readonly Dictionary<string, Place> used = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Resolution> used = new(StringComparer.Ordinal);
 
     // Where each `.use` gives the name it brings in, so that an item nothing uses can be
     // reported on the item rather than on the whole line.
@@ -202,7 +202,7 @@ internal sealed partial class Binder
         {
             if (at.Lookup(name.Text) is { IsDefine: false, Kind: not (SymbolKind.MacroParameter or SymbolKind.Binding) })
             {
-                Report(name.Span, Catalogue.DefinedAsksAboutDefines.Says(name.Text));
+                Report(name.Span, Catalogue.DefinedAsksAboutDefines.Message(name.Text));
             }
         }
 
@@ -217,7 +217,7 @@ internal sealed partial class Binder
             var reference = references.LastOrDefault(found => found.Span.Start == last.Span.Start && !found.IsDeclaration);
             if (reference?.Symbol is { } foreign && foreign.Tree != tree)
             {
-                Report(name.Span, Catalogue.ReexportNeeded.Says(foreign.Name, foreign.Module, foreign.PathName));
+                Report(name.Span, Catalogue.ReexportNeeded.Message(foreign.Name, foreign.Module, foreign.PathName));
             }
         }
 
@@ -449,14 +449,14 @@ internal sealed partial class Binder
         if (scope.Symbols is not [{ Kind: SymbolKind.Binding } binding])
             return null;
         DiagnosticMessage? why = kind == BlockKind.Repeat
-            ? Catalogue.FamilyMisplaced.Says("a family must be in an `.each` over a named enum, because each routine it "
+            ? Catalogue.FamilyMisplaced.Message("a family must be in an `.each` over a named enum, because each routine it "
                 + "declares is named after one of the enum's members; a `.repeat` only counts, so it gives no names")
             : around.Kind == ScopeKind.Repetition
-                ? Catalogue.FamilyMisplaced.Says("a family cannot be inside another `.repeat` or `.each`: it declares its "
+                ? Catalogue.FamilyMisplaced.Message("a family cannot be inside another `.repeat` or `.each`: it declares its "
                     + "routines into the scope around its `.each`, and inside a repetition that scope is a new one on every pass")
                 : Placement is ScopeKind.File
                     ? (DiagnosticMessage?)null
-                    : Catalogue.FamilyMisplaced.Says(
+                    : Catalogue.FamilyMisplaced.Message(
                         "a family declares one routine or data declaration per member into the scope around its `.each`, and this one is "
                         + $"inside {Article(Placement)}: " + (Placement is ScopeKind.Macro or ScopeKind.BlockArgument
                             ? "names declared there cannot reach the caller's scope"
@@ -517,7 +517,7 @@ internal sealed partial class Binder
         var around = scope;
         var placement = Placement;
         var why = placement is ScopeKind.Proc or ScopeKind.Data or ScopeKind.Type
-            ? Catalogue.MultiprocMisplaced.Says(Article(placement))
+            ? Catalogue.MultiprocMisplaced.Message(Article(placement))
             : (DiagnosticMessage?)null;
         if (why is { } misplaced)
             Report(multiProc.Keyword.Span, misplaced);
@@ -534,12 +534,12 @@ internal sealed partial class Binder
         // signature may name the binding. For example, `dbr = Bank::b` is that bank on each
         // instance.
         CollectUses(walked);
-        var turns = new Scope(ScopeKind.Repetition, null, around, null);
+        var iterations = new Scope(ScopeKind.Repetition, null, around, null);
         var outer = scope;
-        scope = turns;
+        scope = iterations;
         var binding = Declare(multiProc.Name, SymbolKind.Binding);
         CollectUses(signature);
-        var body = new Scope(ScopeKind.Proc, binding?.Name, turns, null);
+        var body = new Scope(ScopeKind.Proc, binding?.Name, iterations, null);
         if (binding is not null && declares)
             AddFamily(new Repeated(block, walked, binding, around, segment, null), multiProc, body, SymbolKind.Proc, signature, null, null);
         scope = outer;
@@ -556,7 +556,7 @@ internal sealed partial class Binder
     {
         var what = kind == ScopeKind.Scope ? "scope" : "`.data` block";
         Report(NameToken(opener)?.Span ?? opener.Span,
-            Catalogue.FamilyDeclaresTooMuch.Says(each.Binding.Name, what, each.Binding.Name, each.Binding.Name));
+            Catalogue.FamilyDeclaresTooMuch.Message(each.Binding.Name, what, each.Binding.Name, each.Binding.Name));
 
         // The block still opens a scope of its own, so its contents have somewhere to be
         // declared and the one error does not lead to others.
@@ -619,12 +619,12 @@ internal sealed partial class Binder
     {
         var at = NameToken(pending.Declaration)?.Span ?? pending.Declaration.Span;
         var walked = pending.Each.Walked;
-        var written = walked?.GetText().Trim();
+        var walkedText = walked?.GetText().Trim();
         var found = walked is null ? null : NamedByPath(walked, pending.Each.Around);
         if (found is not { Kind: SymbolKind.Enum, Body: { } members })
         {
-            Report(walked?.Span ?? at, Catalogue.FamilyNotOverAnEnum.Says(
-                written, found is null ? "is not declared" : $"is {Named(found)}"));
+            Report(walked?.Span ?? at, Catalogue.FamilyNotOverAnEnum.Message(
+                walkedText, found is null ? "is not declared" : $"is {Named(found)}"));
             return;
         }
 
@@ -664,7 +664,7 @@ internal sealed partial class Binder
         instance.Bound = (pending.Each.Binding, new Expansion.Bound(member.Value, null, Member: member));
         if (scope.Declare(instance) is { } existing)
         {
-            Report(at, Catalogue.FamilyMemberCollides.Says(member.Name, pending.Each.Walked?.GetText().Trim()),
+            Report(at, Catalogue.FamilyMemberCollides.Message(member.Name, pending.Each.Walked?.GetText().Trim()),
                 new RelatedSpan(existing.DeclarationSpan, "declared here"));
         }
         symbols.Add(instance);
@@ -686,7 +686,7 @@ internal sealed partial class Binder
     {
         if (expression is not NameExpressionSyntax name)
             return null;
-        Place? part = null;
+        Resolution? part = null;
         var path = name.GlobalToken is not null;
         var parts = name.Parts;
         for (var i = 0; i < parts.Count; i++)
@@ -695,10 +695,10 @@ internal sealed partial class Binder
                 break;
             var last = i == parts.Count - 1;
             part = !path
-                ? at.Lookup(token.Text) is { } local ? new Place(local) : Outside(token, last, null)
+                ? at.Lookup(token.Text) is { } local ? new Resolution(local) : Outside(token, last, null)
                 : part is null ? ModuleRoot(token, null)
                 : part.Value.Module is { } prefix ? InModule(token, prefix, last, null)
-                : BodyOf(part.Value.Symbol!)?.FindMember(token.Text) is { } member ? new Place(member)
+                : BodyOf(part.Value.Symbol!)?.FindMember(token.Text) is { } member ? new Resolution(member)
                 : null;
             path = true;
             if (part is null or { IsReported: true })
@@ -714,7 +714,7 @@ internal sealed partial class Binder
     /// </summary>
     private Scope OpenScope(ScopeKind kind, StatementSyntax opener, SymbolKind symbolKind)
     {
-        var (expected, written) = opener switch
+        var (expected, declaredName) = opener switch
         {
             ProcDeclarationSyntax proc when kind == ScopeKind.Proc => (true, proc.Name),
             ScopeDeclarationSyntax named when kind != ScopeKind.Proc => (true, named.Name),
@@ -728,7 +728,7 @@ internal sealed partial class Binder
 
         // `.scope { }` is anonymous, and a `.proc` without a name in the source declares nothing
         // either. The scope it opens is nameless, as the routine is.
-        if (written is not { IsMissing: false } name)
+        if (declaredName is not { IsMissing: false } name)
             return new Scope(kind, null, scope, null);
 
         var symbol = Declare(name, symbolKind);
@@ -765,7 +765,7 @@ internal sealed partial class Binder
             {
                 if (item is { Width: Width.Sixteen, Part: StatePart.A or StatePart.Index })
                 {
-                    Report(item.Node.Span, Catalogue.SignatureItemNeeds65816.Says(item.Text, CpuNames.Spell(cpu)));
+                    Report(item.Node.Span, Catalogue.SignatureItemNeeds65816.Message(item.Text, CpuNames.Format(cpu)));
                 }
             }
             foreach (var child in node.ChildNodes)
@@ -779,9 +779,9 @@ internal sealed partial class Binder
     /// <summary>Reads the signature a proc or an extern proc gives after its name, or the default.</summary>
     private Signature ReadSignature(StatementSyntax declaration)
     {
-        var written = SignatureOf(declaration);
-        CollectUses(written);
-        return Signature.Read(written);
+        var declaredSignature = SignatureOf(declaration);
+        CollectUses(declaredSignature);
+        return Signature.Read(declaredSignature);
     }
 
     /// <summary>
@@ -853,13 +853,13 @@ internal sealed partial class Binder
         }
 
         CheckMacroPlacement(declaration);
-        var written = declaration.Name;
-        var symbol = Declare(written, SymbolKind.Macro);
+        var macroName = declaration.Name;
+        var symbol = Declare(macroName, SymbolKind.Macro);
 
         // The declarations in a body are named after the macro, so a macro without a name in
         // the source opens a nameless scope, as a routine with no name does.
         var body = new Scope(
-            ScopeKind.Macro, symbol?.Name ?? (written.IsMissing ? null : written.Text), scope, symbol);
+            ScopeKind.Macro, symbol?.Name ?? (macroName.IsMissing ? null : macroName.Text), scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
         if (symbol is not null && declaration.Signature is { } signature)
@@ -923,7 +923,7 @@ internal sealed partial class Binder
         {
             if (around.Kind is not (ScopeKind.Proc or ScopeKind.Macro))
                 continue;
-            Report(opener.Keyword.Span, Catalogue.MacroMisplaced.Says(
+            Report(opener.Keyword.Span, Catalogue.MacroMisplaced.Message(
                 around.Kind == ScopeKind.Proc ? "a routine" : "another macro"));
             return;
         }
@@ -935,14 +935,14 @@ internal sealed partial class Binder
     /// last, because they appear after the parentheses and so cannot be positional at all.
     /// </summary>
     private void CheckParameterOrder(
-        IReadOnlyList<MacroParameterSyntax> written, IReadOnlyList<MacroParameter> parameters)
+        IReadOnlyList<MacroParameterSyntax> declaredParameters, IReadOnlyList<MacroParameter> parameters)
     {
         MacroParameter? list = null;
         MacroParameter? block = null;
-        for (var i = 0; i < parameters.Count && i < written.Count; i++)
+        for (var i = 0; i < parameters.Count && i < declaredParameters.Count; i++)
         {
             var parameter = parameters[i];
-            var at = written[i].Span;
+            var at = declaredParameters[i].Span;
             if (parameter.IsBlock)
             {
                 block = parameter;
@@ -950,11 +950,11 @@ internal sealed partial class Binder
             }
             if (block is not null)
             {
-                Report(at, Catalogue.ParameterAfterBlock.Says(parameter.Name, block.Name));
+                Report(at, Catalogue.ParameterAfterBlock.Message(parameter.Name, block.Name));
             }
             if (list is not null)
             {
-                Report(at, Catalogue.ParameterAfterList.Says(parameter.Name, list.Name));
+                Report(at, Catalogue.ParameterAfterList.Message(parameter.Name, list.Name));
             }
             if (parameter.Kind == ParameterKind.List)
                 list = list is null ? parameter : list;
@@ -1005,8 +1005,8 @@ internal sealed partial class Binder
             PatchDirectiveSyntax patch => patch.Keyword,
             _ => null,
         };
-        if (keyword is { } written && Annotations.Misplaced(line, statement) is { } why)
-            Report(written.Span, why);
+        if (keyword is { } present && Annotations.Misplaced(line, statement) is { } why)
+            Report(present.Span, why);
     }
 
     /// <summary>
@@ -1076,12 +1076,12 @@ internal sealed partial class Binder
     private void BindInitializer(StatementSyntax opener, ImmutableArray<SyntaxNode> lines)
     {
         BindStatement(opener);
-        var written = lines.Skip(1).OfType<LineSyntax>().Select(line => line.Statement).ToList();
-        foreach (var statement in written)
+        var statements = lines.Skip(1).OfType<LineSyntax>().Select(line => line.Statement).ToList();
+        foreach (var statement in statements)
             CollectUses(statement);
         var directive = opener is DataDeclarationSyntax data ? data.Directive : opener as DataDirectiveSyntax;
         if (directive?.Type is { } type)
-            records.Add((type, [.. written.OfType<MemberValueSyntax>()]));
+            records.Add((type, [.. statements.OfType<MemberValueSyntax>()]));
     }
 
     /// <summary>
@@ -1160,7 +1160,7 @@ internal sealed partial class Binder
         // name is caught before ld65 runs. Its contents still go there, which keeps the mistake
         // to one diagnostic.
         if (segments.Find(name) is null)
-            Report(token.Span, Catalogue.SegmentUndeclared.Says(name));
+            Report(token.Span, Catalogue.SegmentUndeclared.Message(name));
         return name;
     }
 
@@ -1214,7 +1214,7 @@ internal sealed partial class Binder
             // An import states its own address size. An unqualified import is absolute, and so
             // is a routine, unless its signature declares it far.
             symbol.AddressSize = AddressSize.Absolute;
-            if (item.AddressSize is { } written && SegmentNames.ParseSize(written.Text) is { } size)
+            if (item.AddressSize is { } sizeToken && SegmentNames.ParseSize(sizeToken.Text) is { } size)
                 symbol.AddressSize = size;
             if (item.Signature is { } signature)
             {
@@ -1229,7 +1229,7 @@ internal sealed partial class Binder
             if (item.Segment is { IsMissing: false } segment)
             {
                 if (segments.Find(segment.Text) is null)
-                    Report(segment.Span, Catalogue.SegmentUndeclared.Says(segment.Text));
+                    Report(segment.Span, Catalogue.SegmentUndeclared.Message(segment.Text));
                 else
                     symbol.Segment = segment.Text;
             }
@@ -1333,8 +1333,8 @@ internal sealed partial class Binder
         codeRun = null;
         var many = run.Lines > 1 ? $"these {run.Lines} instructions belong" : "an instruction belongs";
         Report(run.At, run.Placement == ScopeKind.Data
-            ? Catalogue.InstructionInData.Says(many)
-            : Catalogue.InstructionOutsideARoutine.Says(many));
+            ? Catalogue.InstructionInData.Message(many)
+            : Catalogue.InstructionOutsideARoutine.Message(many));
     }
 
     /// <summary>
@@ -1355,12 +1355,12 @@ internal sealed partial class Binder
         {
             if (name.Kind != SyntaxKind.CheapLocal)
             {
-                Report(name.Span, Catalogue.LabelInData.Says(name.Text, name.Text, name.Text));
+                Report(name.Span, Catalogue.LabelInData.Message(name.Text, name.Text, name.Text));
                 Fixed(new DiagnosticFix(FixKind.DataMember));
             }
             return;
         }
-        Report(name.Span, Catalogue.LabelOutsideARoutine.Says(
+        Report(name.Span, Catalogue.LabelOutsideARoutine.Message(
             name.Text, $", and data is named by a declaration, `.data {name.Text.TrimStart('@')}: ...`"));
         if (name.Kind == SyntaxKind.Identifier)
             Fixed(new DiagnosticFix(FixKind.DataDeclaration));
@@ -1378,7 +1378,7 @@ internal sealed partial class Binder
         if (statement.Directive.Text.ToLowerInvariant() is not (".res" or ".align"))
         {
             var directive = statement.Directive.Text;
-            Report(statement.Directive.Span, Catalogue.PaddingOutsideARoutine.Says(
+            Report(statement.Directive.Span, Catalogue.PaddingOutsideARoutine.Message(
                 directive, $": `.data name: {directive} ...`"));
         }
     }
@@ -1417,8 +1417,8 @@ internal sealed partial class Binder
         var outer = scope;
         scope = inside;
         var parameters = new List<Symbol>();
-        IReadOnlyList<ParameterSyntax> written = statement.Parameters is { } list ? list.Parameters : [];
-        foreach (var declared in written)
+        IReadOnlyList<ParameterSyntax> declaredParameters = statement.Parameters is { } list ? list.Parameters : [];
+        foreach (var declared in declaredParameters)
         {
             if (Declare(declared.Name, SymbolKind.Constant) is { } parameter)
                 parameters.Add(parameter);
@@ -1438,7 +1438,7 @@ internal sealed partial class Binder
         var token = statement.Name;
         if (!InMacroBody)
         {
-            Report(token.Span, Catalogue.ExpectedStatement.Says("a label, a constant, an instruction or a directive"));
+            Report(token.Span, Catalogue.ExpectedStatement.Message("a label, a constant, an instruction or a directive"));
             return;
         }
         uses.Add(new Use(token, scope, Path: false, First: true, Last: true, Splice: true));
@@ -1470,7 +1470,7 @@ internal sealed partial class Binder
             references.Add(new SymbolReference(symbol, callee.Span, false, place.IsAlias, InMacro: inside is not null));
             if (symbol.Kind != SymbolKind.Macro)
             {
-                Report(callee.Span, Catalogue.NotAMacro.Says(callee.Text, symbol.KindPhrase));
+                Report(callee.Span, Catalogue.NotAMacro.Message(callee.Text, symbol.KindPhrase));
                 continue;
             }
             if (inside is not null)
@@ -1479,14 +1479,14 @@ internal sealed partial class Binder
                 called.Add(symbol);
 
             var invocation = MacroInvocation.Of(call, symbol, tree, diagnostics, at.Lookup);
-            var written = new List<Use>();
+            var argumentUses = new List<Use>();
             var outer = scope;
             scope = at;
             foreach (var argument in invocation.Arguments)
             {
                 // A default was resolved where the macro is declared, so only the arguments the
                 // call itself gives are collected here.
-                if (!argument.Written)
+                if (!argument.IsGiven)
                     continue;
 
                 // A `one` argument is a word, which is never looked up, except that a word may
@@ -1497,12 +1497,12 @@ internal sealed partial class Binder
                 // word here too.
                 var words = argument.Parameter.Kind is ParameterKind.One or ParameterKind.Enum
                     || argument.Parameter.Accepts.Element is { Kind: ParameterKind.One or ParameterKind.Enum };
-                CollectUses(argument.Value, written, words);
+                CollectUses(argument.Value, argumentUses, words);
                 foreach (var item in argument.Items)
-                    CollectUses(item, written, words);
+                    CollectUses(item, argumentUses, words);
             }
             scope = outer;
-            ResolveUses(written);
+            ResolveUses(argumentUses);
         }
     }
 
@@ -1529,7 +1529,7 @@ internal sealed partial class Binder
             if (SegmentFunctions.TakesOnlyASegment(call))
             {
                 if (segments.Find(segmentName.Text) is null)
-                    Report(segmentName.Span, Catalogue.SegmentUndeclared.Says(segmentName.Text));
+                    Report(segmentName.Span, Catalogue.SegmentUndeclared.Message(segmentName.Text));
                 return;
             }
             if (call.Function is { } spanOf && spanOf.Text.Equals(".spanof", StringComparison.OrdinalIgnoreCase)
@@ -1615,7 +1615,7 @@ internal sealed partial class Binder
         var cheap = name.Kind == SyntaxKind.CheapLocal;
         if (!cheap && kind != SymbolKind.MacroParameter && InABlockArgument)
         {
-            Report(name.Span, Catalogue.DeclarationInABlockArgument.Says(name.Text));
+            Report(name.Span, Catalogue.DeclarationInABlockArgument.Message(name.Text));
             return null;
         }
         var owner = cheap ? CheapLocalOwner(name) : scope;
@@ -1637,8 +1637,8 @@ internal sealed partial class Binder
             // caller's name in the caller, so that case gets its own, plainer message.
             Report(name.Span,
                 existing.Parameter is { Kind: ParameterKind.Ident }
-                    ? Catalogue.IdentParameterDeclared.Says(symbol.DisplayName)
-                    : Catalogue.NameAlreadyDeclared.Says(symbol.DisplayName),
+                    ? Catalogue.IdentParameterDeclared.Message(symbol.DisplayName)
+                    : Catalogue.NameAlreadyDeclared.Message(symbol.DisplayName),
                 new RelatedSpan(existing.DeclarationSpan, "declared here"));
         }
         symbols.Add(symbol);
@@ -1664,7 +1664,7 @@ internal sealed partial class Binder
             if (owner.Kind != ScopeKind.File)
                 return owner;
         }
-        Report(name.Span, Catalogue.CheapLocalOutsideAScope.Says(name.Text));
+        Report(name.Span, Catalogue.CheapLocalOutsideAScope.Message(name.Text));
         return fileScope;
     }
 
@@ -1679,7 +1679,7 @@ internal sealed partial class Binder
     {
         if (name.Kind != SyntaxKind.Register)
             return true;
-        Report(name.Span, Catalogue.RegisterName.Says(name.Text));
+        Report(name.Span, Catalogue.RegisterName.Message(name.Text));
         return false;
     }
 
@@ -1693,12 +1693,12 @@ internal sealed partial class Binder
     {
         if (name.Kind != SyntaxKind.Mnemonic)
             return;
-        var named = Instructions.Writable(cpu, name.MnemonicKind)
+        var named = Instructions.Available(cpu, name.MnemonicKind)
             ? cpu
             : CpuNames.All.Cast<Cpu?>().FirstOrDefault(other => Instructions.Has(other!.Value, name.MnemonicKind));
         if (named is not { } having)
             return;
-        Warn(name.Span, Catalogue.MnemonicName.Says(name.Text, CpuNames.Spell(having)));
+        Warn(name.Span, Catalogue.MnemonicName.Message(name.Text, CpuNames.Format(having)));
 
         // The only remedy is to rename it, which only the programmer can decide, so the editor
         // puts the caret on the name.
@@ -1778,7 +1778,7 @@ internal sealed partial class Binder
         {
             if (Declared(item.Name, around) is not { } symbol)
                 continue;
-            var size = item.AddressSize is { } written ? SegmentNames.ParseSize(written.Text) : null;
+            var size = item.AddressSize is { } sizeToken ? SegmentNames.ParseSize(sizeToken.Text) : null;
             var linkerName = item.LinkerName?.Text.Trim('"');
 
             // An `as` name is the name in the object file, and the output has to define it with
@@ -1789,7 +1789,7 @@ internal sealed partial class Binder
             // link against.
             if (linkerName is not null && Ca65Instructions.HasAnywhere(linkerName) && item.LinkerName is { } spelled)
             {
-                Report(spelled.Span, Catalogue.LinkerNameIsAnInstruction.Says(linkerName));
+                Report(spelled.Span, Catalogue.LinkerNameIsAnInstruction.Message(linkerName));
             }
             Export(symbol, item.Span, linkerName, size);
         }
@@ -1872,8 +1872,8 @@ internal sealed partial class Binder
         /// Gets the same names mapped to what they resolve to, which is what a lookup in this file
         /// returns.
         /// </summary>
-        internal IReadOnlyDictionary<string, Place> Used { get; init; } =
-            new Dictionary<string, Place>(StringComparer.Ordinal);
+        internal IReadOnlyDictionary<string, Resolution> Used { get; init; } =
+            new Dictionary<string, Resolution>(StringComparer.Ordinal);
 
         /// <summary>Gets the modules whose exports a <c>.use module::*</c> brings in.</summary>
         public IReadOnlyList<ProgramSymbols.Module> Globs { get; init; } = [];
@@ -1966,7 +1966,7 @@ internal sealed partial class Binder
             var items = node.Items;
             var set = node.Name;
             if (SyntaxFacts.IsStateWord(set.Text))
-                binder.Report(set.Span, Catalogue.SignatureSetNameIsAnItem.Says(set.Text));
+                binder.Report(set.Span, Catalogue.SignatureSetNameIsAnItem.Message(set.Text));
             else if (binder.Declare(set, SymbolKind.SignatureSet) is { } declared)
                 declared.Definition = items;
             binder.CollectUses(items);

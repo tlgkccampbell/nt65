@@ -108,8 +108,8 @@ internal static class Json
     /// <summary>
     /// Returns the value of a JSON string's contents, undoing the escapes a path may contain.
     /// </summary>
-    private static string Read(string written) =>
-        written.Replace("\\\\", "\\", StringComparison.Ordinal)
+    private static string Read(string escaped) =>
+        escaped.Replace("\\\\", "\\", StringComparison.Ordinal)
             .Replace("\\\"", "\"", StringComparison.Ordinal)
             .Replace("\\/", "/", StringComparison.Ordinal);
 }

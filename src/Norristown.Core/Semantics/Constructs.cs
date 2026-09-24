@@ -38,7 +38,7 @@ public static class Constructs
     // child position empty, and an `.error` without one holds a missing token where the string
     // belongs.
     private static string? MessageOf(SyntaxToken? message) =>
-        message is { IsMissing: false } written ? Literals.Text(written.Text) : null;
+        message is { IsMissing: false } token ? Literals.Text(token.Text) : null;
 
     /// <summary>Represents what an <c>.assert</c> or an <c>.error</c> requires.</summary>
     /// <param name="Condition">The expression that has to hold, or null for an <c>.error</c>.</param>

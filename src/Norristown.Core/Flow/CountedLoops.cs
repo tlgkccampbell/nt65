@@ -29,15 +29,15 @@ internal static class CountedLoops
     {
         foreach (var loop in Loops.In(blocks))
         {
-            if (Turns(model, blocks, loop) is not { } turns)
+            if (IterationCount(model, blocks, loop) is not { } iterations)
                 continue;
 
             // The loop is marked as counted while the cost of an iteration is worked out, so
             // that the walk of it stops at the latch instead of going round again. If that
             // cost turns out to be unknown, the marking is undone.
-            Mark(blocks, loop, turns);
-            if (Repeated(layout, blocks, loop, turns) is { } cost)
-                Settle(blocks, loop, cost);
+            Mark(blocks, loop, iterations);
+            if (Repeated(layout, blocks, loop, iterations) is { } cost)
+                RecordCost(blocks, loop, cost);
             else
                 Mark(blocks, loop, null);
         }
@@ -47,11 +47,11 @@ internal static class CountedLoops
     /// Returns how many iterations a loop runs, or null when it is not a shape nt65 recognises.
     /// Every part of the shape has to hold, and anything unexpected leaves the loop uncounted.
     /// </summary>
-    private static int? Turns(SemanticModel model, IReadOnlyList<BasicBlock> blocks, Loop loop)
+    private static int? IterationCount(SemanticModel model, IReadOnlyList<BasicBlock> blocks, Loop loop)
     {
         // Each iteration ends with the decrement immediately followed by the branch back,
         // because anything between the two could set the flags the branch tests instead.
-        var steps = Written(blocks[loop.Latch]);
+        var steps = InstructionsIn(blocks[loop.Latch]);
         if (steps.Count < 2)
             return null;
         if (Mnemonic(steps[^1]) is not (MnemonicKind.Bne or MnemonicKind.Bpl)
@@ -90,7 +90,7 @@ internal static class CountedLoops
         {
             if (!loop.Inside[i])
                 continue;
-            foreach (var step in Written(blocks[i]))
+            foreach (var step in InstructionsIn(blocks[i]))
             {
                 if (i == loop.Latch && counting.Contains((step.Statement.Position, step.On)))
                     continue;
@@ -115,20 +115,20 @@ internal static class CountedLoops
         // of zero does depends on the register's width, which is not always known.
         if (start <= 0)
             return null;
-        long turns;
+        long iterations;
         if (Mnemonic(steps[^1]) == MnemonicKind.Bne)
         {
             if (start % stride != 0)
                 return null;
-            turns = start / stride;
+            iterations = start / stride;
         }
         else
         {
             if (start >= 0x80)
                 return null;
-            turns = (start / stride) + 1;
+            iterations = (start / stride) + 1;
         }
-        return turns is > 0 and <= 0x10000 ? (int)turns : null;
+        return iterations is > 0 and <= 0x10000 ? (int)iterations : null;
     }
 
     /// <summary>
@@ -139,7 +139,7 @@ internal static class CountedLoops
     private static long? Started(SemanticModel model, BasicBlock before, MnemonicKind load, Registers register)
     {
         long? started = null;
-        foreach (var step in Written(before))
+        foreach (var step in InstructionsIn(before))
         {
             var mnemonic = Mnemonic(step);
             if (!Writes(mnemonic, register))
@@ -150,20 +150,20 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// Marks the loop as counted with <paramref name="turns"/> iterations, or unmarks it when
+    /// Marks the loop as counted with <paramref name="iterations"/> iterations, or unmarks it when
     /// that is null. Every block of it runs the same number of iterations, and a loop inside
     /// another runs all of its iterations on each iteration of the outer one, so the counts
     /// multiply. The back edge is marked so that a walk of the routine stops at the latch
     /// rather than going round again.
     /// </summary>
-    private static void Mark(IReadOnlyList<BasicBlock> blocks, Loop loop, int? turns)
+    private static void Mark(IReadOnlyList<BasicBlock> blocks, Loop loop, int? iterations)
     {
         for (var i = 0; i < blocks.Count; i++)
         {
             if (!loop.Inside[i])
                 continue;
-            blocks[i].Turns = turns is { } many ? (blocks[i].Turns ?? 1) * many : null;
-            blocks[i].Repeats = turns is null ? null : i == loop.Latch ? loop.Header : blocks[i].Repeats;
+            blocks[i].Iterations = iterations is { } many ? (blocks[i].Iterations ?? 1) * many : null;
+            blocks[i].Repeats = iterations is null ? null : i == loop.Latch ? loop.Header : blocks[i].Repeats;
         }
     }
 
@@ -172,10 +172,10 @@ internal static class CountedLoops
     /// taken on every iteration but the last, which is the only difference between the final
     /// iteration and the others.
     /// </summary>
-    private static CycleCount? Repeated(CodeLayout layout, IReadOnlyList<BasicBlock> blocks, Loop loop, int turns)
+    private static CycleCount? Repeated(CodeLayout layout, IReadOnlyList<BasicBlock> blocks, Loop loop, int iterations)
     {
-        var (least, most, _) = Paths.Through(blocks, loop.Header, at => loop.Inside[at], Paths.Costing);
-        if (least is not { } low || most is not { } high)
+        var (minimum, maximum, _) = Paths.Through(blocks, loop.Header, at => loop.Inside[at], Paths.Costing);
+        if (minimum is not { } low || maximum is not { } high)
             return null;
         var last = blocks[loop.Latch].Steps.LastOrDefault(step => !step.IsMarker);
         if (layout.Of(last.Statement, last.On)?.Cycles is not { } branch)
@@ -183,10 +183,10 @@ internal static class CountedLoops
 
         // A branch costs its fewest cycles when it is not taken, and one more than that when it
         // is taken. A taken branch that crosses a page costs its most cycles.
-        var taken = new CycleCount(branch.Least + 1, branch.Most);
+        var taken = new CycleCount(branch.Minimum + 1, branch.Maximum);
         return new CycleCount(
-            ((low - branch.Least) * turns) + (taken.Least * (turns - 1)) + branch.Least,
-            ((high - branch.Most) * turns) + (taken.Most * (turns - 1)) + branch.Least);
+            ((low - branch.Minimum) * iterations) + (taken.Minimum * (iterations - 1)) + branch.Minimum,
+            ((high - branch.Maximum) * iterations) + (taken.Maximum * (iterations - 1)) + branch.Minimum);
     }
 
     /// <summary>
@@ -194,7 +194,7 @@ internal static class CountedLoops
     /// routine still passes through all of them, and the header's total already includes every
     /// iteration of every block.
     /// </summary>
-    private static void Settle(IReadOnlyList<BasicBlock> blocks, Loop loop, CycleCount cost)
+    private static void RecordCost(IReadOnlyList<BasicBlock> blocks, Loop loop, CycleCount cost)
     {
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -208,7 +208,7 @@ internal static class CountedLoops
         Instructions.Facts(mnemonic).Writes.HasFlag(register);
 
     /// <summary>Returns the instructions in a block, leaving out markers and directives.</summary>
-    private static List<Step> Written(BasicBlock block) =>
+    private static List<Step> InstructionsIn(BasicBlock block) =>
         [.. block.Steps.Where(step => !step.IsMarker && step.Statement is InstructionStatementSyntax)];
 
     /// <summary>Returns the mnemonic of a step's statement, or <see cref="MnemonicKind.None"/>.</summary>

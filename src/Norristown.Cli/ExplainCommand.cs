@@ -43,13 +43,14 @@ internal static class ExplainCommand
         // as `...`, its explanation, and the project-file setting that changes it.
         output.WriteLine($"{descriptor.Id}, {Reported(descriptor.Severity)} by default");
         output.WriteLine();
-        output.WriteLine($"  {Said(descriptor.Format)}");
+        output.WriteLine($"  {Readable(descriptor.Format)}");
         output.WriteLine();
         foreach (var line in Wrapped(descriptor.Explanation))
             output.WriteLine(line);
         output.WriteLine();
         output.WriteLine(
-            $"in {Project.ProjectFile.Name}: \"diagnostics\": {{ \"{descriptor.Id}\": \"{Turned(descriptor)}\" }}");
+            $"in {Project.ProjectFile.Name}: \"diagnostics\": "
+            + $"{{ \"{descriptor.Id}\": \"{ExampleSetting(descriptor)}\" }}");
         return 0;
     }
 
@@ -75,12 +76,12 @@ internal static class ExplainCommand
     /// Returns the message format with each numbered placeholder (<c>{0}</c>, <c>{1}</c>, ...)
     /// shown as <c>...</c>, since the numbers mean something to nt65 but nothing to a reader.
     /// </summary>
-    private static string Said(string format)
+    private static string Readable(string format)
     {
-        var said = format;
-        for (var i = 0; said.Contains('{', StringComparison.Ordinal) && i < 16; i++)
-            said = said.Replace($"{{{i.ToString(CultureInfo.InvariantCulture)}}}", "...", StringComparison.Ordinal);
-        return said.Replace("{{", "{", StringComparison.Ordinal).Replace("}}", "}", StringComparison.Ordinal);
+        var text = format;
+        for (var i = 0; text.Contains('{', StringComparison.Ordinal) && i < 16; i++)
+            text = text.Replace($"{{{i.ToString(CultureInfo.InvariantCulture)}}}", "...", StringComparison.Ordinal);
+        return text.Replace("{{", "{", StringComparison.Ordinal).Replace("}}", "}", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -88,7 +89,7 @@ internal static class ExplainCommand
     /// diagnostic that is not an error, since turning it off is the likeliest change, and
     /// <c>error</c> for an error, which cannot be turned down.
     /// </summary>
-    private static string Turned(DiagnosticDescriptor descriptor) =>
+    private static string ExampleSetting(DiagnosticDescriptor descriptor) =>
         descriptor.Severity == Severity.Error ? "error" : "off";
 
     /// <summary>

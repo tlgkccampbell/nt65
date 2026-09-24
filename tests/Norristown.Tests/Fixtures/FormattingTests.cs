@@ -53,7 +53,7 @@ public sealed partial class FormattingTests
     /// half-written file is what an editor usually formats.
     /// </summary>
     [Fact]
-    public void AHalfWrittenSourceReadsBackWholeAndLaysOutOnce()
+    public void AnUnfinishedSourceReadsBackWholeAndLaysOutOnce()
     {
         var failures = Repo.CollectFailures(Repo.Sources(), file =>
         {
@@ -85,8 +85,8 @@ public sealed partial class FormattingTests
     {
         var flat = Indent().Replace(text, "");
         yield return flat;
-        yield return Line().Replace(flat, written =>
-            written.Length == 0 ? "" : "\t   " + written.Value + "  \t");
+        yield return Line().Replace(flat, match =>
+            match.Length == 0 ? "" : "\t   " + match.Value + "  \t");
         yield return Column().Replace(flat, ": ");
     }
 

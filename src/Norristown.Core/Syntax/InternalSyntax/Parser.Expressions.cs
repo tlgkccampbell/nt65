@@ -85,7 +85,7 @@ internal sealed partial class Parser
     {
         var open = Advance();
         var expression = ParseExpression();
-        return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says(
+        return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message(
             "`)`")));
     }
 
@@ -93,13 +93,13 @@ internal sealed partial class Parser
     {
         if (!SyntaxFacts.IsBuiltinFunction(Current.Text))
         {
-            Report(Catalogue.NotAFunction.Says(Current.Text));
+            Report(Catalogue.NotAFunction.Message(Current.Text));
             return new ErrorExpressionSyntax(Advance());
         }
         var name = Advance();
         if (Kind == SyntaxKind.OpenParen)
             return new CallExpressionSyntax(null, name, ParseArgumentList());
-        Report(Catalogue.ExpectedParenthesis.Says($"`(` after `{name.Text}`"));
+        Report(Catalogue.ExpectedParenthesis.Message($"`(` after `{name.Text}`"));
         return new ErrorExpressionSyntax(name);
     }
 
@@ -109,7 +109,7 @@ internal sealed partial class Parser
         var arguments = Kind is not SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseExpression) : null;
         var closeParen = Kind == SyntaxKind.CloseParen
             ? Advance()
-            : Missing(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`"));
+            : Missing(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
         return new ArgumentListSyntax(openParen, arguments, closeParen);
     }
 
@@ -129,7 +129,7 @@ internal sealed partial class Parser
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.CheapLocal
             or SyntaxKind.Register or SyntaxKind.Mnemonic))
         {
-            return new NameExpressionSyntax(global, MissingParts(Catalogue.ExpectedName.Says("a name")));
+            return new NameExpressionSyntax(global, MissingParts(Catalogue.ExpectedName.Message("a name")));
         }
 
         var parts = ImmutableArray.CreateBuilder<GreenNode>();
@@ -143,7 +143,7 @@ internal sealed partial class Parser
             if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic))
             {
                 parts.Add(separator);
-                parts.Add(MissingPart(Catalogue.ExpectedName.Says("a name after `::`")));
+                parts.Add(MissingPart(Catalogue.ExpectedName.Message("a name after `::`")));
                 break;
             }
             parts.Add(separator);
@@ -167,7 +167,7 @@ internal sealed partial class Parser
     /// diagnostic already covers the absence.
     /// </summary>
     private IdentifierNameSyntax MissingPart(DiagnosticMessage? message) =>
-        new(message is not { } said ? GreenToken.Missing(SyntaxKind.Identifier) : Missing(SyntaxKind.Identifier, said),
+        new(message is not { } text ? GreenToken.Missing(SyntaxKind.Identifier) : Missing(SyntaxKind.Identifier, text),
             null);
 
     /// <summary>Returns a path whose only part is a missing name.</summary>
@@ -193,7 +193,7 @@ internal sealed partial class Parser
             Report(Catalogue.ExpectedElementIndex);
             index = new ErrorExpressionSyntax(null);
         }
-        return new ElementIndexSyntax(open, index, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Says(
+        return new ElementIndexSyntax(open, index, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message(
             "`]`")));
     }
 
@@ -216,7 +216,7 @@ internal sealed partial class Parser
                 // `a && (b | c)` reads clearly enough that the language leaves `a && b | c` alone.
                 if (SyntaxFacts.IsLogicalOperator(op.Kind) && !SyntaxFacts.IsLogicalOperator(inner.Kind))
                     continue;
-                Report(operatorIndex, Catalogue.OperatorsNeedParentheses.Says(op.Text, inner.Text),
+                Report(operatorIndex, Catalogue.OperatorsNeedParentheses.Message(op.Text, inner.Text),
                     new DiagnosticFix(FixKind.Parentheses));
                 return;
             }
@@ -225,7 +225,7 @@ internal sealed partial class Parser
         if (RightmostByteOperator(left) is { } byteOperator)
         {
             Report(operatorIndex,
-                Catalogue.ByteOperatorNeedsParentheses.Says(byteOperator.Text, op.Text, byteOperator.Text),
+                Catalogue.ByteOperatorNeedsParentheses.Message(byteOperator.Text, op.Text, byteOperator.Text),
                 new DiagnosticFix(FixKind.Parentheses));
         }
     }

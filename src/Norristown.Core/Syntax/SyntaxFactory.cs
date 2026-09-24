@@ -131,8 +131,8 @@ public static partial class SyntaxFactory
     /// <returns>The list, which is empty if there are no items.</returns>
     public static SeparatedSyntaxList<T> SeparatedList<T>(IEnumerable<T> items) where T : SyntaxNode
     {
-        var written = items as IReadOnlyList<T> ?? [.. items];
-        return SeparatedList(written, Enumerable.Range(0, Math.Max(written.Count - 1, 0))
+        var itemList = items as IReadOnlyList<T> ?? [.. items];
+        return SeparatedList(itemList, Enumerable.Range(0, Math.Max(itemList.Count - 1, 0))
             .Select(_ => Token(SyntaxKind.Comma, ",", [], [Space])));
     }
 
@@ -147,20 +147,20 @@ public static partial class SyntaxFactory
     public static SeparatedSyntaxList<T> SeparatedList<T>(IEnumerable<T> items, IEnumerable<SyntaxToken> separators)
         where T : SyntaxNode
     {
-        var written = items as IReadOnlyList<T> ?? [.. items];
+        var itemList = items as IReadOnlyList<T> ?? [.. items];
         var between = separators as IReadOnlyList<SyntaxToken> ?? [.. separators];
-        if (between.Count != written.Count && between.Count != written.Count - 1)
+        if (between.Count != itemList.Count && between.Count != itemList.Count - 1)
         {
             throw new ArgumentException(
                 "a separated list has one fewer separator than items, or as many", nameof(separators));
         }
-        if (written.Count == 0)
+        if (itemList.Count == 0)
             return default;
 
-        var children = ImmutableArray.CreateBuilder<GreenNode>(written.Count + between.Count);
-        for (var i = 0; i < written.Count; i++)
+        var children = ImmutableArray.CreateBuilder<GreenNode>(itemList.Count + between.Count);
+        for (var i = 0; i < itemList.Count; i++)
         {
-            children.Add(written[i].Green);
+            children.Add(itemList[i].Green);
             if (i < between.Count)
                 children.Add(between[i].Green);
         }

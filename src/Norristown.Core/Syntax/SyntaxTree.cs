@@ -26,7 +26,7 @@ public sealed class SyntaxTree
     // array is default or empty when no line has such a parse. An edit keeps these entries for
     // every line that keeps its green node. That lets an annotation survive an edit elsewhere in
     // the file, and drops it when its own line is parsed again.
-    private readonly ImmutableArray<Parser.Result?> carried;
+    private readonly ImmutableArray<Parser.Result?> keptParses;
 
     // Records which lines hold an annotation, and is allocated only once some line does. A green
     // line holds the tokens the lexer read and not the statement they parse to. So, as with the
@@ -59,13 +59,13 @@ public sealed class SyntaxTree
 
     private SyntaxTree(
         string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines,
-        ImmutableArray<Parser.Result?> carried)
+        ImmutableArray<Parser.Result?> keptParses)
     {
         Path = path;
         Text = text;
         LineStarts = lineStarts;
         Lines = lines;
-        this.carried = carried;
+        this.keptParses = keptParses;
         var errors = new List<Blocks.Error>();
         green = Blocks.Build(lines, errors);
         blockErrors = [.. errors];
@@ -75,7 +75,7 @@ public sealed class SyntaxTree
         // surroundings across an edit keeps the statement it already has.
         var parsed = new Parser.Result[lines.Length];
         var line = 0;
-        ParseLines(green, BlockKind.None, parsed, carried, ref line);
+        ParseLines(green, BlockKind.None, parsed, keptParses, ref line);
         statements = ImmutableCollectionsMarshal.AsImmutableArray(parsed);
 
         // Which lines have diagnostics is computed once, here, so that a node asked whether it
@@ -84,7 +84,7 @@ public sealed class SyntaxTree
         reported = new bool[lines.Length];
         for (var i = 0; i < parsed.Length; i++)
         {
-            reported[i] = Said(parsed[i], lines[i]);
+            reported[i] = HasDiagnostics(parsed[i], lines[i]);
 
             // Annotations are rare — a file has none until a rewrite tags something — so the
             // flags for them are not allocated until some line has an annotation.
@@ -225,7 +225,7 @@ public sealed class SyntaxTree
             lines.Add(Lexer.LexLine(LineText(text, starts, i)));
         for (var i = oldCount - suffix; i < oldCount; i++)
             lines.Add(Lines[i]);
-        return new SyntaxTree(Path, text, starts, lines.MoveToImmutable(), Carried(prefix, suffix, newCount));
+        return new SyntaxTree(Path, text, starts, lines.MoveToImmutable(), KeptParsesAfter(prefix, suffix, newCount));
     }
 
     /// <summary>
@@ -237,16 +237,16 @@ public sealed class SyntaxTree
     /// <param name="prefix">The number of lines at the start of the file the edit left alone.</param>
     /// <param name="suffix">The number of lines at the end of the file the edit left alone.</param>
     /// <param name="newCount">The number of lines in the edited file.</param>
-    private ImmutableArray<Parser.Result?> Carried(int prefix, int suffix, int newCount)
+    private ImmutableArray<Parser.Result?> KeptParsesAfter(int prefix, int suffix, int newCount)
     {
-        if (carried.IsDefaultOrEmpty)
+        if (keptParses.IsDefaultOrEmpty)
             return default;
         var kept = new Parser.Result?[newCount];
         var any = false;
         for (var i = 0; i < prefix; i++)
-            any |= (kept[i] = carried[i]) is not null;
+            any |= (kept[i] = keptParses[i]) is not null;
         for (var i = 0; i < suffix; i++)
-            any |= (kept[newCount - 1 - i] = carried[carried.Length - 1 - i]) is not null;
+            any |= (kept[newCount - 1 - i] = keptParses[keptParses.Length - 1 - i]) is not null;
         return any ? ImmutableCollectionsMarshal.AsImmutableArray(kept) : default;
     }
 
@@ -259,7 +259,7 @@ public sealed class SyntaxTree
     /// <param name="kept">
     /// One entry per line, holding either a parse to keep or null to use the line's own parse.
     /// </param>
-    internal SyntaxTree WithCarried(ImmutableArray<Parser.Result?> kept) =>
+    internal SyntaxTree WithKeptParses(ImmutableArray<Parser.Result?> kept) =>
         new(Path, Text, LineStarts, Lines, kept);
 
     /// <summary>
@@ -332,7 +332,8 @@ public sealed class SyntaxTree
     /// Parses every line under <paramref name="node"/>, each in the kind of the block around it.
     /// </summary>
     private static void ParseLines(
-        GreenNode node, BlockKind context, Parser.Result[] parsed, ImmutableArray<Parser.Result?> carried, ref int line)
+        GreenNode node, BlockKind context, Parser.Result[] parsed, ImmutableArray<Parser.Result?> keptParses,
+        ref int line)
     {
         for (var i = 0; i < node.SlotCount; i++)
         {
@@ -344,7 +345,7 @@ public sealed class SyntaxTree
             // enclosing body's own lines are.
             if (node.GetSlot(i) is GreenBlock block)
             {
-                ParseLines(block, Within(context, block.BlockKind), parsed, carried, ref line);
+                ParseLines(block, Within(context, block.BlockKind), parsed, keptParses, ref line);
                 continue;
             }
 
@@ -353,7 +354,7 @@ public sealed class SyntaxTree
             // has since changed is parsed again in its current context, and the annotations are
             // dropped along with the old parse.
             var at = line++;
-            parsed[at] = !carried.IsDefaultOrEmpty && carried[at] is { } kept && kept.Context == context
+            parsed[at] = !keptParses.IsDefaultOrEmpty && keptParses[at] is { } kept && kept.Context == context
                 ? kept
                 : ((GreenLine)node.GetSlot(i)!).Parse(context);
         }
@@ -382,7 +383,7 @@ public sealed class SyntaxTree
     /// tokens or a parse error on one of the nodes they parse to. A green line holds the tokens
     /// the lexer read and not those nodes, so both have to be checked.
     /// </summary>
-    private static bool Said(Parser.Result parsed, GreenLine line) =>
+    private static bool HasDiagnostics(Parser.Result parsed, GreenLine line) =>
         line.ContainsDiagnostics
         || parsed.Node.ContainsDiagnostics
         || parsed.ExportKeyword is { ContainsDiagnostics: true }

@@ -163,7 +163,7 @@ public static class Mnemonics
     public static string? Flags(Cpu cpu, MnemonicKind mnemonic, AddressingMode mode, long? constant)
     {
         if (mnemonic is Rep or Sep)
-            return constant is { } mask ? Spell(mask) : "all";
+            return constant is { } mask ? Format(mask) : "all";
         if (mnemonic is Plp or Rti)
             return "all";
 
@@ -210,6 +210,6 @@ public static class Mnemonics
     /// Formats the flags a <c>rep</c> or <c>sep</c> mask names, in the status register's own
     /// order.
     /// </summary>
-    private static string Spell(long mask) =>
+    private static string Format(long mask) =>
         string.Join(" ", Status.Where(flag => (mask & flag.Bit) != 0).Select(flag => flag.Name));
 }

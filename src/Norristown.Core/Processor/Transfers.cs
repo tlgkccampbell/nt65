@@ -41,10 +41,10 @@ public static class Transfers
     {
         if (statement is not InstructionStatementSyntax { Operand: { } operand })
             return null;
-        var written = operand.ChildNodes.OfType<ExpressionSyntax>().ToList();
+        var expressions = operand.ChildNodes.OfType<ExpressionSyntax>().ToList();
         if (mode == AddressingMode.DirectRelative)
-            return written.Count > 1 ? written[1] : null;
-        return written.Count > 0 ? written[0] : operand;
+            return expressions.Count > 1 ? expressions[1] : null;
+        return expressions.Count > 0 ? expressions[0] : operand;
     }
 
     /// <summary>

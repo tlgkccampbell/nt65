@@ -353,7 +353,7 @@ public sealed class FlowTests
         var region = Region(
             ".macro step() {\n    dex\n}\n.proc p {\n    ldx #4\n@loop:\n" + body + "    bne @loop\n    rts\n}\n");
 
-        Assert.Equal(counted, region.Cost.Most is not null);
+        Assert.Equal(counted, region.Cost.Maximum is not null);
     }
 
     /// <summary>

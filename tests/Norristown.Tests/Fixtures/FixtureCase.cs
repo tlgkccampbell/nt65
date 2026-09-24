@@ -189,7 +189,7 @@ internal sealed partial record FixtureCase(
             for (var i = 0; i < lines.Length; i++)
             {
                 var line = i + 1;
-                var written = InlineDiagnostic().Replace(lines[i], match =>
+                var replaced = InlineDiagnostic().Replace(lines[i], match =>
                 {
                     var found = actual.Where(d => d.File == file.Path && d.Line == line
                         && d.Severity == match.Groups["severity"].Value
@@ -197,13 +197,13 @@ internal sealed partial record FixtureCase(
                         .ToList();
                     return found is [var one] ? $";! {one.Severity}[{one.Id}]: {one.Message}" : match.Value;
                 });
-                if (written != lines[i])
+                if (replaced != lines[i])
                 {
-                    lines[i] = written;
+                    lines[i] = replaced;
                     changed = true;
                 }
                 expected.AddRange(ParseInlineDiagnostics(new SourceFile(file.Path, lines[i]))
-                    .Select(said => said with { Line = line }));
+                    .Select(diagnostic => diagnostic with { Line = line }));
             }
             if (!changed)
                 continue;

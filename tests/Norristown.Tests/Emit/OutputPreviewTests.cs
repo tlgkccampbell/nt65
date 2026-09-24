@@ -63,7 +63,7 @@ public sealed class OutputPreviewTests
     /// error's line and message.
     /// </summary>
     [Fact]
-    public void AFileWithErrorsIsShownUnderANoteSayingWhy()
+    public void AFileWithErrorsIsShownUnderANoteExplainingWhy()
     {
         var analysis = Compiler.Analyze(
             [new SourceFile("main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    lda nowhere\n    rts\n}\n")],

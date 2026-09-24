@@ -44,12 +44,12 @@ public sealed class GeneratorDriverTests
     [Theory]
     [InlineData("<Node Name=\"WidgetSyntax\" Base=\"GadgetSyntax\"/>", "WidgetSyntax derives from")]
     [InlineData("<Node Name=\"WidgetSyntax\" Base=\"WidgetSyntax\"/>", "the classes above WidgetSyntax run in a circle")]
-    public void ANodeUnderAClassTheTableDoesNotHaveIsADiagnostic(string node, string said)
+    public void ANodeUnderAClassTheTableDoesNotHaveIsADiagnostic(string node, string message)
     {
         var run = Run($"<Tree>\n  {node}\n</Tree>\n");
         var diagnostic = Assert.Single(run.Diagnostics);
         Assert.Equal("NT1001", diagnostic.Id);
-        Assert.Contains(said, diagnostic.GetMessage());
+        Assert.Contains(message, diagnostic.GetMessage());
         Assert.Empty(run.GeneratedSources);
     }
 

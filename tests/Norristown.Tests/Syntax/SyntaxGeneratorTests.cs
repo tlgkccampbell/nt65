@@ -51,7 +51,7 @@ public sealed class SyntaxGeneratorTests
     /// its <c>Read</c> gives.
     /// </summary>
     [Fact]
-    public void AMemberReturnsWhatTheTableSaysItDoes()
+    public void AMemberReturnsWhatTheTableDeclares()
     {
         const string member = """
             <Node Name="WidgetSyntax" Base="StatementSyntax">
@@ -176,7 +176,7 @@ public sealed class SyntaxGeneratorTests
     /// inherits from its base classes.
     /// </summary>
     [Fact]
-    public void ALayoutPutsTheSlotsOfTheClassesAboveWhereTheSourceWritesThem()
+    public void ALayoutPutsTheBaseClassesSlotsAroundTheNodesOwnSlots()
     {
         const string family = """
             <AbstractNode Name="LidSyntax" Base="SyntaxNode">

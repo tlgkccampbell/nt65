@@ -81,12 +81,12 @@ public sealed class ImportIncCommandTests
     [Fact]
     public void ItWritesToStandardOutput()
     {
-        var (code, said, problems) = Run("import-inc", Repo.Path("tests/corpus/interop/asm/apple2.inc"));
+        var (code, output, problems) = Run("import-inc", Repo.Path("tests/corpus/interop/asm/apple2.inc"));
 
         Assert.Equal(0, code);
         Assert.Empty(problems);
-        Assert.Contains(".module apple2", said, StringComparison.Ordinal);
-        Assert.Contains("KBD = $C000", said, StringComparison.Ordinal);
+        Assert.Contains(".module apple2", output, StringComparison.Ordinal);
+        Assert.Contains("KBD = $C000", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class ImportIncCommandTests
     }
 
     [Fact]
-    public void AFileItCannotReadIsSaidSo()
+    public void AFileItCannotReadIsReported()
     {
         var (code, _, problems) = Run("import-inc", Repo.Path("tests/corpus/interop/asm/no-such-file.inc"));
 
@@ -110,13 +110,13 @@ public sealed class ImportIncCommandTests
     [Fact]
     public void HelpIsTheUsageText()
     {
-        var (code, said, _) = Run("import-inc", "--help");
+        var (code, output, _) = Run("import-inc", "--help");
 
         Assert.Equal(0, code);
-        Assert.Contains("nt65 import-inc <file.inc>", said, StringComparison.Ordinal);
+        Assert.Contains("nt65 import-inc <file.inc>", output, StringComparison.Ordinal);
     }
 
-    private static (int Code, string Said, string Problems) Run(params string[] arguments)
+    private static (int Code, string Output, string Problems) Run(params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

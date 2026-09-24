@@ -12,7 +12,7 @@ internal sealed partial class Binder
 {
     private void ResolveUses(IReadOnlyList<Use> list)
     {
-        Place? previous = null;
+        Resolution? previous = null;
         var broken = false;
         var steps = new List<(int Reference, Scope At, Symbol Symbol, SyntaxToken Token)>();
         foreach (var use in list)
@@ -46,7 +46,7 @@ internal sealed partial class Binder
             {
                 if (last)
                 {
-                    Report(token.Span, Catalogue.ModuleUsedAsAName.Says(place.Module, place.Module));
+                    Report(token.Span, Catalogue.ModuleUsedAsAName.Message(place.Module, place.Module));
                     broken = true;
                 }
                 continue;
@@ -68,7 +68,7 @@ internal sealed partial class Binder
             }
             if (splice && symbol.Parameter is not { Kind: ParameterKind.Block })
             {
-                Report(token.Span, Catalogue.NameAloneOnALine.Says(token.Text, symbol.KindPhrase));
+                Report(token.Span, Catalogue.NameAloneOnALine.Message(token.Text, symbol.KindPhrase));
             }
         }
     }
@@ -103,25 +103,25 @@ internal sealed partial class Binder
     /// resolved to, so that a path walks into a scope or a module instead of looking outward
     /// again.
     /// </summary>
-    private Place? Resolve(Use use, Place? previous)
+    private Resolution? Resolve(Use use, Resolution? previous)
     {
         var (token, at, path, _, last, _, word, _) = use;
         if (token.Kind == SyntaxKind.CheapLocal)
         {
             if (path)
             {
-                Report(token.Span, Catalogue.CheapLocalInAPath.Says(token.Text));
+                Report(token.Span, Catalogue.CheapLocalInAPath.Message(token.Text));
                 return null;
             }
             var local = at.LookupCheapLocal(token.Text[1..]);
             if (local is null)
             {
                 var near = NearestName(at, token.Text[1..], cheap: true);
-                Report(token.Span, Catalogue.NotDeclared.Says(token.Text, Lookup.Suggesting(near is null ? null : "@" + near)));
+                Report(token.Span, Catalogue.NotDeclared.Message(token.Text, Lookup.Suggesting(near is null ? null : "@" + near)));
                 if (near is not null)
                     Fixed(new DiagnosticFix(FixKind.NearestName, "@" + near));
             }
-            return local is null ? null : new Place(local);
+            return local is null ? null : new Resolution(local);
         }
 
         if (!path)
@@ -131,7 +131,7 @@ internal sealed partial class Binder
             // helpful than reporting that the name is not declared. A register that was declared
             // anyway, which is an error, has already been reported at its declaration.
             if (at.Lookup(token.Text) is { } symbol)
-                return new Place(symbol);
+                return new Resolution(symbol);
             if (!word && !CheckReservedWord(token))
                 return null;
             if (Outside(token, last, report) is { } found)
@@ -154,7 +154,7 @@ internal sealed partial class Binder
         var container = BodyOf(before.Symbol!);
         if (container is null)
         {
-            Report(token.Span, Catalogue.NotAScope.Says(before.Symbol!.DisplayName, before.Symbol.KindPhrase));
+            Report(token.Span, Catalogue.NotAScope.Message(before.Symbol!.DisplayName, before.Symbol.KindPhrase));
             return null;
         }
 
@@ -165,14 +165,14 @@ internal sealed partial class Binder
             // named by the binding's current value, which is a different member on each
             // iteration, so each iteration resolves it.
             if (last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
-                return new Place(binding);
+                return new Resolution(binding);
             var near = Spelling.Nearest(token.Text, Lookup.Members(container));
-            Report(token.Span, Catalogue.NotDeclaredIn.Says(token.Text, $"`{container.Name}`", Lookup.Suggesting(near)));
+            Report(token.Span, Catalogue.NotDeclaredIn.Message(token.Text, $"`{container.Name}`", Lookup.Suggesting(near)));
             if (near is not null)
                 Fixed(new DiagnosticFix(FixKind.NearestName, near));
             return null;
         }
-        return new Place(CheckExported(token, member, last));
+        return new Resolution(CheckExported(token, member, last));
     }
 
     /// <summary>
@@ -180,7 +180,7 @@ internal sealed partial class Binder
     /// <c>.use</c> brought in, a define, the first part of a module's path, or one that a
     /// <c>.use module::*</c> brought in.
     /// </summary>
-    private Place? Outside(SyntaxToken token, bool last, Action<TextSpan, DiagnosticMessage>? report) =>
+    private Resolution? Outside(SyntaxToken token, bool last, Action<TextSpan, DiagnosticMessage>? report) =>
         Lookup.Outside(token.Text, last, program, used, globs, Touch, At(token, report));
 
     /// <summary>
@@ -195,11 +195,11 @@ internal sealed partial class Binder
         var exporting = program.ModulesExporting(token.Text).ToList();
         var nearest = exporting.Count == 0 && last ? NearestName(at, token.Text, cheap: false) : null;
         Report(token.Span, exporting.Count > 0
-            ? Catalogue.DeclaredInAnotherModule.Says(
+            ? Catalogue.DeclaredInAnotherModule.Message(
                 token.Text, exporting[0], exporting[0], token.Text, exporting[0], token.Text)
             : last
-                ? Catalogue.NotDeclared.Says(token.Text, Lookup.Suggesting(nearest))
-                : Catalogue.ModuleNotInTheBuild.Says(token.Text, token.Text));
+                ? Catalogue.NotDeclared.Message(token.Text, Lookup.Suggesting(nearest))
+                : Catalogue.ModuleNotInTheBuild.Message(token.Text, token.Text));
         if (exporting.Count > 0)
             Fixed(new DiagnosticFix(FixKind.Use, $"{exporting[0]}::{token.Text}"));
         else if (nearest is not null)
@@ -207,12 +207,12 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// Returns the declared name that <paramref name="written"/> is most likely a misspelling of.
+    /// Returns the declared name that <paramref name="typed"/> is most likely a misspelling of.
     /// The candidate is a name in scope, or one that a <c>.use</c> brought in, that differs from
     /// it by a letter or two.
     /// </summary>
-    private string? NearestName(Scope at, string written, bool cheap) =>
-        Spelling.Nearest(written, Candidates(at, cheap));
+    private string? NearestName(Scope at, string typed, bool cheap) =>
+        Spelling.Nearest(typed, Candidates(at, cheap));
 
     /// <summary>
     /// Returns the names a misspelling could have meant, which are the names in the enclosing
@@ -244,23 +244,23 @@ internal sealed partial class Binder
         report is null ? null : (message, fix) =>
         {
             report(token.Span, message);
-            if (fix is { } written)
-                Fixed(written);
+            if (fix is { } suggested)
+                Fixed(suggested);
         };
 
     /// <summary>Resolves the first part of a path that starts at the root of the modules.</summary>
-    private Place? ModuleRoot(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
+    private Resolution? ModuleRoot(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
         Lookup.ModuleRoot(token.Text, program, At(token, report));
 
     /// <summary>
     /// Resolves the part after <paramref name="prefix"/>, which is a module or the start of a
     /// module's name.
     /// </summary>
-    private Place? InModule(SyntaxToken token, string prefix, bool last, Action<TextSpan, DiagnosticMessage>? report)
+    private Resolution? InModule(SyntaxToken token, string prefix, bool last, Action<TextSpan, DiagnosticMessage>? report)
     {
         var found = Lookup.InModule(token.Text, prefix, program, Touch, At(token, report));
         return found is { Symbol: { } member } && report is not null
-            ? new Place(CheckExported(token, member, last))
+            ? new Resolution(CheckExported(token, member, last))
             : found;
     }
 
@@ -283,7 +283,7 @@ internal sealed partial class Binder
         // same mistake.
         if (!last || symbol.Tree == tree || symbol.IsExported || symbol.IsDefine || !unexported.Add(symbol))
             return symbol;
-        Report(token.Span, Catalogue.NotExported.Says(symbol.PathName, symbol.Module),
+        Report(token.Span, Catalogue.NotExported.Message(symbol.PathName, symbol.Module),
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));
         Fixed(new DiagnosticFix(FixKind.Export, symbol.QualifiedName, symbol.DeclarationSpan));
         return symbol;
@@ -320,7 +320,7 @@ internal sealed partial class Binder
         if (symbol.TypeExpression is not NameExpressionSyntax named)
             return null;
 
-        Place? part = null;
+        Resolution? part = null;
         var path = named.GlobalToken is not null;
         var parts = named.Parts;
         for (var i = 0; i < parts.Count; i++)
@@ -328,10 +328,10 @@ internal sealed partial class Binder
             if (parts[i].Name is not { IsMissing: false } token)
                 break;
             var last = i == parts.Count - 1;
-            part = !path ? (symbol.Scope.Lookup(token.Text) is { } local ? new Place(local) : Outside(token, last, null))
+            part = !path ? (symbol.Scope.Lookup(token.Text) is { } local ? new Resolution(local) : Outside(token, last, null))
                 : part is null ? ModuleRoot(token, null)
                 : part.Value.Module is { } prefix ? InModule(token, prefix, last, null)
-                : BodyOf(part.Value.Symbol!)?.FindMember(token.Text) is { } member ? new Place(member)
+                : BodyOf(part.Value.Symbol!)?.FindMember(token.Text) is { } member ? new Resolution(member)
                 : null;
             path = true;
             if (part is null or { IsReported: true })
@@ -354,13 +354,13 @@ internal sealed partial class Binder
         var alias = statement.Alias;
         if (path.Length == 0)
             return;
-        Place? place = null;
+        Resolution? place = null;
         for (var i = 0; i < path.Length && (i == 0 || place is not null); i++)
         {
             var last = i == path.Length - 1 && !glob && items.Count == 0;
             place = i == 0 ? ModuleRoot(path[i], report)
                 : place!.Value.Module is { } prefix ? InModule(path[i], prefix, last, report)
-                : BodyOf(place.Value.Symbol!)?.FindMember(path[i].Text) is { } member ? new Place(CheckExported(path[i], member, last))
+                : BodyOf(place.Value.Symbol!)?.FindMember(path[i].Text) is { } member ? new Resolution(CheckExported(path[i], member, last))
                 : NotIn(path[i], place.Value.Symbol!);
             if (place?.Symbol is { } symbol)
                 references.Add(new SymbolReference(symbol, path[i].Span, false, InUse: true));
@@ -380,7 +380,7 @@ internal sealed partial class Binder
             }
             else
             {
-                Report(path[^1].Span, Catalogue.UseStarNotAModule.Says(
+                Report(path[^1].Span, Catalogue.UseStarNotAModule.Message(
                     target.Module ?? target.Symbol!.PathName,
                     path[^1].Text,
                     (target.Module is null ? "not a module" : "only the start of a module's name")));
@@ -392,12 +392,12 @@ internal sealed partial class Binder
             BringIn(alias ?? path[^1], target, alias is not null, statement.IsExported);
             return;
         }
-        foreach (var written in items)
+        foreach (var useItem in items)
         {
-            var name = written.Name;
-            var itemAlias = written.Alias;
+            var name = useItem.Name;
+            var itemAlias = useItem.Alias;
             var found = target.Module is { } prefix ? InModule(name, prefix, last: true, report)
-                : BodyOf(target.Symbol!)?.FindMember(name.Text) is { } member ? new Place(CheckExported(name, member, last: true))
+                : BodyOf(target.Symbol!)?.FindMember(name.Text) is { } member ? new Resolution(CheckExported(name, member, last: true))
                 : NotIn(name, target.Symbol!);
             if (found is not { } item)
                 continue;
@@ -408,33 +408,33 @@ internal sealed partial class Binder
     }
 
     /// <summary>Reports a part of a <c>.use</c> path that names nothing in the symbol before it.</summary>
-    private Place? NotIn(SyntaxToken token, Symbol container)
+    private Resolution? NotIn(SyntaxToken token, Symbol container)
     {
         Report(token.Span, container.Body is null && container.TypeExpression is null
-            ? Catalogue.NotAScope.Says(container.DisplayName, container.KindPhrase)
-            : Catalogue.NotDeclaredIn.Says(token.Text, $"`{container.DisplayName}`", ""));
+            ? Catalogue.NotAScope.Message(container.DisplayName, container.KindPhrase)
+            : Catalogue.NotDeclaredIn.Message(token.Text, $"`{container.DisplayName}`", ""));
         return null;
     }
 
     /// <summary>Brings in one name from a <c>.use</c>, under the name that <paramref name="name"/> gives.</summary>
-    private void BringIn(SyntaxToken name, Place target, bool renamed, bool exported)
+    private void BringIn(SyntaxToken name, Resolution target, bool renamed, bool exported)
     {
         if (exported && target.Symbol is null)
         {
-            Report(name.Span, Catalogue.ReexportModule.Says(target.Module));
+            Report(name.Span, Catalogue.ReexportModule.Message(target.Module));
             return;
         }
         if (renamed && target.Symbol is { } symbol)
             references.Add(new SymbolReference(symbol, name.Span, true, IsAlias: true, InUse: true));
         if (fileScope.FindMember(name.Text) is { } local)
         {
-            Report(name.Span, Catalogue.UseCollidesWithDeclaration.Says(
+            Report(name.Span, Catalogue.UseCollidesWithDeclaration.Message(
                 name.Text), new RelatedSpan(local.DeclarationSpan, "declared here"));
             return;
         }
         if (!used.TryAdd(name.Text, target))
         {
-            Report(name.Span, Catalogue.UseBringsInTwice.Says(name.Text));
+            Report(name.Span, Catalogue.UseBringsInTwice.Message(name.Text));
             return;
         }
         broughtAt[name.Text] = (name.Span, exported);

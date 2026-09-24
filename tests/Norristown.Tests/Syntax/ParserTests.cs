@@ -309,7 +309,7 @@ public sealed class ParserTests
     [InlineData("lda #    ")]
     [InlineData("lda #\t")]
     [InlineData("lda #   ; note")]
-    public void AMissingPieceIsReportedWhereItWouldHaveBeenWritten(string line)
+    public void AMissingPieceIsReportedWhereItWouldHaveAppeared(string line)
     {
         var diagnostic = Assert.Single(SyntaxTree.Parse("test.nt65", line + "\n").Diagnostics);
         Assert.Equal("expected an expression", diagnostic.Message);
@@ -329,7 +329,7 @@ public sealed class ParserTests
     [InlineData(600, true)]
     [InlineData(800, false)]
     [InlineData(600, false, "{")]
-    public void ANestTooDeepToReadIsSaidOnceAndTheTextStandsWhole(int depth, bool closed, string open = "(")
+    public void ANestTooDeepToReadIsReportedOnceAndTheTextStandsWhole(int depth, bool closed, string open = "(")
     {
         var close = open == "(" ? ")" : "}";
         var line = ".word " + string.Concat(Enumerable.Repeat(open, depth)) + "1"
@@ -342,7 +342,7 @@ public sealed class ParserTests
 
     /// <summary>Nesting within the parser's limit is read as the source has it, with no diagnostic.</summary>
     [Fact]
-    public void ANestWithinReachIsReadAsWritten()
+    public void ANestWithinReachIsReadAsTheSourceHasIt()
     {
         var line = ".word " + string.Concat(Enumerable.Repeat("(", 90)) + "1"
             + string.Concat(Enumerable.Repeat(")", 90)) + "\n";

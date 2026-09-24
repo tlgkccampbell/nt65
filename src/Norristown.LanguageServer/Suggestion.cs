@@ -26,7 +26,7 @@ internal readonly record struct Suggestion(
     string? Detail,
     string Text,
     string? Documentation = null,
-    int Band = Suggestion.Spelled,
+    int Band = Suggestion.Keyword,
     int Order = 0,
     bool IsSnippet = false)
 {
@@ -40,7 +40,7 @@ internal readonly record struct Suggestion(
     /// A word of the language itself, such as a directive, a signature item, or a number's prefix
     /// character.
     /// </summary>
-    public const int Spelled = 3;
+    public const int Keyword = 3;
 
     /// <summary>
     /// An instruction. Every CPU has far more instructions than could be meant at any one caret, so

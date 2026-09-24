@@ -34,14 +34,14 @@ public sealed partial class CodeLayout
     // has run.
     private readonly IProcessorStates? states;
     private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
-    private readonly Dictionary<(SyntaxTree Tree, int Position), LineLayout> anyWriting = [];
+    private readonly Dictionary<(SyntaxTree Tree, int Position), LineLayout> anyExpansion = [];
     private readonly List<Diagnostic> diagnostics = [];
 
     // These record where every line's bytes land and where every label falls among them. A
     // distance between two positions is known only when both are in the same run of bytes, and branch
     // range checks and long-branch sizing use these distances.
-    private readonly Dictionary<(int Position, Expansion? On), Placement> placements = [];
-    private readonly Dictionary<(Symbol Symbol, Expansion? At), Placement> labels = [];
+    private readonly Dictionary<(int Position, Expansion? On), BytePosition> positions = [];
+    private readonly Dictionary<(Symbol Symbol, Expansion? At), BytePosition> labels = [];
     private readonly Dictionary<int, int> filled = [];
     private readonly List<Branch> branches = [];
 
@@ -67,7 +67,7 @@ public sealed partial class CodeLayout
     // appear before the thing it measures, so the spans one walk works out are the values the
     // next walk answers with. Only what the file actually measures is tracked.
     private readonly IReadOnlySet<Symbol> measured;
-    private readonly Dictionary<Symbol, long> settled;
+    private readonly Dictionary<Symbol, long> spans;
     private readonly Dictionary<Symbol, long> extents = [];
 
     // The streams the walk is inside, innermost last. Each region and each segment block is a
@@ -77,7 +77,7 @@ public sealed partial class CodeLayout
     private int nextStream = 1;
 
     // The run of known distances that each segment's bytes are in, which is the run each line's
-    // Placement refers to. ca65 emits a segment's bytes in the order they appear in the file,
+    // BytePosition refers to. ca65 emits a segment's bytes in the order they appear in the file,
     // regardless of the region or block they are in, so a segment's regions and blocks form one
     // run of bytes. Only an `.align` or a `.place` ends a run. Run numbers are taken from the
     // same count as the streams.
@@ -120,7 +120,7 @@ public sealed partial class CodeLayout
     private CodeLayout(
         SemanticModel model, Cpu cpu, IProcessorStates? states,
         HashSet<(int Position, Expansion? On)> lengthened, IReadOnlySet<Symbol> measured,
-        Dictionary<Symbol, long> settled, IReadOnlyList<Step>? counted = null)
+        Dictionary<Symbol, long> spans, IReadOnlyList<Step>? counted = null)
     {
         this.counted = counted;
         statements = new Statements(this);
@@ -129,7 +129,7 @@ public sealed partial class CodeLayout
         this.states = states;
         this.lengthened = lengthened;
         this.measured = measured;
-        this.settled = settled;
+        this.spans = spans;
     }
 
     /// <summary>Gets the CPU this file was laid out for.</summary>
@@ -165,11 +165,11 @@ public sealed partial class CodeLayout
     /// value of <c>.spanof</c>, or null when nt65 cannot tell. For example, a span with an
     /// <c>.align</c> in it depends on an address.
     /// </summary>
-    public long? SpanOf(Symbol symbol) => settled.TryGetValue(symbol, out var span) ? span : null;
+    public long? SpanOf(Symbol symbol) => spans.TryGetValue(symbol, out var span) ? span : null;
 
     /// <summary>
     /// Returns the cost in cycles of one pass from <paramref name="from"/> to
-    /// <paramref name="to"/>, as the lower bound or, when <paramref name="most"/> is true, the
+    /// <paramref name="to"/>, as the lower bound or, when <paramref name="upperBound"/> is true, the
     /// upper bound. The two must be positions in one routine. The span counts the instructions
     /// from the first up to, but not including, the second, because <paramref name="to"/> is
     /// where the pass arrives rather than an instruction it runs.
@@ -180,7 +180,7 @@ public sealed partial class CodeLayout
     /// the result gives the reason instead.
     /// </para>
     /// </summary>
-    public CycleSpan CyclesOf(Symbol from, Symbol to, bool most)
+    public CycleSpan CyclesOf(Symbol from, Symbol to, bool upperBound)
     {
         if (counted is null)
         {
@@ -217,7 +217,7 @@ public sealed partial class CodeLayout
                 return new CycleSpan(null, $"nt65 has no cycle count for `{mnemonic}`");
             total += cycles;
         }
-        return new CycleSpan(most ? total.Most : total.Least, null);
+        return new CycleSpan(upperBound ? total.Maximum : total.Minimum, null);
     }
 
     /// <summary>
@@ -271,21 +271,21 @@ public sealed partial class CodeLayout
         // because the walks before it laid out a file that differs from the one emitted.
         var lengthened = new HashSet<(int Position, Expansion? On)>();
         var measured = Extents.MeasuredIn(model);
-        var settled = new Dictionary<Symbol, long>();
+        var spans = new Dictionary<Symbol, long>();
         CodeLayout layout;
         do
         {
-            layout = new CodeLayout(model, cpu, states, lengthened, measured, settled);
+            layout = new CodeLayout(model, cpu, states, lengthened, measured, spans);
             layout.Walk(model.Tree.Root.Members, from: 0);
         }
-        while (layout.Lengthen() | layout.Settle());
+        while (layout.Lengthen() | layout.RecordSpans());
 
         // A cycle span is counted over a walk that has finished, because the code it measures
         // may appear after the expression that measures it. Only a file that asks for a span is
         // laid out again, so no other file pays for it.
         if (layout.wantsCycles)
         {
-            layout = new CodeLayout(model, cpu, states, lengthened, measured, settled, layout.steps);
+            layout = new CodeLayout(model, cpu, states, lengthened, measured, spans, layout.steps);
             layout.Walk(model.Tree.Root.Members, from: 0);
         }
         layout.CheckBranchRange();
@@ -301,16 +301,16 @@ public sealed partial class CodeLayout
         lines.GetValueOrDefault((statement.Position, on));
 
     /// <summary>Returns where a statement's bytes land, or null when it generates none.</summary>
-    public Placement? Placed(SyntaxNode statement, Expansion? on = null) =>
-        placements.TryGetValue((statement.Position, on), out var placement) ? placement : null;
+    public BytePosition? PositionOf(SyntaxNode statement, Expansion? on = null) =>
+        positions.TryGetValue((statement.Position, on), out var position) ? position : null;
 
     /// <summary>
     /// Returns where <paramref name="label"/> stands in the stream around it, or null when the
     /// walk did not record it. A label that a macro body declares stands somewhere different in
     /// every expansion, so the expansion being asked about is part of the question.
     /// </summary>
-    public Placement? Placed(Symbol label, Expansion? on = null) =>
-        labels.TryGetValue((label, Expansion.Owning(on, label)), out var placement) ? placement : null;
+    public BytePosition? PositionOf(Symbol label, Expansion? on = null) =>
+        labels.TryGetValue((label, Expansion.Owning(on, label)), out var position) ? position : null;
 
     /// <summary>
     /// Lays out a run of sibling lines and blocks, starting at index <paramref name="from"/>.
@@ -356,19 +356,19 @@ public sealed partial class CodeLayout
         // reserves and how wide an address `lda n` reaches depend on the iteration.
         if (Constructs.Repeats(kind))
         {
-            var outerTurn = expansion;
-            var turns = Repetitions.Of(model, block, outerTurn, diagnostics);
+            var outerIteration = expansion;
+            var iterations = Repetitions.Of(model, block, outerIteration, diagnostics);
 
             // A repetition inside an expansion emits its body once per iteration, and every
             // iteration counts towards the bound, which is checked before any is laid out.
-            if (outerTurn?.NearestCall is { } call && Exceeds(turns.Count * (block.Members.Length - 1), call))
+            if (outerIteration?.NearestCall is { } call && Exceeds(iterations.Count * (block.Members.Length - 1), call))
                 return;
-            foreach (var turn in turns)
+            foreach (var iteration in iterations)
             {
-                expansion = turn;
+                expansion = iteration;
                 Walk(block.Members, from: 1);
             }
-            expansion = outerTurn;
+            expansion = outerIteration;
             return;
         }
 
@@ -379,9 +379,9 @@ public sealed partial class CodeLayout
             if (model.FamilyAt(block.Opener.Statement) is null)
                 return;
             var outerFamily = expansion;
-            foreach (var turn in Repetitions.Of(model, block, outerFamily, diagnostics))
+            foreach (var iteration in Repetitions.Of(model, block, outerFamily, diagnostics))
             {
-                expansion = turn;
+                expansion = iteration;
                 WalkBlock(block, BlockKind.Proc);
             }
             expansion = outerFamily;
@@ -411,7 +411,7 @@ public sealed partial class CodeLayout
             if (Constructs.SegmentOf(opener) == segment
                 && (routine is not null || streams.Count > 1) && opener is SegmentStatementSyntax detour)
             {
-                Report(detour.Keyword, Catalogue.SegmentBlockRedundant.Says(segment));
+                Report(detour.Keyword, Catalogue.SegmentBlockRedundant.Message(segment));
             }
             segment = Constructs.SegmentOf(opener) ?? segment;
             streams.Add(nextStream++);
@@ -477,7 +477,7 @@ public sealed partial class CodeLayout
         expanded += statements;
         if (expanded <= MaximumStatements)
             return false;
-        Report(call, Catalogue.ExpansionLimit.Says(MaximumStatements));
+        Report(call, Catalogue.ExpansionLimit.Message(MaximumStatements));
         return true;
     }
 
@@ -541,7 +541,7 @@ public sealed partial class CodeLayout
         if (routine is null)
         {
             if (expansion?.NearestCall is not null)
-                Report(mnemonic, Catalogue.InstructionOutsideARoutine.Says("an instruction belongs"));
+                Report(mnemonic, Catalogue.InstructionOutsideARoutine.Message("an instruction belongs"));
             return;
         }
 
@@ -549,47 +549,47 @@ public sealed partial class CodeLayout
         if (available.Count == 0)
         {
             var having = CpuNames.All.Where(other => Instructions.Has(other, statement.MnemonicKind)).ToList();
-            var spelled = having.Select(CpuNames.Spell).ToList();
+            var formatted = having.Select(CpuNames.Format).ToList();
 
             // The only CPU with it is the 6502 with its undocumented opcodes, so the reader is
             // looking at one of those rather than at an instruction they have misplaced.
             var undocumented = having is [Cpu.Mos6502X];
-            Report(mnemonic, Catalogue.InstructionNotOnCpu.Says(
+            Report(mnemonic, Catalogue.InstructionNotOnCpu.Message(
                 mnemonic.Text,
-                CpuNames.Spell(cpu),
-                spelled.Count == 0 ? ""
+                CpuNames.Format(cpu),
+                formatted.Count == 0 ? ""
                     : undocumented
-                        ? $", and is an undocumented opcode of the NMOS 6502, which the {CpuNames.Spell(Cpu.Mos6502X)} has"
-                        : ", and is on the " + (spelled.Count == 1
-                            ? spelled[0]
-                            : string.Join(", ", spelled.SkipLast(1)) + " and " + spelled[^1])));
+                        ? $", and is an undocumented opcode of the NMOS 6502, which the {CpuNames.Format(Cpu.Mos6502X)} has"
+                        : ", and is on the " + (formatted.Count == 1
+                            ? formatted[0]
+                            : string.Join(", ", formatted.SkipLast(1)) + " and " + formatted[^1])));
             Unlayable();
             return;
         }
 
         // In a macro body an `operand` parameter stands as a whole operand, so the mode and the
         // address size come from the argument the call passed rather than from the body's text.
-        var written = statement.Operand;
-        var substituted = Operands.Substituted(model, written, expansion);
+        var sourceOperand = statement.Operand;
+        var substituted = Operands.Substituted(model, sourceOperand, expansion);
         CheckSubstitution(substituted);
 
         // The values of an operand's expressions are checked here, as a data directive's are,
         // because no symbol holds them and no other pass evaluates them and reports problems.
-        foreach (var expression in written?.ChildNodes.OfType<ExpressionSyntax>() ?? [])
+        foreach (var expression in sourceOperand?.ChildNodes.OfType<ExpressionSyntax>() ?? [])
             model.Check(expression, diagnostics, expansion, SpanOf, CyclesOf);
-        var operand = substituted?.Operand ?? written;
+        var operand = substituted?.Operand ?? sourceOperand;
 
         var candidates = Plausible(operand).Where(available.Contains).ToArray();
         if (candidates.Length == 0 && operand is null)
         {
-            Report(mnemonic, Catalogue.OperandMissing.Says(mnemonic.Text));
+            Report(mnemonic, Catalogue.OperandMissing.Message(mnemonic.Text));
             Unlayable();
             return;
         }
         if (candidates.Length == 0)
         {
             Report(operand?.Tree ?? mnemonic.Parent.Tree, operand?.Span ?? mnemonic.Span,
-                Catalogue.OperandNotTaken.Says(mnemonic.Text, CpuNames.Spell(cpu)));
+                Catalogue.OperandNotTaken.Message(mnemonic.Text, CpuNames.Format(cpu)));
             Unlayable();
             return;
         }
@@ -650,18 +650,18 @@ public sealed partial class CodeLayout
             || !Plausible(operand).Contains(AddressingMode.Relative))
         {
             Report(operand?.Tree ?? mnemonic.Parent.Tree, operand?.Span ?? mnemonic.Span,
-                Catalogue.BranchOperandNotTaken.Says(mnemonic.Text));
+                Catalogue.BranchOperandNotTaken.Message(mnemonic.Text));
             return;
         }
-        if (Operands.WrittenPrefix(operand) is not null)
+        if (Operands.PrefixSize(operand) is not null)
         {
             Report(operand,
-                Catalogue.TransferPrefix.Says(mnemonic.Text));
+                Catalogue.TransferPrefix.Message(mnemonic.Text));
             return;
         }
         if (model.AddressSizeOf(target, segment, expansion) == AddressSize.Far)
         {
-            Report(target, Catalogue.TargetTooFar.Says(mnemonic.Text));
+            Report(target, Catalogue.TargetTooFar.Message(mnemonic.Text));
             return;
         }
 
@@ -691,7 +691,7 @@ public sealed partial class CodeLayout
             return;
         }
         if (value == 0)
-            Report(directive, Catalogue.AssertionFailed.Says(assertion.Message ?? "this assertion does not hold"));
+            Report(directive, Catalogue.AssertionFailed.Message(assertion.Message ?? "this assertion does not hold"));
     }
 
     /// <summary>
@@ -723,8 +723,8 @@ public sealed partial class CodeLayout
     private void Refuse(ErrorDirectiveSyntax directive)
     {
         var warns = directive.Keyword.Text.Equals(".warning", StringComparison.OrdinalIgnoreCase);
-        var said = Constructs.AssertionOf(directive).Message ?? "this configuration is not supported";
-        Report(directive, warns ? Catalogue.ConfigWarned.Says(said) : Catalogue.ConfigRefused.Says(said));
+        var message = Constructs.AssertionOf(directive).Message ?? "this configuration is not supported";
+        Report(directive, warns ? Catalogue.ConfigWarned.Message(message) : Catalogue.ConfigRefused.Message(message));
     }
 
     private void Data(StatementSyntax directive)
@@ -737,9 +737,9 @@ public sealed partial class CodeLayout
             // the source there do. Binding could not see them, because it sees only the macro body
             // as declared.
             if (expansion?.NearestCall is not null && DataSyntax.NameOf(loose) is not (".res" or ".align"))
-                Report(directive, Catalogue.PaddingOutsideARoutine.Says(loose.Directive.Text, ""));
+                Report(directive, Catalogue.PaddingOutsideARoutine.Message(loose.Directive.Text, ""));
             else if (segment is null && length != 0)
-                Report(directive, Catalogue.OutsideEverySegment.Says("this"));
+                Report(directive, Catalogue.OutsideEverySegment.Message("this"));
         }
         Laid(directive, new LineLayout(length, null, null));
         Place(directive, length);
@@ -750,7 +750,7 @@ public sealed partial class CodeLayout
     /// Returns what a statement assembles to in its first expansion. An editor asks about a line
     /// rather than about one expansion of it, so it is shown the first.
     /// </summary>
-    public LineLayout? AnyOf(StatementSyntax statement) => anyWriting.GetValueOrDefault((statement.Tree, statement.Position));
+    public LineLayout? AnyOf(StatementSyntax statement) => anyExpansion.GetValueOrDefault((statement.Tree, statement.Position));
 
     /// <summary>
     /// Returns the symbol a declaration declares at this point of the walk. For a
@@ -819,9 +819,9 @@ public sealed partial class CodeLayout
                 layout.Data(element);
                 if (DataSyntax.BodyOf(element) is null && layout.NameOf(node) is { } declared
                     && layout.measured.Contains(declared)
-                    && layout.placements.GetValueOrDefault((element.Position, layout.expansion)) is { Length: >= 0 } placed)
+                    && layout.positions.GetValueOrDefault((element.Position, layout.expansion)) is { Length: >= 0 } position)
                 {
-                    layout.extents[declared] = placed.Length;
+                    layout.extents[declared] = position.Length;
                 }
             }
         }

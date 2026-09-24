@@ -21,9 +21,9 @@ public sealed class FormatCommandTests : IDisposable
     {
         File("main.nt65", Crooked);
 
-        var (code, said) = Run(root.FullName, "fmt", "main.nt65");
+        var (code, printed) = Run(root.FullName, "fmt", "main.nt65");
 
-        Assert.Equal((0, ""), (code, said));
+        Assert.Equal((0, ""), (code, printed));
         Assert.Equal(Straight, Read("main.nt65"));
     }
 
@@ -38,9 +38,9 @@ public sealed class FormatCommandTests : IDisposable
         File("src/main.nt65", Crooked);
         File("src/hw.nt65", ".module hw\n");
 
-        var (code, said) = Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65");
+        var (code, printed) = Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65");
 
-        Assert.Equal((1, "src/main.nt65\n"), (code, said));
+        Assert.Equal((1, "src/main.nt65\n"), (code, printed));
         Assert.Equal(Crooked, Read("src/main.nt65"));
 
         Assert.Equal((0, ""), Run(root.FullName, "fmt", "src/main.nt65"));
@@ -74,20 +74,20 @@ public sealed class FormatCommandTests : IDisposable
     /// reports that before printing the usage text.
     /// </summary>
     [Fact]
-    public void WithNothingToFormatItSaysSo()
+    public void WhatItCannotFormatIsReported()
     {
-        var (code, said) = Run(root.FullName, "fmt");
+        var (code, printed) = Run(root.FullName, "fmt");
         Assert.Equal(2, code);
-        Assert.StartsWith("nt65: no files to format, and no nt65.json\nusage: nt65 build", said);
+        Assert.StartsWith("nt65: no files to format, and no nt65.json\nusage: nt65 build", printed);
 
-        (code, said) = Run(root.FullName, "fmt", "gone.nt65");
-        Assert.Equal((1, "gone.nt65: error: file not found\n"), (code, said));
+        (code, printed) = Run(root.FullName, "fmt", "gone.nt65");
+        Assert.Equal((1, "gone.nt65: error: file not found\n"), (code, printed));
 
-        (code, said) = Run(root.FullName, "fmt", "--write");
-        Assert.Equal((2, "nt65: `--write` is not an option\nsee `nt65 --help`\n"), (code, said));
+        (code, printed) = Run(root.FullName, "fmt", "--write");
+        Assert.Equal((2, "nt65: `--write` is not an option\nsee `nt65 --help`\n"), (code, printed));
     }
 
-    private static (int Code, string Said) Run(string directory, params string[] arguments)
+    private static (int Code, string Printed) Run(string directory, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

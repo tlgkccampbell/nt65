@@ -150,7 +150,7 @@ public static class BuildCommand
         if (compilation.IsCpuAssumed)
         {
             error.WriteLine($"nt65: note: nothing says which processor this program is for, so it is built for the "
-                + $"{CpuNames.Spell(ProgramCpu.Default)}: give `--cpu`, `\"cpu\"` in {ProjectFile.Name}, or a `.cpu` item");
+                + $"{CpuNames.Format(ProgramCpu.Default)}: give `--cpu`, `\"cpu\"` in {ProjectFile.Name}, or a `.cpu` item");
         }
 
         // `--check` asks only for the diagnostics, which have now been reported. It writes no

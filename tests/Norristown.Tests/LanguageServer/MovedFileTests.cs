@@ -21,7 +21,7 @@ public sealed class MovedFileTests : IDisposable
     /// A glob that stops matching is reported in a warning rather than rewritten.
     /// </summary>
     [Fact]
-    public async Task WhatMovesWithAFileIsWrittenAndWhatCannotBeIsSaid()
+    public async Task WhatMovesWithAFileIsRewrittenAndWhatCannotBeIsReported()
     {
         var timeout = TestTimeout.Token();
         Write("nt65.json", """
@@ -59,9 +59,9 @@ public sealed class MovedFileTests : IDisposable
         Assert.Equal("\"../../data/tiles.bin\"", path.NewText);
         Assert.Equal(2, path.Range.Start.Line);
 
-        var said = await client.NextShowMessageAsync(timeout);
-        Assert.Equal(MessageType.Warning, said.Type);
-        Assert.Contains("`gfx/*.nt65` in nt65.json does not match sprite.nt65, the file's new path", said.Message, StringComparison.Ordinal);
+        var warning = await client.NextShowMessageAsync(timeout);
+        Assert.Equal(MessageType.Warning, warning.Type);
+        Assert.Contains("`gfx/*.nt65` in nt65.json does not match sprite.nt65, the file's new path", warning.Message, StringComparison.Ordinal);
 
         // The binary moves instead: the file that includes it names it where it now is.
         var binary = await RenameAsync(client, timeout, ("data/tiles.bin", "data/art/tiles.bin"));

@@ -132,15 +132,15 @@ internal sealed class Requirements
         switch (Transfers.Of(statement, mode))
         {
             case Transfer.Elsewhere when Mnemonic(statement).Control == Control.Calls:
-                Report(statement, Catalogue.IndirectCallUnchecked.Says(Quoted(statement)));
+                Report(statement, Catalogue.IndirectCallUnchecked.Message(Quoted(statement)));
                 break;
 
             case Transfer.Elsewhere:
-                Report(statement, Catalogue.IndirectJumpUnchecked.Says(Quoted(statement)), EndPath(step));
+                Report(statement, Catalogue.IndirectJumpUnchecked.Message(Quoted(statement)), EndPath(step));
                 break;
 
             case Transfer.Return when statement.MnemonicKind is MnemonicKind.Rts or MnemonicKind.Rtl && PushesCode(block):
-                Report(statement, Catalogue.PushedReturnUnchecked.Says(SyntaxFacts.TextOf(statement.MnemonicKind)));
+                Report(statement, Catalogue.PushedReturnUnchecked.Message(SyntaxFacts.TextOf(statement.MnemonicKind)));
                 break;
 
             case Transfer.Jump or Transfer.Branch when flow.RelativeCallAt(step) is null:
@@ -162,17 +162,17 @@ internal sealed class Requirements
     /// </summary>
     private void CheckTarget(FlowRegion region, Step step, InstructionStatementSyntax statement, AddressingMode? mode, bool calls)
     {
-        if (Transfers.TargetOf(statement, mode) is not { } written)
+        if (Transfers.TargetOf(statement, mode) is not { } targetExpression)
             return;
-        var target = Targets.Of(model, written, step.On);
+        var target = Targets.Of(model, targetExpression, step.On);
 
         // A name that resolves to nothing has already been reported where it appears. A call to
         // anything but a routine is reported by the state analysis, with the call's other checks.
         if (target is null)
         {
-            if (!calls && written is not NameExpressionSyntax)
+            if (!calls && targetExpression is not NameExpressionSyntax)
             {
-                Report(statement, Catalogue.ComputedJumpUnchecked.Says(Quoted(statement)), EndPath(step));
+                Report(statement, Catalogue.ComputedJumpUnchecked.Message(Quoted(statement)), EndPath(step));
             }
             return;
         }
@@ -181,7 +181,7 @@ internal sealed class Requirements
         {
             if (!calls)
             {
-                Report(statement, Catalogue.JumpTargetNotALabel.Says(
+                Report(statement, Catalogue.JumpTargetNotALabel.Message(
                     Quoted(statement), symbol.DisplayName, symbol.KindPhrase), EndPath(step));
             }
             return;
@@ -194,7 +194,7 @@ internal sealed class Requirements
         if (symbol is { Kind: SymbolKind.Label, Routine: { } owner, StateDeclaration: null }
             && owner != region.Routine && !owner.IsSiblingOf(region.Routine))
         {
-            Report(statement, Catalogue.EntryNotDeclared.Says(symbol.DisplayName, owner.DisplayName),
+            Report(statement, Catalogue.EntryNotDeclared.Message(symbol.DisplayName, owner.DisplayName),
                 new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
         }
         if (!labels.TryGetValue(symbol, out var labelled))
@@ -202,7 +202,7 @@ internal sealed class Requirements
         if (!labelled.IsCode && DataAt(labelled) is { } data
             && (!labelled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a is not NextDirectiveSyntax)))
         {
-            Report(statement, Catalogue.JumpIntoData.Says(symbol.DisplayName));
+            Report(statement, Catalogue.JumpIntoData.Message(symbol.DisplayName));
         }
     }
 
@@ -269,15 +269,15 @@ internal sealed class Requirements
 
         var routine = region.Routine.DisplayName;
         var message = own
-            ? Catalogue.RoutineRunsOffTheEnd.Says(
+            ? Catalogue.RoutineRunsOffTheEnd.Message(
                 routine, "its end", "is written after it",
                 "add a `.fallthrough` naming the routine it runs into")
-            : Catalogue.RoutineRunsOffTheEnd.Says(
+            : Catalogue.RoutineRunsOffTheEnd.Message(
                 routine, "the end of a segment block", "that segment holds next", "add a `.next` saying where flow goes");
 
         // Where the routine emitted next is known, the fix names it. Anywhere else the fix is a
         // `.next ?`, which ends the path without claiming anything about what comes next.
-        var after = own ? flow.WrittenAfter(region) : null;
+        var after = own ? flow.EmittedAfter(region) : null;
         var runsInto = after is { } next
             ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
             : null;
@@ -350,7 +350,7 @@ internal sealed class Requirements
                         .Any(target => Targets.Of(model, target, step.On)?.Symbol == symbol);
                     if (!patched)
                     {
-                        Report(statement, Catalogue.SelfModifyingUnchecked.Says(
+                        Report(statement, Catalogue.SelfModifyingUnchecked.Message(
                             Quoted(statement), symbol.DisplayName, symbol.DisplayName));
                     }
                     continue;
@@ -358,7 +358,7 @@ internal sealed class Requirements
 
                 if (labelled.Block.IsDeclared || named.Contains((labelled.Region.Routine, symbol)))
                     continue;
-                Report(name, Catalogue.CodeLabelAsData.Says(symbol.DisplayName, labelled.Region.Routine.DisplayName),
+                Report(name, Catalogue.CodeLabelAsData.Message(symbol.DisplayName, labelled.Region.Routine.DisplayName),
                     new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
             }
         }
@@ -410,7 +410,7 @@ internal sealed class Requirements
                 continue;
             }
             diagnostics.Add(new Diagnostic(model.Tree.GetSpan(at),
-                Catalogue.ExportedEntryNotDeclared.Says(symbol.DisplayName, labelled.Region.Routine.DisplayName))
+                Catalogue.ExportedEntryNotDeclared.Message(symbol.DisplayName, labelled.Region.Routine.DisplayName))
             {
                 Fix = new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan),
             });

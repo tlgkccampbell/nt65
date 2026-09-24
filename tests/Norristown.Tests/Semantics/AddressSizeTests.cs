@@ -42,7 +42,7 @@ public sealed class AddressSizeTests
     /// Before the first region there is no default segment.
     /// </summary>
     [Fact]
-    public void ARegionPlacesWhatFollowsIt()
+    public void ARegionPutsWhatFollowsItInItsSegment()
     {
         var model = Analysis.Model(".module main\nSIZE = 1\n.segment ZEROPAGE\n.data ptr: .word\n.proc early {\nrts\n}\n"
             + ".segment CODE\n.proc main {\nrts\n}\n");

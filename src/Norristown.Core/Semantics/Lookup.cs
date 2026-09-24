@@ -6,7 +6,7 @@ namespace Norristown.Semantics;
 /// at the caret and the symbol a name binds to can never be computed two different ways.
 /// <para>
 /// Nothing here reads the tree. The class is given the scope a name appears in, the file's
-/// <c>.use</c> items and the program's table, and returns the <see cref="Place"/> the name
+/// <c>.use</c> items and the program's table, and returns the <see cref="Resolution"/> the name
 /// reaches. It reports a diagnostic only through the callback a caller passes, and the caller
 /// decides what to report about the result.
 /// </para>
@@ -20,11 +20,11 @@ internal static class Lookup
     /// name is the whole reference, not a step on a path, because a module is the start of a path
     /// and never a value.
     /// </summary>
-    public static Place? Outside(
+    public static Resolution? Outside(
         string name,
         bool last,
         ProgramSymbols program,
-        IReadOnlyDictionary<string, Place> brought,
+        IReadOnlyDictionary<string, Resolution> brought,
         IReadOnlyList<ProgramSymbols.Module> globs,
         Action<string?, string>? touched = null,
         Action<DiagnosticMessage, DiagnosticFix?>? report = null)
@@ -32,14 +32,14 @@ internal static class Lookup
         if (brought.TryGetValue(name, out var found))
             return found with { IsAlias = found.Symbol is { } target && target.Name != name };
         if (program.Define(name) is { } define)
-            return new Place(define);
+            return new Resolution(define);
         if (!last && program.IsModulePath(name))
-            return new Place(null, name);
+            return new Resolution(null, name);
 
         // A module on its own is not a value, so a name that appears alone means what a `*`
         // brought in, if anything. Only when nothing else matches is it the module, which the
         // caller reports as a module used as a name.
-        Place? chosen = null;
+        Resolution? chosen = null;
         foreach (var module in globs)
         {
             if (program.Member(module, name, touched) is not { } exported
@@ -49,24 +49,24 @@ internal static class Lookup
             }
             if (chosen is { } other)
             {
-                report?.Invoke(Catalogue.ExportAmbiguous.Says(name, other.From, module.Name, module.Name, name), null);
-                return Place.Reported;
+                report?.Invoke(Catalogue.ExportAmbiguous.Message(name, other.From, module.Name, module.Name, name), null);
+                return Resolution.Reported;
             }
-            chosen = new Place(exported, From: module.Name);
+            chosen = new Resolution(exported, From: module.Name);
         }
-        return chosen ?? (last && program.IsModulePath(name) ? new Place(null, name) : null);
+        return chosen ?? (last && program.IsModulePath(name) ? new Resolution(null, name) : null);
     }
 
     /// <summary>
     /// Returns the place that the first part of a path from the root of the modules reaches, or
     /// reports a diagnostic and returns null when no module path starts with that name.
     /// </summary>
-    public static Place? ModuleRoot(
+    public static Resolution? ModuleRoot(
         string name, ProgramSymbols program, Action<DiagnosticMessage, DiagnosticFix?>? report = null)
     {
         if (program.IsModulePath(name))
-            return new Place(null, name);
-        report?.Invoke(Catalogue.ModuleUnknown.Says(name), null);
+            return new Resolution(null, name);
+        report?.Invoke(Catalogue.ModuleUnknown.Message(name), null);
         return null;
     }
 
@@ -75,7 +75,7 @@ internal static class Lookup
     /// which is a module or the start of a module's name. The caller checks whether the result
     /// may be named from outside its module.
     /// </summary>
-    public static Place? InModule(
+    public static Resolution? InModule(
         string name,
         string prefix,
         ProgramSymbols program,
@@ -84,21 +84,21 @@ internal static class Lookup
     {
         var path = $"{prefix}::{name}";
         if (program.IsModulePath(path))
-            return new Place(null, path);
+            return new Resolution(null, path);
         if (program.ModuleNamed(prefix) is not { } module)
         {
-            report?.Invoke(Catalogue.ModuleUnknown.Says(path), null);
+            report?.Invoke(Catalogue.ModuleUnknown.Message(path), null);
             return null;
         }
         if (program.Member(module, name, touched) is not { } member)
         {
             var near = Spelling.Nearest(name, Members(module));
             report?.Invoke(
-                Catalogue.NotDeclaredIn.Says(name, $"module `{prefix}`", Suggesting(near)),
+                Catalogue.NotDeclaredIn.Message(name, $"module `{prefix}`", Suggesting(near)),
                 near is null ? null : new DiagnosticFix(FixKind.NearestName, near));
             return null;
         }
-        return new Place(member);
+        return new Resolution(member);
     }
 
     /// <summary>
@@ -142,32 +142,32 @@ internal static class Lookup
     /// something, and the program lists the modules a path may start with.
     /// </para>
     /// </summary>
-    public static IEnumerable<(string Name, Place Means)> InScope(
+    public static IEnumerable<(string Name, Resolution Means)> InScope(
         Scope at,
         ProgramSymbols program,
-        IReadOnlyDictionary<string, Place> brought,
+        IReadOnlyDictionary<string, Resolution> brought,
         IReadOnlyList<ProgramSymbols.Module> globs)
     {
         for (var scope = at; scope is not null; scope = scope.Parent)
         {
             foreach (var symbol in scope.Symbols)
-                yield return (symbol.DisplayName, new Place(symbol));
+                yield return (symbol.DisplayName, new Resolution(symbol));
         }
         foreach (var (name, place) in brought)
             yield return (name, place with { IsAlias = place.Symbol is { } target && target.Name != name });
         foreach (var define in program.Defines)
-            yield return (define.Name, new Place(define));
+            yield return (define.Name, new Resolution(define));
         foreach (var module in globs)
         {
             foreach (var symbol in module.FileScope.Symbols)
             {
                 if (symbol.IsExported && !symbol.IsCheapLocal)
-                    yield return (symbol.Name, new Place(symbol, From: module.Name));
+                    yield return (symbol.Name, new Resolution(symbol, From: module.Name));
             }
             foreach (var reexport in module.Reexports)
             {
                 if (program.Member(module, reexport.Name) is { } exported)
-                    yield return (reexport.Name, new Place(exported, From: module.Name));
+                    yield return (reexport.Name, new Resolution(exported, From: module.Name));
             }
         }
     }

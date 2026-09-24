@@ -41,7 +41,7 @@ public sealed class AssertionTests
 
     /// <summary>An assertion with no message still reports which line failed.</summary>
     [Fact]
-    public void AnAssertionWithNoMessageSaysSomething()
+    public void AnAssertionWithNoMessageStillReportsTheLine()
     {
         var program = Analysis.Program(("main.nt65", ".module main\n    .assert 1 == 2\n"));
 
@@ -85,7 +85,7 @@ public sealed class AssertionTests
 
     /// <summary>An <c>.error</c> in a branch the build leaves out is not reached.</summary>
     [Fact]
-    public void AnErrorInABranchThatIsNotTakenSaysNothing()
+    public void AnErrorInABranchThatIsNotTakenIsNotReported()
     {
         var program = Analysis.Program(("main.nt65", """
             .module main

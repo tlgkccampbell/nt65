@@ -83,12 +83,12 @@ public readonly record struct BankSet(ulong Low, ulong LowMiddle, ulong HighMidd
         && (HighMiddle & ~other.HighMiddle) == 0 && (High & ~other.High) == 0;
 
     /// <summary>Formats the set for a diagnostic message, such as <c>$00-$3f, $80-$bf</c>.</summary>
-    public string Spell() => string.Join(", ", Runs.Select(run => run.First == run.Last
+    public string Format() => string.Join(", ", Runs.Select(run => run.First == run.Last
         ? StateValue.Hex(run.First, 2)
         : $"{StateValue.Hex(run.First, 2)}-{StateValue.Hex(run.Last, 2)}"));
 
     /// <summary>Formats the set in the syntax an item uses, such as <c>[$00..$3f, $80..$bf]</c>.</summary>
-    public string Write() => "[" + string.Join(", ", Runs.Select(run => run.First == run.Last
+    public string FormatAsItem() => "[" + string.Join(", ", Runs.Select(run => run.First == run.Last
         ? StateValue.Hex(run.First, 2)
         : $"{StateValue.Hex(run.First, 2)}..{StateValue.Hex(run.Last, 2)}")) + "]";
 

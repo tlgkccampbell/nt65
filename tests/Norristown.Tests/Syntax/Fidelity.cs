@@ -24,10 +24,10 @@ internal static class Fidelity
 
         foreach (var line in lines)
         {
-            var written = line.ToFullString();
+            var text = line.ToFullString();
             var pieces = Pieces(line);
-            if (pieces != written)
-                yield return $"line {line.LineIndex + 1}: the line's pieces read back as {Quote(pieces)}, not {Quote(written)}";
+            if (pieces != text)
+                yield return $"line {line.LineIndex + 1}: the line's pieces read back as {Quote(pieces)}, not {Quote(text)}";
         }
     }
 

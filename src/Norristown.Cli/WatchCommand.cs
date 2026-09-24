@@ -18,7 +18,7 @@ internal static class WatchCommand
     /// <summary>
     /// The time, in milliseconds, to let a burst of file events finish before building.
     /// </summary>
-    private const int Settle = 120;
+    private const int QuietMilliseconds = 120;
 
     /// <summary>
     /// Builds until <paramref name="cancellation"/> is cancelled, and returns 0. A command-line
@@ -41,9 +41,9 @@ internal static class WatchCommand
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
         };
-        void Touched(object? sender, FileSystemEventArgs said)
+        void Touched(object? sender, FileSystemEventArgs change)
         {
-            if (!Matters(said.FullPath, watched))
+            if (!Matters(change.FullPath, watched))
                 return;
             try
             {
@@ -83,7 +83,7 @@ internal static class WatchCommand
 
             // An editor may write a file in several steps, and saving many files at once raises
             // many events, so wait for the events to stop, then clear the signal and build once.
-            if (cancellation.WaitHandle.WaitOne(Settle))
+            if (cancellation.WaitHandle.WaitOne(QuietMilliseconds))
                 return 0;
             changed.Wait(0, CancellationToken.None);
         }

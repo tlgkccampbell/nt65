@@ -248,7 +248,7 @@ public sealed class RequirementsTests
     /// it and back, as it does along a jump within one stream of bytes.
     /// </summary>
     [Fact]
-    public void AJumpIntoANestedSegmentBlockCarriesTheState()
+    public void AJumpIntoANestedSegmentBlockPropagatesTheState()
     {
         const string Text = """
             .proc p: a16, i8 {

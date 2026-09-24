@@ -42,7 +42,7 @@ public sealed class RefactorsTests
     /// brought it in is removed.
     /// </summary>
     [Fact]
-    public void ABroughtNameIsWrittenOutInFull()
+    public void ABroughtNameIsSpelledOutInFull()
     {
         const string Main = ".module main\n.use gfx::clear\n.segment CODE\n.proc main {\n    jsr clear\n    rts\n}\n";
 
@@ -77,11 +77,11 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.segment CODE\n.proc start {\n    rts\n}\n";
 
         var exported = Single(Main, ".proc start", "Export `start` from `main`");
-        var written = Editing.Apply(Main, exported.Edit.Changes[Uri]);
-        Assert.Equal(".module main\n.segment CODE\n.export .proc start {\n    rts\n}\n", written);
+        var edited = Editing.Apply(Main, exported.Edit.Changes[Uri]);
+        Assert.Equal(".module main\n.segment CODE\n.export .proc start {\n    rts\n}\n", edited);
 
-        var stopped = Single(written, ".export .proc start", "Stop exporting `start`");
-        Assert.Equal(Main, Editing.Apply(written, stopped.Edit.Changes[Uri]));
+        var stopped = Single(edited, ".export .proc start", "Stop exporting `start`");
+        Assert.Equal(Main, Editing.Apply(edited, stopped.Edit.Changes[Uri]));
     }
 
     /// <summary>What a routine leaves is declared from what the analysis finds at its returns.</summary>
@@ -102,18 +102,18 @@ public sealed class RefactorsTests
     /// back.
     /// </summary>
     [Fact]
-    public void WidthsAreWrittenAsAnEnsureAndBack()
+    public void WidthsAreConvertedToAnEnsureAndBack()
     {
         const string Main = ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 -> a16 {\n    rep #$20\n    rts\n}\n";
 
         var ensured = Single(Main, "rep #$20", "Write it as `.ensure a16`");
-        var written = Editing.Apply(Main, ensured.Edit.Changes[Uri]);
+        var edited = Editing.Apply(Main, ensured.Edit.Changes[Uri]);
         Assert.Equal(
             ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 -> a16 {\n    .ensure a16\n    rts\n}\n",
-            written);
+            edited);
 
-        var back = Single(written, ".ensure a16", "Write it out as `rep #$20`");
-        Assert.Equal(Main, Editing.Apply(written, back.Edit.Changes[Uri]));
+        var back = Single(edited, ".ensure a16", "Write it out as `rep #$20`");
+        Assert.Equal(Main, Editing.Apply(edited, back.Edit.Changes[Uri]));
     }
 
     /// <summary>
@@ -122,7 +122,7 @@ public sealed class RefactorsTests
     /// change what the line does.
     /// </summary>
     [Fact]
-    public void OnlyAnImmediateRepIsWrittenAsAnEnsure()
+    public void OnlyAnImmediateRepIsConvertedToAnEnsure()
     {
         const string Main = ".module main\n.cpu 65816\nFLAGS = $20\n.segment CODE\n"
             + ".proc widen: a8, i8 -> a16 {\n    rep FLAGS\n    rts\n}\n";
@@ -154,11 +154,11 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.segment CODE\n.proc main {\n@loop:\n    jmp @loop\n}\n";
 
         var named = Single(Main, "@loop:", "Give `@loop` a name of its own");
-        var written = Editing.Apply(Main, named.Edit.Changes[Uri]);
-        Assert.Equal(".module main\n.segment CODE\n.proc main {\nloop:\n    jmp loop\n}\n", written);
+        var edited = Editing.Apply(Main, named.Edit.Changes[Uri]);
+        Assert.Equal(".module main\n.segment CODE\n.proc main {\nloop:\n    jmp loop\n}\n", edited);
 
-        var cheap = Single(written, "loop:", "Make `loop` a cheap local, `@loop`");
-        Assert.Equal(Main, Editing.Apply(written, cheap.Edit.Changes[Uri]));
+        var cheap = Single(edited, "loop:", "Make `loop` a cheap local, `@loop`");
+        Assert.Equal(Main, Editing.Apply(edited, cheap.Edit.Changes[Uri]));
     }
 
     /// <summary>A declaration a routine owns is put in a segment block of its own.</summary>
@@ -205,18 +205,18 @@ public sealed class RefactorsTests
         var selection = new Range(Locate.At(Main, "@wait:"), Locate.At(Main, "    rts"));
         var action = Single(Main, selection, "Extract into a `.proc`");
 
-        var written = Editing.Apply(Main, action.Edit.Changes[Uri]);
+        var edited = Editing.Apply(Main, action.Edit.Changes[Uri]);
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    jsr wait\n    rts\n}\n"
                 + "\n.proc wait {\n@wait:\n    lda $d012\n    cmp #100\n    rts\n}\n",
-            written);
+            edited);
 
         Assert.NotNull(action.Command);
         Assert.Equal("nt65.rename", action.Command.Name);
         var line = (int)action.Command.Arguments![1];
         var character = (int)action.Command.Arguments[2];
         Assert.Equal(Uri, action.Command.Arguments[0]);
-        Assert.Equal("wait {", written.Split('\n')[line][character..]);
+        Assert.Equal("wait {", edited.Split('\n')[line][character..]);
     }
 
     /// <summary>

@@ -69,13 +69,13 @@ public sealed class ExtensionTests : IDisposable
     public void TheSchemaOffersTheProcessorsAndSizesNt65Reads()
     {
         Assert.Equal(
-            CpuNames.All.Select(CpuNames.Spell),
+            CpuNames.All.Select(CpuNames.Format),
             Enumeration(Schema.RootElement.GetProperty("properties").GetProperty("cpu")));
 
         var sizes = Enumeration(Definition("segment").GetProperty("properties").GetProperty("size"));
         Assert.Equal(
             Enum.GetValues<AddressSize>().ToHashSet(),
-            sizes.Select(written => SegmentNames.ParseSize(written) ?? throw new Xunit.Sdk.XunitException($"`{written}` is no size")).ToHashSet());
+            sizes.Select(size => SegmentNames.ParseSize(size) ?? throw new Xunit.Sdk.XunitException($"`{size}` is no size")).ToHashSet());
     }
 
     /// <summary>
@@ -92,11 +92,11 @@ public sealed class ExtensionTests : IDisposable
         Assert.Equal(1, Commands.Run(["build"], root.FullName, new StringWriter { NewLine = "\n" }, error,
             cancellation: TestTimeout.Token()));
 
-        var said = error.ToString().ReplaceLineEndings("\n").Split('\n').Where(line => line.Length > 0).ToList();
+        var printed = error.ToString().ReplaceLineEndings("\n").Split('\n').Where(line => line.Length > 0).ToList();
         var matcher = new Regex(Pattern("regexp"), RegexOptions.None, TimeSpan.FromSeconds(5));
-        var matched = said.Select(line => matcher.Match(line)).Where(match => match.Success).ToList();
+        var matched = printed.Select(line => matcher.Match(line)).Where(match => match.Success).ToList();
 
-        Assert.Equal(said.Count, matched.Count);
+        Assert.Equal(printed.Count, matched.Count);
         foreach (var match in matched)
         {
             Assert.Equal("main.nt65", match.Groups[int.Parse(Pattern("file"))].Value);
@@ -120,8 +120,8 @@ public sealed class ExtensionTests : IDisposable
         var matcher = new Regex(Pattern("regexp"), RegexOptions.None, TimeSpan.FromSeconds(5));
         foreach (var severity in Enum.GetValues<Severity>())
         {
-            var written = severity.ToString().ToLowerInvariant();
-            Assert.Matches(matcher, $"src/main.nt65:12:5: {written}: something is wrong");
+            var name = severity.ToString().ToLowerInvariant();
+            Assert.Matches(matcher, $"src/main.nt65:12:5: {name}: something is wrong");
         }
     }
 

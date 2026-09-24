@@ -101,7 +101,7 @@ internal static class CallHierarchy
             {
                 foreach (var block in region.Blocks)
                 {
-                    if (block.Calls.Count == 0 || Written(block) is not { } at)
+                    if (block.Calls.Count == 0 || CallingStatement(block) is not { } at)
                         continue;
                     foreach (var callee in block.Calls)
                         yield return (region.Routine, callee, Lsp.ToRange(at.Tree, at.Span));
@@ -113,7 +113,7 @@ internal static class CallHierarchy
     /// <summary>
     /// Returns the statement that makes a block's calls, or null for a block with no statements.
     /// </summary>
-    private static SyntaxNode? Written(BasicBlock block) =>
+    private static SyntaxNode? CallingStatement(BasicBlock block) =>
         block.Steps.Count == 0 ? null : block.Steps[^1].Statement;
 
     /// <summary>

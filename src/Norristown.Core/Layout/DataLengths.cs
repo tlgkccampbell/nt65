@@ -98,7 +98,7 @@ public static class DataLengths
         if (directive.Parent is DataDeclarationSyntax && name is ".res" or ".align")
         {
             Report(directive, model, diagnostics, on,
-                name == ".res" ? Catalogue.ResNotADeclaration.Says() : Catalogue.AlignNotADeclaration.Says(),
+                name == ".res" ? Catalogue.ResNotADeclaration.Message() : Catalogue.AlignNotADeclaration.Message(),
 
                 // The room a `.res` reserves is the count of the `.byte[n]` that replaces it.
                 // An `.align` only positions a declaration and cannot become one, so it gets
@@ -120,7 +120,7 @@ public static class DataLengths
         foreach (var operand in operands)
         {
             if (operand is RecordValuesSyntax or ValueListSyntax)
-                Report(operand, model, diagnostics, on, Catalogue.ElementNotAValue.Says(name));
+                Report(operand, model, diagnostics, on, Catalogue.ElementNotAValue.Message(name));
         }
 
         switch (name)
@@ -194,7 +194,7 @@ public static class DataLengths
         var at = Bytes(operand, model, on)?.ToList().IndexOf(0) ?? -1;
         if (at < 0)
             return;
-        Report(operand, model, diagnostics, on, Catalogue.StrzZeroInText.Says(
+        Report(operand, model, diagnostics, on, Catalogue.StrzZeroInText.Message(
             operand is CallExpressionSyntax { Callee: { } callee } && at < text.Length
                 && model.SymbolOf(callee, on) is { Kind: SymbolKind.Charmap }
                 ? $"`{callee.GetText().Trim()}` maps `{text[at]}` to $00, "
@@ -228,21 +228,21 @@ public static class DataLengths
         if (directive.Count is not { } count)
             return;
         var (declared, given) = model.ElementsOf(directive, on);
-        if (count.Count is not { } written)
+        if (count.Count is not { } countExpression)
         {
             if (given is null && directive.Tail is not BracedDataSyntax && DataSyntax.BodyOf(directive) is null)
             {
                 Report(count, model, diagnostics, on,
-                    Catalogue.ElementCountEmpty.Says(directive.Directive.Text));
+                    Catalogue.ElementCountEmpty.Message(directive.Directive.Text));
             }
             return;
         }
         if (declared is null)
-            Report(written, model, diagnostics, on, Catalogue.ElementCountNotConstant);
+            Report(countExpression, model, diagnostics, on, Catalogue.ElementCountNotConstant);
         else if (declared < 0)
-            Report(written, model, diagnostics, on, Catalogue.ElementCountNegative.Says(declared));
+            Report(countExpression, model, diagnostics, on, Catalogue.ElementCountNegative.Message(declared));
         else if (given is { } values && values != declared && PaddedText.Padding(directive, model, on) is null)
-            Report(count, model, diagnostics, on, Catalogue.ElementCountMismatch.Says(
+            Report(count, model, diagnostics, on, Catalogue.ElementCountMismatch.Message(
                 declared, Elements(declared.Value), values));
     }
 
@@ -276,7 +276,7 @@ public static class DataLengths
             if (operand is RecordValuesSyntax record)
                 Initialized(type, record.Members, model, diagnostics, on);
             else
-                Report(operand, model, diagnostics, on, Catalogue.ElementNotARecord.Says(
+                Report(operand, model, diagnostics, on, Catalogue.ElementNotARecord.Message(
                     $"a `{type.Name}` array", "a record"));
         }
     }
@@ -293,7 +293,7 @@ public static class DataLengths
                 foreach (var value in bytes)
                 {
                     if (value is < 0 or > 255)
-                        Report(operand, model, diagnostics, on, Catalogue.CharmapValueNotAByte.Says(Value.Of(value)));
+                        Report(operand, model, diagnostics, on, Catalogue.CharmapValueNotAByte.Message(Value.Of(value)));
                 }
                 continue;
             }
@@ -319,20 +319,20 @@ public static class DataLengths
             var name = value.Name.Text;
             if (type.Body?.FindMember(name) is not { Kind: SymbolKind.Member } member)
             {
-                Report(value, model, diagnostics, on, Catalogue.MemberUnknown.Says(type.Name, name));
+                Report(value, model, diagnostics, on, Catalogue.MemberUnknown.Message(type.Name, name));
                 continue;
             }
 
             // Every member of a union is at offset 0, so a second value would write over the first.
             if (!named.Add(name))
             {
-                Report(value, model, diagnostics, on, Catalogue.MemberGivenTwice.Says(name));
+                Report(value, model, diagnostics, on, Catalogue.MemberGivenTwice.Message(name));
                 continue;
             }
             if (type.Kind == SymbolKind.Union && named.Count > 1)
             {
                 Report(value, model, diagnostics, on,
-                    Catalogue.UnionManyMembersGiven.Says(type.Name));
+                    Catalogue.UnionManyMembersGiven.Message(type.Name));
                 continue;
             }
 
@@ -347,12 +347,12 @@ public static class DataLengths
                 if (given is RecordValuesSyntax record)
                     Initialized(inner, record.Members, model, diagnostics, on);
                 else
-                    Report(given, model, diagnostics, on, Catalogue.MemberNeedsARecord.Says(name, inner.Name));
+                    Report(given, model, diagnostics, on, Catalogue.MemberNeedsARecord.Message(name, inner.Name));
                 continue;
             }
             if (given is RecordValuesSyntax or ValueListSyntax)
             {
-                Report(given, model, diagnostics, on, Catalogue.MemberTakesOneValue.Says(name));
+                Report(given, model, diagnostics, on, Catalogue.MemberTakesOneValue.Message(name));
                 continue;
             }
             Scalar(member, element is null ? ".res" : DataSyntax.NameOf(element), given, name, model, diagnostics, on);
@@ -369,12 +369,12 @@ public static class DataLengths
         var spelled = element.Directive.Text;
         if (given is not ValueListSyntax list)
         {
-            Report(given, model, diagnostics, on, Catalogue.MemberNeedsAList.Says(member.Name, member.Name));
+            Report(given, model, diagnostics, on, Catalogue.MemberNeedsAList.Message(member.Name, member.Name));
             return;
         }
         var items = list.Values;
         if (member.Count is { } count && items.Count != count)
-            Report(given, model, diagnostics, on, Catalogue.MemberCountMismatch.Says(
+            Report(given, model, diagnostics, on, Catalogue.MemberCountMismatch.Message(
                 member.Name, count, Elements(count), items.Count));
         foreach (var item in items)
         {
@@ -383,13 +383,13 @@ public static class DataLengths
                 if (item is RecordValuesSyntax record)
                     Initialized(inner, record.Members, model, diagnostics, on);
                 else
-                    Report(item, model, diagnostics, on, Catalogue.ElementNotARecord.Says(
+                    Report(item, model, diagnostics, on, Catalogue.ElementNotARecord.Message(
                         $"`{member.Name}`", $"a `{inner.Name}`"));
                 continue;
             }
             if (item is RecordValuesSyntax or ValueListSyntax)
             {
-                Report(item, model, diagnostics, on, Catalogue.ElementIsOneValue.Says(member.Name, spelled));
+                Report(item, model, diagnostics, on, Catalogue.ElementIsOneValue.Message(member.Name, spelled));
                 continue;
             }
             Scalar(member, DataSyntax.NameOf(element), item, member.Name, model, diagnostics, on);
@@ -405,14 +405,14 @@ public static class DataLengths
         if (element == ".res")
         {
             if (bytes is not null && bytes.Count > member.Size)
-                Report(given, model, diagnostics, on, Catalogue.MemberTextTooLong.Says(
+                Report(given, model, diagnostics, on, Catalogue.MemberTextTooLong.Message(
                     name, member.Size, bytes.Count));
             return;
         }
         if (bytes is { Count: > 1 })
         {
             Report(given, model, diagnostics, on,
-                Catalogue.MemberNotText.Says(name, element, bytes.Count));
+                Catalogue.MemberNotText.Message(name, element, bytes.Count));
             return;
         }
         if (bytes is null && Holds(element) is { } range)
@@ -435,10 +435,10 @@ public static class DataLengths
         {
             return null;
         }
-        var written = address.GetText().Trim();
-        var fix = bytes == 1 ? $"`<{written}` is its low byte" : $"`.loword({written})` is its low 16 bits";
-        return Catalogue.AddressDoesNotFit.Says(
-            written, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
+        var text = address.GetText().Trim();
+        var fix = bytes == 1 ? $"`<{text}` is its low byte" : $"`.loword({text})` is its low 16 bits";
+        return Catalogue.AddressDoesNotFit.Message(
+            text, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
     }
 
     /// <summary>
@@ -472,9 +472,9 @@ public static class DataLengths
         {
             if (AddressIn(operand, model, on) is { } address && model.AddressSizeOf(address, null, on) == AddressSize.Far)
             {
-                var written = address.GetText().Trim();
+                var text = address.GetText().Trim();
                 Report(operand, model, diagnostics, on,
-                    Catalogue.FarAddressInWord.Says(written, directive, written));
+                    Catalogue.FarAddressInWord.Message(text, directive, text));
             }
         }
     }
@@ -498,7 +498,7 @@ public static class DataLengths
         if (count is null)
             Report(operands[0], model, diagnostics, on, Catalogue.ResCountNotConstant);
         else if (count is < 0 or > 0xffff)
-            Report(operands[0], model, diagnostics, on, Catalogue.ResCountOutOfRange.Says(count));
+            Report(operands[0], model, diagnostics, on, Catalogue.ResCountOutOfRange.Message(count));
     }
 
     /// <summary>
@@ -516,7 +516,7 @@ public static class DataLengths
         if (boundary is null)
             Report(operands[0], model, diagnostics, on, Catalogue.AlignBoundaryNotConstant);
         else if (boundary is < 1 or > 0x10000 || (boundary & (boundary - 1)) != 0)
-            Report(operands[0], model, diagnostics, on, Catalogue.AlignBoundaryNotPowerOfTwo.Says(boundary));
+            Report(operands[0], model, diagnostics, on, Catalogue.AlignBoundaryNotPowerOfTwo.Message(boundary));
     }
 
     /// <summary>
@@ -541,9 +541,9 @@ public static class DataLengths
         if (model.ValueOf(argument, on).AsNumber() is not { } value)
             return;
         if (value < 0 && limit.Low == 0)
-            Report(argument, model, diagnostics, on, Catalogue.AddressNegative.Says(value));
+            Report(argument, model, diagnostics, on, Catalogue.AddressNegative.Message(value));
         else if (value < limit.Low || value > limit.High)
-            Report(argument, model, diagnostics, on, Catalogue.ValueTooWide.Says(Value.Of(value), slot));
+            Report(argument, model, diagnostics, on, Catalogue.ValueTooWide.Message(Value.Of(value), slot));
     }
 
     private static void Report(

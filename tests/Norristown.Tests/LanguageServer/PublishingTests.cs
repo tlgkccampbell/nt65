@@ -88,10 +88,10 @@ public sealed class PublishingTests
         var letter = Locate.Span(Main, "jsr clea|r");
         for (var i = 0; i < 10; i++)
         {
-            var (range, written) = i % 2 == 0
+            var (range, typed) = i % 2 == 0
                 ? (letter, "")
                 : (new Range(letter.Start, letter.Start), "r");
-            await client.ChangeAsync(MainUri, ++version, new TextDocumentContentChangeEvent(range, written));
+            await client.ChangeAsync(MainUri, ++version, new TextDocumentContentChangeEvent(range, typed));
             published.Add(await client.NextDiagnosticsAsync(MainUri, timeout));
             while (held.Waiting > 0)
                 await held.ReleaseAsync(timeout);

@@ -186,8 +186,8 @@ public sealed class RewriteTests
         {
             var tree = SyntaxTree.Parse(Repo.Named(path), Repo.ReadText(path));
             var normalized = tree.Root.NormalizeWhitespace();
-            var before = Written(tree.Root);
-            var after = Written(normalized);
+            var before = TokenTexts(tree.Root);
+            var after = TokenTexts(normalized);
             if (before.SequenceEqual(after, StringComparer.Ordinal))
                 return [];
             var at = before.Zip(after).Select((pair, i) => (pair, i)).FirstOrDefault(p => p.pair.First != p.pair.Second);
@@ -199,7 +199,7 @@ public sealed class RewriteTests
     /// <summary>
     /// Returns the text of every token under a node, leaving out missing tokens and line breaks.
     /// </summary>
-    private static List<string> Written(SyntaxNode node) =>
+    private static List<string> TokenTexts(SyntaxNode node) =>
         [.. node.DescendantTokens()
             .Where(token => !token.IsMissing && token.Kind != SyntaxKind.EndOfLine)
             .Select(token => token.Text)];

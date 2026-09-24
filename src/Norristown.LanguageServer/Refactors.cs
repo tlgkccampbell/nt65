@@ -234,14 +234,14 @@ internal static class Refactors
         if (leaves is not { } exit || exit == signature.Exit)
             yield break;
 
-        var items = Edits.SpellState(exit);
+        var items = Edits.FormatState(exit);
         if (items.Length == 0)
             yield break;
         if (Edits.RoutineHead(tree, line) is not var (declared, beforeBrace))
             yield break;
-        var written = declared is null ? $": {Edits.SpellState(signature.Entry)} -> {items}" : $" -> {items}";
+        var clause = declared is null ? $": {Edits.FormatState(signature.Entry)} -> {items}" : $" -> {items}";
         yield return new Change($"Declare what `{routine.Name}` leaves: `-> {items}`", CodeActionKinds.Rewrite,
-            [new Edit(tree, new TextSpan(beforeBrace, 0), written)]);
+            [new Edit(tree, new TextSpan(beforeBrace, 0), clause)]);
     }
 
     /// <summary>
@@ -259,13 +259,13 @@ internal static class Refactors
         // different instruction, and rewriting it as the `.ensure` its value happens to match
         // would change what it does.
         if (statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax immediate } instruction
-            && instruction.MnemonicKind is (MnemonicKind.Rep or MnemonicKind.Sep) and var written
+            && instruction.MnemonicKind is (MnemonicKind.Rep or MnemonicKind.Sep) and var mnemonic
             && model.ValueOf(immediate.Value) is { Kind: ValueKind.Number } value)
         {
             var flags = value.Number;
             if (flags != 0 && (flags & ~0x30) == 0)
             {
-                var width = written == MnemonicKind.Rep ? 16 : 8;
+                var width = mnemonic == MnemonicKind.Rep ? 16 : 8;
                 var items = string.Join(", ", new[]
                 {
                     (flags & 0x20) != 0 ? $"a{width}" : null,
@@ -373,7 +373,7 @@ internal static class Refactors
 
         var indent = Edits.IndentOf(tree, line);
         var last = Edits.BlockEnd(tree, line);
-        var written = string.Join("\n", Enumerable.Range(line, last - line + 1)
+        var indented = string.Join("\n", Enumerable.Range(line, last - line + 1)
             .Select(at => Edits.Indent + tree.Text[tree.LineStarts[at]..LineContext.CodeEnd(tree, at)].TrimEnd()));
 
         // The editor has no way to ask which segment, so each choice is its own change. A
@@ -387,7 +387,7 @@ internal static class Refactors
             .ThenBy(name => name, StringComparer.Ordinal)
             .Take(4))
         {
-            var block = $"{indent}.segment {segment} {{\n{written}\n{indent}}}\n";
+            var block = $"{indent}.segment {segment} {{\n{indented}\n{indent}}}\n";
             yield return new Change($"Put `{data.Name}` in a `.segment {segment}` block", CodeActionKinds.Rewrite,
                 [Edits.RemoveLines(tree, line, last) with { Text = block }]);
         }

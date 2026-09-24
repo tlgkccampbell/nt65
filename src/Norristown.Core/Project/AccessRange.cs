@@ -24,7 +24,7 @@ public sealed record AccessRange(long First, long Last, IReadOnlyList<(long Firs
     /// Formats the banks for a message in the project file's notation, such as
     /// <c>$00-$3f, $80-$bf</c>.
     /// </summary>
-    public string SpellBanks() => string.Join(", ", Banks.Select(banks => banks.First == banks.Last
+    public string FormatBanks() => string.Join(", ", Banks.Select(banks => banks.First == banks.Last
         ? Semantics.StateValue.Hex(banks.First, 2)
         : $"{Semantics.StateValue.Hex(banks.First, 2)}-{Semantics.StateValue.Hex(banks.Last, 2)}"));
 }

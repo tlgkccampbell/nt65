@@ -15,7 +15,7 @@ namespace Norristown.Layout;
 /// <param name="Stream">The run of bytes the line belongs to.</param>
 /// <param name="Offset">The number of bytes of that run that come before the line.</param>
 /// <param name="Length">The number of bytes the line itself generates.</param>
-public readonly record struct Placement(int Stream, int Offset, int Length)
+public readonly record struct BytePosition(int Stream, int Offset, int Length)
 {
     /// <summary>Gets the offset into the run at which the line after this one starts.</summary>
     public int End => Offset + Length;

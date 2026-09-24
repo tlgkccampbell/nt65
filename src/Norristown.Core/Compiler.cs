@@ -67,7 +67,7 @@ public static class Compiler
                 || analysis.Placements.PlacerOf(model.Tree) is not null)
                 continue;
             var members = analysis.Placements.UnitOf(model.Tree)?.Members ?? [model.Tree];
-            var written = Written(analysis, project, i, measured, diagnostics);
+            var written = EmitFile(analysis, project, i, measured, diagnostics);
 
             // A file that would hold only its header is left out, because an empty object file
             // is one more thing to assemble and link for nothing.
@@ -123,7 +123,7 @@ public static class Compiler
         for (var i = 0; i < analysis.Layouts.Count; i++)
         {
             if (analysis.Program.Files[i].Tree.Path == root)
-                return Written(analysis, project, i, measured, []);
+                return EmitFile(analysis, project, i, measured, []);
         }
         return null;
     }
@@ -182,7 +182,7 @@ public static class Compiler
     /// program in order, the symbols that file measures with <c>.endof</c> and <c>.spanof</c>.
     /// The symbols of this file that other files measure are the ones its output has to label.
     /// </summary>
-    private static OutputFile Written(
+    private static OutputFile EmitFile(
         ProgramAnalysis analysis, ProjectSettings project, int i,
         IReadOnlyList<IReadOnlySet<Symbol>> measured, List<Diagnostic> diagnostics)
     {
@@ -323,8 +323,8 @@ public static class Compiler
         reason = WholeProgramReason.FilesAddedOrRemoved;
         var sources = files.Where(tree => !StandardModules.IsStandard(tree.Path))
             .ToDictionary(tree => tree.Path, StringComparer.Ordinal);
-        var written = reuse.Trees.Where(tree => tree != previous.Defines && !StandardModules.IsStandard(tree.Path)).ToList();
-        if (sources.Count != written.Count || written.Any(tree => !sources.ContainsKey(tree.Path)))
+        var earlier = reuse.Trees.Where(tree => tree != previous.Defines && !StandardModules.IsStandard(tree.Path)).ToList();
+        if (sources.Count != earlier.Count || earlier.Any(tree => !sources.ContainsKey(tree.Path)))
             return null;
 
         // An edit that first mentions nt65's own modules, or takes away the last mention, adds
@@ -337,7 +337,7 @@ public static class Compiler
         reason = WholeProgramReason.BinaryFileChanged;
         if (reuse.Lengths.Any(pair => binaryLength(pair.Key) != pair.Value))
             return null;
-        var changed = written.Where(tree => sources[tree.Path] != tree).ToList();
+        var changed = earlier.Where(tree => sources[tree.Path] != tree).ToList();
         if (changed.Count == 0)
             return previous;
         var lengths = new ConcurrentDictionary<string, long?>(reuse.Lengths, StringComparer.Ordinal);
@@ -615,12 +615,12 @@ public static class Compiler
         foreach (var segment in segments.Segments)
         {
             if (segment is { Size: AddressSize.Far, Declaration: { } declared })
-                yield return new Diagnostic(declared, Catalogue.FarNeeds65816.Says($"segment \"{segment.Name}\""));
+                yield return new Diagnostic(declared, Catalogue.FarNeeds65816.Message($"segment \"{segment.Name}\""));
         }
         foreach (var symbol in program.Files.SelectMany(file => file.Symbols))
         {
             if (symbol is { Kind: SymbolKind.ImportedAddress, AddressSize: AddressSize.Far })
-                yield return new Diagnostic(symbol.DeclarationSpan, Catalogue.FarNeeds65816.Says($"`{symbol.Name}`"));
+                yield return new Diagnostic(symbol.DeclarationSpan, Catalogue.FarNeeds65816.Message($"`{symbol.Name}`"));
         }
     }
 }

@@ -268,7 +268,7 @@ internal sealed class ProgramReplay
     {
         var text = new StringBuilder();
         foreach (var d in analysis.Diagnostics)
-            text.Append($"{Spell(d)}\n");
+            text.Append($"{Format(d)}\n");
 
         // Every file is emitted even though the program has errors. The program contains
         // mistakes on purpose, and compiling a program with errors writes nothing.
@@ -284,7 +284,7 @@ internal sealed class ProgramReplay
             }
         }
         foreach (var d in Diagnostics.Ordered(emitted))
-            text.Append($"emit {Spell(d)}\n");
+            text.Append($"emit {Format(d)}\n");
 
         foreach (var model in analysis.Program.Files.OrderBy(file => file.Tree.Path, StringComparer.Ordinal))
         {
@@ -303,7 +303,7 @@ internal sealed class ProgramReplay
         }
         return text.ToString();
 
-        static string Spell(Diagnostic d) =>
+        static string Format(Diagnostic d) =>
             $"{d.Span} {d.Severity} {d.Message} [{string.Join("; ", d.Related.Select(r => $"{r.Span} {r.Message}"))}]";
 
         static string Json(object? value) => JsonSerializer.Serialize(value);

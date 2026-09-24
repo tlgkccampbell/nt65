@@ -37,13 +37,13 @@ internal static class RunningOnChecks
             foreach (var claim in flows[i].RunningOn)
             {
                 var routine = program.Current(claim.Routine);
-                var span = claim.Written.Tree.GetSpan(claim.Written.Span);
+                var span = claim.Target.Tree.GetSpan(claim.Target.Span);
                 var unit = placements.UnitOf(model.Tree);
                 if (unit is null || placements.UnitOf(routine.Tree)?.Root.Path != unit.Root.Path)
                 {
                     found.Add(new Diagnostic(span, routine.Tree.Path == model.Tree.Path
-                        ? Catalogue.FallthroughNotAdjacent.Says(routine.DisplayName)
-                        : Catalogue.FallthroughNotPlaced.Says(routine.DisplayName, routine.Module ?? routine.Tree.Path)));
+                        ? Catalogue.FallthroughNotAdjacent.Message(routine.DisplayName)
+                        : Catalogue.FallthroughNotPlaced.Message(routine.DisplayName, routine.Module ?? routine.Tree.Path)));
                     continue;
                 }
                 if (!laid.TryGetValue(unit.Root.Path, out var layout))
@@ -51,15 +51,15 @@ internal static class RunningOnChecks
                     laid[unit.Root.Path] = layout = UnitLayout.Of(
                         unit, tree => layoutOf.GetValueOrDefault(tree.Path), placements);
                 }
-                var here = layouts[i].Placed(claim.Statement, claim.On) is { } statement
+                var here = layouts[i].PositionOf(claim.Statement, claim.On) is { } statement
                     ? layout.Where(model.Tree, statement) is { } start ? (start.Run, start.Offset + statement.Length) : ((int, int)?)null
                     : null;
-                var there = layoutOf.GetValueOrDefault(routine.Tree.Path)?.Placed(routine) is { } label
+                var there = layoutOf.GetValueOrDefault(routine.Tree.Path)?.PositionOf(routine) is { } label
                     ? layout.Where(routine.Tree, label)
                     : null;
                 if (here is null || here != there)
                 {
-                    found.Add(new Diagnostic(span, Catalogue.FallthroughNotAdjacent.Says(routine.DisplayName)));
+                    found.Add(new Diagnostic(span, Catalogue.FallthroughNotAdjacent.Message(routine.DisplayName)));
                 }
             }
             diagnostics.AddRange(Family.Collapsed(model.Families, found));

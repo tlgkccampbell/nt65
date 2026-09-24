@@ -28,7 +28,7 @@ public static class CpuNames
     };
 
     /// <summary>Returns the name nt65 uses for <paramref name="cpu"/>.</summary>
-    public static string Spell(Cpu cpu) => cpu switch
+    public static string Format(Cpu cpu) => cpu switch
     {
         Cpu.Mos6502 => "6502",
         Cpu.Mos6502X => "6502x",
@@ -42,7 +42,7 @@ public static class CpuNames
     /// Returns the name ca65's <c>.setcpu</c> takes for <paramref name="cpu"/>, chosen so that
     /// ca65's instruction set under it is exactly the CPU's.
     /// </summary>
-    public static string SpellForCa65(Cpu cpu) => cpu switch
+    public static string FormatForCa65(Cpu cpu) => cpu switch
     {
         Cpu.Mos6502 => "6502",
         Cpu.Mos6502X => "6502X",

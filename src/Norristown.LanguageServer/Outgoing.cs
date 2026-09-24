@@ -25,32 +25,32 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     /// Returns the client's form of the URI for the file that a URI produced by the compiler
     /// points at.
     /// </summary>
-    public string Spell(string uri) => workspace.UriOf(Workspace.PathOf(uri));
+    public string ToClient(string uri) => workspace.UriOf(Workspace.PathOf(uri));
 
     /// <summary>Returns a location with its URI converted to the client's form.</summary>
-    public Location Spell(Location location) => location with { Uri = Spell(location.Uri) };
+    public Location ToClient(Location location) => location with { Uri = ToClient(location.Uri) };
 
     /// <summary>Returns the locations with their URIs converted to the client's form.</summary>
-    public IReadOnlyList<Location> Spell(IReadOnlyList<Location> locations) => [.. locations.Select(Spell)];
+    public IReadOnlyList<Location> ToClient(IReadOnlyList<Location> locations) => [.. locations.Select(ToClient)];
 
     /// <summary>
     /// Returns a diagnostic with the URIs of its related locations, which may be in other files,
     /// converted to the client's form.
     /// </summary>
-    public Protocol.Diagnostic Spell(Protocol.Diagnostic diagnostic) =>
+    public Protocol.Diagnostic ToClient(Protocol.Diagnostic diagnostic) =>
         diagnostic.RelatedInformation is not { Count: > 0 } related
             ? diagnostic
             : diagnostic with
             {
-                RelatedInformation = [.. related.Select(one => one with { Location = Spell(one.Location) })],
+                RelatedInformation = [.. related.Select(one => one with { Location = ToClient(one.Location) })],
             };
 
     /// <summary>
     /// Returns the diagnostics with the URIs of their related locations converted to the client's
     /// form.
     /// </summary>
-    public IReadOnlyList<Protocol.Diagnostic> Spell(IReadOnlyList<Protocol.Diagnostic> diagnostics) =>
-        [.. diagnostics.Select(Spell)];
+    public IReadOnlyList<Protocol.Diagnostic> ToClient(IReadOnlyList<Protocol.Diagnostic> diagnostics) =>
+        [.. diagnostics.Select(ToClient)];
 
     /// <summary>
     /// Returns a workspace edit with its URIs converted and its shape chosen for the client, or
@@ -58,11 +58,11 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     /// version the client holds of the file when the client accepts that, and only as a plain map
     /// of edits when it does not.
     /// </summary>
-    public WorkspaceEdit? Spell(WorkspaceEdit? edit)
+    public WorkspaceEdit? ToClient(WorkspaceEdit? edit)
     {
         if (edit is null)
             return null;
-        var named = edit.Changes.ToDictionary(file => Spell(file.Key), file => file.Value, StringComparer.Ordinal);
+        var named = edit.Changes.ToDictionary(file => ToClient(file.Key), file => file.Value, StringComparer.Ordinal);
         return new WorkspaceEdit(
             named,
             !client.DocumentChanges
@@ -78,57 +78,57 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     /// Returns a code action with its edit, the diagnostics it answers and the command it runs
     /// converted to the client's form.
     /// </summary>
-    public CodeAction Spell(CodeAction action) => action with
+    public CodeAction ToClient(CodeAction action) => action with
     {
-        Diagnostics = Spell(action.Diagnostics),
-        Edit = Spell(action.Edit)!,
-        Command = Spell(action.Command),
+        Diagnostics = ToClient(action.Diagnostics),
+        Edit = ToClient(action.Edit)!,
+        Command = ToClient(action.Command),
     };
 
     /// <summary>Returns the code actions, each converted to the client's form.</summary>
-    public IReadOnlyList<CodeAction> Spell(IReadOnlyList<CodeAction> actions) => [.. actions.Select(Spell)];
+    public IReadOnlyList<CodeAction> ToClient(IReadOnlyList<CodeAction> actions) => [.. actions.Select(ToClient)];
 
     /// <summary>
     /// Returns a command the client runs once a change is applied, converted to the client's form.
     /// When its first argument is a string, that argument is the URI of the file to put the caret
     /// in, and it is converted like any other URI.
     /// </summary>
-    public Command? Spell(Command? command) =>
+    public Command? ToClient(Command? command) =>
         command?.Arguments is [string uri, ..] arguments
-            ? command with { Arguments = [Spell(uri), .. arguments.Skip(1)] }
+            ? command with { Arguments = [ToClient(uri), .. arguments.Skip(1)] }
             : command;
 
     /// <summary>
     /// Returns a routine in the call hierarchy with its URI converted to the client's form. The
     /// client later sends the item back unchanged in follow-up requests.
     /// </summary>
-    public CallHierarchyItem Spell(CallHierarchyItem item) => item with { Uri = Spell(item.Uri) };
+    public CallHierarchyItem ToClient(CallHierarchyItem item) => item with { Uri = ToClient(item.Uri) };
 
     /// <summary>Returns the call-hierarchy items, each with its URI converted to the client's form.</summary>
-    public IReadOnlyList<CallHierarchyItem> Spell(IReadOnlyList<CallHierarchyItem> items) =>
-        [.. items.Select(Spell)];
+    public IReadOnlyList<CallHierarchyItem> ToClient(IReadOnlyList<CallHierarchyItem> items) =>
+        [.. items.Select(ToClient)];
 
     /// <summary>Returns the incoming calls, with each caller's URI converted to the client's form.</summary>
-    public IReadOnlyList<CallHierarchyIncomingCall> Spell(IReadOnlyList<CallHierarchyIncomingCall> calls) =>
-        [.. calls.Select(call => call with { From = Spell(call.From) })];
+    public IReadOnlyList<CallHierarchyIncomingCall> ToClient(IReadOnlyList<CallHierarchyIncomingCall> calls) =>
+        [.. calls.Select(call => call with { From = ToClient(call.From) })];
 
     /// <summary>Returns the outgoing calls, with each callee's URI converted to the client's form.</summary>
-    public IReadOnlyList<CallHierarchyOutgoingCall> Spell(IReadOnlyList<CallHierarchyOutgoingCall> calls) =>
-        [.. calls.Select(call => call with { To = Spell(call.To) })];
+    public IReadOnlyList<CallHierarchyOutgoingCall> ToClient(IReadOnlyList<CallHierarchyOutgoingCall> calls) =>
+        [.. calls.Select(call => call with { To = ToClient(call.To) })];
 
     /// <summary>
     /// Returns declarations found across the workspace, with the URI of the file each is in
     /// converted to the client's form.
     /// </summary>
-    public IReadOnlyList<SymbolInformation> Spell(IReadOnlyList<SymbolInformation> symbols) =>
-        [.. symbols.Select(symbol => symbol with { Location = Spell(symbol.Location) })];
+    public IReadOnlyList<SymbolInformation> ToClient(IReadOnlyList<SymbolInformation> symbols) =>
+        [.. symbols.Select(symbol => symbol with { Location = ToClient(symbol.Location) })];
 
     /// <summary>
     /// Returns links from <c>.incbin</c> directives, with the URI of the file each names converted
     /// to the client's form.
     /// </summary>
-    public IReadOnlyList<DocumentLink> Spell(IReadOnlyList<DocumentLink> links) =>
-        [.. links.Select(link => link with { Target = Spell(link.Target) })];
+    public IReadOnlyList<DocumentLink> ToClient(IReadOnlyList<DocumentLink> links) =>
+        [.. links.Select(link => link with { Target = ToClient(link.Target) })];
 
     /// <summary>
     /// Returns a file's outline in the form the client supports. That is the tree formed by the
@@ -137,8 +137,8 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     /// </summary>
     /// <param name="uri">The URI of the file the outline is of, as the client named it.</param>
     /// <param name="outline">The file's declarations.</param>
-    public object Spell(string uri, IReadOnlyList<DocumentSymbol> outline) =>
-        client.HierarchicalSymbols ? outline : Flat(Spell(uri), outline, null);
+    public object ToClient(string uri, IReadOnlyList<DocumentSymbol> outline) =>
+        client.HierarchicalSymbols ? outline : Flat(ToClient(uri), outline, null);
 
     private static IReadOnlyList<SymbolInformation> Flat(
         string uri, IReadOnlyList<DocumentSymbol> outline, string? container) =>

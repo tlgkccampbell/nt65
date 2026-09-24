@@ -28,24 +28,24 @@ internal static class MovedFiles
     /// <param name="renames">
     /// Each file's current path and new path, as logical paths.
     /// </param>
-    public static (Protocol.WorkspaceEdit? Edit, IReadOnlyList<string> Said) For(
+    public static (Protocol.WorkspaceEdit? Edit, IReadOnlyList<string> Messages) For(
         Workspace workspace, IReadOnlyList<(string From, string To)> renames)
     {
         var edits = new Dictionary<string, List<Protocol.TextEdit>>(StringComparer.Ordinal);
-        var said = new List<string>();
+        var messages = new List<string>();
         foreach (var (from, to) in renames)
         {
-            Named(workspace, from, to, edits, said);
+            Named(workspace, from, to, edits, messages);
             Included(workspace, from, to, edits);
         }
         if (edits.Count == 0)
-            return (null, said);
+            return (null, messages);
         return (
             new Protocol.WorkspaceEdit(edits.ToDictionary(
                 file => file.Key,
                 file => (IReadOnlyList<Protocol.TextEdit>)[.. file.Value.OrderBy(edit => edit.Range.Start.Line)],
                 StringComparer.Ordinal)),
-            said);
+            messages);
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ internal static class MovedFiles
     /// </summary>
     private static void Named(
         Workspace workspace, string from, string to,
-        Dictionary<string, List<Protocol.TextEdit>> edits, List<string> said)
+        Dictionary<string, List<Protocol.TextEdit>> edits, List<string> messages)
     {
         foreach (var project in workspace.Projects())
         {
@@ -69,7 +69,7 @@ internal static class MovedFiles
                 {
                     if (!SourceGlobs.Matches(project.Root, glob, to))
                     {
-                        said.Add($"nt65: `{glob}` in {Shown(project.File)} does not match {Shown(to)}, the file's new path. "
+                        messages.Add($"nt65: `{glob}` in {Shown(project.File)} does not match {Shown(to)}, the file's new path. "
                             + "The glob was left unchanged: edit `files` by hand if the moved file should still be built.");
                     }
                     continue;
@@ -99,15 +99,15 @@ internal static class MovedFiles
                 var inThisFile = model.Tree.Path == from;
                 if (!inThisFile && !moved && !renamedInPlace)
                     continue;
-                foreach (var (operand, written) in Includes(model))
+                foreach (var (operand, included) in Includes(model))
                 {
-                    if (Paths.IsRooted(written))
+                    if (Paths.IsRooted(included))
                         continue;
-                    var names = Paths.Beside(model.Tree.Path, written);
+                    var names = Paths.Beside(model.Tree.Path, included);
                     var target = names == from ? to : names;
                     var beside = inThisFile ? Paths.Directory(to) : Paths.Directory(model.Tree.Path);
                     var now = Relative(beside, target);
-                    if (now == written)
+                    if (now == included)
                         continue;
                     var text = model.Tree.Text;
                     Add(edits, model.Tree.Path, text, operand.Span, Json.Quoted(now));
@@ -120,27 +120,27 @@ internal static class MovedFiles
     /// Returns every <c>.incbin</c> in a file, as the operand that gives the path and the path
     /// itself.
     /// </summary>
-    private static IEnumerable<(SyntaxNode Operand, string Written)> Includes(SemanticModel model)
+    private static IEnumerable<(SyntaxNode Operand, string Included)> Includes(SemanticModel model)
     {
         foreach (var directive in model.Tree.Root.DescendantNodes().OfType<DataDirectiveSyntax>())
         {
             if (directive.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
                 && directive.Tail is InlineDataSyntax { Values: [var operand, ..] }
-                && model.ValueOf(operand) is { Kind: ValueKind.String, Text: { } written })
+                && model.ValueOf(operand) is { Kind: ValueKind.String, Text: { } included })
             {
-                yield return (operand, written);
+                yield return (operand, included);
             }
         }
     }
 
     /// <summary>Adds one edit, naming the file by the URI the client knows it as.</summary>
     private static void Add(
-        Dictionary<string, List<Protocol.TextEdit>> edits, string path, string text, TextSpan at, string written)
+        Dictionary<string, List<Protocol.TextEdit>> edits, string path, string text, TextSpan at, string included)
     {
         var uri = Lsp.ToUri(path);
         if (!edits.TryGetValue(uri, out var found))
             edits[uri] = found = [];
-        found.Add(new Protocol.TextEdit(Range(text, at), written));
+        found.Add(new Protocol.TextEdit(Range(text, at), included));
     }
 
     /// <summary>

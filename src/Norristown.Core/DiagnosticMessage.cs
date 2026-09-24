@@ -10,7 +10,7 @@ namespace Norristown;
 public readonly record struct DiagnosticMessage(DiagnosticDescriptor Descriptor, string Text)
 {
     /// <summary>Converts a descriptor whose format takes no arguments to its message.</summary>
-    public static implicit operator DiagnosticMessage(DiagnosticDescriptor descriptor) => descriptor.Says();
+    public static implicit operator DiagnosticMessage(DiagnosticDescriptor descriptor) => descriptor.Message();
 
     /// <summary>
     /// Converts a descriptor whose format takes no arguments to its message, for a caller that

@@ -106,7 +106,7 @@ public sealed class SymbolRequestsTests
     /// mentioning it would add nothing.
     /// </summary>
     [Fact]
-    public async Task HoverSaysWhatTheOutputCallsANameCa65WouldMisread()
+    public async Task HoverShowsWhatTheOutputCallsANameCa65WouldMisread()
     {
         var timeout = TestTimeout.Token();
         const string Text = ".module main\n.cpu 6502\n.segment CODE\n.data lda: .byte 0\n.data plain: .byte 0\n";
@@ -200,7 +200,7 @@ public sealed class SymbolRequestsTests
     /// shows the cost above the declaration may be far from the call.
     /// </summary>
     [Fact]
-    public async Task HoverOnACallSaysWhatTheRoutineCostsAndKeeps()
+    public async Task HoverOnACallShowsWhatTheRoutineCostsAndKeeps()
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
@@ -255,7 +255,7 @@ public sealed class SymbolRequestsTests
 
     /// <summary>A cheap local has no path, so hover names the routine it is private to.</summary>
     [Fact]
-    public async Task HoverOnACheapLocalSaysWhereItLives()
+    public async Task HoverOnACheapLocalShowsWhereItLives()
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
@@ -344,7 +344,7 @@ public sealed class SymbolRequestsTests
     }
 
     [Fact]
-    public async Task HoverOnSomethingThatIsNeitherANameNorAnInstructionSaysNothing()
+    public async Task HoverOnSomethingThatIsNeitherANameNorAnInstructionShowsNothing()
     {
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
@@ -466,7 +466,7 @@ public sealed class SymbolRequestsTests
     /// reader left to work out which it is has been given only half an answer.
     /// </summary>
     [Fact]
-    public async Task HoverSaysWhyACountIsAnInterval()
+    public async Task HoverExplainsWhyACountIsAnInterval()
     {
         var timeout = TestTimeout.Token();
         const string Indexed = """
@@ -686,7 +686,7 @@ public sealed class SymbolRequestsTests
 
     /// <summary>A duplicate declaration points at the one that got there first.</summary>
     [Fact]
-    public async Task ADuplicateCarriesRelatedInformation()
+    public async Task ADuplicateIncludesRelatedInformation()
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);

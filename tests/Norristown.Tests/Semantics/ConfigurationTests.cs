@@ -165,7 +165,7 @@ public sealed class ConfigurationTests
         + "only test the build configuration; use `.assert` to check the program")]
     [InlineData(".if .sizeof(Point) > 2 {", "`.sizeof` asks about the program, which an `.if` "
         + "condition cannot do: use `.assert` to check the program")]
-    public void AConditionThatNamesTheProgramSaysToUseAnAssert(string opener, string message)
+    public void AConditionThatNamesTheProgramSuggestsAnAssert(string opener, string message)
     {
         var program = Built("SIZE = 4\n.export SIZE\n" + opener + "\nON = 1\n}\n");
 
@@ -213,7 +213,7 @@ public sealed class ConfigurationTests
     /// processor.
     /// </summary>
     [Fact]
-    public void CpuMayNotBeWrittenUnderACondition()
+    public void CpuMayNotAppearUnderACondition()
     {
         var program = Built(".if 1 {\n.cpu 65c02\n}\n");
 

@@ -28,7 +28,7 @@ public sealed class BrokenSourceTests
     /// The number of problems one variant may report before its remaining lines are skipped as
     /// likely repeats.
     /// </summary>
-    private const int Most = 5;
+    private const int MaximumProblems = 5;
 
     [Fact]
     public void EveryRequestAnswersOnWholeAndBrokenLines()
@@ -67,7 +67,7 @@ public sealed class BrokenSourceTests
         }
         catch (Exception e)
         {
-            problems.Add($"{where}: analyzing throws {Told(e)}");
+            problems.Add($"{where}: analyzing throws {Describe(e)}");
             return;
         }
         if (analysis.ModelFor(path) is not { } model)
@@ -84,11 +84,11 @@ public sealed class BrokenSourceTests
         }
         catch (Exception e)
         {
-            problems.Add($"{where}: emitting throws {Told(e)}");
+            problems.Add($"{where}: emitting throws {Describe(e)}");
         }
 
         WholeFile(analysis, model, where, problems);
-        for (var line = 0; line < tree.LineCount && problems.Count < Most; line++)
+        for (var line = 0; line < tree.LineCount && problems.Count < MaximumProblems; line++)
             OnLine(analysis, model, line, where, problems);
     }
 
@@ -168,7 +168,7 @@ public sealed class BrokenSourceTests
         }
         catch (Exception e)
         {
-            problems.Add($"{what()} throws {Told(e)}");
+            problems.Add($"{what()} throws {Describe(e)}");
         }
     }
 
@@ -176,6 +176,6 @@ public sealed class BrokenSourceTests
     /// Formats an exception for a problem report, with its type, its message and where it was
     /// thrown.
     /// </summary>
-    private static string Told(Exception e) =>
+    private static string Describe(Exception e) =>
         $"{e.GetType().Name}: {e.Message}{(e.StackTrace is { } stack ? "\n" + stack : "")}";
 }

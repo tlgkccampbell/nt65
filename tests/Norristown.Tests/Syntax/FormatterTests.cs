@@ -133,7 +133,7 @@ public sealed class FormatterTests
     /// the run. An empty line, or any other line that is not a named data line, ends it.
     /// </summary>
     [Fact]
-    public void ACommentCarriesARunThroughAndAnEmptyLineEndsIt()
+    public void ACommentContinuesARunAndAnEmptyLineEndsIt()
     {
         Assert.Equal("""
             .module main
@@ -162,7 +162,7 @@ public sealed class FormatterTests
     [Fact]
     public void OnlyADeclarationsColonLinesUp()
     {
-        const string written = """
+        const string source = """
             .module main
             .import scratch: zp
             .segment CODE
@@ -171,7 +171,7 @@ public sealed class FormatterTests
                 rts
             }
             """;
-        Assert.Equal(written, Formatted(written));
+        Assert.Equal(source, Formatted(source));
     }
 
     /// <summary>Nothing follows a line's last token, and an empty line is empty.</summary>
