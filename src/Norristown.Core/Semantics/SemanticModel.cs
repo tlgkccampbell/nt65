@@ -317,7 +317,7 @@ public sealed class SemanticModel
     /// the iteration the name is in, for a path that ends in a repetition's name.
     /// </summary>
     public Symbol? SymbolOf(SyntaxNode name, Expansion? on = null) =>
-        Evaluator.SymbolNamed(name, resolved, BindingsOf(on));
+        new BoundNames(resolved, BindingsOf(on)).SymbolOf(name);
 
     /// <summary>
     /// Returns how much room a data directive takes, which is the bytes it generates and the
@@ -355,7 +355,8 @@ public sealed class SemanticModel
     /// Returns the items of the list <paramref name="operand"/> names, or null when it does not
     /// name a list.
     /// </summary>
-    public IReadOnlyList<SyntaxNode>? ItemsOf(SyntaxNode operand) => Evaluator.ItemsOf(operand, resolved);
+    public IReadOnlyList<SyntaxNode>? ItemsOf(SyntaxNode operand) =>
+        new BoundNames(resolved).SymbolOf(operand) is { Kind: SymbolKind.List } list ? list.Items : null;
 
     /// <summary>
     /// Returns the address size of an expression. <c>*</c> takes the size of
@@ -451,7 +452,7 @@ public sealed class SemanticModel
     /// <c>{(ptr),y}</c>. Returns null when <c>p</c> is not an <c>operand</c> parameter.
     /// </summary>
     public SyntaxNode? ExprOf(CallExpressionSyntax call, Expansion? on) =>
-        Evaluator.ExprOf(call, resolved, BindingsOf(on));
+        new BoundNames(resolved, BindingsOf(on)).ExprOf(call);
 
     /// <summary>
     /// Returns the references the binder recorded, adjusted so that each enum member a call names

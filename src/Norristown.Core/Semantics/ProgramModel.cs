@@ -518,7 +518,8 @@ public sealed class ProgramModel
     private static void Value(
         IEnumerable<Symbol> symbols, SegmentTable segments, SymbolMap resolved, Dictionary<string, List<Diagnostic>> byFile)
     {
-        Symbol? SetOf(NameExpressionSyntax name) => Evaluator.SymbolNamed(name, resolved);
+        var names = new BoundNames(resolved);
+        Symbol? SetOf(NameExpressionSyntax name) => names.SymbolOf(name);
         foreach (var symbol in symbols)
         {
             // An instance of a family reads its signature with the binding's value for that
@@ -558,10 +559,11 @@ public sealed class ProgramModel
     private static void CheckAliases(
         IEnumerable<Symbol> symbols, SymbolMap resolved, Dictionary<string, List<Diagnostic>> byFile)
     {
+        var names = new BoundNames(resolved);
         foreach (var alias in symbols)
         {
             if (alias is not { Kind: SymbolKind.ExternProc, Signature: { } declared, ValueExpression: { } value }
-                || Evaluator.SymbolNamed(value, resolved) is not { Signature: { } actual } routine
+                || names.SymbolOf(value) is not { Signature: { } actual } routine
                 || routine.Kind == SymbolKind.ExternProc && routine == alias)
             {
                 continue;

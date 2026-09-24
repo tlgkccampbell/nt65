@@ -25,7 +25,11 @@ internal sealed partial class Evaluator
         Func<string, long?>? binaryLength,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Configuration? configuration = null) =>
-        new Evaluator(segments, resolved, null, binaryLength, bound, configuration: configuration).RoomFor(directive);
+        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound))
+        {
+            BinaryLength = binaryLength,
+            Configuration = configuration,
+        }).RoomFor(directive);
 
     /// <summary>
     /// Returns the number of elements an element type declares with its count and the number its
@@ -38,7 +42,7 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Configuration? configuration = null)
     {
-        var evaluator = new Evaluator(segments, resolved, null, null, bound, configuration: configuration);
+        var evaluator = Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound)) { Configuration = configuration });
         return (evaluator.DeclaredCount(directive), evaluator.GivenCount(directive));
     }
 
@@ -48,7 +52,7 @@ internal sealed partial class Evaluator
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        new Evaluator(segments, resolved, null, null, bound).BytesIn(argument);
+        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound))).BytesIn(argument);
 
     /// <summary>
     /// Returns how much room a data directive takes, as the bytes it generates and the number of
@@ -287,12 +291,12 @@ internal sealed partial class Evaluator
             for (long i = 0; i < count; i++)
             {
                 var index = i;
-                iterations.Add(() => arguments[binding] = Value.Of(index));
+                iterations.Add(() => names.Values[binding] = Value.Of(index));
             }
         }
         else if (SymbolOf(counted) is { Kind: SymbolKind.List } list)
         {
-            iterations.AddRange(list.Items.Select(item => (Action)(() => { if (binding is not null) items[binding] = item; })));
+            iterations.AddRange(list.Items.Select(item => (Action)(() => { if (binding is not null) names.Items[binding] = item; })));
         }
         else if (SymbolOf(counted) is { Kind: SymbolKind.Enum, Body: { } walked })
         {
@@ -300,8 +304,8 @@ internal sealed partial class Evaluator
             {
                 if (binding is null)
                     return;
-                arguments[binding] = member.Value;
-                members[binding] = member;
+                names.Values[binding] = member.Value;
+                names.Members[binding] = member;
             })));
         }
         else
@@ -327,9 +331,9 @@ internal sealed partial class Evaluator
             // outlives the repetition.
             if (binding is not null)
             {
-                arguments.Remove(binding);
-                items.Remove(binding);
-                members.Remove(binding);
+                names.Values.Remove(binding);
+                names.Items.Remove(binding);
+                names.Members.Remove(binding);
             }
         }
     }
@@ -408,7 +412,7 @@ internal sealed partial class Evaluator
     private IReadOnlyList<long>? BytesIn(SyntaxNode operand)
     {
         // A macro parameter given text is that text, as many bytes as it has.
-        if (operand is NameExpressionSyntax bound && BoundItem(bound) is { } item)
+        if (operand is NameExpressionSyntax bound && names.BoundItem(bound) is { } item)
             return BytesIn(item);
 
         // A string constant is its text wherever it is named, as a literal would be. A constant

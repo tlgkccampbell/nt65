@@ -50,13 +50,12 @@ internal sealed partial class Evaluator
     private long? Apart(Symbol first, Symbol second)
     {
         // A length computed along the way may be that of a declaration whose count is this very
-        // distance, which would recurse. The `apart` flag prevents that.
-        if (first.Tree != second.Tree || apart)
+        // distance, which would recurse. The walk context's `Apart` flag prevents that.
+        if (first.Tree != second.Tree || context.Apart)
             return null;
-        apart = true;
         var writes = new List<Write>();
-        Writes(first.Tree.Root.Members, 0, null, writes);
-        apart = false;
+        using (Enter(context with { Apart = true }))
+            Writes(first.Tree.Root.Members, 0, null, writes);
         var at = writes.FindIndex(write => write.Declares(first));
         var to = writes.FindIndex(write => write.Declares(second));
         if (at < 0 || to < 0 || writes[at].Segment is not { } segment || writes[to].Segment != segment)
@@ -236,7 +235,7 @@ internal sealed partial class Evaluator
     /// </summary>
     private (Symbol Data, long Offset)? PositionOfName(NameExpressionSyntax name)
     {
-        if (BoundItem(name) is not null)
+        if (names.BoundItem(name) is not null)
             return null;
         Symbol? address = null;
         long along = 0;
@@ -286,8 +285,15 @@ internal sealed partial class Evaluator
         if (outermost.Definition is not BlockSyntax body || !placing.Add(outermost))
             return null;
         long offset = 0;
-        var found = Seek(body.Members, 1, symbol.NameSpan.Start, ref offset);
-        placing.Remove(outermost);
+        bool? found;
+        try
+        {
+            found = Seek(body.Members, 1, symbol.NameSpan.Start, ref offset);
+        }
+        finally
+        {
+            placing.Remove(outermost);
+        }
         return found == true ? (outermost, offset) : null;
     }
 

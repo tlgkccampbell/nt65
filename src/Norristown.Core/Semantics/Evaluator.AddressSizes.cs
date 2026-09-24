@@ -21,7 +21,7 @@ internal sealed partial class Evaluator
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        new Evaluator(segments, resolved, null, null, bound).SizeOf(expression, segment);
+        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound))).SizeOf(expression, segment);
 
     /// <summary>Returns the wider of two address sizes, either of which may be unknown.</summary>
     private static AddressSize? Widest(AddressSize? a, AddressSize? b) =>
@@ -75,12 +75,12 @@ internal sealed partial class Evaluator
             // `{a:ptr}`, or otherwise as wide as the expression it stands for.
             if (node is CallExpressionSyntax exprOf && Operands.IsExprOf(exprOf))
             {
-                if (OperandOf(exprOf) is { } operand && Operands.PrefixSize(operand) is { } prefixSize)
+                if (names.OperandOf(exprOf) is { } operand && Operands.PrefixSize(operand) is { } prefixSize)
                 {
                     named = true;
                     widest = Widest(widest, prefixSize);
                 }
-                else if (ExprOf(exprOf) is { } inner)
+                else if (names.ExprOf(exprOf) is { } inner)
                 {
                     Walk(inner);
                 }

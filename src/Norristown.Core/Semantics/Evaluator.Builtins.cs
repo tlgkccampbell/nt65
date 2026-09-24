@@ -51,8 +51,8 @@ internal sealed partial class Evaluator
     private Value Call(CallExpressionSyntax call)
     {
         var given = call.Arguments.Arguments;
-        if (conditions is not null)
-            return InCondition(call, given, conditions);
+        if (mode == EvaluationMode.Conditions)
+            return InCondition(call, given, conditions!);
         if (call.Callee is { } callee)
             return Applied(callee, given);
         if (call.Function is not { Kind: SyntaxKind.Directive } function)
@@ -68,7 +68,7 @@ internal sealed partial class Evaluator
         // a value, so each reads what the parameter was given rather than evaluating it.
         if (name is ".mode" or ".empty")
         {
-            if (arguments.Count != 1 || Argument(arguments[0]) is not { } about)
+            if (arguments.Count != 1 || names.Argument(arguments[0]) is not { } about)
                 return Value.Unknown;
             return name == ".mode"
                 ? about.Operand is { } operand ? Value.Word(Operands.ModeOf(operand)) : Value.Unknown
@@ -137,7 +137,7 @@ internal sealed partial class Evaluator
                 return Value.Unknown;
 
             // `.countof(p)` of a `list` parameter is the number of arguments the call gave it.
-            if (name == ".countof" && Argument(arguments[0]) is { Parameter.Kind: ParameterKind.List } listed)
+            if (name == ".countof" && names.Argument(arguments[0]) is { Parameter.Kind: ParameterKind.List } listed)
                 return Value.Of(listed.Items.Count);
             if (NotAnExtent(measured, name, arguments[0]))
                 return Value.Unknown;
@@ -175,12 +175,12 @@ internal sealed partial class Evaluator
         // data.
         if (name == ".exprof")
         {
-            if (ExprOf(call) is { } inner)
+            if (names.ExprOf(call) is { } inner)
                 return Evaluate(inner);
 
             // Outside an expansion the parameter has been given no operand yet, which is not an
             // error.
-            if (arguments.Count != 1 || Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
+            if (arguments.Count != 1 || names.Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
                 Report(function, Catalogue.BuiltinArguments.Message(".exprof", "an `operand` parameter"));
             return Value.Unknown;
         }
@@ -441,7 +441,7 @@ internal sealed partial class Evaluator
             // A function's body is read once with no arguments, when its parameters have no
             // values yet. Both values are evaluated then, so that a cycle through either one is
             // found.
-            if (readingBody)
+            if (context.ReadingBody)
             {
                 Evaluate(arguments[1]);
                 Evaluate(arguments[2]);
@@ -456,10 +456,8 @@ internal sealed partial class Evaluator
             }
             return Value.Unknown;
         }
-        choosing++;
-        var chosen = Evaluate(arguments[holds != 0 ? 1 : 2]);
-        choosing--;
-        return chosen;
+        using (Enter(context with { Choosing = context.Choosing + 1 }))
+            return Evaluate(arguments[holds != 0 ? 1 : 2]);
     }
 
     /// <summary>
@@ -503,69 +501,6 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Returns the expression inside the operand that the call passed as <c>p</c> in
-    /// <c>.exprof(p)</c>, such as <c>5</c> for <c>{#5}</c> or <c>ptr</c> for <c>{(ptr),y}</c>.
-    /// When the call passed another macro's <c>operand</c> parameter, this is the expression
-    /// inside the operand that parameter was passed. Returns null when <c>p</c> is not an
-    /// <c>operand</c> parameter.
-    /// </summary>
-    internal SyntaxNode? ExprOf(CallExpressionSyntax call) =>
-        OperandOf(call) is { } operand ? Operands.ExpressionOf(operand) : null;
-
-    /// <summary>
-    /// Returns the operand that the call passed as <c>p</c> in <c>.exprof(p)</c>, following
-    /// another macro's <c>operand</c> parameter to the operand that parameter was passed. Returns
-    /// null when <c>p</c> is not an <c>operand</c> parameter.
-    /// </summary>
-    internal SyntaxNode? OperandOf(CallExpressionSyntax call)
-    {
-        var arguments = call.Arguments.Arguments;
-        if (arguments.Count != 1)
-            return null;
-        SyntaxNode? operand = null;
-        SyntaxNode? inner = arguments[0];
-        for (var steps = 0; steps < 64 && inner is NameExpressionSyntax; steps++)
-        {
-            if (Argument(inner) is not { Parameter.Kind: ParameterKind.Operand, Operand: { } passed })
-                break;
-            operand = passed;
-            inner = Operands.ExpressionOf(passed);
-        }
-        return operand;
-    }
-
-    /// <summary>
-    /// Returns the argument that a name's macro parameter was given, or null when the name refers
-    /// to no parameter. When the argument is another macro's parameter, it is followed to the
-    /// argument that parameter was given. Any other argument, even a plain name, is returned as
-    /// it is and not followed further.
-    /// </summary>
-    private MacroArgument? Argument(SyntaxNode name)
-    {
-        var argument = Parameter(name) is { } parameter ? given.GetValueOrDefault(parameter) : null;
-        for (var steps = 0; steps < 64 && argument?.Value is NameExpressionSyntax passed; steps++)
-        {
-            if (Parameter(passed) is not { Kind: SymbolKind.MacroParameter } outer
-                || !given.TryGetValue(outer, out var next))
-            {
-                break;
-            }
-            argument = next;
-        }
-        return argument;
-    }
-
-    /// <summary>
-    /// Returns the symbol that a one-part name was resolved to at its position, without
-    /// substituting what a binding gave it.
-    /// </summary>
-    private Symbol? Parameter(SyntaxNode name) =>
-        name is NameExpressionSyntax { Names.Length: 1, SimpleName: { } only } nameExpression
-        && resolved.TryGetValue((nameExpression.Tree, only.Span.Start), out var symbol)
-            ? symbol
-            : null;
-
-    /// <summary>
     /// Evaluates a call to a charmap or a function by name. A charmap maps one character to its
     /// byte. A function evaluates its body with each parameter bound to the argument it was
     /// given. A function whose evaluation needs its own value is reported as a cycle, as a
@@ -600,25 +535,30 @@ internal sealed partial class Evaluator
         }
 
         var values = given.Select(Evaluate).ToArray();
+        var bound = names.Values;
         var shadowed = new List<(Symbol Symbol, Value Value, bool Had)>();
-        for (var i = 0; i < values.Length; i++)
+        try
         {
-            var parameter = symbol.ParameterSymbols[i];
-            shadowed.Add((parameter, arguments.GetValueOrDefault(parameter), arguments.ContainsKey(parameter)));
-            arguments[parameter] = values[i];
+            for (var i = 0; i < values.Length; i++)
+            {
+                var parameter = symbol.ParameterSymbols[i];
+                shadowed.Add((parameter, bound.GetValueOrDefault(parameter), bound.ContainsKey(parameter)));
+                bound[parameter] = values[i];
+            }
+            using (Evaluating(symbol))
+                return Evaluate(symbol.Items[0]);
         }
-
-        evaluating.Add(symbol);
-        var result = Evaluate(symbol.Items[0]);
-        evaluating.RemoveAt(evaluating.Count - 1);
-        foreach (var (parameter, previous, had) in shadowed)
+        finally
         {
-            if (had)
-                arguments[parameter] = previous;
-            else
-                arguments.Remove(parameter);
+            // The parameters take back what they had before the call, however the call ends.
+            foreach (var (parameter, previous, had) in shadowed)
+            {
+                if (had)
+                    bound[parameter] = previous;
+                else
+                    bound.Remove(parameter);
+            }
         }
-        return result;
     }
 
     /// <summary>
