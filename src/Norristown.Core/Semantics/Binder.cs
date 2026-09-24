@@ -180,6 +180,15 @@ internal sealed partial class Binder
         var binder = new Binder(tree, segments, configuration, cpu, isDefines, new Scope(ScopeKind.File, null, null, null));
         binder.WalkContainer(tree.Root);
         binder.EndCodeRun();
+
+        // Everything the build configuration declares at its top level is a define. It is marked
+        // here, with the rest of what the file declares, so that a program built again after an
+        // edit elsewhere never has to change a define it kept.
+        if (isDefines)
+        {
+            foreach (var symbol in binder.fileScope.Symbols)
+                symbol.IsDefine = true;
+        }
         return binder;
     }
 

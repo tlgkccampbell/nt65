@@ -133,6 +133,7 @@ public sealed class ProgramModel
         var lookedUp = new Dictionary<string, IReadOnlySet<LookedUpName>>(StringComparer.Ordinal);
         foreach (var binder in binders)
             lookedUp.TryAdd(binder.Tree.Path, binder.LookedUp);
+        Freeze(read.Bound);
         return new ProgramModel(
             files, segments, read.Symbols, target, modules, read.Resolved, read.Declared, read.Forwarding, lookedUp,
             unexported,
@@ -337,6 +338,7 @@ public sealed class ProgramModel
         var lookups = new Dictionary<string, IReadOnlySet<LookedUpName>>(lookedUp, StringComparer.Ordinal);
         foreach (var (path, binder) in binders)
             lookups[path] = binder.LookedUp;
+        Freeze(read.Bound);
         return new ProgramModel(
             files, Segments, symbols, cpu, replaced, resolved, declared, forwarding, lookups, unexportedNow, byFile, tables,
             segmentValuesNow);
@@ -386,8 +388,6 @@ public sealed class ProgramModel
 
         // Every define is visible in every file, as if every file had brought it in.
         var defined = modules.FirstOrDefault(module => module.Tree == defines)?.FileScope.Symbols ?? [];
-        foreach (var symbol in defined)
-            symbol.IsDefine = true;
 
         // A family declares one name per member of the enum it iterates over, and the enum may
         // belong to another module. The instances are therefore declared once every file has
@@ -446,6 +446,17 @@ public sealed class ProgramModel
             CheckDeclaredSignatures(result.Symbols, byFile, cpu);
         CheckDefineNames(modules, defines, tables);
         return new Reading(symbols, bound, byFile, tables, forwarding, resolved, declared, reads);
+    }
+
+    /// <summary>
+    /// Freezes every symbol the files of <paramref name="bound"/> declare, once the model that
+    /// holds them is complete. Another thread may read them from then on, and a model built
+    /// from this one after an edit keeps them as they are.
+    /// </summary>
+    private static void Freeze(IEnumerable<Binder.Result> bound)
+    {
+        foreach (var symbol in bound.SelectMany(result => result.Symbols))
+            symbol.Freeze();
     }
 
     /// <summary>

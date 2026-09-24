@@ -7,6 +7,10 @@ namespace Norristown.Semantics;
 /// Represents one declared name, with what analysis needs to know about it. This includes
 /// whether it is a constant or an address, its value where nt65 knows it, its address size, and
 /// the segment it is in.
+/// <para>
+/// Binding and evaluation fill a symbol in while its <see cref="ProgramModel"/> is built. Once
+/// the model is complete the symbol is frozen, and it never changes again.
+/// </para>
 /// </summary>
 public sealed class Symbol
 {
@@ -29,7 +33,7 @@ public sealed class Symbol
     /// Gets the kind of thing the declaration declares. A <c>NAME = expr</c> is classified once
     /// its expression is read.
     /// </summary>
-    public SymbolKind Kind { get; internal set; }
+    public SymbolKind Kind { get; internal set => field = Unfrozen(value); }
 
     /// <summary>Gets the scope that contains the declaration.</summary>
     public Scope Scope { get; }
@@ -45,26 +49,26 @@ public sealed class Symbol
     /// <c>.export</c> names it, precedes its declaration, or exports the scope, the data or the
     /// type it is declared in.
     /// </summary>
-    public bool IsExported { get; internal set; }
+    public bool IsExported { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the name the linker knows an export by. This is the <c>as</c> name its
     /// <c>.export</c> gives, an import's own name, or its path prefixed with the module's, joined
     /// with <c>__</c>. Null for a symbol that is not exported.
     /// </summary>
-    public string? LinkerName { get; internal set; }
+    public string? LinkerName { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the address size an <c>.export</c> gives the symbol, as in <c>.export K: abs</c>, or
     /// null when it gives none.
     /// </summary>
-    public AddressSize? ExportSize { get; internal set; }
+    public AddressSize? ExportSize { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the span of the <c>.export</c> that exports the symbol, or null for a symbol that is
     /// not exported.
     /// </summary>
-    public TextSpan? ExportSpan { get; internal set; }
+    public TextSpan? ExportSpan { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets a value indicating whether the symbol is a cheap local (<c>@name</c>), private to its
@@ -78,24 +82,24 @@ public sealed class Symbol
     /// the output, which always emits it as its value so that a <c>-D</c> given to ca65 cannot
     /// collide with it.
     /// </summary>
-    public bool IsDefine { get; internal set; }
+    public bool IsDefine { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets a value indicating whether the symbol is a <c>.config</c> setting, which is a constant
     /// whose value the build may set. As with a define, the output emits it as its value rather
     /// than by name.
     /// </summary>
-    public bool IsConfig { get; internal set; }
+    public bool IsConfig { get; internal set => field = Unfrozen(value); }
 
     /// <summary>Gets the segment the declaration is in, for an address; null for a constant.</summary>
-    public string? Segment { get; internal set; }
+    public string? Segment { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets, for one instance of a <see cref="Family"/>, the repetition's binding and its value
     /// for this instance, with which a signature naming the binding is read. Null for every other
     /// symbol.
     /// </summary>
-    public (Symbol Binding, Expansion.Bound Value)? Bound { get; internal set; }
+    public (Symbol Binding, Expansion.Bound Value)? Bound { get; internal set => field = Unfrozen(value); }
 
     /// <summary>Gets the expression after <c>=</c>, or null for a label, proc body or scope.</summary>
     public ExpressionSyntax? ValueExpression { get; internal init; }
@@ -105,24 +109,24 @@ public sealed class Symbol
     /// <c>.scope</c>, mixed data, a macro, a <c>.func</c>, or a named enum, struct or union. Null
     /// for everything else.
     /// </summary>
-    public Scope? Body { get; internal set; }
+    public Scope? Body { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the block that contains a <c>.macro</c> body, which every call expands, or the block
     /// of a <c>.data name { }</c>, which holds its members.
     /// </summary>
-    public SyntaxNode? Definition { get; internal set; }
+    public SyntaxNode? Definition { get; internal set => field = Unfrozen(value); }
 
     /// <summary>Gets the value, where nt65 knows it. For a struct member, this is its offset.</summary>
-    public Value Value { get; internal set; }
+    public Value Value { get; internal set => field = Unfrozen(value); }
 
     /// <summary>Gets how many bytes the symbol occupies, where that is both meaningful and known.</summary>
-    public long? Size { get; internal set; }
+    public long? Size { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets how many elements those bytes form, for a type, an array or a data label.
     /// </summary>
-    public long? Count { get; internal set; }
+    public long? Count { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the <c>T</c> of a <c>.type T</c>, before it is resolved. A member or a data
@@ -131,18 +135,18 @@ public sealed class Symbol
     public ExpressionSyntax? TypeExpression { get; internal init; }
 
     /// <summary>Gets the type a <c>.type</c> names, once resolved.</summary>
-    public Symbol? Type { get; internal set; }
+    public Symbol? Type { get; internal set => field = Unfrozen(value); }
 
     /// <summary>Gets a function's parameters, in order, as the symbols its body names.</summary>
-    public IReadOnlyList<Symbol> ParameterSymbols { get; internal set; } = [];
+    public IReadOnlyList<Symbol> ParameterSymbols { get; internal set => field = Unfrozen(value); } = [];
 
     /// <summary>Gets a macro's parameters, in declaration order.</summary>
-    public IReadOnlyList<MacroParameter> Parameters { get; internal set; } = [];
+    public IReadOnlyList<MacroParameter> Parameters { get; internal set => field = Unfrozen(value); } = [];
 
     /// <summary>
     /// Gets what a macro parameter accepts; meaningless for every other kind of symbol.
     /// </summary>
-    public MacroParameter? Parameter { get; internal set; }
+    public MacroParameter? Parameter { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the macros this macro's body calls, each with the call that names it. A macro may not
@@ -154,7 +158,7 @@ public sealed class Symbol
     /// Records that this macro's body calls <paramref name="callee"/>, named at
     /// <paramref name="at"/>.
     /// </summary>
-    internal void AddCall(Symbol callee, Span at) => calls.Add((callee, at));
+    internal void AddCall(Symbol callee, Span at) => calls.Add((Unfrozen(callee), at));
 
     /// <summary>
     /// Gets the names a macro's body uses that it neither declared nor was given. Every expansion
@@ -166,7 +170,7 @@ public sealed class Symbol
     /// <summary>
     /// Records that this macro's body uses <paramref name="used"/>, named at <paramref name="at"/>.
     /// </summary>
-    internal void AddUse(Symbol used, Span at) => uses.Add((used, at));
+    internal void AddUse(Symbol used, Span at) => uses.Add((Unfrozen(used), at));
 
     /// <summary>Gets a list's items, or a function's body as its single item.</summary>
     public IReadOnlyList<SyntaxNode> Items { get; internal init; } = [];
@@ -184,13 +188,13 @@ public sealed class Symbol
     /// Gets the enum member declared before this one, or null for the first. A member with no
     /// value of its own follows it.
     /// </summary>
-    public Symbol? PreviousMember { get; internal set; }
+    public Symbol? PreviousMember { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets a value indicating whether this is a member of an enum, named or anonymous, whose
     /// value must be a constant.
     /// </summary>
-    public bool IsEnumMember { get; internal set; }
+    public bool IsEnumMember { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets a value indicating whether this is an enum member that was given no value, and so is
@@ -203,20 +207,20 @@ public sealed class Symbol
     /// <c>proc(...)</c> import. It is null for everything else, and a signature is what makes a
     /// symbol a routine rather than an address.
     /// </summary>
-    public Signature? Signature { get; internal set; }
+    public Signature? Signature { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the processor state a macro declares that it expects and leaves, or null for a macro
     /// that declares none, whose expansions are analyzed as the code they contain. It is kept
     /// separate from <see cref="Signature"/>, because a macro is expanded rather than called.
     /// </summary>
-    public Signature? MacroSignature { get; internal set; }
+    public Signature? MacroSignature { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the <c>.state</c> directly after a label, which declares the label an entry point with
     /// that state. Null for a label with none and for every other symbol.
     /// </summary>
-    public StateDirectiveSyntax? StateDeclaration { get; internal set; }
+    public StateDirectiveSyntax? StateDeclaration { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the routine that contains a label, or null for a label at file level or outside every
@@ -234,7 +238,7 @@ public sealed class Symbol
         Bound is not null && other.Bound is not null && Scope == other.Scope && NameSpan == other.NameSpan;
 
     /// <summary>Gets the address size, or null where nt65 cannot tell yet.</summary>
-    public AddressSize? AddressSize { get; internal set; }
+    public AddressSize? AddressSize { get; internal set => field = Unfrozen(value); }
 
     /// <summary>Gets a value indicating whether the symbol names an address rather than a value.</summary>
     public bool IsAddress => Kind is SymbolKind.Label or SymbolKind.AddressAlias or SymbolKind.Proc
@@ -255,7 +259,7 @@ public sealed class Symbol
     /// reported once for the whole cycle. It has no value and, for a type, no layout, so code that
     /// follows symbols' values or layouts must not follow this one.
     /// </summary>
-    public bool IsCyclic { get; internal set; }
+    public bool IsCyclic { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets a value indicating whether the symbol can be reached from outside its scope with
@@ -371,6 +375,14 @@ public sealed class Symbol
     public string KindPhrase => $"{(KindText[0] is 'a' or 'e' or 'i' or 'o' or 'u' ? "an" : "a")} {KindText}";
 
     /// <summary>
+    /// Gets a value indicating whether the symbol belongs to a completed <see cref="ProgramModel"/>.
+    /// Other threads may then be reading it, so every setter throws rather than change it. A
+    /// program built from an earlier one after an edit keeps the unchanged files' symbols as they
+    /// are.
+    /// </summary>
+    internal bool IsFrozen { get; private set; }
+
+    /// <summary>
     /// Returns the symbol's address size as seen by code in <paramref name="tree"/>. Another
     /// module sees the size the export gives it, which may be wider than its own size.
     /// </summary>
@@ -378,4 +390,18 @@ public sealed class Symbol
 
     /// <summary>Returns the symbol's kind and name, for debugging.</summary>
     public override string ToString() => $"{KindText} {QualifiedName}";
+
+    /// <summary>
+    /// Freezes the symbol once its program model is complete, after which nothing may change it.
+    /// </summary>
+    internal void Freeze() => IsFrozen = true;
+
+    /// <summary>
+    /// Returns <paramref name="value"/>, the new value of a setter, once it has checked that the
+    /// symbol may still change.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The symbol is frozen.</exception>
+    private T Unfrozen<T>(T value) => IsFrozen
+        ? throw new InvalidOperationException($"The {KindText} {QualifiedName} belongs to a completed program model and cannot change.")
+        : value;
 }

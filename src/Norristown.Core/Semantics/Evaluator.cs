@@ -138,7 +138,7 @@ internal sealed partial class Evaluator
             Spans = spans,
             Cycles = cycles,
         };
-        new Evaluator(EvaluationMode.Report, inputs, (diagnostic, _) => diagnostics.Add(diagnostic)).Bytes(expression);
+        new Evaluator(EvaluationMode.Check, inputs, (diagnostic, _) => diagnostics.Add(diagnostic)).Bytes(expression);
     }
 
     /// <summary>
@@ -344,13 +344,13 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// Evaluates <paramref name="symbol"/> unless it has been evaluated already. Only the pass
-    /// that reports does this. By the time anything else asks, every symbol has been evaluated and
-    /// every type laid out, and answering a query must never modify a symbol that another thread
-    /// is reading.
+    /// over the symbols does this. By the time anything else asks, every symbol has been evaluated
+    /// and every type laid out, and neither a query nor a check may modify a symbol that another
+    /// thread is reading.
     /// </summary>
     private void EnsureEvaluated(Symbol symbol)
     {
-        if (Reporting)
+        if (mode == EvaluationMode.Report)
             EvaluateSymbol(symbol);
     }
 
@@ -496,9 +496,15 @@ internal sealed partial class Evaluator
         List<Symbol> ring = [.. found.Skip(first), .. found.Take(first)];
 
         // Every symbol on the ring is left without a value, and a type on the ring without a
-        // layout. Code that walks into a type later has to be able to tell.
+        // layout. Code that walks into a type later has to be able to tell. Only the symbols this
+        // pass evaluates are marked. A function of a file that is not read again can be on a
+        // ring that a call reaches, and it keeps what its own evaluation found, as does every
+        // symbol a check reaches once the program is complete.
         foreach (var member in ring)
-            member.IsCyclic = true;
+        {
+            if (mode == EvaluationMode.Report && !unchanged(member))
+                member.IsCyclic = true;
+        }
         var symbol = ring[0];
         Report(symbol.DeclarationSpan, Catalogue.DefinedInTermsOfItself.Message(symbol.DisplayName),
             [.. ring.Skip(1).Select(other =>

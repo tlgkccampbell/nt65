@@ -353,6 +353,11 @@ internal sealed partial class Binder
             if (part is null or { IsReported: true })
                 return null;
         }
+        // A symbol of a file that was not read again after an edit belongs to a completed model,
+        // which other threads may be reading, so the type is kept only on a symbol still being
+        // built.
+        if (symbol.IsFrozen)
+            return part?.Symbol;
         symbol.Type = part?.Symbol;
         return symbol.Type;
     }

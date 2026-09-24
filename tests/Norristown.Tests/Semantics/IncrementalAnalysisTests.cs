@@ -1,4 +1,5 @@
 using Norristown.Project;
+using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.Tests.Semantics;
@@ -130,6 +131,58 @@ public sealed class IncrementalAnalysisTests
         var scratch = Compiler.Analyze([edited, main], project, Nothing);
 
         Assert.NotEmpty(scratch.Diagnostics);
+        Assert.Equal(scratch.Problems(), incremental.Problems());
+    }
+
+    /// <summary>
+    /// A completed model's symbols are frozen, because the language server reads a model on
+    /// several threads at once. An edit to one file builds new symbols for that file, which are
+    /// frozen in turn, and keeps every other file's symbols as they are.
+    /// </summary>
+    [Fact]
+    public void ACompletedModelsSymbolsAreFrozen()
+    {
+        var lib = SyntaxTree.Parse("lib.nt65", ".module lib\n.export SIZE = 4\n");
+        var main = SyntaxTree.Parse("main.nt65",
+            ".module main\n.use lib::SIZE\n.segment CODE\n.export .proc main {\n    lda #SIZE\n    rts\n}\n");
+        var project = ProjectSettings.None;
+
+        var first = Compiler.Analyze([lib, main], project, Nothing);
+        var size = first.File("lib.nt65").Symbol("SIZE");
+        Assert.All(first.Program.Files.SelectMany(file => file.Symbols), symbol => Assert.True(symbol.IsFrozen));
+        Assert.Throws<InvalidOperationException>(() => size.Value = Value.Of(5));
+        Assert.Throws<InvalidOperationException>(() => size.Kind = SymbolKind.AddressAlias);
+        Assert.Equal(4, size.Value.AsNumber());
+
+        var edited = main.WithChange(new TextChange(main.Text.IndexOf("rts", StringComparison.Ordinal), 3, "nop\n    rts"));
+        var second = Compiler.Analyze([lib, edited], project, Nothing, first);
+        Assert.Equal(1, second.Reanalyzed);
+        Assert.Same(size, second.File("lib.nt65").Symbol("SIZE"));
+        Assert.NotSame(first.File("main.nt65").Symbol("main"), second.File("main.nt65").Symbol("main"));
+        Assert.All(second.Program.Files.SelectMany(file => file.Symbols), symbol => Assert.True(symbol.IsFrozen));
+    }
+
+    /// <summary>
+    /// Two functions in two files that call each other form a ring, which is found again whenever
+    /// one of the files is read again. The function in the file that was not read again is on
+    /// that ring too, and it keeps what the model before the edit found for it, because that
+    /// model may still be read.
+    /// </summary>
+    [Fact]
+    public void ARingThroughAFileNotReadAgainLeavesItsFunctionAlone()
+    {
+        var a = SyntaxTree.Parse("a.nt65", ".module a\n.use b::g\n.export .func f(n) = g(n)\n.export K = f(1)\n");
+        var b = SyntaxTree.Parse("b.nt65", ".module b\n.use a::f\n.export .func g(n) = f(n)\n");
+        var project = ProjectSettings.None;
+
+        var first = Compiler.Analyze([a, b], project, Nothing);
+        Assert.NotEmpty(first.Diagnostics);
+
+        var edited = a.WithChange(new TextChange(a.Text.Length, 0, "; a comment\n"));
+        var incremental = Compiler.Analyze([edited, b], project, Nothing, first);
+        var scratch = Compiler.Analyze([edited, b], project, Nothing);
+
+        Assert.Equal(1, incremental.Reanalyzed);
         Assert.Equal(scratch.Problems(), incremental.Problems());
     }
 
