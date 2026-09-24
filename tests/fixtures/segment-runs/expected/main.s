@@ -15,6 +15,8 @@
 .export main__report
 .export main__prompts
 .export main__far_apart
+.export main__scratch
+.export main__tail
 
 .segment "CODE": absolute
 ; .proc first  main.nt65:12
@@ -58,3 +60,14 @@ main__far_apart: .byte 0
 
 PROMPTS_AT   = $0a                  ; prompts - table
 FAR_APART_AT = main__far_apart - main__table
+
+.pushseg
+.segment "DATA": absolute
+main__scratch: .byte 0
+.popseg
+
+.segment "CODE": absolute
+; .proc tail  main.nt65:56
+main__tail:
+    rts
+; end of tail

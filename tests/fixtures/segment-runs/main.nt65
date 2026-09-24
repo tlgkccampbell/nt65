@@ -6,7 +6,7 @@
 
 .cpu 6502
 
-.export first, table, second, messages, prompts, far_apart, report
+.export first, table, second, messages, prompts, far_apart, report, scratch
 
 .segment CODE
 .proc first {
@@ -46,3 +46,13 @@
 
 .const PROMPTS_AT   = prompts - table    ; 3 + 5 + 2
 .const FAR_APART_AT = far_apart - table  ; an `.align` between: an address
+
+; A block that opens a region, before anything of the region's own segment is written, goes
+; back to the segment written before it, so the routine after it is still given CODE.
+.segment CODE
+.segment DATA {
+    .data scratch: .byte 0
+}
+.export .proc tail {
+    rts
+}

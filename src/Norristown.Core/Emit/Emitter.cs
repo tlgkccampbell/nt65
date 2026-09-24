@@ -654,6 +654,10 @@ public sealed class Emitter
         var placing = kind is BlockKind.Segment or BlockKind.Region;
         var proc = kind == BlockKind.Proc && opener is ProcDeclarationSyntax or MultiProcDeclarationSyntax;
         var pushed = placing && context.Depth > 0;
+
+        // `.popseg` goes back to the segment ca65 was in at the `.pushseg`, which is the last one
+        // written. The enclosing block's own segment may not have been written yet.
+        var outer = writtenSegment;
         if (pushed)
         {
             Blank();
@@ -705,7 +709,7 @@ public sealed class Emitter
         if (pushed)
         {
             Line(".popseg");
-            writtenSegment = context.Segment;
+            writtenSegment = outer;
             pendingBlank = true;
         }
     }
