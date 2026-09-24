@@ -525,20 +525,40 @@ internal sealed class Server : IDisposable
             ? Hovers.At(asked.Analysis, asked.Model, asked.Position)
             : null;
 
+    /// <summary>
+    /// Returns where the name at the caret is declared. A segment may be declared in several
+    /// places, one for each linked config that places it and each project that builds the file,
+    /// so the answer is a list.
+    /// </summary>
     [JsonRpcMethod("textDocument/definition")]
-    public async Task<Location?> DefinitionAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
-            && (Lsp.ToDefinition(asked.Program, asked.Model, asked.Position)
-                ?? Lsp.ToPlacedDefinition(asked.Analysis, asked.Model, asked.Position)) is { } where
-            ? outgoing.ToClient(where)
-            : null;
+    public async Task<IReadOnlyList<Location>> DefinitionAsync(TextDocumentPositionParams request, CancellationToken cancellation)
+    {
+        if (await AtAsync(request, cancellation).ConfigureAwait(false) is not { } asked)
+            return [];
+        if (SegmentNavigation.At(asked.Model, asked.Position) is { } segment)
+        {
+            var analyses = await workspace.AnalysesForAsync(asked.Model.Tree.Path, cancellation).ConfigureAwait(false);
+            return outgoing.ToClient(SegmentNavigation.Definitions(analyses, segment));
+        }
+        return (Lsp.ToDefinition(asked.Program, asked.Model, asked.Position)
+            ?? Lsp.ToPlacedDefinition(asked.Analysis, asked.Model, asked.Position)) is { } where
+            ? [outgoing.ToClient(where)]
+            : [];
+    }
 
     [JsonRpcMethod("textDocument/references")]
-    public async Task<IReadOnlyList<Location>> ReferencesAsync(ReferenceParams request, CancellationToken cancellation) =>
-        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
-            ? outgoing.ToClient(
-                Lsp.ToReferences(asked.Program, asked.Model, asked.Position, request.Context.IncludeDeclaration))
-            : [];
+    public async Task<IReadOnlyList<Location>> ReferencesAsync(ReferenceParams request, CancellationToken cancellation)
+    {
+        if (await AtAsync(request, cancellation).ConfigureAwait(false) is not { } asked)
+            return [];
+        if (SegmentNavigation.At(asked.Model, asked.Position) is { } segment)
+        {
+            var analyses = await workspace.AnalysesForAsync(asked.Model.Tree.Path, cancellation).ConfigureAwait(false);
+            return outgoing.ToClient(SegmentNavigation.References(analyses, segment, request.Context.IncludeDeclaration));
+        }
+        return outgoing.ToClient(
+            Lsp.ToReferences(asked.Program, asked.Model, asked.Position, request.Context.IncludeDeclaration));
+    }
 
     [JsonRpcMethod("textDocument/documentHighlight")]
     public async Task<IReadOnlyList<DocumentHighlight>> DocumentHighlightsAsync(

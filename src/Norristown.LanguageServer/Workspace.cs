@@ -275,6 +275,26 @@ internal sealed class Workspace
     }
 
     /// <summary>
+    /// Returns the analysis of every program that <paramref name="path"/> belongs to. A file that
+    /// several projects name, such as a library they share, belongs to each of them, and a file
+    /// no project names belongs to the program of the open documents that no project names.
+    /// </summary>
+    /// <param name="path">The logical path of a file of the programs.</param>
+    /// <param name="cancellation">Stops this request waiting.</param>
+    public async Task<IReadOnlyList<ProgramAnalysis>> AnalysesForAsync(string path, CancellationToken cancellation)
+    {
+        List<Task<ProgramAnalysis>> analyses;
+        lock (gate)
+        {
+            var owners = projects.Where(project => project.Owns(path)).ToList();
+            analyses = owners.Count > 0
+                ? [.. owners.Select(project => project.AnalysisAsync(open.Values, cancellation))]
+                : [LooseAsync(cancellation)];
+        }
+        return await Task.WhenAll(analyses).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Returns the files the programs read besides their sources and project files, as logical
     /// paths. These are the binaries that <c>.incbin</c> directives include and the linker configs
     /// the projects link. The editor has to be asked to watch them, because only the programs say

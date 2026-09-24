@@ -92,6 +92,10 @@ public sealed class SegmentTable
             if (segments.TryGetValue(segment.Name, out var predeclared)
                 && !Redeclares(predeclared, segment.Size, segment.Declaration!.Value, diagnostics))
             {
+                // A standard segment a config places at another size keeps its standard size,
+                // but it is still placed, so naming it reports only the size.
+                if (segment.Placements.Count > 0)
+                    segments[segment.Name] = segment with { Size = predeclared.Size };
                 continue;
             }
             if (segment.Space is { } named && !table.spaces.ContainsKey(named))

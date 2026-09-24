@@ -316,9 +316,20 @@ internal sealed class TestClient : IAsyncDisposable
         rpc.InvokeWithParameterObjectAsync<Hover?>("textDocument/hover",
             new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
 
-    /// <summary>Requests the location where the name at a position is declared.</summary>
-    public Task<Location?> DefinitionAsync(string uri, Position position, CancellationToken cancellation) =>
-        rpc.InvokeWithParameterObjectAsync<Location?>("textDocument/definition",
+    /// <summary>
+    /// Requests the location where the name at a position is declared, for a name declared in
+    /// one place.
+    /// </summary>
+    public async Task<Location?> DefinitionAsync(string uri, Position position, CancellationToken cancellation)
+    {
+        var found = await DefinitionsAsync(uri, position, cancellation);
+        Assert.True(found.Count <= 1, $"the name is declared in {found.Count} places");
+        return found.Count == 0 ? null : found[0];
+    }
+
+    /// <summary>Requests every location where the name at a position is declared.</summary>
+    public Task<IReadOnlyList<Location>> DefinitionsAsync(string uri, Position position, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<Location>>("textDocument/definition",
             new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
 
     /// <summary>Requests every location where the name at a position appears.</summary>

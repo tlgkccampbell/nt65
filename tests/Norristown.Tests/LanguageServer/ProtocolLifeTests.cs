@@ -74,7 +74,7 @@ public sealed class ProtocolLifeTests
             {"textDocument":{"uri":"file:///c%3A/work/main.nt65"},"position":{"line":3,"character":9}}
             """), timeout);
         var definition = await server.AnswerToAsync(6, timeout);
-        var where = definition.GetProperty("result");
+        var where = Assert.Single(definition.GetProperty("result").EnumerateArray());
         Assert.Equal("file:///c%3A/work/main.nt65", where.GetProperty("uri").GetString());
         Assert.Equal(6, where.GetProperty("range").GetProperty("start").GetProperty("line").GetInt32());
 

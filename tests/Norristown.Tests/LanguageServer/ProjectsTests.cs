@@ -148,6 +148,69 @@ public sealed class ProjectsTests : IDisposable
         Assert.Equal([1], Dimmed(await NextForAsync(client, "app/main.nt65", timeout)));
     }
 
+    /// <summary>
+    /// A linked config declares its project's segments, so a change to it on disk makes the
+    /// project publish again.
+    /// </summary>
+    [Fact]
+    public async Task ALinkedConfigChangingOnDiskIsPublishedAgain()
+    {
+        var timeout = TestTimeout.Token();
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "links": { "prg": { "config": "cfg/prg.cfg" } } }""");
+        root.Write("cfg/prg.cfg", "MEMORY { M: start = $0800, size = $1000; } SEGMENTS { CODE: load = M; }\n");
+        root.Write("main.nt65", ".module main\n.segment DATA\n.export .data table: .byte 1\n");
+        await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
+        Assert.Equal(["segment \"DATA\" is not in any linked config, so ld65 has nowhere to put it"],
+            (await NextForAsync(client, "main.nt65", timeout)).Diagnostics.Select(d => d.Message));
+
+        root.Write("cfg/prg.cfg", "MEMORY { M: start = $0800, size = $1000; } SEGMENTS { CODE: load = M; DATA: load = M; }\n");
+        await client.ChangedOnDiskAsync(Uri("cfg/prg.cfg"));
+        Assert.Empty((await NextForAsync(client, "main.nt65", timeout)).Diagnostics);
+    }
+
+    /// <summary>
+    /// Go-to-definition on a segment name leads to the line of each linked config that places
+    /// it. A library that two projects build is answered from both, since each links its own
+    /// config. References add every line that names the segment, and the project file's entry
+    /// that adds to it.
+    /// </summary>
+    [Fact]
+    public async Task ASegmentNameLeadsToTheConfigsThatPlaceIt()
+    {
+        var timeout = TestTimeout.Token();
+        const string Library = ".module lib\n.segment CODE\n.export .proc clear {\n    rts\n}\n";
+        root.Write("lib/lib.nt65", Library);
+        root.Write("c64/nt65.json", """
+            { "cpu": "6502", "files": ["*.nt65", "../lib/*.nt65"], "links": { "prg": { "config": "c64.cfg" } } }
+            """);
+        root.Write("c64/c64.cfg", "MEMORY {\n    MAIN: start = $0801, size = $9000;\n}\nSEGMENTS {\n    CODE: load = MAIN;\n}\n");
+        root.Write("c64/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    jsr lib::clear\n    rts\n}\n");
+        root.Write("snes/nt65.json", """
+            { "cpu": "65816", "files": ["*.nt65", "../lib/*.nt65"], "links": { "rom": { "config": "snes.cfg" } },
+              "segments": { "CODE": { "bank": "$80" } } }
+            """);
+
+        // The ROM spans two banks, so the config does not say which one CODE is in.
+        root.Write("snes/snes.cfg", "MEMORY { ROM: start = $808000, size = $10000; }\nSEGMENTS { CODE: load = ROM; }\n");
+        await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
+        await client.OpenAsync(Uri("lib/lib.nt65"), Library);
+        var caret = Locate.At(Library, ".segment |CODE");
+
+        var definitions = await client.DefinitionsAsync(Uri("lib/lib.nt65"), caret, timeout);
+
+        Assert.Equal(
+            [(Uri("c64/c64.cfg"), 4), (Uri("snes/snes.cfg"), 1)],
+            definitions.Select(location => (location.Uri, location.Range.Start.Line)).Order());
+
+        var references = await client.ReferencesAsync(Uri("lib/lib.nt65"), caret, true, timeout);
+        Assert.Equal(
+            [
+                (Uri("c64/c64.cfg"), 4), (Uri("c64/main.nt65"), 1), (Uri("lib/lib.nt65"), 1),
+                (Uri("snes/nt65.json"), 1), (Uri("snes/snes.cfg"), 1),
+            ],
+            references.Select(location => (location.Uri, location.Range.Start.Line)).Distinct().Order());
+    }
+
     private static IReadOnlyList<int> Dimmed(PublishDiagnosticsParams published) =>
         [.. published.Diagnostics.Where(d => d.Tags?.Contains(DiagnosticTag.Unnecessary) == true).Select(d => d.Range.Start.Line)];
 
