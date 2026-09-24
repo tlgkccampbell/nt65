@@ -137,11 +137,7 @@ internal sealed partial class Ca65Oracle
             if (cached is not null)
             {
                 Directory.CreateDirectory(cacheDirectory!);
-                // Identical sources share one cache entry, and two threads may write it at once, so
-                // each writes a temporary file and moves it into place.
-                var temp = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
-                File.WriteAllText(temp, string.Join(",", bytes));
-                File.Move(temp, cached, overwrite: true);
+                Store(cached, string.Join(",", bytes));
             }
             return new AssemblyResult(true, "", bytes);
         }
@@ -189,9 +185,7 @@ internal sealed partial class Ca65Oracle
         if (result.Succeeded && cached is not null)
         {
             Directory.CreateDirectory(cacheDirectory!);
-            var temp = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            File.WriteAllText(temp, Convert.ToBase64String(result.Binary) + "\n" + result.DebugFile);
-            File.Move(temp, cached, overwrite: true);
+            Store(cached, Convert.ToBase64String(result.Binary) + "\n" + result.DebugFile);
         }
         return result;
     }
@@ -244,6 +238,27 @@ internal sealed partial class Ca65Oracle
         var path = Path.Combine(root, name);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, text);
+    }
+
+    /// <summary>
+    /// Stores <paramref name="text"/> as the cache entry <paramref name="cached"/>. Identical
+    /// sources share one entry, and threads or other test runs may write or read it at once, so
+    /// each writes a temporary file and moves it into place. On Windows the move fails while
+    /// another process has the entry open. The entry is keyed by content, so one that is already
+    /// there holds the same text, and the temporary file is dropped.
+    /// </summary>
+    private static void Store(string cached, string text)
+    {
+        var temp = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        File.WriteAllText(temp, text);
+        try
+        {
+            File.Move(temp, cached, overwrite: true);
+        }
+        catch (Exception exception) when ((exception is IOException or UnauthorizedAccessException) && File.Exists(cached))
+        {
+            File.Delete(temp);
+        }
     }
 
     private static void WriteBytes(string root, string name, byte[] content)
