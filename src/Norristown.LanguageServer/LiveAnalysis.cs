@@ -173,8 +173,9 @@ internal sealed class LiveAnalysis(Analyzer analyzer)
 
         /// <summary>
         /// Gets a value indicating whether another request can wait for this analysis. It cannot
-        /// once the analysis has failed or been abandoned.
+        /// once the analysis has been cancelled or abandoned. An analysis that failed is still the
+        /// answer for the files as they stand, since running it again would only fail again.
         /// </summary>
-        public bool IsUsable => Task.IsCompletedSuccessfully || (!Task.IsCompleted && !IsAbandoned);
+        public bool IsUsable => Task.IsCompletedSuccessfully || Task.IsFaulted || (!Task.IsCompleted && !IsAbandoned);
     }
 }

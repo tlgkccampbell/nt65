@@ -98,7 +98,7 @@ internal sealed class Server : IDisposable
     {
         this.log = log;
         this.framing = framing;
-        workspace = new Workspace(analyzer);
+        workspace = new Workspace(analyzer, failure => log.Write($"an analysis failed, and fails again until a file changes: {failure}"));
         settling = new Debounce(Quiet, delay);
         outgoing = new Outgoing(workspace, client);
     }
@@ -928,6 +928,11 @@ internal sealed class Server : IDisposable
             {
                 // The client disconnected during the debounce wait; nobody is waiting for this.
                 log.Write($"the rest of the program was not published: {e.Message}");
+            }
+            catch (Exception e)
+            {
+                // Nothing awaits this work, so a failure logged here is the only trace it leaves.
+                log.Write($"the rest of the program was not published: {e}");
             }
         });
 

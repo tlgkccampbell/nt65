@@ -48,11 +48,29 @@ internal sealed class Workspace
     /// The function that analyzes a program. A test supplies its own so that it can hold an
     /// analysis back. <see cref="Compiler"/> analyzes when none is given.
     /// </param>
-    public Workspace(Analyzer? analyzer = null)
+    /// <param name="failed">
+    /// Is told of each analysis that fails for any reason but being cancelled, which is a bug in
+    /// nt65 that no request would otherwise say anything about.
+    /// </param>
+    public Workspace(Analyzer? analyzer = null, Action<Exception>? failed = null)
     {
-        this.analyzer = analyzer
+        var analyze = analyzer
             ?? ((files, project, previous, cancellation) =>
                 Compiler.Analyze(files, project, binaryLength: null, previous, cancellation));
+        this.analyzer = failed is null
+            ? analyze
+            : (files, project, previous, cancellation) =>
+            {
+                try
+                {
+                    return analyze(files, project, previous, cancellation);
+                }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    failed(e);
+                    throw;
+                }
+            };
         loose = new LiveAnalysis(this.analyzer);
     }
 
