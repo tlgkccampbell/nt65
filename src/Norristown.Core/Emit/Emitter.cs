@@ -5,6 +5,7 @@ using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
+using static Norristown.Emit.Ca65Numbers;
 
 namespace Norristown.Emit;
 
@@ -33,9 +34,6 @@ namespace Norristown.Emit;
 /// </summary>
 public sealed class Emitter
 {
-    /// <summary>Where a generated comment starts, so that a column of them lines up.</summary>
-    private const int CommentColumn = 36;
-
     /// <summary>
     /// The indentation that starts a line that is not a label, a definition or a file-level
     /// directive.
@@ -47,7 +45,7 @@ public sealed class Emitter
     /// exist in the output.
     /// </para>
     /// </summary>
-    private const string Body = "    ";
+    internal const string Body = "    ";
 
     // The visitor that writing a line dispatches through, with one method per kind of statement.
     private readonly Statements statements;
@@ -92,7 +90,10 @@ public sealed class Emitter
     // The width at which the previous 65816 immediate of each register was written, in output
     // order, which is exactly ca65's setting when the next one is reached.
     private readonly Dictionary<WidthRegister, int> widths = [];
-    private string? written;
+
+    // The segment the output is in, which is the last one a `.segment` or `.popseg` switched to,
+    // or null where no segment is known to be open.
+    private string? writtenSegment;
     private bool pendingBlank;
 
     // Where the walk is, which every block, repetition and macro call it enters changes and
@@ -136,13 +137,13 @@ public sealed class Emitter
         emitter.Linkage(emitter.Exports());
         emitter.Linkage(emitter.Imports());
         emitter.WalkContainer(model.Tree.Root);
-        emitter.Columns();
-        emitter.Filled();
-        return new OutputFile(path, emitter.Written(), [.. emitter.lines.Select(line => line.Bytes)])
+        LinePasses.AlignColumns(emitter.lines);
+        LinePasses.FoldFills(emitter.lines);
+        return new OutputFile(path, emitter.OutputText(), [.. emitter.lines.Select(line => line.Bytes)])
         {
             IsEmpty = emitter.WritesNothing(),
             Source = model.Tree.Path,
-            SourceSize = SizeOf(model),
+            SourceSize = SourceSize(model),
             LineSources = [.. emitter.lines.Select(line => line.Source)],
         };
     }
@@ -182,26 +183,26 @@ public sealed class Emitter
         first.Linkage([.. emitters.SelectMany(emitter => emitter.Exports()).Distinct(StringComparer.Ordinal)]);
         first.Linkage([.. emitters.SelectMany(emitter => emitter.Imports()).Distinct(StringComparer.Ordinal)]);
         first.WalkContainer(root.Tree.Root);
-        first.Columns();
-        first.Filled();
+        LinePasses.AlignColumns(first.lines);
+        LinePasses.FoldFills(first.lines);
 
         // Each placed module's part is found by the line objects that open and close it. They
         // remain the same objects no matter how many lines the passes above removed before them.
         var lines = first.lines;
-        var sources = new List<OutputSource> { new(root.Tree.Path, SizeOf(root), 0, lines.Count) };
+        var sources = new List<OutputSource> { new(root.Tree.Path, SourceSize(root), 0, lines.Count) };
         foreach (var member in members.Skip(1))
         {
             var part = first.parts.FirstOrDefault(part => part.Source == member.Model.Tree.Path);
             var opens = part.Opens is null ? -1 : lines.FindIndex(line => ReferenceEquals(line, part.Opens));
             var closes = part.Closes is null ? -1 : lines.FindIndex(line => ReferenceEquals(line, part.Closes));
             sources.Add(new OutputSource(
-                member.Model.Tree.Path, SizeOf(member.Model), Math.Max(opens, 0), opens < 0 ? 0 : closes - opens + 1));
+                member.Model.Tree.Path, SourceSize(member.Model), Math.Max(opens, 0), opens < 0 ? 0 : closes - opens + 1));
         }
-        return new OutputFile(path, first.Written(), [.. lines.Select(line => line.Bytes)])
+        return new OutputFile(path, first.OutputText(), [.. lines.Select(line => line.Bytes)])
         {
             IsEmpty = first.WritesNothing(),
             Source = root.Tree.Path,
-            SourceSize = SizeOf(root),
+            SourceSize = SourceSize(root),
             LineSources = [.. lines.Select(line => line.Source)],
             LineFiles = [.. lines.Select(line => line.File)],
             Sources = sources,
@@ -212,11 +213,11 @@ public sealed class Emitter
     /// Returns the lines as the file holds them, each with its comment at the column where the
     /// comments line up.
     /// </summary>
-    private string Written()
+    private string OutputText()
     {
         var text = new StringBuilder();
         foreach (var line in lines)
-            text.Append(Commented(line.Text, line.Comment).TrimEnd()).Append('\n');
+            text.Append(EmittedLine.Commented(line.Text, line.Comment).TrimEnd()).Append('\n');
         return text.ToString();
     }
 
@@ -236,27 +237,8 @@ public sealed class Emitter
     }
 
     /// <summary>Returns the size in bytes of a module's source, which the line map records.</summary>
-    private static int SizeOf(SemanticModel model) => Encoding.UTF8.GetByteCount(model.Tree.Text);
+    private static int SourceSize(SemanticModel model) => Encoding.UTF8.GetByteCount(model.Tree.Text);
 
-    /// <summary>Formats a number as the output writes it, in hexadecimal at the width it is used at.</summary>
-    private static string Hex(long value, int digits) =>
-        "$" + value.ToString($"x{digits}", CultureInfo.InvariantCulture);
-
-    /// <summary>
-    /// Formats a known value, written in place of the name that represented it, at the narrowest
-    /// width that holds it. A negative number is written in decimal, because in hexadecimal it
-    /// would be sixteen digits wide, a width nt65 never intended.
-    /// </summary>
-    private static string Constant(long value) => value < 0
-        ? value.ToString(CultureInfo.InvariantCulture)
-        : Hex(value, value < 0x100 ? 2 : value < 0x10000 ? 4 : 8);
-
-    /// <summary>
-    /// Returns the tokens under a node, in source order. A missing token is nowhere in the text,
-    /// so there is nothing of it to write or to blank, and it is left out.
-    /// </summary>
-    private static List<SyntaxToken> Tokens(SyntaxNode node) =>
-        [.. node.DescendantTokens().Where(token => !token.IsMissing)];
 
     /// <summary>
     /// Records the routines and data declarations this file measures, and claims their end
@@ -274,7 +256,7 @@ public sealed class Emitter
         foreach (var measured in own)
         {
             ends.Add(measured);
-            var end = EndOf(measured);
+            var end = EndLabelOf(measured);
             if (names.Claimed(end) is { } other)
             {
                 diagnostics.Add(new Diagnostic(measured.DeclarationSpan,
@@ -288,7 +270,7 @@ public sealed class Emitter
 
         foreach (var type in model.Symbols.Where(symbol => symbol.Tree == model.Tree && IsSized(symbol)))
         {
-            var size = SizeOf(type);
+            var size = SizeConstantOf(type);
             if (names.Claimed(size) is { } other)
             {
                 diagnostics.Add(new Diagnostic(type.DeclarationSpan,
@@ -301,14 +283,14 @@ public sealed class Emitter
     }
 
     /// <summary>Returns the label just past a symbol's last byte, which is what <c>.endof</c> stands for.</summary>
-    private string EndOf(Symbol symbol) => Named(symbol) + "__end";
+    private string EndLabelOf(Symbol symbol) => NameOf(symbol) + "__end";
 
     /// <summary>
     /// Returns the name of the constant that an exported struct or union's size is exported as,
     /// so that ca65 and C code can size what they allocate by it. Like an end label, its
     /// spelling is fixed.
     /// </summary>
-    private string SizeOf(Symbol type) => Named(type) + "__sizeof";
+    private string SizeConstantOf(Symbol type) => NameOf(type) + "__sizeof";
 
     /// <summary>
     /// Returns whether <paramref name="symbol"/> is a struct or union whose size this file exports.
@@ -324,7 +306,7 @@ public sealed class Emitter
             return;
         Segment();
         Flush();
-        Line(LabelText(EndOf(symbol)));
+        Line(LabelText(EndLabelOf(symbol)));
     }
 
     /// <summary>
@@ -369,11 +351,11 @@ public sealed class Emitter
     /// </summary>
     private List<string> Exports()
     {
-        var written = new List<string>();
+        var directives = new List<string>();
         foreach (var symbol in model.Symbols)
         {
             if (IsSized(symbol) && symbol.Tree == model.Tree)
-                written.Add(Linked(".export", Implicit(Value.Of(symbol.Size!.Value).ImpliedAddressSize()), SizeOf(symbol)));
+                directives.Add(LinkageDirective(".export", Implicit(Value.Of(symbol.Size!.Value).ImpliedAddressSize()), SizeConstantOf(symbol)));
             if (!symbol.IsExported || !ProgramSymbols.IsLinked(symbol))
                 continue;
             exported.Add(symbol);
@@ -381,23 +363,23 @@ public sealed class Emitter
             // A constant is as wide as its value, which is how ca65 sizes one it is given.
             var size = symbol.ExportSize
                 ?? Implicit(symbol.IsAddress ? symbol.AddressSize : symbol.Value.ImpliedAddressSize());
-            written.Add(Linked(".export", size, Named(symbol)));
+            directives.Add(LinkageDirective(".export", size, NameOf(symbol)));
 
             // Another module that measures the declaration refers to its end label, so that is
             // exported alongside it.
             if (measuredElsewhere.Contains(symbol))
-                written.Add(Linked(".export", size, EndOf(symbol)));
+                directives.Add(LinkageDirective(".export", size, EndLabelOf(symbol)));
         }
-        return written;
+        return directives;
     }
 
     /// <summary>Writes a run of exports or imports, set off from what is around it by a blank line.</summary>
-    private void Linkage(IReadOnlyList<string> written)
+    private void Linkage(IReadOnlyList<string> directives)
     {
-        if (written.Count == 0)
+        if (directives.Count == 0)
             return;
         Blank();
-        foreach (var text in written)
+        foreach (var text in directives)
             Line(text);
         pendingBlank = true;
     }
@@ -416,7 +398,7 @@ public sealed class Emitter
     /// </summary>
     private List<string> Imports()
     {
-        var written = new List<string>();
+        var directives = new List<string>();
         var used = model.Used.ToHashSet();
         foreach (var symbol in model.Symbols
             .Where(symbol => symbol.Kind is SymbolKind.ImportedAddress or SymbolKind.ImportedConstant && used.Contains(symbol))
@@ -424,31 +406,31 @@ public sealed class Emitter
         {
             if (Import(symbol) is not { } line)
                 continue;
-            written.Add(line);
+            directives.Add(line);
 
             // A checked import is checked by every module that uses it, since each was built
             // against the value.
             if (symbol is { Kind: SymbolKind.ImportedConstant } && symbol.Value.AsNumber() is { } checkedValue)
             {
-                written.Add($".assert {Named(symbol)} = {Constant(checkedValue)}, lderror, "
-                    + $"\"{Named(symbol)} is not {Constant(checkedValue)}, which is what "
+                directives.Add($".assert {NameOf(symbol)} = {Constant(checkedValue)}, lderror, "
+                    + $"\"{NameOf(symbol)} is not {Constant(checkedValue)}, which is what "
                     + $"{source} was built against\"");
             }
         }
 
         // The symbols the linker defines for each segment this file, or a macro it calls, asks about.
         foreach (var (name, size) in SegmentImports())
-            written.Add(Linked(".import", size, name));
+            directives.Add(LinkageDirective(".import", size, name));
 
         // The end of what this file measures in another file comes from that file, which
         // exports it beside the declaration.
         foreach (var measured in Extents.MeasuredIn(model)
             .Where(symbol => symbol.Tree != model.Tree && !DefinedInTheUnit(symbol))
-            .OrderBy(symbol => Named(symbol), StringComparer.Ordinal))
+            .OrderBy(symbol => NameOf(symbol), StringComparer.Ordinal))
         {
-            written.Add(Linked(".import", measured.AddressSizeIn(model.Tree), EndOf(measured)));
+            directives.Add(LinkageDirective(".import", measured.AddressSizeIn(model.Tree), EndLabelOf(measured)));
         }
-        return written;
+        return directives;
     }
 
     /// <summary>
@@ -485,7 +467,7 @@ public sealed class Emitter
     /// size <paramref name="size"/>, as <c>.exportzp</c>, <c>.export name: far</c> or the plain
     /// form.
     /// </summary>
-    private static string Linked(string directive, AddressSize? size, string name) => size switch
+    private static string LinkageDirective(string directive, AddressSize? size, string name) => size switch
     {
         AddressSize.ZeroPage => $"{directive}zp {name}",
         AddressSize.Absolute => $"{directive} {name}: abs",
@@ -504,9 +486,9 @@ public sealed class Emitter
     /// <summary>Returns the line that brings one symbol in, or null for a symbol that needs no line at all.</summary>
     private string? Import(Symbol symbol)
     {
-        var name = Named(symbol);
+        var name = NameOf(symbol);
         if (symbol.IsAddress || symbol.Kind == SymbolKind.ImportedConstant)
-            return Linked(".import", symbol.AddressSizeIn(model.Tree), name);
+            return LinkageDirective(".import", symbol.AddressSizeIn(model.Tree), name);
 
         // A constant another file declares is written out by value. A constant whose value nt65
         // does not know has already been reported, and a string is only ever used through
@@ -585,7 +567,7 @@ public sealed class Emitter
                 }
             }
             if (kind == BlockKind.Repeat)
-                Folded(block, Repetitions.BindingOf(model, opener), starts);
+                FoldRepetition(block, Repetitions.BindingOf(model, opener), starts);
             return;
         }
 
@@ -643,7 +625,7 @@ public sealed class Emitter
         {
             Blank();
             Line(".pushseg");
-            written = null;
+            writtenSegment = null;
         }
         if (proc)
         {
@@ -690,7 +672,7 @@ public sealed class Emitter
         if (pushed)
         {
             Line(".popseg");
-            written = context.Segment;
+            writtenSegment = context.Segment;
             pendingBlank = true;
         }
     }
@@ -708,257 +690,27 @@ public sealed class Emitter
 
     /// <summary>
     /// Rewrites a counted repetition whose iterations all came out the same as a single ca65
-    /// <c>.repeat</c> that produces the same lines. nt65 makes every per-iteration decision
-    /// itself, such as the address size an operand is reached at, the width an immediate is
-    /// written at, the form a branch takes and the name an iteration declares. The iterations
-    /// are therefore written first and compared afterwards, and ca65 is given a <c>.repeat</c>
-    /// only when there is nothing left for it to decide. <paramref name="starts"/> is where each
-    /// iteration's lines begin.
-    /// <para>
-    /// Where the iterations differ only in the value of the binding, the body is written once
-    /// with a ca65 repeat counter in place of that number. That happens only after substituting
-    /// each iteration's number back into it has reproduced that iteration's lines exactly.
-    /// </para>
-    /// <para>
-    /// The byte count of the whole block goes on the <c>.repeat</c> line, because that is the
-    /// line ca65 counts every iteration's bytes against. The body's lines are given no bytes of
-    /// their own, and keep only their source line.
-    /// </para>
+    /// <c>.repeat</c>, as <see cref="LinePasses.FoldRepeat"/> describes. <paramref name="starts"/>
+    /// is where each iteration's lines begin.
     /// </summary>
-    private void Folded(BlockSyntax block, Symbol? binding, IReadOnlyList<int> starts)
-    {
-        if (Iterations(starts, out var at) is not { } iterations)
-            return;
-
-        var body = iterations[^1];
-        var counter = "";
-        if (!iterations.TrueForAll(iteration => Identical(iteration, body)))
-        {
-            if (binding is null || Counted(iterations, binding) is not { } counted)
-                return;
-            (counter, body) = ($", {counted.Counter}", counted.Body);
-        }
-        else if (Repeated(body[0]) is not null && body.TrueForAll(line => Same(line, body[0])))
-        {
-            // A row of one repeated byte is a fill regardless of how the source expressed it, and
-            // `.res` says a fill more plainly than a `.repeat` around one `.byte` does.
-            return;
-        }
-
-        // A line whose length nt65 makes no claim about makes the whole block's length
-        // unpredictable too, because the iterations' total is as unpredictable as the line.
-        long bytes = 0;
-        foreach (var line in body)
-            bytes = line.Bytes < 0 || bytes < 0 ? DataLengths.Unpredictable : bytes + line.Bytes;
-        bytes = bytes <= 0 ? bytes : bytes * starts.Count;
-        var length = bytes is > 0 and <= int.MaxValue ? (int)bytes : bytes < 0 ? DataLengths.Unpredictable : 0;
-
-        var opened = body.Select(line => line.Text).FirstOrDefault(text => text.Length > 0) ?? Body;
-        var indent = opened[..(opened.Length - opened.TrimStart().Length)];
-        lines.RemoveRange(at, lines.Count - at);
-        Write(new EmittedLine(
-            $"{indent}.repeat {starts.Count}{counter}", length, Mapped(block.Opener, length, located: false)));
-        foreach (var line in body)
-            Write(line with { Text = line.Text.Length == 0 ? "" : Body + line.Text, Bytes = 0 });
-
-        // ca65 counts the block's bytes against the `.repeat`, and ld65 records a span for the
-        // whole of it against the `.endrepeat`, so the closing line is mapped as well as the
-        // opening one. The map has to cover every line the debug information refers to.
-        Write(new EmittedLine($"{indent}.endrepeat", Source: At(block.Closer ?? block.Opener)));
-    }
+    private void FoldRepetition(BlockSyntax block, Symbol? binding, IReadOnlyList<int> starts) =>
+        LinePasses.FoldRepeat(
+            lines, starts, binding is null ? null : () => CounterFor(binding),
+            At(block.Opener), At(block.Closer ?? block.Opener), file);
 
     /// <summary>
-    /// Returns the lines each iteration came out as, or null when no <c>.repeat</c> could
-    /// represent the block, no matter how alike the iterations are. <paramref name="at"/> is
-    /// where the <c>.repeat</c> goes. The first iteration may begin with lines that belong before
-    /// the repetition rather than inside it, such as a blank the source asked for or the
-    /// <c>.segment</c> that the following code lands in. Later iterations did not need to write
-    /// those lines again, and they stay where they are.
+    /// Returns the name of a repetition's counter. The counter is an output name like any other,
+    /// derived from the source and used by nothing else in the file. A repetition has one counter
+    /// no matter how many times its body is written out; otherwise an enclosing repetition would
+    /// see a different counter in each of its iterations.
     /// </summary>
-    private List<List<EmittedLine>>? Iterations(IReadOnlyList<int> starts, out int at)
+    private string CounterFor(Symbol binding)
     {
-        at = lines.Count;
-
-        // Two iterations read no better as a `.repeat` than written out, and one reads worse.
-        if (starts.Count < 3)
-            return null;
-
-        var length = lines.Count - starts[^1];
-        if (length == 0)
-            return null;
-        for (var iteration = 1; iteration < starts.Count; iteration++)
-        {
-            var end = iteration + 1 < starts.Count ? starts[iteration + 1] : lines.Count;
-            if (end - starts[iteration] != length)
-                return null;
-        }
-
-        var opening = starts[1] - starts[0] - length;
-        if (opening < 0)
-            return null;
-        for (var i = 0; i < opening; i++)
-        {
-            var text = lines[starts[0] + i].Text.TrimStart();
-            if (text.Length != 0 && !text.StartsWith(".segment ", StringComparison.Ordinal))
-                return null;
-        }
-
-        var iterations = new List<List<EmittedLine>>(starts.Count) { lines.GetRange(starts[0] + opening, length) };
-        for (var iteration = 1; iteration < starts.Count; iteration++)
-            iterations.Add(lines.GetRange(starts[iteration], length));
-
-        // A name inside a ca65 `.repeat` is declared once per iteration, which is an error on
-        // the second, so such a body is written out in full no matter how alike the iterations
-        // look.
-        if (iterations[0].Any(Declares))
-            return null;
-
-        at = starts[0] + opening;
-        return iterations;
-    }
-
-    /// <summary>Returns whether two iterations came out as exactly the same lines.</summary>
-    private static bool Identical(List<EmittedLine> one, List<EmittedLine> other)
-    {
-        for (var i = 0; i < one.Count; i++)
-        {
-            if (one[i] != other[i])
-                return false;
-        }
-        return true;
-    }
-
-    /// <summary>
-    /// Returns the single body every iteration of a counted repetition shares, expressed in terms
-    /// of a ca65 repeat counter, together with the counter's name. Returns null when no such body
-    /// reproduces every iteration. ca65 substitutes the iteration number wherever the counter's
-    /// name appears, so the body is the first iteration with the counter in place of its number.
-    /// It is used only if substituting each iteration's number back reproduces that iteration's
-    /// lines exactly. ca65 then evaluates the source's expression, in arithmetic nt65 already
-    /// agrees with it on, since each line is the line nt65 wrote for that iteration with one
-    /// number substituted.
-    /// </summary>
-    private (string Counter, List<EmittedLine> Body)? Counted(List<List<EmittedLine>> iterations, Symbol binding)
-    {
-        // A character no output contains, so that the places the counter goes can be marked
-        // before the counter has a name.
-        const string mark = "\u0001";
-
-        var body = new List<EmittedLine>(iterations[0].Count);
-        for (var i = 0; i < iterations[0].Count; i++)
-        {
-            var line = iterations[0][i];
-            if (!iterations.TrueForAll(iteration => Alongside(iteration[i], line))
-                || Templated(line.Text, iterations[1][i].Text, mark) is not { } text)
-            {
-                return null;
-            }
-            body.Add(line with { Text = text });
-        }
-        for (var iteration = 0; iteration < iterations.Count; iteration++)
-        {
-            for (var i = 0; i < body.Count; i++)
-            {
-                if (Instantiated(body[i].Text, mark, Constant(iteration)) != iterations[iteration][i].Text)
-                    return null;
-            }
-        }
-
-        // The counter is an output name like any other, derived from the source and used by
-        // nothing else in the file. A repetition has one counter no matter how many times its
-        // body is written out; otherwise an enclosing repetition would see a different counter in
-        // each of its iterations.
         if (!counters.TryGetValue(binding, out var counter))
             counters[binding] = counter = names.Generated(binding.Name);
-        return (counter, [.. body.Select(line =>
-            line with { Text = line.Text.Replace(mark, counter, StringComparison.Ordinal) })]);
+        return counter;
     }
 
-    /// <summary>
-    /// Returns the line the first two iterations wrote, with <paramref name="mark"/> wherever the
-    /// first wrote the binding's value on its iteration (0) and the second wrote its own (1).
-    /// Returns null when they differ anywhere else, which means some decision came out
-    /// differently and no counter can represent it.
-    /// </summary>
-    private static string? Templated(string zeroth, string first, string mark)
-    {
-        if (zeroth.Length != first.Length)
-            return null;
-        var zero = Constant(0);
-        var one = Constant(1);
-        var text = new StringBuilder(zeroth.Length);
-        for (var at = 0; at < zeroth.Length;)
-        {
-            if (at + zero.Length <= zeroth.Length
-                && string.CompareOrdinal(zeroth, at, zero, 0, zero.Length) == 0
-                && string.CompareOrdinal(first, at, one, 0, one.Length) == 0
-                && (at == 0 || !InAName(zeroth[at - 1]))
-                && (at + zero.Length == zeroth.Length || !InAName(zeroth[at + zero.Length])))
-            {
-                text.Append(mark);
-                at += zero.Length;
-                continue;
-            }
-            if (zeroth[at] != first[at])
-                return null;
-            text.Append(zeroth[at]);
-            at++;
-        }
-        return text.ToString();
-    }
-
-    /// <summary>
-    /// Returns <paramref name="body"/> with <paramref name="value"/> substituted for
-    /// <paramref name="mark"/>, the way ca65 substitutes the iteration number for the counter's
-    /// name. The value replaces the mark only where the mark stands as a whole word, never inside
-    /// a longer one.
-    /// </summary>
-    private static string Instantiated(string body, string mark, string value)
-    {
-        var text = new StringBuilder(body.Length);
-        for (var at = 0; at < body.Length;)
-        {
-            var found = body.IndexOf(mark, at, StringComparison.Ordinal);
-            if (found < 0)
-            {
-                text.Append(body, at, body.Length - at);
-                break;
-            }
-            text.Append(body, at, found - at);
-            var after = found + mark.Length;
-            text.Append((found == 0 || !InAName(body[found - 1]))
-                && (after == body.Length || !InAName(body[after])) ? value : mark);
-            at = after;
-        }
-        return text.ToString();
-    }
-
-    /// <summary>
-    /// Returns whether a character can appear in a ca65 name, or is the dot that begins a ca65
-    /// directive.
-    /// </summary>
-    private static bool InAName(char letter) => char.IsLetterOrDigit(letter) || letter == '_' || letter == '.';
-
-    /// <summary>Returns whether two lines agree in everything but their text.</summary>
-    private static bool Alongside(EmittedLine one, EmittedLine other) =>
-        one.Bytes == other.Bytes && one.Source == other.Source
-            && one.Label == other.Label && one.Comment == other.Comment;
-
-    /// <summary>
-    /// Returns whether a line declares a name. A name declared in a repetition's body is a different
-    /// name on every iteration, and a ca65 <c>.repeat</c> has no way to express that.
-    /// </summary>
-    private static bool Declares(EmittedLine line)
-    {
-        if (line.Label is not null)
-            return true;
-        var text = line.Text.TrimStart();
-        var name = 0;
-        while (name < text.Length && (char.IsLetterOrDigit(text[name]) || text[name] == '_'))
-            name++;
-        var rest = text[name..].TrimStart();
-        return name > 0 && (rest.StartsWith(':') || rest.StartsWith('='));
-    }
 
     /// <summary>
     /// Writes the members of an enum, each as the constant it is. A member may sit inside
@@ -1075,7 +827,7 @@ public sealed class Emitter
     private void Label(LineSyntax line, Symbol? routine)
     {
         if (routine is not null)
-            Code(line, LabelText(Named(routine)), 0);
+            Code(line, LabelText(NameOf(routine)), 0);
     }
 
     /// <summary>
@@ -1088,19 +840,19 @@ public sealed class Emitter
     {
         var mnemonic = statement.Mnemonic;
         var (taken, skipped) = Instructions.FormsOf(statement.MnemonicKind);
-        var edits = new Edits();
-        Substitute(statement, edits, nested: false);
+        var rewriter = new TokenRewriter();
+        Substitute(statement, rewriter, nested: false);
 
         if (!laid.Inverted)
         {
-            edits.Replace[mnemonic.Position] = SyntaxFacts.TextOf(taken);
-            Code(line, Render(statement, edits, Body), laid.Length);
+            rewriter.Replacements[mnemonic.Position] = SyntaxFacts.TextOf(taken);
+            Code(line, rewriter.Render(statement, Body), laid.Length);
             return;
         }
 
-        var over = names.Generated((context.Routine is null ? "" : Named(context.Routine) + "__") + "over");
-        edits.Replace[mnemonic.Position] = SyntaxFacts.TextOf(MnemonicKind.Jmp);
-        var jump = Render(statement, edits, Body);
+        var over = names.Generated((context.Routine is null ? "" : NameOf(context.Routine) + "__") + "over");
+        rewriter.Replacements[mnemonic.Position] = SyntaxFacts.TextOf(MnemonicKind.Jmp);
+        var jump = rewriter.Render(statement, Body);
         Code(line, $"{Body}{SyntaxFacts.TextOf(skipped)} {over}", Instructions.Length(AddressingMode.Relative));
         Write(new EmittedLine(jump, Instructions.Length(AddressingMode.Absolute)));
         Line($"{over}:");
@@ -1133,35 +885,35 @@ public sealed class Emitter
         }
         var bytes = rest is null ? 0 : layout.Of(rest, context.Expansion)?.Length ?? 0;
         if (rest is not null)
-            Width(rest);
-        var edits = new Edits();
+            WriteWidthDirective(rest);
+        var rewriter = new TokenRewriter();
         if (rest is not null)
         {
-            Substitute(rest, edits, nested: false);
-            Slot(rest, edits);
-            Direct(rest, edits);
+            Substitute(rest, rewriter, nested: false);
+            ReplaceFrameSlot(rest, rewriter);
+            Direct(rest, rewriter);
         }
 
         if (model.SymbolAt(label.Name) is not { } reference)
         {
-            Code(line, Render(statement, edits), bytes);
+            Code(line, rewriter.Render(statement), bytes);
             return;
         }
 
         // ca65 reads `z:` at the start of a line as an address-size prefix, so such a label is
         // written as an assignment instead, as in `z := *` and `f := *`. An assignment takes the
         // whole line, so the rest of the line goes on the next one.
-        var text = LabelText(Named(reference));
+        var text = LabelText(NameOf(reference));
         if (rest is not null && !text.EndsWith(':'))
         {
             Code(line, text, 0);
-            Code(line, Render(rest, edits, Body), bytes);
+            Code(line, rewriter.Render(rest, Body), bytes);
             return;
         }
 
-        edits.Replace[label.Name.Position] = text;
-        edits.Replace[label.ColonToken.Position] = "";
-        Code(line, Render(statement, edits), bytes);
+        rewriter.Replacements[label.Name.Position] = text;
+        rewriter.Replacements[label.ColonToken.Position] = "";
+        Code(line, rewriter.Render(statement), bytes);
     }
 
     /// <summary>
@@ -1175,7 +927,7 @@ public sealed class Emitter
             return;
         if (declaration.Directive is not { } element)
         {
-            Code(line, LabelText(Named(symbol)), 0);
+            Code(line, LabelText(NameOf(symbol)), 0);
             return;
         }
         if (DataSyntax.IsElementType(element))
@@ -1190,9 +942,9 @@ public sealed class Emitter
             NotTranspiled(element);
             return;
         }
-        var edits = new Edits();
-        Substitute(element, edits, nested: false);
-        WithName(line, symbol, Bare(element, edits, out var comment), laid.Length, comment);
+        var rewriter = new TokenRewriter();
+        Substitute(element, rewriter, nested: false);
+        WithName(line, symbol, rewriter.Bare(element, out var comment), laid.Length, comment);
     }
 
     /// <summary>
@@ -1205,7 +957,7 @@ public sealed class Emitter
         if (DataSyntax.BodyOf(directive) is { BlockKind: BlockKind.DataBody })
         {
             if (symbol is not null)
-                Code(line, LabelText(Named(symbol)), 0);
+                Code(line, LabelText(NameOf(symbol)), 0);
             return;
         }
         if (directive.Type is { } named)
@@ -1223,23 +975,23 @@ public sealed class Emitter
         }
 
         // A list is written without its braces, as the directive's own values are.
-        var edits = new Edits();
+        var rewriter = new TokenRewriter();
         string text;
         string? comment = null;
         if (directive.Tail is BracedDataSyntax { Value: ValueListSyntax list })
         {
-            var (width, bigEndian) = Slot(directive);
+            var (width, bigEndian) = ElementFormat(directive);
             foreach (var value in list.Values)
-                InPlace(value, width, bigEndian, edits);
-            edits.Replace[list.OpenBraceToken.Position] = "";
+                InPlace(value, width, bigEndian, rewriter);
+            rewriter.Replacements[list.OpenBraceToken.Position] = "";
             if (!list.CloseBraceToken.IsMissing)
-                edits.Replace[list.CloseBraceToken.Position] = "";
-            text = $"{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {Bare(list, edits, out comment)}";
+                rewriter.Replacements[list.CloseBraceToken.Position] = "";
+            text = $"{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {rewriter.Bare(list, out comment)}";
         }
         else if (directive.Tail is InlineDataSyntax)
         {
-            Substitute(directive, edits, nested: false);
-            text = Bare(directive, edits, out comment);
+            Substitute(directive, rewriter, nested: false);
+            text = rewriter.Bare(directive, out comment);
         }
         else
         {
@@ -1282,18 +1034,6 @@ public sealed class Emitter
             Code(line, $"{Body}.res {reserved}, $00", (int)reserved, $"padded to {count}");
     }
 
-    /// <summary>
-    /// Returns <paramref name="node"/> rendered without the comments its edits collected. Those
-    /// comments are returned in <paramref name="comment"/> instead, to go after anything the
-    /// line puts in front of the text.
-    /// </summary>
-    private static string Bare(SyntaxNode node, Edits edits, out string? comment)
-    {
-        comment = edits.Comments.Count == 0 ? null : string.Join(", ", edits.Comments);
-        edits.Comments.Clear();
-        return Render(node, edits).Trim();
-    }
-
     /// <summary>Writes one line of a body's values as the directive of the body's type.</summary>
     private void Values(LineSyntax line, DataValuesSyntax values)
     {
@@ -1312,9 +1052,9 @@ public sealed class Emitter
             NotTranspiled(values);
             return;
         }
-        var edits = new Edits();
-        Substitute(values, edits, nested: false);
-        Code(line, $"{Body}{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {Bare(values, edits, out var comment)}",
+        var rewriter = new TokenRewriter();
+        Substitute(values, rewriter, nested: false);
+        Code(line, $"{Body}{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {rewriter.Bare(values, out var comment)}",
             laid.Length, comment);
     }
 
@@ -1331,115 +1071,13 @@ public sealed class Emitter
             Code(line, Body + text, bytes, comment);
             return;
         }
-        if (LabelText(Named(symbol)) is var label && !label.EndsWith(':'))
+        if (LabelText(NameOf(symbol)) is var label && !label.EndsWith(':'))
         {
             Code(line, label, 0);
             Code(line, Body + text, bytes, comment);
             return;
         }
-        Named(line, label, text, bytes, comment);
-    }
-
-    /// <summary>Returns the line with its generated comment at the column where comments line up.</summary>
-    private static string Commented(string text, string? comment) =>
-        comment is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
-
-    /// <summary>
-    /// Lines up the directives of each run of named data lines, so that a run reads as a column
-    /// the way hand-written ca65 does. The names are nt65's output names, not the source's, so
-    /// the source's alignment no longer holds, and the column can only be chosen once the whole
-    /// run is known.
-    /// </summary>
-    private void Columns()
-    {
-        foreach (var run in Runs())
-        {
-            var column = run.Max(at => lines[at].Label!.Length) + 1;
-            foreach (var at in run)
-            {
-                var line = lines[at];
-                var label = line.Label!;
-                lines[at] = line with
-                {
-                    Text = label + new string(' ', column - label.Length) + line.Text,
-                    Label = null,
-                };
-            }
-        }
-    }
-
-    /// <summary>
-    /// Rewrites each run of lines holding one repeated byte as a single <c>.res</c> that
-    /// produces the same bytes. A repetition of a single value unrolls to a row of equal lines,
-    /// which is a fill regardless of how the source expressed it, and ca65 expresses a fill as
-    /// <c>.res n, value</c>.
-    /// <para>
-    /// This is done last, because it removes lines. The line that replaces a run keeps the source
-    /// line of the run's first line and the byte count of the whole run.
-    /// </para>
-    /// </summary>
-    private void Filled()
-    {
-        var kept = new List<EmittedLine>(lines.Count);
-        for (var i = 0; i < lines.Count; i++)
-        {
-            // A run longer than one `.res` reserves is left as it is. Gathering it would need
-            // several directives, and a file with that many equal lines in it is a repetition
-            // nobody would have written by hand either.
-            var run = 1;
-            while (i + run < lines.Count && run < 0xffff && Same(lines[i + run], lines[i]) && Repeated(lines[i]) is not null)
-                run++;
-            if (run >= 3 && Repeated(lines[i]) is { } value)
-            {
-                var indent = lines[i].Text[..(lines[i].Text.Length - lines[i].Text.TrimStart().Length)];
-                kept.Add(lines[i] with { Text = $"{indent}.res {run}, {value}", Bytes = run * lines[i].Bytes });
-                i += run - 1;
-                continue;
-            }
-            kept.Add(lines[i]);
-        }
-        lines.Clear();
-        lines.AddRange(kept);
-    }
-
-    /// <summary>
-    /// Returns whether two lines have the same text, label and comment. Their byte counts and
-    /// source lines are ignored, because a row of equal bytes is a fill no matter how many source
-    /// lines produced it, and the fill is mapped to the first of them.
-    /// </summary>
-    private static bool Same(EmittedLine a, EmittedLine b) =>
-        a.Text == b.Text && a.Label == b.Label && a.Comment == b.Comment;
-
-    /// <summary>
-    /// Returns the value of the single byte a line writes, or null for a line that writes
-    /// anything more, because only such a line can be one byte of a fill. The line's comment is kept on the
-    /// fill, because what it says about the byte is equally true of the fill the run becomes.
-    /// </summary>
-    private static string? Repeated(EmittedLine line)
-    {
-        if (line.Label is not null)
-            return null;
-        var text = line.Text.TrimStart();
-        if (!text.StartsWith(".byte ", StringComparison.Ordinal))
-            return null;
-        var value = text[".byte ".Length..].Trim();
-        return value.Length == 0 || value.Contains(',') || value.Contains(';') ? null : value;
-    }
-
-    /// <summary>Returns the runs of lines to line up, which are named data lines with nothing in between.</summary>
-    private List<List<int>> Runs()
-    {
-        var runs = new List<List<int>>();
-        for (var at = 0; at < lines.Count; at++)
-        {
-            if (lines[at].Label is null)
-                continue;
-            if (runs.Count > 0 && runs[^1][^1] == at - 1)
-                runs[^1].Add(at);
-            else
-                runs.Add([at]);
-        }
-        return runs;
+        WriteNamedData(line, label, text, bytes, comment);
     }
 
     /// <summary>
@@ -1479,7 +1117,7 @@ public sealed class Emitter
         }
 
         if (symbol is not null)
-            Code(line, LabelText(Named(symbol)), 0);
+            Code(line, LabelText(NameOf(symbol)), 0);
         long bytes = 0;
         foreach (var record in records)
             bytes += Fields(line, type, record, path: "");
@@ -1508,7 +1146,7 @@ public sealed class Emitter
     private void LabelOnly(LineSyntax line, LabelSyntax label)
     {
         if (model.SymbolAt(label.Name) is { } reference)
-            Code(line, LabelText(Named(reference)), 0);
+            Code(line, LabelText(NameOf(reference)), 0);
     }
 
     /// <summary>
@@ -1524,10 +1162,10 @@ public sealed class Emitter
         foreach (var member in reference.Body?.Symbols ?? [])
         {
             if (exported.Contains(member) && member.Value.AsNumber() is { } offset)
-                Definition($"{Named(member)} = {Constant(offset)}");
+                Definition($"{NameOf(member)} = {Constant(offset)}");
         }
         if (IsSized(reference))
-            Definition($"{SizeOf(reference)} = {Constant(reference.Size!.Value)}");
+            Definition($"{SizeConstantOf(reference)} = {Constant(reference.Size!.Value)}");
     }
 
     /// <summary>Writes one enum member, which is a constant like any other.</summary>
@@ -1538,7 +1176,7 @@ public sealed class Emitter
         {
             return;
         }
-        Definition($"{Named(reference)} = {Constant(value)}");
+        Definition($"{NameOf(reference)} = {Constant(value)}");
     }
 
     /// <summary>
@@ -1584,7 +1222,7 @@ public sealed class Emitter
                     bytes += size;
                     continue;
                 }
-                var (width, bigEndian) = Slot(element);
+                var (width, bigEndian) = ElementFormat(element);
                 Field(line,
                     $"{ForCa65(element.Directive.DirectiveKind, DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
                     named, size);
@@ -1659,7 +1297,7 @@ public sealed class Emitter
             }
             yield break;
         }
-        var (width, bigEndian) = Slot(element!);
+        var (width, bigEndian) = ElementFormat(element!);
         var value = given is null ? Constant(0) : Datum(given, width, bigEndian, []) ?? Rendered(given);
         yield return ($"{ForCa65(directive, SyntaxFacts.TextOf(directive))} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}", size);
     }
@@ -1678,7 +1316,7 @@ public sealed class Emitter
             case ParenthesizedExpressionSyntax parenthesized:
                 return "(" + Rendered(parenthesized.Expression, comments) + ")";
             case BinaryExpressionSyntax binary:
-                return $"({Rendered(binary.Left, comments)} {Operator(binary.OperatorToken)} {Rendered(binary.Right, comments)})";
+                return $"({Rendered(binary.Left, comments)} {TokenRewriter.Ca65Operator(binary.OperatorToken)} {Rendered(binary.Right, comments)})";
             case UnaryExpressionSyntax unary:
                 return $"({unary.OperatorToken.Text}{Rendered(unary.Operand, comments)})";
             default:
@@ -1689,45 +1327,16 @@ public sealed class Emitter
         // spelling, with names flattened.
         if (model.ValueOf(node, context.Expansion).AsNumber() is { } value)
             return Constant(value);
-        var edits = new Edits();
-        Substitute(node, edits, nested: false);
-        return Inline(node, edits, comments);
+        var rewriter = new TokenRewriter();
+        Substitute(node, rewriter, nested: false);
+        return rewriter.Inline(node, comments);
     }
-
-    /// <summary>
-    /// Returns <paramref name="node"/> rendered to go inside another line. Its comments belong
-    /// to that line and go to <paramref name="comments"/>, or stay on the text when
-    /// <paramref name="comments"/> is null.
-    /// </summary>
-    private static string Inline(SyntaxNode node, Edits edits, List<string>? comments)
-    {
-        if (comments is null)
-            return Render(node, edits).Trim();
-        comments.AddRange(edits.Comments);
-        edits.Comments.Clear();
-        return Render(node, edits).Trim();
-    }
-
-    /// <summary>
-    /// Converts an operator to ca65's form. ca65 writes equality as `=`, inequality as
-    /// `&lt;&gt;` and nt65's `^^` as `.xor`. The operators `&amp;&amp;`, `||` and `!` are the
-    /// same in both.
-    /// </summary>
-    private static string Operator(SyntaxToken op) => op.Kind switch
-    {
-        SyntaxKind.EqualsEquals => "=",
-        SyntaxKind.BangEquals => "<>",
-
-        // ca65 has no `^^`: it reads `a ^^ b` as `a ^ ^b`, an xor with the bank byte.
-        SyntaxKind.CaretCaret => ".xor",
-        _ => op.Text,
-    };
 
     /// <summary>
     /// Returns the name a symbol has in the output, at the level being written. A name that a
     /// macro body declares is a different name in every expansion.
     /// </summary>
-    private string Named(Symbol symbol) => names.Of(symbol, context.Expansion);
+    private string NameOf(Symbol symbol) => names.Of(symbol, context.Expansion);
 
     /// <summary>
     /// Returns an argument written where the body named its parameter. It goes in as a
@@ -1739,9 +1348,9 @@ public sealed class Emitter
     /// </summary>
     private string Substituted(SyntaxNode argument, List<string>? comments = null)
     {
-        var edits = new Edits();
-        Substitute(argument, edits, nested: false);
-        var text = Inline(argument, edits, comments);
+        var rewriter = new TokenRewriter();
+        Substitute(argument, rewriter, nested: false);
+        var text = rewriter.Inline(argument, comments);
         return argument is BinaryExpressionSyntax or UnaryExpressionSyntax
             ? "(" + text + ")"
             : text;
@@ -1753,7 +1362,7 @@ public sealed class Emitter
     /// </summary>
     private static string LabelText(string name) => name is "z" or "f" ? $"{name} := *" : $"{name}:";
 
-    private void Constant(LineSyntax line, ConstantDeclarationSyntax statement)
+    private void WriteConstant(LineSyntax line, ConstantDeclarationSyntax statement)
     {
         // A string cannot be expressed as a ca65 constant. It is used through `.strlen` and
         // `.strat`, which are numbers by the time anything is written.
@@ -1761,10 +1370,10 @@ public sealed class Emitter
         {
             if (reference.Value.IsString)
                 return;
-            var edits = new Edits();
-            edits.Replace[statement.Name.Position] = Named(reference);
-            Substitute(statement.Value, edits, nested: false);
-            var text = Render(statement, edits);
+            var rewriter = new TokenRewriter();
+            rewriter.Replacements[statement.Name.Position] = NameOf(reference);
+            Substitute(statement.Value, rewriter, nested: false);
+            var text = rewriter.Render(statement);
             if (statement.DescendantNodes().OfType<CurrentAddressExpressionSyntax>().Any())
                 Code(line, text, 0);
             else
@@ -1779,32 +1388,32 @@ public sealed class Emitter
             return;
 
         var address = statement.Address;
-        var edits = new Edits();
-        Substitute(address, edits, nested: false);
-        Definition($"{Named(reference)} = {Render(address, edits)}");
+        var rewriter = new TokenRewriter();
+        Substitute(address, rewriter, nested: false);
+        Definition($"{NameOf(reference)} = {rewriter.Render(address)}");
     }
 
     private void Source(LineSyntax line, StatementSyntax statement, int bytes, bool located = false)
     {
-        Width(statement);
-        var edits = new Edits();
-        Substitute(statement, edits, nested: false);
-        Immediate(statement, bytes, edits);
-        Slot(statement, edits);
-        Direct(statement, edits);
-        Code(line, Render(statement, edits, Body), bytes, located: located);
+        WriteWidthDirective(statement);
+        var rewriter = new TokenRewriter();
+        Substitute(statement, rewriter, nested: false);
+        Immediate(statement, bytes, rewriter);
+        ReplaceFrameSlot(statement, rewriter);
+        Direct(statement, rewriter);
+        Code(line, rewriter.Render(statement, Body), bytes, located: located);
     }
 
     /// <summary>
     /// Rewrites a negative constant in an immediate as its two's complement. An immediate is a
     /// byte or a word slot, as wide as the instruction makes it.
     /// </summary>
-    private void Immediate(StatementSyntax statement, int bytes, Edits edits)
+    private void Immediate(StatementSyntax statement, int bytes, TokenRewriter rewriter)
     {
         if (statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax { Value: var value, SecondValue: null } }
-            && bytes is 2 or 3 && Datum(value, bytes - 1, bigEndian: false, edits.Comments) is { } text)
+            && bytes is 2 or 3 && Datum(value, bytes - 1, bigEndian: false, rewriter.Comments) is { } text)
         {
-            Replace(value, text, edits, around: false);
+            rewriter.Replace(value, text, around: false);
         }
     }
 
@@ -1812,16 +1421,16 @@ public sealed class Emitter
     /// Writes an assertion the linker checks, as ca65's <c>.assert</c> with the level that defers
     /// it to ld65.
     /// </summary>
-    private void Linked(LineSyntax line, AssertDirectiveSyntax statement)
+    private void WriteLinkerAssertion(LineSyntax line, AssertDirectiveSyntax statement)
     {
-        var edits = new Edits();
-        Substitute(statement, edits, nested: false);
+        var rewriter = new TokenRewriter();
+        Substitute(statement, rewriter, nested: false);
 
         // A missing condition has no token to put the level after, and the line has already
         // been reported.
-        if (Tokens(statement.Condition) is [.., var end])
-            edits.After[end.Position] = edits.After.GetValueOrDefault(end.Position, "") + ", lderror";
-        Code(line, Render(statement, edits), 0, located: true);
+        if (TokenRewriter.Tokens(statement.Condition) is [.., var end])
+            rewriter.After[end.Position] = rewriter.After.GetValueOrDefault(end.Position, "") + ", lderror";
+        Code(line, rewriter.Render(statement), 0, located: true);
     }
 
     /// <summary>
@@ -1842,7 +1451,7 @@ public sealed class Emitter
     /// Replaces a frame's member in a stack-relative operand with the offset from the stack
     /// pointer that the analysis counted for it here, because ca65 knows nothing of frames.
     /// </summary>
-    private void Slot(StatementSyntax statement, Edits edits)
+    private void ReplaceFrameSlot(StatementSyntax statement, TokenRewriter rewriter)
     {
         if (layout.Of(statement, context.Expansion)?.Slot is not { } slot
             || statement is not InstructionStatementSyntax { Operand: { } operand })
@@ -1856,7 +1465,7 @@ public sealed class Emitter
             {
                 continue;
             }
-            ReplaceName(name, slot.ToString(CultureInfo.InvariantCulture), edits);
+            rewriter.ReplaceName(name, slot.ToString(CultureInfo.InvariantCulture));
         }
     }
 
@@ -1865,7 +1474,7 @@ public sealed class Emitter
     /// analysis found. For example, with D at <c>$2100</c>, <c>lda d:$2105</c> is
     /// <c>lda z:$05</c>. ca65 has no <c>d:</c>, and knows nothing of D.
     /// </summary>
-    private void Direct(StatementSyntax statement, Edits edits)
+    private void Direct(StatementSyntax statement, TokenRewriter rewriter)
     {
         if (layout.Of(statement, context.Expansion) is not { Direct: { } offset } laid
             || statement is not InstructionStatementSyntax { Operand: AbsoluteOperandSyntax { Prefix: { } sourcePrefix } operand })
@@ -1873,12 +1482,12 @@ public sealed class Emitter
             return;
         }
         foreach (var token in sourcePrefix.ChildTokens)
-            edits.Replace[token.Position] = "";
-        var tokens = Tokens(operand.Address);
-        edits.Before.Remove(tokens[0].Position);
-        edits.Replace[tokens[0].Position] = (laid.Prefix ?? "") + Hex(offset, 2);
+            rewriter.Replacements[token.Position] = "";
+        var tokens = TokenRewriter.Tokens(operand.Address);
+        rewriter.Before.Remove(tokens[0].Position);
+        rewriter.Replacements[tokens[0].Position] = (laid.Prefix ?? "") + Hex(offset, 2);
         for (var i = 1; i < tokens.Count; i++)
-            edits.Replace[tokens[i].Position] = "";
+            rewriter.Replacements[tokens[i].Position] = "";
     }
 
     /// <summary>
@@ -1888,7 +1497,7 @@ public sealed class Emitter
     /// the previous immediate's for the same register, and nowhere else. The width itself comes
     /// from the analysis, which follows control flow.
     /// </summary>
-    private void Width(StatementSyntax statement)
+    private void WriteWidthDirective(StatementSyntax statement)
     {
         if (layout.Of(statement, context.Expansion) is not { Bits: { } bits }
             || statement is not InstructionStatementSyntax instruction
@@ -1910,7 +1519,7 @@ public sealed class Emitter
     /// </summary>
     private void NotTranspiled(SyntaxNode statement)
     {
-        var tokens = Tokens(statement);
+        var tokens = TokenRewriter.Tokens(statement);
         var first = tokens.FirstOrDefault(token => token.Kind != SyntaxKind.EndOfLine);
         if (first.Parent is null)
             return;
@@ -1944,7 +1553,7 @@ public sealed class Emitter
     /// apart until every line is written, because the column the directive goes in depends on
     /// the whole run of such lines, not on this one alone.
     /// </summary>
-    private void Named(LineSyntax line, string label, string text, int bytes, string? comment)
+    private void WriteNamedData(LineSyntax line, string label, string text, int bytes, string? comment)
     {
         Segment();
         Flush();
@@ -1982,10 +1591,10 @@ public sealed class Emitter
     private void Segment()
     {
         var segment = context.Segment;
-        if (written == segment || segment is null)
+        if (writtenSegment == segment || segment is null)
             return;
         var size = model.Segments.Find(segment)?.Size ?? AddressSize.Absolute;
-        if (written is not null)
+        if (writtenSegment is not null)
             pendingBlank = true;
         Flush();
         Line($".segment \"{segment}\": {size switch
@@ -1994,7 +1603,7 @@ public sealed class Emitter
             AddressSize.Far => "far",
             _ => "absolute",
         }}");
-        written = segment;
+        writtenSegment = segment;
     }
 
     /// <summary>
@@ -2038,84 +1647,16 @@ public sealed class Emitter
         Blank();
         Line($"; .place {name}  {Where(directive)}");
         var opens = lines[^1];
-        placed.written = written;
+        placed.writtenSegment = writtenSegment;
         placed.WalkContainer(placed.model.Tree.Root);
-        placed.Columns();
-        placed.Filled();
+        LinePasses.AlignColumns(placed.lines);
+        LinePasses.FoldFills(placed.lines);
         lines.AddRange(placed.lines);
         Line($"; end of {name}");
         parts.Add((placed.source, opens, lines[^1]));
         parts.AddRange(placed.parts);
-        written = placed.written;
+        writtenSegment = placed.writtenSegment;
         pendingBlank = true;
-    }
-
-    /// <summary>
-    /// Returns the statement's own text with the edits applied. The text keeps the source's
-    /// spacing between tokens, drops its comments, and has names, prefixes and byte values
-    /// written where the source had something else. The source's indentation is not kept, and
-    /// the caller decides where the line goes (<see cref="Body"/>).
-    /// </summary>
-    private static string Render(SyntaxNode statement, Edits edits, string indent = "")
-    {
-        var text = new StringBuilder();
-        var tokens = Tokens(statement);
-        for (var i = 0; i < tokens.Count; i++)
-        {
-            var token = tokens[i];
-            if (token.Kind == SyntaxKind.EndOfLine)
-                continue;
-            if (edits.Joined.Contains(token.Position))
-            {
-                if (!edits.Joined.Contains(tokens[i - 1].Position))
-                    text.Length -= Width(tokens[i - 1].TrailingTrivia);
-                text.Append(edits.Before.GetValueOrDefault(token.Position, ""))
-                    .Append(edits.Replace.GetValueOrDefault(token.Position, Format(token)))
-                    .Append(edits.After.GetValueOrDefault(token.Position, ""));
-                if (i + 1 == tokens.Count || !edits.Joined.Contains(tokens[i + 1].Position))
-                    Whitespace(text, token.TrailingTrivia);
-                continue;
-            }
-            Whitespace(text, token.LeadingTrivia);
-            if (edits.Before.TryGetValue(token.Position, out var before))
-                text.Append(before);
-            text.Append(edits.Replace.TryGetValue(token.Position, out var replacement) ? replacement : Format(token));
-            if (edits.After.TryGetValue(token.Position, out var after))
-                text.Append(after);
-            Whitespace(text, token.TrailingTrivia);
-        }
-
-        var line = indent + text.ToString().Trim();
-        return edits.Comments.Count == 0 ? line : Commented(line, string.Join(", ", edits.Comments));
-    }
-
-    /// <summary>
-    /// Formats a token for the output. Every token but a number is kept as it appears in the
-    /// source. Everything nt65 works out for itself is written in lower case
-    /// (<see cref="Hex"/>), so a hexadecimal number in upper case in the source is lowered to
-    /// match. Otherwise one file with <c>$FFD2</c> in one line and <c>$d020</c> in the next would
-    /// look as if two people wrote it. The <c>_</c> that separates a number's digits is nt65's
-    /// own, and the header switches ca65's <c>underline_in_numbers</c> off, so it is dropped on
-    /// the way out.
-    /// </summary>
-    private static string Format(SyntaxToken token)
-    {
-        if (token.Kind != SyntaxKind.NumberLiteral)
-            return token.Text;
-        var text = token.Text.Replace("_", "", StringComparison.Ordinal);
-        return text.StartsWith('$') ? text.ToLowerInvariant() : text;
-    }
-
-    private static int Width(SyntaxTriviaList trivia) =>
-        trivia.Where(piece => piece.Kind == SyntaxKind.WhitespaceTrivia).Sum(piece => piece.Text.Length);
-
-    private static void Whitespace(StringBuilder text, SyntaxTriviaList trivia)
-    {
-        foreach (var piece in trivia)
-        {
-            if (piece.Kind == SyntaxKind.WhitespaceTrivia)
-                text.Append(piece.Text);
-        }
     }
 
     /// <summary>
@@ -2123,28 +1664,28 @@ public sealed class Emitter
     /// address-size prefix the chosen mode needs, byte values for text, and the parentheses that
     /// keep the output from depending on ca65's precedence.
     /// </summary>
-    private void Substitute(SyntaxNode node, Edits edits, bool nested)
+    private void Substitute(SyntaxNode node, TokenRewriter rewriter, bool nested)
     {
         switch (node)
         {
             case NameExpressionSyntax name:
-                Name(name, edits);
+                Name(name, rewriter);
                 return;
 
             case LiteralExpressionSyntax literal when literal is StringExpressionSyntax or CharacterExpressionSyntax:
-                Text(literal, edits);
+                Text(literal, rewriter);
                 return;
 
             case CallExpressionSyntax call:
-                Applied(call, edits);
+                Applied(call, rewriter);
                 return;
 
             // `wdm #n` is written as its bytes, which is what it is to every processor but the
             // emulator that hooks it.
             case InstructionStatementSyntax { Operand: ImmediateOperandSyntax hook } instruction
                 when instruction.MnemonicKind == MnemonicKind.Wdm:
-                edits.Replace[instruction.Mnemonic.Position] = ".byte";
-                edits.Replace[hook.HashToken.Position] = "$42, ";
+                rewriter.Replacements[instruction.Mnemonic.Position] = ".byte";
+                rewriter.Replacements[hook.HashToken.Position] = "$42, ";
                 break;
 
             case AbsoluteOperandSyntax operand:
@@ -2152,46 +1693,46 @@ public sealed class Emitter
                 // the argument the call passed replaces the body's operand, including its prefix
                 // and index. The prefix goes on last, outside any parentheses the expression was
                 // given.
-                if (Given(operand, edits))
+                if (Given(operand, rewriter))
                     return;
                 foreach (var child in operand.ChildNodes)
-                    Substitute(child, edits, nested: false);
-                Prefix(operand, edits);
+                    Substitute(child, rewriter, nested: false);
+                Prefix(operand, rewriter);
                 return;
 
             case DataDirectiveSyntax directive:
-                Terminated(directive, edits);
+                rewriter.TerminateStrz(directive);
 
                 // An `.incbin` names a file rather than holding data, so its path is left a
                 // path, pointed at the file from the output's location.
-                if (Included(directive, edits))
+                if (Included(directive, rewriter))
                     return;
 
                 // An element type's values, and a `.res` fill, are each written into a slot of a
                 // fixed width.
                 if (DataSyntax.IsElementType(directive) && directive.Tail is not BracedDataSyntax)
                 {
-                    edits.Replace[directive.Directive.Position] = ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text);
-                    var (width, bigEndian) = Slot(directive);
+                    rewriter.Replacements[directive.Directive.Position] = ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text);
+                    var (width, bigEndian) = ElementFormat(directive);
                     foreach (var value in DataLengths.ElementsOf(directive))
-                        InPlace(value, width, bigEndian, edits);
+                        InPlace(value, width, bigEndian, rewriter);
                     return;
                 }
                 if (directive.Directive.DirectiveKind is DirectiveKind.Res or DirectiveKind.Align
                     && directive.Tail is InlineDataSyntax { Values: [var count, .. var fills] })
                 {
-                    Counted(count, edits);
+                    ReplaceCount(count, rewriter);
                     foreach (var fill in fills)
-                        InPlace(fill, 1, bigEndian: false, edits);
+                        InPlace(fill, 1, bigEndian: false, rewriter);
                     return;
                 }
                 break;
 
             case DataValuesSyntax values
                 when DataSyntax.DirectiveOfValues(values) is { IsRecord: false } of:
-                var (valueWidth, valuesBigEndian) = Slot(of);
+                var (valueWidth, valuesBigEndian) = ElementFormat(of);
                 foreach (var value in values.Values)
-                    InPlace(value, valueWidth, valuesBigEndian, edits);
+                    InPlace(value, valueWidth, valuesBigEndian, rewriter);
                 return;
 
             // The distance between two places in one data declaration is a constant nt65 has
@@ -2199,25 +1740,25 @@ public sealed class Emitter
             // work out again.
             case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Minus } difference
                 when NamesAnAddress(difference) && Worth(difference).AsNumber() is { } distance:
-                Replace(difference, nested ? $"({Constant(distance)})" : Constant(distance), edits);
-                edits.Comments.Add(difference.GetText().Trim());
+                rewriter.Replace(difference, nested ? $"({Constant(distance)})" : Constant(distance));
+                rewriter.Comments.Add(difference.GetText().Trim());
                 return;
 
             case BinaryExpressionSyntax:
             case UnaryExpressionSyntax:
                 foreach (var op in node.ChildTokens)
                 {
-                    if (Operator(op) is var spelled && spelled != op.Text)
-                        edits.Replace[op.Position] = spelled;
+                    if (TokenRewriter.Ca65Operator(op) is var spelled && spelled != op.Text)
+                        rewriter.Replacements[op.Position] = spelled;
                 }
                 if (nested)
                 {
-                    var tokens = Tokens(node);
-                    edits.Before[tokens[0].Position] = "(" + edits.Before.GetValueOrDefault(tokens[0].Position, "");
-                    edits.After[tokens[^1].Position] = edits.After.GetValueOrDefault(tokens[^1].Position, "") + ")";
+                    var tokens = TokenRewriter.Tokens(node);
+                    rewriter.Before[tokens[0].Position] = "(" + rewriter.Before.GetValueOrDefault(tokens[0].Position, "");
+                    rewriter.After[tokens[^1].Position] = rewriter.After.GetValueOrDefault(tokens[^1].Position, "") + ")";
                 }
                 foreach (var child in node.ChildNodes)
-                    Substitute(child, edits, nested: true);
+                    Substitute(child, rewriter, nested: true);
                 return;
 
             default:
@@ -2225,7 +1766,7 @@ public sealed class Emitter
         }
 
         foreach (var child in node.ChildNodes)
-            Substitute(child, edits, nested: false);
+            Substitute(child, rewriter, nested: false);
     }
 
     /// <summary>
@@ -2246,7 +1787,7 @@ public sealed class Emitter
     /// Returns how wide one element of an element type is, and whether its bytes are written high
     /// first.
     /// </summary>
-    private static (int Width, bool BigEndian) Slot(DataDirectiveSyntax directive)
+    private static (int Width, bool BigEndian) ElementFormat(DataDirectiveSyntax directive)
     {
         var kind = directive.Directive.DirectiveKind;
         return (SyntaxFacts.ElementSize(kind) ?? 1, kind is DirectiveKind.BeWord or DirectiveKind.BeLong or DirectiveKind.BeDword);
@@ -2258,57 +1799,29 @@ public sealed class Emitter
     /// name in it is defined further down the output. A count that uses such a name is written
     /// as its value, with the source text in a comment beside it.
     /// </summary>
-    private void Counted(SyntaxNode count, Edits edits)
+    private void ReplaceCount(SyntaxNode count, TokenRewriter rewriter)
     {
         var named = count.DescendantNodes().Prepend(count).OfType<NameExpressionSyntax>().Any(name =>
             name.Names is [.., var last] && model.SymbolAt(last) is { Kind: not (SymbolKind.Binding or SymbolKind.MacroParameter) });
         if (named && model.ValueOf(count, context.Expansion).AsNumber() is { } known)
         {
-            edits.Comments.Add(count.GetText().Trim());
-            Replace(count, Constant(known), edits);
+            rewriter.Comments.Add(count.GetText().Trim());
+            rewriter.Replace(count, Constant(known));
             return;
         }
-        Substitute(count, edits, nested: false);
+        Substitute(count, rewriter, nested: false);
     }
 
     /// <summary>
     /// Writes one value of a slot as <see cref="Datum"/> returns it when it returns anything, and
     /// as the source has it otherwise.
     /// </summary>
-    private void InPlace(SyntaxNode value, int width, bool bigEndian, Edits edits)
+    private void InPlace(SyntaxNode value, int width, bool bigEndian, TokenRewriter rewriter)
     {
-        if (Datum(value, width, bigEndian, edits.Comments) is { } text)
-            Replace(value, text, edits);
+        if (Datum(value, width, bigEndian, rewriter.Comments) is { } text)
+            rewriter.Replace(value, text);
         else
-            Substitute(value, edits, nested: false);
-    }
-
-    /// <summary>
-    /// Writes <paramref name="text"/> in place of all of <paramref name="node"/>. Edits already
-    /// made before and after the node stay, and edits already made inside it are discarded; with
-    /// <paramref name="around"/> false, the edits before its first token and after its last are
-    /// discarded too.
-    /// </summary>
-    private static void Replace(SyntaxNode node, string text, Edits edits, bool around = true)
-    {
-        var tokens = Tokens(node);
-
-        // A missing node, such as the value after a trailing comma, has no tokens to write at.
-        if (tokens.Count == 0)
-            return;
-        for (var i = 0; i < tokens.Count; i++)
-        {
-            edits.Replace[tokens[i].Position] = "";
-            if (i > 0 || !around)
-                edits.Before.Remove(tokens[i].Position);
-            if (i < tokens.Count - 1 || !around)
-                edits.After.Remove(tokens[i].Position);
-        }
-        edits.Replace[tokens[0].Position] = text;
-
-        // The spaces between the tokens it replaces go with them, and the ones around it stay.
-        for (var i = 1; i < tokens.Count; i++)
-            edits.Joined.Add(tokens[i].Position);
+            Substitute(value, rewriter, nested: false);
     }
 
     /// <summary>
@@ -2333,9 +1846,9 @@ public sealed class Emitter
                 comments.Add(value.GetText().Trim());
                 return string.Join(", ", HighFirst(number, width));
             }
-            var written = Rendered(value, comments);
-            var low = $".bankbyte({written}), .hibyte({written}), .lobyte({written})";
-            return width == 3 ? low : $".lobyte(({written}) >> 24), {low}";
+            var rendered = Rendered(value, comments);
+            var low = $".bankbyte({rendered}), .hibyte({rendered}), .lobyte({rendered})";
+            return width == 3 ? low : $".lobyte(({rendered}) >> 24), {low}";
         }
         if (known is not (< 0 and var negative))
             return null;
@@ -2347,28 +1860,11 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Rewrites a <c>.strz</c> as a <c>.byte</c>. Text reaches the output as bytes, so
-    /// <c>.strz</c> becomes the bytes and the zero that ends them. ca65's own directive takes a
-    /// string, and once the text has become bytes there is no string left to give it.
-    /// </summary>
-    private static void Terminated(DataDirectiveSyntax directive, Edits edits)
-    {
-        if (directive.Directive.DirectiveKind != DirectiveKind.Strz)
-            return;
-
-        edits.Replace[directive.Directive.Position] = ".byte";
-        var last = directive.Tail is InlineDataSyntax { Values: [.., var argument] } && Tokens(argument) is [.., var token]
-            ? token.Position
-            : directive.Directive.Position;
-        edits.After[last] = edits.After.GetValueOrDefault(last, "") + ", $00";
-    }
-
-    /// <summary>
     /// Rewrites the path of an <c>.incbin</c> so that ca65 finds the file from the output rather
     /// than from the source. ca65 looks beside the file it is assembling, so the output assembles
     /// from any directory. Returns whether the directive was an <c>.incbin</c>.
     /// </summary>
-    private bool Included(DataDirectiveSyntax directive, Edits edits)
+    private bool Included(DataDirectiveSyntax directive, TokenRewriter rewriter)
     {
         if (directive.Directive.DirectiveKind != DirectiveKind.IncBin)
             return false;
@@ -2376,14 +1872,14 @@ public sealed class Emitter
         if (values is [var path, ..]
             && model.ValueOf(path, context.Expansion) is { Kind: ValueKind.String, Text: { } named })
         {
-            Replace(path, "\"" + Paths.Relative(Paths.Directory(output), Paths.Beside(source, named)) + "\"", edits);
+            rewriter.Replace(path, "\"" + Paths.Relative(Paths.Directory(output), Paths.Beside(source, named)) + "\"");
         }
         foreach (var argument in values.Skip(1))
-            Substitute(argument, edits, nested: false);
+            Substitute(argument, rewriter, nested: false);
         return true;
     }
 
-    private void Name(NameExpressionSyntax name, Edits edits)
+    private void Name(NameExpressionSyntax name, TokenRewriter rewriter)
     {
         // A path names one symbol, and the whole of it becomes that symbol's flat name. A body is
         // written out in every file that calls its macro, so the symbol a name refers to comes
@@ -2403,8 +1899,8 @@ public sealed class Emitter
         // A list's name is replaced by its items wherever data uses it.
         if (model.ItemsOf(name) is { Count: > 0 } items)
         {
-            ReplaceName(name, string.Join(", ", items.Select(item => Rendered(item, edits.Comments))), edits);
-            edits.Comments.Add(name.GetText().Trim());
+            rewriter.ReplaceName(name, string.Join(", ", items.Select(item => Rendered(item, rewriter.Comments))));
+            rewriter.Comments.Add(name.GetText().Trim());
             return;
         }
 
@@ -2413,7 +1909,7 @@ public sealed class Emitter
         // the path adds whole elements to the same sum.
         if (reference.Kind == SymbolKind.Member || (name.IsIndexed && reference.IsAddress))
         {
-            MemberPath(name, edits);
+            MemberPath(name, rewriter);
             return;
         }
 
@@ -2422,9 +1918,9 @@ public sealed class Emitter
         var symbol = reference;
         if (symbol.Kind == SymbolKind.MacroParameter)
         {
-            if (Parameter(symbol, edits.Comments) is not { } given)
+            if (Parameter(symbol, rewriter.Comments) is not { } given)
                 return;
-            ReplaceName(name, given, edits);
+            rewriter.ReplaceName(name, given);
             return;
         }
 
@@ -2437,13 +1933,13 @@ public sealed class Emitter
 
             // A list item is written as it stands, with its own names substituted; a number
             // is written as its value on this iteration.
-            var written = bound.Item is { } item ? Rendered(item, edits.Comments) : null;
-            if (written is null && bound.Value.AsNumber() is { } number)
-                written = Constant(number);
-            if (written is null)
+            var replacement = bound.Item is { } item ? Rendered(item, rewriter.Comments) : null;
+            if (replacement is null && bound.Value.AsNumber() is { } number)
+                replacement = Constant(number);
+            if (replacement is null)
                 return;
 
-            ReplaceName(name, written, edits);
+            rewriter.ReplaceName(name, replacement);
 
             // The binding's value is written into the line, so naming the binding in a comment
             // as well would only repeat it down every line an unrolled body writes.
@@ -2456,8 +1952,8 @@ public sealed class Emitter
         {
             if (model.BytesOf(name, context.Expansion) is { Count: > 0 } bytes)
             {
-                Replace(name, string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2))), edits);
-                edits.Comments.Add(name.GetText().Trim());
+                rewriter.Replace(name, string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2))));
+                rewriter.Comments.Add(name.GetText().Trim());
             }
             return;
         }
@@ -2467,34 +1963,9 @@ public sealed class Emitter
         // has already used in its own arithmetic.
         var byValue = (symbol.IsDefine || symbol.IsConfig || symbol.Kind == SymbolKind.ImportedConstant)
             && symbol.Value.AsNumber() is not null;
-        ReplaceName(name, byValue ? Constant(symbol.Value.Number) : Named(symbol), edits);
+        rewriter.ReplaceName(name, byValue ? Constant(symbol.Value.Number) : NameOf(symbol));
         if (byValue)
-            edits.Comments.Add(symbol.QualifiedName);
-    }
-
-    /// <summary>
-    /// Writes <paramref name="text"/> where the whole of <paramref name="name"/> stood, at the
-    /// first token of the name itself, with the rest of its tokens blanked. An <c>[i]</c> along
-    /// the path is left in place, because it selects an element of what the name refers to
-    /// rather than being part of the name.
-    /// </summary>
-    private static void ReplaceName(NameExpressionSyntax name, string text, Edits edits)
-    {
-        var names = name.Names;
-        var first = name.GlobalToken;
-        if (first is null)
-        {
-            if (names.IsEmpty)
-                return;
-            first = names[0];
-        }
-        foreach (var token in names)
-            edits.Replace[token.Position] = "";
-
-        // What is left directly under the name are the `::` between its parts.
-        foreach (var token in name.ChildTokens)
-            edits.Replace[token.Position] = "";
-        edits.Replace[first.Value.Position] = text;
+            rewriter.Comments.Add(symbol.QualifiedName);
     }
 
     /// <summary>
@@ -2522,7 +1993,7 @@ public sealed class Emitter
     /// instance plus the offset, which ca65 and ld65 resolve. Either way the path it came from is kept
     /// in a comment.
     /// </summary>
-    private void MemberPath(NameExpressionSyntax name, Edits edits)
+    private void MemberPath(NameExpressionSyntax name, TokenRewriter rewriter)
     {
         Symbol? start = null;
         long offset = 0;
@@ -2544,10 +2015,10 @@ public sealed class Emitter
             }
         }
 
-        Replace(name, start is null
+        rewriter.Replace(name, start is null
             ? Constant(offset)
-            : offset == 0 ? Named(start) : $"{Named(start)}+{offset}", edits);
-        edits.Comments.Add(name.GetText().Trim());
+            : offset == 0 ? NameOf(start) : $"{NameOf(start)}+{offset}");
+        rewriter.Comments.Add(name.GetText().Trim());
     }
 
     /// <summary>
@@ -2566,16 +2037,16 @@ public sealed class Emitter
     /// maps the text to, and a function call becomes its value. A call nt65 cannot evaluate is
     /// reported rather than passed to ca65, which knows neither charmaps nor functions.
     /// </summary>
-    private void Applied(CallExpressionSyntax call, Edits edits)
+    private void Applied(CallExpressionSyntax call, TokenRewriter rewriter)
     {
-        var tokens = Tokens(call);
+        var tokens = TokenRewriter.Tokens(call);
         if (tokens.Count == 0)
             return;
 
         // A segment function such as `.loadof` is written as the symbol ld65 defines for that segment.
         if (SegmentFunctions.Of(call, model) is { } about)
         {
-            Replace(call, SegmentFunctions.LinkerName(about.Function, about.Segment), edits);
+            rewriter.Replace(call, SegmentFunctions.LinkerName(about.Function, about.Segment));
             return;
         }
 
@@ -2584,7 +2055,7 @@ public sealed class Emitter
         if (Extents.Is(call, model, out var span) && Extents.MeasuredBy(call) is { } named
             && model.SymbolOf(named) is { } measured && (ends.Contains(measured) || measured.Tree != model.Tree))
         {
-            Replace(call, span ? $"({EndOf(measured)} - {Named(measured)})" : EndOf(measured), edits);
+            rewriter.Replace(call, span ? $"({EndLabelOf(measured)} - {NameOf(measured)})" : EndLabelOf(measured));
             return;
         }
 
@@ -2594,7 +2065,7 @@ public sealed class Emitter
         if (Semantics.Operands.IsExprOf(call) && Worth(call).AsNumber() is null
             && model.ExprOf(call, context.Expansion) is { } inner)
         {
-            Replace(call, "(" + Substituted(inner, edits.Comments) + ")", edits);
+            rewriter.Replace(call, "(" + Substituted(inner, rewriter.Comments) + ")");
             return;
         }
 
@@ -2608,8 +2079,8 @@ public sealed class Emitter
             {
                 if (model.BytesOf(call, context.Expansion) is { } built)
                 {
-                    Replace(call, BytesText(built), edits);
-                    edits.Comments.Add(call.GetText().Trim());
+                    rewriter.Replace(call, BytesText(built));
+                    rewriter.Comments.Add(call.GetText().Trim());
                 }
                 else
                 {
@@ -2624,16 +2095,16 @@ public sealed class Emitter
                 && model.ValueOf(condition, context.Expansion).AsNumber() is { } holds)
             {
                 // A parenthesis first in an operand would read as indirection, which a unary `+` prevents.
-                var chosen = Rendered(holds != 0 ? ifHolds : otherwise, edits.Comments);
-                Replace(call, chosen.StartsWith('(') ? "+" + chosen : chosen, edits);
+                var chosen = Rendered(holds != 0 ? ifHolds : otherwise, rewriter.Comments);
+                rewriter.Replace(call, chosen.StartsWith('(') ? "+" + chosen : chosen);
                 return;
             }
             if (Worth(call).AsNumber() is { } builtin)
             {
-                Replace(call, Constant(builtin), edits);
+                rewriter.Replace(call, Constant(builtin));
                 return;
             }
-            Substitute(call.Arguments, edits, nested: false);
+            Substitute(call.Arguments, rewriter, nested: false);
             return;
         }
 
@@ -2648,8 +2119,8 @@ public sealed class Emitter
             NotTranspiled(call);
             return;
         }
-        Replace(call, text, edits);
-        edits.Comments.Add(call.GetText().Trim());
+        rewriter.Replace(call, text);
+        rewriter.Comments.Add(call.GetText().Trim());
     }
 
     /// <summary>
@@ -2660,25 +2131,25 @@ public sealed class Emitter
         bytes.Count == 0 ? "\"\"" : string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
 
     /// <summary>Replaces text with its byte values, keeping the source spelling in a comment.</summary>
-    private void Text(LiteralExpressionSyntax literal, Edits edits)
+    private void Text(LiteralExpressionSyntax literal, TokenRewriter rewriter)
     {
         if (DataLengths.Bytes(literal, model) is not { Count: > 0 } bytes)
             return;
-        edits.Replace[literal.Token.Position] =
+        rewriter.Replacements[literal.Token.Position] =
             string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
-        edits.Comments.Add(literal.GetText());
+        rewriter.Comments.Add(literal.GetText());
     }
 
     /// <summary>
     /// Writes an operand that names an <c>operand</c> parameter as the operand the call passed.
     /// Returns whether the operand named such a parameter.
     /// </summary>
-    private bool Given(AbsoluteOperandSyntax operand, Edits edits)
+    private bool Given(AbsoluteOperandSyntax operand, TokenRewriter rewriter)
     {
         if (Semantics.Operands.Substituted(model, operand, context.Expansion) is not { } given)
             return false;
 
-        var text = Argument(given, edits.Comments);
+        var text = Argument(given, rewriter.Comments);
         if (text is null)
             return false;
 
@@ -2688,10 +2159,10 @@ public sealed class Emitter
         if (text.StartsWith('(') && (prefix.Length > 0 || given.IsAddress))
             text = "+" + text;
 
-        var tokens = Tokens(operand);
-        edits.Replace[tokens[0].Position] = prefix + text;
+        var tokens = TokenRewriter.Tokens(operand);
+        rewriter.Replacements[tokens[0].Position] = prefix + text;
         for (var i = 1; i < tokens.Count; i++)
-            edits.Replace[tokens[i].Position] = "";
+            rewriter.Replacements[tokens[i].Position] = "";
         return true;
     }
 
@@ -2723,12 +2194,12 @@ public sealed class Emitter
         if (given.Expression is not { } addressed)
             return null;
         var index = given.Index is { } register ? "," + register.Text : "";
-        var written = Substituted(addressed, comments);
-        return offset > 0 ? $"{written}+{offset}{index}" : $"{written}{offset}{index}";
+        var address = Substituted(addressed, comments);
+        return offset > 0 ? $"{address}+{offset}{index}" : $"{address}{offset}{index}";
     }
 
     /// <summary>Writes the <c>z:</c> or <c>a:</c> that shows which mode was chosen.</summary>
-    private void Prefix(AbsoluteOperandSyntax operand, Edits edits)
+    private void Prefix(AbsoluteOperandSyntax operand, TokenRewriter rewriter)
     {
         var instruction = operand.Parent;
         if (instruction is null)
@@ -2738,7 +2209,7 @@ public sealed class Emitter
         var sourcePrefix = operand.Prefix;
         if (chosen is null && sourcePrefix is not null)
             return;
-        var tokens = Tokens(operand.Address);
+        var tokens = TokenRewriter.Tokens(operand.Address);
 
         // ca65 reads a `(` at the head of an operand, or straight after a prefix, as indirect
         // addressing. An expression that starts with one therefore gets a unary `+` in front of
@@ -2746,7 +2217,7 @@ public sealed class Emitter
         // `jml (bank << 16) | .loword(f)`, and an expression written out with parentheses around
         // its first operation. The `+` changes nothing and keeps the operand an expression.
         var opens = tokens is [{ Kind: SyntaxKind.OpenParen }, ..]
-            || (tokens.Count > 0 && edits.Before.GetValueOrDefault(tokens[0].Position, "").StartsWith('('));
+            || (tokens.Count > 0 && rewriter.Before.GetValueOrDefault(tokens[0].Position, "").StartsWith('('));
         var text = opens ? prefix + "+" : prefix;
 
         if (sourcePrefix is not null)
@@ -2754,37 +2225,12 @@ public sealed class Emitter
             // The source already has a prefix, so it is replaced with the one chosen, in case an
             // expression made the operand wider.
             foreach (var token in sourcePrefix.ChildTokens)
-                edits.Replace[token.Position] = "";
-            edits.Replace[sourcePrefix.Name.Position] = text;
+                rewriter.Replacements[token.Position] = "";
+            rewriter.Replacements[sourcePrefix.Name.Position] = text;
             return;
         }
         if (tokens.Count > 0)
-            edits.Before[tokens[0].Position] = text + edits.Before.GetValueOrDefault(tokens[0].Position, "");
-    }
-
-    /// <summary>Holds what the output writes in place of the source's own tokens.</summary>
-    private sealed class Edits
-    {
-        /// <summary>Gets the text to write before a token, keyed by the token's position.</summary>
-        public Dictionary<int, string> Before { get; } = [];
-
-        /// <summary>Gets the text to write after a token, keyed by the token's position.</summary>
-        public Dictionary<int, string> After { get; } = [];
-
-        /// <summary>
-        /// Gets the text to write instead of a token, keyed by the token's position. An empty
-        /// string omits the token.
-        /// </summary>
-        public Dictionary<int, string> Replace { get; } = [];
-
-        /// <summary>Gets the source spellings to keep in a comment at the end of the line.</summary>
-        public List<string> Comments { get; } = [];
-
-        /// <summary>
-        /// Gets the positions of tokens written as part of the token before them, with no
-        /// whitespace between the two.
-        /// </summary>
-        public HashSet<int> Joined { get; } = [];
+            rewriter.Before[tokens[0].Position] = text + rewriter.Before.GetValueOrDefault(tokens[0].Position, "");
     }
 
     /// <summary>
@@ -2833,7 +2279,7 @@ public sealed class Emitter
 
         /// <inheritdoc/>
         public override void VisitConstantDeclaration(ConstantDeclarationSyntax node) =>
-            emitter.Constant(Line, node);
+            emitter.WriteConstant(Line, node);
 
         /// <summary>
         /// Writes a named data declaration. Its label is written at its first byte, and its end
@@ -2890,7 +2336,7 @@ public sealed class Emitter
         {
             if (emitter.model.ValueOf(
                 node.Condition, emitter.context.Expansion, emitter.layout.SpanOf, emitter.layout.CyclesOf).AsNumber() is null)
-                emitter.Linked(Line, node);
+                emitter.WriteLinkerAssertion(Line, node);
         }
 
         /// <inheritdoc/>

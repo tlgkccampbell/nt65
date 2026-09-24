@@ -34,4 +34,12 @@ namespace Norristown.Emit;
 /// order they are emitted.
 /// </param>
 internal sealed record EmittedLine(
-    string Text, int Bytes = 0, int Source = 0, string? Label = null, string? Comment = null, int File = 0);
+    string Text, int Bytes = 0, int Source = 0, string? Label = null, string? Comment = null, int File = 0)
+{
+    /// <summary>Where a generated comment starts, so that a column of them lines up.</summary>
+    private const int CommentColumn = 36;
+
+    /// <summary>Returns the text with its generated comment at the column where comments line up.</summary>
+    public static string Commented(string text, string? comment) =>
+        comment is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
+}
