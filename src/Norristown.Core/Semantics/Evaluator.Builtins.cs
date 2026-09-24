@@ -402,6 +402,17 @@ internal sealed partial class Evaluator
             return setting;
         if (name.SimpleName is { } only && asked.Defines.TryGetValue(only.Text, out var value))
             return Value.Of(value);
+
+        // A constant at file level is most likely meant as a setting, which `.config` makes it.
+        if (asked.Constant?.Invoke(name) is { } declared)
+        {
+            Add(new Diagnostic(name.Tree.GetSpan(name.Span), Severity.Error,
+                Catalogue.ConditionNamesAConstant.Message(name.GetText().Trim()), [])
+            {
+                Fix = new DiagnosticFix(FixKind.Setting, null, declared),
+            });
+            return Value.Unknown;
+        }
         Report(name, Catalogue.ConditionNamesTheProgram.Message(name.GetText().Trim()));
         return Value.Unknown;
     }

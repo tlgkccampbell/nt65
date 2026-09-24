@@ -77,6 +77,9 @@ public enum FixKind
     /// <summary>The declaration nothing names, removed, or exported so that another module may name it.</summary>
     Unused,
 
+    /// <summary>The constant a condition names, declared with <c>.config</c> as a setting.</summary>
+    Setting,
+
     /// <summary>The <c>.use</c> item that imports a name nothing refers to, removed.</summary>
     UseItem,
 

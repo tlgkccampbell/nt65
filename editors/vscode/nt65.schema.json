@@ -141,6 +141,7 @@
         "condition-asks-about-the-program",
         "condition-calls-a-function",
         "condition-is-text",
+        "condition-names-a-constant",
         "condition-names-the-program",
         "config-is-text",
         "config-misplaced",

@@ -49,6 +49,7 @@ public sealed class CatalogueAreaTests
         [
             "arithmetic-overflow", "binding-not-over-an-enum", "builtin-arguments", "charmap-has-no-entry",
             "condition-asks-about-the-program", "condition-calls-a-function", "condition-is-text",
+            "condition-names-a-constant",
             "condition-names-the-program", "config-is-text", "config-misplaced", "countof-has-no-elements",
             "cpu-disagrees", "cpu-under-a-condition", "cycles-needs-a-position", "cycles-span-has-no-bound",
             "declaration-in-a-repetition", "defined-in-terms-of-itself", "division-by-zero",

@@ -192,7 +192,7 @@ public sealed class ConfigurationTests
 
     /// <summary>A condition tests the configuration. A check on the program is an assertion.</summary>
     [Theory]
-    [InlineData(".if SIZE > 2 {", "`SIZE` is not a define or a `.config` setting: an `.if` condition can "
+    [InlineData(".if here > 2 {", "`here` is not a define or a `.config` setting: an `.if` condition can "
         + "only test the build configuration; use `.assert` to check the program")]
     [InlineData(".if .sizeof(Point) > 2 {", "`.sizeof` asks about the program, which an `.if` "
         + "condition cannot do: use `.assert` to check the program")]
@@ -201,6 +201,25 @@ public sealed class ConfigurationTests
         var program = Built("SIZE = 4\n.export SIZE\n" + opener + "\nON = 1\n}\n");
 
         Assert.Equal([$"main.nt65:4: {message}"], program.Problems());
+    }
+
+    /// <summary>
+    /// A condition that names a constant at file level is told to make it a setting, with a fix
+    /// that does, whether the constant is in the same file or another module exports it.
+    /// </summary>
+    [Theory]
+    [InlineData("SIZE = 4\n.if SIZE > 2 {\nON = 1\n}\n", null)]
+    [InlineData(".use sizes::SIZE\n.if SIZE > 2 {\nON = 1\n}\n", ".module sizes\n.export SIZE\nSIZE = 4\n")]
+    public void AConditionThatNamesAConstantSuggestsASetting(string text, string? other)
+    {
+        (string, string)[] files = other is null
+            ? [("main.nt65", ".module main\n" + text)]
+            : [("main.nt65", ".module main\n" + text), ("sizes.nt65", other)];
+        var program = Analysis.Program(ProjectSettings.None, files);
+
+        var diagnostic = Assert.Single(program.Diagnostics, d => d.Id == "condition-names-a-constant");
+        Assert.Equal(FixKind.Setting, diagnostic.Fix?.Kind);
+        Assert.EndsWith(other is null ? "main.nt65" : "sizes.nt65", diagnostic.Fix?.At?.File);
     }
 
     /// <summary>

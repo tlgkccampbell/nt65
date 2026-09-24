@@ -4,7 +4,7 @@
 
 SIZE = 4
 
-.if SIZE > 2 {                  ;! error[condition-names-the-program]: `SIZE` is not a define or a `.config` setting: an `.if` condition can only test the build configuration; use `.assert` to check the program
+.if SIZE > 2 {                  ;! error[condition-names-a-constant]: `SIZE` is a constant, and a condition or a setting may use only defines and settings: declare it with `.config` to make it a setting
     NOPE = 1
 }
 

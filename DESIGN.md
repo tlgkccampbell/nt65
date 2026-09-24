@@ -2481,7 +2481,9 @@ constant, reached as `hw::SOUND_CHANNELS` or brought in with `.use`. The build m
 exported one by its qualified name (§5.3), which makes the value in the file a default; a
 setting the module keeps to itself is not part of its configuration, and setting it is an
 error. The output writes a setting as its value, as it writes a define. The spelling is not
-ca65's `.define`, which substitutes text.
+ca65's `.define`, which substitutes text. A condition that names a constant where a setting could
+stand, at file level and outside every block, is told to declare it with `.config`, and the
+editor's fix does.
 
 In `&&` and `||` the right operand is evaluated, and its names checked, only when the
 left operand does not already decide the result, so `.if .defined(TRACE) && TRACE`

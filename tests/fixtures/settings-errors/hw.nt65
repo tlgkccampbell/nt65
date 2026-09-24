@@ -5,7 +5,7 @@
 .config LOOP = LOOP_TOO             ;! error[defined-in-terms-of-itself]: `LOOP` is defined in terms of itself
 .config LOOP_TOO = LOOP
 .config WORDS = "text"              ;! error[config-is-text]: a `.config` value must be a number, not text
-.config SIZE = LIMIT                ;! error[condition-names-the-program]: `LIMIT` is not a define or a `.config` setting: an `.if` condition can only test the build configuration; use `.assert` to check the program
+.config SIZE = LIMIT                ;! error[condition-names-a-constant]: `LIMIT` is a constant, and a condition or a setting may use only defines and settings: declare it with `.config` to make it a setting
 LIMIT = 4
 
 .if HIDDEN {

@@ -1230,6 +1230,18 @@ public static class Catalogue
         "an `.if` condition must be a number, not text",
         "An `.if` or `.elseif` condition is true when its value is nonzero, so it must evaluate to a number.");
 
+    internal static DiagnosticDescriptor ConditionNamesAConstant { get; } = Entry(
+        Area.Values,
+        "condition-names-a-constant",
+        Severity.Error,
+        "`{0}` is a constant, and a condition or a setting may use only defines and settings: declare it with "
+            + "`.config` to make it a setting",
+        "Conditions are evaluated first, to decide which parts of the source are assembled, so they can only use "
+            + "defines and `.config` settings. A constant is part of the program, which is not known at that point. "
+            + "A setting is a constant the build configuration owns: its value may use only literals, built-ins, "
+            + "defines and other settings, the build may set it, and conditions anywhere may test it. The fix "
+            + "declares the constant with `.config`.");
+
     internal static DiagnosticDescriptor ConditionNamesTheProgram { get; } = Entry(
         Area.Values,
         "condition-names-the-program",

@@ -370,23 +370,28 @@ public sealed class Configuration
         private readonly Dictionary<Symbol, Setting> bySymbol;
         private readonly Dictionary<Setting, long?> values;
         private readonly Dictionary<SyntaxTree, Reach> reached;
+
+        // The constants at file level, which a condition cannot test but `.config` could make
+        // settings. They are declared beside the settings so that a name is looked up alike.
+        private readonly HashSet<Symbol> constants;
         private readonly List<Setting> evaluating = [];
         private Func<SyntaxTree, Reader>? readerFor;
 
         public Settings()
-            : this(ProgramSymbols.Empty, [], [], [], [])
+            : this(ProgramSymbols.Empty, [], [], [], [], [])
         {
         }
 
         private Settings(
             ProgramSymbols program, Dictionary<SyntaxTree, Scope> scopes, Dictionary<Symbol, Setting> bySymbol,
-            Dictionary<Setting, long?> values, Dictionary<SyntaxTree, Reach> reached)
+            Dictionary<Setting, long?> values, Dictionary<SyntaxTree, Reach> reached, HashSet<Symbol> constants)
         {
             this.program = program;
             this.scopes = scopes;
             this.bySymbol = bySymbol;
             this.values = values;
             this.reached = reached;
+            this.constants = constants;
         }
 
         /// <summary>Gets a value indicating whether the program declares any setting.</summary>
@@ -403,6 +408,7 @@ public sealed class Configuration
         {
             var scopes = new Dictionary<SyntaxTree, Scope>();
             var bySymbol = new Dictionary<Symbol, Setting>();
+            var constants = new HashSet<Symbol>();
             var modules = new List<ProgramSymbols.Module>();
             foreach (var tree in trees)
             {
@@ -428,13 +434,14 @@ public sealed class Configuration
                     if (scope.Declare(symbol) is null)
                         bySymbol[symbol] = new Setting(symbol, name, declaration.Value);
                 }
+                DeclareConstants(tree, scope, exported, constants);
                 modules.Add(new ProgramSymbols.Module(
                     tree, scope.Module, default, scope, [.. scope.Symbols.Where(symbol => symbol.IsExported)],
                     [.. Reexports(tree)]));
             }
 
             // Problems with the modules themselves are the binder's to report.
-            var settings = new Settings(ProgramSymbols.Build(modules, [], []), scopes, bySymbol, [], []);
+            var settings = new Settings(ProgramSymbols.Build(modules, [], []), scopes, bySymbol, [], [], constants);
 
             // The build names a setting with the module's path, as the setting is named from
             // outside the module.
@@ -476,10 +483,13 @@ public sealed class Configuration
         {
             var moved = new Dictionary<SyntaxTree, Scope>(scopes);
             moved.Remove(before);
-            moved[after] = FileScope(after);
+            var scope = FileScope(after);
+            moved[after] = scope;
             var reach = new Dictionary<SyntaxTree, Reach>(reached);
             reach.Remove(before);
-            return new Settings(program, moved, bySymbol, values, reach) { readerFor = readerFor };
+            var kept = new HashSet<Symbol>(constants.Where(symbol => symbol.Tree != before));
+            DeclareConstants(after, scope, ExportedNames(after), kept);
+            return new Settings(program, moved, bySymbol, values, reach, kept) { readerFor = readerFor };
         }
 
         /// <summary>
@@ -489,7 +499,18 @@ public sealed class Configuration
         /// </summary>
         public Evaluator EvaluatorFor(Cpu cpu, Dictionary<string, long> defines, List<Diagnostic> diagnostics) =>
             Evaluator.ForConditions(
-                new Conditions(cpu, defines, (name, report) => Named(name, defines, report)), diagnostics);
+                new Conditions(cpu, defines, (name, report) => Named(name, defines, report), name => Constant(name, defines)),
+                diagnostics);
+
+        /// <summary>
+        /// Returns where the constant at file level that <paramref name="name"/> refers to is
+        /// declared, or null when it refers to none that the file may see.
+        /// </summary>
+        public Span? Constant(NameExpressionSyntax name, Dictionary<string, long> defines) =>
+            Place(name.Tree, name, defines)?.Symbol is { } symbol && constants.Contains(symbol)
+                && (symbol.IsExported || symbol.Tree == name.Tree)
+                ? symbol.DeclarationSpan
+                : null;
 
         /// <summary>
         /// Returns the value of a name in a condition as a setting. Returns null when the name
@@ -525,14 +546,7 @@ public sealed class Configuration
             SyntaxTree tree, NameExpressionSyntax name, Dictionary<string, long> defines,
             Action<SyntaxNode, DiagnosticMessage> report)
         {
-            var parts = name.Names;
-            if (parts.Length == 0 || !scopes.TryGetValue(tree, out var own))
-                return (null, false);
-
-            var text = parts[0].Text;
-            var start = name.GlobalToken is not null ? Semantics.Lookup.ModuleRoot(text, program)
-                : First(tree, own, text, last: parts.Length == 1, defines);
-            var place = Semantics.Lookup.Walk(start, [.. parts.Select(part => part.Text)], program);
+            var place = Place(tree, name, defines);
 
             // A name that two `.use module::*` items bring in is ambiguous. The binder reports
             // that, so the name has no value here and nothing more is said about it.
@@ -546,6 +560,45 @@ public sealed class Configuration
                 return (null, true);
             }
             return (setting, false);
+        }
+
+        /// <summary>
+        /// Returns what a name in <paramref name="tree"/> leads to among the settings and the
+        /// constants at file level, looked for as the binder looks for a name, or null.
+        /// </summary>
+        private Resolution? Place(SyntaxTree tree, NameExpressionSyntax name, Dictionary<string, long> defines)
+        {
+            var parts = name.Names;
+            if (parts.Length == 0 || !scopes.TryGetValue(tree, out var own))
+                return null;
+            var text = parts[0].Text;
+            var start = name.GlobalToken is not null ? Semantics.Lookup.ModuleRoot(text, program)
+                : First(tree, own, text, last: parts.Length == 1, defines);
+            return Semantics.Lookup.Walk(start, [.. parts.Select(part => part.Text)], program);
+        }
+
+        /// <summary>
+        /// Declares in <paramref name="scope"/> each constant <paramref name="tree"/> has where a
+        /// setting could stand, at file level and outside every block, and adds it to
+        /// <paramref name="constants"/>. A name a setting already has is left to the setting.
+        /// </summary>
+        private static void DeclareConstants(
+            SyntaxTree tree, Scope scope, HashSet<string> exported, HashSet<Symbol> constants)
+        {
+            foreach (var constant in FileLevel(tree.Root).OfType<ConstantDeclarationSyntax>())
+            {
+                if (constant.Name is not { IsMissing: false } name
+                    || SyntaxFacts.PlacementOf(DirectiveKind.Config).IsBarredBy(SyntaxFacts.NestingOf(constant)))
+                {
+                    continue;
+                }
+                var symbol = new Symbol(name.Text, SymbolKind.Constant, scope, tree, name.Span)
+                {
+                    IsExported = constant.IsExported || exported.Contains(name.Text),
+                };
+                if (scope.Declare(symbol) is null)
+                    constants.Add(symbol);
+            }
         }
 
         /// <summary>
