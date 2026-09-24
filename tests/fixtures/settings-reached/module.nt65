@@ -1,0 +1,7 @@
+; Brings in a module, and names a setting through it.
+.module module
+.use hw::cfg
+
+.if cfg::SPEED != 3 {
+    .error "a setting named through a module brought in by `.use` has the wrong value"
+}

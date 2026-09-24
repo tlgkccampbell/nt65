@@ -1,0 +1,12 @@
+; A name a `.use` brings in comes before a define of the same name, and a define comes before
+; what a `.use module::*` brings in.
+.module aliased
+.use hw::cfg::{SPEED as TURBO}
+.use hub::*
+
+.if TURBO != 3 {
+    .error "a setting brought in by `.use` should come before a define"
+}
+.if DELAY != 1 {
+    .error "a define should come before a setting brought in by `*`"
+}

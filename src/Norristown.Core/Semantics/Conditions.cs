@@ -14,7 +14,9 @@ namespace Norristown.Semantics;
 /// <param name="Setting">
 /// Returns the value of a name as a <c>.config</c> setting, reporting any problem with it
 /// through the second argument. Returns null when the name is not a setting and nothing has
-/// been reported about it, which leaves the caller to report it as an unknown name.
+/// been reported about it, which leaves the caller to read it as a define or report it as an
+/// unknown name. It is asked before the defines, because a setting the file declares or a
+/// <c>.use</c> brings in comes before a define of the same name.
 /// </param>
 internal sealed record Conditions(
     Cpu Cpu,

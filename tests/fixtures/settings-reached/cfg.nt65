@@ -1,0 +1,8 @@
+; The settings the other modules reach. `LATE` is exported by a list that follows a `.segment`.
+.module hw::cfg
+
+.export .config SPEED = 3
+.config LATE = 7
+
+.segment CODE
+.export LATE

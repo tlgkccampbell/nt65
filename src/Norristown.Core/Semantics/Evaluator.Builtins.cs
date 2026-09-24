@@ -400,10 +400,12 @@ internal sealed partial class Evaluator
     /// </summary>
     private Value InCondition(NameExpressionSyntax name, Conditions asked)
     {
-        if (name.SimpleName is { } only && asked.Defines.TryGetValue(only.Text, out var value))
-            return Value.Of(value);
+        // The setting lookup follows the binder's order, in which a define comes after what the
+        // file declares and what a `.use` brings in by name, so it is asked first.
         if (asked.Setting(name, Report) is { } setting)
             return setting;
+        if (name.SimpleName is { } only && asked.Defines.TryGetValue(only.Text, out var value))
+            return Value.Of(value);
         Report(name, Catalogue.ConditionNamesTheProgram.Message(name.GetText().Trim()));
         return Value.Unknown;
     }

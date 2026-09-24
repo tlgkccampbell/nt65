@@ -27,6 +27,13 @@ public enum WholeProgramReason
     /// </summary>
     SettingsDeclared,
 
+    /// <summary>
+    /// The changed file names a different module or re-exports different names, in a program
+    /// that declares a <c>.config</c>. Another file's condition may reach a setting through that
+    /// module.
+    /// </summary>
+    SettingPathsChanged,
+
     /// <summary>The program's CPU changed.</summary>
     CpuChanged,
 

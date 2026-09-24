@@ -1,0 +1,5 @@
+; Re-exports settings, which makes them part of this module.
+.module hub
+
+.export .use hw::cfg::SPEED
+.export .use hw::cfg::{LATE as DELAY}

@@ -40,6 +40,9 @@ public sealed class Configuration
     /// <summary>Gets the CPU the build is for, which <c>.target</c> and <c>.has</c> ask about.</summary>
     public Cpu Cpu { get; }
 
+    /// <summary>Gets a value indicating whether any file of the program declares a <c>.config</c>.</summary>
+    internal bool HasSettings => settings.Any;
+
     /// <summary>
     /// Determines which branches <paramref name="trees"/> take when built for
     /// <paramref name="cpu"/> with <paramref name="defines"/>.
@@ -98,6 +101,16 @@ public sealed class Configuration
     public IReadOnlyList<TextSpan> Omitted(SyntaxTree tree) =>
         omitted.TryGetValue(tree, out var left) ? left : [];
 
+
+    /// <summary>
+    /// Determines whether <paramref name="before"/> and <paramref name="after"/>, two versions of
+    /// one file, name the same module and re-export the same names. A condition in another file
+    /// may reach a setting through the module's path or its re-exports, so a file that changes
+    /// either changes what such a condition means.
+    /// </summary>
+    internal static bool LeadsAlike(SyntaxTree before, SyntaxTree after) =>
+        ModuleSyntax.ModuleOf(before) == ModuleSyntax.ModuleOf(after)
+        && Reexports(before).Select(Spelled).SequenceEqual(Reexports(after).Select(Spelled));
 
     /// <summary>
     /// Returns the value of <c>.target(cpu)</c> or <c>.has(mnemonic)</c>, whichever
@@ -161,8 +174,9 @@ public sealed class Configuration
     /// <summary>
     /// Returns the configuration of a program in which <paramref name="before"/> was replaced by
     /// <paramref name="after"/>. A condition depends only on the file it is in, the build and the
-    /// settings. A file that declares a setting is analyzed with the whole program, so every other
-    /// file's results remain valid.
+    /// settings. A file that declares a setting is analyzed with the whole program, and so is one
+    /// that does not lead to the settings as it did before (see <see cref="LeadsAlike"/>). So
+    /// every other file's results remain valid.
     /// </summary>
     internal Configuration Replacing(
         SyntaxTree before, SyntaxTree after, Cpu cpu, IEnumerable<Define> defines, List<Diagnostic> diagnostics)
@@ -193,6 +207,38 @@ public sealed class Configuration
 
     private static List<ConfigDeclarationSyntax> SettingsIn(SyntaxTree tree) =>
         settingsByTree.GetValue(tree, tree => [.. tree.Root.DescendantNodes().OfType<ConfigDeclarationSyntax>()]);
+
+    /// <summary>Returns the names that the <c>.export .use</c> items of a file re-export.</summary>
+    private static IEnumerable<ProgramSymbols.Reexport> Reexports(SyntaxTree tree) =>
+        UsesIn(tree).Where(use => use.IsExported).SelectMany(ModuleSyntax.Brought);
+
+    /// <summary>Returns a re-export as one string, so that two lists of them can be compared.</summary>
+    private static string Spelled(ProgramSymbols.Reexport reexport) => $"{reexport.Name} {string.Join("::", reexport.Path)}";
+
+    /// <summary>Returns the <c>.use</c> items of a file that this pass reads.</summary>
+    private static IEnumerable<UseDirectiveSyntax> UsesIn(SyntaxTree tree) =>
+        FileLevel(tree.Root).OfType<UseDirectiveSyntax>();
+
+    /// <summary>
+    /// Returns the statements that are at the file level of <paramref name="container"/> and
+    /// under no condition. A statement in a <c>.segment</c> region or block is at file level,
+    /// because a segment leaves names in the scope around it.
+    /// </summary>
+    private static IEnumerable<StatementSyntax> FileLevel(SyntaxNode container)
+    {
+        foreach (var child in container.ChildNodes)
+        {
+            if (child is LineSyntax { Statement: { } statement })
+            {
+                yield return statement;
+            }
+            else if (child is BlockSyntax { BlockKind: BlockKind.Region or BlockKind.Segment } segment)
+            {
+                foreach (var inner in FileLevel(segment))
+                    yield return inner;
+            }
+        }
+    }
 
     /// <summary>
     /// Reads one file's conditions. A chain is a run of sibling blocks, made up of the
@@ -319,28 +365,62 @@ public sealed class Configuration
     /// so that which settings exist depends on no condition. Its value may use literals,
     /// built-ins, the build's defines and other settings. The build can set a setting that a
     /// module exports by its qualified name, which makes the value in the file only a default.
+    /// <para>
+    /// A condition names a setting as the rest of the program names any declaration. The settings
+    /// are therefore kept in a <see cref="ProgramSymbols"/> of their own, and a name is resolved
+    /// with <see cref="Semantics.Lookup"/>, the same way the binder resolves it. That covers a
+    /// setting a module re-exports, one reached through a module a <c>.use</c> brought in, and
+    /// the order in which a name is looked for.
+    /// </para>
+    /// <para>
+    /// The conditions are evaluated before the binder collects the program, because they decide
+    /// which of its declarations exist. So this class reads less than the binder does, and the
+    /// difference is deliberate.
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// An <c>.export</c> or a <c>.use</c> under a condition is not read, because whether it exists
+    /// depends on the conditions being evaluated. One in a <c>.segment</c> region or block is read.
+    /// </description></item>
+    /// <item><description>
+    /// The table holds only settings, because the other declarations are not collected yet. A
+    /// name that means another declaration is therefore not a setting, and the condition reports
+    /// that it names the program.
+    /// </description></item>
+    /// <item><description>
+    /// The build sets a setting by the path of the module that declares it. A module that
+    /// re-exports the setting does not give it a second path for the build to use.
+    /// </description></item>
+    /// </list>
     /// </summary>
     private sealed class Settings
     {
-        private readonly Dictionary<(string Module, string Name), Setting> byName;
-        private readonly Dictionary<SyntaxTree, string> modules;
+        private readonly ProgramSymbols program;
+        private readonly Dictionary<SyntaxTree, Scope> scopes;
+        private readonly Dictionary<Symbol, Setting> bySymbol;
         private readonly Dictionary<Setting, long?> values;
+        private readonly Dictionary<SyntaxTree, Reach> reached;
         private readonly List<Setting> evaluating = [];
         private Func<SyntaxTree, Reader>? readerFor;
 
         public Settings()
-            : this([], [], [])
+            : this(ProgramSymbols.Empty, [], [], [], [])
         {
         }
 
         private Settings(
-            Dictionary<(string Module, string Name), Setting> byName, Dictionary<SyntaxTree, string> modules,
-            Dictionary<Setting, long?> values)
+            ProgramSymbols program, Dictionary<SyntaxTree, Scope> scopes, Dictionary<Symbol, Setting> bySymbol,
+            Dictionary<Setting, long?> values, Dictionary<SyntaxTree, Reach> reached)
         {
-            this.byName = byName;
-            this.modules = modules;
+            this.program = program;
+            this.scopes = scopes;
+            this.bySymbol = bySymbol;
             this.values = values;
+            this.reached = reached;
         }
+
+        /// <summary>Gets a value indicating whether the program declares any setting.</summary>
+        public bool Any => bySymbol.Count > 0;
 
         /// <summary>
         /// Reads every setting that <paramref name="trees"/> declare, together with what the build
@@ -351,11 +431,13 @@ public sealed class Configuration
             IReadOnlyList<SyntaxTree> trees, Cpu cpu, Dictionary<string, long> defines, IEnumerable<Define> set,
             List<Diagnostic> diagnostics)
         {
-            var settings = new Settings();
+            var scopes = new Dictionary<SyntaxTree, Scope>();
+            var bySymbol = new Dictionary<Symbol, Setting>();
+            var modules = new List<ProgramSymbols.Module>();
             foreach (var tree in trees)
             {
-                var module = ModuleOf(tree);
-                settings.modules[tree] = module;
+                var scope = FileScope(tree);
+                scopes[tree] = scope;
                 var exported = ExportedNames(tree);
                 foreach (var declaration in SettingsIn(tree))
                 {
@@ -368,51 +450,66 @@ public sealed class Configuration
                             Catalogue.ConfigMisplaced));
                         continue;
                     }
-                    settings.byName.TryAdd((module, name.Text), new Setting(tree, name, declaration.Value,
-                        declaration.IsExported || exported.Contains(name.Text)));
+                    var symbol = new Symbol(name.Text, SymbolKind.Constant, scope, tree, name.Span)
+                    {
+                        IsConfig = true,
+                        IsExported = declaration.IsExported || exported.Contains(name.Text),
+                    };
+                    if (scope.Declare(symbol) is null)
+                        bySymbol[symbol] = new Setting(symbol, name, declaration.Value);
                 }
+                modules.Add(new ProgramSymbols.Module(
+                    tree, scope.Module, default, scope, [.. scope.Symbols.Where(symbol => symbol.IsExported)],
+                    [.. Reexports(tree)]));
             }
+
+            // Problems with the modules themselves are the binder's to report.
+            var settings = new Settings(ProgramSymbols.Build(modules, [], []), scopes, bySymbol, [], []);
 
             // The build names a setting with the module's path, as the setting is named from
             // outside the module.
             foreach (var define in set.Where(define => define.IsSetting))
             {
                 var at = define.Name.LastIndexOf("::", StringComparison.Ordinal);
-                var key = (define.Name[..at], define.Name[(at + 2)..]);
-                if (!settings.byName.TryGetValue(key, out var setting))
+                var module = define.Name[..at];
+                if (settings.program.ModuleNamed(module)?.FileScope.FindMember(define.Name[(at + 2)..]) is not { } symbol)
                 {
                     diagnostics.Add(new Diagnostic(define.Declaration,
                         Catalogue.SettingUnknown.Message(define.Name)));
                 }
-                else if (!setting.IsExported)
+                else if (!symbol.IsExported)
                 {
                     diagnostics.Add(new Diagnostic(define.Declaration,
-                        Catalogue.SettingNotExported.Message(define.Name, key.Item1)));
+                        Catalogue.SettingNotExported.Message(define.Name, module)));
                 }
                 else
                 {
-                    setting.Given = define.Value;
+                    bySymbol[symbol].Given = define.Value;
                 }
             }
 
             var evaluator = settings.EvaluatorFor(cpu, defines, diagnostics);
             settings.readerFor = tree => new Reader(tree, evaluator, diagnostics, [], []);
-            foreach (var setting in settings.byName.Values)
+            foreach (var setting in bySymbol.Values)
                 settings.Worth(setting);
             return settings;
         }
 
         /// <summary>
         /// Returns these settings after <paramref name="before"/> was replaced by
-        /// <paramref name="after"/>. Neither version declares a setting, because otherwise the
-        /// whole program would be read again, so every value is kept.
+        /// <paramref name="after"/>. Neither version declares a setting, and both name the same
+        /// module and re-export the same names, because otherwise the whole program would be read
+        /// again. So every value is kept, and only what <paramref name="after"/> brings in is read
+        /// afresh.
         /// </summary>
         public Settings Replacing(SyntaxTree before, SyntaxTree after)
         {
-            var moved = new Dictionary<SyntaxTree, string>(modules);
+            var moved = new Dictionary<SyntaxTree, Scope>(scopes);
             moved.Remove(before);
-            moved[after] = ModuleOf(after);
-            return new Settings(byName, moved, values) { readerFor = readerFor };
+            moved[after] = FileScope(after);
+            var reach = new Dictionary<SyntaxTree, Reach>(reached);
+            reach.Remove(before);
+            return new Settings(program, moved, bySymbol, values, reach) { readerFor = readerFor };
         }
 
         /// <summary>
@@ -421,16 +518,18 @@ public sealed class Configuration
         /// <paramref name="diagnostics"/>.
         /// </summary>
         public Evaluator EvaluatorFor(Cpu cpu, Dictionary<string, long> defines, List<Diagnostic> diagnostics) =>
-            Evaluator.ForConditions(new Conditions(cpu, defines, Lookup), diagnostics);
+            Evaluator.ForConditions(
+                new Conditions(cpu, defines, (name, report) => Named(name, defines, report)), diagnostics);
 
         /// <summary>
         /// Returns the value of a name in a condition as a setting. Returns null when the name
         /// refers to no setting and nothing was reported about it, which leaves the caller to
-        /// report it as an unknown name.
+        /// read it as a define or report it as an unknown name.
         /// </summary>
-        public Value? Lookup(NameExpressionSyntax name, Action<SyntaxNode, DiagnosticMessage> report)
+        public Value? Named(
+            NameExpressionSyntax name, Dictionary<string, long> defines, Action<SyntaxNode, DiagnosticMessage> report)
         {
-            var (setting, reported) = Find(name.Tree, name, report);
+            var (setting, reported) = Find(name.Tree, name, defines, report);
             if (setting is not null)
                 return Worth(setting) is { } value ? Value.Of(value) : Value.Unknown;
             return reported ? Value.Unknown : null;
@@ -441,42 +540,49 @@ public sealed class Configuration
         /// null.
         /// </summary>
         public long? ValueOf(SyntaxTree tree, string name) =>
-            modules.TryGetValue(tree, out var module) && byName.TryGetValue((module, name), out var setting)
+            scopes.TryGetValue(tree, out var scope) && scope.FindMember(name) is { } symbol
+                && bySymbol.TryGetValue(symbol, out var setting)
                 ? values.GetValueOrDefault(setting)
                 : null;
 
         /// <summary>
         /// Finds the setting that a name in <paramref name="tree"/> refers to, and whether anything
         /// was reported about it, such as a setting that another module does not export. The
-        /// setting may be one the file's own module declares, one a <c>.use</c> brought in, or one
-        /// named with its module's path.
+        /// name is looked for as the binder looks for it. It may be a setting the file declares,
+        /// one a <c>.use</c> brought in, or one named with a module's path.
         /// </summary>
-        public (Setting? Setting, bool Reported) Find(SyntaxTree tree, NameExpressionSyntax name, Action<SyntaxNode, DiagnosticMessage> report)
+        public (Setting? Setting, bool Reported) Find(
+            SyntaxTree tree, NameExpressionSyntax name, Dictionary<string, long> defines,
+            Action<SyntaxNode, DiagnosticMessage> report)
         {
             var parts = name.Names;
-            if (parts.Length == 0 || !modules.TryGetValue(tree, out var own))
+            if (parts.Length == 0 || !scopes.TryGetValue(tree, out var own))
                 return (null, false);
 
-            Setting? found;
-            if (parts.Length == 1)
+            Resolution? place = null;
+            for (var i = 0; i < parts.Length; i++)
             {
-                if (byName.TryGetValue((own, parts[0].Text), out var local))
-                    return (local, false);
-                found = Used(tree, parts[0].Text);
+                var text = parts[i].Text;
+                place = i == 0 && name.GlobalToken is not null ? Semantics.Lookup.ModuleRoot(text, program)
+                    : i == 0 ? First(tree, own, text, last: parts.Length == 1, defines)
+                    : place!.Value.Module is { } prefix ? Semantics.Lookup.InModule(text, prefix, program)
+                    : null;
+                if (place is not { } found)
+                    return (null, false);
+
+                // A name that two `.use module::*` items bring in is ambiguous. The binder reports
+                // that, so the name has no value here and nothing more is said about it.
+                if (found.IsReported)
+                    return (null, true);
             }
-            else
-            {
-                var module = string.Join("::", parts.SkipLast(1).Select(part => part.Text));
-                found = byName.GetValueOrDefault((module, parts[^1].Text));
-            }
-            if (found is null)
+            if (place?.Symbol is not { } symbol || !bySymbol.TryGetValue(symbol, out var setting))
                 return (null, false);
-            if (!found.IsExported && found.Tree != tree)
+            if (!symbol.IsExported && symbol.Tree != tree)
             {
-                report(name, Catalogue.NotExported.Message(name.GetText().Trim(), modules[found.Tree]));
+                report(name, Catalogue.NotExported.Message(name.GetText().Trim(), symbol.Module));
                 return (null, true);
             }
-            return (found, false);
+            return (setting, false);
         }
 
         /// <summary>
@@ -504,24 +610,16 @@ public sealed class Configuration
             return values[setting] = setting.Given ?? evaluated.AsNumber();
         }
 
-        private static string ModuleOf(SyntaxTree tree)
-        {
-            foreach (var child in tree.Root.Members)
-            {
-                if (child is LineSyntax { Statement: ModuleDirectiveSyntax module })
-                    return string.Join("::", module.Name.Names.Select(part => part.Text));
-            }
-            return "";
-        }
+        /// <summary>Creates the scope that holds the settings of <paramref name="tree"/>.</summary>
+        private static Scope FileScope(SyntaxTree tree) =>
+            new(ScopeKind.File, null, null, null) { Module = ModuleSyntax.ModuleOf(tree) };
 
         /// <summary>Returns the names in a file's <c>.export</c> lists, which may include settings.</summary>
         private static HashSet<string> ExportedNames(SyntaxTree tree)
         {
             var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var child in tree.Root.Members)
+            foreach (var export in FileLevel(tree.Root).OfType<ExportDirectiveSyntax>())
             {
-                if (child is not LineSyntax { Statement: ExportDirectiveSyntax export })
-                    continue;
                 foreach (var item in export.Items)
                 {
                     if (item.Name.SimpleName is { Kind: SyntaxKind.Identifier } name)
@@ -532,58 +630,92 @@ public sealed class Configuration
         }
 
         /// <summary>
-        /// Returns the setting that a <c>.use</c> in <paramref name="tree"/> brings in as
-        /// <paramref name="name"/>. The <c>.use</c> may name the setting alone or in braces, under
-        /// its own name or an alias, or bring in everything a module exports.
+        /// Returns what the first part of a name means in <paramref name="tree"/>. The order is
+        /// the binder's, which is the file's own settings, then what a <c>.use</c> brought in, then
+        /// the defines, and then the modules and what a <c>.use module::*</c> brought in. Returns
+        /// null for a define, which the caller reads, and for a <c>.use</c> that brought in
+        /// something other than a setting.
         /// </summary>
-        private Setting? Used(SyntaxTree tree, string name)
+        private Resolution? First(SyntaxTree tree, Scope own, string text, bool last, Dictionary<string, long> defines)
         {
-            foreach (var child in tree.Root.Members)
+            if (own.FindMember(text) is { } local)
+                return new Resolution(local);
+            var reach = ReachOf(tree);
+            if (reach.Brought.TryGetValue(text, out var brought))
+                return brought.IsReported ? null : brought;
+            if (defines.ContainsKey(text))
+                return null;
+            return Semantics.Lookup.Outside(text, last, program, reach.Brought, reach.Globs);
+        }
+
+        /// <summary>
+        /// Returns what the <c>.use</c> items of <paramref name="tree"/> bring in, reading them the
+        /// first time they are asked about.
+        /// </summary>
+        private Reach ReachOf(SyntaxTree tree)
+        {
+            if (reached.TryGetValue(tree, out var known))
+                return known;
+            var brought = new Dictionary<string, Resolution>(StringComparer.Ordinal);
+            var globs = new List<ProgramSymbols.Module>();
+            foreach (var use in UsesIn(tree))
             {
-                if (child is not LineSyntax { Statement: UseDirectiveSyntax use })
-                    continue;
-                var path = use.Path.Names.Select(part => part.Text).ToList();
+                // The binder refuses an exported `*`, which brings in nothing.
                 if (use.StarToken is not null)
                 {
-                    if (byName.GetValueOrDefault((string.Join("::", path), name)) is { IsExported: true } everything)
-                        return everything;
+                    if (!use.IsExported && program.ModuleNamed(ModuleSyntax.PathOf(use.Path)) is { } module)
+                        globs.Add(module);
                     continue;
                 }
-                if (use.OpenBraceToken is not null)
-                {
-                    foreach (var item in use.Items)
-                    {
-                        var alias = (item.Alias ?? item.Name).Text;
-                        if (alias == name && byName.GetValueOrDefault((string.Join("::", path), item.Name.Text)) is { } listed)
-                            return listed;
-                    }
-                    continue;
-                }
-                if (path.Count < 2)
-                    continue;
-                var brought = use.Alias?.Text ?? path[^1];
-                if (brought == name && byName.GetValueOrDefault((string.Join("::", path.SkipLast(1)), path[^1])) is { } one)
-                    return one;
+
+                // A `.use` whose path leads to no setting still brings the name in, so that the
+                // name does not go on to mean a define or what a `*` brought in.
+                foreach (var item in ModuleSyntax.Brought(use))
+                    brought.TryAdd(item.Name, Walk(item.Path) ?? Resolution.Reported);
             }
-            return null;
+            return reached[tree] = new Reach(brought, globs);
+        }
+
+        /// <summary>
+        /// Returns where a <c>.use</c> path leads from the root of the modules, or null when it
+        /// leads nowhere. A setting has no members, so a path that goes on past one leads nowhere.
+        /// </summary>
+        private Resolution? Walk(IReadOnlyList<string> path)
+        {
+            Resolution? place = null;
+            for (var i = 0; i < path.Count && (i == 0 || place is not null); i++)
+            {
+                place = i == 0 ? Semantics.Lookup.ModuleRoot(path[i], program)
+                    : place!.Value.Module is { } prefix ? Semantics.Lookup.InModule(path[i], prefix, program)
+                    : null;
+            }
+            return place;
         }
     }
 
     /// <summary>
-    /// Represents one <c>.config</c>, with where it is declared, the value its file gives it, and
-    /// the value the build sets.
+    /// Represents one <c>.config</c>, with the symbol that stands for it while conditions are
+    /// evaluated, the value its file gives it, and the value the build sets.
     /// </summary>
-    private sealed class Setting(SyntaxTree tree, SyntaxToken name, ExpressionSyntax? expression, bool isExported)
+    private sealed class Setting(Symbol symbol, SyntaxToken name, ExpressionSyntax? expression)
     {
-        public SyntaxTree Tree { get; } = tree;
+        public Symbol Symbol { get; } = symbol;
+
+        public SyntaxTree Tree => Symbol.Tree;
 
         public SyntaxToken Name { get; } = name;
 
         public ExpressionSyntax? Expression { get; } = expression;
 
-        public bool IsExported { get; } = isExported;
-
         /// <summary>The value the build sets, which replaces the file's, or null when it sets none.</summary>
         public long? Given { get; set; }
     }
+
+    /// <summary>
+    /// Represents what the <c>.use</c> items of one file bring in, which are names and the
+    /// modules whose exports a <c>.use module::*</c> brings in.
+    /// </summary>
+    /// <param name="Brought">The names brought in one by one, and where each leads.</param>
+    /// <param name="Globs">The modules whose exports a <c>.use module::*</c> brings in.</param>
+    private sealed record Reach(Dictionary<string, Resolution> Brought, List<ProgramSymbols.Module> Globs);
 }

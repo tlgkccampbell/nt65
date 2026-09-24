@@ -111,6 +111,35 @@ public sealed class IncrementalAnalysisTests
     }
 
     /// <summary>
+    /// A condition may reach a setting through a module that re-exports it. Changing what that
+    /// module re-exports, or its name, changes what the condition means in a file that did not
+    /// change, so the whole program is analyzed again.
+    /// </summary>
+    [Fact]
+    public void ChangingAReexportOfASettingReachesConditionsElsewhere()
+    {
+        var cfg = SyntaxTree.Parse("cfg.nt65", ".module cfg\n.export .config SPEED = 3\n");
+        var hub = SyntaxTree.Parse("hub.nt65", ".module hub\n.export .use cfg::SPEED\n");
+        var main = SyntaxTree.Parse("main.nt65",
+            ".module main\n.if hub::SPEED != 3 {\n    .error \"wrong speed\"\n}\n");
+        var project = ProjectSettings.None;
+
+        var first = Compiler.Analyze([cfg, hub, main], project, Nothing);
+        Assert.Empty(first.Diagnostics);
+
+        foreach (var (find, replace) in new[] { (".export .use", ".use"), (".module hub", ".module relay") })
+        {
+            var edited = hub.WithChange(new TextChange(hub.Text.IndexOf(find, StringComparison.Ordinal), find.Length, replace));
+            var incremental = Compiler.Analyze([cfg, edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
+            var scratch = Compiler.Analyze([cfg, edited, main], project, Nothing);
+
+            Assert.Equal(WholeProgramReason.SettingPathsChanged, incremental.WholeProgram);
+            Assert.Contains(scratch.Diagnostics, found => found.Span.File == "main.nt65");
+            Assert.Equal(scratch.Problems(), incremental.Problems());
+        }
+    }
+
+    /// <summary>
     /// Changing only which registers a routine keeps is a change to its signature, so a file
     /// that calls the routine is analyzed again. Here the caller promises to keep X and relies
     /// on the routine it calls to keep it too.

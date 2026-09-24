@@ -230,8 +230,12 @@ public sealed class ProgramSymbols
         SyntaxTree Tree, string? Name, TextSpan NameSpan, Scope FileScope, IReadOnlyList<Symbol> Exported,
         IReadOnlyList<Reexport> Reexports);
 
-    /// <summary>Represents a name a module re-exports, as in <c>.export .use hw::vic::border</c>.</summary>
-    /// <param name="Name">The name under which the re-exported symbol becomes part of the module.</param>
+    /// <summary>
+    /// Represents a name a <c>.use</c> brings in, together with the path it leads to. A module's
+    /// re-exports, as in <c>.export .use hw::vic::border</c>, are the names its exported
+    /// <c>.use</c> items bring in.
+    /// </summary>
+    /// <param name="Name">The name under which the symbol is brought in, and under which a re-exported symbol becomes part of the module.</param>
     /// <param name="Path">The path the symbol was brought in from, starting at the root of the modules.</param>
     public sealed record Reexport(string Name, IReadOnlyList<string> Path);
 }

@@ -1737,7 +1737,7 @@ internal sealed partial class Binder
             return;
         foreach (var part in parts)
             CheckReservedWord(part);
-        moduleName = string.Join("::", parts.Select(part => part.Text));
+        moduleName = ModuleSyntax.PathOf(statement.Name);
         moduleNameSpan = span;
         fileScope.Module = moduleName;
     }
@@ -1756,18 +1756,8 @@ internal sealed partial class Binder
             return;
         }
         useDirectives.Add(statement);
-        if (!statement.IsExported)
-            return;
-        var path = statement.Path.Names;
-        if (path.Length == 0 || statement.StarToken is not null)
-            return;
-        if (statement.Items.Count == 0)
-        {
-            reexports.Add(new ProgramSymbols.Reexport((statement.Alias ?? path[^1]).Text, [.. path.Select(part => part.Text)]));
-            return;
-        }
-        foreach (var item in statement.Items)
-            reexports.Add(new ProgramSymbols.Reexport((item.Alias ?? item.Name).Text, [.. path.Select(part => part.Text), item.Name.Text]));
+        if (statement.IsExported)
+            reexports.AddRange(ModuleSyntax.Brought(statement));
     }
 
     /// <summary>

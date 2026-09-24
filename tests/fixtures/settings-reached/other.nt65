@@ -1,0 +1,4 @@
+; A second module with a setting of the same name as one in `hw::cfg`.
+.module other
+
+.export .config SPEED = 5

@@ -1,0 +1,5 @@
+{
+  // A condition reaches a `.config` by every way the rest of the program reaches a name.
+  "files": ["*.nt65"],
+  "defines": { "TURBO": 1, "DELAY": 1 }
+}

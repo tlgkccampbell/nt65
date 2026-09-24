@@ -315,6 +315,11 @@ public static class Compiler
             return WholeProgramReason.SegmentsDeclared;
         if (changed.Any(tree => Configuration.DeclaresSettings(tree) || Configuration.DeclaresSettings(sources[tree.Path])))
             return WholeProgramReason.SettingsDeclared;
+        if (previous.Configuration.HasSettings
+            && changed.Any(tree => !Configuration.LeadsAlike(tree, sources[tree.Path])))
+        {
+            return WholeProgramReason.SettingPathsChanged;
+        }
         if (ProgramCpu.Resolve(Current(reuse, sources), project.Cpu, []) != previous.Cpu)
             return WholeProgramReason.CpuChanged;
         return null;

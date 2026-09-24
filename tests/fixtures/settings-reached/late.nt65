@@ -1,0 +1,13 @@
+; Reaches a setting exported by a list inside a `.segment` region, and brings one in with a
+; `.use` inside one.
+.module late
+
+.segment CODE
+.use hw::cfg::{SPEED as FAST}
+
+.if hw::cfg::LATE != 7 {
+    .error "a setting exported by a list in a region has the wrong value"
+}
+.if FAST != 3 {
+    .error "a setting brought in by a `.use` in a region has the wrong value"
+}

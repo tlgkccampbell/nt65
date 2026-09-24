@@ -1,0 +1,13 @@
+; Reaches settings through a module that re-exports them.
+.module reexported
+.use hub::SPEED
+
+.if SPEED != 3 {
+    .error "a re-exported setting brought in by `.use` has the wrong value"
+}
+.if hub::SPEED != 3 {
+    .error "a re-exported setting named by its path has the wrong value"
+}
+.if hub::DELAY != 7 {
+    .error "a setting re-exported under another name has the wrong value"
+}

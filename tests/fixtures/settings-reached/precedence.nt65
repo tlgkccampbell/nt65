@@ -1,0 +1,9 @@
+; A name a `.use` brings in by name comes before one a `.use module::*` brings in, whatever
+; their order.
+.module precedence
+.use hw::cfg::*
+.use other::SPEED
+
+.if SPEED != 5 {
+    .error "a setting brought in by name should come before one brought in by `*`"
+}
