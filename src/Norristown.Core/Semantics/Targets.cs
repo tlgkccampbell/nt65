@@ -39,8 +39,7 @@ public static class Targets
             return null;
         foreach (var (low, high) in new[] { (combined.Left, combined.Right), (combined.Right, combined.Left) })
         {
-            if (Inner(low) is CallExpressionSyntax { Function: { } function } call
-                && function.Text.Equals(".loword", StringComparison.OrdinalIgnoreCase)
+            if (Inner(low) is CallExpressionSyntax { BuiltinKind: BuiltinKind.Loword } call
                 && call.Arguments.Arguments is [NameExpressionSyntax named]
                 && Of(model, named, on) is { Symbol.Signature: not null } routine
                 && model.ValueOf(high, on).AsNumber() is { } bank and >= 0 and <= 0xff0000 && (bank & 0xffff) == 0)

@@ -29,19 +29,50 @@ public static class SyntaxFacts
     /// </summary>
     public static readonly IReadOnlyList<string> KeptRegisters = ["a", "x", "y", "c"];
 
-    /// <summary>The built-in functions any expression may call.</summary>
-    public static readonly IReadOnlyList<string> BuiltinFunctions =
-    [
-        ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof",
-        ".endof", ".spanof", ".loadof", ".runof", ".strlen", ".strat", ".strsub", ".strcat", ".min", ".max", ".addrsize", ".target",
-        ".defined", ".has", ".select", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles", ".maxcycles",
-    ];
+    // The text of each built-in kind, indexed by the kind. The text of None is empty.
+    private static readonly string[] builtinTexts =
+        [.. Enum.GetValues<BuiltinKind>().Select(kind => kind == BuiltinKind.None ? "" : "." + kind.ToString().ToLowerInvariant())];
 
     /// <summary>
-    /// The four extra built-in functions available inside a macro body, which ask about the
-    /// arguments the macro was given.
+    /// Every built-in function, in the order <see cref="BuiltinKind"/> declares them, with what
+    /// each one allows. Any expression may call a function here unless it is marked as one only a
+    /// macro body may call.
     /// </summary>
-    public static readonly IReadOnlyList<string> MacroBuiltinFunctions = [".mode", ".byteof", ".exprof", ".empty"];
+    public static readonly IReadOnlyList<BuiltinFunction> Builtins =
+    [
+        new(BuiltinKind.Lobyte, Arithmetic: true),
+        new(BuiltinKind.Hibyte, Arithmetic: true),
+        new(BuiltinKind.Bankbyte, Arithmetic: true),
+        new(BuiltinKind.Loword, Arithmetic: true),
+        new(BuiltinKind.Hiword, Arithmetic: true),
+        new(BuiltinKind.Sizeof),
+        new(BuiltinKind.Countof),
+        new(BuiltinKind.Endof),
+        new(BuiltinKind.Spanof),
+        new(BuiltinKind.Loadof),
+        new(BuiltinKind.Runof),
+        new(BuiltinKind.Strlen, Arithmetic: true),
+        new(BuiltinKind.Strat, Arithmetic: true),
+        new(BuiltinKind.Strsub, Arithmetic: true),
+        new(BuiltinKind.Strcat, Arithmetic: true),
+        new(BuiltinKind.Min, Arithmetic: true),
+        new(BuiltinKind.Max, Arithmetic: true),
+        new(BuiltinKind.Addrsize),
+        new(BuiltinKind.Target),
+        new(BuiltinKind.Defined),
+        new(BuiltinKind.Has),
+        new(BuiltinKind.Select),
+        new(BuiltinKind.Sqrt, Arithmetic: true),
+        new(BuiltinKind.Muldiv, Arithmetic: true),
+        new(BuiltinKind.Sin, Arithmetic: true),
+        new(BuiltinKind.Cos, Arithmetic: true),
+        new(BuiltinKind.Mincycles),
+        new(BuiltinKind.Maxcycles),
+        new(BuiltinKind.Mode, MacroOnly: true),
+        new(BuiltinKind.Byteof, MacroOnly: true),
+        new(BuiltinKind.Exprof, MacroOnly: true),
+        new(BuiltinKind.Empty, MacroOnly: true),
+    ];
 
     /// <summary>
     /// The CPU names, lower case, in the order nt65 lists them. Which processors exist is not
@@ -59,6 +90,9 @@ public static class SyntaxFacts
 
     private static readonly FrozenDictionary<string, MnemonicKind> mnemonicKinds =
         Mnemonics.ToFrozenDictionary(TextOf, StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenDictionary<string, BuiltinKind> builtinKinds =
+        Builtins.ToFrozenDictionary(builtin => builtin.Name, builtin => builtin.Kind, StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> registerSet = Registers.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
@@ -142,9 +176,6 @@ public static class SyntaxFacts
         [".belong"] = 3,
         [".bedword"] = 4,
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-
-    private static readonly FrozenSet<string> builtinFunctions =
-        BuiltinFunctions.Concat(MacroBuiltinFunctions).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     // The processor-state items, grouped by the suffix that follows the name. A point item
     // stands alone. The suffix `*` keeps a part of the state unchanged, `?` forgets it, and `=`
@@ -251,8 +282,25 @@ public static class SyntaxFacts
     public static int? ElementSize(string directive) =>
         elementTypes.TryGetValue(directive, out var size) ? size : null;
 
-    /// <summary>Checks whether <paramref name="directive"/> names a built-in function.</summary>
-    public static bool IsBuiltinFunction(string directive) => builtinFunctions.Contains(directive);
+    /// <summary>Checks whether <paramref name="directive"/> names a built-in function, in any letter case.</summary>
+    public static bool IsBuiltinFunction(ReadOnlySpan<char> directive) => BuiltinKindOf(directive) != BuiltinKind.None;
+
+    /// <summary>
+    /// Returns the built-in function <paramref name="text"/> names, in any letter case, or
+    /// <see cref="BuiltinKind.None"/>.
+    /// </summary>
+    public static BuiltinKind BuiltinKindOf(ReadOnlySpan<char> text) =>
+        builtinKinds.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(text, out var kind) ? kind : BuiltinKind.None;
+
+    /// <summary>
+    /// Returns the name of <paramref name="kind"/> as it is spelled in source, such as
+    /// <c>.sizeof</c>, or an empty string for <see cref="BuiltinKind.None"/>.
+    /// </summary>
+    public static string TextOf(BuiltinKind kind) => builtinTexts[(int)kind];
+
+    /// <summary>Returns the row of <see cref="Builtins"/> that describes <paramref name="kind"/>.</summary>
+    public static BuiltinFunction Builtin(BuiltinKind kind) =>
+        kind == BuiltinKind.None ? throw new ArgumentOutOfRangeException(nameof(kind)) : Builtins[(int)kind - 1];
 
     /// <summary>
     /// Checks whether <paramref name="text"/> is a level a ca65 <c>.assert</c> reports at. An nt65

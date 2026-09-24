@@ -474,7 +474,7 @@ public sealed class Emitter
         return new[] { model.Tree.Root }.Concat(bodies)
             .SelectMany(node => node.DescendantNodes().OfType<CallExpressionSyntax>())
             .Select(call => SegmentFunctions.Of(call, model))
-            .OfType<(string Function, Segment Segment)>()
+            .OfType<(BuiltinKind Function, Segment Segment)>()
             .Select(about => (SegmentFunctions.LinkerName(about.Function, about.Segment), SegmentFunctions.SizeOf()))
             .Distinct()
             .OrderBy(import => import.Item1, StringComparer.Ordinal);

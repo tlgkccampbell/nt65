@@ -66,8 +66,7 @@ internal sealed partial class Evaluator
             // `.spanof` is the difference of two addresses, which is a number, so it adds no
             // width. `.endof` needs no case, because it is an address as wide as the symbol it
             // measures, which walking its argument finds.
-            if (node is CallExpressionSyntax { Function: { } function }
-                && function.Text.Equals(".spanof", StringComparison.OrdinalIgnoreCase))
+            if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Spanof })
             {
                 return;
             }

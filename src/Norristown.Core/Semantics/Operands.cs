@@ -100,9 +100,7 @@ public static class Operands
     }
 
     /// <summary>Returns a value indicating whether <paramref name="call"/> calls <c>.exprof</c>.</summary>
-    public static bool IsExprOf(CallExpressionSyntax call) =>
-        call.Function is { } function
-        && function.Text.Equals(".exprof", StringComparison.OrdinalIgnoreCase);
+    public static bool IsExprOf(CallExpressionSyntax call) => call.BuiltinKind == BuiltinKind.Exprof;
 
     /// <summary>
     /// Returns the operand's addressing mode in the form <c>.mode(p)</c> returns. An argument
@@ -125,9 +123,7 @@ public static class Operands
         register is { } token && token.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Returns a value indicating whether <paramref name="call"/> calls <c>.byteof</c>.</summary>
-    public static bool IsByteOf(CallExpressionSyntax call) =>
-        call.Function is { } function
-        && function.Text.Equals(".byteof", StringComparison.OrdinalIgnoreCase);
+    public static bool IsByteOf(CallExpressionSyntax call) => call.BuiltinKind == BuiltinKind.Byteof;
 
     /// <summary>
     /// Returns the operand parameter <paramref name="name"/> refers to, and the operand it was

@@ -17,7 +17,7 @@ public static class SegmentFunctions
     /// <c>.runof</c>, which take a segment and nothing else.
     /// </summary>
     public static bool TakesOnlyASegment(CallExpressionSyntax call) =>
-        FunctionOf(call) is ".loadof" or ".runof";
+        call.BuiltinKind is BuiltinKind.Loadof or BuiltinKind.Runof;
 
     /// <summary>
     /// Returns the segment name given as <paramref name="call"/>'s only argument, or null when
@@ -34,14 +34,14 @@ public static class SegmentFunctions
     /// or null for any other call.
     /// </summary>
     public static string? Runs(CallExpressionSyntax call) =>
-        FunctionOf(call) == ".runof" ? NameIn(call)?.Text : null;
+        call.BuiltinKind == BuiltinKind.Runof ? NameIn(call)?.Text : null;
 
     /// <summary>
     /// Returns the function <paramref name="call"/> applies and the segment it asks about. Returns
     /// null when the call is not one of the three functions or names no declared segment.
     /// <c>.spanof</c> of a name that is also a symbol measures the symbol instead.
     /// </summary>
-    public static (string Function, Segment Segment)? Of(CallExpressionSyntax call, SemanticModel model) =>
+    public static (BuiltinKind Function, Segment Segment)? Of(CallExpressionSyntax call, SemanticModel model) =>
         Of(call, model.Segments, name => model.SymbolOf(name) is not null);
 
     /// <summary>
@@ -51,16 +51,16 @@ public static class SegmentFunctions
     /// declared segment. <c>.spanof</c> of a name that is also a symbol measures the symbol
     /// instead.
     /// </summary>
-    public static (string Function, Segment Segment)? Of(
+    public static (BuiltinKind Function, Segment Segment)? Of(
         CallExpressionSyntax call, SegmentTable segments, Func<NameExpressionSyntax, bool> isSymbol)
     {
-        if (FunctionOf(call) is not (".loadof" or ".runof" or ".spanof") || NameIn(call) is not { } name
+        var function = call.BuiltinKind;
+        if (function is not (BuiltinKind.Loadof or BuiltinKind.Runof or BuiltinKind.Spanof) || NameIn(call) is not { } name
             || segments.Find(name.Text) is not { } segment)
         {
             return null;
         }
-        var function = FunctionOf(call)!;
-        if (function == ".spanof" && isSymbol((NameExpressionSyntax)call.Arguments.Arguments[0]))
+        if (function == BuiltinKind.Spanof && isSymbol((NameExpressionSyntax)call.Arguments.Arguments[0]))
             return null;
         return (function, segment);
     }
@@ -69,8 +69,8 @@ public static class SegmentFunctions
     /// Returns the name ld65 defines for what <paramref name="function"/> asks of
     /// <paramref name="segment"/>.
     /// </summary>
-    public static string LinkerName(string function, Segment segment) =>
-        $"__{segment.Name}_{function switch { ".loadof" => "LOAD", ".runof" => "RUN", _ => "SIZE" }}__";
+    public static string LinkerName(BuiltinKind function, Segment segment) =>
+        $"__{segment.Name}_{function switch { BuiltinKind.Loadof => "LOAD", BuiltinKind.Runof => "RUN", _ => "SIZE" }}__";
 
     /// <summary>
     /// Returns the address size of the three functions' results, which is absolute because ld65
@@ -78,7 +78,4 @@ public static class SegmentFunctions
     /// therefore use <c>f:</c>.
     /// </summary>
     public static AddressSize SizeOf() => AddressSize.Absolute;
-
-    private static string? FunctionOf(CallExpressionSyntax call) =>
-        call.Function is { Kind: SyntaxKind.Directive } function ? function.Text.ToLowerInvariant() : null;
 }

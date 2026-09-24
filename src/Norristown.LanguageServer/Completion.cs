@@ -292,7 +292,7 @@ internal static class Completion
             return null;
         if (left.Kind == SyntaxKind.CloseParen && before is [.., (SyntaxKind.Directive, var mode, _), (SyntaxKind.OpenParen, _, _),
                 (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic, var name, _), _, _]
-            && mode.Equals(".mode", StringComparison.OrdinalIgnoreCase))
+            && SyntaxFacts.BuiltinKindOf(mode) == BuiltinKind.Mode)
         {
             return model.GetSymbolInfo(line.Caret, [name]).Symbol is { Parameter: { Kind: ParameterKind.Operand } operand }
                 ? (operand.Name, operand.Accepts, true)
@@ -715,11 +715,8 @@ internal static class Completion
         AddWord("'", "a character", items);
         AddInScope(model, line.Caret, items, symbol => symbol.Kind is not (SymbolKind.Macro or SymbolKind.SignatureSet));
         AddModules(program, "", items);
-        var builtins = line.InMacro
-            ? SyntaxFacts.BuiltinFunctions.Concat(SyntaxFacts.MacroBuiltinFunctions)
-            : SyntaxFacts.BuiltinFunctions;
-        foreach (var builtin in builtins)
-            items.TryAdd(builtin, new Suggestion(Protocol.CompletionItemKind.Function, "built-in function", builtin + "("));
+        foreach (var builtin in SyntaxFacts.Builtins.Where(builtin => line.InMacro || !builtin.MacroOnly))
+            items.TryAdd(builtin.Name, new Suggestion(Protocol.CompletionItemKind.Function, "built-in function", builtin.Name + "("));
     }
 
     /// <summary>

@@ -482,8 +482,7 @@ internal sealed partial class Evaluator
                 return BytesIn(parenthesized.Expression);
             case CallExpressionSyntax when SelectArguments(operand) is not null:
                 return ChosenBy(operand) is { } chosen ? BytesIn(chosen) : null;
-            case CallExpressionSyntax { Function: { } function }
-                when function.Text.ToLowerInvariant() is ".strsub" or ".strcat":
+            case CallExpressionSyntax { BuiltinKind: BuiltinKind.Strsub or BuiltinKind.Strcat }:
             case CallExpressionSyntax { Callee: { } callee } when SymbolOf(callee) is { Kind: SymbolKind.Func }:
             case NameExpressionSyntax name when SymbolOf(name) is { Kind: SymbolKind.MacroParameter or SymbolKind.Binding }:
                 return Evaluate(operand) is { Kind: ValueKind.String, Text: { } text } && text.All(c => c <= 0xff)

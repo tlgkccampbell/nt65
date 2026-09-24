@@ -372,8 +372,7 @@ internal sealed class Requirements
     {
         for (var node = name.Parent; node is not null && node != statement; node = node.Parent)
         {
-            if (node is CallExpressionSyntax { Function: { } function }
-                && function.Text.ToLowerInvariant() is ".sizeof" or ".endof" or ".spanof")
+            if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Sizeof or BuiltinKind.Endof or BuiltinKind.Spanof })
             {
                 return true;
             }

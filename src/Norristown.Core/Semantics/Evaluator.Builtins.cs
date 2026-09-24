@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -19,15 +20,13 @@ internal sealed partial class Evaluator
     /// a <c>.select</c> call.
     /// </summary>
     internal static IReadOnlyList<SyntaxNode>? SelectArguments(SyntaxNode node) =>
-        node is CallExpressionSyntax { Function: { Kind: SyntaxKind.Directive } function } call
-            && function.Text.Equals(".select", StringComparison.OrdinalIgnoreCase)
-            ? call.Arguments.Arguments
-            : null;
+        node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Select } call ? call.Arguments.Arguments : null;
 
-    /// <summary>Determines whether a built-in is one that the configuration alone can evaluate.</summary>
-    private static bool Answerable(string name) => name is ".lobyte" or ".hibyte" or ".bankbyte"
-        or ".loword" or ".hiword" or ".min" or ".max" or ".strlen" or ".strat" or ".strsub" or ".strcat"
-        or ".sqrt" or ".muldiv" or ".sin" or ".cos";
+    /// <summary>
+    /// Determines whether a built-in is one that the configuration alone can evaluate, which
+    /// <see cref="BuiltinFunction.Arithmetic"/> records.
+    /// </summary>
+    private static bool Answerable(BuiltinKind kind) => kind != BuiltinKind.None && SyntaxFacts.Builtin(kind).Arithmetic;
 
     /// <summary>
     /// Determines whether a symbol has bytes of its own in the output, which are what
@@ -58,181 +57,210 @@ internal sealed partial class Evaluator
         if (call.Function is not { Kind: SyntaxKind.Directive } function)
             return Value.Unknown;
 
-        var name = function.Text.ToLowerInvariant();
-        var arguments = given;
-
-        if (name == ".select")
-            return Select(function, arguments);
-
-        // `.mode` and `.empty`, which only a macro body uses, ask about an argument rather than
-        // a value, so each reads what the parameter was given rather than evaluating it.
-        if (name is ".mode" or ".empty")
+        var kind = call.BuiltinKind;
+        switch (kind)
         {
-            if (arguments.Count != 1 || names.Argument(arguments[0]) is not { } about)
-                return Value.Unknown;
-            return name == ".mode"
-                ? about.Operand is { } operand ? Value.Word(Operands.ModeOf(operand)) : Value.Unknown
-                : Value.Of(about.Block is null || Macros.LinesOf(about.Block).Count == 0);
+            case BuiltinKind.Select:
+                return Select(function, given);
+            case BuiltinKind.Mode or BuiltinKind.Empty:
+                return AboutAnArgument(kind, given);
+            case BuiltinKind.Loadof or BuiltinKind.Runof:
+                return Linked(kind, function, given);
+            case BuiltinKind.Endof or BuiltinKind.Spanof:
+                return Extent(kind, given);
+            case BuiltinKind.Mincycles or BuiltinKind.Maxcycles:
+                return Cycles(kind, function, given);
+            case BuiltinKind.Sizeof or BuiltinKind.Countof:
+                return Measured(kind, given);
+            case BuiltinKind.Exprof:
+                return ExprOf(call, function, given);
+
+            // `.addrsize` asks about the shape of its argument rather than its value.
+            case BuiltinKind.Addrsize:
+                return given.Count == 1 && SizeOf(given[0], null) is { } size ? Value.Of((long)size) : Value.Unknown;
+
+            // A condition in an expansion asks about the CPU in the same way the build's
+            // conditions do.
+            case BuiltinKind.Target or BuiltinKind.Has when configuration is not null:
+                return Configuration.AboutTheCpu(kind, function, given, configuration.Cpu,
+                    (_, message) => Report(function, message));
+
+            // `.target`, `.has`, `.defined` and the three built-ins only a macro body uses
+            // (`.mode`, `.empty`, `.exprof`) are handled before this point, each by the pass that
+            // knows what they ask about.
+            default:
+                return Plain(kind, function, given);
         }
+    }
 
-        // Where a segment is loaded and where it runs are known only to the linker.
-        if (name is ".loadof" or ".runof")
+    /// <summary>
+    /// Returns the value of <c>.mode</c> or <c>.empty</c>, which only a macro body uses. Each asks
+    /// about an argument rather than a value, so each reads what the parameter was given rather
+    /// than evaluating it.
+    /// </summary>
+    private Value AboutAnArgument(BuiltinKind kind, IReadOnlyList<SyntaxNode> arguments)
+    {
+        if (arguments.Count != 1 || names.Argument(arguments[0]) is not { } about)
+            return Value.Unknown;
+        return kind == BuiltinKind.Mode
+            ? about.Operand is { } operand ? Value.Word(Operands.ModeOf(operand)) : Value.Unknown
+            : Value.Of(about.Block is null || Macros.LinesOf(about.Block).Count == 0);
+    }
+
+    /// <summary>
+    /// Returns the value of <c>.loadof</c> or <c>.runof</c>, which is never known here, because
+    /// where a segment is loaded and where it runs are known only to the linker.
+    /// </summary>
+    private Value Linked(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
+    {
+        if (arguments.Count != 1)
+            Report(function, Catalogue.BuiltinArguments.Message(SyntaxFacts.TextOf(kind), "a segment"));
+        return Value.Unknown;
+    }
+
+    /// <summary>
+    /// Returns the value of <c>.endof</c> or <c>.spanof</c>. They describe layout rather than
+    /// shape, and are address expressions like any label difference. Only the difference can ever
+    /// be a number, because nt65 never knows an absolute address, and only a caller that has laid
+    /// out the file can supply it.
+    /// </summary>
+    private Value Extent(BuiltinKind kind, IReadOnlyList<SyntaxNode> arguments)
+    {
+        var name = SyntaxFacts.TextOf(kind);
+        if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } laid)
+            return Value.Unknown;
+        if (NotAnExtent(laid, name, arguments[0]))
+            return Value.Unknown;
+        if (!HasBytesOfItsOwn(laid))
         {
-            if (arguments.Count != 1)
-                Report(function, Catalogue.BuiltinArguments.Message(name, "a segment"));
+            Report(arguments[0], Catalogue.NothingToMeasure.Message(laid.Name, laid.KindPhrase, name));
             return Value.Unknown;
         }
+        return kind == BuiltinKind.Spanof && spans?.Invoke(laid) is { } span ? Value.Of(span) : Value.Unknown;
+    }
 
-        // `.endof` and `.spanof` describe layout rather than shape. They are address
-        // expressions like any label difference. Only the difference can ever be a number,
-        // because nt65 never knows an absolute address, and only a caller that has laid out the
-        // file can supply it.
-        if (name is ".endof" or ".spanof")
+    /// <summary>
+    /// Returns the value of <c>.mincycles</c> or <c>.maxcycles</c>, which is what one pass over a
+    /// span of code costs. Both ends are positions in one routine, and only a caller that has
+    /// laid out the file can count what lies between them.
+    /// </summary>
+    private Value Cycles(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
+    {
+        var name = SyntaxFacts.TextOf(kind);
+        if (arguments.Count != 2)
         {
-            if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } laid)
-                return Value.Unknown;
-            if (NotAnExtent(laid, name, arguments[0]))
-                return Value.Unknown;
-            if (!HasBytesOfItsOwn(laid))
-            {
-                Report(arguments[0], Catalogue.NothingToMeasure.Message(laid.Name, laid.KindPhrase, name));
-                return Value.Unknown;
-            }
-            return name == ".spanof" && spans?.Invoke(laid) is { } span ? Value.Of(span) : Value.Unknown;
-        }
-
-        // `.mincycles` and `.maxcycles` return what one pass over a span of code costs. Both
-        // ends are positions in one routine, and only a caller that has laid out the file can
-        // count what lies between them.
-        if (name is ".mincycles" or ".maxcycles")
-        {
-            if (arguments.Count != 2)
-            {
-                Report(function, Catalogue.BuiltinArguments.Message(name, $"`{name}(from, to)`"));
-                return Value.Unknown;
-            }
-            if (SymbolOf(arguments[0]) is not { } start || SymbolOf(arguments[1]) is not { } end)
-                return Value.Unknown;
-            foreach (var (at, symbol) in new[] { (arguments[0], start), (arguments[1], end) })
-            {
-                if (symbol.Kind is not (SymbolKind.Label or SymbolKind.Proc))
-                {
-                    Report(at, Catalogue.CyclesNeedsAPosition.Message(symbol.DisplayName, symbol.KindPhrase));
-                    return Value.Unknown;
-                }
-            }
-            if (cycles?.Invoke(start, end, name == ".maxcycles") is not { } counted)
-                return Value.Unknown;
-            if (counted.Problem is { } problem)
-            {
-                Report(function, Catalogue.CyclesSpanHasNoBound.Message(name, problem));
-                return Value.Unknown;
-            }
-            return counted.Value is { } number ? Value.Of(number) : Value.Unknown;
-        }
-
-        if (name is ".sizeof" or ".countof")
-        {
-            if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } measured)
-                return Value.Unknown;
-
-            // `.countof(p)` of a `list` parameter is the number of arguments the call gave it.
-            if (name == ".countof" && names.Argument(arguments[0]) is { Parameter.Kind: ParameterKind.List } listed)
-                return Value.Of(listed.Items.Count);
-            if (NotAnExtent(measured, name, arguments[0]))
-                return Value.Unknown;
-
-            // An enum counts its members.
-            if (name == ".countof" && measured.Kind == SymbolKind.Enum)
-                return Value.Of(measured.Body?.Symbols.Count(member => member.Kind == SymbolKind.Constant) ?? 0);
-
-            // A routine and mixed data are measured in bytes, not elements. How many bytes a
-            // routine takes is a matter of layout, which only a caller that has laid out the
-            // file knows.
-            var bytesOnly = measured.Kind == SymbolKind.Proc || measured is { Kind: SymbolKind.Data, Data: null };
-            if (name == ".countof" && bytesOnly)
-            {
-                Report(arguments[0], Catalogue.CountofHasNoElements.Message(
-                    measured.Name, (measured.Kind == SymbolKind.Proc ? "a routine" : "mixed data"), measured.Name));
-                return Value.Unknown;
-            }
-            if (measured.Kind == SymbolKind.Proc)
-                return spans?.Invoke(measured) is { } body ? Value.Of(body) : Value.Unknown;
-
-            EnsureEvaluated(measured);
-            var room = name == ".sizeof" ? measured.Size : measured.Count;
-            if (room is null && measured is { Kind: SymbolKind.Data, Data: null })
-            {
-                Report(arguments[0], Expands(measured)
-                    ? Catalogue.SizeofDependsOnExpansion.Message(measured.Name, measured.Name)
-                    : Catalogue.SizeofDependsOnAlignment.Message(measured.Name, measured.Name));
-            }
-            return room is { } number ? Value.Of(number) : Value.Unknown;
-        }
-
-        // `.exprof(p)` is the expression inside the operand that the call passed as `p`, such
-        // as `5` for `{#5}` or `ptr` for `{(ptr),y}`. It lets a body put an operand's value in
-        // data.
-        if (name == ".exprof")
-        {
-            if (names.ExprOf(call) is { } inner)
-                return Evaluate(inner);
-
-            // Outside an expansion the parameter has been given no operand yet, which is not an
-            // error.
-            if (arguments.Count != 1 || names.Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
-                Report(function, Catalogue.BuiltinArguments.Message(".exprof", "an `operand` parameter"));
+            Report(function, Catalogue.BuiltinArguments.Message(name, $"`{name}(from, to)`"));
             return Value.Unknown;
         }
-
-        // `.addrsize` asks about the shape of its argument rather than its value.
-        if (name == ".addrsize")
+        if (SymbolOf(arguments[0]) is not { } start || SymbolOf(arguments[1]) is not { } end)
+            return Value.Unknown;
+        foreach (var (at, symbol) in new[] { (arguments[0], start), (arguments[1], end) })
         {
-            return arguments.Count == 1 && SizeOf(arguments[0], null) is { } size
-                ? Value.Of((long)size)
-                : Value.Unknown;
+            if (symbol.Kind is not (SymbolKind.Label or SymbolKind.Proc))
+            {
+                Report(at, Catalogue.CyclesNeedsAPosition.Message(symbol.DisplayName, symbol.KindPhrase));
+                return Value.Unknown;
+            }
         }
-
-        // A condition in an expansion asks about the CPU in the same way the build's
-        // conditions do.
-        if (configuration is not null
-            && Configuration.AboutTheCpu(name, function, arguments, configuration.Cpu,
-                (_, message) => Report(function, message)) is { } answer)
+        if (cycles?.Invoke(start, end, kind == BuiltinKind.Maxcycles) is not { } counted)
+            return Value.Unknown;
+        if (counted.Problem is { } problem)
         {
-            return answer;
+            Report(function, Catalogue.CyclesSpanHasNoBound.Message(name, problem));
+            return Value.Unknown;
         }
+        return counted.Value is { } number ? Value.Of(number) : Value.Unknown;
+    }
 
-        // `.target`, `.has`, `.defined` and the three built-ins only a macro body uses
-        // (`.mode`, `.empty`, `.exprof`) are handled before this point, each by the pass that
-        // knows what they ask about.
-        return Plain(name, function, arguments);
+    /// <summary>
+    /// Returns the value of <c>.sizeof</c> or <c>.countof</c>, which measure a declaration's shape.
+    /// </summary>
+    private Value Measured(BuiltinKind kind, IReadOnlyList<SyntaxNode> arguments)
+    {
+        var name = SyntaxFacts.TextOf(kind);
+        if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } measured)
+            return Value.Unknown;
+
+        // `.countof(p)` of a `list` parameter is the number of arguments the call gave it.
+        if (kind == BuiltinKind.Countof && names.Argument(arguments[0]) is { Parameter.Kind: ParameterKind.List } listed)
+            return Value.Of(listed.Items.Count);
+        if (NotAnExtent(measured, name, arguments[0]))
+            return Value.Unknown;
+
+        // An enum counts its members.
+        if (kind == BuiltinKind.Countof && measured.Kind == SymbolKind.Enum)
+            return Value.Of(measured.Body?.Symbols.Count(member => member.Kind == SymbolKind.Constant) ?? 0);
+
+        // A routine and mixed data are measured in bytes, not elements. How many bytes a
+        // routine takes is a matter of layout, which only a caller that has laid out the
+        // file knows.
+        var bytesOnly = measured.Kind == SymbolKind.Proc || measured is { Kind: SymbolKind.Data, Data: null };
+        if (kind == BuiltinKind.Countof && bytesOnly)
+        {
+            Report(arguments[0], Catalogue.CountofHasNoElements.Message(
+                measured.Name, (measured.Kind == SymbolKind.Proc ? "a routine" : "mixed data"), measured.Name));
+            return Value.Unknown;
+        }
+        if (measured.Kind == SymbolKind.Proc)
+            return spans?.Invoke(measured) is { } body ? Value.Of(body) : Value.Unknown;
+
+        EnsureEvaluated(measured);
+        var room = kind == BuiltinKind.Sizeof ? measured.Size : measured.Count;
+        if (room is null && measured is { Kind: SymbolKind.Data, Data: null })
+        {
+            Report(arguments[0], Expands(measured)
+                ? Catalogue.SizeofDependsOnExpansion.Message(measured.Name, measured.Name)
+                : Catalogue.SizeofDependsOnAlignment.Message(measured.Name, measured.Name));
+        }
+        return room is { } number ? Value.Of(number) : Value.Unknown;
+    }
+
+    /// <summary>
+    /// Returns the value of <c>.exprof(p)</c>, the expression inside the operand that the call
+    /// passed as <c>p</c>, such as <c>5</c> for <c>{#5}</c> or <c>ptr</c> for <c>{(ptr),y}</c>. It
+    /// lets a body put an operand's value in data.
+    /// </summary>
+    private Value ExprOf(CallExpressionSyntax call, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
+    {
+        if (names.ExprOf(call) is { } inner)
+            return Evaluate(inner);
+
+        // Outside an expansion the parameter has been given no operand yet, which is not an
+        // error.
+        if (arguments.Count != 1 || names.Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
+            Report(function, Catalogue.BuiltinArguments.Message(SyntaxFacts.TextOf(BuiltinKind.Exprof), "an `operand` parameter"));
+        return Value.Unknown;
     }
 
     /// <summary>
     /// Evaluates the built-in functions that are arithmetic on their arguments and ask nothing
-    /// about the program. These are the ones a build's conditions may also call.
+    /// about the program. These are the ones a build's conditions may also call, which
+    /// <see cref="BuiltinFunction.Arithmetic"/> records. Any other built-in that reaches here has
+    /// no value, though its arguments are still evaluated.
     /// </summary>
-    private Value Plain(string name, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
+    private Value Plain(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
     {
         var values = arguments.Select(Evaluate).ToArray();
-        if (name is ".sqrt" or ".muldiv" or ".sin" or ".cos")
-            return Worked(name, function, values);
-        if (name is ".strsub" or ".strcat")
-            return Built(name, function, arguments, values);
-        return name switch
+        return kind switch
         {
-            ".lobyte" => Number1(values, v => v & 0xff),
-            ".hibyte" => Number1(values, v => (v >> 8) & 0xff),
-            ".bankbyte" => Number1(values, v => (v >> 16) & 0xff),
-            ".loword" => Number1(values, v => v & 0xffff),
-            ".hiword" => Number1(values, v => (v >> 16) & 0xffff),
-            ".min" => Number2(values, Math.Min),
-            ".max" => Number2(values, Math.Max),
-            ".strlen" => values is [{ Kind: ValueKind.String, Text: { } s }] ? Value.Of(s.Length) : Value.Unknown,
-            ".strat" => values is [{ Kind: ValueKind.String, Text: { } t }, { Kind: ValueKind.Number } at]
+            BuiltinKind.Sqrt or BuiltinKind.Muldiv or BuiltinKind.Sin or BuiltinKind.Cos => Worked(kind, function, values),
+            BuiltinKind.Strsub or BuiltinKind.Strcat => Built(kind, function, arguments, values),
+            BuiltinKind.Lobyte => Number1(values, v => v & 0xff),
+            BuiltinKind.Hibyte => Number1(values, v => (v >> 8) & 0xff),
+            BuiltinKind.Bankbyte => Number1(values, v => (v >> 16) & 0xff),
+            BuiltinKind.Loword => Number1(values, v => v & 0xffff),
+            BuiltinKind.Hiword => Number1(values, v => (v >> 16) & 0xffff),
+            BuiltinKind.Min => Number2(values, Math.Min),
+            BuiltinKind.Max => Number2(values, Math.Max),
+            BuiltinKind.Strlen => values is [{ Kind: ValueKind.String, Text: { } s }] ? Value.Of(s.Length) : Value.Unknown,
+            BuiltinKind.Strat => values is [{ Kind: ValueKind.String, Text: { } t }, { Kind: ValueKind.Number } at]
                 && at.Number >= 0 && at.Number < t.Length
                 ? Value.Of(t[(int)at.Number])
                 : Value.Unknown,
+
+            // Every arithmetic built-in has a case above, so a build's condition never calls one
+            // that has no value here.
+            _ when Answerable(kind) => throw new UnreachableException($"`{SyntaxFacts.TextOf(kind)}` has no arithmetic."),
             _ => Value.Unknown,
         };
     }
@@ -245,9 +273,10 @@ internal sealed partial class Evaluator
     /// the result unknown, as happens when a function's body is read before it is given any
     /// arguments.
     /// </summary>
-    private Value Built(string name, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments, Value[] values)
+    private Value Built(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments, Value[] values)
     {
-        if (name == ".strsub")
+        var name = SyntaxFacts.TextOf(kind);
+        if (kind == BuiltinKind.Strsub)
         {
             if (values.Length != 3 || values[0].Kind is ValueKind.Number or ValueKind.Word
                 || values[1].Kind is ValueKind.String or ValueKind.Word
@@ -310,19 +339,20 @@ internal sealed partial class Evaluator
     /// Each takes whole numbers and returns a whole number. Each reports arguments it cannot
     /// compute a result for, rather than silently giving no value.
     /// </summary>
-    private Value Worked(string name, SyntaxToken function, Value[] values)
+    private Value Worked(BuiltinKind kind, SyntaxToken function, Value[] values)
     {
+        var name = SyntaxFacts.TextOf(kind);
         if (values.Any(value => value.Kind != ValueKind.Number))
             return Value.Unknown;
         long? worked;
-        switch (name)
+        switch (kind)
         {
-            case ".sqrt" when values is [var n]:
+            case BuiltinKind.Sqrt when values is [var n]:
                 worked = IntegerMath.Sqrt(n.Number);
                 if (worked is null)
                     Report(function, Catalogue.SqrtOfANegative.Message(n.Number));
                 break;
-            case ".muldiv" when values is [var a, var b, var c]:
+            case BuiltinKind.Muldiv when values is [var a, var b, var c]:
                 if (c.Number == 0)
                 {
                     Report(function, Catalogue.DivisionByZero);
@@ -332,21 +362,21 @@ internal sealed partial class Evaluator
                 if (worked is null)
                     Report(function, Catalogue.ArithmeticOverflow.Message($"`{name}`"));
                 break;
-            case ".sin" or ".cos" when values is [var angle, var turn, var scale]:
+            case BuiltinKind.Sin or BuiltinKind.Cos when values is [var angle, var turn, var scale]:
                 if (!IntegerMath.InRange(turn.Number, scale.Number))
                 {
                     Report(function, Catalogue.TurnOrScaleOutOfRange.Message(name, IntegerMath.Limit));
                     return Value.Unknown;
                 }
-                worked = name == ".sin"
+                worked = kind == BuiltinKind.Sin
                     ? IntegerMath.Sin(angle.Number, turn.Number, scale.Number)
                     : IntegerMath.Cos(angle.Number, turn.Number, scale.Number);
                 break;
             default:
-                Report(function, Catalogue.BuiltinArguments.Message(name, name switch
+                Report(function, Catalogue.BuiltinArguments.Message(name, kind switch
                 {
-                    ".sqrt" => "one number",
-                    ".muldiv" => "`.muldiv(a, b, c)`",
+                    BuiltinKind.Sqrt => "one number",
+                    BuiltinKind.Muldiv => "`.muldiv(a, b, c)`",
                     _ => $"`{name}(angle, turn, scale)`",
                 }));
                 return Value.Unknown;
@@ -386,25 +416,22 @@ internal sealed partial class Evaluator
             return Value.Unknown;
         }
 
-        var name = function.Text.ToLowerInvariant();
+        var kind = call.BuiltinKind;
 
         // `.defined` asks whether a name is a define, so the name is not looked up at all, and
         // a name that is not a define is the answer rather than a mistake.
-        if (name == ".defined")
+        if (kind == BuiltinKind.Defined)
         {
             return given is [NameExpressionSyntax { SimpleName: { } about }]
                 ? Value.Of(asked.Defines.ContainsKey(about.Text))
                 : Value.Unknown;
         }
 
-        if (Configuration.AboutTheCpu(name, function, given, asked.Cpu, (_, message) => Report(function, message))
-            is { } answer)
-        {
-            return answer;
-        }
+        if (kind is BuiltinKind.Target or BuiltinKind.Has)
+            return Configuration.AboutTheCpu(kind, function, given, asked.Cpu, (_, message) => Report(function, message));
 
         // Only the value the condition chooses is read, so it alone has to be a define.
-        if (name == ".select")
+        if (kind == BuiltinKind.Select)
         {
             if (given.Count != 3)
             {
@@ -416,12 +443,12 @@ internal sealed partial class Evaluator
 
         // What the function asks about is checked before its arguments are read, so a
         // `.sizeof(Point)` is one mistake, not that plus a `Point` that is not a define.
-        if (!Answerable(name))
+        if (!Answerable(kind))
         {
             Report(function, Catalogue.ConditionAsksAboutTheProgram.Message(function.Text));
             return Value.Unknown;
         }
-        return Plain(name, function, given);
+        return Plain(kind, function, given);
     }
 
     /// <summary>

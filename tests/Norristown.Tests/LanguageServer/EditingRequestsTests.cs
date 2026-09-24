@@ -1,4 +1,5 @@
 using Norristown.LanguageServer.Protocol;
+using Norristown.Syntax;
 
 namespace Norristown.Tests.LanguageServer;
 
@@ -215,6 +216,27 @@ public sealed class EditingRequestsTests
         var labels = items.Select(item => item.Label).ToHashSet();
         Assert.All(offered, label => Assert.Contains(label, labels));
         Assert.All(notOffered, label => Assert.DoesNotContain(label, labels));
+    }
+
+    /// <summary>
+    /// Where an expression may start, completion offers exactly the built-in functions in the
+    /// table. Those only a macro body may call are offered only in one.
+    /// </summary>
+    [Theory]
+    [InlineData("body", false)]
+    [InlineData("macro", true)]
+    public async Task CompletionOffersExactlyTheBuiltinTable(string where, bool inMacro)
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = WithLine(where, "    lda #|");
+        await using var client = await OpenAsync(text, timeout);
+
+        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+
+        Assert.Equal(
+            SyntaxFacts.Builtins.Where(builtin => inMacro || !builtin.MacroOnly).Select(builtin => builtin.Name).Order(),
+            items.Where(item => item.Detail == "built-in function").Select(item => item.Label).Order());
     }
 
     /// <summary>

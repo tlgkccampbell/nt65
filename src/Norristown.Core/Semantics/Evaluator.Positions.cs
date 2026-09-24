@@ -213,9 +213,8 @@ internal sealed partial class Evaluator
                 return null;
 
             // The end of a declaration is as far into it as it is long.
-            case CallExpressionSyntax { Function: { } function } call
-                when function.Text.Equals(".endof", StringComparison.OrdinalIgnoreCase)
-                    && call.Arguments.Arguments is [NameExpressionSyntax measured]
+            case CallExpressionSyntax { BuiltinKind: BuiltinKind.Endof } call
+                when call.Arguments.Arguments is [NameExpressionSyntax measured]
                     && SymbolOf(measured) is { Kind: SymbolKind.Data } ended:
                 EnsureEvaluated(ended);
                 return ended.Size is { } size && PositionOf(ended) is { } start ? (start.Data, start.Offset + size) : null;

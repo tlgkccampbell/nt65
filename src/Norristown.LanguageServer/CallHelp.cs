@@ -14,15 +14,15 @@ internal static class CallHelp
     // The built-in functions that get signature help, with their parameter names and a
     // description of what each returns. A parameter named `...` stands for any number of
     // further arguments.
-    private static readonly Dictionary<string, (string[] Parameters, string Documentation)> builtins =
-        new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<BuiltinKind, (string[] Parameters, string Documentation)> builtins =
+        new()
         {
-            [".select"] = (["condition", "chosen", "otherwise"],
+            [BuiltinKind.Select] = (["condition", "chosen", "otherwise"],
                 "the second argument when the condition holds, and the third when it does not"),
-            [".strlen"] = (["text"], "how many bytes the text is"),
-            [".strat"] = (["text", "index"], "the byte of the text at the index, counting from 0"),
-            [".strsub"] = (["text", "start", "count"], "`count` bytes of the text from `start`, counting from 0"),
-            [".strcat"] = (["part", "..."], "the parts joined into one text: a text's bytes, and a number as one byte, 0 to 255"),
+            [BuiltinKind.Strlen] = (["text"], "how many bytes the text is"),
+            [BuiltinKind.Strat] = (["text", "index"], "the byte of the text at the index, counting from 0"),
+            [BuiltinKind.Strsub] = (["text", "start", "count"], "`count` bytes of the text from `start`, counting from 0"),
+            [BuiltinKind.Strcat] = (["part", "..."], "the parts joined into one text: a text's bytes, and a number as one byte, 0 to 255"),
         };
 
     /// <summary>
@@ -44,11 +44,12 @@ internal static class CallHelp
             var argument = call.Argument;
             var open = call.Open;
             if (open >= 1 && before[open - 1] is { Kind: SyntaxKind.Directive } directive
-                && builtins.TryGetValue(directive.Text, out var builtin))
+                && SyntaxFacts.BuiltinKindOf(directive.Text) is var kind
+                && builtins.TryGetValue(kind, out var builtin))
             {
                 var parameters = builtin.Parameters;
                 var last = parameters[^1] == "..." ? parameters.Length - 2 : parameters.Length - 1;
-                return Help($"{directive.Text.ToLowerInvariant()}(", parameters, ")", builtin.Documentation,
+                return Help($"{SyntaxFacts.TextOf(kind)}(", parameters, ")", builtin.Documentation,
                     Math.Min(argument, last));
             }
             if (open >= 2 && before[open - 1].Kind == SyntaxKind.Bang

@@ -18,14 +18,11 @@ public static class Extents
     /// </summary>
     public static bool Is(CallExpressionSyntax call, SemanticModel model, out bool span)
     {
-        span = false;
-        if (call.Function is not { Kind: SyntaxKind.Directive } function)
-            return false;
-        var name = function.Text;
-        span = name.Equals(".spanof", StringComparison.OrdinalIgnoreCase)
-            || (name.Equals(".sizeof", StringComparison.OrdinalIgnoreCase)
+        var kind = call.BuiltinKind;
+        span = kind == BuiltinKind.Spanof
+            || (kind == BuiltinKind.Sizeof
                 && MeasuredBy(call) is { } named && model.SymbolOf(named) is { Kind: SymbolKind.Proc });
-        return span || name.Equals(".endof", StringComparison.OrdinalIgnoreCase);
+        return span || kind == BuiltinKind.Endof;
     }
 
     /// <summary>Returns the name that such a call measures, or null when it names nothing.</summary>

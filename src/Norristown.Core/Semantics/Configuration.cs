@@ -100,17 +100,17 @@ public sealed class Configuration
 
 
     /// <summary>
-    /// Returns the value of <c>.target(cpu)</c> or <c>.has(mnemonic)</c> for a build for
-    /// <paramref name="cpu"/>, or null when <paramref name="name"/> is neither. Problems with the
+    /// Returns the value of <c>.target(cpu)</c> or <c>.has(mnemonic)</c>, whichever
+    /// <paramref name="kind"/> is, for a build for <paramref name="cpu"/>. Problems with the
     /// argument are reported through <paramref name="report"/>.
     /// </summary>
-    internal static Value? AboutTheCpu(
-        string name, SyntaxToken function, IReadOnlyList<SyntaxNode> given, Cpu cpu,
+    internal static Value AboutTheCpu(
+        BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> given, Cpu cpu,
         Action<TextSpan, DiagnosticMessage> report)
     {
-        switch (name)
+        switch (kind)
         {
-            case ".target":
+            case BuiltinKind.Target:
                 if (given.Count != 1 || Alone(given[0]) is not { } cpuName || CpuNames.Parse(cpuName.Text) is not { } named)
                 {
                     report(function.Span, Catalogue.TargetArgument.Message(CpuNames.Listed));
@@ -121,7 +121,7 @@ public sealed class Configuration
             // `.has` asks whether the build's CPU has an instruction, whichever CPU that is. A
             // program that runs on more than one CPU asks this rather than listing the CPUs
             // that have the instruction.
-            case ".has":
+            case BuiltinKind.Has:
                 if (given.Count != 1 || given[0] is not NameExpressionSyntax { SimpleName: { Kind: SyntaxKind.Mnemonic } mnemonic })
                 {
                     report(function.Span, Catalogue.HasArgument);
@@ -130,7 +130,7 @@ public sealed class Configuration
                 return Value.Of(Processor.Instructions.Available(cpu, mnemonic.MnemonicKind));
 
             default:
-                return null;
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, "Only `.target` and `.has` ask about the CPU.");
         }
     }
 

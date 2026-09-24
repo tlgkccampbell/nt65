@@ -257,8 +257,7 @@ internal sealed partial class Binder
 
     /// <summary>Determines whether <paramref name="node"/> is a call of <c>.defined</c>.</summary>
     private static bool IsDefinedCall(SyntaxNode node) =>
-        node is CallExpressionSyntax { Function: { } function }
-        && function.Text.Equals(".defined", StringComparison.OrdinalIgnoreCase);
+        node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Defined };
 
     /// <summary>Returns the first token of a statement that could be a declared name.</summary>
     private static SyntaxToken? NameToken(StatementSyntax statement)
@@ -1530,8 +1529,7 @@ internal sealed partial class Binder
                     Report(segmentName.Span, Catalogue.SegmentUndeclared.Message(segmentName.Text));
                 return;
             }
-            if (call.Function is { } spanOf && spanOf.Text.Equals(".spanof", StringComparison.OrdinalIgnoreCase)
-                && segments.Find(segmentName.Text) is not null)
+            if (call.BuiltinKind == BuiltinKind.Spanof && segments.Find(segmentName.Text) is not null)
             {
                 CollectUses(call.Arguments, into, words: true, chosen);
                 return;

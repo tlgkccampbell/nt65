@@ -104,8 +104,7 @@ public sealed record ComparedWord(SyntaxToken Word, string Compared, string Name
             return null;
         }
         var other = side == comparison.Left ? comparison.Right : comparison.Left;
-        if (other is CallExpressionSyntax { Function: { } function } call
-            && function.Text.Equals(".mode", StringComparison.OrdinalIgnoreCase)
+        if (other is CallExpressionSyntax { BuiltinKind: BuiltinKind.Mode } call
             && call.Arguments.Arguments is [NameExpressionSyntax argument]
             && symbolOf(argument) is { Parameter: { Kind: ParameterKind.Operand } operand })
         {

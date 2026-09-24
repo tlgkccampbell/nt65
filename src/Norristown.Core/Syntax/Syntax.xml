@@ -364,7 +364,7 @@
     </Field>
   </Node>
 
-  <Node Name="CallExpressionSyntax" Base="ExpressionSyntax">
+  <Node Name="CallExpressionSyntax" Base="ExpressionSyntax" Partial="true">
     <Kind Name="CallExpression"/>
     <TypeComment>
       <summary>Represents a call, <c>name(args)</c> or <c>.function(args)</c>.</summary>
