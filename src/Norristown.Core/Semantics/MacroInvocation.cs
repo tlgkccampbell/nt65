@@ -33,12 +33,6 @@ public sealed class MacroInvocation
     public IReadOnlyList<MacroArgument> Arguments { get; private set; } = [];
 
     /// <summary>
-    /// Returns the argument <paramref name="parameter"/> was given, or null when the call gave it
-    /// nothing.
-    /// </summary>
-    public MacroArgument? For(Symbol parameter) => byParameter.GetValueOrDefault(parameter);
-
-    /// <summary>
     /// Matches <paramref name="call"/>'s arguments to <paramref name="macro"/>'s parameters,
     /// reporting what is wrong with them into <paramref name="diagnostics"/> when it is not
     /// null.
@@ -280,6 +274,12 @@ public sealed class MacroInvocation
             }
         }
     }
+
+    /// <summary>
+    /// Returns the argument <paramref name="parameter"/> was given, or null when the call gave it
+    /// nothing.
+    /// </summary>
+    public MacroArgument? For(Symbol parameter) => byParameter.GetValueOrDefault(parameter);
 
     /// <summary>
     /// Returns the message for a call that gives <paramref name="macro"/> more arguments than it

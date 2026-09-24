@@ -55,6 +55,14 @@ internal sealed partial class Evaluator
         Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound))).BytesIn(argument);
 
     /// <summary>
+    /// Determines whether mixed data contains a macro call, whose bytes are unknown until it is
+    /// expanded.
+    /// </summary>
+    private static bool Expands(Symbol data) =>
+        data.Definition is BlockSyntax block
+        && block.DescendantNodes().Any(node => node is MacroCallSyntax or BlockSpliceSyntax);
+
+    /// <summary>
     /// Returns how much room a data directive takes, as the bytes it generates and the number of
     /// elements they form. Returns null when nt65 cannot determine it, as for an <c>.align</c>,
     /// whose size depends on where it lands, or for a directive whose operands do not add up.
@@ -162,14 +170,6 @@ internal sealed partial class Evaluator
     /// <c>.align</c> in it makes the size depend on where it lands.
     /// </summary>
     private long? RoomForMixed(BlockSyntax block) => Total(block.Members, 1, BytesOnLine, NestedBytes);
-
-    /// <summary>
-    /// Determines whether mixed data contains a macro call, whose bytes are unknown until it is
-    /// expanded.
-    /// </summary>
-    private static bool Expands(Symbol data) =>
-        data.Definition is BlockSyntax block
-        && block.DescendantNodes().Any(node => node is MacroCallSyntax or BlockSpliceSyntax);
 
     /// <summary>
     /// Returns the bytes a block inside mixed data takes, or null when nt65 cannot determine

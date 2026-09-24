@@ -228,15 +228,6 @@ public sealed class Symbol
     /// </summary>
     public Symbol? Routine => Scope.Enclosing(ScopeKind.Proc)?.Owner;
 
-    /// <summary>
-    /// Returns a value indicating whether this symbol and <paramref name="other"/> are instances
-    /// of the same <see cref="Family"/>. Such instances share one body, declared under every
-    /// member's name, so a label inside it belongs to whichever instance is being read rather
-    /// than to the first.
-    /// </summary>
-    public bool IsSiblingOf(Symbol other) =>
-        Bound is not null && other.Bound is not null && Scope == other.Scope && NameSpan == other.NameSpan;
-
     /// <summary>Gets the address size, or null where nt65 cannot tell yet.</summary>
     public AddressSize? AddressSize { get; internal set => field = Unfrozen(value); }
 
@@ -381,6 +372,15 @@ public sealed class Symbol
     /// are.
     /// </summary>
     internal bool IsFrozen { get; private set; }
+
+    /// <summary>
+    /// Returns a value indicating whether this symbol and <paramref name="other"/> are instances
+    /// of the same <see cref="Family"/>. Such instances share one body, declared under every
+    /// member's name, so a label inside it belongs to whichever instance is being read rather
+    /// than to the first.
+    /// </summary>
+    public bool IsSiblingOf(Symbol other) =>
+        Bound is not null && other.Bound is not null && Scope == other.Scope && NameSpan == other.NameSpan;
 
     /// <summary>
     /// Returns the symbol's address size as seen by code in <paramref name="tree"/>. Another

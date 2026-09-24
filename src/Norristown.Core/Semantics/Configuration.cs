@@ -149,15 +149,6 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// Returns the single token that makes up an argument, such as a CPU name, a number, or a
-    /// name with a single component. Returns null when the argument is anything more.
-    /// </summary>
-    private static SyntaxToken? Alone(SyntaxNode argument) =>
-        argument is NameExpressionSyntax name ? name.SimpleName
-        : argument.ChildTokens is [var only] ? only
-        : null;
-
-    /// <summary>
     /// Determines whether a setting is where its placement allows it, which is at file level,
     /// outside every block, whether or not it is exported.
     /// </summary>
@@ -192,6 +183,15 @@ public sealed class Configuration
             replaced[after] = left;
         return new Configuration(replaced, reanswered, cpu, moved);
     }
+
+    /// <summary>
+    /// Returns the single token that makes up an argument, such as a CPU name, a number, or a
+    /// name with a single component. Returns null when the argument is anything more.
+    /// </summary>
+    private static SyntaxToken? Alone(SyntaxNode argument) =>
+        argument is NameExpressionSyntax name ? name.SimpleName
+        : argument.ChildTokens is [var only] ? only
+        : null;
 
     /// <summary>
     /// Returns the build's defines that a plain name in a file can refer to, by name. A define
@@ -277,6 +277,9 @@ public sealed class Configuration
         public void Report(TextSpan span, DiagnosticMessage message) =>
             diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message));
 
+        private static string Directive(StatementSyntax opener) =>
+            opener is ElseDirectiveSyntax ? ".else" : ".elseif";
+
         /// <summary>
         /// Determines whether the build takes one branch of a chain, and records that the build
         /// answered it. <paramref name="already"/> indicates that an earlier branch was taken, in
@@ -324,9 +327,6 @@ public sealed class Configuration
         // line's leading whitespace, before its first token.
         private void Leave(BlockSyntax block) =>
             omitted.Add(new TextSpan(block.Position, block.Span.End - block.Position));
-
-        private static string Directive(StatementSyntax opener) =>
-            opener is ElseDirectiveSyntax ? ".else" : ".elseif";
     }
 
     /// <summary>

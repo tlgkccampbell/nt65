@@ -105,13 +105,6 @@ public sealed class SemanticModel
     public IReadOnlyList<Symbol> ExternalSymbols { get; }
 
     /// <summary>
-    /// Gets the qualified names this file declares and does not export but that another file
-    /// uses anyway. That file reports that the name is not exported. This file does not also
-    /// report that nothing uses the name, which would report the same mistake twice.
-    /// </summary>
-    internal IReadOnlySet<string> NamedUnexported { get; }
-
-    /// <summary>
     /// Gets every symbol this file's output uses, in the order the file first names them. These
     /// are what its code and data name, and what the bodies of the macros it calls name. A path
     /// uses only what it leads to, not the steps on the way, and what a macro body names is used
@@ -133,6 +126,17 @@ public sealed class SemanticModel
     /// source and covers one declaration per member of the enum it iterates over.
     /// </summary>
     public IReadOnlyList<Family> Families { get; }
+
+    /// <summary>
+    /// Gets the qualified names this file declares and does not export but that another file
+    /// uses anyway. That file reports that the name is not exported. This file does not also
+    /// report that nothing uses the name, which would report the same mistake twice.
+    /// </summary>
+    internal IReadOnlySet<string> NamedUnexported { get; }
+
+    /// <summary>Builds the model for <paramref name="tree"/> alone, seeing no other file.</summary>
+    public static SemanticModel Create(SyntaxTree tree, SegmentTable segments) =>
+        ProgramModel.Create([tree], segments).Files[0];
 
     /// <summary>
     /// Returns the family <paramref name="declaration"/> declares, or null when it declares a
@@ -161,10 +165,6 @@ public sealed class SemanticModel
         }
         return null;
     }
-
-    /// <summary>Builds the model for <paramref name="tree"/> alone, seeing no other file.</summary>
-    public static SemanticModel Create(SyntaxTree tree, SegmentTable segments) =>
-        ProgramModel.Create([tree], segments).Files[0];
 
     /// <summary>
     /// Returns the symbol the name at <paramref name="token"/> refers to, in whichever file of the
@@ -392,92 +392,12 @@ public sealed class SemanticModel
     }
 
     /// <summary>
-    /// Returns the symbols a path ending in a repetition's name can reach. For example,
-    /// <c>reset::b</c>, where <c>b</c> iterates over an enum, names a different member of
-    /// <c>reset</c> in every iteration. The output must be able to reach each of them, and a
-    /// member another module declares must be imported.
-    /// </summary>
-    private static IEnumerable<Symbol> Namesakes(IReadOnlyList<SymbolReference> references)
-    {
-        for (var i = 1; i < references.Count; i++)
-        {
-            if (references[i] is { IsDeclaration: false, Symbol.Kind: SymbolKind.Binding }
-                && references[i - 1].Symbol.Body is { } container)
-            {
-                foreach (var member in container.Symbols)
-                    yield return member;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Returns the word a <c>one</c> parameter was given. An argument that names another
-    /// <c>one</c> parameter passes on that parameter's word, so a macro can hand a word it was
-    /// given to the macro it calls.
-    /// </summary>
-    private Value WordFor(MacroArgument argument, Expansion? outer)
-    {
-        if (argument.Value is NameExpressionSyntax name
-            && SymbolOf(name) is { Kind: SymbolKind.MacroParameter } passed
-            && ArgumentFor(passed, outer) is { } given)
-        {
-            return WordFor(given, outer);
-        }
-        return argument.Word is { } word ? Value.Word(word) : Value.Unknown;
-    }
-
-    /// <summary>
     /// Returns, for <c>.exprof(p)</c> at <paramref name="on"/>, the expression inside the operand
     /// the call passed as <c>p</c>, such as <c>5</c> for <c>{#5}</c> or <c>ptr</c> for
     /// <c>{(ptr),y}</c>. Returns null when <c>p</c> is not an <c>operand</c> parameter.
     /// </summary>
     public SyntaxNode? ExprOf(CallExpressionSyntax call, Expansion? on) =>
         new BoundNames(resolved, BindingsOf(on)).ExprOf(call);
-
-    /// <summary>
-    /// Returns the references the binder recorded, adjusted so that each enum member a call names
-    /// by its bare name, as an argument of an enum kind, refers to that member. The binder reads
-    /// such a name as a word, because it is resolved in the parameter's enum rather than in the
-    /// caller's scope. The binder therefore records nothing for it, or records whatever the
-    /// caller's scope has by that name. The member is what the argument means, and what an editor
-    /// shows and renames.
-    /// </summary>
-    private IReadOnlyList<SymbolReference> WithMembersNamedBare(IReadOnlyList<SymbolReference> references)
-    {
-        var members = new List<SymbolReference>();
-        foreach (var call in Tree.Root.DescendantNodes().OfType<MacroCallSyntax>())
-        {
-            if (MacroAt(call) is not { } macro
-                || !macro.Parameters.Any(parameter => (parameter.Accepts.Element ?? parameter.Accepts).Kind == ParameterKind.Enum)
-                || InvocationAt(call) is not { } invocation)
-            {
-                continue;
-            }
-            var inMacro = call.Ancestors().Any(node => node is BlockSyntax { Opener.Statement: MacroDeclarationSyntax });
-            foreach (var argument in invocation.Arguments.Where(argument => argument.IsGiven))
-            {
-                var accepts = argument.Parameter.Accepts;
-                var kind = accepts.Kind == ParameterKind.List ? accepts.Element : accepts;
-                if (kind is not { Kind: ParameterKind.Enum } || EnumOf(kind) is not { Body: { } body })
-                    continue;
-                var givenNodes = accepts.Kind == ParameterKind.List ? argument.Items : argument.Value is { } value ? [value] : [];
-                foreach (var name in givenNodes)
-                {
-                    if (name is NameExpressionSyntax { Names.Length: 1, GlobalToken: null, SimpleName: { Kind: SyntaxKind.Identifier } word }
-                        && body.FindMember(word.Text) is { Kind: SymbolKind.Constant } member)
-                    {
-                        members.Add(new SymbolReference(member, word.Span, false, InMacro: inMacro));
-                    }
-                }
-            }
-        }
-        if (members.Count == 0)
-            return references;
-        var at = members.Select(reference => reference.Span.Start).ToHashSet();
-        return [.. references.Where(reference => !at.Contains(reference.Span.Start))
-            .Concat(members)
-            .OrderBy(reference => reference.Span.Start)];
-    }
 
     /// <summary>
     /// Returns the enum an enum kind names, resolved where the macro that declares the parameter
@@ -570,5 +490,85 @@ public sealed class SemanticModel
                 return (argument, level.Outer);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Returns the symbols a path ending in a repetition's name can reach. For example,
+    /// <c>reset::b</c>, where <c>b</c> iterates over an enum, names a different member of
+    /// <c>reset</c> in every iteration. The output must be able to reach each of them, and a
+    /// member another module declares must be imported.
+    /// </summary>
+    private static IEnumerable<Symbol> Namesakes(IReadOnlyList<SymbolReference> references)
+    {
+        for (var i = 1; i < references.Count; i++)
+        {
+            if (references[i] is { IsDeclaration: false, Symbol.Kind: SymbolKind.Binding }
+                && references[i - 1].Symbol.Body is { } container)
+            {
+                foreach (var member in container.Symbols)
+                    yield return member;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the word a <c>one</c> parameter was given. An argument that names another
+    /// <c>one</c> parameter passes on that parameter's word, so a macro can hand a word it was
+    /// given to the macro it calls.
+    /// </summary>
+    private Value WordFor(MacroArgument argument, Expansion? outer)
+    {
+        if (argument.Value is NameExpressionSyntax name
+            && SymbolOf(name) is { Kind: SymbolKind.MacroParameter } passed
+            && ArgumentFor(passed, outer) is { } given)
+        {
+            return WordFor(given, outer);
+        }
+        return argument.Word is { } word ? Value.Word(word) : Value.Unknown;
+    }
+
+    /// <summary>
+    /// Returns the references the binder recorded, adjusted so that each enum member a call names
+    /// by its bare name, as an argument of an enum kind, refers to that member. The binder reads
+    /// such a name as a word, because it is resolved in the parameter's enum rather than in the
+    /// caller's scope. The binder therefore records nothing for it, or records whatever the
+    /// caller's scope has by that name. The member is what the argument means, and what an editor
+    /// shows and renames.
+    /// </summary>
+    private IReadOnlyList<SymbolReference> WithMembersNamedBare(IReadOnlyList<SymbolReference> references)
+    {
+        var members = new List<SymbolReference>();
+        foreach (var call in Tree.Root.DescendantNodes().OfType<MacroCallSyntax>())
+        {
+            if (MacroAt(call) is not { } macro
+                || !macro.Parameters.Any(parameter => (parameter.Accepts.Element ?? parameter.Accepts).Kind == ParameterKind.Enum)
+                || InvocationAt(call) is not { } invocation)
+            {
+                continue;
+            }
+            var inMacro = call.Ancestors().Any(node => node is BlockSyntax { Opener.Statement: MacroDeclarationSyntax });
+            foreach (var argument in invocation.Arguments.Where(argument => argument.IsGiven))
+            {
+                var accepts = argument.Parameter.Accepts;
+                var kind = accepts.Kind == ParameterKind.List ? accepts.Element : accepts;
+                if (kind is not { Kind: ParameterKind.Enum } || EnumOf(kind) is not { Body: { } body })
+                    continue;
+                var givenNodes = accepts.Kind == ParameterKind.List ? argument.Items : argument.Value is { } value ? [value] : [];
+                foreach (var name in givenNodes)
+                {
+                    if (name is NameExpressionSyntax { Names.Length: 1, GlobalToken: null, SimpleName: { Kind: SyntaxKind.Identifier } word }
+                        && body.FindMember(word.Text) is { Kind: SymbolKind.Constant } member)
+                    {
+                        members.Add(new SymbolReference(member, word.Span, false, InMacro: inMacro));
+                    }
+                }
+            }
+        }
+        if (members.Count == 0)
+            return references;
+        var at = members.Select(reference => reference.Span.Start).ToHashSet();
+        return [.. references.Where(reference => !at.Contains(reference.Span.Start))
+            .Concat(members)
+            .OrderBy(reference => reference.Span.Start)];
     }
 }

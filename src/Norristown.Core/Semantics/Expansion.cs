@@ -161,23 +161,6 @@ public sealed class Expansion : IEquatable<Expansion>
     }
 
     /// <summary>
-    /// Returns the expansion enclosing <paramref name="splice"/> that belongs to the macro whose
-    /// body contains <paramref name="line"/>.
-    /// </summary>
-    private static Expansion? SplicedBy(Expansion splice, SyntaxNode line)
-    {
-        for (var level = splice.Outer; level is not null; level = level.Outer)
-        {
-            if (level.Call is not null && level.Body is { } body && body.Tree == line.Tree
-                && line.Position >= body.Position && line.Position < body.FullSpan.End)
-            {
-                return level;
-            }
-        }
-        return null;
-    }
-
-    /// <summary>
     /// Creates a diagnostic for a problem with the text at <paramref name="span"/> of
     /// <paramref name="tree"/>, found while laying out or emitting <paramref name="file"/> within
     /// the expansion <paramref name="at"/>. Text in the file itself is reported at its own
@@ -231,6 +214,23 @@ public sealed class Expansion : IEquatable<Expansion>
     /// <summary>Returns a description of what this expansion expands, for debugging.</summary>
     public override string ToString() =>
         Call is not null ? $"expansion of {Call.GetText()}" : $"iteration {Index}";
+
+    /// <summary>
+    /// Returns the expansion enclosing <paramref name="splice"/> that belongs to the macro whose
+    /// body contains <paramref name="line"/>.
+    /// </summary>
+    private static Expansion? SplicedBy(Expansion splice, SyntaxNode line)
+    {
+        for (var level = splice.Outer; level is not null; level = level.Outer)
+        {
+            if (level.Call is not null && level.Body is { } body && body.Tree == line.Tree
+                && line.Position >= body.Position && line.Position < body.FullSpan.End)
+            {
+                return level;
+            }
+        }
+        return null;
+    }
 
     /// <summary>
     /// Represents what one name is bound to in one expansion. An item is kept as the expression

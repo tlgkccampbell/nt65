@@ -10,6 +10,31 @@ namespace Norristown.Semantics;
 /// </summary>
 internal sealed partial class Binder
 {
+    /// <summary>
+    /// Records a name that a macro body uses without declaring it or receiving it as a
+    /// parameter. Every expansion needs that name, regardless of which file calls the macro, so
+    /// the macro keeps a list of such names. The calling file brings them in, and an exported
+    /// macro may only use names that are also exported.
+    /// </summary>
+    /// <returns>True if the name appears in a macro body.</returns>
+    private static bool RecordBodyUse(Scope at, Symbol used, SyntaxToken token, bool last)
+    {
+        var body = at.Enclosing(ScopeKind.Macro);
+        if (body?.Owner is not { } macro)
+            return false;
+
+        // Names the body declares, and its parameters, are part of the macro and need no record.
+        // Only the last part of a path is recorded; the steps before it are only walked through.
+        for (var owner = used.Scope; owner is not null; owner = owner.Parent)
+        {
+            if (owner == body)
+                return true;
+        }
+        if (last && !macro.Uses.Any(seen => seen.Used == used))
+            macro.AddUse(used, token.Parent.Tree.GetSpan(token.Span));
+        return true;
+    }
+
     private void ResolveUses(IReadOnlyList<Use> list)
     {
         Resolution? previous = null;
@@ -69,31 +94,6 @@ internal sealed partial class Binder
                 Report(token.Span, Catalogue.NameAloneOnALine.Message(token.Text, symbol.KindPhrase));
             }
         }
-    }
-
-    /// <summary>
-    /// Records a name that a macro body uses without declaring it or receiving it as a
-    /// parameter. Every expansion needs that name, regardless of which file calls the macro, so
-    /// the macro keeps a list of such names. The calling file brings them in, and an exported
-    /// macro may only use names that are also exported.
-    /// </summary>
-    /// <returns>True if the name appears in a macro body.</returns>
-    private static bool RecordBodyUse(Scope at, Symbol used, SyntaxToken token, bool last)
-    {
-        var body = at.Enclosing(ScopeKind.Macro);
-        if (body?.Owner is not { } macro)
-            return false;
-
-        // Names the body declares, and its parameters, are part of the macro and need no record.
-        // Only the last part of a path is recorded; the steps before it are only walked through.
-        for (var owner = used.Scope; owner is not null; owner = owner.Parent)
-        {
-            if (owner == body)
-                return true;
-        }
-        if (last && !macro.Uses.Any(seen => seen.Used == used))
-            macro.AddUse(used, token.Parent.Tree.GetSpan(token.Span));
-        return true;
     }
 
     /// <summary>

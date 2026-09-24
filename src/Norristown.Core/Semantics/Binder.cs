@@ -169,6 +169,68 @@ internal sealed partial class Binder
     public ProgramSymbols.Module Module => new(tree, moduleName, moduleNameSpan, fileScope, exported, reexports);
 
     /// <summary>
+    /// Gets a value indicating whether the file holds any declaration named by a repetition's
+    /// binding.
+    /// </summary>
+    public bool HasFamilies => pendingFamilies.Count > 0;
+
+    /// <summary>
+    /// Gets a value indicating whether the walk is inside a <c>.repeat</c> or <c>.each</c> body,
+    /// however many scopes deep.
+    /// </summary>
+    private bool InRepetition => scope.Enclosing(ScopeKind.Repetition) is not null;
+
+    /// <summary>
+    /// Gets a value indicating whether the walk is inside a macro body, however many scopes deep.
+    /// </summary>
+    private bool InMacroBody => scope.Enclosing(ScopeKind.Macro) is not null;
+
+    /// <summary>
+    /// Gets a value indicating whether a declaration here would land in a block argument. A
+    /// routine or a macro inside a block argument owns what it declares, so the search stops at
+    /// the first of those.
+    /// </summary>
+    private bool InABlockArgument
+    {
+        get
+        {
+            for (var around = scope; around is not null; around = around.Parent)
+            {
+                if (around.Kind == ScopeKind.BlockArgument)
+                    return true;
+                if (around.Kind is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.Type)
+                    return false;
+            }
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Gets the kind of construct the walk is inside, which determines what may appear there. It
+    /// is a routine, which holds code, or a macro body or a block argument, which land wherever
+    /// they are expanded and are checked there. It may also be mixed data or a type, or
+    /// <see cref="ScopeKind.File"/> at item level.
+    /// </summary>
+    private ScopeKind Placement
+    {
+        get
+        {
+            for (var around = scope; around is not null; around = around.Parent)
+            {
+                if (around.Kind is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument
+                    or ScopeKind.Data or ScopeKind.Type)
+                {
+                    return around.Kind;
+                }
+            }
+            return ScopeKind.File;
+        }
+    }
+
+    /// <summary>Gets the macro whose body the walk is inside, or null when it is inside none.</summary>
+    private Symbol? EnclosingMacro => scope.Enclosing(ScopeKind.Macro)?.Owner;
+
+    /// <summary>
     /// Reads the declarations of <paramref name="tree"/>, leaving the names it uses to be
     /// resolved once every file of the program has been read. What the file exports is known
     /// from here on, because a file exports only what it declares. <paramref name="isDefines"/>
@@ -191,12 +253,6 @@ internal sealed partial class Binder
         }
         return binder;
     }
-
-    /// <summary>
-    /// Gets a value indicating whether the file holds any declaration named by a repetition's
-    /// binding.
-    /// </summary>
-    public bool HasFamilies => pendingFamilies.Count > 0;
 
     /// <summary>
     /// Resolves the names the file uses, looking in <paramref name="program"/> for the ones it
@@ -264,6 +320,101 @@ internal sealed partial class Binder
     /// </summary>
     public IReadOnlyList<Symbol> CalledMacros() => called;
 
+
+    /// <summary>
+    /// Declares the instances of each family in the file, one declaration per member of the enum
+    /// it walks, named after the member, in the scope around the repetition. This runs once every
+    /// file has been collected, because the enum may belong to another module. It runs before the
+    /// modules' exports are read, because the instances are among them.
+    /// </summary>
+    public void DeclareFamilies(ProgramSymbols provisional)
+    {
+        if (pendingFamilies.Count == 0)
+            return;
+
+        // The `.use` items are read here only to find an enum that one of them brought in. The
+        // program they are read against is not complete yet, so a binder of their own reads
+        // them, and what it reports and records is dropped with it. `Resolve` reads them again
+        // against the complete program. What it looked for is kept, because the enum each
+        // family walks depends on it.
+        var brought = new Binder(tree, segments, configuration, cpu, isDefines, fileScope) { program = provisional };
+        foreach (var directive in useDirectives)
+            brought.ResolveUse(directive);
+
+        foreach (var pending in pendingFamilies)
+            DeclareFamily(pending, brought);
+        pendingFamilies.Clear();
+        lookedUp.UnionWith(brought.lookedUp);
+    }
+
+    /// <summary>
+    /// Determines what the file exports once it has been read. The exports are each declaration
+    /// that follows <c>.export</c> and each name an <c>.export</c> list gives, together with the
+    /// members that are exported along with them. Only the file's own declarations are looked
+    /// for, so this needs no other module.
+    /// <para>
+    /// It runs after the families are declared, because their instances are declarations of the
+    /// file like any others, and an <c>.export</c> before a family exports every instance.
+    /// </para>
+    /// </summary>
+    public void Export()
+    {
+        if (moduleName is null && !isDefines)
+        {
+            Report(new TextSpan(0, 0), Catalogue.ModuleMissing);
+        }
+        foreach (var (symbol, at) in exportedDeclarations)
+            Export(symbol, at, linkerName: null, size: null);
+        foreach (var (item, around) in exportItems)
+        {
+            if (Declared(item.Name, around) is not { } symbol)
+                continue;
+            var size = item.AddressSize is { } sizeToken ? SegmentNames.ParseSize(sizeToken.Text) : null;
+            var linkerName = item.LinkerName?.Text.Trim('"');
+
+            // An `as` name is the name in the object file, and the output has to define it with
+            // exactly that spelling, because there is no module to prefix it with. ca65 reads a
+            // word from its own instruction tables at the start of a line as an instruction, so
+            // it could never define such a name. The CPU this program is built for does not
+            // matter, because the name is what another module, built for another CPU, would
+            // link against.
+            if (linkerName is not null && Ca65Instructions.HasAnywhere(linkerName) && item.LinkerName is { } spelled)
+            {
+                Report(spelled.Span, Catalogue.LinkerNameIsAnInstruction.Message(linkerName));
+            }
+            Export(symbol, item.Span, linkerName, size);
+        }
+    }
+
+    /// <summary>
+    /// Exports one symbol. Exporting a named scope or mixed data exports what it declares,
+    /// through the scopes and data inside it, and exporting a type exports its members. A
+    /// routine's interior labels are exported one by one, and cheap locals never are.
+    /// </summary>
+    private void Export(Symbol symbol, TextSpan at, string? linkerName, AddressSize? size)
+    {
+        if (!symbol.IsExported)
+        {
+            symbol.IsExported = true;
+            symbol.ExportSpan = at;
+            exported.Add(symbol);
+        }
+        if (linkerName is not null)
+            symbol.LinkerName = linkerName;
+        symbol.LinkerName ??= symbol.Kind is SymbolKind.ImportedAddress or SymbolKind.ImportedConstant || moduleName is null
+            ? symbol.FlatName
+            : $"{moduleName.Replace("::", "__", StringComparison.Ordinal)}__{symbol.FlatName}";
+        if (size is not null)
+            symbol.ExportSize = size;
+        if (symbol.Kind is not (SymbolKind.Scope or SymbolKind.Data or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union))
+            return;
+        foreach (var member in symbol.Body?.Symbols ?? [])
+        {
+            if (!member.IsCheapLocal && !member.IsExported)
+                Export(member, at, linkerName: null, size: null);
+        }
+    }
+
     /// <summary>Determines whether <paramref name="node"/> is a call of <c>.defined</c>.</summary>
     private static bool IsDefinedCall(SyntaxNode node) =>
         node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Defined };
@@ -296,6 +447,47 @@ internal sealed partial class Binder
         MacroDeclarationSyntax macro => macro.Signature,
         _ => null,
     };
+
+    /// <summary>Returns the phrase a message uses for a place where a declaration is not allowed.</summary>
+    private static string Article(ScopeKind kind) => kind switch
+    {
+        ScopeKind.Proc => "a routine",
+        ScopeKind.Macro => "a macro body",
+        ScopeKind.BlockArgument => "a block argument",
+        ScopeKind.Data => "a `.data` block",
+        _ => "a type",
+    };
+
+
+    /// <summary>
+    /// Returns the repetition around <paramref name="opener"/> when the declaration is named
+    /// after the name the repetition binds, and so declares one declaration per member rather
+    /// than one private to each iteration.
+    /// </summary>
+    private static Repeated? NamedByBinding(StatementSyntax opener, Repeated? repeated) =>
+        repeated is { } found && NameToken(opener) is { } name && name.Text == found.Binding.Name
+            ? found
+            : null;
+
+    /// <summary>Returns how a message describes a symbol that is not the kind that was expected.</summary>
+    private static string Named(Symbol symbol) =>
+        symbol.Kind == SymbolKind.Enum ? "an anonymous enum, whose members are ordinary names" : $"a {symbol.KindText}";
+
+    /// <summary>
+    /// Returns the file's own declaration that a name in an <c>.export</c> list refers to, or
+    /// null.
+    /// </summary>
+    private static Symbol? Declared(NameExpressionSyntax name, Scope around)
+    {
+        Symbol? symbol = null;
+        foreach (var token in name.Names)
+        {
+            symbol = symbol is null ? around.Lookup(token.Text) : symbol.Body?.FindMember(token.Text);
+            if (symbol is null)
+                return null;
+        }
+        return symbol;
+    }
 
     private void WalkContainer(FileSyntax file)
     {
@@ -449,7 +641,6 @@ internal sealed partial class Binder
             previousEnumMember = null;
     }
 
-
     /// <summary>
     /// Returns what a repetition's body may declare by the name it binds, or null for a
     /// repetition that binds no name. The result holds the block, the enum or list it walks, and
@@ -475,26 +666,6 @@ internal sealed partial class Binder
                             : "a routine belongs at file level or in a `.scope`"));
         return new Repeated(block, (opener as RepetitionDirectiveSyntax)?.Expression, binding, around, segment, why);
     }
-
-    /// <summary>Returns the phrase a message uses for a place where a declaration is not allowed.</summary>
-    private static string Article(ScopeKind kind) => kind switch
-    {
-        ScopeKind.Proc => "a routine",
-        ScopeKind.Macro => "a macro body",
-        ScopeKind.BlockArgument => "a block argument",
-        ScopeKind.Data => "a `.data` block",
-        _ => "a type",
-    };
-
-    /// <summary>
-    /// Returns the repetition around <paramref name="opener"/> when the declaration is named
-    /// after the name the repetition binds, and so declares one declaration per member rather
-    /// than one private to each iteration.
-    /// </summary>
-    private static Repeated? NamedByBinding(StatementSyntax opener, Repeated? repeated) =>
-        repeated is { } found && NameToken(opener) is { } name && name.Text == found.Binding.Name
-            ? found
-            : null;
 
     /// <summary>
     /// Opens the body of a <c>.proc</c> named after a repetition's binding, which declares one
@@ -589,33 +760,6 @@ internal sealed partial class Binder
         pendingFamilies.Add(new PendingFamily(declaration, each, body, kind, signature, data, type));
     }
 
-
-    /// <summary>
-    /// Declares the instances of each family in the file, one declaration per member of the enum
-    /// it walks, named after the member, in the scope around the repetition. This runs once every
-    /// file has been collected, because the enum may belong to another module. It runs before the
-    /// modules' exports are read, because the instances are among them.
-    /// </summary>
-    public void DeclareFamilies(ProgramSymbols provisional)
-    {
-        if (pendingFamilies.Count == 0)
-            return;
-
-        // The `.use` items are read here only to find an enum that one of them brought in. The
-        // program they are read against is not complete yet, so a binder of their own reads
-        // them, and what it reports and records is dropped with it. `Resolve` reads them again
-        // against the complete program. What it looked for is kept, because the enum each
-        // family walks depends on it.
-        var brought = new Binder(tree, segments, configuration, cpu, isDefines, fileScope) { program = provisional };
-        foreach (var directive in useDirectives)
-            brought.ResolveUse(directive);
-
-        foreach (var pending in pendingFamilies)
-            DeclareFamily(pending, brought);
-        pendingFamilies.Clear();
-        lookedUp.UnionWith(brought.lookedUp);
-    }
-
     /// <summary>
     /// Declares one family by finding the enum it walks and making its declaration for each
     /// member. The enum is looked for with what <paramref name="brought"/> read from the file's
@@ -678,10 +822,6 @@ internal sealed partial class Binder
             exportedDeclarations.Add((instance, export.Span));
         return instance;
     }
-
-    /// <summary>Returns how a message describes a symbol that is not the kind that was expected.</summary>
-    private static string Named(Symbol symbol) =>
-        symbol.Kind == SymbolKind.Enum ? "an anonymous enum, whose members are ordinary names" : $"a {symbol.KindText}";
 
     /// <summary>
     /// Returns the symbol a path names, resolved from <paramref name="at"/> without reporting
@@ -1016,37 +1156,6 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// Gets a value indicating whether the walk is inside a <c>.repeat</c> or <c>.each</c> body,
-    /// however many scopes deep.
-    /// </summary>
-    private bool InRepetition => scope.Enclosing(ScopeKind.Repetition) is not null;
-
-    /// <summary>
-    /// Gets a value indicating whether the walk is inside a macro body, however many scopes deep.
-    /// </summary>
-    private bool InMacroBody => scope.Enclosing(ScopeKind.Macro) is not null;
-
-    /// <summary>
-    /// Gets a value indicating whether a declaration here would land in a block argument. A
-    /// routine or a macro inside a block argument owns what it declares, so the search stops at
-    /// the first of those.
-    /// </summary>
-    private bool InABlockArgument
-    {
-        get
-        {
-            for (var around = scope; around is not null; around = around.Parent)
-            {
-                if (around.Kind == ScopeKind.BlockArgument)
-                    return true;
-                if (around.Kind is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.Type)
-                    return false;
-            }
-            return false;
-        }
-    }
-
-    /// <summary>
     /// Declares a <c>.charmap</c> or a <c>.list</c>, whose lines are entries rather than
     /// declarations, as one symbol holding them. A list's items name symbols, and those names
     /// belong to the scope the list appears in.
@@ -1292,28 +1401,6 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// Gets the kind of construct the walk is inside, which determines what may appear there. It
-    /// is a routine, which holds code, or a macro body or a block argument, which land wherever
-    /// they are expanded and are checked there. It may also be mixed data or a type, or
-    /// <see cref="ScopeKind.File"/> at item level.
-    /// </summary>
-    private ScopeKind Placement
-    {
-        get
-        {
-            for (var around = scope; around is not null; around = around.Parent)
-            {
-                if (around.Kind is ScopeKind.Proc or ScopeKind.Macro or ScopeKind.BlockArgument
-                    or ScopeKind.Data or ScopeKind.Type)
-                {
-                    return around.Kind;
-                }
-            }
-            return ScopeKind.File;
-        }
-    }
-
-    /// <summary>
     /// Records an instruction outside a routine, where nothing calls it or runs into it. A run of
     /// such instructions is one mistake, so it is counted here and reported once, on its first
     /// line, when the run ends. A whole routine of pasted ca65 code therefore gets one
@@ -1456,9 +1543,6 @@ internal sealed partial class Binder
     /// meaning of its arguments follows from the parameters they bind to.
     /// </summary>
     private void BindCall(MacroCallSyntax call) => calls.Add(new Invocation(call, scope, EnclosingMacro));
-
-    /// <summary>Gets the macro whose body the walk is inside, or null when it is inside none.</summary>
-    private Symbol? EnclosingMacro => scope.Enclosing(ScopeKind.Macro)?.Owner;
 
     /// <summary>
     /// Matches each call to the macro it names and resolves the arguments that are names.
@@ -1752,90 +1836,6 @@ internal sealed partial class Binder
             reexports.AddRange(ModuleSyntax.Brought(statement));
     }
 
-    /// <summary>
-    /// Determines what the file exports once it has been read. The exports are each declaration
-    /// that follows <c>.export</c> and each name an <c>.export</c> list gives, together with the
-    /// members that are exported along with them. Only the file's own declarations are looked
-    /// for, so this needs no other module.
-    /// <para>
-    /// It runs after the families are declared, because their instances are declarations of the
-    /// file like any others, and an <c>.export</c> before a family exports every instance.
-    /// </para>
-    /// </summary>
-    public void Export()
-    {
-        if (moduleName is null && !isDefines)
-        {
-            Report(new TextSpan(0, 0), Catalogue.ModuleMissing);
-        }
-        foreach (var (symbol, at) in exportedDeclarations)
-            Export(symbol, at, linkerName: null, size: null);
-        foreach (var (item, around) in exportItems)
-        {
-            if (Declared(item.Name, around) is not { } symbol)
-                continue;
-            var size = item.AddressSize is { } sizeToken ? SegmentNames.ParseSize(sizeToken.Text) : null;
-            var linkerName = item.LinkerName?.Text.Trim('"');
-
-            // An `as` name is the name in the object file, and the output has to define it with
-            // exactly that spelling, because there is no module to prefix it with. ca65 reads a
-            // word from its own instruction tables at the start of a line as an instruction, so
-            // it could never define such a name. The CPU this program is built for does not
-            // matter, because the name is what another module, built for another CPU, would
-            // link against.
-            if (linkerName is not null && Ca65Instructions.HasAnywhere(linkerName) && item.LinkerName is { } spelled)
-            {
-                Report(spelled.Span, Catalogue.LinkerNameIsAnInstruction.Message(linkerName));
-            }
-            Export(symbol, item.Span, linkerName, size);
-        }
-    }
-
-    /// <summary>
-    /// Exports one symbol. Exporting a named scope or mixed data exports what it declares,
-    /// through the scopes and data inside it, and exporting a type exports its members. A
-    /// routine's interior labels are exported one by one, and cheap locals never are.
-    /// </summary>
-    private void Export(Symbol symbol, TextSpan at, string? linkerName, AddressSize? size)
-    {
-        if (!symbol.IsExported)
-        {
-            symbol.IsExported = true;
-            symbol.ExportSpan = at;
-            exported.Add(symbol);
-        }
-        if (linkerName is not null)
-            symbol.LinkerName = linkerName;
-        symbol.LinkerName ??= symbol.Kind is SymbolKind.ImportedAddress or SymbolKind.ImportedConstant || moduleName is null
-            ? symbol.FlatName
-            : $"{moduleName.Replace("::", "__", StringComparison.Ordinal)}__{symbol.FlatName}";
-        if (size is not null)
-            symbol.ExportSize = size;
-        if (symbol.Kind is not (SymbolKind.Scope or SymbolKind.Data or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union))
-            return;
-        foreach (var member in symbol.Body?.Symbols ?? [])
-        {
-            if (!member.IsCheapLocal && !member.IsExported)
-                Export(member, at, linkerName: null, size: null);
-        }
-    }
-
-    /// <summary>
-    /// Returns the file's own declaration that a name in an <c>.export</c> list refers to, or
-    /// null.
-    /// </summary>
-    private static Symbol? Declared(NameExpressionSyntax name, Scope around)
-    {
-        Symbol? symbol = null;
-        foreach (var token in name.Names)
-        {
-            symbol = symbol is null ? around.Lookup(token.Text) : symbol.Body?.FindMember(token.Text);
-            if (symbol is null)
-                return null;
-        }
-        return symbol;
-    }
-
     private void Report(TextSpan span, DiagnosticMessage message, params RelatedSpan[] related) =>
         diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message, related));
 
@@ -1864,18 +1864,18 @@ internal sealed partial class Binder
         public IReadOnlyDictionary<string, BroughtName> Brought { get; init; } =
             new Dictionary<string, BroughtName>();
 
+        /// <summary>Gets the modules whose exports a <c>.use module::*</c> brings in.</summary>
+        public IReadOnlyList<ProgramSymbols.Module> Globs { get; init; } = [];
+
+        /// <summary>Gets the families the file declares, each standing for one declaration per member.</summary>
+        public IReadOnlyList<Family> Families { get; init; } = [];
+
         /// <summary>
         /// Gets the same names mapped to what they resolve to, which is what a lookup in this file
         /// returns.
         /// </summary>
         internal IReadOnlyDictionary<string, Resolution> Used { get; init; } =
             new Dictionary<string, Resolution>(StringComparer.Ordinal);
-
-        /// <summary>Gets the modules whose exports a <c>.use module::*</c> brings in.</summary>
-        public IReadOnlyList<ProgramSymbols.Module> Globs { get; init; } = [];
-
-        /// <summary>Gets the families the file declares, each standing for one declaration per member.</summary>
-        public IReadOnlyList<Family> Families { get; init; } = [];
     }
 
     /// <summary>

@@ -28,44 +28,6 @@ public static class Operands
     }
 
     /// <summary>
-    /// Returns what <paramref name="expression"/>, the expression inside an operand, becomes in
-    /// the expansion <paramref name="on"/>, or null when it names no <c>operand</c> parameter.
-    /// </summary>
-    private static OperandSubstitution? Read(SemanticModel model, ExpressionSyntax expression, Expansion? on)
-    {
-        switch (expression)
-        {
-            case NameExpressionSyntax:
-                return Bound(model, expression, on) is { } plain
-                    ? new OperandSubstitution(plain.Parameter, plain.Operand, 0, false, expression)
-                    : null;
-
-            // `dest + 1` and `dest - 1` apply to the argument's expression, so that `dest+1`
-            // with `dest` bound to `buf,x` is `buf+1,x`.
-            case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } binary:
-                if (Bound(model, binary.Left, on) is not { } shifted)
-                    return null;
-                if (model.ValueOf(binary.Right, on).AsNumber() is not { } by)
-                    return null;
-                var sign = binary.OperatorToken.Kind == SyntaxKind.Minus ? -1 : 1;
-                return new OperandSubstitution(
-                    shifted.Parameter, shifted.Operand, sign * by, false, expression);
-
-            // `.byteof(p, n)` may appear where the operand would be, and means byte n of the
-            // operand's value.
-            case CallExpressionSyntax call when IsByteOf(call):
-                var arguments = call.Arguments.Arguments;
-                if (arguments.Count < 1 || Bound(model, arguments[0], on) is not { } whole)
-                    return null;
-                var byteAt = arguments.Count > 1 ? model.ValueOf(arguments[1], on).AsNumber() ?? 0 : 0;
-                return new OperandSubstitution(whole.Parameter, whole.Operand, byteAt, true, expression);
-
-            default:
-                return null;
-        }
-    }
-
-    /// <summary>
     /// Returns the expression an operand addresses, or its immediate value. For example, this is
     /// <c>buf</c> for <c>buf,x</c>, <c>ptr</c> for <c>(ptr),y</c> and <c>5</c> for <c>#5</c>. An
     /// argument without braces is itself the expression, and the accumulator operand has none.
@@ -119,11 +81,49 @@ public static class Operands
         _ => "abs",
     };
 
-    private static bool Is(SyntaxToken? register, string name) =>
-        register is { } token && token.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
-
     /// <summary>Returns a value indicating whether <paramref name="call"/> calls <c>.byteof</c>.</summary>
     public static bool IsByteOf(CallExpressionSyntax call) => call.BuiltinKind == BuiltinKind.Byteof;
+
+    /// <summary>
+    /// Returns what <paramref name="expression"/>, the expression inside an operand, becomes in
+    /// the expansion <paramref name="on"/>, or null when it names no <c>operand</c> parameter.
+    /// </summary>
+    private static OperandSubstitution? Read(SemanticModel model, ExpressionSyntax expression, Expansion? on)
+    {
+        switch (expression)
+        {
+            case NameExpressionSyntax:
+                return Bound(model, expression, on) is { } plain
+                    ? new OperandSubstitution(plain.Parameter, plain.Operand, 0, false, expression)
+                    : null;
+
+            // `dest + 1` and `dest - 1` apply to the argument's expression, so that `dest+1`
+            // with `dest` bound to `buf,x` is `buf+1,x`.
+            case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } binary:
+                if (Bound(model, binary.Left, on) is not { } shifted)
+                    return null;
+                if (model.ValueOf(binary.Right, on).AsNumber() is not { } by)
+                    return null;
+                var sign = binary.OperatorToken.Kind == SyntaxKind.Minus ? -1 : 1;
+                return new OperandSubstitution(
+                    shifted.Parameter, shifted.Operand, sign * by, false, expression);
+
+            // `.byteof(p, n)` may appear where the operand would be, and means byte n of the
+            // operand's value.
+            case CallExpressionSyntax call when IsByteOf(call):
+                var arguments = call.Arguments.Arguments;
+                if (arguments.Count < 1 || Bound(model, arguments[0], on) is not { } whole)
+                    return null;
+                var byteAt = arguments.Count > 1 ? model.ValueOf(arguments[1], on).AsNumber() ?? 0 : 0;
+                return new OperandSubstitution(whole.Parameter, whole.Operand, byteAt, true, expression);
+
+            default:
+                return null;
+        }
+    }
+
+    private static bool Is(SyntaxToken? register, string name) =>
+        register is { } token && token.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Returns the operand parameter <paramref name="name"/> refers to, and the operand it was

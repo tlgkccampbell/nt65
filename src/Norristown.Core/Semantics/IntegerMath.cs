@@ -21,19 +21,19 @@ namespace Norristown.Semantics;
 public static class IntegerMath
 {
     /// <summary>
+    /// The largest turn and scale the trigonometric functions accept. A value in the output must
+    /// fit ca65's 32 bits anyway, and bounding both keeps the intermediate numbers comfortably
+    /// small.
+    /// </summary>
+    public const long Limit = 0x7fffffff;
+
+    /// <summary>
     /// The number of fraction bits the series is computed to. This precision far exceeds the
     /// distance between two neighbouring results at any scale the language accepts. The one case
     /// where an exact value could sit halfway between two results is computed exactly instead,
     /// so the nearest whole number never depends on the last bit.
     /// </summary>
     private const int Bits = 192;
-
-    /// <summary>
-    /// The largest turn and scale the trigonometric functions accept. A value in the output must
-    /// fit ca65's 32 bits anyway, and bounding both keeps the intermediate numbers comfortably
-    /// small.
-    /// </summary>
-    public const long Limit = 0x7fffffff;
 
     /// <summary>
     /// π/2 as a fraction with <see cref="Bits"/> bits after the point. It is a literal rather than

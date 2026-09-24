@@ -37,6 +37,50 @@ public sealed class ProgramSymbols
     /// <summary>Gets the table for a program of one file, which can see nothing beyond itself.</summary>
     public static ProgramSymbols Empty { get; } = new([], [], []);
 
+    /// <summary>Gets every module of the program.</summary>
+    public IEnumerable<Module> Modules => modules.Values;
+
+    /// <summary>Gets every define, which every file sees.</summary>
+    public IEnumerable<Symbol> Defines => defines.Values;
+
+    /// <summary>
+    /// Returns the module named <paramref name="name"/>, or null when no file declares that
+    /// module.
+    /// </summary>
+    public Module? ModuleNamed(string name) => modules.GetValueOrDefault(name);
+
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="path"/> is a module or the start of a
+    /// module's name.
+    /// </summary>
+    public bool IsModulePath(string path) => modules.ContainsKey(path) || prefixes.Contains(path);
+
+    /// <summary>
+    /// Returns the define named <paramref name="name"/>, which every file sees, or null if there
+    /// is none.
+    /// </summary>
+    public Symbol? Define(string name) => defines.GetValueOrDefault(name);
+
+    /// <summary>
+    /// Returns what <paramref name="name"/> means in <paramref name="module"/>, which is either a
+    /// name its file declares at its top level, exported or not, or a name it re-exports.
+    /// <paramref name="touched"/> is called with every name looked for and the module it was
+    /// looked for in, including those a re-export leads through.
+    /// </summary>
+    public Symbol? Member(Module module, string name, Action<string?, string>? touched = null) =>
+        Member(module, name, touched, []);
+
+    /// <summary>
+    /// Returns the modules that export a top-level name <paramref name="name"/>. These are what an
+    /// undeclared name may have meant.
+    /// </summary>
+    public IEnumerable<string> ModulesExporting(string name) =>
+        modules.Values
+            .Where(module => module.FileScope.FindMember(name) is { IsExported: true }
+                || module.Reexports.Any(reexport => reexport.Name == name))
+            .Select(module => module.Name!)
+            .Order(StringComparer.Ordinal);
+
     /// <summary>
     /// Builds the table for a program whose files have been collected but not yet resolved.
     /// Problems with the modules, rather than with one file, are reported here. These are two
@@ -115,50 +159,6 @@ public sealed class ProgramSymbols
             defined.TryAdd(define.Name, define);
         return new ProgramSymbols(byName, prefixes, defined);
     }
-
-    /// <summary>Gets every module of the program.</summary>
-    public IEnumerable<Module> Modules => modules.Values;
-
-    /// <summary>Gets every define, which every file sees.</summary>
-    public IEnumerable<Symbol> Defines => defines.Values;
-
-    /// <summary>
-    /// Returns the module named <paramref name="name"/>, or null when no file declares that
-    /// module.
-    /// </summary>
-    public Module? ModuleNamed(string name) => modules.GetValueOrDefault(name);
-
-    /// <summary>
-    /// Returns a value indicating whether <paramref name="path"/> is a module or the start of a
-    /// module's name.
-    /// </summary>
-    public bool IsModulePath(string path) => modules.ContainsKey(path) || prefixes.Contains(path);
-
-    /// <summary>
-    /// Returns the define named <paramref name="name"/>, which every file sees, or null if there
-    /// is none.
-    /// </summary>
-    public Symbol? Define(string name) => defines.GetValueOrDefault(name);
-
-    /// <summary>
-    /// Returns what <paramref name="name"/> means in <paramref name="module"/>, which is either a
-    /// name its file declares at its top level, exported or not, or a name it re-exports.
-    /// <paramref name="touched"/> is called with every name looked for and the module it was
-    /// looked for in, including those a re-export leads through.
-    /// </summary>
-    public Symbol? Member(Module module, string name, Action<string?, string>? touched = null) =>
-        Member(module, name, touched, []);
-
-    /// <summary>
-    /// Returns the modules that export a top-level name <paramref name="name"/>. These are what an
-    /// undeclared name may have meant.
-    /// </summary>
-    public IEnumerable<string> ModulesExporting(string name) =>
-        modules.Values
-            .Where(module => module.FileScope.FindMember(name) is { IsExported: true }
-                || module.Reexports.Any(reexport => reexport.Name == name))
-            .Select(module => module.Name!)
-            .Order(StringComparer.Ordinal);
 
     /// <summary>
     /// Returns a value indicating whether an export is a symbol to the linker. A macro, a charmap,

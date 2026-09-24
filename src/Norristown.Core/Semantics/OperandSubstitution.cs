@@ -32,11 +32,6 @@ public sealed record OperandSubstitution(
     public AddressPrefixSyntax? Prefix => (Operand as AbsoluteOperandSyntax)?.Prefix;
 
     /// <summary>
-    /// Gets a value indicating whether the argument was braced, as one of the operand forms.
-    /// </summary>
-    private bool IsOperandForm => Operand is OperandSyntax;
-
-    /// <summary>
     /// Gets the expression the argument addresses, from which the address size is determined.
     /// </summary>
     public SyntaxNode? Expression => Operands.ExpressionOf(Operand);
@@ -53,6 +48,11 @@ public sealed record OperandSubstitution(
 
     /// <summary>Gets the argument's index register, such as <c>,x</c>, which follows the expression.</summary>
     public SyntaxToken? Index => (Operand as AbsoluteOperandSyntax)?.IndexRegister;
+
+    /// <summary>
+    /// Gets a value indicating whether the argument was braced, as one of the operand forms.
+    /// </summary>
+    private bool IsOperandForm => Operand is OperandSyntax;
 
     /// <summary>
     /// Gets a value indicating whether the argument's own index is <c>,s</c>. Only an operand form

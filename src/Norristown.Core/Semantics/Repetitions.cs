@@ -68,6 +68,15 @@ public static class Repetitions
     }
 
     /// <summary>
+    /// Returns the message explaining why a <c>.repeat</c> or <c>.each</c> body may not contain
+    /// <paramref name="statement"/>, or null when it may. What the body declares is a different
+    /// name on every iteration, and each forbidden statement is one thing for the whole file.
+    /// </summary>
+    public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
+        ? Catalogue.DeclarationInARepetition.Message(why.What, why.Because)
+        : (DiagnosticMessage?)null;
+
+    /// <summary>
     /// Returns the iterations of <c>.repeat count, i</c>. The name counts from zero, as an index
     /// does.
     /// </summary>
@@ -139,15 +148,6 @@ public static class Repetitions
         Report(model, diagnostics, walked, outer, Catalogue.EachNotOverAList);
         return [];
     }
-
-    /// <summary>
-    /// Returns the message explaining why a <c>.repeat</c> or <c>.each</c> body may not contain
-    /// <paramref name="statement"/>, or null when it may. What the body declares is a different
-    /// name on every iteration, and each forbidden statement is one thing for the whole file.
-    /// </summary>
-    public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
-        ? Catalogue.DeclarationInARepetition.Message(why.What, why.Because)
-        : (DiagnosticMessage?)null;
 
     /// <summary>
     /// Returns the two halves of the <see cref="Forbidden"/> message, what is refused and why, or

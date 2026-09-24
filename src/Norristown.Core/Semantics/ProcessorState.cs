@@ -25,18 +25,6 @@ public readonly record struct ProcessorState(
     public static ProcessorState Unknown => new(
         Width.Unknown, Width.Unknown, ProcessorMode.Unknown, StateValue.Unknown, StateValue.Unknown);
 
-    /// <summary>Returns the width of <paramref name="register"/>.</summary>
-    public Width Of(Processor.WidthRegister register) => register == Processor.WidthRegister.A ? A : Index;
-
-    /// <summary>
-    /// Returns the state formatted as in a signature, such as <c>a16, i8, native</c>. The direct
-    /// page and the data bank are included when they are anything other than unchanged.
-    /// </summary>
-    public override string ToString() =>
-        $"{Format(StateRegister.A, A)}, {Format(StateRegister.Index, Index)}, {Format(E)}"
-        + (D.Kind == StateValueKind.Unchanged ? "" : ", " + D.Format(StateRegister.DirectPage))
-        + (B.Kind == StateValueKind.Unchanged ? "" : ", " + B.Format(StateRegister.DataBank));
-
     /// <summary>
     /// Formats one width as a signature item: <c>a8</c>, <c>a16</c>, <c>a?</c> or <c>a*</c>.
     /// </summary>
@@ -58,4 +46,16 @@ public readonly record struct ProcessorState(
         ProcessorMode.Unknown => "e?",
         _ => "e*",
     };
+
+    /// <summary>Returns the width of <paramref name="register"/>.</summary>
+    public Width Of(Processor.WidthRegister register) => register == Processor.WidthRegister.A ? A : Index;
+
+    /// <summary>
+    /// Returns the state formatted as in a signature, such as <c>a16, i8, native</c>. The direct
+    /// page and the data bank are included when they are anything other than unchanged.
+    /// </summary>
+    public override string ToString() =>
+        $"{Format(StateRegister.A, A)}, {Format(StateRegister.Index, Index)}, {Format(E)}"
+        + (D.Kind == StateValueKind.Unchanged ? "" : ", " + D.Format(StateRegister.DirectPage))
+        + (B.Kind == StateValueKind.Unchanged ? "" : ", " + B.Format(StateRegister.DataBank));
 }

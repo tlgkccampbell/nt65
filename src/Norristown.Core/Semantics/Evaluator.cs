@@ -192,6 +192,28 @@ internal sealed partial class Evaluator
         return false;
     }
 
+    /// <summary>Returns the diagnostic message for a value too wide for ca65 to hold.</summary>
+    private static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Message(Value.Of(number));
+
+    /// <summary>
+    /// Determines whether ca65 can hold a value. ca65's own arithmetic is 32-bit signed, and it
+    /// also reads a 32-bit value as unsigned.
+    /// </summary>
+    private static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
+
+    /// <summary>
+    /// Returns the word that one side of a comparison gives. This is the value when it is
+    /// already a word, or otherwise the bare name on that side, which is compared as a word
+    /// without being looked up.
+    /// </summary>
+    private static string? WordOf(Value value, ExpressionSyntax expression) => value.IsWord
+        ? value.Text
+        : expression is NameExpressionSyntax { SimpleName: { } word }
+            ? word.Text
+            : null;
+
+    private static Value Number(long? value) => value is { } number ? Value.Of(number) : Value.Unknown;
+
     /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
     private void Bytes(SyntaxNode operand)
     {
@@ -225,9 +247,6 @@ internal sealed partial class Evaluator
             Report(node, TooWide(number));
         return value;
     }
-
-    /// <summary>Returns the diagnostic message for a value too wide for ca65 to hold.</summary>
-    private static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Message(Value.Of(number));
 
     /// <summary>
     /// Reports a literal that contains a character above <c>$7f</c>, unless a charmap or layout
@@ -265,12 +284,6 @@ internal sealed partial class Evaluator
         }
         return false;
     }
-
-    /// <summary>
-    /// Determines whether ca65 can hold a value. ca65's own arithmetic is 32-bit signed, and it
-    /// also reads a 32-bit value as unsigned.
-    /// </summary>
-    private static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
 
     private Value Evaluated(SyntaxNode node)
     {
@@ -679,17 +692,6 @@ internal sealed partial class Evaluator
         return Value.Unknown;
     }
 
-    /// <summary>
-    /// Returns the word that one side of a comparison gives. This is the value when it is
-    /// already a word, or otherwise the bare name on that side, which is compared as a word
-    /// without being looked up.
-    /// </summary>
-    private static string? WordOf(Value value, ExpressionSyntax expression) => value.IsWord
-        ? value.Text
-        : expression is NameExpressionSyntax { SimpleName: { } word }
-            ? word.Text
-            : null;
-
     private Value Binary(SyntaxToken op, Value left, Value right)
     {
         if (left.AsNumber() is not { } a || right.AsNumber() is not { } b)
@@ -734,8 +736,6 @@ internal sealed partial class Evaluator
     /// because only a name can refer to a symbol.
     /// </summary>
     private Symbol? SymbolOf(SyntaxNode node) => node is NameExpressionSyntax name ? SymbolOf(name) : null;
-
-    private static Value Number(long? value) => value is { } number ? Value.Of(number) : Value.Unknown;
 
     private void Report(Span span, DiagnosticMessage message, IReadOnlyList<RelatedSpan> related) =>
         Add(new Diagnostic(span, Severity.Error, message, related));

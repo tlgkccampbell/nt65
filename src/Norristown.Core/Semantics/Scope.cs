@@ -92,20 +92,6 @@ public sealed class Scope
     }
 
     /// <summary>
-    /// Adds <paramref name="symbol"/>, or returns the declaration already using that name.
-    /// A name may be declared once in its scope, and cheap locals count separately.
-    /// </summary>
-    internal Symbol? Declare(Symbol symbol)
-    {
-        var table = symbol.IsCheapLocal ? cheapLocals : members;
-        if (table.TryGetValue(symbol.Name, out var existing))
-            return existing;
-        table.Add(symbol.Name, symbol);
-        order.Add(symbol);
-        return null;
-    }
-
-    /// <summary>
     /// Returns the symbol <paramref name="name"/> means in this scope, without looking outward.
     /// </summary>
     public Symbol? FindMember(string name) => members.GetValueOrDefault(name);
@@ -147,4 +133,18 @@ public sealed class Scope
 
     /// <summary>Returns the scope's kind and name, for debugging.</summary>
     public override string ToString() => Name is null ? Kind.ToString() : $"{Kind} {Name}";
+
+    /// <summary>
+    /// Adds <paramref name="symbol"/>, or returns the declaration already using that name.
+    /// A name may be declared once in its scope, and cheap locals count separately.
+    /// </summary>
+    internal Symbol? Declare(Symbol symbol)
+    {
+        var table = symbol.IsCheapLocal ? cheapLocals : members;
+        if (table.TryGetValue(symbol.Name, out var existing))
+            return existing;
+        table.Add(symbol.Name, symbol);
+        order.Add(symbol);
+        return null;
+    }
 }

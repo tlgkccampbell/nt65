@@ -212,41 +212,6 @@ public sealed class SegmentTable
     internal static bool Declares(SyntaxTree tree) => Declarations(tree).Count > 0;
 
     /// <summary>
-    /// Returns the space a file's segment declaration puts the segment in with
-    /// <c>space = name</c>, which must be given once and name a declared space. Returns null for
-    /// the host's space, after reporting any problem.
-    /// </summary>
-    private string? SpaceOf(string segment, SegmentDeclarationSyntax node, List<Diagnostic> diagnostics)
-    {
-        string? found = null;
-        var given = false;
-        foreach (var attribute in node.Attributes)
-        {
-            if (attribute.Name.IsMissing || !attribute.Name.Text.Equals("space", StringComparison.OrdinalIgnoreCase))
-                continue;
-            var at = attribute.Tree.GetSpan(attribute.Span);
-            if (given)
-            {
-                diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Message(segment, "space")));
-                continue;
-            }
-            given = true;
-            if (attribute.Value is not NameExpressionSyntax { Names.Length: 1, SimpleName: { } name })
-            {
-                diagnostics.Add(new Diagnostic(at, Catalogue.SpaceNotAName));
-                continue;
-            }
-            if (!spaces.ContainsKey(name.Text))
-            {
-                diagnostics.Add(new Diagnostic(attribute.Tree.GetSpan(name.Span), Catalogue.SpaceUndeclared.Message(name.Text)));
-                continue;
-            }
-            found = name.Text;
-        }
-        return found;
-    }
-
-    /// <summary>
     /// Returns the bank ranges a <c>mirrors = [$00..$3f, $80]</c> gives, after checking that each
     /// is a constant bank.
     /// </summary>
@@ -326,6 +291,41 @@ public sealed class SegmentTable
         // The parser has already reported the missing size. Absolute is the default that
         // produces the fewest further diagnostics.
         return AddressSize.Absolute;
+    }
+
+    /// <summary>
+    /// Returns the space a file's segment declaration puts the segment in with
+    /// <c>space = name</c>, which must be given once and name a declared space. Returns null for
+    /// the host's space, after reporting any problem.
+    /// </summary>
+    private string? SpaceOf(string segment, SegmentDeclarationSyntax node, List<Diagnostic> diagnostics)
+    {
+        string? found = null;
+        var given = false;
+        foreach (var attribute in node.Attributes)
+        {
+            if (attribute.Name.IsMissing || !attribute.Name.Text.Equals("space", StringComparison.OrdinalIgnoreCase))
+                continue;
+            var at = attribute.Tree.GetSpan(attribute.Span);
+            if (given)
+            {
+                diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Message(segment, "space")));
+                continue;
+            }
+            given = true;
+            if (attribute.Value is not NameExpressionSyntax { Names.Length: 1, SimpleName: { } name })
+            {
+                diagnostics.Add(new Diagnostic(at, Catalogue.SpaceNotAName));
+                continue;
+            }
+            if (!spaces.ContainsKey(name.Text))
+            {
+                diagnostics.Add(new Diagnostic(attribute.Tree.GetSpan(name.Span), Catalogue.SpaceUndeclared.Message(name.Text)));
+                continue;
+            }
+            found = name.Text;
+        }
+        return found;
     }
 
     /// <summary>Represents one <c>.segment NAME: size</c> item before it reaches the table.</summary>

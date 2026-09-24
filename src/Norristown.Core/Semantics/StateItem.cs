@@ -55,6 +55,10 @@ public readonly record struct StateItem(
         }
     }
 
+    /// <summary>Gets the name of the signature set a <see cref="StatePart.Set"/> item names.</summary>
+    public NameExpressionSyntax? SetName =>
+        Part == StatePart.Set && Node is StateSetItemSyntax set ? set.Name : null;
+
     /// <summary>Reads the items of a state list, or of a <c>.state</c>, in source order.</summary>
     public static IEnumerable<StateItem> Read(SyntaxNode? list)
     {
@@ -71,10 +75,6 @@ public readonly record struct StateItem(
             }
         }
     }
-
-    /// <summary>Gets the name of the signature set a <see cref="StatePart.Set"/> item names.</summary>
-    public NameExpressionSyntax? SetName =>
-        Part == StatePart.Set && Node is StateSetItemSyntax set ? set.Name : null;
 
     /// <summary>
     /// Returns a value indicating whether a list has items and every item is a <c>keeps</c>. Such

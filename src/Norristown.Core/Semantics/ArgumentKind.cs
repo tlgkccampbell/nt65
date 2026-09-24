@@ -45,25 +45,6 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
     /// </summary>
     public NameExpressionSyntax? Enum { get; init; }
 
-    /// <summary>Returns the kind as it appears in the source, in the form a diagnostic uses.</summary>
-    public override string ToString() => Kind switch
-    {
-        ParameterKind.One => $"one({string.Join(", ", Words)})",
-        ParameterKind.List => $"list({Element?.ToString() ?? "expr"})",
-        ParameterKind.Const when Low is not null && High is not null =>
-            $"const({Low.GetText().Trim()}..{High.GetText().Trim()})",
-        ParameterKind.Operand when Words.Count > 0 => $"operand({string.Join(", ", Words)})",
-        ParameterKind.Enum => Enum?.GetText().Trim() ?? "expr",
-        _ => Kind.ToString().ToLowerInvariant(),
-    };
-
-    /// <inheritdoc/>
-    public bool Equals(ArgumentKind? other) =>
-        other is not null && ToString() == other.ToString();
-
-    /// <inheritdoc/>
-    public override int GetHashCode() => ToString().GetHashCode(StringComparison.Ordinal);
-
     /// <summary>
     /// Reads the kind declared after a parameter's <c>:</c> from the syntax. A kind the parser
     /// could not read is treated as an expression, the kind that accepts the most, so that
@@ -100,4 +81,23 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
             return new ArgumentKind(kind, [], null) { Low = syntax.Low, High = syntax.High };
         return new ArgumentKind(kind, [], null);
     }
+
+    /// <summary>Returns the kind as it appears in the source, in the form a diagnostic uses.</summary>
+    public override string ToString() => Kind switch
+    {
+        ParameterKind.One => $"one({string.Join(", ", Words)})",
+        ParameterKind.List => $"list({Element?.ToString() ?? "expr"})",
+        ParameterKind.Const when Low is not null && High is not null =>
+            $"const({Low.GetText().Trim()}..{High.GetText().Trim()})",
+        ParameterKind.Operand when Words.Count > 0 => $"operand({string.Join(", ", Words)})",
+        ParameterKind.Enum => Enum?.GetText().Trim() ?? "expr",
+        _ => Kind.ToString().ToLowerInvariant(),
+    };
+
+    /// <inheritdoc/>
+    public bool Equals(ArgumentKind? other) =>
+        other is not null && ToString() == other.ToString();
+
+    /// <inheritdoc/>
+    public override int GetHashCode() => ToString().GetHashCode(StringComparison.Ordinal);
 }

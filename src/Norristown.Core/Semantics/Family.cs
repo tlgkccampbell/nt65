@@ -74,28 +74,6 @@ public sealed class Family
     public string Directive => IsFolded ? ".multiproc" : ".each";
 
     /// <summary>
-    /// Returns the instance named after <paramref name="member"/>, or null if the family declares
-    /// no instance for it.
-    /// </summary>
-    public Symbol? InstanceFor(Symbol? member) =>
-        member is not null && byMember.TryGetValue(member, out var instance) ? instance : null;
-
-    /// <summary>
-    /// Returns the instance being emitted at <paramref name="on"/>. This is the instance for the
-    /// member of the enclosing iteration that emits this family's block, or null outside such an
-    /// iteration.
-    /// </summary>
-    public Symbol? InstanceAt(Expansion? on)
-    {
-        for (var level = on; level is not null; level = level.Outer)
-        {
-            if (level.Body == Block)
-                return InstanceFor(level.Member);
-        }
-        return null;
-    }
-
-    /// <summary>
     /// Returns <paramref name="found"/> with each problem found on more than one instance reported
     /// once. A family's body appears once in the source, so a mistake in it is found once per
     /// instance, and each report names the instance it was found on. Two or more reports that are
@@ -131,6 +109,31 @@ public sealed class Family
     }
 
     /// <summary>
+    /// Returns the instance named after <paramref name="member"/>, or null if the family declares
+    /// no instance for it.
+    /// </summary>
+    public Symbol? InstanceFor(Symbol? member) =>
+        member is not null && byMember.TryGetValue(member, out var instance) ? instance : null;
+
+    /// <summary>
+    /// Returns the instance being emitted at <paramref name="on"/>. This is the instance for the
+    /// member of the enclosing iteration that emits this family's block, or null outside such an
+    /// iteration.
+    /// </summary>
+    public Symbol? InstanceAt(Expansion? on)
+    {
+        for (var level = on; level is not null; level = level.Outer)
+        {
+            if (level.Body == Block)
+                return InstanceFor(level.Member);
+        }
+        return null;
+    }
+
+    /// <summary>Returns a description of what the family declares, for debugging.</summary>
+    public override string ToString() => $"{Directive} {Enumeration.Name}, {Binding.Name}: {Instances.Count} instances";
+
+    /// <summary>
     /// Returns <paramref name="message"/> with each instance's name replaced by the name its
     /// repetition binds.
     /// </summary>
@@ -143,7 +146,4 @@ public sealed class Family
         }
         return message;
     }
-
-    /// <summary>Returns a description of what the family declares, for debugging.</summary>
-    public override string ToString() => $"{Directive} {Enumeration.Name}, {Binding.Name}: {Instances.Count} instances";
 }
