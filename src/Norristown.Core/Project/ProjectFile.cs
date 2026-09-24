@@ -350,13 +350,15 @@ public static class ProjectFile
                         segment = segment with { Mirrors = Banks(property.Name, attribute.Value) };
                         continue;
                     }
+                    if (StateRegister.FromAttribute(attribute.Name) is not { } register)
+                        continue;
                     var value = Number(attribute.Value);
-                    if (Semantics.SegmentTable.Check(property.Name, address, attribute.Name, value, At(property.Name),
+                    if (Semantics.SegmentTable.Check(property.Name, address, register, value, At(property.Name),
                         (segment.DirectPage, segment.Bank), diagnostics) is not { } valid)
                     {
                         continue;
                     }
-                    segment = attribute.Name == "dp" ? segment with { DirectPage = valid } : segment with { Bank = valid };
+                    segment = register == StateRegister.DirectPage ? segment with { DirectPage = valid } : segment with { Bank = valid };
                 }
                 if (segment is { Mirrors.Count: > 0, Bank: null })
                     Report(property.Name, SegmentTable.MirrorsNeedABank(property.Name));

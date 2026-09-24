@@ -151,18 +151,14 @@ public readonly record struct StateItem(
             SyntaxKind.Question => ProcessorMode.Unknown,
             _ => name == "emu" ? ProcessorMode.Emulation : ProcessorMode.Native,
         };
-        StatePart? part = name switch
+        StatePart? part = StateRegister.FromItem(name)?.Part ?? name switch
         {
-            "a" or "a8" or "a16" => StatePart.A,
-            "i" or "i8" or "i16" => StatePart.Index,
             "e" or "native" or "emu" => StatePart.E,
             "near" or "far" => StatePart.Distance,
             "inline" => StatePart.Inline,
             "args" => StatePart.Arguments,
             "interrupt" => StatePart.Interrupt,
             "noreturn" => StatePart.NoReturn,
-            "dp" => StatePart.DirectPage,
-            "dbr" => StatePart.DataBank,
             "keeps" => StatePart.Keeps,
             _ => null,
         };

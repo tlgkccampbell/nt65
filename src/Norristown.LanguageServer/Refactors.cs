@@ -268,8 +268,8 @@ internal static class Refactors
                 var width = mnemonic == MnemonicKind.Rep ? 16 : 8;
                 var items = string.Join(", ", new[]
                 {
-                    (flags & (long)StatusFlags.M) != 0 ? $"a{width}" : null,
-                    (flags & (long)StatusFlags.X) != 0 ? $"i{width}" : null,
+                    (flags & (long)StatusFlags.M) != 0 ? StateRegister.A.WidthItem(width) : null,
+                    (flags & (long)StatusFlags.X) != 0 ? StateRegister.Index.WidthItem(width) : null,
                 }.OfType<string>());
                 yield return new Change($"Rewrite as `.ensure {items}`", CodeActionKinds.Rewrite,
                     [new Edit(tree, statement.Span, $"{SyntaxFacts.TextOf(DirectiveKind.Ensure)} {items}")]);

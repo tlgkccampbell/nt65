@@ -1510,7 +1510,7 @@ public sealed class Emitter
         widths[register] = bits;
         Segment();
         Flush();
-        Line($"{Body}.{(register == WidthRegister.A ? "a" : "i")}{bits}");
+        Line($"{Body}.{StateRegister.Of(register).WidthItem(bits)}");
     }
 
     /// <summary>

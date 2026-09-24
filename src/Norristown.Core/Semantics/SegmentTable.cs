@@ -120,21 +120,20 @@ public sealed class SegmentTable
     /// on a <c>zp</c> segment, the only kind whose symbols are reached through the direct page.
     /// </summary>
     public static long? Check(
-        string segment, AddressSize size, string word, long? value, Span at, (long? DirectPage, long? Bank) already,
-        List<Diagnostic> diagnostics)
+        string segment, AddressSize size, StateRegister register, long? value, Span at,
+        (long? DirectPage, long? Bank) already, List<Diagnostic> diagnostics)
     {
         DiagnosticMessage? problem = null;
-        if ((word == "dp" ? already.DirectPage : already.Bank) is not null)
+        var word = register.Attribute!;
+        var isDirectPage = register == StateRegister.DirectPage;
+        if ((isDirectPage ? already.DirectPage : already.Bank) is not null)
             problem = Catalogue.SegmentAttributeTwice.Message(segment, word);
-        else if (word == "dp" && size != AddressSize.ZeroPage)
+        else if (isDirectPage && size != AddressSize.ZeroPage)
             problem = Catalogue.SegmentDpNotZp.Message(segment);
         else if (value is null)
             problem = Catalogue.SegmentAttributeNotConstant.Message(word);
-        else if (value < 0 || value > (word == "dp" ? 0xffff : 0xff))
-        {
-            problem = Catalogue.SegmentAttributeOutOfRange.Message(
-                word == "dp" ? "`dp` must be $0000 to $ffff: the direct page is a 16-bit address" : "`bank` must be $00 to $ff: a bank is one byte");
-        }
+        else if (value < 0 || value > register.Maximum)
+            problem = Catalogue.SegmentAttributeOutOfRange.Message($"`{word}` must be {register.ValueRange()}: {register.Range}");
         if (problem is not { } reported)
             return value;
         diagnostics.Add(new Diagnostic(at, reported));
@@ -177,12 +176,12 @@ public sealed class SegmentTable
                     segment = segment with { Mirrors = Mirrors(attribute, valueOf, diagnostics) };
                     continue;
                 }
-                if (attribute.Value is not { } expression)
+                if (attribute.Value is not { } expression || StateRegister.FromAttribute(word) is not { } register)
                     continue;
                 var value = valueOf(expression);
-                if (Check(name, segment.Size, word, value, at, (segment.DirectPage, segment.Bank), diagnostics) is not { } valid)
+                if (Check(name, segment.Size, register, value, at, (segment.DirectPage, segment.Bank), diagnostics) is not { } valid)
                     continue;
-                segment = word == "dp" ? segment with { DirectPage = valid } : segment with { Bank = valid };
+                segment = register == StateRegister.DirectPage ? segment with { DirectPage = valid } : segment with { Bank = valid };
             }
             if (mirrors is not null && segment.Bank is null)
             {
