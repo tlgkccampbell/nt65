@@ -39,36 +39,6 @@ public sealed record RegisterState(
     /// <summary>Gets why the stack is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyStack { get; init; }
 
-    /// <summary>Returns what <paramref name="register"/> may hold.</summary>
-    public RegisterValue Of(Registers register) => register switch
-    {
-        Registers.A => A,
-        Registers.X => X,
-        Registers.Y => Y,
-        _ => C,
-    };
-
-    /// <summary>Returns this state with <paramref name="register"/> holding <paramref name="value"/>.</summary>
-    public RegisterState With(Registers register, RegisterValue value) => register switch
-    {
-        Registers.A => this with { A = value },
-        Registers.X => this with { X = value },
-        Registers.Y => this with { Y = value },
-        _ => this with { C = value },
-    };
-
-    /// <summary>
-    /// Returns this state with every register of <paramref name="registers"/> holding
-    /// <paramref name="value"/>.
-    /// </summary>
-    public RegisterState WithEach(Registers registers, RegisterValue value)
-    {
-        var state = this;
-        foreach (var register in RegisterEffects.Each(registers))
-            state = state.With(register, value);
-        return state;
-    }
-
     /// <summary>Gets the registers that hold exactly their own entry value here.</summary>
     public Registers Kept
     {
@@ -102,5 +72,35 @@ public sealed record RegisterState(
         {
             WhyStack = stack is null ? known.WhyStack ?? arriving.WhyStack : null,
         };
+    }
+
+    /// <summary>Returns what <paramref name="register"/> may hold.</summary>
+    public RegisterValue Of(Registers register) => register switch
+    {
+        Registers.A => A,
+        Registers.X => X,
+        Registers.Y => Y,
+        _ => C,
+    };
+
+    /// <summary>Returns this state with <paramref name="register"/> holding <paramref name="value"/>.</summary>
+    public RegisterState With(Registers register, RegisterValue value) => register switch
+    {
+        Registers.A => this with { A = value },
+        Registers.X => this with { X = value },
+        Registers.Y => this with { Y = value },
+        _ => this with { C = value },
+    };
+
+    /// <summary>
+    /// Returns this state with every register of <paramref name="registers"/> holding
+    /// <paramref name="value"/>.
+    /// </summary>
+    public RegisterState WithEach(Registers registers, RegisterValue value)
+    {
+        var state = this;
+        foreach (var register in RegisterEffects.Each(registers))
+            state = state.With(register, value);
+        return state;
     }
 }

@@ -78,14 +78,6 @@ public sealed class StateAnalysis : IProcessorStates
         reaching.GetValueOrDefault(StepKey.Of(statement, on));
 
     /// <summary>
-    /// Returns the <c>n</c> of <c>n,s</c> that the frame slot in <paramref name="statement"/>'s
-    /// operand comes to in the expansion <paramref name="on"/>. It returns null where the operand
-    /// names no slot or the slot is not known.
-    /// </summary>
-    public int? SlotAt(SyntaxNode statement, Expansion? on = null) =>
-        slots.TryGetValue(StepKey.Of(statement, on), out var slot) ? slot : null;
-
-    /// <summary>
     /// Returns the processor's own part of the state <see cref="Before"/> returns, which is all
     /// layout asks of the analysis.
     /// </summary>
@@ -94,6 +86,14 @@ public sealed class StateAnalysis : IProcessorStates
     /// <returns>The processor state reaching it, or null.</returns>
     ProcessorState? IProcessorStates.Before(SyntaxNode statement, Expansion? on) =>
         Before(statement, on)?.Processor;
+
+    /// <summary>
+    /// Returns the <c>n</c> of <c>n,s</c> that the frame slot in <paramref name="statement"/>'s
+    /// operand comes to in the expansion <paramref name="on"/>. It returns null where the operand
+    /// names no slot or the slot is not known.
+    /// </summary>
+    public int? SlotAt(SyntaxNode statement, Expansion? on = null) =>
+        slots.TryGetValue(StepKey.Of(statement, on), out var slot) ? slot : null;
 
     /// <summary>
     /// Returns the state reaching a statement in any <see cref="Expansion"/> of it. An editor asks
@@ -215,6 +215,104 @@ public sealed class StateAnalysis : IProcessorStates
         bytes is { } count ? stack?.Pull(count) : null;
 
     /// <summary>
+    /// Returns the state at a declared label that can be entered from outside the routine. The
+    /// parts its <c>.state</c> gives keep what reaches the label, which the directive itself then
+    /// checks. Every part it leaves out becomes unknown, because a jump from outside is checked
+    /// for the parts the declaration gives and for nothing else. The stack is what a call to the
+    /// routine leaves, since that is what a jump in arrives with. It is unknown where the path
+    /// above the label has pushed something else, because a declaration cannot say what is on
+    /// the stack, so nothing can reconcile the two.
+    /// </summary>
+    private static FlowState Entered(
+        BasicBlock block, FlowState reached, Signature signature, Symbol routine)
+    {
+        var given = Given(block);
+        var here = reached.Processor;
+        var outside = Outside(signature);
+        var label = block.Label!;
+        var a = given.Contains(StatePart.A) ? here.A : Met(here.A, outside.A);
+        var index = given.Contains(StatePart.Index) ? here.Index : Met(here.Index, outside.Index);
+        var stack = AnalysisStack.Merge(reached.Stack, EntryStack(signature));
+        return reached with
+        {
+            Processor = new ProcessorState(
+                a,
+                index,
+                given.Contains(StatePart.E) ? here.E : here.E == outside.E ? here.E : ProcessorMode.Unknown,
+                given.Contains(StatePart.DirectPage) ? here.D : StateValue.Merge(here.D, outside.D),
+                given.Contains(StatePart.DataBank) ? here.B : StateValue.Merge(here.B, outside.B)),
+            Stack = stack,
+            WhyA = a == Width.Unknown && !given.Contains(StatePart.A)
+                ? Undeclared(label, routine, StateRegister.A)
+                : reached.WhyA,
+            WhyIndex = index == Width.Unknown && !given.Contains(StatePart.Index)
+                ? Undeclared(label, routine, StateRegister.Index)
+                : reached.WhyIndex,
+            WhyStack = stack is null ? OutsideEntries.UnknownStack(label, routine) : reached.WhyStack,
+        };
+
+        static Width Met(Width here, Width outside) => here == outside ? here : Width.Unknown;
+    }
+
+    /// <summary>
+    /// Returns the routine a target's label is inside, where the target is a label in another
+    /// routine and so a jump into that routine's interior. It returns null for every other target.
+    /// Another instance of the same <see cref="Family"/> does not count as another routine,
+    /// because all the instances share one body in the source.
+    /// </summary>
+    private static Symbol? Interior(Symbol target, Symbol routine) =>
+        target is { Kind: SymbolKind.Label, Routine: { } owner } && owner != routine && !owner.IsSiblingOf(routine)
+            ? owner
+            : null;
+
+    /// <summary>
+    /// Checks a call made with <c>per</c> and a branch, and returns the state after it. The call is
+    /// checked as <c>jsr</c> or, with a <c>phk</c> before it, as <c>jsl</c>.
+    /// </summary>
+    private static ProcessorState RelativelyCalled(
+        Step step, MnemonicKind mnemonic, RelativeCall call, ProcessorState state, StateChecks? report)
+    {
+        var callee = call.Routine.Signature!;
+        if (callee.IsInterrupt)
+            return state;
+        report?.CheckRelativeCall(step, mnemonic, call, state);
+        return StateChecks.Exited(callee, state);
+    }
+
+    /// <summary>
+    /// Returns the state after an <c>.ensure</c> such as <c>.ensure a16, i8</c>. The widths it
+    /// names hold after it, whatever it emits to make them. A 16-bit width needs native mode, and
+    /// is reported unless native mode is known here.
+    /// </summary>
+    private static FlowState Ensured(Step step, FlowState state, StateChecks? report)
+    {
+        var processor = state.Processor;
+        foreach (var item in StateItem.Read(step.Statement))
+        {
+            if (item.Part is not (StatePart.A or StatePart.Index) || !StateChecks.IsKnown(item.Width))
+            {
+                report?.ReportAt(item.Node, step, Catalogue.EnsureItemNotAWidth.Message(item.Text));
+                continue;
+            }
+            if (item.Width == Width.Sixteen && processor.E != ProcessorMode.Native)
+            {
+                report?.ReportAt(item.Node, step, Catalogue.EnsureNeedsNative.Message(
+                    item.Text,
+                    processor.E == ProcessorMode.Emulation
+                        ? "the processor is in emulation mode here, where both widths are 8 bits"
+                        : "the mode is not known here"));
+            }
+            // Emulation mode pins both widths at 8, whatever is emitted to change them.
+            if (processor.E == ProcessorMode.Emulation)
+                continue;
+            processor = item.Part == StatePart.A
+                ? processor with { A = item.Width }
+                : processor with { Index = item.Width };
+        }
+        return state with { Processor = processor };
+    }
+
+    /// <summary>
     /// Runs one region to a fixed point, then once more to report.
     /// </summary>
     private void Analyze(FlowRegion region)
@@ -254,46 +352,6 @@ public sealed class StateAnalysis : IProcessorStates
                 checks.Unreached(block, region);
         }
         MaximumWalks = Math.Max(MaximumWalks, walks.DefaultIfEmpty().Max());
-    }
-
-    /// <summary>
-    /// Returns the state at a declared label that can be entered from outside the routine. The
-    /// parts its <c>.state</c> gives keep what reaches the label, which the directive itself then
-    /// checks. Every part it leaves out becomes unknown, because a jump from outside is checked
-    /// for the parts the declaration gives and for nothing else. The stack is what a call to the
-    /// routine leaves, since that is what a jump in arrives with. It is unknown where the path
-    /// above the label has pushed something else, because a declaration cannot say what is on
-    /// the stack, so nothing can reconcile the two.
-    /// </summary>
-    private static FlowState Entered(
-        BasicBlock block, FlowState reached, Signature signature, Symbol routine)
-    {
-        var given = Given(block);
-        var here = reached.Processor;
-        var outside = Outside(signature);
-        var label = block.Label!;
-        var a = given.Contains(StatePart.A) ? here.A : Met(here.A, outside.A);
-        var index = given.Contains(StatePart.Index) ? here.Index : Met(here.Index, outside.Index);
-        var stack = AnalysisStack.Merge(reached.Stack, EntryStack(signature));
-        return reached with
-        {
-            Processor = new ProcessorState(
-                a,
-                index,
-                given.Contains(StatePart.E) ? here.E : here.E == outside.E ? here.E : ProcessorMode.Unknown,
-                given.Contains(StatePart.DirectPage) ? here.D : StateValue.Merge(here.D, outside.D),
-                given.Contains(StatePart.DataBank) ? here.B : StateValue.Merge(here.B, outside.B)),
-            Stack = stack,
-            WhyA = a == Width.Unknown && !given.Contains(StatePart.A)
-                ? Undeclared(label, routine, StateRegister.A)
-                : reached.WhyA,
-            WhyIndex = index == Width.Unknown && !given.Contains(StatePart.Index)
-                ? Undeclared(label, routine, StateRegister.Index)
-                : reached.WhyIndex,
-            WhyStack = stack is null ? OutsideEntries.UnknownStack(label, routine) : reached.WhyStack,
-        };
-
-        static Width Met(Width here, Width outside) => here == outside ? here : Width.Unknown;
     }
 
     /// <summary>
@@ -614,17 +672,6 @@ public sealed class StateAnalysis : IProcessorStates
         flow.Named(next, on).Select(named => named.Symbol).Where(symbol => symbol.Signature is not null);
 
     /// <summary>
-    /// Returns the routine a target's label is inside, where the target is a label in another
-    /// routine and so a jump into that routine's interior. It returns null for every other target.
-    /// Another instance of the same <see cref="Family"/> does not count as another routine,
-    /// because all the instances share one body in the source.
-    /// </summary>
-    private static Symbol? Interior(Symbol target, Symbol routine) =>
-        target is { Kind: SymbolKind.Label, Routine: { } owner } && owner != routine && !owner.IsSiblingOf(routine)
-            ? owner
-            : null;
-
-    /// <summary>
     /// Checks a call and returns the state after it. The state here must be what the routine
     /// expects, and becomes what it returns with, except for the parts it declares unchanged,
     /// which keep what they were.
@@ -648,20 +695,6 @@ public sealed class StateAnalysis : IProcessorStates
         if (callee.IsInterrupt)
             return state;
         report?.CheckCall(step, mnemonic, target, callee, state);
-        return StateChecks.Exited(callee, state);
-    }
-
-    /// <summary>
-    /// Checks a call made with <c>per</c> and a branch, and returns the state after it. The call is
-    /// checked as <c>jsr</c> or, with a <c>phk</c> before it, as <c>jsl</c>.
-    /// </summary>
-    private static ProcessorState RelativelyCalled(
-        Step step, MnemonicKind mnemonic, RelativeCall call, ProcessorState state, StateChecks? report)
-    {
-        var callee = call.Routine.Signature!;
-        if (callee.IsInterrupt)
-            return state;
-        report?.CheckRelativeCall(step, mnemonic, call, state);
         return StateChecks.Exited(callee, state);
     }
 
@@ -863,39 +896,6 @@ public sealed class StateAnalysis : IProcessorStates
             }
             return item.Width;
         }
-    }
-
-    /// <summary>
-    /// Returns the state after an <c>.ensure</c> such as <c>.ensure a16, i8</c>. The widths it
-    /// names hold after it, whatever it emits to make them. A 16-bit width needs native mode, and
-    /// is reported unless native mode is known here.
-    /// </summary>
-    private static FlowState Ensured(Step step, FlowState state, StateChecks? report)
-    {
-        var processor = state.Processor;
-        foreach (var item in StateItem.Read(step.Statement))
-        {
-            if (item.Part is not (StatePart.A or StatePart.Index) || !StateChecks.IsKnown(item.Width))
-            {
-                report?.ReportAt(item.Node, step, Catalogue.EnsureItemNotAWidth.Message(item.Text));
-                continue;
-            }
-            if (item.Width == Width.Sixteen && processor.E != ProcessorMode.Native)
-            {
-                report?.ReportAt(item.Node, step, Catalogue.EnsureNeedsNative.Message(
-                    item.Text,
-                    processor.E == ProcessorMode.Emulation
-                        ? "the processor is in emulation mode here, where both widths are 8 bits"
-                        : "the mode is not known here"));
-            }
-            // Emulation mode pins both widths at 8, whatever is emitted to change them.
-            if (processor.E == ProcessorMode.Emulation)
-                continue;
-            processor = item.Part == StatePart.A
-                ? processor with { A = item.Width }
-                : processor with { Index = item.Width };
-        }
-        return state with { Processor = processor };
     }
 
     /// <summary>

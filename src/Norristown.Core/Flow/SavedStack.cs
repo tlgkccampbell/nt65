@@ -34,6 +34,27 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// </summary>
     public IReadOnlyList<SavedPush> Pushes => pushes;
 
+    /// <summary>
+    /// Returns what two paths arriving at one place agree the stack holds, or null when they do
+    /// not agree on what is on it. A push they disagree about holds what either of them left.
+    /// </summary>
+    public static SavedStack? Merge(SavedStack? a, SavedStack? b)
+    {
+        if (a is null || b is null || a.pushes.Length != b.pushes.Length)
+            return null;
+        if (a.Equals(b))
+            return a;
+        var builder = a.pushes.ToBuilder();
+        for (var i = 0; i < builder.Count; i++)
+        {
+            var (x, y) = (a.pushes[i], b.pushes[i]);
+            if (x.Size != y.Size || x.Width != y.Width)
+                return null;
+            builder[i] = x with { Value = RegisterValue.Merge(x.Value, y.Value) };
+        }
+        return new SavedStack(builder.ToImmutable());
+    }
+
     /// <summary>Returns this stack with <paramref name="push"/> on top of it.</summary>
     public SavedStack Push(SavedPush push) => new(pushes.Add(push));
 
@@ -69,27 +90,6 @@ public sealed class SavedStack : IEquatable<SavedStack>
         pushes.Length == 0 ? this
             : pushes[^1].Size == size && pushes[^1].Width == width ? new SavedStack(pushes[..^1])
             : null;
-
-    /// <summary>
-    /// Returns what two paths arriving at one place agree the stack holds, or null when they do
-    /// not agree on what is on it. A push they disagree about holds what either of them left.
-    /// </summary>
-    public static SavedStack? Merge(SavedStack? a, SavedStack? b)
-    {
-        if (a is null || b is null || a.pushes.Length != b.pushes.Length)
-            return null;
-        if (a.Equals(b))
-            return a;
-        var builder = a.pushes.ToBuilder();
-        for (var i = 0; i < builder.Count; i++)
-        {
-            var (x, y) = (a.pushes[i], b.pushes[i]);
-            if (x.Size != y.Size || x.Width != y.Width)
-                return null;
-            builder[i] = x with { Value = RegisterValue.Merge(x.Value, y.Value) };
-        }
-        return new SavedStack(builder.ToImmutable());
-    }
 
     /// <inheritdoc/>
     public bool Equals(SavedStack? other) => other is not null && pushes.AsSpan().SequenceEqual(other.pushes.AsSpan());

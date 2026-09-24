@@ -23,14 +23,6 @@ internal static class Paths
         Through(blocks, 0, _ => true, Costing);
 
     /// <summary>
-    /// Returns what a block costs. That is its own cycles where a pass runs it once. For a block in
-    /// a counted loop it is the block's share of the whole loop's cost, which is all of it on the
-    /// header and none on the rest. A counted loop's back edge is not followed, so it no longer
-    /// makes a path cycle.
-    /// </summary>
-    public static CycleCount? Costing(BasicBlock block) => block.LoopCycles ?? block.Cycles;
-
-    /// <summary>
     /// Returns what one pass through part of a routine costs, starting from
     /// <paramref name="entry"/> and crossing the blocks <paramref name="inside"/> accepts, with
     /// <paramref name="weight"/> giving what each block costs. A path ends where nothing follows it
@@ -60,6 +52,14 @@ internal static class Paths
         }
         return (Minimum(blocks, entry, inside, weight), Maximum(blocks, reached, inside, weight), true);
     }
+
+    /// <summary>
+    /// Returns what a block costs. That is its own cycles where a pass runs it once. For a block in
+    /// a counted loop it is the block's share of the whole loop's cost, which is all of it on the
+    /// header and none on the rest. A counted loop's back edge is not followed, so it no longer
+    /// makes a path cycle.
+    /// </summary>
+    public static CycleCount? Costing(BasicBlock block) => block.LoopCycles ?? block.Cycles;
 
     /// <summary>Returns which blocks a path from <paramref name="entry"/> can reach without leaving.</summary>
     private static bool[] Reached(IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside)

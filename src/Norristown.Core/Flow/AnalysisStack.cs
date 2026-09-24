@@ -54,6 +54,37 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     /// </summary>
     public IReadOnlyList<StackEntry> Entries => entries;
 
+    /// <summary>
+    /// Returns what two paths arriving at one place agree the stack holds, or null when they do
+    /// not agree on its shape. A byte whose value differs between them becomes a byte nothing is
+    /// known about, which leaves the depth, the saved status registers and the frames known.
+    /// </summary>
+    public static AnalysisStack? Merge(AnalysisStack? a, AnalysisStack? b)
+    {
+        if (a is null || b is null || a.entries.Length != b.entries.Length || a.IsAnchored != b.IsAnchored)
+            return null;
+        if (a.Equals(b))
+            return a;
+        var builder = a.entries.ToBuilder();
+        for (var i = 0; i < builder.Count; i++)
+        {
+            var (x, y) = (a.entries[i], b.entries[i]);
+            if (x == y)
+                continue;
+            if (x.IsStatus || y.IsStatus || x.Frame != y.Frame)
+                return null;
+            builder[i] = StackEntry.Opaque with { Frame = x.Frame };
+        }
+        return new AnalysisStack(builder.ToImmutable(), a.IsAnchored);
+    }
+
+    /// <summary>
+    /// Returns a stack of <paramref name="size"/> bytes named as <paramref name="frame"/>, with
+    /// nothing known beneath them.
+    /// </summary>
+    public static AnalysisStack OnlyFrame(Symbol frame, int size) =>
+        Unanchored.Framed(frame, size)!;
+
     /// <summary>Returns this stack with <paramref name="entry"/> pushed <paramref name="count"/> times.</summary>
     public AnalysisStack Push(StackEntry entry, int count = 1)
     {
@@ -99,30 +130,6 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
-    /// Returns what two paths arriving at one place agree the stack holds, or null when they do
-    /// not agree on its shape. A byte whose value differs between them becomes a byte nothing is
-    /// known about, which leaves the depth, the saved status registers and the frames known.
-    /// </summary>
-    public static AnalysisStack? Merge(AnalysisStack? a, AnalysisStack? b)
-    {
-        if (a is null || b is null || a.entries.Length != b.entries.Length || a.IsAnchored != b.IsAnchored)
-            return null;
-        if (a.Equals(b))
-            return a;
-        var builder = a.entries.ToBuilder();
-        for (var i = 0; i < builder.Count; i++)
-        {
-            var (x, y) = (a.entries[i], b.entries[i]);
-            if (x == y)
-                continue;
-            if (x.IsStatus || y.IsStatus || x.Frame != y.Frame)
-                return null;
-            builder[i] = StackEntry.Opaque with { Frame = x.Frame };
-        }
-        return new AnalysisStack(builder.ToImmutable(), a.IsAnchored);
-    }
-
-    /// <summary>
     /// Returns this stack with its top <paramref name="size"/> bytes named as
     /// <paramref name="frame"/>, or null when fewer than that have been pushed since the routine
     /// was entered. Over an unknown base the frame reaches into bytes nothing is known about. A
@@ -143,13 +150,6 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
         builder[bottom] = builder[bottom] with { Frame = frame };
         return new AnalysisStack(builder.ToImmutable(), IsAnchored);
     }
-
-    /// <summary>
-    /// Returns a stack of <paramref name="size"/> bytes named as <paramref name="frame"/>, with
-    /// nothing known beneath them.
-    /// </summary>
-    public static AnalysisStack OnlyFrame(Symbol frame, int size) =>
-        Unanchored.Framed(frame, size)!;
 
     /// <summary>
     /// Returns how many bytes are above the lowest byte of <paramref name="frame"/>, or null when

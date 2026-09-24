@@ -28,10 +28,10 @@ public readonly record struct RegisterValue(Registers Entry, bool IsWritten, boo
     /// <summary>Returns exactly the value <paramref name="register"/> was entered with.</summary>
     public static RegisterValue Of(Registers register) => new(register, false, false);
 
-    /// <summary>Returns whether this is the entry value of <paramref name="register"/> and nothing else.</summary>
-    public bool Holds(Registers register) => Entry == register && !IsWritten && !IsUnknown;
-
     /// <summary>Returns what the register may hold where two paths meet, which is what either path left.</summary>
     public static RegisterValue Merge(RegisterValue a, RegisterValue b) =>
         new(a.Entry | b.Entry, a.IsWritten || b.IsWritten, a.IsUnknown || b.IsUnknown);
+
+    /// <summary>Returns whether this is the entry value of <paramref name="register"/> and nothing else.</summary>
+    public bool Holds(Registers register) => Entry == register && !IsWritten && !IsUnknown;
 }

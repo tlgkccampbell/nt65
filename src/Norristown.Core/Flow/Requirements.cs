@@ -72,28 +72,6 @@ internal sealed class Requirements
     /// <summary>Returns the statement's source text in backticks, for a message that quotes it.</summary>
     private static string Quoted(SyntaxNode statement) => $"`{statement.GetText().Trim()}`";
 
-    /// <summary>Records which labels there are, and which labels each routine's <c>.next</c> names.</summary>
-    private void Collect()
-    {
-        foreach (var region in flow.Regions)
-        {
-            var blocks = region.Blocks;
-            foreach (var block in blocks)
-            {
-                if (block.Label is { Kind: SymbolKind.Label } label && !labels.ContainsKey(label))
-                    labels[label] = new Labelled(region, block, IsCode(blocks, block.Index));
-            }
-        }
-        foreach (var step in layout.Steps)
-        {
-            if (step is { Routine: { } routine, Statement: NextDirectiveSyntax next })
-            {
-                foreach (var target in flow.Named(next, step.On))
-                    named.Add((routine, target.Symbol));
-            }
-        }
-    }
-
     /// <summary>
     /// Returns whether a label stands on code. It does when the first thing after it, past any
     /// <c>.state</c> and through any labels that run straight into the next, is an instruction.
@@ -114,6 +92,72 @@ internal sealed class Requirements
             }
         }
         return false;
+    }
+
+    /// <summary>Returns the first data statement a data label labels, or null when it labels none.</summary>
+    private static Step? DataAt(Labelled labelled)
+    {
+        var first = labelled.Block.Steps.FirstOrDefault(step => step.Statement is not StateDirectiveSyntax);
+        return first.Statement is DataDirectiveSyntax or DataValuesSyntax ? first : null;
+    }
+
+    /// <summary>
+    /// Returns how source inside <paramref name="from"/> names <paramref name="routine"/>. That is
+    /// its own name where the two are declared in one scope, and its qualified name anywhere else.
+    /// </summary>
+    private static string Named(Symbol routine, Symbol from) =>
+        routine.Scope == from.Scope ? routine.Name : routine.QualifiedName;
+
+    /// <summary>
+    /// Returns whether a name is only measured rather than used as an address, as it is inside
+    /// <c>.sizeof</c>, <c>.endof</c> or <c>.spanof</c>.
+    /// </summary>
+    private static bool Measured(NameExpressionSyntax name, SyntaxNode statement)
+    {
+        for (var node = name.Parent; node is not null && node != statement; node = node.Parent)
+        {
+            if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Sizeof or BuiltinKind.Endof or BuiltinKind.Spanof })
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Returns whether an instruction stores to the memory its operand names.</summary>
+    private static bool Stores(SyntaxNode statement, AddressingMode? mode) =>
+        mode is not (null or AddressingMode.Immediate or AddressingMode.Accumulator or AddressingMode.Implied)
+        && Mnemonic(statement).Stores;
+
+    /// <summary>
+    /// Returns the facts about the statement's instruction, or <see cref="InstructionFacts.None"/>
+    /// where the statement is not an instruction.
+    /// </summary>
+    private static InstructionFacts Mnemonic(SyntaxNode statement) =>
+        statement is InstructionStatementSyntax instruction
+            ? Instructions.Facts(instruction.MnemonicKind)
+            : InstructionFacts.None;
+
+    /// <summary>Records which labels there are, and which labels each routine's <c>.next</c> names.</summary>
+    private void Collect()
+    {
+        foreach (var region in flow.Regions)
+        {
+            var blocks = region.Blocks;
+            foreach (var block in blocks)
+            {
+                if (block.Label is { Kind: SymbolKind.Label } label && !labels.ContainsKey(label))
+                    labels[label] = new Labelled(region, block, IsCode(blocks, block.Index));
+            }
+        }
+        foreach (var step in layout.Steps)
+        {
+            if (step is { Routine: { } routine, Statement: NextDirectiveSyntax next })
+            {
+                foreach (var target in flow.Named(next, step.On))
+                    named.Add((routine, target.Symbol));
+            }
+        }
     }
 
     /// <summary>
@@ -204,13 +248,6 @@ internal sealed class Requirements
         {
             Report(statement, Catalogue.JumpIntoData.Message(symbol.DisplayName));
         }
-    }
-
-    /// <summary>Returns the first data statement a data label labels, or null when it labels none.</summary>
-    private static Step? DataAt(Labelled labelled)
-    {
-        var first = labelled.Block.Steps.FirstOrDefault(step => step.Statement is not StateDirectiveSyntax);
-        return first.Statement is DataDirectiveSyntax or DataValuesSyntax ? first : null;
     }
 
     /// <summary>
@@ -305,13 +342,6 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// Returns how source inside <paramref name="from"/> names <paramref name="routine"/>. That is
-    /// its own name where the two are declared in one scope, and its qualified name anywhere else.
-    /// </summary>
-    private static string Named(Symbol routine, Symbol from) =>
-        routine.Scope == from.Scope ? routine.Name : routine.QualifiedName;
-
-    /// <summary>
     /// Reports each place a label on code is named, other than as the target of a branch, a jump
     /// or a call, without the annotation it needs. A store into the label needs a <c>.patch</c>.
     /// Any other use means flow may arrive at the label without the analysis seeing it, which
@@ -363,36 +393,6 @@ internal sealed class Requirements
             }
         }
     }
-
-    /// <summary>
-    /// Returns whether a name is only measured rather than used as an address, as it is inside
-    /// <c>.sizeof</c>, <c>.endof</c> or <c>.spanof</c>.
-    /// </summary>
-    private static bool Measured(NameExpressionSyntax name, SyntaxNode statement)
-    {
-        for (var node = name.Parent; node is not null && node != statement; node = node.Parent)
-        {
-            if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Sizeof or BuiltinKind.Endof or BuiltinKind.Spanof })
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /// <summary>Returns whether an instruction stores to the memory its operand names.</summary>
-    private static bool Stores(SyntaxNode statement, AddressingMode? mode) =>
-        mode is not (null or AddressingMode.Immediate or AddressingMode.Accumulator or AddressingMode.Implied)
-        && Mnemonic(statement).Stores;
-
-    /// <summary>
-    /// Returns the facts about the statement's instruction, or <see cref="InstructionFacts.None"/>
-    /// where the statement is not an instruction.
-    /// </summary>
-    private static InstructionFacts Mnemonic(SyntaxNode statement) =>
-        statement is InstructionStatementSyntax instruction
-            ? Instructions.Facts(instruction.MnemonicKind)
-            : InstructionFacts.None;
 
     /// <summary>
     /// Reports each exported label inside a routine that is not declared. An exported label lets

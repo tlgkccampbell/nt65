@@ -199,13 +199,21 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// Returns a solver that runs <paramref name="blocks"/> to a fixed point over what the
-        /// registers hold, with <paramref name="of"/> giving what each routine they call keeps.
+        /// Returns which registers each inline <c>.scope</c> block of <paramref name="region"/>
+        /// leaves unchanged. This is the question asked of the routine, but measured from where the
+        /// scope is entered rather than where the routine was. A scope that saves a register and
+        /// restores it keeps it, even where the routine around it does not.
         /// </summary>
-        private Dataflow<RegisterState> Solver(
-            IReadOnlyList<BasicBlock> blocks, Func<Symbol, RoutineRegisters> of,
-            Func<BasicBlock, IEnumerable<int>> successors) =>
-            new(blocks, (block, state) => Through(block, state, of, null), RegisterState.Merge, successors);
+        public IReadOnlyList<ScopeRegisters> Scopes(FlowRegion region, Func<Symbol, RoutineRegisters> of)
+        {
+            var found = new List<ScopeRegisters>();
+            foreach (var (opener, whole) in region.Inline)
+            {
+                if (Within(region, whole, of) is { } kept)
+                    found.Add(new ScopeRegisters(opener, kept.Kept, kept.Complete));
+            }
+            return found;
+        }
 
         /// <summary>
         /// Returns the state at a declared label that can also be entered from outside the routine.
@@ -226,22 +234,148 @@ public static class RegisterKeeps
             };
         }
 
+        /// <summary>Returns whether every call a block makes is one nt65 could follow into a body.</summary>
+        private static bool Followed(BasicBlock block, Func<Symbol, RoutineRegisters> of) =>
+            !block.CallsUnknown && block.Calls.All(callee => of(callee).Complete);
+
         /// <summary>
-        /// Returns which registers each inline <c>.scope</c> block of <paramref name="region"/>
-        /// leaves unchanged. This is the question asked of the routine, but measured from where the
-        /// scope is entered rather than where the routine was. A scope that saves a register and
-        /// restores it keeps it, even where the routine around it does not.
+        /// Reports a diagnostic where a routine's <c>keeps</c> promise does not hold at a point a
+        /// path leaves it, saying what to change. <paramref name="into"/> is the routine or
+        /// label the path passes control to, if any, and <paramref name="kept"/> the registers
+        /// that routine returns unchanged.
         /// </summary>
-        public IReadOnlyList<ScopeRegisters> Scopes(FlowRegion region, Func<Symbol, RoutineRegisters> of)
+        private static void Check(
+            FlowRegion region, BasicBlock block, RegisterState state, Symbol? into, Registers kept,
+            List<Diagnostic> report)
         {
-            var found = new List<ScopeRegisters>();
-            foreach (var (opener, whole) in region.Inline)
-            {
-                if (Within(region, whole, of) is { } kept)
-                    found.Add(new ScopeRegisters(opener, kept.Kept, kept.Complete));
-            }
-            return found;
+            if (region.Routine.Signature?.Keeps is not { } promised || promised == Registers.None)
+                return;
+            var broken = promised & ~state.Kept;
+            if (broken == Registers.None)
+                return;
+            var at = block.Steps.Count > 0
+                ? block.Steps[^1].Statement.Tree.GetSpan(block.Steps[^1].Statement.Span)
+                : region.Routine.DeclarationSpan;
+            var names = RegisterEffects.Format(broken);
+            var items = names.ToLowerInvariant();
+            var one = RegisterEffects.Each(broken).Count() == 1;
+
+            // This routine cannot promise registers that the routine the path passes control to
+            // makes no promise about. The promise belongs on the routine whose code has to
+            // honour it.
+            var missing = into is not null ? broken & ~kept : Registers.None;
+
+            // When the stack is unknown, that is why the restore could not be seen. Saying what
+            // made it unknown points nearer the mistake than telling the routine to restore the
+            // register again.
+            var fix = missing != Registers.None
+                ? Handing(into!, missing)
+                : state.Stack is null && state.WhyStack is { } lost
+                    ? Cause.Because(lost)
+                    : $": restore {(one ? "it" : "them")} before returning, or add `.state keeps {items}` "
+                        + "at the point where the entry value is restored";
+            report.Add(new Diagnostic(at,
+                Catalogue.KeepsBroken.Message(
+                    region.Routine.DisplayName, items, names, one ? "is" : "are", fix)));
         }
+
+        /// <summary>
+        /// Returns the fix to suggest where handing control to another routine is what loses the
+        /// registers. The promise goes on the routine handed to, since that is the code the
+        /// register has to come back through. Control never comes back here to restore anything.
+        /// </summary>
+        private static string Handing(Symbol into, Registers missing)
+        {
+            var owner = Owner(into)!;
+            var name = owner.DisplayName;
+            var items = RegisterEffects.Format(missing).ToLowerInvariant();
+            var one = RegisterEffects.Each(missing).Count() == 1;
+
+            // Where the path names a label rather than the routine itself, the message gives both
+            // names. One says where control went, and the other says where the promise belongs.
+            var gone = owner == into
+                ? $"control does not come back from `{name}`, which does not promise to keep {items}"
+                : $"control does not come back from `{into.DisplayName}`, and `{name}` does not promise "
+                    + $"to keep {items}";
+            return $": {gone}: add `keeps {items}` to `{name}` if it preserves {(one ? "it" : "them")}, "
+                + "or add `.next ?` here to end the path unchecked";
+        }
+
+        /// <summary>
+        /// Returns the state after a <c>.state keeps</c>, from which point those registers hold what
+        /// the routine was entered with.
+        /// </summary>
+        private static RegisterState Asserted(Step step, RegisterState state, List<Diagnostic>? report)
+        {
+            foreach (var item in StateItem.Read(step.Statement))
+            {
+                if (item.Part != StatePart.Keeps)
+                    continue;
+                foreach (var register in RegisterEffects.Each(item.Registers))
+                {
+                    if (report is not null && state.Of(register).Holds(register))
+                    {
+                        report.Add(new Diagnostic(
+                            step.Statement.Tree.GetSpan(item.Node.Span),
+                            Catalogue.KeepsRedundant.Message(item.Text, RegisterEffects.Format(register))));
+                    }
+                    state = state.With(register, RegisterValue.Of(register));
+                }
+            }
+            return state;
+        }
+
+        /// <summary>
+        /// Returns the state after a path passes control to a routine instead of returning. The
+        /// registers that routine keeps are unchanged, and nothing is known about the rest.
+        /// </summary>
+        private static RegisterState Handed(RegisterState state, RoutineRegisters kept) =>
+            state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown);
+
+        /// <summary>Returns the state the routines a block calls leave behind.</summary>
+        private static RegisterState Calls(BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of)
+        {
+            if (block.CallsUnknown || block.Calls.Count == 0)
+                return state.WithEach(Registers.All, RegisterValue.Unknown);
+
+            // A call through a pointer whose `.next` names several routines comes back with
+            // anything any one of them may have left.
+            RegisterState? reached = null;
+            foreach (var callee in block.Calls)
+            {
+                var kept = of(callee).Kept;
+                reached = RegisterState.Merge(reached, state.WithEach(Registers.All & ~kept, RegisterValue.Unknown));
+            }
+            return reached!;
+        }
+
+        /// <summary>
+        /// Returns whether a target hands control to a routine other than
+        /// <paramref name="routine"/>. Another instance of the same <see cref="Family"/> does not
+        /// count as another routine, because all the instances share one body in the source.
+        /// </summary>
+        private static bool Outside(Symbol target, Symbol routine) =>
+            Owner(target) is { } owner && owner != routine && !owner.IsSiblingOf(routine);
+
+        /// <summary>
+        /// Returns the routine a target hands control to. That is the routine itself where the
+        /// target names one, and the routine a label is inside where it names a label. It is null
+        /// where the target names neither, which is a target this analysis has nothing to say
+        /// about.
+        /// </summary>
+        private static Symbol? Owner(Symbol target) =>
+            target.Signature is not null ? target
+                : target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner
+                : null;
+
+        /// <summary>
+        /// Returns a solver that runs <paramref name="blocks"/> to a fixed point over what the
+        /// registers hold, with <paramref name="of"/> giving what each routine they call keeps.
+        /// </summary>
+        private Dataflow<RegisterState> Solver(
+            IReadOnlyList<BasicBlock> blocks, Func<Symbol, RoutineRegisters> of,
+            Func<BasicBlock, IEnumerable<int>> successors) =>
+            new(blocks, (block, state) => Through(block, state, of, null), RegisterState.Merge, successors);
 
         /// <summary>
         /// Returns which registers the part of a routine inside <paramref name="whole"/> leaves
@@ -316,73 +450,6 @@ public static class RegisterKeeps
             return any ? new RoutineRegisters(state.Kept, Followed(block, of)) : null;
         }
 
-        /// <summary>Returns whether every call a block makes is one nt65 could follow into a body.</summary>
-        private static bool Followed(BasicBlock block, Func<Symbol, RoutineRegisters> of) =>
-            !block.CallsUnknown && block.Calls.All(callee => of(callee).Complete);
-
-        /// <summary>
-        /// Reports a diagnostic where a routine's <c>keeps</c> promise does not hold at a point a
-        /// path leaves it, saying what to change. <paramref name="into"/> is the routine or
-        /// label the path passes control to, if any, and <paramref name="kept"/> the registers
-        /// that routine returns unchanged.
-        /// </summary>
-        private static void Check(
-            FlowRegion region, BasicBlock block, RegisterState state, Symbol? into, Registers kept,
-            List<Diagnostic> report)
-        {
-            if (region.Routine.Signature?.Keeps is not { } promised || promised == Registers.None)
-                return;
-            var broken = promised & ~state.Kept;
-            if (broken == Registers.None)
-                return;
-            var at = block.Steps.Count > 0
-                ? block.Steps[^1].Statement.Tree.GetSpan(block.Steps[^1].Statement.Span)
-                : region.Routine.DeclarationSpan;
-            var names = RegisterEffects.Format(broken);
-            var items = names.ToLowerInvariant();
-            var one = RegisterEffects.Each(broken).Count() == 1;
-
-            // This routine cannot promise registers that the routine the path passes control to
-            // makes no promise about. The promise belongs on the routine whose code has to
-            // honour it.
-            var missing = into is not null ? broken & ~kept : Registers.None;
-
-            // When the stack is unknown, that is why the restore could not be seen. Saying what
-            // made it unknown points nearer the mistake than telling the routine to restore the
-            // register again.
-            var fix = missing != Registers.None
-                ? Handing(into!, missing)
-                : state.Stack is null && state.WhyStack is { } lost
-                    ? Cause.Because(lost)
-                    : $": restore {(one ? "it" : "them")} before returning, or add `.state keeps {items}` "
-                        + "at the point where the entry value is restored";
-            report.Add(new Diagnostic(at,
-                Catalogue.KeepsBroken.Message(
-                    region.Routine.DisplayName, items, names, one ? "is" : "are", fix)));
-        }
-
-        /// <summary>
-        /// Returns the fix to suggest where handing control to another routine is what loses the
-        /// registers. The promise goes on the routine handed to, since that is the code the
-        /// register has to come back through. Control never comes back here to restore anything.
-        /// </summary>
-        private static string Handing(Symbol into, Registers missing)
-        {
-            var owner = Owner(into)!;
-            var name = owner.DisplayName;
-            var items = RegisterEffects.Format(missing).ToLowerInvariant();
-            var one = RegisterEffects.Each(missing).Count() == 1;
-
-            // Where the path names a label rather than the routine itself, the message gives both
-            // names. One says where control went, and the other says where the promise belongs.
-            var gone = owner == into
-                ? $"control does not come back from `{name}`, which does not promise to keep {items}"
-                : $"control does not come back from `{into.DisplayName}`, and `{name}` does not promise "
-                    + $"to keep {items}";
-            return $": {gone}: add `keeps {items}` to `{name}` if it preserves {(one ? "it" : "them")}, "
-                + "or add `.next ?` here to end the path unchecked";
-        }
-
         /// <summary>Returns what one block does to the registers, from the state that reaches it.</summary>
         private RegisterState Through(
             BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of, List<Diagnostic>? report)
@@ -441,54 +508,6 @@ public static class RegisterKeeps
             return state.WithEach(
                 RegisterEffects.Written(mnemonic, mode, mode == AddressingMode.Immediate ? Constant(step) : null),
                 RegisterValue.Written);
-        }
-
-        /// <summary>
-        /// Returns the state after a <c>.state keeps</c>, from which point those registers hold what
-        /// the routine was entered with.
-        /// </summary>
-        private static RegisterState Asserted(Step step, RegisterState state, List<Diagnostic>? report)
-        {
-            foreach (var item in StateItem.Read(step.Statement))
-            {
-                if (item.Part != StatePart.Keeps)
-                    continue;
-                foreach (var register in RegisterEffects.Each(item.Registers))
-                {
-                    if (report is not null && state.Of(register).Holds(register))
-                    {
-                        report.Add(new Diagnostic(
-                            step.Statement.Tree.GetSpan(item.Node.Span),
-                            Catalogue.KeepsRedundant.Message(item.Text, RegisterEffects.Format(register))));
-                    }
-                    state = state.With(register, RegisterValue.Of(register));
-                }
-            }
-            return state;
-        }
-
-        /// <summary>
-        /// Returns the state after a path passes control to a routine instead of returning. The
-        /// registers that routine keeps are unchanged, and nothing is known about the rest.
-        /// </summary>
-        private static RegisterState Handed(RegisterState state, RoutineRegisters kept) =>
-            state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown);
-
-        /// <summary>Returns the state the routines a block calls leave behind.</summary>
-        private static RegisterState Calls(BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of)
-        {
-            if (block.CallsUnknown || block.Calls.Count == 0)
-                return state.WithEach(Registers.All, RegisterValue.Unknown);
-
-            // A call through a pointer whose `.next` names several routines comes back with
-            // anything any one of them may have left.
-            RegisterState? reached = null;
-            foreach (var callee in block.Calls)
-            {
-                var kept = of(callee).Kept;
-                reached = RegisterState.Merge(reached, state.WithEach(Registers.All & ~kept, RegisterValue.Unknown));
-            }
-            return reached!;
         }
 
         /// <summary>
@@ -592,25 +611,6 @@ public static class RegisterKeeps
             if (transfer != Transfer.Jump || target.Signature is null)
                 yield return target;
         }
-
-        /// <summary>
-        /// Returns whether a target hands control to a routine other than
-        /// <paramref name="routine"/>. Another instance of the same <see cref="Family"/> does not
-        /// count as another routine, because all the instances share one body in the source.
-        /// </summary>
-        private static bool Outside(Symbol target, Symbol routine) =>
-            Owner(target) is { } owner && owner != routine && !owner.IsSiblingOf(routine);
-
-        /// <summary>
-        /// Returns the routine a target hands control to. That is the routine itself where the
-        /// target names one, and the routine a label is inside where it names a label. It is null
-        /// where the target names neither, which is a target this analysis has nothing to say
-        /// about.
-        /// </summary>
-        private static Symbol? Owner(Symbol target) =>
-            target.Signature is not null ? target
-                : target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner
-                : null;
 
         /// <summary>Returns the value of an immediate operand, where it is known.</summary>
         private long? Constant(Step step) =>
