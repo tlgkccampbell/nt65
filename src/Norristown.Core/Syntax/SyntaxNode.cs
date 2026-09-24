@@ -294,21 +294,7 @@ public abstract class SyntaxNode
     /// </para>
     /// </summary>
     /// <returns>This node, or the node it has become.</returns>
-    public SyntaxNode NormalizeWhitespace()
-    {
-        var tokens = new List<(SyntaxToken Token, bool Tight)>();
-        Flatten(this, tokens);
-        var spaced = ImmutableArray.CreateBuilder<SyntaxToken>(tokens.Count);
-        for (var i = 0; i < tokens.Count; i++)
-        {
-            var (token, tight) = tokens[i];
-            SyntaxTrivia[] after = !tight && i + 1 < tokens.Count && Apart(token.Kind, tokens[i + 1].Token.Kind)
-                ? [SyntaxFactory.Space]
-                : [];
-            spaced.Add(token.WithLeadingTrivia().WithTrailingTrivia(after));
-        }
-        return new Spacer(spaced.ToImmutable()).Visit(this) ?? this;
-    }
+    public SyntaxNode NormalizeWhitespace() => WhitespaceNormalizer.Normalize(this);
 
     /// <summary>
     /// Returns a copy of this node that has <paramref name="annotations"/> in addition to the
@@ -320,12 +306,8 @@ public abstract class SyntaxNode
     /// The annotations to add. Annotations this node already has are skipped.
     /// </param>
     /// <returns>This node, or the node it has become.</returns>
-    public SyntaxNode WithAdditionalAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
-    {
-        var own = Green.Annotations;
-        var wanted = own.AddRange(annotations.Where(annotation => !own.Contains(annotation)).Distinct());
-        return wanted.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(wanted));
-    }
+    public SyntaxNode WithAdditionalAnnotations(params IEnumerable<SyntaxAnnotation> annotations) =>
+        Reannotated(Green.WithAdditionalAnnotations(annotations));
 
     /// <summary>
     /// Returns a copy of this node without <paramref name="annotations"/>, keeping its other
@@ -333,24 +315,16 @@ public abstract class SyntaxNode
     /// </summary>
     /// <param name="annotations">The annotations to remove.</param>
     /// <returns>This node, or the node it has become.</returns>
-    public SyntaxNode WithoutAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
-    {
-        var own = Green.Annotations;
-        var kept = own.RemoveRange(annotations);
-        return kept.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(kept));
-    }
+    public SyntaxNode WithoutAnnotations(params IEnumerable<SyntaxAnnotation> annotations) =>
+        Reannotated(Green.WithoutAnnotations(annotations));
 
     /// <summary>
     /// Returns a copy of this node without its annotations of kind <paramref name="kind"/>.
     /// </summary>
     /// <param name="kind">The kind of annotation to remove.</param>
     /// <returns>This node, or the node it has become.</returns>
-    public SyntaxNode WithoutAnnotations(string kind)
-    {
-        var own = Green.Annotations;
-        var kept = own.RemoveAll(annotation => annotation.Kind == kind);
-        return kept.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(kept));
-    }
+    public SyntaxNode WithoutAnnotations(string kind) =>
+        Reannotated(Green.WithoutAnnotations(kind));
 
     /// <summary>Checks whether this node itself has <paramref name="annotation"/>.</summary>
     /// <param name="annotation">The annotation to look for, matched by reference.</param>
@@ -365,8 +339,7 @@ public abstract class SyntaxNode
     /// they were added.
     /// </summary>
     /// <param name="kind">The kind to look for.</param>
-    public IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) =>
-        Green.Annotations.Where(annotation => annotation.Kind == kind);
+    public IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) => Green.GetAnnotations(kind);
 
     /// <summary>
     /// Returns every node at or below this node that has <paramref name="annotation"/>, in source
@@ -782,70 +755,6 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Adds every token under <paramref name="node"/> to <paramref name="tokens"/>, in source
-    /// order. Each token is paired with a value indicating whether its parent allows no space
-    /// before the next token. nt65 puts no space between a prefix operator and its operand, inside
-    /// an instruction operand, or inside an address prefix.
-    /// </summary>
-    private static void Flatten(SyntaxNode node, List<(SyntaxToken Token, bool Tight)> tokens)
-    {
-        var tight = node is UnaryExpressionSyntax or OperandSyntax or AddressPrefixSyntax;
-        foreach (var child in node.ChildNodesAndTokens())
-        {
-            if (child.AsNode() is { } inner)
-                Flatten(inner, tokens);
-            else
-                tokens.Add((child.AsToken(), tight));
-        }
-    }
-
-    /// <summary>
-    /// Checks whether a space goes between a token of kind <paramref name="left"/> and a token of
-    /// kind <paramref name="right"/>. Punctuation that binds tightly gets no space on its binding
-    /// side, two adjacent words need a space to stay separate, and a binary operator gets a
-    /// space on both sides.
-    /// </summary>
-    private static bool Apart(SyntaxKind left, SyntaxKind right)
-    {
-        if (right is SyntaxKind.EndOfLine or SyntaxKind.Comma or SyntaxKind.CloseParen or SyntaxKind.CloseBracket
-            or SyntaxKind.Colon or SyntaxKind.ColonColon or SyntaxKind.OpenBracket or SyntaxKind.DotDot)
-        {
-            return false;
-        }
-        if (left is SyntaxKind.ColonColon or SyntaxKind.Hash or SyntaxKind.OpenParen or SyntaxKind.OpenBracket
-            or SyntaxKind.DotDot or SyntaxKind.Bang or SyntaxKind.Tilde)
-        {
-            return false;
-        }
-        if (left is SyntaxKind.Colon or SyntaxKind.Comma or SyntaxKind.Mnemonic or SyntaxKind.CloseBrace)
-            return true;
-        if (left is SyntaxKind.Directive)
-            return right != SyntaxKind.OpenParen;
-        if (left is SyntaxKind.OpenBrace || right is SyntaxKind.OpenBrace or SyntaxKind.CloseBrace)
-            return true;
-        return Operator(left) || Operator(right) || (Word(left) && Word(right));
-    }
-
-    /// <summary>
-    /// Checks whether <paramref name="kind"/> is a binary operator, which gets a space on both
-    /// sides.
-    /// </summary>
-    private static bool Operator(SyntaxKind kind) => kind is SyntaxKind.Star or SyntaxKind.Slash
-        or SyntaxKind.Plus or SyntaxKind.Minus or SyntaxKind.LessLess or SyntaxKind.GreaterGreater
-        or SyntaxKind.Less or SyntaxKind.LessEquals or SyntaxKind.Greater or SyntaxKind.GreaterEquals
-        or SyntaxKind.EqualsEquals or SyntaxKind.BangEquals or SyntaxKind.Ampersand
-        or SyntaxKind.AmpersandAmpersand or SyntaxKind.Bar or SyntaxKind.BarBar or SyntaxKind.Caret
-        or SyntaxKind.CaretCaret or SyntaxKind.Equals or SyntaxKind.Arrow;
-
-    /// <summary>
-    /// Checks whether <paramref name="kind"/> is a word-like token, which needs a space between it
-    /// and another word to be read as a separate token.
-    /// </summary>
-    private static bool Word(SyntaxKind kind) => kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
-        or SyntaxKind.Mnemonic or SyntaxKind.Register or SyntaxKind.Directive or SyntaxKind.NumberLiteral
-        or SyntaxKind.CharacterLiteral or SyntaxKind.StringLiteral or SyntaxKind.CpuName or SyntaxKind.BadToken;
-
-    /// <summary>
     /// Returns the child whose full span contains <paramref name="position"/>, through which the
     /// walk down to a token continues, or the default value if no child contains it. A child of
     /// zero width contains no position, so a missing token is never returned.
@@ -898,6 +807,13 @@ public abstract class SyntaxNode
         return best;
     }
 
+    /// <summary>
+    /// Returns this node if <paramref name="green"/> is the green node it already wraps, or a
+    /// detached node that wraps <paramref name="green"/> if its annotations changed.
+    /// </summary>
+    /// <param name="green">The green node with the annotations the result is to have.</param>
+    private SyntaxNode Reannotated(GreenNode green) => green == Green ? this : SyntaxTree.Detached(green);
+
     /// <summary>Replaces the given nodes, or removes them from the tree, during a rewrite.</summary>
     /// <typeparam name="TNode">The type of the nodes to replace.</typeparam>
     private sealed class NodeReplacer<TNode> : SyntaxRewriter where TNode : SyntaxNode
@@ -935,20 +851,5 @@ public abstract class SyntaxNode
         /// <inheritdoc/>
         public override SyntaxToken VisitToken(SyntaxToken token) =>
             sought.Contains(token) ? replacement(token, token) : token;
-    }
-
-    /// <summary>
-    /// Replaces each token with the corresponding already-spaced token it was given, in the order
-    /// it visits them. The spacing was computed over the same walk order, so the nth token visited
-    /// is the nth token in the list.
-    /// </summary>
-    /// <param name="spaced">Every token of the node, in source order, with its new trivia.</param>
-    private sealed class Spacer(ImmutableArray<SyntaxToken> spaced) : SyntaxRewriter
-    {
-        private int index;
-
-        /// <inheritdoc/>
-        public override SyntaxToken VisitToken(SyntaxToken token) =>
-            index < spaced.Length ? spaced[index++] : token;
     }
 }

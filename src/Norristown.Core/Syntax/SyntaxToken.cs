@@ -139,12 +139,8 @@ public readonly record struct SyntaxToken
     /// </summary>
     /// <param name="annotations">The annotations to add, skipping any the token already has.</param>
     /// <returns>This token if nothing was added; otherwise, the annotated copy.</returns>
-    public SyntaxToken WithAdditionalAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
-    {
-        var own = Green.Annotations;
-        var wanted = own.AddRange(annotations.Where(annotation => !own.Contains(annotation)).Distinct());
-        return wanted.Length == own.Length ? this : Annotated(wanted);
-    }
+    public SyntaxToken WithAdditionalAnnotations(params IEnumerable<SyntaxAnnotation> annotations) =>
+        Reannotated(Green.WithAdditionalAnnotations(annotations));
 
     /// <summary>
     /// Returns a copy of this token without <paramref name="annotations"/>, keeping its other
@@ -152,22 +148,14 @@ public readonly record struct SyntaxToken
     /// </summary>
     /// <param name="annotations">The annotations to remove.</param>
     /// <returns>This token if nothing was removed; otherwise, the copy.</returns>
-    public SyntaxToken WithoutAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
-    {
-        var own = Green.Annotations;
-        var kept = own.RemoveRange(annotations);
-        return kept.Length == own.Length ? this : Annotated(kept);
-    }
+    public SyntaxToken WithoutAnnotations(params IEnumerable<SyntaxAnnotation> annotations) =>
+        Reannotated(Green.WithoutAnnotations(annotations));
 
     /// <summary>Returns a copy of this token without its annotations of <paramref name="kind"/>.</summary>
     /// <param name="kind">The kind of annotation to remove.</param>
     /// <returns>This token if nothing was removed; otherwise, the copy.</returns>
-    public SyntaxToken WithoutAnnotations(string kind)
-    {
-        var own = Green.Annotations;
-        var kept = own.RemoveAll(annotation => annotation.Kind == kind);
-        return kept.Length == own.Length ? this : Annotated(kept);
-    }
+    public SyntaxToken WithoutAnnotations(string kind) =>
+        Reannotated(Green.WithoutAnnotations(kind));
 
     /// <summary>Checks whether this token has <paramref name="annotation"/>.</summary>
     /// <param name="annotation">The annotation to look for, matched by reference.</param>
@@ -182,8 +170,7 @@ public readonly record struct SyntaxToken
     /// added.
     /// </summary>
     /// <param name="kind">The kind to look for.</param>
-    public IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) =>
-        Green.Annotations.Where(annotation => annotation.Kind == kind);
+    public IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) => Green.GetAnnotations(kind);
 
     /// <summary>Returns the syntax diagnostics on this token, in source order.</summary>
     public IReadOnlyList<Diagnostic> GetDiagnostics()
@@ -201,11 +188,12 @@ public readonly record struct SyntaxToken
         [.. trivia.Select(one => one.Green)];
 
     /// <summary>
-    /// Returns a detached copy of this token with <paramref name="wanted"/> in place of its
-    /// annotations.
+    /// Returns this token if <paramref name="green"/> is the green token it already wraps, or a
+    /// detached token that wraps <paramref name="green"/> if its annotations changed.
     /// </summary>
-    private SyntaxToken Annotated(ImmutableArray<SyntaxAnnotation> wanted) =>
-        SyntaxFactory.Detached((GreenToken)Green.WithAnnotations(wanted));
+    /// <param name="green">The green token with the annotations the result is to have.</param>
+    private SyntaxToken Reannotated(GreenNode green) =>
+        green == Green ? this : SyntaxFactory.Detached((GreenToken)green);
 
     /// <summary>
     /// Returns a copy of this token rebuilt with new text or trivia. A token's diagnostics concern

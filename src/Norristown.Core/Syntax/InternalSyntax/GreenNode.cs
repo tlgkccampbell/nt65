@@ -129,6 +129,51 @@ internal abstract class GreenNode(SyntaxKind kind, int fullWidth)
     }
 
     /// <summary>
+    /// Returns a copy of this node that has <paramref name="annotations"/> after the annotations
+    /// it already has, or this node itself if every one of them is already there. An annotation
+    /// the node has, or one listed twice, is added only once.
+    /// </summary>
+    /// <param name="annotations">The annotations to add.</param>
+    internal GreenNode WithAdditionalAnnotations(IEnumerable<SyntaxAnnotation> annotations)
+    {
+        var own = Annotations;
+        var wanted = own.AddRange(annotations.Where(annotation => !own.Contains(annotation)).Distinct());
+        return wanted.Length == own.Length ? this : WithAnnotations(wanted);
+    }
+
+    /// <summary>
+    /// Returns a copy of this node without <paramref name="annotations"/>, keeping its other
+    /// annotations, or this node itself if it has none of them.
+    /// </summary>
+    /// <param name="annotations">The annotations to remove.</param>
+    internal GreenNode WithoutAnnotations(IEnumerable<SyntaxAnnotation> annotations)
+    {
+        var own = Annotations;
+        var kept = own.RemoveRange(annotations);
+        return kept.Length == own.Length ? this : WithAnnotations(kept);
+    }
+
+    /// <summary>
+    /// Returns a copy of this node without its annotations of kind <paramref name="kind"/>, or
+    /// this node itself if it has none of that kind.
+    /// </summary>
+    /// <param name="kind">The kind of annotation to remove.</param>
+    internal GreenNode WithoutAnnotations(string kind)
+    {
+        var own = Annotations;
+        var kept = own.RemoveAll(annotation => annotation.Kind == kind);
+        return kept.Length == own.Length ? this : WithAnnotations(kept);
+    }
+
+    /// <summary>
+    /// Returns the annotations of kind <paramref name="kind"/> on this node itself, in the order
+    /// they were added.
+    /// </summary>
+    /// <param name="kind">The kind to look for.</param>
+    internal IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) =>
+        Annotations.Where(annotation => annotation.Kind == kind);
+
+    /// <summary>
     /// Creates the red node for this node at <paramref name="position"/> under
     /// <paramref name="parent"/>.
     /// </summary>
