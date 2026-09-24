@@ -22,6 +22,18 @@ public static class Catalogue
         Area.Instructions, Area.ControlFlow, Area.ProcessorState, Area.Output, Area.TheProjectFile, Area.Signatures,
     ];
 
+    /// <summary>
+    /// Gets the one entry the compiler itself never reports. An editor uses it to mark the lines
+    /// the build configuration leaves out, and nothing else reports on those lines.
+    /// </summary>
+    public static DiagnosticDescriptor OmittedBranch { get; } = Entry(
+        Area.Output,
+        "omitted-branch",
+        Severity.Info,
+        "the build configuration leaves this branch out",
+        "The build configuration does not take this branch, so its lines are parsed and nothing else. The editor "
+            + "shows them faded.");
+
     // Reading a line
 
     internal static DiagnosticDescriptor NumberInvalid { get; } = Entry(
@@ -2966,18 +2978,6 @@ public static class Catalogue
         "`{0}` and `{1}` are both exported to the linker as `{2}`",
         "Exports share one flat namespace with everything else the linker sees, so two exports may not reach it "
             + "under one name. `as` gives one of them a name of its own.");
-
-    /// <summary>
-    /// Gets the one entry the compiler itself never reports. An editor uses it to mark the lines
-    /// the build configuration leaves out, and nothing else reports on those lines.
-    /// </summary>
-    public static DiagnosticDescriptor OmittedBranch { get; } = Entry(
-        Area.Output,
-        "omitted-branch",
-        Severity.Info,
-        "the build configuration leaves this branch out",
-        "The build configuration does not take this branch, so its lines are parsed and nothing else. The editor "
-            + "shows them faded.");
 
     internal static DiagnosticDescriptor CannotBeTranslated { get; } = Entry(
         Area.Output,

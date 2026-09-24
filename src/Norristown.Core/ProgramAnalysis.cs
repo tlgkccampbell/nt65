@@ -56,16 +56,16 @@ public sealed record ProgramAnalysis(
     public Placements Placements { get; internal init; } = Placements.None;
 
     /// <summary>
-    /// Gets what a later analysis of the same program, after one edit, needs in order to reuse the
-    /// parts of this one that the edit did not affect.
-    /// </summary>
-    internal Reuse? Reused { get; init; }
-
-    /// <summary>
     /// Gets the logical paths of the files whose lengths <c>.incbin</c> directives were measured
     /// from. An editor that sees one of them change on disk analyzes the program again.
     /// </summary>
     public IEnumerable<string> Binaries => Reused?.Lengths.Keys ?? [];
+
+    /// <summary>
+    /// Gets what a later analysis of the same program, after one edit, needs in order to reuse the
+    /// parts of this one that the edit did not affect.
+    /// </summary>
+    internal Reuse? Reused { get; init; }
 
     /// <summary>
     /// Returns the diagnostics for one file, for an editor that shows a file at a time.

@@ -14,6 +14,11 @@ namespace Norristown;
 public sealed record OutputFile(string Path, string Text, IReadOnlyList<int> LineBytes)
 {
     /// <summary>
+    /// Initializes a file with no line lengths worked out, such as one a test wrote by hand.
+    /// </summary>
+    public OutputFile(string path, string text) : this(path, text, []) { }
+
+    /// <summary>
     /// Gets the files this output depends on, as sorted logical paths. They are the sources whose
     /// changes may change it, and the binaries it includes.
     /// </summary>
@@ -67,9 +72,4 @@ public sealed record OutputFile(string Path, string Text, IReadOnlyList<int> Lin
     /// </summary>
     public IReadOnlyList<OutputSource> AllSources =>
         Sources.Count > 0 ? Sources : [new OutputSource(Source, SourceSize, 0, LineBytes.Count)];
-
-    /// <summary>
-    /// Initializes a file with no line lengths worked out, such as one a test wrote by hand.
-    /// </summary>
-    public OutputFile(string path, string text) : this(path, text, []) { }
 }
