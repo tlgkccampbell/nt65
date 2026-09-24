@@ -50,7 +50,15 @@ internal static class NameHighlighting
             .SelectMany(place => place.Name.Names)
             .Where(part => !part.IsMissing)
             .Select(part => (part.Span, Type: IndexOf("namespace"), Modifiers: 0));
-        foreach (var (span, type, modifiers) in names.Concat(words).Concat(modules).OrderBy(token => token.Span.Start))
+        // Names outside the lines asked about are dropped before sorting, since a range request
+        // for a screenful of a long file would otherwise sort and place every name in the file.
+        var tokens = names.Concat(words).Concat(modules);
+        if (first > 0 || last < int.MaxValue)
+        {
+            tokens = tokens.Where(token => tree.GetLineIndex(token.Span.Start) is var at
+                && at >= first && at <= last);
+        }
+        foreach (var (span, type, modifiers) in tokens.OrderBy(token => token.Span.Start))
         {
             // A name in a macro body is recorded once per expansion; emit its token only once.
             if (span.Start < end || span.Length == 0)

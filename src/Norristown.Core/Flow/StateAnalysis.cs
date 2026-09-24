@@ -34,6 +34,11 @@ public sealed class StateAnalysis : IProcessorStates
     // takes its unchanged parts from it.
     private readonly Dictionary<StepKey, ProcessorState> started = [];
 
+    // The first state in reaching for each line, built when an editor first asks. Inlay hints ask
+    // about every line of a file, so scanning reaching for each one would grow with the square of
+    // the file.
+    private Dictionary<(SyntaxTree Tree, int Position), FlowState>? anyExpansion;
+
     private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges)
     {
         this.model = model;
@@ -101,11 +106,20 @@ public sealed class StateAnalysis : IProcessorStates
     /// line belongs to the file that contains the body it expands. For a macro declared in another
     /// file that is the other file, so the same position in two files is two lines.
     /// </summary>
-    public FlowState? AnyBefore(SyntaxNode statement) =>
-        reaching.Where(pair => pair.Key.Position == statement.Position
-                && (pair.Key.On?.Body?.Tree ?? model.Tree) == statement.Tree)
-            .Select(pair => pair.Value)
-            .FirstOrDefault();
+    public FlowState? AnyBefore(SyntaxNode statement)
+    {
+        // The analysis is complete before anyone asks, so the index never goes stale. Two threads
+        // that build it at once build the same one.
+        var index = anyExpansion;
+        if (index is null)
+        {
+            index = [];
+            foreach (var (key, state) in reaching)
+                index.TryAdd((key.On?.Body?.Tree ?? model.Tree, key.Position), state);
+            anyExpansion = index;
+        }
+        return index.GetValueOrDefault((statement.Tree, statement.Position));
+    }
 
     /// <summary>
     /// Returns a routine's state when it is entered. That is its declared entry, with nothing pushed
