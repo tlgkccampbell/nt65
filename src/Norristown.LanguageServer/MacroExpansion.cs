@@ -98,7 +98,7 @@ internal sealed class MacroExpansion
             return null;
         var (bytes, cycles) = Laid(analysis, model, call);
         var expansion = new MacroExpansion(analysis, model, macro, call, all) { Bytes = bytes, Cycles = cycles };
-        expansion.Body(definition, Expansion.Of(null, call, definition), "", into ?? [], []);
+        expansion.Body(definition, new Level(Expansion.Of(null, call, definition), "", into ?? [], [], new Counter()));
         return expansion;
     }
 
@@ -184,29 +184,24 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// Adds the lines of one block to the expansion at <paramref name="indent"/>.
-    /// <paramref name="into"/> gives which call to expand further at this level and below, and
-    /// <paramref name="reached"/> is the index path to this level, which each link records.
+    /// Adds the lines of one block to the expansion at <paramref name="level"/>. The caller gives
+    /// the level a fresh <see cref="Counter"/>, so the block numbers its calls from zero.
     /// </summary>
-    private void Body(
-        BlockSyntax block, Expansion at, string indent, IReadOnlyList<int> into, IReadOnlyList<int> reached) =>
-        Members(Macros.LinesOf(block), at, indent, into, reached, new Counter());
+    private void Body(BlockSyntax block, Level level) => Members(Macros.LinesOf(block), level);
 
     /// <summary>
-    /// Adds lines that do not form a whole block to the expansion at <paramref name="indent"/>.
+    /// Adds lines that do not form a whole block to the expansion at <paramref name="level"/>.
     /// Such lines are a block argument's contents, or the branch of an <c>.if</c> chain that this
     /// call takes.
     /// </summary>
-    private void Members(
-        IReadOnlyList<SyntaxNode> members, Expansion at, string indent,
-        IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
+    private void Members(IReadOnlyList<SyntaxNode> members, Level level)
     {
-        foreach (var (member, included) in ConditionChain.Walk(model, members, 0, at))
+        foreach (var (member, included) in ConditionChain.Walk(model, members, 0, level.At))
         {
             if (member is BlockSyntax block)
-                Block(block, included, at, indent, into, reached, counter);
+                Block(block, included, level);
             else if (member is LineSyntax line)
-                Statement(line, at, indent, into, reached, counter);
+                Statement(line, level);
         }
     }
 
@@ -215,16 +210,14 @@ internal sealed class MacroExpansion
     /// a plain block. <paramref name="included"/> indicates whether the call takes the block,
     /// which only a branch of a condition chain may not.
     /// </summary>
-    private void Block(
-        BlockSyntax block, bool included, Expansion at, string indent,
-        IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
+    private void Block(BlockSyntax block, bool included, Level level)
     {
         // Conditions on the arguments are resolved here, because a programmer expanding this
         // call by hand would have kept only the branch it takes.
         if (block.BlockKind == BlockKind.If)
         {
             if (included)
-                Members(Macros.LinesOf(block), at, indent, into, reached, counter);
+                Members(Macros.LinesOf(block), level);
             return;
         }
 
@@ -233,8 +226,8 @@ internal sealed class MacroExpansion
         // the reader asked what this call becomes rather than what the body says.
         if (block.BlockKind is BlockKind.Repeat or BlockKind.Each or BlockKind.MultiProc)
         {
-            foreach (var iteration in Repetitions.Of(model, block, at, null))
-                Members(Macros.LinesOf(block), iteration, indent, into, reached, counter);
+            foreach (var iteration in Repetitions.Of(model, block, level.At, null))
+                Members(Macros.LinesOf(block), level with { At = iteration });
             return;
         }
 
@@ -244,19 +237,17 @@ internal sealed class MacroExpansion
             // expanded with the call that opened the chain. Only the chain's first block holds
             // the call.
             if (Macros.CallIn(block.Opener.Statement) is { } call)
-                Called(block, call, at, indent, into, reached, counter);
+                Called(block, call, level);
             return;
         }
 
-        AddStatement(block.Opener.Statement, at, indent);
-        Members(Macros.LinesOf(block), at, indent + Step, into, reached, counter);
-        Emit(indent + "}");
+        AddStatement(block.Opener.Statement, level.At, level.Indent);
+        Members(Macros.LinesOf(block), level.Indented());
+        Emit(level.Indent + "}");
     }
 
     /// <summary>Adds one line of a body that opens no block.</summary>
-    private void Statement(
-        LineSyntax line, Expansion at, string indent,
-        IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
+    private void Statement(LineSyntax line, Level level)
     {
         switch (line.Statement)
         {
@@ -266,17 +257,17 @@ internal sealed class MacroExpansion
             // A line naming a `block` parameter inserts the caller's own code, which needs no
             // substitution because the caller wrote it in the place where it stands.
             case BlockSpliceSyntax splice:
-                Spliced(splice, at, indent, into, reached, counter);
+                Spliced(splice, level);
                 return;
             case MacroCallSyntax call:
-                Called(null, call, at, indent, into, reached, counter);
+                Called(null, call, level);
                 return;
             case LabeledLineSyntax { Statement: MacroCallSyntax inner } labeled:
-                Emit(indent + labeled.Label.GetText().Trim());
-                Called(null, inner, at, indent, into, reached, counter);
+                Emit(level.Indent + labeled.Label.GetText().Trim());
+                Called(null, inner, level);
                 return;
             default:
-                AddStatement(line.Statement, at, indent);
+                AddStatement(line.Statement, level.At, level.Indent);
                 return;
         }
     }
@@ -285,9 +276,7 @@ internal sealed class MacroExpansion
     /// Adds the lines a <c>block</c> argument gives, at the place where the body names the
     /// parameter.
     /// </summary>
-    private void Spliced(
-        BlockSpliceSyntax splice, Expansion at, string indent,
-        IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
+    private void Spliced(BlockSpliceSyntax splice, Level level)
     {
         if (model.SymbolAt(splice.Name) is not { Parameter: { IsBlock: true } parameter })
         {
@@ -296,22 +285,20 @@ internal sealed class MacroExpansion
         }
 
         // A block argument the call omitted adds nothing. This is the case `.empty` tests for.
-        if (model.ArgumentFor(parameter.Symbol, at) is not { Block: { } block })
+        if (model.ArgumentFor(parameter.Symbol, level.At) is not { Block: { } block })
             return;
-        Members(Macros.LinesOf(block), Expansion.Spliced(at, splice, block), indent, into, reached, counter);
+        Members(Macros.LinesOf(block), level with { At = Expansion.Spliced(level.At, splice, block) });
     }
 
     /// <summary>
     /// Adds a call inside the body. It is left as a call, so that expansion goes one level at a
     /// time, unless it is the call the reader asked to see or every call was asked for.
     /// </summary>
-    private void Called(
-        BlockSyntax? opened, MacroCallSyntax call, Expansion at, string indent,
-        IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
+    private void Called(BlockSyntax? opened, MacroCallSyntax call, Level level)
     {
-        var index = counter.Next();
-        IReadOnlyList<int> way = [.. reached, index];
-        var chosen = into is [var first, ..] && first == index;
+        var index = level.Counter.Next();
+        IReadOnlyList<int> way = [.. level.Reached, index];
+        var chosen = level.Into is [var first, ..] && first == index;
         if (all || chosen)
         {
             if (model.MacroAt(call) is not { Definition: BlockSyntax definition })
@@ -319,7 +306,7 @@ internal sealed class MacroExpansion
                 Refuse($"no macro named `{call.Name.Text}!` is declared in this program");
                 return;
             }
-            if (Expansion.Expanding(at, definition))
+            if (Expansion.Expanding(level.At, definition))
             {
                 Refuse($"`{call.Name.Text}!` calls itself, directly or through another macro, so its expansion never ends");
                 return;
@@ -328,33 +315,35 @@ internal sealed class MacroExpansion
             // Each expansion has its own locals, so two of them expanded in one body would
             // declare the same name twice. An anonymous scope is inline code and keeps them
             // apart, which is what the language offers for exactly this case.
-            var inner = Expansion.Of(at, call, definition);
-            IReadOnlyList<int> next = chosen ? [.. into.Skip(1)] : [];
+            var inner = new Level(
+                Expansion.Of(level.At, call, definition), level.Indent,
+                chosen ? [.. level.Into.Skip(1)] : [], way, new Counter());
             if (!Declares(analysis, definition))
             {
-                Body(definition, inner, indent, next, way);
+                Body(definition, inner);
                 return;
             }
-            Emit(indent + ".scope {");
-            Body(definition, inner, indent + Step, next, way);
-            Emit(indent + "}");
+            Emit(level.Indent + ".scope {");
+            Body(definition, inner.Indented());
+            Emit(level.Indent + "}");
             return;
         }
 
         // A call left unexpanded adds the call line itself, then the block arguments under it.
         // Those arguments are code of this body rather than of the called macro, and are
         // expanded like any other line of the body.
-        var callText = AddStatement(call, at, indent);
+        var callText = AddStatement(call, level.At, level.Indent);
         links.Add(new Link(lines.Count - 1, callText.TrimEnd('{').Trim(), way));
         if (opened is null)
             return;
-        Members(Macros.LinesOf(opened), at, indent + Step, [], way, new Counter());
+        var arguments = level.Indented() with { Into = [], Reached = way };
+        Body(opened, arguments with { Counter = new Counter() });
         foreach (var next in Continuations(opened))
         {
-            Emit(indent + next.Opener.Statement.GetText().Trim());
-            Members(Macros.LinesOf(next), at, indent + Step, [], way, new Counter());
+            Emit(level.Indent + next.Opener.Statement.GetText().Trim());
+            Body(next, arguments with { Counter = new Counter() });
         }
-        Emit(indent + "}");
+        Emit(level.Indent + "}");
     }
 
     /// <summary>Returns the <c>} name {</c> blocks that continue a call's block arguments.</summary>
@@ -524,6 +513,22 @@ internal sealed class MacroExpansion
     /// <param name="Text">The call's text, for the link's label.</param>
     /// <param name="Into">The index path that expands it, giving which call to expand at each level.</param>
     internal sealed record Link(int Line, string Text, IReadOnlyList<int> Into);
+
+    /// <summary>
+    /// Represents where the expansion is while it adds the lines of one level. A nested level is
+    /// derived from its parent with <c>with</c>.
+    /// </summary>
+    /// <param name="At">The expansion the lines are read under, which gives each parameter its argument.</param>
+    /// <param name="Indent">The indentation each added line starts with.</param>
+    /// <param name="Into">The index path that gives which call to expand further at this level and below.</param>
+    /// <param name="Reached">The index path to this level, which each link records.</param>
+    /// <param name="Counter">The numbering of the calls left unexpanded at this level.</param>
+    private readonly record struct Level(
+        Expansion At, string Indent, IReadOnlyList<int> Into, IReadOnlyList<int> Reached, Counter Counter)
+    {
+        /// <summary>Returns this level with its lines indented one step further.</summary>
+        public Level Indented() => this with { Indent = Indent + Step };
+    }
 
     /// <summary>
     /// Numbers the calls left unexpanded at one level. A link identifies a call by that number.

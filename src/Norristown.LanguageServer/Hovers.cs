@@ -279,7 +279,8 @@ internal static class Hovers
         // before where the routine lives. What a macro call expands to is the same question
         // asked of a macro, so its row goes here too.
         Routine(card, analysis, symbol);
-        card.Row("expands to", MacroCallHover.Becomes(analysis, model, reference));
+        var expansion = MacroCallHover.At(analysis, model, reference);
+        card.Row("expands to", expansion?.Becomes());
 
         // Size and element count answer one question, so they share a row. A count of one is
         // what a declaration without a count means, so it is not shown.
@@ -299,10 +300,10 @@ internal static class Hovers
         OutputName(card, analysis, symbol);
 
         // A macro call is the only name whose hover says more than its declaration does: what
-        // it expands to. MacroCallHover computes the summary row above and appends the
-        // expansion listing to the hover text here.
+        // it expands to. The one expansion computed above gives the summary row, and
+        // MacroCallHover appends its listing to the hover text here.
         return new Protocol.Hover(
-            Protocol.MarkupContent.Markdown(MacroCallHover.Added(card.ToString(), analysis, model, reference)),
+            Protocol.MarkupContent.Markdown(MacroCallHover.Added(card.ToString(), expansion, model, reference)),
             Lsp.ToRange(model.Tree, reference.Span));
     }
 

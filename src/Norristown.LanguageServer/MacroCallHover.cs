@@ -21,46 +21,13 @@ internal static class MacroCallHover
     private const int Shown = 8;
 
     /// <summary>
-    /// Returns what the call under the caret expands to, as the grid's row shows it, or null
-    /// where the caret is not on a call.
-    /// </summary>
-    /// <param name="analysis">The program, for the bytes and cycles the call assembles to.</param>
-    /// <param name="model">The file the caret is in.</param>
-    /// <param name="reference">The name under the caret.</param>
-    public static string? Becomes(ProgramAnalysis analysis, SemanticModel model, SymbolReference reference) =>
-        At(analysis, model, reference)?.Becomes();
-
-    /// <summary>
-    /// Returns <paramref name="card"/> with the expansion listed under it, or
-    /// <paramref name="card"/> unchanged where the caret is not on a call.
-    /// </summary>
-    /// <param name="card">The hover text as every name gets it.</param>
-    /// <param name="analysis">The program, for the bytes and cycles the call assembles to.</param>
-    /// <param name="model">The file the caret is in.</param>
-    /// <param name="reference">The name under the caret.</param>
-    public static string Added(
-        string card, ProgramAnalysis analysis, SemanticModel model, SymbolReference reference)
-    {
-        // An expansion the analysis could not produce in full is not shown, because a listing
-        // that is nearly right about what a line became is worse than no listing. The summary row is still
-        // shown, because it comes from the layout and not from the expansion text.
-        if (At(analysis, model, reference) is not { Refusal: null, Lines.Count: > 0 } expansion)
-            return card;
-        var zones = new List<string>
-        {
-            card,
-            $"```nt65\n{string.Join("\n", expansion.Lines.Take(Shown))}\n```",
-        };
-        if (expansion.Lines.Count > Shown)
-            zones.Add(Link(model, reference.Span.Start, expansion.Lines.Count - Shown));
-        return string.Join("\n---\n", zones);
-    }
-
-    /// <summary>
     /// Returns the expansion of the call the caret is on, or null unless the name under the caret
-    /// is the call's macro name.
+    /// is the call's macro name. A hover computes it once, for both its summary row and its listing.
     /// </summary>
-    private static MacroExpansion? At(
+    /// <param name="analysis">The program, for the bytes and cycles the call assembles to.</param>
+    /// <param name="model">The file the caret is in.</param>
+    /// <param name="reference">The name under the caret.</param>
+    public static MacroExpansion? At(
         ProgramAnalysis analysis, SemanticModel model, SymbolReference reference)
     {
         if (reference is not { IsDeclaration: false, Symbol.Kind: SymbolKind.Macro })
@@ -70,6 +37,32 @@ internal static class MacroCallHover
         return Macros.CalleeOf(call) is { } callee && callee.Span.Start == reference.Span.Start
             ? MacroExpansion.Of(analysis, model, call)
             : null;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="card"/> with the expansion listed under it, or
+    /// <paramref name="card"/> unchanged where the caret is not on a call.
+    /// </summary>
+    /// <param name="card">The hover text as every name gets it.</param>
+    /// <param name="expansion">The expansion from <see cref="At"/>, or null where the caret is not on a call.</param>
+    /// <param name="model">The file the caret is in.</param>
+    /// <param name="reference">The name under the caret.</param>
+    public static string Added(
+        string card, MacroExpansion? expansion, SemanticModel model, SymbolReference reference)
+    {
+        // An expansion the analysis could not produce in full is not shown, because a listing
+        // that is nearly right about what a line became is worse than no listing. The summary row is still
+        // shown, because it comes from the layout and not from the expansion text.
+        if (expansion is not { Refusal: null, Lines.Count: > 0 })
+            return card;
+        var zones = new List<string>
+        {
+            card,
+            $"```nt65\n{string.Join("\n", expansion.Lines.Take(Shown))}\n```",
+        };
+        if (expansion.Lines.Count > Shown)
+            zones.Add(Link(model, reference.Span.Start, expansion.Lines.Count - Shown));
+        return string.Join("\n---\n", zones);
     }
 
     /// <summary>
