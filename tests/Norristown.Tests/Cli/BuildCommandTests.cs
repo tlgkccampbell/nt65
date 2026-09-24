@@ -30,7 +30,7 @@ public sealed class BuildCommandTests : IDisposable
 
         var (code, printed) = Run(Path.Combine(root.FullName, "app", "src"), "build");
 
-        Assert.Equal((0, ""), (code, printed));
+        Assert.Equal((ExitCode.Success, ""), (code, printed));
         Assert.True(Exists("app/build/main.s"));
         Assert.True(Exists("app/build/hw/vic.s"));
         Assert.Contains("from ../lib/vic.nt65.", root.Read("app/build/hw/vic.s"));
@@ -59,13 +59,13 @@ public sealed class BuildCommandTests : IDisposable
         root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
         var app = Path.Combine(root.FullName, "app");
 
-        Assert.Equal(0, Run(app, "build").Code);
-        Assert.Equal(0, Run(app, "build", "--config", "debug").Code);
+        Assert.Equal(ExitCode.Success, Run(app, "build").Code);
+        Assert.Equal(ExitCode.Success, Run(app, "build", "--config", "debug").Code);
         Assert.Contains("lda #$00", root.Read("app/build/release/main.s"));
         Assert.Contains("lda #$01", root.Read("app/build/debug/main.s"));
 
         var (code, printed) = Run(app, "build", "--config", "ntsc");
-        Assert.Equal(1, code);
+        Assert.Equal(ExitCode.InputError, code);
         Assert.Contains("--config:1:1: error: `ntsc` is not a configuration: nt65.json names `debug`", printed);
     }
 
@@ -81,14 +81,14 @@ public sealed class BuildCommandTests : IDisposable
         root.Write("app/vic.nt65", Hw);
         root.Write("app/build/notes.txt", "mine");
         var app = Path.Combine(root.FullName, "app");
-        Assert.Equal(0, Run(app, "build").Code);
+        Assert.Equal(ExitCode.Success, Run(app, "build").Code);
         Assert.True(Exists("app/build/hw/vic.s"));
 
         root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
         System.IO.File.Delete(Path.Combine(app, "vic.nt65"));
         var (code, printed) = Run(app, "build");
 
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Equal("nt65: note: deleted build/hw/vic.s, which the program no longer writes\n", printed);
         Assert.False(Exists("app/build/hw/vic.s"));
         Assert.False(Directory.Exists(Path.Combine(app, "build", "hw")));
@@ -110,7 +110,7 @@ public sealed class BuildCommandTests : IDisposable
         root.Write("app/data/font.bin", "ABCD");
         var app = Path.Combine(root.FullName, "app");
 
-        Assert.Equal(0, Run(app, "build", "--depfile", "build/nt65.d").Code);
+        Assert.Equal(ExitCode.Success, Run(app, "build", "--depfile", "build/nt65.d").Code);
 
         Assert.Equal("""
             build/main.s: \
@@ -151,7 +151,7 @@ public sealed class BuildCommandTests : IDisposable
 
         var (code, printed) = Run(Path.Combine(root.FullName, "app"), "build", "main.nt65");
 
-        Assert.Equal((0, ""), (code, printed));
+        Assert.Equal((ExitCode.Success, ""), (code, printed));
         Assert.True(Exists("app/main.s"));
         Assert.False(Exists("app/hw/vic.s"));
     }
@@ -169,7 +169,7 @@ public sealed class BuildCommandTests : IDisposable
 
         var (code, printed) = Run(app, "build");
 
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.StartsWith("nt65.json:1:39: error: `flies` is not a key of nt65.json", printed);
         Assert.Contains("nt65: no file matched the `files` globs in nt65.json", printed);
         Assert.DoesNotContain("usage: nt65 build", printed);
@@ -187,11 +187,11 @@ public sealed class BuildCommandTests : IDisposable
         var alone = Path.Combine(root.FullName, "alone");
 
         var (code, printed) = Run(alone, "build", "main.nt65");
-        Assert.Equal(1, code);
+        Assert.Equal(ExitCode.InputError, code);
         Assert.Contains("main.nt65:2:6: error: no module `hw` is in this build", printed);
 
         (code, printed) = Run(alone, "build", "other.nt65");
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Contains("nt65: note: nothing declares which processor this program is for, so it is built for the 6502", printed);
     }
 
@@ -209,7 +209,7 @@ public sealed class BuildCommandTests : IDisposable
 
         var (code, printed) = Run(app, "build", "--check", "--depfile", "nt65.d", "--c-header", "nt65.h");
 
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Contains("main.nt65:3:1: warning: `UNUSED` is never used", printed);
         Assert.False(Directory.Exists(Path.Combine(app, "build")));
         Assert.False(System.IO.File.Exists(Path.Combine(app, "nt65.d")));
@@ -217,7 +217,7 @@ public sealed class BuildCommandTests : IDisposable
 
         // It exits with the code a build would, so a program a build rejects fails the check too.
         root.Write("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
-        Assert.Equal(1, Run(app, "build", "--check").Code);
+        Assert.Equal(ExitCode.InputError, Run(app, "build", "--check").Code);
     }
 
     /// <summary>
@@ -233,7 +233,7 @@ public sealed class BuildCommandTests : IDisposable
 
         var (code, output, error) = Apart(app, false, "build", "--json");
 
-        Assert.Equal((1, ""), (code, error));
+        Assert.Equal((ExitCode.InputError, ""), (code, error));
         var diagnostic = JsonDocument.Parse(Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries))).RootElement;
         Assert.Equal("main.nt65", diagnostic.GetProperty("file").GetString());
         Assert.Equal(4, diagnostic.GetProperty("line").GetInt32());
@@ -282,15 +282,15 @@ public sealed class BuildCommandTests : IDisposable
     public void HelpAndVersionAreAnswered()
     {
         var (code, printed) = Run(root.FullName, "--help");
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Contains("--depfile <file>", printed);
 
         (code, printed) = Run(root.FullName, "--version");
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.StartsWith("nt65 ", printed);
 
         (code, printed) = Run(root.FullName, "build", "--bogus");
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.StartsWith("nt65: `--bogus` is not an option", printed);
     }
 
@@ -302,19 +302,19 @@ public sealed class BuildCommandTests : IDisposable
     public void WhatIsNotACommandIsReportedWithAPointerToTheHelp()
     {
         var (code, printed) = Run(root.FullName, "check");
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.Equal("nt65: `check` is not a command\nsee `nt65 --help`\n", printed);
 
         (code, printed) = Run(root.FullName, "--watch");
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.Equal("nt65: `--watch` is not an option\nsee `nt65 --help`\n", printed);
 
         (code, printed) = Run(root.FullName, "build", "--rebuild");
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.Equal("nt65: `--rebuild` is not an option\nsee `nt65 --help`\n", printed);
 
         (code, printed) = Run(root.FullName);
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.StartsWith("usage: nt65 build", printed);
     }
 
@@ -331,7 +331,7 @@ public sealed class BuildCommandTests : IDisposable
         var app = Path.Combine(root.FullName, "app");
 
         var (code, output, error) = Apart(app, false, "build", "--stdout", "main.nt65");
-        Assert.Equal((0, ""), (code, error));
+        Assert.Equal((ExitCode.Success, ""), (code, error));
         Assert.StartsWith("; Generated by nt65 from main.nt65.", output, StringComparison.Ordinal);
         Assert.Contains("    rts\n", output, StringComparison.Ordinal);
         Assert.False(Exists("app/build/main.s"));
@@ -340,7 +340,7 @@ public sealed class BuildCommandTests : IDisposable
         // incomplete.
         root.Write("app/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    lda nowhere\n    rts\n}\n");
         var (wrong, incomplete, reported) = Apart(app, false, "build", "--stdout", "main.nt65");
-        Assert.Equal(1, wrong);
+        Assert.Equal(ExitCode.InputError, wrong);
         Assert.Contains("`nowhere` is not declared", reported, StringComparison.Ordinal);
         Assert.StartsWith(
             "; nt65: this output is incomplete because the program has an error at line 4: `nowhere` is not declared\n",
@@ -348,7 +348,7 @@ public sealed class BuildCommandTests : IDisposable
             StringComparison.Ordinal);
 
         // It prints one file's output, so it needs exactly one file named.
-        Assert.Equal(2, Run(app, "build", "--stdout").Code);
+        Assert.Equal(ExitCode.UsageError, Run(app, "build", "--stdout").Code);
     }
 
     /// <summary>
@@ -365,22 +365,22 @@ public sealed class BuildCommandTests : IDisposable
         var app = Path.Combine(root.FullName, "app");
         root.Write("app/main.nt65", ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n");
         root.Write("app/part.nt65", ".module part: placeable\n\n.segment CODE\n.export .proc tail {\n    rts\n}\n");
-        Assert.Equal(0, Run(app, "build").Code);
+        Assert.Equal(ExitCode.Success, Run(app, "build").Code);
         Assert.True(Exists("app/build/part.s"));
 
         root.Write("app/main.nt65", ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n\n.place part\n");
         var (code, output, error) = Apart(app, false, "build", "--stdout", "part.nt65");
-        Assert.Equal((0, ""), (code, error));
+        Assert.Equal((ExitCode.Success, ""), (code, error));
         Assert.Equal(
             "; .place part  main.nt65:8\n; .proc tail  part.nt65:4\npart__tail:\n    rts\n; end of tail\n; end of part\n",
             output);
 
-        Assert.Equal(0, Run(app, "build", "part.nt65").Code);
+        Assert.Equal(ExitCode.Success, Run(app, "build", "part.nt65").Code);
         Assert.Contains("; .place part  main.nt65:8\n", root.Read("app/build/main.s"), StringComparison.Ordinal);
         Assert.True(Exists("app/build/part.s"));
 
         var (whole, deleted) = Run(app, "build");
-        Assert.Equal(0, whole);
+        Assert.Equal(ExitCode.Success, whole);
         Assert.Equal(
             "nt65: note: deleted build/part.s, which the program no longer writes\n"
                 + "nt65: note: deleted build/part.s.lines, which the program no longer writes\n",
@@ -388,7 +388,7 @@ public sealed class BuildCommandTests : IDisposable
         Assert.False(Exists("app/build/part.s"));
     }
 
-    private static (int Code, string Printed) Run(string directory, params string[] arguments)
+    private static (ExitCode Code, string Printed) Run(string directory, params string[] arguments)
     {
         var (code, output, error) = Apart(directory, false, arguments);
         return (code, output + error);
@@ -398,7 +398,7 @@ public sealed class BuildCommandTests : IDisposable
     /// Runs nt65 with standard output and standard error kept apart, so that a test can check
     /// which stream a message goes to.
     /// </summary>
-    private static (int Code, string Output, string Error) Apart(
+    private static (ExitCode Code, string Output, string Error) Apart(
         string directory, bool colour, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };

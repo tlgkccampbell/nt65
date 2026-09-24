@@ -14,7 +14,7 @@ public sealed class ExplainCommandTests
     {
         var (code, output, problems) = Run("explain", "unused-symbol");
 
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Empty(problems);
         Assert.StartsWith("unused-symbol, a warning by default", output, StringComparison.Ordinal);
         Assert.Contains(Catalogue.Find("unused-symbol")!.Explanation.Split(' ')[0], output, StringComparison.Ordinal);
@@ -31,7 +31,7 @@ public sealed class ExplainCommandTests
         foreach (var descriptor in Catalogue.All)
         {
             var (code, output, _) = Run("explain", descriptor.Id);
-            Assert.Equal(0, code);
+            Assert.Equal(ExitCode.Success, code);
             Assert.StartsWith(descriptor.Id + ",", output, StringComparison.Ordinal);
         }
     }
@@ -41,7 +41,7 @@ public sealed class ExplainCommandTests
     {
         var (code, output, problems) = Run("explain");
 
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Empty(problems);
         foreach (var descriptor in Catalogue.All)
             Assert.Contains(descriptor.Id, output, StringComparison.Ordinal);
@@ -53,7 +53,7 @@ public sealed class ExplainCommandTests
     {
         var (code, output, problems) = Run("explain", "unused-symbols");
 
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.Empty(output);
         Assert.Contains("no diagnostic is named `unused-symbols`; did you mean `unused-symbol`?", problems, StringComparison.Ordinal);
         Assert.Contains("`nt65 explain` with no name lists every diagnostic", problems, StringComparison.Ordinal);
@@ -64,7 +64,7 @@ public sealed class ExplainCommandTests
     {
         var (code, _, problems) = Run("explain", "unused-symbol", "mnemonic-name");
 
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.Contains("explain takes one diagnostic's name", problems, StringComparison.Ordinal);
     }
 
@@ -73,11 +73,11 @@ public sealed class ExplainCommandTests
     {
         var (code, output, _) = Run("explain", "--help");
 
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Contains("nt65 explain [<diagnostic> | --markdown]", output, StringComparison.Ordinal);
     }
 
-    private static (int Code, string Output, string Problems) Run(params string[] arguments)
+    private static (ExitCode Code, string Output, string Problems) Run(params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

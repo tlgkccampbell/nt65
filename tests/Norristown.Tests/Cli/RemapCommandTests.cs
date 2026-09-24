@@ -42,7 +42,7 @@ public sealed class RemapCommandTests : IDisposable
 
         var (code, printed) = Run("remap-dbg", "game.dbg");
 
-        Assert.Equal((0, ""), (code, printed));
+        Assert.Equal((ExitCode.Success, ""), (code, printed));
         Assert.Contains("name=\"src/main.nt65\"", Read("game.dbg"));
         Assert.Contains("line\tid=1,file=1,line=9,type=1,span=0", Read("game.dbg"));
     }
@@ -54,7 +54,7 @@ public sealed class RemapCommandTests : IDisposable
         root.Write("build/main.s.lines", Map);
         root.Write("game.dbg", Linked);
 
-        Assert.Equal(0, Run("remap-dbg", "game.dbg", "--out", "mapped.dbg").Code);
+        Assert.Equal(ExitCode.Success, Run("remap-dbg", "game.dbg", "--out", "mapped.dbg").Code);
 
         Assert.Equal(Linked, Read("game.dbg"));
         Assert.Contains("name=\"src/main.nt65\"", Read("mapped.dbg"));
@@ -69,19 +69,19 @@ public sealed class RemapCommandTests : IDisposable
     {
         root.Write("game.dbg", Linked);
 
-        Assert.Equal(0, Run("remap-dbg", "game.dbg").Code);
+        Assert.Equal(ExitCode.Success, Run("remap-dbg", "game.dbg").Code);
 
         Assert.Equal(Linked, Read("game.dbg"));
     }
 
     /// <summary>Each failure is reported, naming the file it concerns where there is one.</summary>
     [Theory]
-    [InlineData(new[] { "remap-dbg", "nowhere.dbg" }, 1, "nowhere.dbg: error: file not found")]
-    [InlineData(new[] { "remap-dbg" }, 2, "nt65: `remap-dbg` needs the debug file ld65 wrote with `--dbgfile`")]
-    [InlineData(new[] { "remap-dbg", "a.dbg", "b.dbg" }, 2, "nt65: `remap-dbg` takes one debug file, and was given more than one")]
-    [InlineData(new[] { "remap-dbg", "--out" }, 2, "nt65: `--out` needs a file to write")]
-    [InlineData(new[] { "remap-dbg", "--bogus", "game.dbg" }, 2, "nt65: `--bogus` is not an option")]
-    public void EachFailureIsReportedWithItsExitCode(string[] arguments, int expected, string message)
+    [InlineData(new[] { "remap-dbg", "nowhere.dbg" }, ExitCode.InputError, "nowhere.dbg: error: file not found")]
+    [InlineData(new[] { "remap-dbg" }, ExitCode.UsageError, "nt65: `remap-dbg` needs the debug file ld65 wrote with `--dbgfile`")]
+    [InlineData(new[] { "remap-dbg", "a.dbg", "b.dbg" }, ExitCode.UsageError, "nt65: `remap-dbg` takes one debug file, and was given more than one")]
+    [InlineData(new[] { "remap-dbg", "--out" }, ExitCode.UsageError, "nt65: `--out` needs a file to write")]
+    [InlineData(new[] { "remap-dbg", "--bogus", "game.dbg" }, ExitCode.UsageError, "nt65: `--bogus` is not an option")]
+    public void EachFailureIsReportedWithItsExitCode(string[] arguments, ExitCode expected, string message)
     {
         root.Write("a.dbg", Linked);
         root.Write("game.dbg", Linked);
@@ -100,11 +100,11 @@ public sealed class RemapCommandTests : IDisposable
 
         var (code, printed) = Run("remap-dbg", "game.dbg");
 
-        Assert.Equal(1, code);
+        Assert.Equal(ExitCode.InputError, code);
         Assert.StartsWith("game.dbg: error: it is not a version 2.0 ld65 debug file", printed);
     }
 
-    private (int Code, string Printed) Run(params string[] arguments)
+    private (ExitCode Code, string Printed) Run(params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

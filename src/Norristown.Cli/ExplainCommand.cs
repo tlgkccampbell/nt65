@@ -11,23 +11,23 @@ namespace Norristown.Cli;
 internal static class ExplainCommand
 {
     /// <summary>Runs the command with what followed <c>explain</c> on the command line.</summary>
-    public static int Run(IReadOnlyList<string> arguments, TextWriter output, TextWriter error)
+    public static ExitCode Run(IReadOnlyList<string> arguments, TextWriter output, TextWriter error)
     {
         if (arguments is [])
         {
             List(output);
-            return 0;
+            return ExitCode.Success;
         }
         if (arguments is ["--markdown"])
         {
             output.Write(DiagnosticsPage.Text());
-            return 0;
+            return ExitCode.Success;
         }
         if (arguments is not [var name] || name.StartsWith('-'))
         {
             error.WriteLine("nt65: explain takes one diagnostic's name");
             error.WriteLine(CommandLine.SeeHelp);
-            return 2;
+            return ExitCode.UsageError;
         }
         if (Catalogue.Find(name) is not { } descriptor)
         {
@@ -36,7 +36,7 @@ internal static class ExplainCommand
                 ? $"nt65: no diagnostic is named `{name}`"
                 : $"nt65: no diagnostic is named `{name}`; did you mean `{nearest}`?");
             error.WriteLine("nt65: `nt65 explain` with no name lists every diagnostic");
-            return 2;
+            return ExitCode.UsageError;
         }
 
         // Print the entry's name and default severity, its message with each placeholder shown
@@ -51,7 +51,7 @@ internal static class ExplainCommand
         output.WriteLine(
             $"in {Project.ProjectFile.Name}: \"diagnostics\": "
             + $"{{ \"{descriptor.Id}\": \"{ExampleSetting(descriptor)}\" }}");
-        return 0;
+        return ExitCode.Success;
     }
 
     /// <summary>Lists every diagnostic name with its default severity, for someone looking one up.</summary>

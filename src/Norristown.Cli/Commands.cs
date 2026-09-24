@@ -11,10 +11,9 @@ public static class Commands
 {
     /// <summary>
     /// Runs nt65 with <paramref name="arguments"/> from <paramref name="directory"/>, and returns
-    /// the exit code. The code is 0 when nt65 did what it was asked, 1 when its input (the program
-    /// or a file) is wrong, and 2 when the command line is wrong.
+    /// the exit code.
     /// </summary>
-    public static int Run(
+    public static ExitCode Run(
         string[] arguments, string directory, TextWriter output, TextWriter error,
         bool colour = false, CancellationToken cancellation = default)
     {
@@ -25,10 +24,10 @@ public static class Commands
                 or ["explain", "--help" or "-h"] or ["lsp", "--help" or "-h"]
                 or ["import-inc", "--help" or "-h"]:
                 output.WriteLine(CommandLine.Usage);
-                return 0;
+                return ExitCode.Success;
             case ["--version"]:
                 output.WriteLine($"nt65 {Version()}");
-                return 0;
+                return ExitCode.Success;
             case ["build", .. var rest]:
                 if (CommandLine.Parse(rest, out var problem) is not { } command)
                     return Wrong(error, problem!);
@@ -46,8 +45,9 @@ public static class Commands
             case ["lsp"]:
                 // The language server's own entry point is served here too, so that any editor
                 // that speaks LSP can start it by running nt65 itself. Every other command is
-                // synchronous, so this one waits for the server to exit.
-                return Server.ServeStandardStreamsAsync(error).GetAwaiter().GetResult();
+                // synchronous, so this one waits for the server to exit. The server's own exit
+                // codes are 0, 1 and 70, so they pass through unchanged.
+                return (ExitCode)Server.ServeStandardStreamsAsync(error).GetAwaiter().GetResult();
             case ["lsp", var unexpected, ..]:
                 return Wrong(error, $"`lsp` takes no arguments, but was given `{unexpected}`");
             case ["import-inc", .. var converted]:
@@ -63,15 +63,15 @@ public static class Commands
 
         // Nothing was asked for, so the usage text is the answer.
         error.WriteLine(CommandLine.Usage);
-        return 2;
+        return ExitCode.UsageError;
     }
 
-    /// <summary>Reports what is wrong with the command line and how to see the usage text, and returns 2.</summary>
-    private static int Wrong(TextWriter error, string problem)
+    /// <summary>Reports what is wrong with the command line and how to see the usage text, and returns <see cref="ExitCode.UsageError"/>.</summary>
+    private static ExitCode Wrong(TextWriter error, string problem)
     {
         error.WriteLine($"nt65: {problem}");
         error.WriteLine(CommandLine.SeeHelp);
-        return 2;
+        return ExitCode.UsageError;
     }
 
     /// <summary>Returns the version nt65 was built as.</summary>

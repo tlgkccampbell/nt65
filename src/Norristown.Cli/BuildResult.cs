@@ -6,8 +6,9 @@ namespace Norristown.Cli;
 /// reports absolute paths rather than paths relative to a project.
 /// </summary>
 /// <param name="Code">
-/// The exit code, which is 0 when the build succeeded, 1 when the program has errors, and 2 when
-/// the command line is wrong.
+/// The exit code, which is <see cref="ExitCode.Success"/> when the build succeeded,
+/// <see cref="ExitCode.InputError"/> when the program has errors, and
+/// <see cref="ExitCode.UsageError"/> when the command line is wrong.
 /// </param>
 /// <param name="Root">The project root, or where nt65 ran when there is no project.</param>
 /// <param name="Watched">
@@ -15,4 +16,4 @@ namespace Norristown.Cli;
 /// read to find its size. A build that stopped early lists the files it had read by then, which is
 /// enough for a watch to notice when the missing file is written.
 /// </param>
-internal sealed record BuildResult(int Code, string Root, IReadOnlyList<string> Watched);
+internal sealed record BuildResult(ExitCode Code, string Root, IReadOnlyList<string> Watched);

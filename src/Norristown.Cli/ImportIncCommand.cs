@@ -29,7 +29,7 @@ public static class ImportIncCommand
     /// 0 when it wrote a module, 1 when the file could not be read or the output could not be
     /// written, and 2 when the command is wrong. Lines it could not convert are notes, not failures.
     /// </summary>
-    public static int Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
+    public static ExitCode Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
     {
         string? source = null, destination = null, module = null;
         for (var i = 0; i < arguments.Count; i++)
@@ -70,12 +70,12 @@ public static class ImportIncCommand
         catch (IOException problem)
         {
             error.WriteLine($"nt65: cannot read {ProjectRoot.Shown(directory, source)}: {problem.Message}");
-            return 1;
+            return ExitCode.InputError;
         }
         catch (UnauthorizedAccessException problem)
         {
             error.WriteLine($"nt65: cannot read {ProjectRoot.Shown(directory, source)}: {problem.Message}");
-            return 1;
+            return ExitCode.InputError;
         }
 
         var named = ProjectRoot.Shown(directory, source);
@@ -92,7 +92,7 @@ public static class ImportIncCommand
         if (destination is null)
         {
             output.Write(converted.Text);
-            return 0;
+            return ExitCode.Success;
         }
         try
         {
@@ -102,14 +102,14 @@ public static class ImportIncCommand
         catch (IOException problem)
         {
             error.WriteLine($"nt65: cannot write {ProjectRoot.Shown(directory, destination)}: {problem.Message}");
-            return 1;
+            return ExitCode.InputError;
         }
         catch (UnauthorizedAccessException problem)
         {
             error.WriteLine($"nt65: cannot write {ProjectRoot.Shown(directory, destination)}: {problem.Message}");
-            return 1;
+            return ExitCode.InputError;
         }
-        return 0;
+        return ExitCode.Success;
     }
 
     /// <summary>
@@ -270,11 +270,11 @@ public static class ImportIncCommand
         return name.Length == 0 || char.IsDigit(name[0]) ? "_" + name : name.ToString();
     }
 
-    /// <summary>Reports what is wrong with the command line and how to see the usage text, and returns 2.</summary>
-    private static int Wrong(TextWriter error, string problem)
+    /// <summary>Reports what is wrong with the command line and how to see the usage text, and returns <see cref="ExitCode.UsageError"/>.</summary>
+    private static ExitCode Wrong(TextWriter error, string problem)
     {
         error.WriteLine($"nt65: {problem}");
         error.WriteLine(CommandLine.SeeHelp);
-        return 2;
+        return ExitCode.UsageError;
     }
 }

@@ -18,7 +18,7 @@ public static class RemapCommand
     /// Rewrites the debug file <paramref name="arguments"/> names, in place unless <c>--out</c>
     /// gives somewhere else, and returns the exit code.
     /// </summary>
-    public static int Run(IReadOnlyList<string> arguments, string directory, TextWriter error)
+    public static ExitCode Run(IReadOnlyList<string> arguments, string directory, TextWriter error)
     {
         string? file = null, target = null;
         for (var i = 0; i < arguments.Count; i++)
@@ -30,14 +30,14 @@ public static class RemapCommand
                     break;
                 case "--out":
                     error.WriteLine("nt65: `--out` needs a file to write");
-                    return 2;
+                    return ExitCode.UsageError;
                 default:
                     if (arguments[i].StartsWith('-') || file is not null)
                     {
                         error.WriteLine(arguments[i].StartsWith('-')
                             ? $"nt65: `{arguments[i]}` is not an option"
                             : "nt65: `remap-dbg` takes one debug file, and was given more than one");
-                        return 2;
+                        return ExitCode.UsageError;
                     }
                     file = arguments[i];
                     break;
@@ -46,14 +46,14 @@ public static class RemapCommand
         if (file is null)
         {
             error.WriteLine("nt65: `remap-dbg` needs the debug file ld65 wrote with `--dbgfile`");
-            return 2;
+            return ExitCode.UsageError;
         }
 
         var path = Path.GetFullPath(file, directory);
         if (!File.Exists(path))
         {
             error.WriteLine($"{file}: error: file not found");
-            return 1;
+            return ExitCode.InputError;
         }
 
         // ca65 records a `.s` path relative to the directory the build ran in. That is normally
@@ -63,10 +63,10 @@ public static class RemapCommand
         if (remapped is null)
         {
             error.WriteLine($"{file}: error: {problem}");
-            return 1;
+            return ExitCode.InputError;
         }
         File.WriteAllText(target is null ? path : Path.GetFullPath(target, directory), remapped);
-        return 0;
+        return ExitCode.Success;
     }
 
     /// <summary>

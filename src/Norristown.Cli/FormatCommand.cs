@@ -21,7 +21,7 @@ public static class FormatCommand
     /// <c>--check</c> found a file that is not or a file could not be read, and 2 when the command
     /// is wrong.
     /// </summary>
-    public static int Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
+    public static ExitCode Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
     {
         var check = false;
         var named = new List<string>();
@@ -37,7 +37,7 @@ public static class FormatCommand
                     {
                         error.WriteLine($"nt65: `{argument}` is not an option");
                         error.WriteLine(CommandLine.SeeHelp);
-                        return 2;
+                        return ExitCode.UsageError;
                     }
                     named.Add(Path.GetFullPath(argument, directory));
                     break;
@@ -52,7 +52,7 @@ public static class FormatCommand
             {
                 error.WriteLine($"nt65: no files to format, and no {ProjectFile.Name}");
                 error.WriteLine(CommandLine.Usage);
-                return 2;
+                return ExitCode.UsageError;
             }
             var root = Path.GetDirectoryName(projectFile)!;
             var project = ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile));
@@ -66,7 +66,7 @@ public static class FormatCommand
                 error.WriteLine(project.Files.Count == 0
                     ? $"nt65: no files to format, and no `files` in {ProjectFile.Name}"
                     : $"nt65: no file matched the `files` globs in {ProjectFile.Name}");
-                return 2;
+                return ExitCode.UsageError;
             }
         }
 
@@ -76,7 +76,7 @@ public static class FormatCommand
             if (!File.Exists(file))
             {
                 error.WriteLine($"{ProjectRoot.Shown(directory, file)}: error: file not found");
-                return 1;
+                return ExitCode.InputError;
             }
 
             var shown = ProjectRoot.Shown(directory, file);
@@ -90,6 +90,6 @@ public static class FormatCommand
             else
                 File.WriteAllText(file, formatted);
         }
-        return check && unformatted > 0 ? 1 : 0;
+        return check && unformatted > 0 ? ExitCode.InputError : ExitCode.Success;
     }
 }

@@ -33,7 +33,7 @@ public static class InitCommand
     /// <paramref name="directory"/>, and returns the exit code. The code is 0 when it wrote both
     /// files, 1 when one of them was there already, and 2 when the command is wrong.
     /// </summary>
-    public static int Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
+    public static ExitCode Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
     {
         var cpu = Cpu.Mos6502;
         string? where = null;
@@ -49,7 +49,7 @@ public static class InitCommand
                             ? $"nt65: `--cpu` needs a processor: {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}"
                             : $"nt65: `{value}` is not a processor nt65 knows; `--cpu` takes {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}");
                         error.WriteLine(CommandLine.SeeHelp);
-                        return 2;
+                        return ExitCode.UsageError;
                     }
                     cpu = named;
                     break;
@@ -60,7 +60,7 @@ public static class InitCommand
                             ? $"nt65: `{arguments[i]}` is not an option"
                             : "nt65: `init` takes at most one directory");
                         error.WriteLine(CommandLine.SeeHelp);
-                        return 2;
+                        return ExitCode.UsageError;
                     }
                     where = arguments[i];
                     break;
@@ -78,7 +78,7 @@ public static class InitCommand
             if (File.Exists(existing))
             {
                 error.WriteLine($"nt65: {ProjectRoot.Shown(directory, existing)} exists already");
-                return 1;
+                return ExitCode.InputError;
             }
         }
 
@@ -87,7 +87,7 @@ public static class InitCommand
         File.WriteAllText(main, Source.ReplaceLineEndings("\n"));
         output.WriteLine(ProjectRoot.Shown(directory, project));
         output.WriteLine(ProjectRoot.Shown(directory, main));
-        return 0;
+        return ExitCode.Success;
     }
 
     /// <summary>

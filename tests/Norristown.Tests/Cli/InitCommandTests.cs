@@ -22,8 +22,8 @@ public sealed class InitCommandTests : IDisposable
     {
         var (code, printed) = Run(root.FullName, "init");
 
-        Assert.Equal((0, "nt65.json\nsrc/main.nt65\n"), (code, printed));
-        Assert.Equal((0, ""), Run(root.FullName, "build"));
+        Assert.Equal((ExitCode.Success, "nt65.json\nsrc/main.nt65\n"), (code, printed));
+        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build"));
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "main.s")));
     }
 
@@ -34,7 +34,7 @@ public sealed class InitCommandTests : IDisposable
     [Fact]
     public void WhatItWritesIsWhatNt65WouldWrite()
     {
-        Assert.Equal(0, Run(root.FullName, "init").Code);
+        Assert.Equal(ExitCode.Success, Run(root.FullName, "init").Code);
 
         var project = root.Read(ProjectFile.Name);
         foreach (var key in JsonDocument.Parse(project).RootElement.EnumerateObject().Select(each => each.Name))
@@ -42,7 +42,7 @@ public sealed class InitCommandTests : IDisposable
 
         var main = root.Read("src/main.nt65");
         Assert.Equal(main, Formatter.Format(SyntaxTree.Parse("src/main.nt65", main)));
-        Assert.Equal((0, ""), Run(root.FullName, "fmt", "--check"));
+        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "fmt", "--check"));
     }
 
     /// <summary>The files are written into the directory named, which is created if it does not exist.</summary>
@@ -51,9 +51,9 @@ public sealed class InitCommandTests : IDisposable
     {
         var (code, printed) = Run(root.FullName, "init", "game", "--cpu", "65816");
 
-        Assert.Equal((0, "game/nt65.json\ngame/src/main.nt65\n"), (code, printed));
+        Assert.Equal((ExitCode.Success, "game/nt65.json\ngame/src/main.nt65\n"), (code, printed));
         Assert.Contains("\"cpu\": \"65816\"", root.Read("game/nt65.json"));
-        Assert.Equal(0, Run(Path.Combine(root.FullName, "game"), "build").Code);
+        Assert.Equal(ExitCode.Success, Run(Path.Combine(root.FullName, "game"), "build").Code);
     }
 
     /// <summary>
@@ -67,13 +67,13 @@ public sealed class InitCommandTests : IDisposable
 
         var (code, printed) = Run(root.FullName, "init");
 
-        Assert.Equal((1, "nt65: src/main.nt65 exists already\n"), (code, printed));
+        Assert.Equal((ExitCode.InputError, "nt65: src/main.nt65 exists already\n"), (code, printed));
         Assert.Equal(".module mine\n", root.Read("src/main.nt65"));
         Assert.False(File.Exists(Path.Combine(root.FullName, ProjectFile.Name)));
 
         File.Delete(Path.Combine(root.FullName, "src", "main.nt65"));
         Repo.WriteText(Path.Combine(root.FullName, ProjectFile.Name), "{}");
-        Assert.Equal((1, "nt65: nt65.json exists already\n"), Run(root.FullName, "init"));
+        Assert.Equal((ExitCode.InputError, "nt65: nt65.json exists already\n"), Run(root.FullName, "init"));
         Assert.Equal("{}", root.Read(ProjectFile.Name));
     }
 
@@ -82,14 +82,14 @@ public sealed class InitCommandTests : IDisposable
     public void WhatItCannotBeAskedForIsReportedAndNothingIsWritten()
     {
         Assert.Equal(
-            (2, "nt65: `z80` is not a processor nt65 knows; `--cpu` takes 6502, 6502x, 65sc02, r65c02, 65c02 or 65816\nsee `nt65 --help`\n"),
+            (ExitCode.UsageError, "nt65: `z80` is not a processor nt65 knows; `--cpu` takes 6502, 6502x, 65sc02, r65c02, 65c02 or 65816\nsee `nt65 --help`\n"),
             Run(root.FullName, "init", "--cpu", "z80"));
-        Assert.Equal((2, "nt65: `init` takes at most one directory\nsee `nt65 --help`\n"), Run(root.FullName, "init", "a", "b"));
-        Assert.Equal((2, "nt65: `--force` is not an option\nsee `nt65 --help`\n"), Run(root.FullName, "init", "--force"));
+        Assert.Equal((ExitCode.UsageError, "nt65: `init` takes at most one directory\nsee `nt65 --help`\n"), Run(root.FullName, "init", "a", "b"));
+        Assert.Equal((ExitCode.UsageError, "nt65: `--force` is not an option\nsee `nt65 --help`\n"), Run(root.FullName, "init", "--force"));
         Assert.Empty(Directory.GetFileSystemEntries(root.FullName));
     }
 
-    private static (int Code, string Printed) Run(string directory, params string[] arguments)
+    private static (ExitCode Code, string Printed) Run(string directory, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

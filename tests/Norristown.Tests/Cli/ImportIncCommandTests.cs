@@ -83,7 +83,7 @@ public sealed class ImportIncCommandTests
     {
         var (code, output, problems) = Run("import-inc", Repo.Path("tests/corpus/interop/asm/apple2.inc"));
 
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Empty(problems);
         Assert.Contains(".module apple2", output, StringComparison.Ordinal);
         Assert.Contains("KBD = $C000", output, StringComparison.Ordinal);
@@ -94,7 +94,7 @@ public sealed class ImportIncCommandTests
     {
         var (code, _, problems) = Run("import-inc");
 
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.Contains("import-inc needs the `.inc` file to convert", problems, StringComparison.Ordinal);
     }
 
@@ -103,7 +103,7 @@ public sealed class ImportIncCommandTests
     {
         var (code, _, problems) = Run("import-inc", Repo.Path("tests/corpus/interop/asm/no-such-file.inc"));
 
-        Assert.Equal(1, code);
+        Assert.Equal(ExitCode.InputError, code);
         Assert.Contains("cannot read", problems, StringComparison.Ordinal);
     }
 
@@ -112,11 +112,11 @@ public sealed class ImportIncCommandTests
     {
         var (code, output, _) = Run("import-inc", "--help");
 
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Contains("nt65 import-inc <file.inc>", output, StringComparison.Ordinal);
     }
 
-    private static (int Code, string Output, string Problems) Run(params string[] arguments)
+    private static (ExitCode Code, string Output, string Problems) Run(params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

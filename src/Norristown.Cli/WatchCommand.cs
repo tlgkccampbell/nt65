@@ -21,10 +21,11 @@ internal static class WatchCommand
     private const int QuietMilliseconds = 120;
 
     /// <summary>
-    /// Builds until <paramref name="cancellation"/> is cancelled, and returns 0. A command-line
-    /// error (exit code 2) is returned at once, since no change to a file can fix it.
+    /// Builds until <paramref name="cancellation"/> is cancelled, and returns
+    /// <see cref="ExitCode.Success"/>. A <see cref="ExitCode.UsageError"/> is returned at once,
+    /// since no change to a file can fix it.
     /// </summary>
-    public static int Run(
+    public static ExitCode Run(
         CommandLine command, string directory, TextWriter output, TextWriter error, bool colour,
         CancellationToken cancellation)
     {
@@ -63,8 +64,8 @@ internal static class WatchCommand
         while (true)
         {
             var built = BuildCommand.Run(command, directory, output, error, colour);
-            if (built.Code == 2)
-                return 2;
+            if (built.Code == ExitCode.UsageError)
+                return ExitCode.UsageError;
             lock (watched)
             {
                 watched.Clear();
@@ -78,13 +79,13 @@ internal static class WatchCommand
             }
             catch (OperationCanceledException)
             {
-                return 0;
+                return ExitCode.Success;
             }
 
             // An editor may write a file in several steps, and saving many files at once raises
             // many events, so wait for the events to stop, then clear the signal and build once.
             if (cancellation.WaitHandle.WaitOne(QuietMilliseconds))
-                return 0;
+                return ExitCode.Success;
             changed.Wait(0, CancellationToken.None);
         }
     }

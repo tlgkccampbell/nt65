@@ -23,7 +23,7 @@ public sealed class FormatCommandTests : IDisposable
 
         var (code, printed) = Run(root.FullName, "fmt", "main.nt65");
 
-        Assert.Equal((0, ""), (code, printed));
+        Assert.Equal((ExitCode.Success, ""), (code, printed));
         Assert.Equal(Straight, root.Read("main.nt65"));
     }
 
@@ -40,11 +40,11 @@ public sealed class FormatCommandTests : IDisposable
 
         var (code, printed) = Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65");
 
-        Assert.Equal((1, "src/main.nt65\n"), (code, printed));
+        Assert.Equal((ExitCode.InputError, "src/main.nt65\n"), (code, printed));
         Assert.Equal(Crooked, root.Read("src/main.nt65"));
 
-        Assert.Equal((0, ""), Run(root.FullName, "fmt", "src/main.nt65"));
-        Assert.Equal((0, ""), Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65"));
+        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "fmt", "src/main.nt65"));
+        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65"));
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public sealed class FormatCommandTests : IDisposable
         root.Write("app/src/hw.nt65", "  .module hw\n");
         root.Write("app/notes.nt65", Crooked);
 
-        Assert.Equal((0, ""), Run(Path.Combine(root.FullName, "app", "src"), "fmt"));
+        Assert.Equal((ExitCode.Success, ""), Run(Path.Combine(root.FullName, "app", "src"), "fmt"));
 
         Assert.Equal(Straight, root.Read("app/src/main.nt65"));
         Assert.Equal(".module hw\n", root.Read("app/src/hw.nt65"));
@@ -77,17 +77,17 @@ public sealed class FormatCommandTests : IDisposable
     public void WhatItCannotFormatIsReported()
     {
         var (code, printed) = Run(root.FullName, "fmt");
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.StartsWith("nt65: no files to format, and no nt65.json\nusage: nt65 build", printed);
 
         (code, printed) = Run(root.FullName, "fmt", "gone.nt65");
-        Assert.Equal((1, "gone.nt65: error: file not found\n"), (code, printed));
+        Assert.Equal((ExitCode.InputError, "gone.nt65: error: file not found\n"), (code, printed));
 
         (code, printed) = Run(root.FullName, "fmt", "--write");
-        Assert.Equal((2, "nt65: `--write` is not an option\nsee `nt65 --help`\n"), (code, printed));
+        Assert.Equal((ExitCode.UsageError, "nt65: `--write` is not an option\nsee `nt65 --help`\n"), (code, printed));
     }
 
-    private static (int Code, string Printed) Run(string directory, params string[] arguments)
+    private static (ExitCode Code, string Printed) Run(string directory, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };
         var error = new StringWriter { NewLine = "\n" };

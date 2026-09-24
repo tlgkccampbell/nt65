@@ -18,7 +18,7 @@ public sealed class DiagnosticsPageTests
             ["explain", "--markdown"], Directory.GetCurrentDirectory(), output, error,
             cancellation: TestTimeout.Token());
 
-        Assert.Equal(0, code);
+        Assert.Equal(ExitCode.Success, code);
         Assert.Empty(error.ToString());
         var written = output.ToString();
         foreach (var area in Catalogue.Areas)

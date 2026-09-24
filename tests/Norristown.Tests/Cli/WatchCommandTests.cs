@@ -52,7 +52,7 @@ public sealed class WatchCommandTests : IDisposable
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "gfx.s")));
 
         await stopping.CancelAsync();
-        Assert.Equal(0, await watching);
+        Assert.Equal(ExitCode.Success, await watching);
     }
 
     /// <summary>
@@ -69,7 +69,7 @@ public sealed class WatchCommandTests : IDisposable
             () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, timeout),
             CancellationToken.None);
 
-        Assert.Equal(2, code);
+        Assert.Equal(ExitCode.UsageError, code);
         Assert.Equal("nt65: no input files, and no nt65.json", await printed.NextAsync(timeout));
     }
 

@@ -19,10 +19,11 @@ public static class BuildCommand
 {
     /// <summary>
     /// Builds what <paramref name="command"/> asks for, from <paramref name="directory"/>, and
-    /// returns the exit code. The code is 0 when the build succeeded, 1 when the program has
-    /// errors, and 2 when the command line is wrong.
+    /// returns the exit code. The code is <see cref="ExitCode.Success"/> when the build succeeded,
+    /// <see cref="ExitCode.InputError"/> when the program has errors, and
+    /// <see cref="ExitCode.UsageError"/> when the command line is wrong.
     /// </summary>
-    public static int Build(CommandLine command, string directory, TextWriter output, TextWriter error, bool colour) =>
+    public static ExitCode Build(CommandLine command, string directory, TextWriter output, TextWriter error, bool colour) =>
         Run(command, directory, output, error, colour).Code;
 
     /// <summary>
@@ -40,9 +41,10 @@ public static class BuildCommand
         if (command.Project is not null && !File.Exists(projectFile))
         {
             error.WriteLine($"nt65: {ProjectRoot.Shown(directory, projectFile!)} does not exist");
-            return new BuildResult(2, directory, []);
+            return new BuildResult(ExitCode.UsageError, directory, []);
         }
-        var root = projectFile is null ? directory : Path.GetDirectoryName(projectFile)!;
+        var run = new Context(
+            command, directory, projectFile is null ? directory : Path.GetDirectoryName(projectFile)!, output, error, colour);
         string[] watched = projectFile is null ? [] : [projectFile];
 
         // `--stdout` prints the output of one file, so it needs exactly one file named.
@@ -50,8 +52,66 @@ public static class BuildCommand
         {
             error.WriteLine("nt65: `--stdout` prints one file's output, so name exactly one file");
             error.WriteLine(CommandLine.SeeHelp);
-            return new BuildResult(2, root, watched);
+            return new BuildResult(ExitCode.UsageError, run.Root, watched);
         }
+        var project = ResolveProject(run, projectFile);
+        if (NamedFiles(run) is not { } named)
+            return new BuildResult(ExitCode.InputError, run.Root, watched);
+        var paths = project.Files.SelectMany(glob => SourceGlobs.Matching(run.Root, glob)).Concat(named)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+
+        if (paths.Count == 0)
+        {
+            ReportNoInput(run, project, projectFile);
+            return new BuildResult(ExitCode.UsageError, run.Root, watched);
+        }
+
+        var header = command.Header is { } headerPath ? Path.GetFullPath(headerPath, directory) : null;
+        var (analysis, compilation) = Compile(run, project, paths, header);
+
+        // A watch watches the files the build read: the sources, and the binaries the outputs list
+        // as dependencies. A program with errors may list no binaries, but the source that fixes
+        // it is in the list either way.
+        watched =
+        [
+            .. watched,
+            .. paths.Select(path => Path.Combine(run.Root, path)),
+            .. compilation.Outputs.SelectMany(o => o.Dependencies).Distinct(StringComparer.Ordinal)
+                .Select(dependency => Path.Combine(run.Root, dependency)),
+        ];
+
+        Report(run, compilation.Diagnostics);
+        var failed = compilation.Diagnostics.Any(d => d.Severity == Severity.Error);
+
+        // `--stdout` prints the named file's output even when the rest of the program has
+        // errors. It prints the text a build would have written, with a note where it is
+        // incomplete. That is the same text the editor's output preview shows, and no files are
+        // written.
+        if (command.Stdout)
+            return new BuildResult(Preview(run, analysis, project, named[0], failed), run.Root, watched);
+
+        if (failed)
+            return new BuildResult(ExitCode.InputError, run.Root, watched);
+        if (compilation.IsCpuAssumed)
+        {
+            error.WriteLine($"nt65: note: nothing declares which processor this program is for, so it is built for the "
+                + $"{CpuNames.Format(ProgramCpu.Default)}: give `--cpu`, `\"cpu\"` in {ProjectFile.Name}, or a `.cpu` item");
+        }
+
+        // `--check` asks only for the diagnostics, which have now been reported. It writes no
+        // output, no header, no dependency file, and no record of what was written.
+        if (!command.Check)
+            WriteArtifacts(run, project, compilation, named, paths, header, projectFile is null ? [] : [ProjectFile.Name]);
+        return new BuildResult(ExitCode.Success, run.Root, watched);
+    }
+
+    /// <summary>
+    /// Returns the project's settings, read from <paramref name="projectFile"/> when there is one,
+    /// with what the command line sets applied over them.
+    /// </summary>
+    private static ProjectSettings ResolveProject(Context run, string? projectFile)
+    {
+        var command = run.Command;
         var project = projectFile is null
             ? ProjectSettings.None
             : ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile));
@@ -64,99 +124,115 @@ public static class BuildCommand
         var defines = command.Defines.Select(define => ProjectFile.Definition(define, arguments)).OfType<Define>().ToList();
         project = project.With(defines) with { Diagnostics = [.. project.Diagnostics, .. arguments] };
         if (command.Out is { } chosen)
-            project = project with { Out = ProjectRoot.Logical(root, Path.GetFullPath(chosen, directory)) };
+            project = project with { Out = ProjectRoot.Logical(run.Root, Path.GetFullPath(chosen, run.Directory)) };
+        return project;
+    }
 
+    /// <summary>
+    /// Returns the files the command line names, as paths relative to the project root, or null
+    /// after reporting the first one that does not exist.
+    /// </summary>
+    private static List<string>? NamedFiles(Context run)
+    {
         // Naming files still builds the whole program they are part of, so that names declared in
         // other files resolve as usual; only the named files' outputs are written.
         var named = new List<string>();
-        foreach (var file in command.Files)
+        foreach (var file in run.Command.Files)
         {
-            var full = Path.GetFullPath(file, directory);
+            var full = Path.GetFullPath(file, run.Directory);
             if (!File.Exists(full))
             {
-                error.WriteLine($"{file}: error: file not found");
-                return new BuildResult(1, root, watched);
+                run.Error.WriteLine($"{file}: error: file not found");
+                return null;
             }
-            named.Add(ProjectRoot.Logical(root, full));
+            named.Add(ProjectRoot.Logical(run.Root, full));
         }
-        var paths = project.Files.SelectMany(glob => SourceGlobs.Matching(root, glob)).Concat(named)
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        void Say(Diagnostic d)
-        {
-            if (command.Json)
-                output.WriteLine(Reported.Object(d, span => Named(directory, root, span)));
-            else
-                error.WriteLine(Reported.Line(d, Named(directory, root, d.Span), colour));
-        }
+        return named;
+    }
 
-        if (paths.Count == 0)
-        {
-            // When a build finds no files, an error in the project file is a far more common
-            // cause than a missing `files`, so the project file's diagnostics are reported first.
-            // The usage text is printed only when there are none, since then the command line is
-            // what needs fixing.
-            foreach (var d in project.Diagnostics)
-                Say(d);
-            error.WriteLine(projectFile is null ? $"nt65: no input files, and no {ProjectFile.Name}"
-                : project.Files.Count == 0 ? $"nt65: no input files, and no `files` in {ProjectFile.Name}"
-                : $"nt65: no file matched the `files` globs in {ProjectFile.Name}");
-            if (project.Diagnostics.Count == 0)
-                error.WriteLine(CommandLine.Usage);
-            return new BuildResult(2, root, watched);
-        }
+    /// <summary>
+    /// Reports that the build found no files to read, along with the project file's diagnostics,
+    /// which are the likelier cause.
+    /// </summary>
+    private static void ReportNoInput(Context run, ProjectSettings project, string? projectFile)
+    {
+        // When a build finds no files, an error in the project file is a far more common
+        // cause than a missing `files`, so the project file's diagnostics are reported first.
+        // The usage text is printed only when there are none, since then the command line is
+        // what needs fixing.
+        Report(run, project.Diagnostics);
+        run.Error.WriteLine(projectFile is null ? $"nt65: no input files, and no {ProjectFile.Name}"
+            : project.Files.Count == 0 ? $"nt65: no input files, and no `files` in {ProjectFile.Name}"
+            : $"nt65: no file matched the `files` globs in {ProjectFile.Name}");
+        if (project.Diagnostics.Count == 0)
+            run.Error.WriteLine(CommandLine.Usage);
+    }
 
-        var sources = paths.Select(path => new SourceFile(path, File.ReadAllText(Path.Combine(root, path)))).ToList();
-        var header = command.Header is { } headerPath ? Path.GetFullPath(headerPath, directory) : null;
+    /// <summary>
+    /// Reads and analyzes the program's sources, and returns the analysis with the output it emits.
+    /// </summary>
+    private static (ProgramAnalysis Analysis, Compilation Compilation) Compile(
+        Context run, ProjectSettings project, IReadOnlyList<string> paths, string? header)
+    {
+        var sources = paths.Select(path => new SourceFile(path, File.ReadAllText(Path.Combine(run.Root, path)))).ToList();
 
         // Recorded so that, if nt65 crashes, its report says which program it was building.
         Building.Started(paths.Count == 1 ? paths[0] : $"{paths[0]} and {paths.Count - 1} more");
         var analysis = Compiler.Analyze(
-            [.. sources.Select(SyntaxTree.Parse)], project, path => Length(Path.Combine(root, path)));
+            [.. sources.Select(SyntaxTree.Parse)], project, path => Length(Path.Combine(run.Root, path)));
         var compilation = Compiler.Emit(analysis, project, header);
         Building.Nothing();
+        return (analysis, compilation);
+    }
 
-        // A watch watches the files the build read: the sources, and the binaries the outputs list
-        // as dependencies. A program with errors may list no binaries, but the source that fixes
-        // it is in the list either way.
-        watched =
-        [
-            .. watched,
-            .. paths.Select(path => Path.Combine(root, path)),
-            .. compilation.Outputs.SelectMany(o => o.Dependencies).Distinct(StringComparer.Ordinal)
-                .Select(dependency => Path.Combine(root, dependency)),
-        ];
-
-        foreach (var d in compilation.Diagnostics)
-            Say(d);
-
-        // `--stdout` prints the named file's output even when the rest of the program has
-        // errors. It prints the text a build would have written, with a note where it is
-        // incomplete. That is the same text the editor's output preview shows, and no files are
-        // written.
-        if (command.Stdout)
+    /// <summary>
+    /// Reports each of <paramref name="diagnostics"/>, as a JSON object on standard output when
+    /// <c>--json</c> asked for that, and as a line on standard error otherwise.
+    /// </summary>
+    private static void Report(Context run, IEnumerable<Diagnostic> diagnostics)
+    {
+        foreach (var d in diagnostics)
         {
-            if (OutputPreview.Of(analysis, project, named[0]) is not { } preview)
-            {
-                error.WriteLine($"{command.Files[0]}: error: it is not a file of this program");
-                return new BuildResult(1, root, watched);
-            }
-            output.Write(preview.Text);
-            return new BuildResult(
-                compilation.Diagnostics.Any(d => d.Severity == Severity.Error) ? 1 : 0, root, watched);
+            if (run.Command.Json)
+                run.Output.WriteLine(Reported.Object(d, span => Named(run.Directory, run.Root, span)));
+            else
+                run.Error.WriteLine(Reported.Line(d, Named(run.Directory, run.Root, d.Span), run.Colour));
         }
+    }
 
-        if (compilation.Diagnostics.Any(d => d.Severity == Severity.Error))
-            return new BuildResult(1, root, watched);
-        if (compilation.IsCpuAssumed)
+    /// <summary>
+    /// Prints the output of the file <c>--stdout</c> names, and returns the exit code. The code is
+    /// <see cref="ExitCode.InputError"/> when the file is not part of the program or the program
+    /// has errors.
+    /// </summary>
+    private static ExitCode Preview(
+        Context run, ProgramAnalysis analysis, ProjectSettings project, string named, bool failed)
+    {
+        if (OutputPreview.Of(analysis, project, named) is not { } preview)
         {
-            error.WriteLine($"nt65: note: nothing declares which processor this program is for, so it is built for the "
-                + $"{CpuNames.Format(ProgramCpu.Default)}: give `--cpu`, `\"cpu\"` in {ProjectFile.Name}, or a `.cpu` item");
+            run.Error.WriteLine($"{run.Command.Files[0]}: error: it is not a file of this program");
+            return ExitCode.InputError;
         }
+        run.Output.Write(preview.Text);
+        return failed ? ExitCode.InputError : ExitCode.Success;
+    }
 
-        // `--check` asks only for the diagnostics, which have now been reported. It writes no
-        // output, no header, no dependency file, and no record of what was written.
-        if (command.Check)
-            return new BuildResult(0, root, watched);
+    /// <summary>
+    /// Writes the outputs, the C header and the dependency file that the build was asked for, and
+    /// deletes the outputs the program no longer writes.
+    /// </summary>
+    /// <param name="run">The build being run.</param>
+    /// <param name="project">The project's settings.</param>
+    /// <param name="compilation">The output the program emitted.</param>
+    /// <param name="named">The files the command line names, which limit the outputs written.</param>
+    /// <param name="paths">The program's sources, which the header depends on.</param>
+    /// <param name="header">The full path of the C header to write, or null for none.</param>
+    /// <param name="extra">The project file's name when there is one, which every file written depends on.</param>
+    private static void WriteArtifacts(
+        Context run, ProjectSettings project, Compilation compilation, IReadOnlyList<string> named,
+        IReadOnlyList<string> paths, string? header, string[] extra)
+    {
+        var (root, directory) = (run.Root, run.Directory);
 
         // When files are named, write each output that contains one of them. A named module that
         // another module places in its own output is written as part of that output.
@@ -164,7 +240,6 @@ public static class BuildCommand
         var written = compilation.Outputs
             .Where(o => only is null || o.AllSources.Any(source => only.Contains(source.Path)))
             .ToList();
-        string[] extra = projectFile is null ? [] : [ProjectFile.Name];
         foreach (var o in written)
             Write(Path.Combine(root, o.Path), o.Text, [.. o.Dependencies.Concat(extra).Select(dependency => Path.Combine(root, dependency))]);
 
@@ -177,13 +252,13 @@ public static class BuildCommand
             // recognise it separately. An output is deleted when its module has been removed or
             // is now placed in another module's output.
             foreach (var deleted in OutputManifest.Update(root, project.Out ?? ".", [.. compilation.Outputs.Select(o => o.Path)]))
-                error.WriteLine($"nt65: note: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, which the program no longer writes");
+                run.Error.WriteLine($"nt65: note: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, which the program no longer writes");
         }
 
         if (header is not null && compilation.Header is { } text)
             Write(header, text, [.. paths.Concat(extra).Select(path => Path.Combine(root, path))]);
 
-        if (command.DependencyFile is { } dependencyFile)
+        if (run.Command.DependencyFile is { } dependencyFile)
         {
             List<(string, IEnumerable<string>)> rules =
             [
@@ -194,7 +269,6 @@ public static class BuildCommand
                 rules.Add((ProjectRoot.Shown(directory, header), paths.Concat(extra).Select(path => ProjectRoot.Shown(directory, Path.Combine(root, path)))));
             Write(Path.GetFullPath(dependencyFile, directory), DependencyFile.Write(rules), []);
         }
-        return new BuildResult(0, root, watched);
     }
 
     /// <summary>
@@ -249,4 +323,16 @@ public static class BuildCommand
             return null;
         }
     }
+
+    /// <summary>
+    /// Represents one run of the build, which is what it was asked for and where it prints.
+    /// </summary>
+    /// <param name="Command">What the command line asked for.</param>
+    /// <param name="Directory">The directory nt65 was run from, which messages name files relative to.</param>
+    /// <param name="Root">The project root, or where nt65 ran when there is no project.</param>
+    /// <param name="Output">The writer for standard output.</param>
+    /// <param name="Error">The writer for standard error.</param>
+    /// <param name="Colour">Whether diagnostics on standard error are coloured.</param>
+    private sealed record Context(
+        CommandLine Command, string Directory, string Root, TextWriter Output, TextWriter Error, bool Colour);
 }
