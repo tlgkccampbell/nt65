@@ -74,6 +74,51 @@ public sealed class ProjectFileTests
         Assert.Equal(3, diagnostic.Span.StartColumn);
     }
 
+    /// <summary>
+    /// A diagnostic sits on the key where the JSON puts it. The same text earlier in the file, as
+    /// a value, as a key at another level or inside a comment, is passed over.
+    /// </summary>
+    [Theory]
+    [InlineData("{\n  \"out\": \"nope\",\n  \"nope\": 1\n}", 3, 3)]
+    [InlineData("{\n  // \"cpu\" names the processor\n  \"cpu\": \"z80\"\n}", 3, 3)]
+    [InlineData("{\n  \"defines\": { \"out\": 1 },\n  \"out\": 2\n}", 3, 3)]
+    [InlineData("{\n  \"spaces\": { \"spc\": \"code\" },\n  \"segments\": { \"code\": { \"size\": \"zp\", \"x\": 1 } }\n}", 3, 17)]
+    [InlineData("{\n  \"out\": \"a\",\n  \"configurations\": { \"a\": { \"defines\": { \"out\": 1 }, \"out\": 2 } }\n}", 3, 55)]
+    public void ADiagnosticPointsAtTheKeyTheJsonGives(string text, int line, int column)
+    {
+        var diagnostic = Assert.Single(Read(text).Diagnostics);
+
+        Assert.Equal((line, column), (diagnostic.Span.Line, diagnostic.Span.StartColumn));
+    }
+
+    /// <summary>A segment is declared where its key is, even when its name is also a value.</summary>
+    [Fact]
+    public void ASegmentIsDeclaredAtItsKey()
+    {
+        var project = Read("{\n  \"spaces\": { \"spc\": \"code\" },\n  \"segments\": { \"code\": { \"size\": \"zp\" } }\n}");
+
+        Assert.Empty(project.Diagnostics);
+        var segment = Assert.Single(project.Segments);
+        Assert.Equal(new Span(ProjectFile.Name, 3, 17, 23), segment.Declaration);
+    }
+
+    /// <summary>
+    /// A key written with an escape is found by the name it spells, and its span covers the key
+    /// as written.
+    /// </summary>
+    [Fact]
+    public void AnEscapedKeyIsFoundByItsName()
+    {
+        var diagnostic = Assert.Single(Read("{ \"c\\u0070u\": \"z80\" }").Diagnostics);
+
+        Assert.Equal((1, 3, 13), (diagnostic.Span.Line, diagnostic.Span.StartColumn, diagnostic.Span.EndColumn));
+    }
+
+    /// <summary>The empty severity map that every project without overrides shares cannot be changed.</summary>
+    [Fact]
+    public void TheSharedEmptySeverityMapIsReadOnly() =>
+        Assert.False(ProjectSettings.NoSeverities is IDictionary<string, Severity?> { IsReadOnly: false });
+
     /// <summary>A file that is not JSON at all is one diagnostic, not a crash.</summary>
     [Fact]
     public void AFileThatIsNotJsonIsReportedOnce()
