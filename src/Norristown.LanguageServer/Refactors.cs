@@ -163,7 +163,7 @@ internal static class Refactors
     private static IEnumerable<Change> Exported(SemanticModel model, int line)
     {
         var tree = model.Tree;
-        if (DeclaredOn(model, line) is not { } symbol || model.FileScope.Module is not { } module)
+        if (Edits.DeclaredOn(model, line) is not { } symbol || model.FileScope.Module is not { } module)
             yield break;
         if (symbol.Scope.Kind != ScopeKind.File || symbol.IsCheapLocal)
             yield break;
@@ -208,7 +208,7 @@ internal static class Refactors
     private static IEnumerable<Change> Leaves(ProgramAnalysis analysis, SemanticModel model, int line)
     {
         var tree = model.Tree;
-        if (analysis.Cpu != Cpu.Wdc65816 || DeclaredOn(model, line) is not { Kind: SymbolKind.Proc } routine)
+        if (analysis.Cpu != Cpu.Wdc65816 || Edits.DeclaredOn(model, line) is not { Kind: SymbolKind.Proc } routine)
             yield break;
         if (routine.Signature is not { IsInterrupt: false, NeverReturns: false } signature)
             yield break;
@@ -252,7 +252,7 @@ internal static class Refactors
     private static IEnumerable<Change> Widths(ProgramAnalysis analysis, SemanticModel model, int line)
     {
         var tree = model.Tree;
-        if (StatementOn(tree, line) is not { } statement)
+        if (Edits.StatementOn(tree, line) is not { } statement)
             yield break;
 
         // Only an immediate operand is a known set of flags: `rep flags` without the `#` is a
@@ -299,7 +299,7 @@ internal static class Refactors
     private static IEnumerable<Change> Named(SemanticModel model, int caret, int line)
     {
         var tree = model.Tree;
-        if (StatementOn(tree, line) is not { } statement || model.ReferenceAt(caret) is not null)
+        if (Edits.StatementOn(tree, line) is not { } statement || model.ReferenceAt(caret) is not null)
             yield break;
         var numbers = statement.DescendantNodes()
             .OfType<NumberExpressionSyntax>()
@@ -349,7 +349,7 @@ internal static class Refactors
         // Every reference has to be inside the label's routine, because that is as far as a
         // cheap local can be seen.
         if (label.IsExported || label.Routine is not { } routine
-            || Edits.BodyOf(tree, routine.DeclarationSpan.Line - 1) is not { } body)
+            || Edits.BodyOf(tree, routine.DeclarationSpan.LineIndex) is not { } body)
         {
             yield break;
         }
@@ -366,9 +366,9 @@ internal static class Refactors
     private static IEnumerable<Change> Segments(SemanticModel model, int line)
     {
         var tree = model.Tree;
-        if (DeclaredOn(model, line) is not { Kind: SymbolKind.Data } data || data.Routine is null)
+        if (Edits.DeclaredOn(model, line) is not { Kind: SymbolKind.Data } data || data.Routine is null)
             yield break;
-        if (StatementOn(tree, line) is not DataDeclarationSyntax)
+        if (Edits.StatementOn(tree, line) is not DataDeclarationSyntax)
             yield break;
 
         var indent = Edits.IndentOf(tree, line);
@@ -392,18 +392,4 @@ internal static class Refactors
                 [Edits.RemoveLines(tree, line, last) with { Text = block }]);
         }
     }
-
-    /// <summary>
-    /// Returns the symbol declared on <paramref name="line"/>, or null for a line that declares
-    /// none.
-    /// </summary>
-    private static Symbol? DeclaredOn(SemanticModel model, int line) =>
-        model.Symbols.FirstOrDefault(symbol => symbol.Tree == model.Tree && symbol.DeclarationSpan.Line - 1 == line);
-
-    /// <summary>
-    /// Returns the statement parsed from <paramref name="line"/>, or null when the file has no such
-    /// line.
-    /// </summary>
-    private static StatementSyntax? StatementOn(SyntaxTree tree, int line) =>
-        line >= 0 && line < tree.LineCount ? tree.GetLine(line).Statement : null;
 }

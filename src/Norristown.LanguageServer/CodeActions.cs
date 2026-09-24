@@ -71,9 +71,8 @@ internal static class CodeActions
         // rename starts on it where it is.
         if (change.Renames is { } existing)
         {
-            return new Protocol.Command(
-                "Rename", "nt65.rename",
-                [Uris.ToUri(existing.File), existing.Line - 1, existing.StartColumn - 1]);
+            var start = Lsp.ToRange(existing).Start;
+            return new Protocol.Command("Rename", "nt65.rename", [Uris.ToUri(existing.File), start.Line, start.Character]);
         }
         if (change.Names is not { } placeholder)
             return null;
@@ -90,8 +89,7 @@ internal static class CodeActions
         foreach (var edit in edits.OrderByDescending(edit => edit.Span.Start))
             text = text[..edit.Span.Start] + edit.Text + text[edit.Span.End..];
 
-        var line = text[..at].Count(c => c == '\n');
-        var character = at - (text[..at].LastIndexOf('\n') + 1);
-        return new Protocol.Command("Rename", "nt65.rename", [Uris.ToUri(tree.Path), line, character]);
+        var named = Lsp.ToPosition(text, at);
+        return new Protocol.Command("Rename", "nt65.rename", [Uris.ToUri(tree.Path), named.Line, named.Character]);
     }
 }

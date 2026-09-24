@@ -43,9 +43,7 @@ internal static class DocComments
     /// <summary>Returns one line of the file, without its line break.</summary>
     private static string Text(SyntaxTree tree, int line)
     {
-        var start = tree.LineStarts[line];
-        var end = line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length;
-        return tree.Text[start..end].TrimEnd('\n', '\r');
+        return tree.Text[tree.LineStarts[line]..tree.GetLineEnd(line)].TrimEnd('\n', '\r');
     }
 
     /// <summary>

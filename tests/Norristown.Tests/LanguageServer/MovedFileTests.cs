@@ -72,6 +72,31 @@ public sealed class MovedFileTests : IDisposable
     }
 
     /// <summary>
+    /// A rewritten path is placed by the same line rule as every other answer, so in a file whose
+    /// lines end with a lone <c>\r</c> the edit lands on the line that holds the path.
+    /// </summary>
+    [Fact]
+    public async Task ARewrittenPathIsPlacedInAFileWithCarriageReturnLineEnds()
+    {
+        var timeout = TestTimeout.Token();
+        Write("nt65.json", """{ "cpu": "6502", "files": ["gfx/*.nt65"], "out": "build" }""");
+        const string Sprite = ".module gfx::sprite\r.segment RODATA\r.export .data tiles: .incbin \"../data/tiles.bin\"\r";
+        File.WriteAllText(Path.Combine(root.CreateSubdirectory("gfx").FullName, "sprite.nt65"), Sprite);
+        Write("data/tiles.bin", "0123");
+
+        await using var client = await TestClient.StartAsync(
+            TestClient.Capable(), timeout, rootUri: Folder(""));
+        await client.OpenAsync(Folder("gfx/sprite.nt65"), Sprite);
+        await client.NextDiagnosticsAsync(Folder("gfx/sprite.nt65"), timeout);
+
+        var binary = await RenameAsync(client, timeout, ("data/tiles.bin", "data/art/tiles.bin"));
+        Assert.NotNull(binary);
+        var path = Assert.Single(binary.Changes[Folder("gfx/sprite.nt65")]);
+        Assert.Equal(2, path.Range.Start.Line);
+        Assert.Equal(".export .data tiles: .incbin ".Length, path.Range.Start.Character);
+    }
+
+    /// <summary>
     /// A client that does not declare <c>willRename</c> support is not registered for it, and a
     /// client that does is registered for every file.
     /// </summary>

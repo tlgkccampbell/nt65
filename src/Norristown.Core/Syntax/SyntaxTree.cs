@@ -151,6 +151,32 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
+    /// Returns the 0-based line holding <paramref name="position"/>, given where each line starts
+    /// as <see cref="LineOffsets"/> returns it.
+    /// </summary>
+    public static int GetLineIndex(ImmutableArray<int> lineStarts, int position)
+    {
+        var index = lineStarts.BinarySearch(position);
+        return index >= 0 ? index : ~index - 1;
+    }
+
+    /// <summary>
+    /// Returns the offset in <paramref name="text"/> of a 0-based line and character, given where
+    /// each line starts as <see cref="LineOffsets"/> returns it. The offset is clamped to the
+    /// text, since an editor may name a position past the end of a line or of the file, and that
+    /// is not an error here.
+    /// </summary>
+    public static int GetPosition(string text, ImmutableArray<int> lineStarts, int line, int character)
+    {
+        if (line < 0)
+            return 0;
+        if (line >= lineStarts.Length)
+            return text.Length;
+        var start = lineStarts[line];
+        return character <= 0 ? start : Math.Min(start + character, LineEnd(text, lineStarts, line));
+    }
+
+    /// <summary>
     /// Returns the red node for <paramref name="built"/>, in a tree that contains only that node.
     /// <see cref="SyntaxFactory"/> returns such nodes, and an <c>Update</c> creates them. The node
     /// has no file around it, and its text is its own.
@@ -277,26 +303,19 @@ public sealed class SyntaxTree
     public LineSyntax GetLine(int line) => Root.Lines[line];
 
     /// <summary>Returns the 0-based line holding <paramref name="position"/>.</summary>
-    public int GetLineIndex(int position)
-    {
-        var index = LineStarts.BinarySearch(position);
-        return index >= 0 ? index : ~index - 1;
-    }
+    public int GetLineIndex(int position) => GetLineIndex(LineStarts, position);
+
+    /// <summary>
+    /// Returns the offset where the 0-based line <paramref name="line"/> ends, after its line
+    /// break. That is where the next line starts, or the end of the text for the last line.
+    /// </summary>
+    public int GetLineEnd(int line) => LineEnd(Text, LineStarts, line);
 
     /// <summary>
     /// Returns the offset of a 0-based line and character, clamped to the text. An editor may name
     /// a position past the end of a line or of the file, and that is not an error here.
     /// </summary>
-    public int GetPosition(int line, int character)
-    {
-        if (line < 0)
-            return 0;
-        if (line >= LineStarts.Length)
-            return Text.Length;
-        var start = LineStarts[line];
-        var end = line + 1 < LineStarts.Length ? LineStarts[line + 1] : Text.Length;
-        return character <= 0 ? start : Math.Min(start + character, end);
-    }
+    public int GetPosition(int line, int character) => GetPosition(Text, LineStarts, line, character);
 
     /// <summary>Returns the diagnostic span for a range on one line.</summary>
     public Span GetSpan(TextSpan span)

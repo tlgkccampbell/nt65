@@ -215,11 +215,7 @@ public sealed class SemanticModel
         }
         return found;
 
-        int LineAfter(int start)
-        {
-            var line = Tree.GetLineIndex(start) + 1;
-            return line < Tree.LineStarts.Length ? Tree.LineStarts[line] : Tree.Text.Length;
-        }
+        int LineAfter(int start) => Tree.GetLineEnd(Tree.GetLineIndex(start));
     }
 
     /// <summary>

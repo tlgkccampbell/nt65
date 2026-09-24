@@ -220,6 +220,24 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
+    /// The rename is asked for at the position the client counts to, which treats a lone
+    /// <c>\r</c> as a line break just as the server does everywhere else.
+    /// </summary>
+    [Fact]
+    public void AnExtractedRoutineIsOfferedForRenamingInAFileWithCarriageReturnLineEnds()
+    {
+        const string Main = ".module main\r.segment CODE\r.proc main {\r@wait:\r    lda $d012\r    cmp #100\r    rts\r}\r";
+
+        var action = Single(Main, new Range(new Position(3, 0), new Position(6, 0)), "Extract into a `.proc`");
+
+        var edited = Editing.Apply(Main, action.Edit.Changes[Uri]);
+        Assert.NotNull(action.Command);
+        var line = (int)action.Command.Arguments![1];
+        var character = (int)action.Command.Arguments[2];
+        Assert.Equal("wait {", edited.Split(["\r\n", "\r", "\n"], StringSplitOptions.None)[line][character..]);
+    }
+
+    /// <summary>
     /// A selection that returns from its routine part way through cannot be extracted into a
     /// routine.
     /// </summary>

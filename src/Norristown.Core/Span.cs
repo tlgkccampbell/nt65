@@ -8,4 +8,8 @@ namespace Norristown;
 /// <param name="Line">The 1-based line.</param>
 /// <param name="StartColumn">The 1-based column where the range starts.</param>
 /// <param name="EndColumn">The 1-based column just past the range.</param>
-public readonly record struct Span(string File, int Line, int StartColumn, int EndColumn);
+public readonly record struct Span(string File, int Line, int StartColumn, int EndColumn)
+{
+    /// <summary>Gets the 0-based line, which is how a syntax tree and an editor count lines.</summary>
+    public int LineIndex => Line - 1;
+}

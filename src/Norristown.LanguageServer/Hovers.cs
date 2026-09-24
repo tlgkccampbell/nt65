@@ -375,8 +375,9 @@ internal static class Hovers
         var tree = symbol.Tree;
         var index = tree.GetLineIndex(symbol.NameSpan.Start);
         var start = tree.LineStarts[index];
-        var end = index + 1 < tree.LineStarts.Length ? tree.LineStarts[index + 1] : tree.Text.Length;
-        var line = tree.Text[start..end].TrimEnd('\n', '\r');
+
+        // The line's code ends where its trailing trivia starts, so the comment is left out.
+        var line = tree.Text[start..LineContext.CodeEnd(tree, index)];
         var at = symbol.NameSpan.Start - start;
 
         // A cheap local appears with an `@` that its symbol name lacks, so it is not
@@ -390,16 +391,11 @@ internal static class Hovers
     }
 
     /// <summary>
-    /// Returns a line as a headline shows it, without the indentation before it, the comment at
-    /// the end of it or the brace that opens the block it heads. None of these is what was asked
-    /// about.
+    /// Returns a line's code as a headline shows it, without the indentation before it or the
+    /// brace that opens the block it heads. Neither is what was asked about. The code holds no
+    /// comment, since a comment is trivia that the code's span leaves out.
     /// </summary>
-    private static string Headline(string line)
-    {
-        if (LineComments.Start(line) is var comment and >= 0)
-            line = line[..comment];
-        return line.TrimEnd().TrimEnd('{').Trim();
-    }
+    private static string Headline(string code) => code.TrimEnd().TrimEnd('{').Trim();
 
     /// <summary>
     /// Adds the cost and preserved-register rows for a routine, wherever its name appears. A code

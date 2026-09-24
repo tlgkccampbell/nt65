@@ -20,7 +20,7 @@ internal static class Edits
     /// <summary>Converts the location a diagnostic is reported at to a span of its file.</summary>
     public static TextSpan SpanOf(SyntaxTree tree, Span span)
     {
-        var line = Math.Clamp(span.Line - 1, 0, tree.LineStarts.Length - 1);
+        var line = Math.Clamp(span.LineIndex, 0, tree.LineStarts.Length - 1);
         var start = Math.Clamp(tree.LineStarts[line] + span.StartColumn - 1, 0, tree.Text.Length);
         return new TextSpan(start, Math.Clamp(span.EndColumn - span.StartColumn, 0, tree.Text.Length - start));
     }
@@ -52,8 +52,7 @@ internal static class Edits
     public static Edit RemoveLines(SyntaxTree tree, int first, int last)
     {
         var start = tree.LineStarts[first];
-        var end = last + 1 < tree.LineStarts.Length ? tree.LineStarts[last + 1] : tree.Text.Length;
-        return new Edit(tree, new TextSpan(start, end - start), "");
+        return new Edit(tree, new TextSpan(start, tree.GetLineEnd(last) - start), "");
     }
 
     /// <summary>Returns the whitespace a line starts with.</summary>
@@ -129,6 +128,20 @@ internal static class Edits
     /// </summary>
     public static BlockSyntax? BlockOpenedBy(SyntaxTree tree, int line) =>
         tree.GetLine(line).Parent is BlockSyntax block && block.LineIndex == line ? block : null;
+
+    /// <summary>
+    /// Returns the statement parsed from <paramref name="line"/>, or null when the file has no such
+    /// line.
+    /// </summary>
+    public static StatementSyntax? StatementOn(SyntaxTree tree, int line) =>
+        line >= 0 && line < tree.LineCount ? tree.GetLine(line).Statement : null;
+
+    /// <summary>
+    /// Returns the symbol declared on <paramref name="line"/>, or null for a line that declares
+    /// none.
+    /// </summary>
+    public static Symbol? DeclaredOn(SemanticModel model, int line) =>
+        model.Symbols.FirstOrDefault(symbol => symbol.Tree == model.Tree && symbol.DeclarationSpan.LineIndex == line);
 
     /// <summary>
     /// Returns the edits that rename <paramref name="symbol"/> to <paramref name="name"/>

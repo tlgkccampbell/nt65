@@ -97,7 +97,7 @@ internal static class WorkspaceSymbols
         foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())
         {
             if (line.Statement is ModuleDirectiveSyntax directive)
-                return directive.GetText().Split(';')[0].Trim() is var text && text.IndexOf(' ') is var space and > 0
+                return directive.GetText().Trim() is var text && text.IndexOf(' ') is var space and > 0
                     ? text[space..].Trim()
                     : null;
             if (line.Statement is not BlankLineSyntax)

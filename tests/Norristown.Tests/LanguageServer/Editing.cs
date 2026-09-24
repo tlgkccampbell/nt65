@@ -11,13 +11,9 @@ internal static class Editing
     /// </summary>
     public static string Apply(string text, IReadOnlyList<TextEdit> edits)
     {
-        var starts = new List<int> { 0 };
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] == '\n')
-                starts.Add(i + 1);
-        }
-        int Offset(Position position) => position.Line < starts.Count ? starts[position.Line] + position.Character : text.Length;
+        // An editor ends a line at \r\n, \n or a lone \r, which is the rule a tree splits lines by.
+        var starts = Norristown.Syntax.SyntaxTree.LineOffsets(text);
+        int Offset(Position position) => position.Line < starts.Length ? starts[position.Line] + position.Character : text.Length;
         foreach (var edit in edits.OrderByDescending(edit => Offset(edit.Range.Start)))
             text = text[..Offset(edit.Range.Start)] + edit.NewText + text[Offset(edit.Range.End)..];
         return text;

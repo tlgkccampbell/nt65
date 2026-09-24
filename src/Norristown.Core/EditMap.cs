@@ -96,7 +96,7 @@ internal sealed class EditMap
             return span;
         if (span.Line < 1 || span.Line > before.LineStarts.Length)
             return null;
-        var from = before.LineStarts[span.Line - 1] + span.StartColumn - 1;
+        var from = before.LineStarts[span.LineIndex] + span.StartColumn - 1;
         var length = span.EndColumn - span.StartColumn;
         if (from + length <= start)
             return span;

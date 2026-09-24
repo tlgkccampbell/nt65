@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -7,7 +8,7 @@ namespace Norristown.LanguageServer;
 /// Converts analysis results to protocol types, so the analysis stays free of LSP. This class
 /// holds all of the 0-based counting, which <see cref="Hovers"/>, <see cref="Rename"/> and the
 /// other answers use through <see cref="ToRange(SyntaxTree, TextSpan)"/> and
-/// <see cref="ToPosition"/>.
+/// <see cref="ToPosition(SyntaxTree, int)"/>.
 /// <para>
 /// Protocol types are written out in full, because several of them share a name with
 /// something in the analysis core (<c>Diagnostic</c>, <c>SymbolKind</c>) or in the framework
@@ -126,14 +127,39 @@ internal static class Lsp
     }
 
     /// <summary>Converts a span of a syntax tree to a 0-based range.</summary>
-    internal static Protocol.Range ToRange(SyntaxTree tree, TextSpan span) =>
-        new(ToPosition(tree, span.Start), ToPosition(tree, span.End));
+    internal static Protocol.Range ToRange(SyntaxTree tree, TextSpan span) => ToRange(tree.LineStarts, span);
+
+    /// <summary>
+    /// Converts a span of a text that has not been parsed, such as a project file, to a 0-based
+    /// range. Its lines are split the way a syntax tree splits them.
+    /// </summary>
+    internal static Protocol.Range ToRange(string text, TextSpan span) => ToRange(SyntaxTree.LineOffsets(text), span);
+
+    /// <summary>Converts a diagnostic span, which is 1-based and on one line, to a 0-based range.</summary>
+    internal static Protocol.Range ToRange(Span span) => new(
+        new Protocol.Position(span.LineIndex, span.StartColumn - 1),
+        new Protocol.Position(span.LineIndex, span.EndColumn - 1));
 
     /// <summary>Converts an offset into a syntax tree to a 0-based line and column.</summary>
-    internal static Protocol.Position ToPosition(SyntaxTree tree, int position)
+    internal static Protocol.Position ToPosition(SyntaxTree tree, int position) => ToPosition(tree.LineStarts, position);
+
+    /// <summary>
+    /// Converts an offset into a text that has not been parsed to a 0-based line and column. Its
+    /// lines are split the way a syntax tree splits them.
+    /// </summary>
+    internal static Protocol.Position ToPosition(string text, int position) =>
+        ToPosition(SyntaxTree.LineOffsets(text), position);
+
+    /// <summary>
+    /// Returns the first and last lines a selection covers, clamped to the file. A selection that
+    /// ends at the start of a line covers only the lines above it, since that is how an editor
+    /// represents whole lines selected by dragging down the margin.
+    /// </summary>
+    internal static (int First, int Last) SelectedLines(SyntaxTree tree, Protocol.Range range)
     {
-        var line = tree.GetLineIndex(position);
-        return new Protocol.Position(line, position - tree.LineStarts[line]);
+        var first = Math.Clamp(range.Start.Line, 0, tree.LineCount - 1);
+        var last = range.End.Line > first && range.End.Character == 0 ? range.End.Line - 1 : range.End.Line;
+        return (first, Math.Clamp(last, first, tree.LineCount - 1));
     }
 
     /// <summary>Converts the kind of an outline item to the symbol kind the client shows for it.</summary>
@@ -164,10 +190,16 @@ internal static class Lsp
     private static IReadOnlyList<SymbolReference> Occurrences(SemanticModel model, int position) =>
         model.ReferenceAt(position) is { } reference ? model.ReferencesTo(reference.Symbol) : [];
 
-    /// <summary>Converts a diagnostic span, which is 1-based and on one line, to a 0-based range.</summary>
-    private static Protocol.Range ToRange(Span span) => new(
-        new Protocol.Position(span.Line - 1, span.StartColumn - 1),
-        new Protocol.Position(span.Line - 1, span.EndColumn - 1));
+    /// <summary>Converts a span, given where each line starts, to a 0-based range.</summary>
+    private static Protocol.Range ToRange(ImmutableArray<int> lineStarts, TextSpan span) =>
+        new(ToPosition(lineStarts, span.Start), ToPosition(lineStarts, span.End));
+
+    /// <summary>Converts an offset, given where each line starts, to a 0-based line and column.</summary>
+    private static Protocol.Position ToPosition(ImmutableArray<int> lineStarts, int position)
+    {
+        var line = SyntaxTree.GetLineIndex(lineStarts, position);
+        return new Protocol.Position(line, position - lineStarts[line]);
+    }
 
     /// <summary>Converts a diagnostic's severity to the protocol's.</summary>
     private static Protocol.DiagnosticSeverity ToSeverity(Severity severity) => severity switch

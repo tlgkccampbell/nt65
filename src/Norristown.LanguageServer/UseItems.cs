@@ -149,9 +149,8 @@ internal static class UseItems
         var indent = Edits.IndentOf(tree, index);
         var start = tree.LineStarts[index];
         var end = LineContext.CodeEnd(tree, index);
-        var lineEnd = index + 1 < tree.LineStarts.Length ? tree.LineStarts[index + 1] : tree.Text.Length;
         var code = tree.Text[(start + indent.Length)..end];
-        var comment = tree.Text[end..lineEnd].TrimEnd('\r', '\n');
+        var comment = tree.Text[end..tree.GetLineEnd(index)].TrimEnd('\r', '\n');
 
         var path = use.Path.Names;
         if (path.Length == 0)

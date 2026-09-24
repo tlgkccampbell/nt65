@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Norristown.LanguageServer;
 using Norristown.Syntax;
 
 namespace Norristown.Cli;
@@ -191,30 +192,8 @@ public static class ImportIncCommand
     /// literal. The comment keeps the spacing before it, so comments aligned in a column stay
     /// aligned unless the formatter moves them.
     /// </summary>
-    private static (string Code, string? Comment) SplitComment(string line)
-    {
-        var quote = '\0';
-        for (var i = 0; i < line.Length; i++)
-        {
-            var c = line[i];
-            if (quote != '\0')
-            {
-                if (c == '\\')
-                    i++;
-                else if (c == quote)
-                    quote = '\0';
-            }
-            else if (c is '"' or '\'')
-            {
-                quote = c;
-            }
-            else if (c == ';')
-            {
-                return (line[..i].TrimEnd(), line[i..]);
-            }
-        }
-        return (line, null);
-    }
+    private static (string Code, string? Comment) SplitComment(string line) =>
+        LineComments.Start(line) is var at and >= 0 ? (line[..at].TrimEnd(), line[at..]) : (line, null);
 
     /// <summary>
     /// Returns a value indicating whether nt65's own parser reads <paramref name="line"/>, without

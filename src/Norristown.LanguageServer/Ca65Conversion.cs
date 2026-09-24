@@ -69,9 +69,7 @@ internal static partial class Ca65Conversion
     public static IEnumerable<Change> In(SemanticModel model, Protocol.Range range)
     {
         var tree = model.Tree;
-        var first = Math.Clamp(range.Start.Line, 0, tree.LineStarts.Length - 1);
-        var last = range.End.Line > first && range.End.Character == 0 ? range.End.Line - 1 : range.End.Line;
-        last = Math.Clamp(last, first, tree.LineStarts.Length - 1);
+        var (first, last) = Lsp.SelectedLines(tree, range);
         if (last == first && range.Start.Character == range.End.Character)
             yield break;
 
@@ -79,8 +77,7 @@ internal static partial class Ca65Conversion
         var changed = false;
         for (var line = first; line <= last; line++)
         {
-            var end = line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length;
-            var text = tree.Text[tree.LineStarts[line]..end].TrimEnd('\r', '\n');
+            var text = tree.Text[tree.LineStarts[line]..tree.GetLineEnd(line)].TrimEnd('\r', '\n');
             var read = Converted(text);
             changed |= read != text;
             if (read is not null)

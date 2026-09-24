@@ -224,30 +224,8 @@ internal sealed class LineContext
     /// code. The line is scanned up to the caret, following the lexer's quoting rules only as
     /// far as needed to tell.
     /// </summary>
-    private static bool IsText(string text, int start, int caret)
-    {
-        var quote = '\0';
-        for (var at = start; at < caret; at++)
-        {
-            var c = text[at];
-            if (quote != '\0')
-            {
-                if (c == '\\')
-                    at++;
-                else if (c == quote)
-                    quote = '\0';
-            }
-            else if (c is '"' or '\'')
-            {
-                quote = c;
-            }
-            else if (c == ';')
-            {
-                return true;
-            }
-        }
-        return quote != '\0';
-    }
+    private static bool IsText(string text, int start, int caret) =>
+        LineComments.Start(text, start, caret, out var quoted) >= 0 || quoted;
 
     /// <summary>
     /// Lexes the line's text from <paramref name="start"/> to <paramref name="end"/> on its own,

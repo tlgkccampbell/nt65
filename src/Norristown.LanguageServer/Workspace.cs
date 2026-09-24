@@ -574,28 +574,12 @@ internal sealed class Workspace
                 continue;
             }
 
-            var start = Position(text, starts, range.Start.Line, range.Start.Character);
-            var end = Math.Max(start, Position(text, starts, range.End.Line, range.End.Character));
+            var start = SyntaxTree.GetPosition(text, starts, range.Start.Line, range.Start.Character);
+            var end = Math.Max(start, SyntaxTree.GetPosition(text, starts, range.End.Line, range.End.Character));
             applied.Add(new TextChange(start, end - start, change.Text));
             text = string.Concat(text.AsSpan(0, start), change.Text, text.AsSpan(end));
             starts = SyntaxTree.LineOffsets(text);
         }
         return tree.WithChanges(applied);
-    }
-
-    /// <summary>
-    /// Returns the offset of a zero-based line and character in <paramref name="text"/>, clamped to
-    /// the text in the same way that <see cref="SyntaxTree.GetPosition"/> clamps. An editor may
-    /// name a position past the end of a line or of the file, and that is not an error here.
-    /// </summary>
-    private static int Position(string text, ImmutableArray<int> starts, int line, int character)
-    {
-        if (line < 0)
-            return 0;
-        if (line >= starts.Length)
-            return text.Length;
-        var start = starts[line];
-        var end = line + 1 < starts.Length ? starts[line + 1] : text.Length;
-        return character <= 0 ? start : Math.Min(start + character, end);
     }
 }

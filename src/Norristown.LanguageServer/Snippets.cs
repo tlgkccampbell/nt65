@@ -98,13 +98,14 @@ internal static class Snippets
         var tree = symbol.Tree;
         var index = tree.GetLineIndex(symbol.NameSpan.Start);
         var start = tree.LineStarts[index];
-        var end = index + 1 < tree.LineStarts.Length ? tree.LineStarts[index + 1] : tree.Text.Length;
-        var line = tree.Text[start..end];
+
+        // The line's code ends where its trailing trivia starts, so the comment is left out.
+        var line = tree.Text[start..LineContext.CodeEnd(tree, index)];
         var at = symbol.NameSpan.End - start;
         if (at < 0 || at >= line.Length || line[at] != ':')
             return null;
         var item = line[(at + 1)..];
-        foreach (var mark in (ReadOnlySpan<string>)[",", "->", "{", ";"])
+        foreach (var mark in (ReadOnlySpan<string>)[",", "->", "{"])
         {
             var found = item.IndexOf(mark, StringComparison.Ordinal);
             if (found >= 0)

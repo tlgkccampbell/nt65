@@ -30,15 +30,10 @@ internal static class ExtractProc
     public static IEnumerable<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
     {
         var tree = model.Tree;
-        var first = Math.Clamp(range.Start.Line, 0, tree.LineStarts.Length - 1);
-
-        // A selection ending at the start of a line covers only the lines above it; that is how
-        // an editor represents whole lines selected by dragging down the margin.
-        var last = range.End.Line > first && range.End.Character == 0 ? range.End.Line - 1 : range.End.Line;
-        last = Math.Clamp(last, first, tree.LineStarts.Length - 1);
+        var (first, last) = Lsp.SelectedLines(tree, range);
         if (Selected(tree, first, last) is not { } lines)
             yield break;
-        if (Around(tree, first, last) is not { } block || DeclaredOn(model, block.LineIndex) is not { Kind: SymbolKind.Proc } routine)
+        if (Around(tree, first, last) is not { } block || Edits.DeclaredOn(model, block.LineIndex) is not { Kind: SymbolKind.Proc } routine)
             yield break;
         if (!IsSelfContained(model, tree, first, last))
             yield break;
@@ -74,7 +69,7 @@ internal static class ExtractProc
     /// gives these lines.
     /// </summary>
     private static string? Called(SyntaxTree tree, int first) =>
-        StatementOn(tree, first) is LabeledLineSyntax labelled ? labelled.Label.Name.Text.TrimStart('@') : null;
+        Edits.StatementOn(tree, first) is LabeledLineSyntax labelled ? labelled.Label.Name.Text.TrimStart('@') : null;
 
     /// <summary>
     /// Returns the lines of the selection, provided each is code a call can replace, which means
@@ -88,7 +83,7 @@ internal static class ExtractProc
         var code = false;
         for (var line = first; line <= last; line++)
         {
-            var statement = StatementOn(tree, line);
+            var statement = Edits.StatementOn(tree, line);
             if (statement is null)
                 return null;
             if (statement is not (InstructionStatementSyntax or BlankLineSyntax
@@ -128,12 +123,12 @@ internal static class ExtractProc
     private static bool IsSelfContained(SemanticModel model, SyntaxTree tree, int first, int last)
     {
         var from = tree.LineStarts[first];
-        var to = last + 1 < tree.LineStarts.Length ? tree.LineStarts[last + 1] : tree.Text.Length;
+        var to = tree.GetLineEnd(last);
         bool Within(int start, int end) => start >= from && end <= to;
 
         for (var line = first; line <= last; line++)
         {
-            if (Instruction(StatementOn(tree, line)) is not { } jump
+            if (Instruction(Edits.StatementOn(tree, line)) is not { } jump
                 || Instructions.Facts(jump.MnemonicKind).Control != Control.Jumps)
             {
                 continue;
@@ -196,14 +191,14 @@ internal static class ExtractProc
     /// at the margin stays there.
     /// </summary>
     private static string LineText(SyntaxTree tree, int line) =>
-        tree.Text[tree.LineStarts[line]..LineEnd(tree, line)].TrimEnd();
+        tree.Text[tree.LineStarts[line]..tree.GetLineEnd(line)].TrimEnd();
 
     /// <summary>Returns the instruction statements of the selected lines, in order.</summary>
     private static IEnumerable<InstructionStatementSyntax> Statements(SyntaxTree tree, IReadOnlyList<int> lines)
     {
         foreach (var line in lines)
         {
-            if (Instruction(StatementOn(tree, line)) is { } statement)
+            if (Instruction(Edits.StatementOn(tree, line)) is { } statement)
                 yield return statement;
         }
     }
@@ -218,7 +213,7 @@ internal static class ExtractProc
         var end = block is not null ? tree.GetLineIndex(block.FullSpan.End - 1) : tree.LineStarts.Length - 1;
         for (var next = line + 1; next <= end; next++)
         {
-            if (Instruction(StatementOn(tree, next)) is { } statement)
+            if (Instruction(Edits.StatementOn(tree, next)) is { } statement)
                 return statement;
         }
         return null;
@@ -235,21 +230,4 @@ internal static class ExtractProc
         _ => null,
     };
 
-    /// <summary>
-    /// Returns the symbol declared on <paramref name="line"/>, or null for a line that declares
-    /// none.
-    /// </summary>
-    private static Symbol? DeclaredOn(SemanticModel model, int line) =>
-        model.Symbols.FirstOrDefault(symbol => symbol.Tree == model.Tree && symbol.DeclarationSpan.Line - 1 == line);
-
-    /// <summary>
-    /// Returns the statement parsed from <paramref name="line"/>, or null where the file has no
-    /// such line.
-    /// </summary>
-    private static StatementSyntax? StatementOn(SyntaxTree tree, int line) =>
-        line >= 0 && line < tree.LineCount ? tree.GetLine(line).Statement : null;
-
-    /// <summary>Returns the position where a line's text ends, including the line break.</summary>
-    private static int LineEnd(SyntaxTree tree, int line) =>
-        line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length;
 }

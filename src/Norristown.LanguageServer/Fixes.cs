@@ -23,7 +23,7 @@ internal static class Fixes
         foreach (var diagnostic in analysis.DiagnosticsFor(model.Tree.Path))
         {
             if (diagnostic.Fix is not { } fix
-                || diagnostic.Span.Line - 1 < range.Start.Line || diagnostic.Span.Line - 1 > range.End.Line)
+                || diagnostic.Span.LineIndex < range.Start.Line || diagnostic.Span.LineIndex > range.End.Line)
             {
                 continue;
             }
@@ -36,7 +36,7 @@ internal static class Fixes
         ProgramAnalysis analysis, SemanticModel model, Diagnostic diagnostic, DiagnosticFix fix)
     {
         var tree = model.Tree;
-        var line = diagnostic.Span.Line - 1;
+        var line = diagnostic.Span.LineIndex;
         switch (fix.Kind)
         {
             case FixKind.EndPath:
@@ -45,14 +45,14 @@ internal static class Fixes
                 break;
 
             case FixKind.Fallthrough when fix is { Text: { } routine, At: { } closer }:
-                var last = closer.Line - 1;
+                var last = closer.LineIndex;
                 yield return Fix(diagnostic, $"Add `.fallthrough {routine}`",
                     [new Edit(tree, new TextSpan(tree.LineStarts[last], 0),
                         $"{Edits.IndentOf(tree, last)}    .fallthrough {routine}\n")]);
                 break;
 
             case FixKind.AlwaysTaken when fix is { Text: { } target, At: { } branch }:
-                var after = branch.Line - 1;
+                var after = branch.LineIndex;
                 yield return Fix(diagnostic, $"Add `.next {target}`: the branch is always taken",
                     [Edits.InsertAfter(tree, after, $"{Edits.IndentOf(tree, after)}.next {target}")]);
                 break;
@@ -152,7 +152,7 @@ internal static class Fixes
             case FixKind.Signature when fix is { Text: { } register, At: { } routine }:
                 foreach (var width in (int[])[8, 16])
                 {
-                    if (Edits.SignatureItem(tree, routine.Line - 1, $"{register}{width}") is { } item)
+                    if (Edits.SignatureItem(tree, routine.LineIndex, $"{register}{width}") is { } item)
                     {
                         yield return Fix(diagnostic,
                             $"Declare it `{register}{width}`, which is what the routine assumes", [item],
@@ -213,7 +213,7 @@ internal static class Fixes
     /// </summary>
     private static Edit? Piece(SyntaxTree tree, Diagnostic diagnostic, string piece)
     {
-        var line = tree.GetLine(Math.Clamp(diagnostic.Span.Line - 1, 0, tree.LineCount - 1));
+        var line = tree.GetLine(Math.Clamp(diagnostic.Span.LineIndex, 0, tree.LineCount - 1));
         foreach (var token in line.DescendantTokens())
         {
             if (!token.IsMissing || !token.GetDiagnostics().Contains(diagnostic))
@@ -256,7 +256,7 @@ internal static class Fixes
         ProgramAnalysis analysis, SemanticModel model, Span label)
     {
         var tree = model.Tree;
-        var line = label.Line - 1;
+        var line = label.LineIndex;
         var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == label);
         var block = analysis.FlowFor(tree.Path)?.Regions
             .SelectMany(region => region.Blocks)
@@ -334,7 +334,7 @@ internal static class Fixes
     private static Edit? WithoutLevel(SyntaxTree tree, Span at)
     {
         var span = Edits.SpanOf(tree, at);
-        var tokens = LineContext.TokensOf(tree, at.Line - 1);
+        var tokens = LineContext.TokensOf(tree, at.LineIndex);
         var level = tokens.FindIndex(token => token.Start == span.Start);
         if (level < 0)
             return null;
@@ -372,7 +372,7 @@ internal static class Fixes
         var tree = model.Tree;
         var span = Edits.SpanOf(tree, diagnostic.Span);
         var name = tree.Text[span.Start..span.End];
-        var tokens = LineContext.TokensOf(tree, diagnostic.Span.Line - 1);
+        var tokens = LineContext.TokensOf(tree, diagnostic.Span.LineIndex);
         var colon = tokens.FindIndex(token => token.Start == span.Start) + 1;
 
         // A member is a name plus what it holds, so it is offered only when a directive follows
@@ -397,7 +397,7 @@ internal static class Fixes
     private static Edit? ExportSize(SyntaxTree tree, Span at, string size)
     {
         var span = Edits.SpanOf(tree, at);
-        var tokens = LineContext.TokensOf(tree, at.Line - 1);
+        var tokens = LineContext.TokensOf(tree, at.LineIndex);
         var colon = tokens.FindIndex(token => token.Start >= span.Start && token.Kind == SyntaxKind.Colon);
         return colon >= 0 && colon + 1 < tokens.Count
             ? new Edit(tree, new TextSpan(tokens[colon + 1].Start, tokens[colon + 1].Text.Length), size)
@@ -460,7 +460,7 @@ internal static class Fixes
     private static IEnumerable<Change> Unused(SemanticModel model, Diagnostic diagnostic, string name)
     {
         var tree = model.Tree;
-        var line = diagnostic.Span.Line - 1;
+        var line = diagnostic.Span.LineIndex;
         var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
 
         // Removal deletes whole lines, which is only safe where the line starts with the

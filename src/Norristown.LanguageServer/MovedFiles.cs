@@ -76,7 +76,7 @@ internal static class MovedFiles
                     continue;
                 }
                 if (Json.Entry(text, "files", glob) is { } at)
-                    Add(edits, project.File, text, at, Json.Quoted(Relative(project.Root, to)));
+                    Add(edits, project.File, Lsp.ToRange(text, at), Json.Quoted(Relative(project.Root, to)));
             }
         }
     }
@@ -110,8 +110,7 @@ internal static class MovedFiles
                     var now = Relative(beside, target);
                     if (now == included)
                         continue;
-                    var text = model.Tree.Text;
-                    Add(edits, model.Tree.Path, text, operand.Span, Json.Quoted(now));
+                    Add(edits, model.Tree.Path, Lsp.ToRange(model.Tree, operand.Span), Json.Quoted(now));
                 }
             }
         }
@@ -136,32 +135,12 @@ internal static class MovedFiles
 
     /// <summary>Adds one edit, naming the file by the URI the client knows it as.</summary>
     private static void Add(
-        Dictionary<string, List<Protocol.TextEdit>> edits, string path, string text, TextSpan at, string included)
+        Dictionary<string, List<Protocol.TextEdit>> edits, string path, Protocol.Range at, string included)
     {
         var uri = Uris.ToUri(path);
         if (!edits.TryGetValue(uri, out var found))
             edits[uri] = found = [];
-        found.Add(new Protocol.TextEdit(Range(text, at), included));
-    }
-
-    /// <summary>
-    /// Converts a span of a file to a protocol range, which is a line and UTF-16 code-unit offsets
-    /// within it.
-    /// </summary>
-    private static Protocol.Range Range(string text, TextSpan at)
-    {
-        var line = 0;
-        var start = 0;
-        for (var i = 0; i < at.Start; i++)
-        {
-            if (text[i] != '\n')
-                continue;
-            line++;
-            start = i + 1;
-        }
-        return new Protocol.Range(
-            new Protocol.Position(line, at.Start - start),
-            new Protocol.Position(line, at.End - start));
+        found.Add(new Protocol.TextEdit(at, included));
     }
 
     /// <summary>Returns the path of a file relative to a directory, with <c>/</c> separators.</summary>
