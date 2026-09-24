@@ -27,23 +27,19 @@ namespace Norristown.Flow;
 public static class RegisterKeeps
 {
     /// <summary>
-    /// Works out what every routine of <paramref name="flows"/> keeps, stores it on each region,
-    /// and reports the routines that break what they promise. The lists are parallel, with one
-    /// file at each index, and <paramref name="states"/> is empty on the CPUs that have no
-    /// register widths to follow.
+    /// Works out what every routine of <paramref name="files"/> keeps, stores it on each region,
+    /// and reports the routines that break what they promise.
     /// </summary>
-    public static IReadOnlyList<Diagnostic> Compose(
-        IReadOnlyList<SemanticModel> models, IReadOnlyList<CodeLayout> layouts,
-        IReadOnlyList<ControlFlow> flows, IReadOnlyList<StateAnalysis> states)
+    public static IReadOnlyList<Diagnostic> Compose(IReadOnlyList<FileAnalysis> files)
     {
         var regions = new Dictionary<(string Path, string Name), FlowRegion>();
         var walks = new Dictionary<(string Path, string Name), Walk>();
-        var byFile = new List<Walk>();
-        for (var i = 0; i < flows.Count && i < models.Count && i < layouts.Count; i++)
+        var byFile = new List<(ControlFlow Flow, Walk Walk)>();
+        foreach (var file in files)
         {
-            var walk = new Walk(models[i], layouts[i], flows[i], i < states.Count ? states[i] : null);
-            byFile.Add(walk);
-            foreach (var region in flows[i].Regions)
+            var walk = new Walk(file.Model, file.Layout, file.Flow, file.State);
+            byFile.Add((file.Flow, walk));
+            foreach (var region in file.Flow.Regions)
             {
                 var name = Named(region.Routine);
                 if (regions.TryAdd(name, region))
@@ -78,8 +74,8 @@ public static class RegisterKeeps
             region.ScopeRegisters = walks[name].Scopes(region, Of);
             walks[name].Run(region, Of, diagnostics);
         }
-        for (var i = 0; i < byFile.Count; i++)
-            flows[i].Registers = byFile[i].Held;
+        foreach (var (flow, walk) in byFile)
+            flow.Registers = walk.Held;
         return Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
 
         // Returns what a routine keeps. That is what the walk found or, for a routine whose body

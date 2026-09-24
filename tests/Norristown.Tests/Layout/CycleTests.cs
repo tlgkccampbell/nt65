@@ -284,7 +284,7 @@ public sealed class CycleTests
                 rts
             }
             """));
-        var layout = analysis.Layouts.Single();
+        var layout = analysis.Files.Single().Layout;
         var lines = analysis.File("main.nt65").Tree.Root.DescendantNodes()
             .OfType<Norristown.Syntax.LineSyntax>()
             .Select(line => line.Statement)
@@ -313,7 +313,7 @@ public sealed class CycleTests
     public void ABlockCostsWhatItsStatementsCost()
     {
         var analysis = Analysis.Program(("main.nt65", ".module main\n.proc p: a8, i8 {\n    ldx #0\n    inx\n    rts\n}\n"));
-        var block = analysis.Flows.Single().Regions.Single().Blocks.Single();
+        var block = analysis.Files.Single().Flow.Regions.Single().Blocks.Single();
 
         Assert.Equal("10", block.Cycles?.ToString());
     }

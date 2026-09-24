@@ -94,7 +94,7 @@ internal static class CallHierarchy
     private static IEnumerable<(Symbol Caller, Symbol Callee, Protocol.Range At)> Calls(
         ProgramAnalysis analysis, CancellationToken cancellation)
     {
-        foreach (var flow in analysis.Flows)
+        foreach (var flow in analysis.Files.Select(file => file.Flow))
         {
             cancellation.ThrowIfCancellationRequested();
             foreach (var region in flow.Regions)
@@ -155,8 +155,8 @@ internal static class CallHierarchy
         if (analysis.ModelFor(path) is not { } model)
             return null;
         var start = model.Tree.GetPosition(item.SelectionRange.Start.Line, item.SelectionRange.Start.Character);
-        return analysis.Flows
-            .SelectMany(flow => flow.Regions)
+        return analysis.Files
+            .SelectMany(file => file.Flow.Regions)
             .Select(region => region.Routine)
             .Concat(model.Symbols)
             .FirstOrDefault(symbol =>

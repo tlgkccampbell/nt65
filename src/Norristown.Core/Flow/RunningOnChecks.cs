@@ -16,25 +16,25 @@ internal static class RunningOnChecks
     /// <summary>
     /// Reports a diagnostic for each <c>.fallthrough</c> claim in the files of
     /// <paramref name="program"/> whose routines are not adjacent, or that crosses from one
-    /// translation unit into another. Each file's layout and flow are at the same index in
-    /// <paramref name="layouts"/> and <paramref name="flows"/>.
+    /// translation unit into another. <paramref name="files"/> holds what analyzing each file
+    /// of the program on its own found.
     /// </summary>
     public static IReadOnlyList<Diagnostic> Check(
-        ProgramModel program, IReadOnlyList<CodeLayout> layouts, IReadOnlyList<ControlFlow> flows, Placements placements)
+        ProgramModel program, IReadOnlyList<FileAnalysis> files, Placements placements)
     {
         var diagnostics = new List<Diagnostic>();
         var layoutOf = new Dictionary<string, CodeLayout>(StringComparer.Ordinal);
-        for (var i = 0; i < program.Files.Count && i < layouts.Count; i++)
-            layoutOf.TryAdd(program.Files[i].Tree.Path, layouts[i]);
+        foreach (var file in files)
+            layoutOf.TryAdd(file.Path, file.Layout);
         var laid = new Dictionary<string, UnitLayout>(StringComparer.Ordinal);
 
-        for (var i = 0; i < program.Files.Count && i < flows.Count; i++)
+        foreach (var file in files)
         {
-            if (flows[i].RunningOn.Count == 0)
+            if (file.Flow.RunningOn.Count == 0)
                 continue;
-            var model = program.Files[i];
+            var model = file.Model;
             var found = new List<Diagnostic>();
-            foreach (var claim in flows[i].RunningOn)
+            foreach (var claim in file.Flow.RunningOn)
             {
                 var routine = program.Current(claim.Routine);
                 var span = claim.Target.Tree.GetSpan(claim.Target.Span);
@@ -51,7 +51,7 @@ internal static class RunningOnChecks
                     laid[unit.Root.Path] = layout = UnitLayout.Of(
                         unit, tree => layoutOf.GetValueOrDefault(tree.Path), placements);
                 }
-                var here = layouts[i].PositionOf(claim.Statement, claim.On) is { } statement
+                var here = file.Layout.PositionOf(claim.Statement, claim.On) is { } statement
                     ? layout.Where(model.Tree, statement) is { } start ? (start.Run, start.Offset + statement.Length) : ((int, int)?)null
                     : null;
                 var there = layoutOf.GetValueOrDefault(routine.Tree.Path)?.PositionOf(routine) is { } label

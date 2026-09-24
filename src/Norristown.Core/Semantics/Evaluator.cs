@@ -49,11 +49,11 @@ internal sealed partial class Evaluator
     private readonly Func<Symbol, bool>? unchanged;
     private readonly HashSet<Symbol> unchangedReads = [];
 
-    // The file of the symbol being evaluated when each diagnostic was found, kept in step with
-    // the diagnostics. A problem found while evaluating a symbol belongs to that symbol's file,
-    // even when it is found in another file's function body, so a file that is not evaluated
-    // again keeps reporting it.
-    private readonly List<string>? owners;
+    // Each diagnostic found, with the file of the symbol being evaluated when it was found, for
+    // a caller that wants to know. A problem found while evaluating a symbol belongs to that
+    // symbol's file, even when it is found in another file's function body, so a file that is
+    // not evaluated again keeps reporting it.
+    private readonly List<(Diagnostic Diagnostic, string Owner)>? owned;
 
     // Which branches the build takes, for the conditionals in a data body. Without it, every
     // condition is evaluated as a condition inside an expansion would be.
@@ -101,14 +101,14 @@ internal sealed partial class Evaluator
         Func<Symbol, long?>? spans = null,
         Func<Symbol, Symbol, bool, CycleSpan>? cycles = null,
         Func<Symbol, bool>? unchanged = null,
-        List<string>? owners = null,
+        List<(Diagnostic Diagnostic, string Owner)>? owned = null,
         Configuration? configuration = null,
         Conditions? conditions = null)
     {
         this.conditions = conditions;
         this.configuration = configuration;
         this.unchanged = unchanged;
-        this.owners = owners;
+        this.owned = owned;
         this.segments = segments;
         this.resolved = resolved;
         this.diagnostics = diagnostics;
@@ -132,6 +132,12 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
+    /// Gets whether this evaluator reports the problems it finds, which only the pass over the
+    /// symbols does.
+    /// </summary>
+    private bool Reporting => diagnostics is not null || owned is not null;
+
+    /// <summary>
     /// Assigns every symbol in <paramref name="symbols"/> its kind, value and address size,
     /// reporting any problems it finds into <paramref name="diagnostics"/>.
     /// </summary>
@@ -150,7 +156,8 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// Assigns every symbol in <paramref name="symbols"/> its kind, value and address size,
-    /// recording in <paramref name="owners"/> the file of the symbol that found each diagnostic.
+    /// reporting each problem it finds into <paramref name="owned"/> with the file of the symbol
+    /// that found it.
     /// When <paramref name="unchanged"/> reports that a symbol belongs to an unchanged file, its
     /// value is read as it stands rather than evaluated again.
     /// </summary>
@@ -159,14 +166,13 @@ internal sealed partial class Evaluator
         SegmentTable segments,
         IReadOnlyList<Symbol> symbols,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        List<Diagnostic> diagnostics,
-        List<string> owners,
+        List<(Diagnostic Diagnostic, string Owner)> owned,
         Func<Symbol, bool>? unchanged,
         Func<string, long?>? binaryLength,
         Configuration? configuration = null)
     {
         var evaluator = new Evaluator(
-            segments, resolved, diagnostics, binaryLength, unchanged: unchanged, owners: owners, configuration: configuration);
+            segments, resolved, null, binaryLength, unchanged: unchanged, owned: owned, configuration: configuration);
         foreach (var symbol in symbols)
             evaluator.EvaluateSymbol(symbol);
         return evaluator.unchangedReads;
@@ -416,7 +422,7 @@ internal sealed partial class Evaluator
     /// </summary>
     private void EnsureEvaluated(Symbol symbol)
     {
-        if (diagnostics is not null)
+        if (Reporting)
             EvaluateSymbol(symbol);
     }
 
@@ -473,7 +479,7 @@ internal sealed partial class Evaluator
             // A function has no value of its own, but its body is read once with nothing given,
             // so that functions calling each other in a ring are reported whether or not
             // anything calls them.
-            case SymbolKind.Func when symbol.Items.Count > 0 && diagnostics is not null:
+            case SymbolKind.Func when symbol.Items.Count > 0 && Reporting:
                 evaluating.Add(symbol);
                 var outer = readingBody;
                 readingBody = true;
@@ -875,9 +881,7 @@ internal sealed partial class Evaluator
 
     private void Add(Diagnostic diagnostic)
     {
-        if (diagnostics is null)
-            return;
-        diagnostics.Add(diagnostic);
-        owners?.Add(owner?.Tree.Path ?? diagnostic.Span.File);
+        diagnostics?.Add(diagnostic);
+        owned?.Add((diagnostic, owner?.Tree.Path ?? diagnostic.Span.File));
     }
 }

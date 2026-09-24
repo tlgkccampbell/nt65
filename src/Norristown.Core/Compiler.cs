@@ -55,10 +55,10 @@ public static class Compiler
         // Every file is written even when the program already has errors, because what emission
         // finds — a construct no earlier stage checked, two names that collide in the output —
         // is worth reporting alongside the rest rather than only once the rest is fixed.
-        var measured = analysis.Program.Files.Select(Extents.MeasuredIn).ToList();
-        for (var i = 0; i < analysis.Layouts.Count; i++)
+        var measured = Measured(analysis);
+        foreach (var file in analysis.Files)
         {
-            var model = analysis.Program.Files[i];
+            var model = file.Model;
 
             // The defines and the modules that come with nt65 are not files anyone wrote, and
             // nothing is written for them. A module that another module places has no output of
@@ -67,7 +67,7 @@ public static class Compiler
                 || analysis.Placements.PlacerOf(model.Tree) is not null)
                 continue;
             var members = analysis.Placements.UnitOf(model.Tree)?.Members ?? [model.Tree];
-            var written = EmitFile(analysis, project, i, measured, diagnostics);
+            var written = EmitFile(analysis, project, file, measured, diagnostics);
 
             // A file that would hold only its header is left out, because an empty object file
             // is one more thing to assemble and link for nothing.
@@ -119,13 +119,7 @@ public static class Compiler
             || StandardModules.IsStandard(path))
             return null;
         var root = analysis.Placements.UnitOf(model.Tree)?.Root.Path ?? path;
-        var measured = analysis.Program.Files.Select(Extents.MeasuredIn).ToList();
-        for (var i = 0; i < analysis.Layouts.Count; i++)
-        {
-            if (analysis.Program.Files[i].Tree.Path == root)
-                return EmitFile(analysis, project, i, measured, []);
-        }
-        return null;
+        return analysis.FileFor(root) is { } file ? EmitFile(analysis, project, file, Measured(analysis), []) : null;
     }
 
     /// <summary>
@@ -186,23 +180,31 @@ public static class Compiler
     }
 
     /// <summary>
+    /// Returns, for each file of the program in order, the file's tree and the symbols it
+    /// measures with <c>.endof</c> and <c>.spanof</c>.
+    /// </summary>
+    private static List<(SyntaxTree Tree, IReadOnlySet<Symbol> Symbols)> Measured(ProgramAnalysis analysis) =>
+        [.. analysis.Files.Select(file => (file.Model.Tree, Extents.MeasuredIn(file.Model)))];
+
+    /// <summary>
     /// Emits one file of the program. <paramref name="measured"/> holds, for each file of the
     /// program in order, the symbols that file measures with <c>.endof</c> and <c>.spanof</c>.
     /// The symbols of this file that other files measure are the ones its output has to label.
     /// </summary>
     private static OutputFile EmitFile(
-        ProgramAnalysis analysis, ProjectSettings project, int i,
-        IReadOnlyList<IReadOnlySet<Symbol>> measured, List<Diagnostic> diagnostics)
+        ProgramAnalysis analysis, ProjectSettings project, FileAnalysis file,
+        IReadOnlyList<(SyntaxTree Tree, IReadOnlySet<Symbol> Symbols)> measured, List<Diagnostic> diagnostics)
     {
-        var model = analysis.Program.Files[i];
-        IReadOnlySet<Symbol> Elsewhere(int at) => measured.Where((_, j) => j != at).SelectMany(set => set)
-            .Where(symbol => symbol.Tree == analysis.Program.Files[at].Tree)
+        var model = file.Model;
+        IReadOnlySet<Symbol> Elsewhere(SyntaxTree tree) => measured.Where(other => other.Tree != tree)
+            .SelectMany(other => other.Symbols)
+            .Where(symbol => symbol.Tree == tree)
             .ToHashSet();
         if (analysis.Placements.UnitOf(model.Tree) is not { IsPlaced: true } unit)
         {
             return Emitter.Emit(
-                model, analysis.Layouts[i], FlatNames.Create(model, analysis.Cpu, diagnostics), diagnostics,
-                project.Out, Elsewhere(i));
+                model, file.Layout, FlatNames.Create(model, analysis.Cpu, diagnostics), diagnostics,
+                project.Out, Elsewhere(model.Tree));
         }
 
         // The modules of a translation unit share one output, and so one table of names; the
@@ -211,28 +213,12 @@ public static class Compiler
         FlatNames? names = null;
         foreach (var tree in unit.Members)
         {
-            var at = Index(analysis, tree.Path);
-            if (at < 0)
+            if (analysis.FileFor(tree.Path) is not { } member)
                 continue;
-            var member = analysis.Program.Files[at];
-            names = FlatNames.Create(member, analysis.Cpu, diagnostics, names, placed: members.Count > 0);
-            members.Add((member, analysis.Layouts[at], names, Elsewhere(at)));
+            names = FlatNames.Create(member.Model, analysis.Cpu, diagnostics, names, placed: members.Count > 0);
+            members.Add((member.Model, member.Layout, names, Elsewhere(member.Model.Tree)));
         }
         return Emitter.Emit(members, analysis.Placements, diagnostics, project.Out);
-    }
-
-    /// <summary>
-    /// Returns the index of the file at <paramref name="path"/> among the program's files, or -1
-    /// if the program has no such file.
-    /// </summary>
-    private static int Index(ProgramAnalysis analysis, string path)
-    {
-        for (var i = 0; i < analysis.Program.Files.Count; i++)
-        {
-            if (analysis.Program.Files[i].Tree.Path == path)
-                return i;
-        }
-        return -1;
     }
 
     private static ProgramAnalysis AnalyzeAll(
@@ -276,11 +262,11 @@ public static class Compiler
         // another file exports.
         var program = ProgramModel.Create(trees, segments, configuration, defines, Length, target);
         var analyzed = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
-        var (layouts, flows, states) = AnalyzeFiles(program, target, project, analyzed, previous: null, dirty: null);
+        var analyses = AnalyzeFiles(program, target, project, analyzed, previous: null, dirty: null);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
         return Composed(
-            new ProgramAnalysis(program, target, layouts, flows, states, defines, configuration, [])
+            new ProgramAnalysis(program, target, analyses, defines, configuration, [])
             {
                 Reanalyzed = program.Files.Count,
             },
@@ -396,9 +382,9 @@ public static class Compiler
         if (EditMap.Moved(reuse.SegmentTable, moved) is not { } segmentTable)
             return null;
 
-        var (layouts, flows, states) = AnalyzeFiles(program, previous.Cpu, project, analyzed, previous, dirty);
+        var analyses = AnalyzeFiles(program, previous.Cpu, project, analyzed, previous, dirty);
         return Composed(
-            new ProgramAnalysis(program, previous.Cpu, layouts, flows, states, previous.Defines, configuration, [])
+            new ProgramAnalysis(program, previous.Cpu, analyses, previous.Defines, configuration, [])
             {
                 Reanalyzed = dirty.Count,
             },
@@ -427,38 +413,31 @@ public static class Compiler
         [.. reuse.Trees.Select(tree => sources.GetValueOrDefault(tree.Path) ?? tree)];
 
     /// <summary>
-    /// Analyzes each file of <paramref name="program"/> on its own, and returns every file's
-    /// layout, control flow and, on the 65816, processor state, in the program's order. When
-    /// <paramref name="previous"/> is given, only the files at <paramref name="dirty"/> are
-    /// analyzed, and every other file keeps what <paramref name="previous"/> found for it.
-    /// <paramref name="analyzed"/> receives the diagnostics of each file analyzed.
+    /// Analyzes each file of <paramref name="program"/> on its own, and returns what each file's
+    /// analysis found, in the program's order. When <paramref name="previous"/> is given, only the
+    /// files at <paramref name="dirty"/> are analyzed, and every other file keeps what
+    /// <paramref name="previous"/> found for it. <paramref name="analyzed"/> receives the
+    /// diagnostics of each file analyzed.
     /// </summary>
-    private static (List<CodeLayout> Layouts, List<Flow.ControlFlow> Flows, List<Flow.StateAnalysis> States) AnalyzeFiles(
+    private static List<FileAnalysis> AnalyzeFiles(
         ProgramModel program, Cpu target, ProjectSettings project, Dictionary<string, IReadOnlyList<Diagnostic>> analyzed,
         ProgramAnalysis? previous, IReadOnlySet<string>? dirty)
     {
-        var layouts = new List<CodeLayout>();
-        var flows = new List<Flow.ControlFlow>();
-        var states = new List<Flow.StateAnalysis>();
-        for (var i = 0; i < program.Files.Count; i++)
+        var files = new List<FileAnalysis>();
+        foreach (var model in program.Files)
         {
-            var model = program.Files[i];
-            if (previous is not null && dirty?.Contains(model.Tree.Path) != true)
+            // A file kept from before keeps what was found for it then, under the program's
+            // current model of the file.
+            if (dirty?.Contains(model.Tree.Path) != true && previous?.FileFor(model.Tree.Path) is { } kept)
             {
-                layouts.Add(previous.Layouts[i]);
-                flows.Add(previous.Flows[i]);
-                if (i < previous.States.Count)
-                    states.Add(previous.States[i]);
+                files.Add(kept with { Model = model });
                 continue;
             }
             var (layout, flow, state, found) = AnalyzeFile(model, target, project);
-            layouts.Add(layout);
-            flows.Add(flow);
-            if (state is not null)
-                states.Add(state);
+            files.Add(new FileAnalysis(model, layout, flow, state));
             analyzed[model.Tree.Path] = found;
         }
-        return (layouts, flows, states);
+        return files;
     }
 
     /// <summary>
@@ -470,7 +449,7 @@ public static class Compiler
     private static ProgramAnalysis Composed(
         ProgramAnalysis analysis, ProjectSettings project, IReadOnlyList<Diagnostic> cpu, ProgramAnalysis.Reuse reuse)
     {
-        var (program, layouts, flows) = (analysis.Program, analysis.Layouts, analysis.Flows);
+        var program = analysis.Program;
 
         // What a routine costs including its calls, and which registers it preserves for its
         // caller, are questions about the program rather than about one file, so they are
@@ -478,8 +457,8 @@ public static class Compiler
         // edit keeps its own costs, but its routines' costs including their calls, and the
         // registers they preserve, may still have changed, because a routine they call may be in
         // a file that changed.
-        Flow.CallCosts.Compose(flows);
-        var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, analysis.States);
+        Flow.CallCosts.Compose(analysis.Files.Select(file => file.Flow));
+        var registers = Flow.RegisterKeeps.Compose(analysis.Files);
 
         // Which modules place which others follows from the files alone. Which routine a routine
         // falls through into across a `.place` follows from the layouts of every file in its
@@ -490,7 +469,7 @@ public static class Compiler
         {
             Diagnostics = Collected(project, analysis.Cpu, cpu, program, reuse, [
                 .. registers, .. placements.Diagnostics,
-                .. Flow.RunningOnChecks.Check(program, layouts, flows, placements)]),
+                .. Flow.RunningOnChecks.Check(program, analysis.Files, placements)]),
             Reused = reuse,
             Placements = placements,
         };

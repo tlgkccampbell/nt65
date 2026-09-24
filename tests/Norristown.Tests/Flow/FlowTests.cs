@@ -314,7 +314,7 @@ public sealed class FlowTests
             """;
 
         Assert.Empty(Problems(Text));
-        var p = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + Text)).Flows.Single().Regions
+        var p = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + Text)).Files.Single().Flow.Regions
             .Single(region => region.Routine.Name == "p");
         Assert.All(p.Blocks.Skip(1), block => Assert.False(block.IsFallenInto));
     }
@@ -368,7 +368,7 @@ public sealed class FlowTests
     {
         var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text));
         Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
-        return Assert.Single(analysis.Flows.Single().Regions);
+        return Assert.Single(analysis.Files.Single().Flow.Regions);
     }
 
     private static BasicBlock Block(FlowRegion region, string label) =>

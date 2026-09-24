@@ -433,7 +433,7 @@ public sealed class StateAnalysisTests
     private static int MaximumWalks(string text)
     {
         var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
-        return Assert.Single(analysis.States).MaximumWalks;
+        return Assert.Single(analysis.Files).State!.MaximumWalks;
     }
 
     private static IReadOnlyList<string> Problems(string text) =>

@@ -14,15 +14,8 @@ namespace Norristown;
 /// </summary>
 /// <param name="Program">Every file's model, and what the files can see of one another.</param>
 /// <param name="Cpu">The processor the program is built for.</param>
-/// <param name="Layouts">
-/// One layout per file of <see cref="Program"/>, in the same order.
-/// </param>
-/// <param name="Flows">
-/// The control flow of each file of <see cref="Program"/>, in the same order.
-/// </param>
-/// <param name="States">
-/// The processor state through each file of <see cref="Program"/>, in the same order, on the
-/// 65816. It is empty on the processors that have no state to track.
+/// <param name="Files">
+/// What analyzing each file of <see cref="Program"/> on its own found, in the same order.
 /// </param>
 /// <param name="Defines">The file the build configuration was read as, or null.</param>
 /// <param name="Configuration">Which <c>.if</c> branches this build takes.</param>
@@ -30,13 +23,20 @@ namespace Norristown;
 public sealed record ProgramAnalysis(
     ProgramModel Program,
     Cpu Cpu,
-    IReadOnlyList<CodeLayout> Layouts,
-    IReadOnlyList<ControlFlow> Flows,
-    IReadOnlyList<StateAnalysis> States,
+    IReadOnlyList<FileAnalysis> Files,
     SyntaxTree? Defines,
     Configuration Configuration,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
+    // The files by their logical paths. Where two files share a path, the first is found.
+    private readonly Dictionary<string, FileAnalysis> byPath = ByPath(Files);
+
+    /// <summary>
+    /// Gets what analyzing each file of <see cref="Program"/> on its own found, in the same order.
+    /// It cannot be replaced, so that the lookups by path always agree with it.
+    /// </summary>
+    public IReadOnlyList<FileAnalysis> Files { get; } = Files;
+
     /// <summary>
     /// Gets the number of files this analysis analyzed. That is every file of the program, or only
     /// the files that changed and the files the changes affect when the rest could be kept from
@@ -74,41 +74,41 @@ public sealed record ProgramAnalysis(
         [.. Diagnostics.Where(diagnostic => diagnostic.Span.File == path)];
 
     /// <summary>
+    /// Returns what analyzing <paramref name="path"/> on its own found, or null when the program
+    /// has no such file.
+    /// </summary>
+    public FileAnalysis? FileFor(string path) => byPath.GetValueOrDefault(path);
+
+    /// <summary>
     /// Returns the model for <paramref name="path"/>, or null when the program has no such file.
     /// </summary>
-    public SemanticModel? ModelFor(string path) =>
-        Program.Files.FirstOrDefault(file => file.Tree.Path == path);
+    public SemanticModel? ModelFor(string path) => FileFor(path)?.Model;
 
     /// <summary>
     /// Returns the layout of <paramref name="path"/>, which says what its lines assemble to, or
-    /// null when the file was not laid out.
+    /// null when the program has no such file.
     /// </summary>
-    public CodeLayout? LayoutFor(string path) => At(Layouts, path);
+    public CodeLayout? LayoutFor(string path) => FileFor(path)?.Layout;
 
     /// <summary>
-    /// Returns the control flow of <paramref name="path"/>, or null when the file was not laid out.
+    /// Returns the control flow of <paramref name="path"/>, or null when the program has no such
+    /// file.
     /// </summary>
-    public ControlFlow? FlowFor(string path) => At(Flows, path);
+    public ControlFlow? FlowFor(string path) => FileFor(path)?.Flow;
 
     /// <summary>
     /// Returns the processor state through <paramref name="path"/>, or null when there is none to
     /// track.
     /// </summary>
-    public StateAnalysis? StatesFor(string path) => At(States, path);
+    public StateAnalysis? StatesFor(string path) => FileFor(path)?.State;
 
-    /// <summary>
-    /// Returns the entry of <paramref name="alongside"/> for <paramref name="path"/>. Every list
-    /// here runs in the same order as <see cref="ProgramModel.Files"/>, or is empty.
-    /// </summary>
-    private T? At<T>(IReadOnlyList<T> alongside, string path)
-        where T : class
+    /// <summary>Returns <paramref name="files"/> by their logical paths, keeping the first of each.</summary>
+    private static Dictionary<string, FileAnalysis> ByPath(IReadOnlyList<FileAnalysis> files)
     {
-        for (var i = 0; i < Program.Files.Count && i < alongside.Count; i++)
-        {
-            if (Program.Files[i].Tree.Path == path)
-                return alongside[i];
-        }
-        return null;
+        var byPath = new Dictionary<string, FileAnalysis>(StringComparer.Ordinal);
+        foreach (var file in files)
+            byPath.TryAdd(file.Path, file);
+        return byPath;
     }
 
     /// <summary>Holds what an analysis keeps so that the next analysis can start from it.</summary>

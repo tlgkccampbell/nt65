@@ -273,13 +273,13 @@ internal sealed class ProgramReplay
         // Every file is emitted even though the program has errors. The program contains
         // mistakes on purpose, and compiling a program with errors writes nothing.
         var emitted = new List<Diagnostic>();
-        for (var i = 0; i < analysis.Layouts.Count; i++)
+        foreach (var file in analysis.Files)
         {
-            var model = analysis.Program.Files[i];
+            var model = file.Model;
             if (model.Tree != analysis.Defines)
             {
                 var output = Emitter.Emit(
-                    model, analysis.Layouts[i], FlatNames.Create(model, analysis.Cpu, emitted), emitted, Project.Out);
+                    model, file.Layout, FlatNames.Create(model, analysis.Cpu, emitted), emitted, Project.Out);
                 text.Append($"== {output.Path}\n{output.Text}");
             }
         }

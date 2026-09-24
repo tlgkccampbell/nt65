@@ -163,6 +163,6 @@ public sealed class ExtentTests
         var analysis = Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text));
         var model = analysis.File("main.nt65");
         var measured = Norristown.Semantics.Extents.MeasuredIn(model).Single();
-        return analysis.Layouts.Single().SpanOf(measured);
+        return analysis.Files.Single().Layout.SpanOf(measured);
     }
 }

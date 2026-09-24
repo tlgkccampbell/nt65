@@ -421,13 +421,12 @@ public sealed class ProgramModel
         foreach (var diagnostic in macros)
             byFile[diagnostic.Span.File].Add(diagnostic);
 
-        var evaluation = new List<Diagnostic>();
-        var owners = new List<string>();
+        var evaluation = new List<(Diagnostic Diagnostic, string Owner)>();
         var reads = Evaluator.EvaluateSymbols(
-            segments, [.. bound.SelectMany(result => result.Symbols)], resolved, evaluation, owners, unchanged,
+            segments, [.. bound.SelectMany(result => result.Symbols)], resolved, evaluation, unchanged,
             binaryLength, configuration);
-        for (var i = 0; i < evaluation.Count; i++)
-            byFile[owners[i]].Add(evaluation[i]);
+        foreach (var (diagnostic, owner) in evaluation)
+            byFile[owner].Add(diagnostic);
 
         // A segment's `dp` and `bank`, and a signature's `dp = e` and `dbr = e`, are expressions
         // that nothing before the analysis reads, so they are evaluated after the constants.
