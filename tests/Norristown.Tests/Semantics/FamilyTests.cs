@@ -94,6 +94,31 @@ public sealed class FamilyTests
         Assert.Empty(program.Problems());
     }
 
+    /// <summary>
+    /// A family may walk an enum that a <c>.use</c> brought in from another module. Finding that
+    /// enum reads the module's <c>.use</c> directives before the program is complete, and that
+    /// read neither reports nor records anything. Each problem with a <c>.use</c> is reported
+    /// once, and each name a <c>.use</c> gives is one reference.
+    /// </summary>
+    [Fact]
+    public void AFamilyOverAnEnumBroughtInReportsEachUseOnce()
+    {
+        var program = Analysis.Program(Analysis.Fragment,
+            ("sound.nt65", ".module sound\n.export .enum Channel {\n    a\n    b\n}\nhidden = 1\n"),
+            ("main.nt65", ".module main\n.use sound::Channel\n.use sound::hidden\n.use sound::missing\n.segment CODE\n.export .multiproc Channel, ch {\n    rts\n}\n"));
+        var model = program.File("main.nt65");
+
+        var family = Assert.Single(model.Families);
+        Assert.Equal(["a", "b"], family.Instances.Select(instance => instance.Name));
+        Assert.Equal(
+            [
+                "main.nt65:3: `sound::hidden` is not exported by module `sound`",
+                "main.nt65:4: `missing` is not declared in module `sound`",
+            ],
+            program.Problems());
+        Assert.Single(model.ReferencesTo(family.Enumeration), reference => reference.InUse);
+    }
+
     private static string Output(string text) => Analysis.Outputs(("main.nt65", text))["main.s"];
 
     /// <summary>Returns the output without the comments, which name where each line came from.</summary>

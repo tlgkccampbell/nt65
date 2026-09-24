@@ -33,10 +33,7 @@ internal sealed partial class Binder
 
             // A name in one of a `.select`'s values only has to resolve if the condition
             // chooses that value, so its diagnostics are dropped here and evaluation reports it.
-            var reported = diagnostics.Count;
-            previous = Resolve(use, previous);
-            if (use.Chosen)
-                diagnostics.RemoveRange(reported, diagnostics.Count - reported);
+            previous = use.Chosen ? Unreported(use, previous) : Resolve(use, previous);
             if (previous is not { IsReported: false } place)
             {
                 broken = true;
@@ -173,6 +170,25 @@ internal sealed partial class Binder
             return null;
         }
         return new Resolution(CheckExported(token, member, last));
+    }
+
+    /// <summary>
+    /// Resolves one part of a name as <see cref="Resolve(Use, Resolution?)"/> does, with the
+    /// diagnostics it reports going to a list that is then dropped. Everything else that
+    /// resolving it records is kept.
+    /// </summary>
+    private Resolution? Unreported(Use use, Resolution? previous)
+    {
+        var kept = diagnostics;
+        diagnostics = [];
+        try
+        {
+            return Resolve(use, previous);
+        }
+        finally
+        {
+            diagnostics = kept;
+        }
     }
 
     /// <summary>

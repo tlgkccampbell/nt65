@@ -52,9 +52,33 @@ internal sealed partial class Parser
     /// </summary>
     private OperandSyntax? TryParseIndirect()
     {
+        // The attempt reports into a list of its own, which joins the line's only if the attempt
+        // succeeds. A failed attempt leaves no trace. Its tokens are read again as an ordinary
+        // expression, and the nodes it built are discarded along with the diagnostics reported
+        // while building them, so no diagnostic about a missing token from the attempt survives.
         var start = index;
         var reportedBefore = reported;
-        var pendingBefore = pending.Count;
+        var line = pending;
+        pending = [];
+        var indirect = ParseIndirect();
+        var attempt = pending;
+        pending = line;
+        if (indirect is not null)
+        {
+            pending.AddRange(attempt);
+            return indirect;
+        }
+        index = start;
+        reported = reportedBefore;
+        return null;
+    }
+
+    /// <summary>
+    /// Parses what <see cref="TryParseIndirect"/> attempts, or returns null when the operand is
+    /// not indirect, leaving the parser wherever that became clear.
+    /// </summary>
+    private OperandSyntax? ParseIndirect()
+    {
         var openParen = Advance();
         var address = ParseExpression();
 
@@ -78,14 +102,6 @@ internal sealed partial class Parser
                     : new IndirectOperandSyntax(openParen, address, closeParen, comma, register);
             }
         }
-
-        // A failed attempt leaves no trace: its tokens are read again as an ordinary expression,
-        // and the nodes it built are discarded along with the diagnostics reported while building
-        // them, so no diagnostic about a missing token from the attempt survives it.
-        index = start;
-        if (pending.Count > pendingBefore)
-            pending.RemoveRange(pendingBefore, pending.Count - pendingBefore);
-        reported = reportedBefore;
         return null;
     }
 

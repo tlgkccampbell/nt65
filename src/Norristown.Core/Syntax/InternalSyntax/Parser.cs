@@ -56,8 +56,9 @@ internal sealed partial class Parser
     // The diagnostics reported over a token, positioned within the line and waiting to be
     // attached to the node that contains them. `reported` is the total number of diagnostics the
     // line has been given, including those on missing tokens. ReportOnce and Expect use it to
-    // tell whether anything has been reported on this line yet.
-    private readonly List<Pending> pending = [];
+    // tell whether anything has been reported on this line yet. An attempt that may fail reports
+    // into a list of its own for as long as it runs.
+    private List<Pending> pending = [];
     private int reported;
     private int index;
 

@@ -49,7 +49,10 @@ internal sealed partial class Binder
     private readonly Configuration configuration;
     private readonly Cpu cpu;
     private readonly bool isDefines;
-    private readonly List<Diagnostic> diagnostics = [];
+
+    // Where the binder reports its diagnostics. Resolving a name whose diagnostics are dropped
+    // points this at a list of its own for as long as that takes.
+    private List<Diagnostic> diagnostics = [];
 
     // The callback a lookup reports its diagnostics through; a lookup that must not report is
     // passed null instead.
@@ -124,7 +127,8 @@ internal sealed partial class Binder
     // including inside a nested block of the body.
     private Repeated? repeated;
 
-    private Binder(SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines)
+    private Binder(
+        SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines, Scope fileScope)
     {
         statements = new Statements(this);
         this.tree = tree;
@@ -132,7 +136,7 @@ internal sealed partial class Binder
         this.configuration = configuration;
         this.cpu = cpu;
         this.isDefines = isDefines;
-        fileScope = new Scope(ScopeKind.File, null, null, null);
+        this.fileScope = fileScope;
         scope = fileScope;
         report = (span, message) => Report(span, message);
     }
@@ -173,7 +177,7 @@ internal sealed partial class Binder
     public static Binder Collect(
         SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines = false)
     {
-        var binder = new Binder(tree, segments, configuration, cpu, isDefines);
+        var binder = new Binder(tree, segments, configuration, cpu, isDefines, new Scope(ScopeKind.File, null, null, null));
         binder.WalkContainer(tree.Root);
         binder.EndCodeRun();
         return binder;
@@ -590,37 +594,31 @@ internal sealed partial class Binder
             return;
 
         // The `.use` items are read here only to find an enum that one of them brought in. The
-        // program they are read against is not complete yet, so their results are discarded
-        // and `Resolve` reads them again against the complete program.
-        var referenced = references.Count;
-        var reported = diagnostics.Count;
-        program = provisional;
+        // program they are read against is not complete yet, so a binder of their own reads
+        // them, and what it reports and records is dropped with it. `Resolve` reads them again
+        // against the complete program. What it looked for is kept, because the enum each
+        // family walks depends on it.
+        var brought = new Binder(tree, segments, configuration, cpu, isDefines, fileScope) { program = provisional };
         foreach (var directive in useDirectives)
-            ResolveUse(directive);
-        references.RemoveRange(referenced, references.Count - referenced);
-        diagnostics.RemoveRange(reported, diagnostics.Count - reported);
-        unexported.Clear();
+            brought.ResolveUse(directive);
 
         foreach (var pending in pendingFamilies)
-            DeclareFamily(pending);
+            DeclareFamily(pending, brought);
         pendingFamilies.Clear();
-
-        used.Clear();
-        broughtAt.Clear();
-        globs.Clear();
-        program = ProgramSymbols.Empty;
+        lookedUp.UnionWith(brought.lookedUp);
     }
 
     /// <summary>
     /// Declares one family by finding the enum it walks and making its declaration for each
-    /// member.
+    /// member. The enum is looked for with what <paramref name="brought"/> read from the file's
+    /// <c>.use</c> items.
     /// </summary>
-    private void DeclareFamily(PendingFamily pending)
+    private void DeclareFamily(PendingFamily pending, Binder brought)
     {
         var at = NameToken(pending.Declaration)?.Span ?? pending.Declaration.Span;
         var walked = pending.Each.Walked;
         var walkedText = walked?.GetText().Trim();
-        var found = walked is null ? null : NamedByPath(walked, pending.Each.Around);
+        var found = walked is null ? null : brought.NamedByPath(walked, pending.Each.Around);
         if (found is not { Kind: SymbolKind.Enum, Body: { } members })
         {
             Report(walked?.Span ?? at, Catalogue.FamilyNotOverAnEnum.Message(
