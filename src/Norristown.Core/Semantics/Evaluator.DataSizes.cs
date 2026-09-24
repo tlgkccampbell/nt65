@@ -125,7 +125,7 @@ internal sealed partial class Evaluator
         var count = directive.Count is { } counted
             ? counted.Count is null ? GivenCount(directive) ?? 0 : DeclaredCount(directive)
             : GivenCount(directive) ?? 1;
-        return count is { } many and >= 0 ? new DataSize(width * many, many) : null;
+        return count is { } many and >= 0 && Product(directive, width, many) is { } bytes ? new DataSize(bytes, many) : null;
     }
 
     /// <summary>
@@ -236,9 +236,9 @@ internal sealed partial class Evaluator
                         break;
                 }
             }
-            if (part is not { } known)
+            if (part is not { } known || Sum(child, total, known) is not { } sum)
                 return null;
-            total += known;
+            total = sum;
         }
         return total;
     }
@@ -280,7 +280,7 @@ internal sealed partial class Evaluator
                 return null;
             }
             if (binding is null)
-                return body() * count;
+                return body() is { } once ? Product(counted, once, count) : null;
             for (long i = 0; i < count; i++)
             {
                 var index = i;
@@ -312,9 +312,9 @@ internal sealed partial class Evaluator
             foreach (var iteration in iterations)
             {
                 iteration();
-                if (body() is not { } part)
+                if (body() is not { } part || Sum(counted, total, part) is not { } sum)
                     return null;
-                total += part;
+                total = sum;
             }
             return total;
         }
@@ -547,5 +547,32 @@ internal sealed partial class Evaluator
         }
         type.Size = type.Kind == SymbolKind.Union ? largest : offset;
         type.Count = members;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="left"/> + <paramref name="right"/>, a step in adding up the room
+    /// data takes. Returns null and reports the overflow at <paramref name="at"/> when the sum
+    /// leaves 64 bits.
+    /// </summary>
+    private long? Sum(SyntaxNode at, long left, long right) => Fitted(at, (Int128)left + right);
+
+    /// <summary>
+    /// Returns <paramref name="left"/> × <paramref name="right"/>, a step in adding up the room
+    /// data takes. Returns null and reports the overflow at <paramref name="at"/> when the
+    /// product leaves 64 bits.
+    /// </summary>
+    private long? Product(SyntaxNode at, long left, long right) => Fitted(at, (Int128)left * right);
+
+    /// <summary>
+    /// Returns a size worked out in 128 bits when it fits in 64. Otherwise, returns null and
+    /// reports the overflow at <paramref name="at"/>, because a wrapped size would reserve the
+    /// wrong number of bytes with no error.
+    /// </summary>
+    private long? Fitted(SyntaxNode at, Int128 size)
+    {
+        if (size >= long.MinValue && size <= long.MaxValue)
+            return (long)size;
+        Report(at, Catalogue.ArithmeticOverflow.Message("the room this data takes"));
+        return null;
     }
 }

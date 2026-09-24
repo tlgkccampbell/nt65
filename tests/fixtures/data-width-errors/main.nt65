@@ -31,3 +31,12 @@
     .assert 1 == 1, warning, "fine"     ;! error[assert-level]: nt65's `.assert` takes no level: remove `warning`, since a failed assertion is always an error
     rts
 }
+
+; The room data takes is counted in 64 bits and never wraps.
+.segment BSS
+.data big: .dword[$4000000000000000]  ;! error[arithmetic-overflow]: the room this data takes overflows nt65's 64-bit signed arithmetic
+.data many {
+    .repeat 4 { ;! error[arithmetic-overflow]: the room this data takes overflows nt65's 64-bit signed arithmetic
+        .byte[$2000000000000000]
+    }
+}
