@@ -1,6 +1,6 @@
 {
   "cpu": "6502",
-  "files": ["src/*.nt65", "../lib/*.nt65", "../joypad/*.nt65"],
+  "files": ["src/*.nt65", "../lib/*.nt65", "../console/*.nt65"],
   "out": "../build/nes",
   "links": {
     "rom": { "config": "nes.cfg" }

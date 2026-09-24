@@ -212,7 +212,7 @@ of its own in a folder of its own, whose `nt65.json` names its files and the lib
 "files": ["src/*.nt65", "../lib/*.nt65"]
 ```
 
-The Super NES and the NES also name `../joypad/*.nt65`, the parts of a platform that the two
+The Super NES and the NES also name `../console/*.nt65`, the parts of a platform that the two
 share.
 
 So each platform chooses its own processor and linker configuration, which declares its
@@ -260,19 +260,19 @@ editor a library file shows as part of the first platform's program.
 
 ### What the Super NES and the NES share
 
-The files in `joypad/` are modules of the platform, `platform::screen`, `platform::keyboard` and
+The files in `console/` are modules of the platform, `platform::screen`, `platform::keyboard` and
 `platform::font`, that each of the two platforms compiles as its own, for the 65816 on the Super
 NES and for the 6502 on the NES. They are written for the 6502, which the 65816 runs as well.
 Each machine supplies what differs: `platform::video`, which shows the screen, and
 `platform::joypad`, which reads the joypad.
 
-- `joypad/screen.nt65`: the text screen, 32 columns by 28 rows, kept in RAM one byte to a place,
+- `console/screen.nt65`: the text screen, 32 columns by 28 rows, kept in RAM one byte to a place,
   which is the tile the place shows. `putc` writes into it and scrolls it.
-- `joypad/keyboard.nt65`: `read_line`, and the on-screen keyboard it reads from. What each
+- `console/keyboard.nt65`: `read_line`, and the on-screen keyboard it reads from. What each
   place on the keyboard types and how the keyboard is drawn are both built from one list of its
   rows. The keyboard reads the joypad at each frame as a set of `Button`s, which say what each
   button does, and which each machine's `joypad::read` makes of its own buttons.
-- `joypad/font.nt65`: the font, drawn in the source as a type specimen lays it out, eight
+- `console/font.nt65`: the font, drawn in the source as a type specimen lays it out, eight
   characters to a band and `#` for each dot, and the `.func`s that turn a band's row into a
   plane of a tile. The font is drawn in three styles, the text's, the keys' and the key under
   the cursor's, which differ only in their colors. The keyboard shows the key under the cursor
@@ -335,7 +335,7 @@ A platform whose keyboard gives only one key at a time implements `read_line` as
 it; the C64's screen editor and the Apple II's `GETLN` already do that, and more. The Super NES
 and the NES have no keyboard at all, and their `read_line` is a loop over the frames, which reads
 the joypad at each one. Another machine with a joypad and a screen of 2bpp tiles can use
-`joypad/` as they do, and supply only `video` and `joypad`.
+`console/` as they do, and supply only `video` and `joypad`.
 
 ## What it shows of nt65
 
