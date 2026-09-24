@@ -91,7 +91,8 @@ public static class Cycles
         {
             Cpu.Mos6502 => mos6502,
             Cpu.Mos6502X => mos6502X,
-            _ => wdc65C02,
+            Cpu.Cmos65SC02 or Cpu.Rockwell65C02 or Cpu.Wdc65C02 => wdc65C02,
+            _ => throw new ArgumentOutOfRangeException(nameof(cpu), cpu, "not a CPU nt65 knows"),
         };
         return table.TryGetValue((mnemonic, mode), out var cycles) ? cycles : null;
     }

@@ -86,7 +86,8 @@ public static class Ca65Instructions
         Cpu.Cmos65SC02 => cmos65SC02,
         Cpu.Rockwell65C02 => rockwell65C02,
         Cpu.Wdc65C02 => wdc65C02,
-        _ => wdc65816,
+        Cpu.Wdc65816 => wdc65816,
+        _ => throw new ArgumentOutOfRangeException(nameof(cpu), cpu, "not a CPU nt65 knows"),
     };
 
     /// <summary>

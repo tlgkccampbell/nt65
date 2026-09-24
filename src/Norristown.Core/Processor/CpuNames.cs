@@ -35,7 +35,8 @@ public static class CpuNames
         Cpu.Cmos65SC02 => "65sc02",
         Cpu.Rockwell65C02 => "r65c02",
         Cpu.Wdc65C02 => "65c02",
-        _ => "65816",
+        Cpu.Wdc65816 => "65816",
+        _ => throw new ArgumentOutOfRangeException(nameof(cpu), cpu, "not a CPU nt65 knows"),
     };
 
     /// <summary>
@@ -49,6 +50,7 @@ public static class CpuNames
         Cpu.Cmos65SC02 => "65SC02",
         Cpu.Rockwell65C02 => "65C02",
         Cpu.Wdc65C02 => "W65C02",
-        _ => "65816",
+        Cpu.Wdc65816 => "65816",
+        _ => throw new ArgumentOutOfRangeException(nameof(cpu), cpu, "not a CPU nt65 knows"),
     };
 }
