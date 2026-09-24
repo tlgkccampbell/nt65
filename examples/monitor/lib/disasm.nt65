@@ -1,7 +1,7 @@
 ; D: shows memory as instructions.
 .module monitor::disasm
 
-.use platform::{putc, text, running}
+.use platform::{putc, text, running, COLUMNS}
 .use monitor::{addr, registers, ADDRESS_SIZE}
 .use monitor::opcodes::{Mode, operand_size, opening, closing, branch, banks, name_lo, name_hi, modes}
 .use monitor::text::{print, print_byte, space, newline}
@@ -16,6 +16,19 @@ M_FLAG = $20                        ; the 65816's flag for an 8-bit A
 X_FLAG = $10                        ; the 65816's flag for 8-bit X and Y
 REP_OPCODE = $C2
 SEP_OPCODE = $E2
+
+; Returns the width of the widest line of D, whose bytes are `gap` columns apart. The line holds a
+; comma and the address, then a space and the bytes, then a space and the name, and then a space
+; and the widest operand, such as `$1234,X`.
+.func line_width(gap) = (
+    1 + 2 * ADDRESS_SIZE + 1 + 2 * LONGEST + gap * (LONGEST - 1) + 1 + 3 + 1 + 2 * ADDRESS_SIZE + 3
+)
+
+; The bytes are a space apart where the screen has room, and run together otherwise. A line stays
+; narrower than the screen, so that the cursor does not wrap onto the next row.
+GAP = .select(line_width(1) < COLUMNS, 1, 0)
+
+.assert line_width(GAP) < COLUMNS, "a line of D must fit on the screen"
 
 .segment BSS
 .data count:  .byte                 ; instructions still to show, or 0 to stop past `last`
@@ -94,9 +107,14 @@ SEP_OPCODE = $E2
     jsr putc
     print_address!(addr)
     ; The instruction's bytes, in the columns the longest one needs.
+    .repeat 1 - GAP {
+        jsr space
+    }
     ldy #0
 @column:
-    jsr space
+    .repeat GAP {
+        jsr space
+    }
     cpy length
     bcc @byte
     jsr space

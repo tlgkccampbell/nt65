@@ -96,7 +96,8 @@ each `REP` and `SEP` in the listing. `R` shows the registers at their full sixte
 program bank as the PC's, and `E`, which is 1 in emulation mode. That line is 47 columns wide,
 which the IIGS's 80-column screen has room for; the Super NES's 32 columns show it as two lines,
 the second from `DP`. A line of `D` with a nine-character operand, such as `LDA $123456,X`, is
-33 columns wide, so on the Super NES its last character wraps onto the next row.
+33 columns wide with a space between the bytes. On the Super NES the bytes run together, as in
+`BF563412`, so that every line of `D` fits in its 32 columns.
 
 A command the monitor cannot read gets a `?`.
 
