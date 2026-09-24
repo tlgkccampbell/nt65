@@ -207,6 +207,60 @@ public sealed class AnnotationTests
         Assert.False(root.Tree.GetLine(2).ContainsAnnotations);
     }
 
+    /// <summary>
+    /// A token given text that the reparse reads as another kind of token has no match either, and
+    /// loses its annotations just as silently. A number token given the text of a name is read
+    /// back as an identifier, and the tag on the number is gone.
+    /// </summary>
+    [Fact]
+    public void AnAnnotationOnATokenReadBackAsAnotherKindIsDropped()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", Program);
+        var number = tree.Root.DescendantNodes().OfType<NumberExpressionSyntax>().Single().Token;
+        var tag = new SyntaxAnnotation("probe");
+
+        var root = tree.Root.ReplaceToken(number, number.WithText("mask").WithAdditionalAnnotations(tag));
+        Assert.Equal(".proc main {\n    lda #mask ; the mask\n    sta mask\n    rts\n}\n", root.ToFullString());
+        Assert.Equal(SyntaxKind.Identifier, root.FindToken(number.Span.Start).Kind);
+        Assert.Empty(root.GetAnnotatedTokens(tag));
+        Assert.False(root.ContainsAnnotations);
+    }
+
+    /// <summary>
+    /// A rewrite with several changes parses the file again from the first to the last, so the
+    /// lines in each gap between them are parsed again too. The tags in every gap come through,
+    /// a tag inside a tagged node among them, even though each change moves the text after it.
+    /// </summary>
+    [Fact]
+    public void TagsInEveryGapBetweenChangesCrossTheReparse()
+    {
+        var tree = SyntaxTree.Parse(
+            "main.nt65", ".proc main {\n    lda #1\n    lda #2\n    lda #3\n    lda #4\n    lda #5\n    rts\n}\n");
+        var numbers = tree.Root.DescendantNodes().OfType<NumberExpressionSyntax>().ToList();
+        var second = new SyntaxAnnotation("second");
+        var fourth = new SyntaxAnnotation("fourth");
+        var line = new SyntaxAnnotation("line");
+        var instruction = numbers[3].Ancestors().OfType<InstructionStatementSyntax>().First();
+        var tagged = tree.Root.ReplaceNodes<SyntaxNode>(
+            [numbers[1], instruction],
+            (old, _) => ReferenceEquals(old, instruction)
+                ? instruction
+                    .ReplaceNode(numbers[3], numbers[3].WithAdditionalAnnotations(fourth))
+                    .WithAdditionalAnnotations(line)
+                : old.WithAdditionalAnnotations(second));
+
+        var odd = tagged.DescendantNodes().OfType<NumberExpressionSyntax>()
+            .Where(number => number.GetText() is "1" or "3" or "5")
+            .Select(number => number.Token);
+        var root = tagged.ReplaceTokens(odd, (old, _) => old.WithText("$00" + old.Text));
+        Assert.Equal(
+            ".proc main {\n    lda #$001\n    lda #2\n    lda #$003\n    lda #4\n    lda #$005\n    rts\n}\n",
+            root.ToFullString());
+        Assert.Equal("2", Assert.Single(root.GetAnnotatedNodes(second)).GetText());
+        Assert.Equal("4", Assert.Single(root.GetAnnotatedNodes(fourth)).GetText());
+        Assert.Equal("lda #4", Assert.Single(root.GetAnnotatedNodes(line)).GetText());
+    }
+
     /// <summary>Normalizing throws the trivia away and keeps the tags, which are not trivia.</summary>
     [Fact]
     public void NormalizingKeepsAnnotationsAndDropsTrivia()

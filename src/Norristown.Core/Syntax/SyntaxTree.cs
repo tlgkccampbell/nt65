@@ -252,8 +252,8 @@ public sealed class SyntaxTree
 
     /// <summary>
     /// Returns a copy of this tree that uses <paramref name="kept"/> as the parse of each line that
-    /// has an entry. A rewrite uses this method to restore the annotations it preserved across a
-    /// reparse. Nothing else changes. The text and the lines are this tree's, and a kept parse is
+    /// has an entry. <see cref="AnnotationCarrier"/> uses this method to restore the annotations a
+    /// rewrite carried across a reparse. Nothing else changes. The text and the lines are this tree's, and a kept parse is
     /// the line's own parse with the annotations added.
     /// </summary>
     /// <param name="kept">
