@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Norristown.Processor;
 using Norristown.Semantics;
 
@@ -32,7 +33,7 @@ public sealed record ProjectSettings(
 {
     /// <summary>The severities of a project that overrides no diagnostic, which is an empty map.</summary>
     public static readonly IReadOnlyDictionary<string, Severity?> NoSeverities =
-        new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
+        FrozenDictionary<string, Severity?>.Empty;
 
     /// <summary>Gets the address spaces other than the host's, ordered by name.</summary>
     public IReadOnlyList<AddressSpace> Spaces { get; init; } = [];
