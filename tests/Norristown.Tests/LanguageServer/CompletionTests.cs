@@ -38,6 +38,7 @@ public sealed class CompletionTests
         { "body", "    .state |", ["a16", "dbr", "e?", "keeps", "native"], ["near", "a*", "fast"] },
         { "top", ".macro m(): |", ["a8", "e*"], ["near", "far", "keeps"] },
         { "top", ".proc other: a8, dp = |", ["twice", "vic"], ["a16"] },
+        { "body", "    .state a8, dbr = |", ["twice", "vic", "$"], ["a16", "keeps"] },
 
         // A macro call's argument may name its parameter.
         { "body", "    poke!(|", ["address", "value", "clear"], ["lda"] },

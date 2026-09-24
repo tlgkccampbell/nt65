@@ -71,6 +71,17 @@ internal static class Completion
     private static readonly Protocol.Command Again = new("Suggest", "editor.action.triggerSuggest");
 
     /// <summary>
+    /// The handlers that <see cref="Collect"/> tries in turn, each for one place the caret can be.
+    /// The first that recognizes the place offers what goes there and the rest are not tried, so
+    /// the order matters. The last, <see cref="TryExpression"/>, recognizes every place.
+    /// </summary>
+    private static readonly Func<Site, bool>[] Handlers =
+    [
+        TryUse, TryPath, TryAfterBrace, TryEnsure, TryCpu, TryState, TrySignature, TryParameterKind,
+        TryAfterMark, TryDeclaredName, TryRepetitionBinding, TryStatementStart, TryOperand, TryExpression,
+    ];
+
+    /// <summary>
     /// Returns the completion items at <paramref name="position"/> in <paramref name="model"/>'s
     /// file, and each item's documentation keyed by label. The client fetches the documentation
     /// for the one item it highlights rather than receiving it with every item.
@@ -88,7 +99,7 @@ internal static class Completion
         var line = LineContext.At(model.Tree, position);
         var items = new Dictionary<string, Suggestion>(StringComparer.Ordinal);
         if (!line.InText)
-            Collect(program, model, line, cpu, items);
+            Collect(new Site(program, model, line, cpu, items));
         if (snippets)
             Shaped(program, cpu, items);
         var range = Lsp.ToRange(model.Tree, line.Replaced);
@@ -118,7 +129,7 @@ internal static class Completion
     {
         foreach (var (name, suggestion) in items.ToList())
         {
-            if (suggestion.Kind == Protocol.CompletionItemKind.Keyword
+            if (suggestion.Source == SuggestionSource.Directive
                 && Snippets.Of(SyntaxFacts.DirectiveKindOf(name), program, cpu) is { } snippet)
             {
                 items[name] = suggestion with { Text = snippet, IsSnippet = true };
@@ -139,114 +150,195 @@ internal static class Completion
         return model.GetSymbolInfo(line.Caret, [.. path, before[end - 1].Text]).Symbol;
     }
 
-    private static void Collect(
-        ProgramModel program, SemanticModel model, LineContext line, Cpu cpu,
-        Dictionary<string, Suggestion> items)
+    /// <summary>
+    /// Offers what goes at the caret by trying each of <see cref="Handlers"/> in turn until one
+    /// recognizes the place.
+    /// </summary>
+    private static void Collect(Site site)
     {
+        foreach (var handler in Handlers)
+        {
+            if (handler(site))
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Offers the names a path leads to in a <c>.use</c>. There a path starts at the root of the
+    /// module tree, and inside the <c>{ }</c> the members of what the path before the brace leads
+    /// to are offered.
+    /// </summary>
+    /// <returns>Whether the line is a <c>.use</c>.</returns>
+    private static bool TryUse(Site site)
+    {
+        var (program, model, line, _, items) = site;
+        if (line.Directive != DirectiveKind.Use)
+            return false;
         var before = line.Before;
-        var directive = line.Directive;
+        var brace = LastIndex(before, SyntaxKind.OpenBrace);
+        var path = brace >= 0 ? line.PathBefore(brace) : line.PathBefore(before.Count);
+        if (path is null && brace < 0 && before.Count == line.Start + 1)
+            AddModules(program, "", items);
+        else if (path is not null && model.GetSymbolInfo(line.Caret, path, fromRoot: true) is { IsNone: false } found)
+            AddMembers(program, model, found, modulesToo: brace < 0, items);
+        return true;
+    }
 
-        // After `::`, the members of what the path leads to are offered. In a `.use`, a path
-        // starts at the root of the module tree, and inside its `{ }` the members of what the
-        // path before the brace leads to are offered.
-        if (directive == DirectiveKind.Use)
-        {
-            var brace = LastIndex(before, SyntaxKind.OpenBrace);
-            var path = brace >= 0 ? line.PathBefore(brace) : line.PathBefore(before.Count);
-            if (path is null && brace < 0 && before.Count == line.Start + 1)
-                AddModules(program, "", items);
-            else if (path is not null && model.GetSymbolInfo(line.Caret, path, fromRoot: true) is { IsNone: false } found)
-                AddMembers(program, model, found, modulesToo: brace < 0, items);
-            return;
-        }
-        if (line.PathBefore(before.Count) is { } walked)
-        {
-            if (model.GetSymbolInfo(line.Caret, walked) is { IsNone: false } found)
-                AddMembers(program, model, found, modulesToo: true, items);
-            return;
-        }
+    /// <summary>Offers the members of what the path before a <c>::</c> leads to.</summary>
+    /// <returns>Whether the caret follows a path.</returns>
+    private static bool TryPath(Site site)
+    {
+        var (program, model, line, _, items) = site;
+        if (line.PathBefore(line.Before.Count) is not { } walked)
+            return false;
+        if (model.GetSymbolInfo(line.Caret, walked) is { IsNone: false } found)
+            AddMembers(program, model, found, modulesToo: true, items);
+        return true;
+    }
 
-        // A `}` closes a block, and only the next branch of a condition may follow it.
-        if (before.Count == 1 && before[0].Kind == SyntaxKind.CloseBrace)
-        {
-            AddDirectives([DirectiveKind.Else, DirectiveKind.ElseIf], items);
-            return;
-        }
+    /// <summary>
+    /// Offers the next branch of a condition after a <c>}</c>, which closes a block and may be
+    /// followed by nothing else.
+    /// </summary>
+    /// <returns>Whether the line so far is a lone <c>}</c>.</returns>
+    private static bool TryAfterBrace(Site site)
+    {
+        if (site.Line.Before is not [(SyntaxKind.CloseBrace, _, _)])
+            return false;
+        AddDirectives([DirectiveKind.Else, DirectiveKind.ElseIf], site.Items);
+        return true;
+    }
 
-        if (directive == DirectiveKind.Ensure)
-        {
-            AddWords(Widths, "width", items);
-            return;
-        }
-        if (directive == DirectiveKind.Cpu && before.Count == line.Start + 1)
-        {
-            AddWords([.. CpuNames.All.Select(CpuNames.Format)], "processor", items);
-            return;
-        }
-        if (directive == DirectiveKind.State)
-        {
-            if (!AfterValuedItem(before))
-            {
-                AddWords(PointItems, "processor state", items);
-                AddWords(ValuedItems, "processor state", items);
-                AddWords(PromiseItems, "registers kept", items);
-                return;
-            }
-        }
-        else if (InSignature(line, directive) is { } signature)
-        {
-            if (!AfterValuedItem(before))
-            {
-                AddWords(PointItems, "processor state", items);
-                AddWords(ValuedItems, "processor state", items);
-                AddWords(KeepItems, "processor state", items);
-                if (signature != DirectiveKind.Macro)
-                {
-                    AddWords(RoutineItems, "processor state", items);
-                    AddWords(PromiseItems, "registers kept", items);
-                }
-                AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.SignatureSet);
-                return;
-            }
-        }
-        else if (directive == DirectiveKind.Macro && InParameterKind(model, line, items))
-        {
-            return;
-        }
-        else if (AfterMark(line, directive) is { } mark)
-        {
-            AddWords(mark.Words, mark.Detail, items);
-            return;
-        }
-        else if (directive is { } declaring && Declaring.Contains(declaring)
-            && !before.Any(token => token.Kind is SyntaxKind.Colon or SyntaxKind.Equals))
-        {
-            // The name a declaration introduces is being made up, so until the `:` or `=` that
-            // follows it there is nothing to offer.
-            return;
-        }
-        else if (directive is DirectiveKind.Repeat or DirectiveKind.Each && before.Any(token => token.Kind == SyntaxKind.Comma))
-        {
-            // Past the comma a repetition declares the name it binds, and names nothing else.
-            return;
-        }
+    /// <summary>Offers the register widths an <c>.ensure</c> can require.</summary>
+    /// <returns>Whether the line is an <c>.ensure</c>.</returns>
+    private static bool TryEnsure(Site site)
+    {
+        if (site.Line.Directive != DirectiveKind.Ensure)
+            return false;
+        AddWords(Widths, "width", site.Items);
+        return true;
+    }
 
-        // The first word of a statement, which depends on the context the line is in.
-        if (before.Count == line.Start)
-        {
-            Starting(program, model, line, cpu, items);
-            return;
-        }
+    /// <summary>Offers the processors after <c>.cpu</c>.</summary>
+    /// <returns>Whether the caret is where a <c>.cpu</c> names its processor.</returns>
+    private static bool TryCpu(Site site)
+    {
+        var line = site.Line;
+        if (line.Directive != DirectiveKind.Cpu || line.Before.Count != line.Start + 1)
+            return false;
+        AddWords([.. CpuNames.All.Select(CpuNames.Format)], "processor", site.Items);
+        return true;
+    }
 
-        // What follows a mnemonic is that instruction's operand, and nothing else.
-        if (before[line.Start].Kind == SyntaxKind.Mnemonic)
-        {
-            Operand(program, model, line, cpu, items);
-            return;
-        }
+    /// <summary>
+    /// Offers the items of a <c>.state</c>. Where the value of a <c>dp =</c> or <c>dbr =</c> goes,
+    /// it offers what <see cref="TryExpression"/> does, since the value is an expression.
+    /// </summary>
+    /// <returns>Whether the line is a <c>.state</c>.</returns>
+    private static bool TryState(Site site)
+    {
+        var (_, _, line, _, items) = site;
+        if (line.Directive != DirectiveKind.State)
+            return false;
+        if (AfterValuedItem(line.Before))
+            return TryExpression(site);
+        AddWords(PointItems, "processor state", items);
+        AddWords(ValuedItems, "processor state", items);
+        AddWords(PromiseItems, "registers kept", items);
+        return true;
+    }
 
-        // An argument of a macro call is offered what the parameter it is for takes, and where an
-        // argument starts, the parameters it may name.
+    /// <summary>
+    /// Offers the items of a signature and the signature sets in scope. A macro's signature has
+    /// no routine items. Where the value of a valued item goes, it offers what
+    /// <see cref="TryExpression"/> does, since the value is an expression.
+    /// </summary>
+    /// <returns>Whether the caret is in a signature.</returns>
+    private static bool TrySignature(Site site)
+    {
+        var (_, model, line, _, items) = site;
+        if (InSignature(line, line.Directive) is not { } signature)
+            return false;
+        if (AfterValuedItem(line.Before))
+            return TryExpression(site);
+        AddWords(PointItems, "processor state", items);
+        AddWords(ValuedItems, "processor state", items);
+        AddWords(KeepItems, "processor state", items);
+        if (signature != DirectiveKind.Macro)
+        {
+            AddWords(RoutineItems, "processor state", items);
+            AddWords(PromiseItems, "registers kept", items);
+        }
+        AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.SignatureSet);
+        return true;
+    }
+
+    /// <summary>Offers what a parameter's kind may be in a macro's header.</summary>
+    /// <returns>Whether the caret is in a parameter's kind.</returns>
+    private static bool TryParameterKind(Site site) =>
+        site.Line.Directive == DirectiveKind.Macro && InParameterKind(site.Model, site.Line, site.Items);
+
+    /// <summary>Offers the words that follow punctuation in a declaration, which <see cref="AfterMark"/> lists.</summary>
+    /// <returns>Whether the caret follows such punctuation.</returns>
+    private static bool TryAfterMark(Site site)
+    {
+        if (AfterMark(site.Line, site.Line.Directive) is not { } mark)
+            return false;
+        AddWords(mark.Words, mark.Detail, site.Items);
+        return true;
+    }
+
+    /// <summary>
+    /// Offers nothing where a declaration's name goes. The name is being made up, so until the
+    /// <c>:</c> or <c>=</c> that follows it there is nothing to offer.
+    /// </summary>
+    /// <returns>Whether the caret is where a declaration's name goes.</returns>
+    private static bool TryDeclaredName(Site site) =>
+        site.Line.Directive is { } declaring && Declaring.Contains(declaring)
+            && !site.Line.Before.Any(token => token.Kind is SyntaxKind.Colon or SyntaxKind.Equals);
+
+    /// <summary>
+    /// Offers nothing past the comma of a repetition, where it declares the name it binds and
+    /// names nothing else.
+    /// </summary>
+    /// <returns>Whether the caret is past a repetition's comma.</returns>
+    private static bool TryRepetitionBinding(Site site) =>
+        site.Line.Directive is DirectiveKind.Repeat or DirectiveKind.Each
+            && site.Line.Before.Any(token => token.Kind == SyntaxKind.Comma);
+
+    /// <summary>
+    /// Offers the first word of a statement, which depends on the context the line is in.
+    /// </summary>
+    /// <returns>Whether the caret is where a statement starts.</returns>
+    private static bool TryStatementStart(Site site)
+    {
+        if (site.Line.Before.Count != site.Line.Start)
+            return false;
+        Starting(site.Program, site.Model, site.Line, site.Cpu, site.Items);
+        return true;
+    }
+
+    /// <summary>Offers an instruction's operand, which is all that may follow a mnemonic.</summary>
+    /// <returns>Whether the statement is an instruction.</returns>
+    private static bool TryOperand(Site site)
+    {
+        if (site.Line.Before[site.Line.Start].Kind != SyntaxKind.Mnemonic)
+            return false;
+        Operand(site.Program, site.Model, site.Line, site.Cpu, site.Items);
+        return true;
+    }
+
+    /// <summary>
+    /// Offers what may go where an expression or a macro's argument goes. An argument of a macro
+    /// call is offered what its parameter takes, and where an argument starts, the parameters it
+    /// may name. A comparison with a parameter's argument is offered the words that parameter
+    /// accepts. Anywhere else a name may follow, the start of an expression is offered.
+    /// </summary>
+    /// <returns>Always true, since this is the last handler and recognizes every place.</returns>
+    private static bool TryExpression(Site site)
+    {
+        var (program, model, line, _, items) = site;
+        var before = line.Before;
         if (line.OpenCall() is { } call && call.Open >= 2 && before[call.Open - 1].Kind == SyntaxKind.Bang
             && before[^1].Kind is SyntaxKind.OpenParen or SyntaxKind.Comma or SyntaxKind.Equals
             && Callee(model, line, call.Open - 1) is { Kind: SymbolKind.Macro } macro)
@@ -256,28 +348,30 @@ internal static class Completion
                 foreach (var parameter in macro.Parameters)
                 {
                     items.TryAdd(parameter.Symbol.Name, new Suggestion(
-                        Protocol.CompletionItemKind.Property, $"parameter: {parameter.Symbol.KindText}",
-                        parameter.Symbol.Name + " = ", Band: Suggestion.InScope, Order: 1));
+                        SuggestionSource.Symbol, Protocol.CompletionItemKind.Property,
+                        $"parameter: {parameter.Symbol.KindText}", parameter.Symbol.Name + " = ",
+                        Band: Suggestion.InScope, Order: 1));
                 }
             }
             if (CallHelp.ParameterAt(macro, before, call.Open, before.Count, call.Argument) is { } taking)
                 Accepted(model, taking, items);
         }
 
-        // A comparison with a parameter's argument takes one of the words that parameter accepts.
+        // The words of a comparison replace the expression rather than joining it.
         if (Compared(model, line) is var (name, accepts, isMode))
         {
             foreach (var word in ComparedWord.ChoicesFor(accepts, isMode))
             {
                 items.TryAdd(word, new Suggestion(
-                    Protocol.CompletionItemKind.EnumMember,
+                    SuggestionSource.Word, Protocol.CompletionItemKind.EnumMember,
                     isMode ? ParameterKinds.Mode(word) : $"a word {name} takes", word, Band: Suggestion.InScope));
             }
-            return;
+            return true;
         }
 
         if (!Ends(before[^1].Kind))
             AddExpression(program, model, line, items);
+        return true;
     }
 
     /// <summary>
@@ -330,7 +424,7 @@ internal static class Completion
                     foreach (var mode in ArgumentKind.OperandModes)
                     {
                         items.TryAdd(mode, new Suggestion(
-                            Protocol.CompletionItemKind.EnumMember, ParameterKinds.Mode(mode), mode));
+                            SuggestionSource.Word, Protocol.CompletionItemKind.EnumMember, ParameterKinds.Mode(mode), mode));
                     }
                     return true;
                 case "list":
@@ -374,7 +468,7 @@ internal static class Completion
             foreach (var member in body.Symbols.Where(member => member.Kind == SymbolKind.Constant))
             {
                 items.TryAdd(member.Name, new Suggestion(
-                    Protocol.CompletionItemKind.EnumMember, Detail(member), member.Name, DocComments.Of(member),
+                    SuggestionSource.Symbol, Protocol.CompletionItemKind.EnumMember, Detail(member), member.Name, DocComments.Of(member),
                     Suggestion.InScope));
             }
         }
@@ -383,7 +477,7 @@ internal static class Completion
             foreach (var word in accepts.Words)
             {
                 items.TryAdd(word, new Suggestion(
-                    Protocol.CompletionItemKind.EnumMember, $"a word {parameter.Name} takes", word, Band: Suggestion.InScope));
+                    SuggestionSource.Word, Protocol.CompletionItemKind.EnumMember, $"a word {parameter.Name} takes", word, Band: Suggestion.InScope));
             }
         }
     }
@@ -403,7 +497,7 @@ internal static class Completion
         Dictionary<string, Suggestion> items)
     {
         foreach (var (name, detail) in Directives.At(line))
-            items.TryAdd(name, new Suggestion(Protocol.CompletionItemKind.Keyword, detail, name));
+            items.TryAdd(name, new Suggestion(SuggestionSource.Directive, Protocol.CompletionItemKind.Keyword, detail, name));
 
         switch (line.Context)
         {
@@ -417,7 +511,7 @@ internal static class Completion
                     var takes = ModesOf(cpu, mnemonic).Any(Takes);
                     var text = SyntaxFacts.TextOf(mnemonic);
                     items.TryAdd(text, new Suggestion(
-                        Protocol.CompletionItemKind.Text, "instruction", takes ? text + " " : text,
+                        SuggestionSource.Instruction, Protocol.CompletionItemKind.Text, "instruction", takes ? text + " " : text,
                         Band: Suggestion.Instruction));
                 }
                 AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.Macro
@@ -449,13 +543,12 @@ internal static class Completion
 
     /// <summary>
     /// Makes each macro, at the start of a statement, insert the <c>!(</c> that calls it, so that
-    /// its arguments are offered next. Macros are the only items whose kind is
-    /// <c>Snippet</c>, which is how they are found here.
+    /// its arguments are offered next.
     /// </summary>
     private static void Called(Dictionary<string, Suggestion> items)
     {
         foreach (var name in items
-            .Where(item => item.Value.Kind == Protocol.CompletionItemKind.Snippet)
+            .Where(item => item.Value.Source == SuggestionSource.Macro)
             .Select(item => item.Key)
             .ToList())
         {
@@ -670,7 +763,7 @@ internal static class Completion
                 foreach (var reexport in module.Reexports)
                 {
                     items.TryAdd(reexport.Name, new Suggestion(
-                        Protocol.CompletionItemKind.Reference, $"from `{string.Join("::", reexport.Path)}`",
+                        SuggestionSource.Symbol, Protocol.CompletionItemKind.Reference, $"from `{string.Join("::", reexport.Path)}`",
                         reexport.Name, Band: Suggestion.InScope));
                 }
             }
@@ -698,7 +791,7 @@ internal static class Completion
             var rest = name[prefix.Length..];
             var next = rest.Split("::")[0];
             items.TryAdd(next, new Suggestion(
-                Protocol.CompletionItemKind.Module, next == rest ? "module" : "modules", next,
+                SuggestionSource.Module, Protocol.CompletionItemKind.Module, next == rest ? "module" : "modules", next,
                 Band: Suggestion.Module));
         }
     }
@@ -718,7 +811,8 @@ internal static class Completion
         AddInScope(model, line.Caret, items, symbol => symbol.Kind is not (SymbolKind.Macro or SymbolKind.SignatureSet));
         AddModules(program, "", items);
         foreach (var builtin in SyntaxFacts.Builtins.Where(builtin => line.InMacro || !builtin.MacroOnly))
-            items.TryAdd(builtin.Name, new Suggestion(Protocol.CompletionItemKind.Function, "built-in function", builtin.Name + "("));
+            items.TryAdd(builtin.Name, new Suggestion(
+                SuggestionSource.Builtin, Protocol.CompletionItemKind.Function, "built-in function", builtin.Name + "("));
     }
 
     /// <summary>
@@ -740,13 +834,13 @@ internal static class Completion
                 if (wanted(symbol))
                 {
                     items.TryAdd(name, new Suggestion(
-                        KindOf(symbol), Detail(symbol), name, DocComments.Of(symbol), Suggestion.InScope, order));
+                        SourceOf(symbol), KindOf(symbol), Detail(symbol), name, DocComments.Of(symbol), Suggestion.InScope, order));
                 }
             }
             else if (means.Module is { } module)
             {
                 items.TryAdd(name, new Suggestion(
-                    Protocol.CompletionItemKind.Module, $"module `{module}`", name,
+                    SuggestionSource.Module, Protocol.CompletionItemKind.Module, $"module `{module}`", name,
                     Band: Suggestion.InScope, Order: order));
             }
         }
@@ -757,7 +851,7 @@ internal static class Completion
         Dictionary<string, Suggestion> items)
     {
         foreach (var (name, detail) in Directives.Described(names))
-            items.TryAdd(name, new Suggestion(Protocol.CompletionItemKind.Keyword, detail, name));
+            items.TryAdd(name, new Suggestion(SuggestionSource.Directive, Protocol.CompletionItemKind.Keyword, detail, name));
     }
 
     private static void AddWords(
@@ -777,12 +871,13 @@ internal static class Completion
         Dictionary<string, Suggestion> items)
     {
         var label = word.TrimEnd(' ', '=', '(');
-        items.TryAdd(label.Length > 0 ? label : word, new Suggestion(Protocol.CompletionItemKind.Keyword, detail, word));
+        items.TryAdd(label.Length > 0 ? label : word, new Suggestion(
+            SuggestionSource.Word, Protocol.CompletionItemKind.Keyword, detail, word));
     }
 
     private static void Add(Symbol symbol, Dictionary<string, Suggestion> items) =>
         items.TryAdd(symbol.DisplayName, new Suggestion(
-            KindOf(symbol), Detail(symbol), symbol.DisplayName, DocComments.Of(symbol), Suggestion.InScope));
+            SourceOf(symbol), KindOf(symbol), Detail(symbol), symbol.DisplayName, DocComments.Of(symbol), Suggestion.InScope));
 
     private static string Detail(Symbol symbol) =>
         symbol.IsDefine ? "define" : symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;
@@ -861,6 +956,13 @@ internal static class Completion
         return -1;
     }
 
+    /// <summary>
+    /// Returns the source of a suggestion that names <paramref name="symbol"/>, which sets a macro
+    /// apart from every other name.
+    /// </summary>
+    private static SuggestionSource SourceOf(Symbol symbol) =>
+        symbol.Kind == SymbolKind.Macro ? SuggestionSource.Macro : SuggestionSource.Symbol;
+
     private static Protocol.CompletionItemKind KindOf(Symbol symbol) => symbol.Kind switch
     {
         SymbolKind.Proc or SymbolKind.ExternProc or SymbolKind.Func => Protocol.CompletionItemKind.Function,
@@ -876,4 +978,15 @@ internal static class Completion
         SymbolKind.Macro => Protocol.CompletionItemKind.Snippet,
         _ => Protocol.CompletionItemKind.TypeParameter,
     };
+
+    /// <summary>
+    /// Represents the place completion was asked for, with the list its handlers add to.
+    /// </summary>
+    /// <param name="Program">Every file, for the names a path leads to and the text a block opener inserts.</param>
+    /// <param name="Model">The file the caret is in.</param>
+    /// <param name="Line">The line up to the caret.</param>
+    /// <param name="Cpu">The processor, which decides the instructions and the shape of a routine.</param>
+    /// <param name="Items">The suggestions gathered so far, keyed by label.</param>
+    private readonly record struct Site(
+        ProgramModel Program, SemanticModel Model, LineContext Line, Cpu Cpu, Dictionary<string, Suggestion> Items);
 }

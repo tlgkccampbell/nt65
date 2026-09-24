@@ -5,6 +5,7 @@ namespace Norristown.LanguageServer;
 /// Suggestions are gathered by the name the client filters on, so a name reached two ways is
 /// offered once.
 /// </summary>
+/// <param name="Source">Where the item comes from, which decides how completion reshapes it.</param>
 /// <param name="Kind">The kind of item, which determines its icon.</param>
 /// <param name="Detail">A short description shown beside the item, or null.</param>
 /// <param name="Text">The text that choosing the item inserts.</param>
@@ -22,6 +23,7 @@ namespace Norristown.LanguageServer;
 /// Whether the inserted text is a snippet with tab stops, which only a block opener's is.
 /// </param>
 internal readonly record struct Suggestion(
+    SuggestionSource Source,
     Protocol.CompletionItemKind Kind,
     string? Detail,
     string Text,
