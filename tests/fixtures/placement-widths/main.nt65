@@ -1,0 +1,16 @@
+; ca65 sizes an immediate from the last width directive in the text, and a placed module's
+; lines are part of that text, so the width it leaves is the one the next immediate here sees.
+.module main
+
+.segment CODE
+.export .proc first: a16 {
+    lda #$1234
+    rts
+}
+
+.place bytes                        ; writes `.a8` for its own immediate
+
+.export .proc second: a16 {
+    lda #$12                        ; so `.a16` is written again here
+    rts
+}

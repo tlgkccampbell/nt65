@@ -1431,6 +1431,7 @@ public sealed class Emitter
         Line($"; .place {name}  {Where(directive)}");
         var opens = lines[^1];
         placed.writtenSegment = writtenSegment;
+        Carry(widths, placed.widths);
         placed.WalkContainer(placed.model.Tree.Root);
         LinePasses.AlignColumns(placed.lines);
         LinePasses.FoldFills(placed.lines);
@@ -1439,7 +1440,17 @@ public sealed class Emitter
         parts.Add((placed.source, opens, lines[^1]));
         parts.AddRange(placed.parts);
         writtenSegment = placed.writtenSegment;
+        Carry(placed.widths, widths);
         pendingBlank = true;
+
+        // ca65's widths run through the text, so the placed module starts from the widths this
+        // file has written and leaves the ones it wrote last to this file's next immediate.
+        static void Carry(Dictionary<WidthRegister, int> from, Dictionary<WidthRegister, int> to)
+        {
+            to.Clear();
+            foreach (var (register, bits) in from)
+                to[register] = bits;
+        }
     }
 
     /// <summary>

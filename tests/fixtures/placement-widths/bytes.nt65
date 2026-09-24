@@ -1,0 +1,7 @@
+.module bytes: placed
+
+.segment CODE
+.export .proc small: a8 {
+    lda #$12
+    rts
+}
