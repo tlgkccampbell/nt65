@@ -90,7 +90,7 @@ internal static class Refactors
                     Edits.LastLine<UseDirectiveSyntax>(tree) is var use and >= 0
                         ? use
                         : Edits.LastLine<ModuleDirectiveSyntax>(tree),
-                    $".use {path}"));
+                    $"{SyntaxFacts.TextOf(DirectiveKind.Use)} {path}"));
                 yield return new Change($"Bring in `{path}` with `.use`", CodeActionKinds.Rewrite, edits);
             }
             yield break;
@@ -174,7 +174,7 @@ internal static class Refactors
             if (tokens.Count > 0)
             {
                 yield return new Change($"Export `{symbol.Name}` from `{module}`", CodeActionKinds.Rewrite,
-                    [new Edit(tree, new TextSpan(tokens[0].Start, 0), ".export ")]);
+                    [new Edit(tree, new TextSpan(tokens[0].Start, 0), SyntaxFacts.TextOf(DirectiveKind.Export) + " ")]);
             }
             yield break;
         }
@@ -187,7 +187,7 @@ internal static class Refactors
         if (exportLine == line)
         {
             var tokens = LineContext.TokensOf(tree, line);
-            var word = tokens.FindIndex(token => token.Text.Equals(".export", StringComparison.OrdinalIgnoreCase));
+            var word = tokens.FindIndex(token => SyntaxFacts.DirectiveKindOf(token.Text) == DirectiveKind.Export);
             if (word >= 0)
             {
                 var end = word + 1 < tokens.Count ? tokens[word + 1].Start : tokens[word].Start + tokens[word].Text.Length;
@@ -272,7 +272,7 @@ internal static class Refactors
                     (flags & (long)StatusFlags.X) != 0 ? $"i{width}" : null,
                 }.OfType<string>());
                 yield return new Change($"Rewrite as `.ensure {items}`", CodeActionKinds.Rewrite,
-                    [new Edit(tree, statement.Span, $".ensure {items}")]);
+                    [new Edit(tree, statement.Span, $"{SyntaxFacts.TextOf(DirectiveKind.Ensure)} {items}")]);
             }
             yield break;
         }

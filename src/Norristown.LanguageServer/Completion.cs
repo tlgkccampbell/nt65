@@ -119,7 +119,7 @@ internal static class Completion
         foreach (var (name, suggestion) in items.ToList())
         {
             if (suggestion.Kind == Protocol.CompletionItemKind.Keyword
-                && Snippets.Of(name, program, cpu) is { } snippet)
+                && Snippets.Of(SyntaxFacts.DirectiveKindOf(name), program, cpu) is { } snippet)
             {
                 items[name] = suggestion with { Text = snippet, IsSnippet = true };
             }
