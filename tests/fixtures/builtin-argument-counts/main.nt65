@@ -1,5 +1,6 @@
 ; A built-in given too few or too many arguments is reported, whatever it would compute. One in a
-; macro body is reported when a call expands it, and one in a condition when the build reads it.
+; macro body is reported when a call expands it, even in a condition there, and one in a
+; condition outside any macro when the build reads it.
 .module main
 .cpu 6502
 
@@ -25,6 +26,11 @@
     lda .byteof()                               ;! error[builtin-arguments]: `.byteof` takes `.byteof(p, n)`: an `operand` parameter and an optional byte number
     ldx #.empty()                               ;! error[builtin-arguments]: `.empty` takes a `block` parameter
     ldy #.mode()                                ;! error[builtin-arguments]: `.mode` takes an `operand` parameter
+    .if .strlen(.strcat()) {                    ;! error[builtin-arguments]: `.strcat` takes `.strcat(part, ...)`: at least one text or number
+        nop
+    } .elseif .empty() {                        ;! error[builtin-arguments]: `.empty` takes a `block` parameter
+        nop
+    }
     body
 }
 
@@ -32,6 +38,9 @@
 .proc main {
     lda #.endof()                               ;! error[builtin-arguments]: `.endof` takes the name of a routine or data
     load!({#1}) {
+        nop
+    }
+    load!({#2}) {
         nop
     }
     rts

@@ -24,14 +24,22 @@ public sealed class ConditionChain
     /// <paramref name="on"/>. A block that is not part of a chain is always included, and it ends
     /// any chain that came before it.
     /// </summary>
-    public bool Includes(SemanticModel model, BlockSyntax block, Expansion? on)
+    /// <param name="model">The model of the file the block is in.</param>
+    /// <param name="block">The block, which may open a branch of a chain.</param>
+    /// <param name="on">The expansion the block is in.</param>
+    /// <param name="diagnostics">
+    /// The list that receives the problems in each condition evaluated here, or null to report
+    /// nothing. No pass over the symbols reaches a condition in an expansion, so the one pass
+    /// that walks every expansion once passes its list, and every other caller passes null.
+    /// </param>
+    public bool Includes(SemanticModel model, BlockSyntax block, Expansion? on, List<Diagnostic>? diagnostics = null)
     {
         var opener = block.Opener.Statement;
         switch (opener)
         {
             case IfDirectiveSyntax:
                 chaining = true;
-                taken = Holds(model, block, opener, already: false, on);
+                taken = Holds(model, block, opener, already: false, on, diagnostics);
                 return taken;
 
             case ElseIfDirectiveSyntax:
@@ -40,7 +48,7 @@ public sealed class ConditionChain
                 // block is left out.
                 if (!chaining)
                     return false;
-                var take = Holds(model, block, opener, taken, on);
+                var take = Holds(model, block, opener, taken, on, diagnostics);
                 taken |= take;
                 return take;
 
@@ -54,15 +62,17 @@ public sealed class ConditionChain
     public void Break() => chaining = false;
 
     private static bool Holds(
-        SemanticModel model, BlockSyntax block, StatementSyntax opener, bool already, Expansion? on)
+        SemanticModel model, BlockSyntax block, StatementSyntax opener, bool already, Expansion? on,
+        List<Diagnostic>? diagnostics)
     {
         if (model.Configuration.Answered(block))
             return model.Configuration.Includes(block);
         if (already)
             return false;
-        if (opener is ElseDirectiveSyntax)
-            return true;
-        return opener is ConditionalDirectiveSyntax conditional
-            && model.ValueOf(conditional.Condition, on).AsNumber() is { } value && value != 0;
+        if (opener is not ConditionalDirectiveSyntax conditional)
+            return opener is ElseDirectiveSyntax;
+        if (diagnostics is not null)
+            model.Check(conditional.Condition, diagnostics, on);
+        return model.ValueOf(conditional.Condition, on).AsNumber() is { } value && value != 0;
     }
 }

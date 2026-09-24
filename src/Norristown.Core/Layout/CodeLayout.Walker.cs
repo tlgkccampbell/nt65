@@ -158,7 +158,7 @@ public sealed partial class CodeLayout
                         Statement(line.Statement);
                     continue;
                 }
-                if (chain.Includes(model, block, expansion))
+                if (chain.Includes(model, block, expansion, diagnostics))
                     WalkBlock(block, block.BlockKind);
             }
         }
