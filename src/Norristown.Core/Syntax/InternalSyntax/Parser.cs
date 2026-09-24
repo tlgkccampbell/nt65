@@ -107,10 +107,66 @@ internal sealed partial class Parser
         var parser = new Parser(line, context);
         var node = parser.ParseLine(line.LineKind);
         parser.AttachPending(node);
+        if (line.Parts.Length > 1)
+            parser.CheckLineBreaks(node);
         return new Result(context, parser.exportKeyword, node, parser.skippedTokens);
     }
 
     private static string Describe(GreenToken token) => $"`{token.Text}`";
+
+    /// <summary>
+    /// Reports each line break of a joined line that stands outside an expression's brackets.
+    /// The breaks inside a group's parentheses, a call's arguments, a set or an index are the ones
+    /// the language allows. Each report goes on the token before the break, and is held by the
+    /// statement, as a diagnostic no inner node claimed is.
+    /// </summary>
+    private void CheckLineBreaks(GreenNode statement)
+    {
+        var breaks = new List<(int Start, int Width)>();
+        var offset = 0;
+        if (exportKeyword is not null)
+            FindBreaks(exportKeyword, inside: false, call: false, ref offset, breaks);
+        var statementStart = offset;
+        FindBreaks(statement, inside: false, call: false, ref offset, breaks);
+        if (skippedTokens is not null)
+            FindBreaks(skippedTokens, inside: false, call: false, ref offset, breaks);
+        foreach (var (start, width) in breaks)
+            statement.Report(new GreenDiagnostic(start - statementStart, width, Catalogue.ContinuationOutsideExpression));
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="breaks"/> the token before each line break under
+    /// <paramref name="node"/> that is not inside an expression's brackets, as an offset from the
+    /// start of the line and a width. <paramref name="offset"/> is where the node starts, and is
+    /// moved past it.
+    /// </summary>
+    /// <param name="node">The node or token to search.</param>
+    /// <param name="inside">Whether the node is inside an expression's brackets.</param>
+    /// <param name="call">Whether the node is part of a call, whose argument list is an expression's.</param>
+    /// <param name="offset">Where the node starts in the line.</param>
+    /// <param name="breaks">The breaks found outside an expression's brackets.</param>
+    private static void FindBreaks(GreenNode node, bool inside, bool call, ref int offset, List<(int, int)> breaks)
+    {
+        if (node is GreenToken token)
+        {
+            if (!inside && token.TrailingTrivia.Any(trivia => trivia.Kind == SyntaxKind.LineBreakTrivia))
+                breaks.Add((offset + token.LeadingWidth, token.Text.Length));
+            offset += token.FullWidth;
+            return;
+        }
+
+        // A bracket's own `(` or `[` is followed by what is inside it, and its closer by what is
+        // outside, so only the slots before the last are inside.
+        var brackets = node.Kind is SyntaxKind.ParenthesizedExpression or SyntaxKind.SetExpression or SyntaxKind.ElementIndex
+            || (node.Kind == SyntaxKind.ArgumentList && call);
+        for (var i = 0; i < node.SlotCount; i++)
+        {
+            if (node.GetSlot(i) is not { } slot)
+                continue;
+            var within = brackets ? i < node.SlotCount - 1 || inside : inside;
+            FindBreaks(slot, within, node.Kind == SyntaxKind.CallExpression, ref offset, breaks);
+        }
+    }
 
     /// <summary>
     /// Returns a value indicating whether the current token is the contextual word

@@ -237,7 +237,9 @@ public readonly record struct SyntaxToken
         if (owner is not LineSyntax line)
             return null;
 
-        var next = line.LineIndex + direction;
+        // A line the parser reads may span several lines of the file, so the next one starts
+        // after its last.
+        var next = direction > 0 ? line.LastLineIndex + 1 : line.LineIndex - 1;
         if (next < 0 || next >= line.Tree.LineCount)
             return null;
         SyntaxToken? edge = null;

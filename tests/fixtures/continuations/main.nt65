@@ -1,0 +1,41 @@
+; A line whose `(` or `[` is still open at its end continues onto the next, so a long
+; expression can be written across lines, with a comment on each.
+.module main
+
+.cpu 6502
+
+.enum Mode {
+    imp
+    zpx
+    absx
+    zpy
+    absy
+}
+
+.func closing(m) = .switch(m,
+    [Mode::zpx, Mode::absx], ",X",      ; indexed by X
+    ; a comment on a line of its own
+    [Mode::zpy, Mode::absy], ",Y",      ; indexed by Y
+    "")
+
+WIDTH = (1 +
+    2 +
+    3)
+
+.segment RODATA
+.data text: .byte closing(Mode::zpx), closing(
+    Mode::absy), 0
+.data flags: .byte Mode::zpy .in [
+    Mode::zpx,
+    Mode::zpy
+]
+
+.segment CODE
+.export .proc main {
+    lda #.select(WIDTH > 5,
+        1,
+        2)
+    sta text + (WIDTH -
+        1)
+    rts
+}

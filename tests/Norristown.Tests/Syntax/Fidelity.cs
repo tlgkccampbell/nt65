@@ -18,9 +18,12 @@ internal static class Fidelity
         if (tree.Root.ToFullString() != tree.Text)
             yield return "the tree does not give back the file's text";
 
+        // A line the parser reads covers one line of the file, or several where an expression
+        // continues, and together they cover every line of the file once.
         var lines = tree.Root.DescendantNodes().OfType<LineSyntax>().ToList();
-        if (lines.Count != tree.LineCount)
-            yield return $"the tree holds {lines.Count} lines, and the file has {tree.LineCount}";
+        var covered = lines.Sum(line => line.LastLineIndex - line.LineIndex + 1);
+        if (covered != tree.LineCount)
+            yield return $"the tree's lines cover {covered} lines, and the file has {tree.LineCount}";
 
         foreach (var line in lines)
         {

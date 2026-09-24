@@ -17,6 +17,7 @@ public sealed class SignatureHelpTests
         { "top", "X = .switch(1, |", ".switch(value, set, result, ...)", 1 },
         { "top", "X = .switch(1, [1, 2], |", ".switch(value, set, result, ...)", 2 },
         { "top", "X = .switch(1, [1], 2, [3..4], 5, |", ".switch(value, set, result, ...)", 1 },
+        { "top", "X = .switch(1,\n    [1], |", ".switch(value, set, result, ...)", 2 },
         { "top", "X = .strsub(\"HELLO\", 1, |", ".strsub(text, start, count)", 2 },
         { "top", "X = .strcat(\"A\", 1, 2, |", ".strcat(part, ...)", 0 },
     };

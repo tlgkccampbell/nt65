@@ -37,7 +37,7 @@ public sealed class GrammarColoursTests
             {
                 if (analysis.ModelFor(tree.Path) is not { } model)
                     continue;
-                var scopes = TextMateTokenizer.Nt65.Scope([.. tree.Lines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
+                var scopes = TextMateTokenizer.Nt65.Scope([.. tree.PhysicalLines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
                 var data = NameHighlighting.In(model).Data;
                 var (line, character) = (0, 0);
                 for (var i = 0; i < data.Count; i += 5)
@@ -49,7 +49,7 @@ public sealed class GrammarColoursTests
                     if (ScopeOf(type, (data[i + 4] & 2) != 0) is not { } expected)
                         continue;
                     // A name introduced by `.use ... as` has the kind that its source module declares.
-                    if (declaration && tree.Lines[line].ToFullString()[..character].TrimEnd().EndsWith(" as", StringComparison.Ordinal))
+                    if (declaration && tree.PhysicalLines[line].ToFullString()[..character].TrimEnd().EndsWith(" as", StringComparison.Ordinal))
                         continue;
                     var given = scopes[line][character..(character + data[i + 2])].Distinct().ToList();
                     var grammar = given.Count == 1 ? given[0] : null;
@@ -58,7 +58,7 @@ public sealed class GrammarColoursTests
                     if (grammar == expected || (plain && !declaration) || (declaration && Undecidable.Contains((grammar!, expected))))
                         continue;
                     var text = scopes[line].Length >= character + data[i + 2]
-                        ? tree.Lines[line].ToFullString().Substring(character, data[i + 2])
+                        ? tree.PhysicalLines[line].ToFullString().Substring(character, data[i + 2])
                         : "?";
                     failures.Add($"{tree.Path}:{line + 1}: `{text}` is a {type}{(declaration ? " declaration" : "")}, "
                         + $"coloured as {expected}, and the grammar gives {string.Join(" + ", given.Select(s => s ?? "no scope"))}");

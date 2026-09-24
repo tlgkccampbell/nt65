@@ -129,7 +129,8 @@ public abstract class SyntaxNode
 
     /// <summary>
     /// Gets the 0-based index of the line this node ends on. For a node on a single line this is
-    /// <see cref="LineIndex"/>, and for a block or a file it is the last line under it.
+    /// <see cref="LineIndex"/>. For a line that continues an expression onto the lines after it,
+    /// it is the last of them, and for a block or a file it is the last line under it.
     /// </summary>
     internal int LastLineIndex => Tree.GetLineIndex(Math.Max(Position, FullSpan.End - 1));
 

@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Norristown.Emit;
 
 /// <summary>
@@ -38,7 +40,7 @@ namespace Norristown.Emit;
 /// The value of the byte a <see cref="EmittedLineKind.Byte"/> line writes, as the line spells it.
 /// Null for every other kind of line.
 /// </param>
-internal sealed record EmittedLine(
+internal sealed partial record EmittedLine(
     string Text,
     int Bytes = 0,
     int Source = 0,
@@ -53,5 +55,16 @@ internal sealed record EmittedLine(
 
     /// <summary>Returns the text with its generated comment at the column where comments line up.</summary>
     public static string Commented(string text, string? comment) =>
-        comment is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
+        comment is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + OneLine(comment);
+
+    /// <summary>
+    /// Returns source text on one line, for a comment. Where the source continues an expression
+    /// across lines, each line break, the comment before it and the indentation after it become
+    /// one space.
+    /// </summary>
+    public static string OneLine(string text) =>
+        text.Contains('\n') || text.Contains('\r') ? Breaks().Replace(text, " ") : text;
+
+    [GeneratedRegex(@"[ \t]*(;[^\r\n]*)?(\r\n?|\n)[ \t]*")]
+    private static partial Regex Breaks();
 }

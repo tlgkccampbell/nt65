@@ -505,6 +505,16 @@ public static class Catalogue
             + "or bitwise operator with a different operator as its operand, and different logical operators "
             + "mixed. Add parentheses to show which applies first; the fix can add them.");
 
+    internal static DiagnosticDescriptor ContinuationOutsideExpression { get; } = Entry(
+        Area.ReadingALine,
+        "continuation-outside-expression",
+        Severity.Error,
+        "a line continues onto the next only inside the parentheses or brackets of an expression",
+        "A line whose `(` or `[` is still open at its end continues onto the next, so a long expression can be "
+            + "written across lines. Only an expression's own brackets may hold a line break: a group's parentheses, "
+            + "a call's arguments, a set and an index. The parentheses of an operand such as `(ptr),y`, a macro "
+            + "call's arguments and a data declaration's count stay on one line.");
+
     internal static DiagnosticDescriptor ByteOperatorNeedsParentheses { get; } = Entry(
         Area.ReadingALine,
         "byte-operator-needs-parentheses",

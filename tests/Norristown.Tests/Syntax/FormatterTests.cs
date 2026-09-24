@@ -248,7 +248,7 @@ public sealed class FormatterTests
             }
             """);
         var tree = SyntaxTree.Parse("main.nt65", once);
-        Assert.Empty(Formatter.Changes(tree, 0, tree.Lines.Length - 1));
+        Assert.Empty(Formatter.Changes(tree, 0, tree.LineCount - 1));
         Assert.Equal(once, Formatter.Format(tree));
     }
 

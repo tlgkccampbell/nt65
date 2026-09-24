@@ -63,6 +63,10 @@ internal sealed class TokenRewriter
     {
         var text = new StringBuilder();
         var tokens = Tokens(statement);
+
+        // A line break inside an expression that continues is written as one space, so the
+        // indentation of the line after it is not written either.
+        var broke = false;
         for (var i = 0; i < tokens.Count; i++)
         {
             var token = tokens[i];
@@ -76,16 +80,17 @@ internal sealed class TokenRewriter
                     .Append(Replacements.GetValueOrDefault(token.Position, Format(token)))
                     .Append(After.GetValueOrDefault(token.Position, ""));
                 if (i + 1 == tokens.Count || !Joined.Contains(tokens[i + 1].Position))
-                    AppendWhitespace(text, token.TrailingTrivia);
+                    broke = AppendWhitespace(text, token.TrailingTrivia);
                 continue;
             }
-            AppendWhitespace(text, token.LeadingTrivia);
+            if (!broke)
+                AppendWhitespace(text, token.LeadingTrivia);
             if (Before.TryGetValue(token.Position, out var before))
                 text.Append(before);
             text.Append(Replacements.TryGetValue(token.Position, out var replacement) ? replacement : Format(token));
             if (After.TryGetValue(token.Position, out var after))
                 text.Append(after);
-            AppendWhitespace(text, token.TrailingTrivia);
+            broke = AppendWhitespace(text, token.TrailingTrivia);
         }
 
         var line = indent + text.ToString().Trim();
@@ -209,13 +214,28 @@ internal sealed class TokenRewriter
     private static int WhitespaceWidth(SyntaxTriviaList trivia) =>
         trivia.Where(piece => piece.Kind == SyntaxKind.WhitespaceTrivia).Sum(piece => piece.Text.Length);
 
-    /// <summary>Appends the whitespace in a token's trivia, leaving out its comments.</summary>
-    private static void AppendWhitespace(StringBuilder text, SyntaxTriviaList trivia)
+    /// <summary>
+    /// Appends the whitespace in a token's trivia, leaving out its comments. A line break, where
+    /// an expression continues onto the next line, is written as one space in place of the
+    /// whitespace before it, and ends the trivia written, since what follows it is the next
+    /// line's comments and breaks. Returns whether there was one.
+    /// </summary>
+    private static bool AppendWhitespace(StringBuilder text, SyntaxTriviaList trivia)
     {
+        var start = text.Length;
         foreach (var piece in trivia)
         {
             if (piece.Kind == SyntaxKind.WhitespaceTrivia)
+            {
                 text.Append(piece.Text);
+            }
+            else if (piece.Kind == SyntaxKind.LineBreakTrivia)
+            {
+                text.Length = start;
+                text.Append(' ');
+                return true;
+            }
         }
+        return false;
     }
 }

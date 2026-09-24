@@ -116,7 +116,8 @@ internal sealed class LineContext
     /// </summary>
     public static LineContext At(SyntaxTree tree, int position)
     {
-        var line = tree.GetLineIndex(position);
+        // Where an expression continues from lines before, the context starts where it does.
+        var line = tree.GetLine(tree.GetLineIndex(position)).LineIndex;
         var lineStart = tree.LineStarts[line];
         var tokens = Lexed(tree, lineStart, position);
 

@@ -685,7 +685,7 @@ public sealed class Emitter
                 // the instance's name. It is one routine in the output, named as the source names it.
                 var routine = context.Routine;
                 var instance = model.FamilyAt(opener) is not null && routine is not null ? $"  {routine.QualifiedName}" : "";
-                Line($"; {opener.GetText().Trim().TrimEnd('{').TrimEnd()}  {Where(opener)}{instance}");
+                Line($"; {EmittedLine.OneLine(opener.GetText().Trim().TrimEnd('{').TrimEnd())}  {Where(opener)}{instance}");
                 Label(block.Opener, routine);
             }
             else if (!placing && kind != BlockKind.Scope)

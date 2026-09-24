@@ -91,7 +91,10 @@ COLUMNS = .select(WIDE, 80, 40)
 }
 SPEED = 5
 
-.func closing(m) = .switch(m, [Mode::zpx, Mode::absx], ",X", [Mode::zpy, Mode::absy], ",Y", "")
+.func closing(m) = .switch(m,
+    [Mode::zpx, Mode::absx], ",X",
+    [Mode::zpy, Mode::absy], ",Y",
+    "")
 FAST = SPEED .in [2, 4..8]
 
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)

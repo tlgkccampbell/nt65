@@ -73,6 +73,9 @@ internal static class SyntaxDump
         }
         for (var i = 0; i < tree.LineCount; i++)
         {
+            // A line that continues another is part of that line's parse, which is dumped once.
+            if (tree.GetLine(i).LineIndex != i)
+                continue;
             var parsed = tree.Parsed(i);
             if (parsed.ExportKeyword is { } export)
                 Walk(export, 0);

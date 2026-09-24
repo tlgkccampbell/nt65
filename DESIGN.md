@@ -121,9 +121,9 @@ one structurally.
 
 ### 3.1 Three levels of order
 
-1. **Lexing and parsing** a file needs nothing outside that file. Brace nesting is the
-   only cross-line state. No setting, declaration or other file can change how a line
-   is read.
+1. **Lexing and parsing** a file needs nothing outside that file. Brace nesting, and the
+   brackets that carry an expression onto the next line (§4), are the only cross-line state.
+   No setting, declaration or other file can change how a line is read.
 2. **Declarations** are a set. The meaning of any item depends only on which
    declarations exist in the program, not their order or file. Which declarations exist
    is fixed by the build configuration (the defines of §5.3) before anything in the
@@ -175,12 +175,33 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
 ## 4. Lexical structure
 
 - **Encoding:** UTF-8. **Comments:** `;` to end of line.
-- **Every line lexes on its own.** There are no block comments, no line continuations
-  and no multi-line strings, and nothing else may be added that spans lines at the
-  lexical level. An edit re-lexes only the lines it touches.
+- **Every line lexes on its own.** There are no block comments and no multi-line strings,
+  and nothing else may be added that spans lines at the lexical level. An edit re-lexes only
+  the lines it touches.
 - **One statement per line.** An opening `{` ends the line of its opener; a closing `}`
   starts a line and may be followed only by `.else {`, `.elseif expr {` or, after a
   macro call's block, `name {` for its next block (§11.4).
+- **An expression continues while its bracket is open.** A line whose `(` or `[` is still open
+  at its end continues onto the next, so a long expression is written across lines, with a
+  comment on each, and there is no continuation character:
+
+  ```nt65
+  .func closing(m) = .switch(m,
+      [Mode::zpx, Mode::absx], ",X",      ; indexed by X
+      [Mode::zpy, Mode::absy], ",Y",
+      "")
+  ```
+
+  Only an expression's own brackets may hold a line break: a group's parentheses, a call's
+  arguments, a set (§9) and an index. The parentheses of an operand such as `(ptr),y`, a macro
+  call's arguments and a data declaration's count stay on one line, and a break in them is an
+  error. Joining is decided above the lexer, from the brackets on each line, and the parser then
+  reads the joined lines as one. So that an unclosed bracket cannot swallow the rest of the file,
+  a line that starts a statement of its own is never joined to the one before it: a blank line,
+  or one that starts with `}`, a directive, an instruction, a macro call, a label or a constant.
+  A line holding only a comment is joined. The layout indents a continuing line one step past
+  the line the expression starts on, and a line that starts with the closing bracket at that
+  line's margin; it keeps the line breaks a file has, and adds none.
 - **Leading whitespace is insignificant.** Labels may be indented. Because it means nothing
   there is nothing to argue about, so nt65 has one layout and writes it (§5.3): names at the
   margin of whatever holds them, what a block holds indented four columns further than the
@@ -2313,7 +2334,10 @@ and anywhere else it is an error.
   that holds `v`, so those may name what this build does not declare.
 
 ```nt65
-.func closing(m) = .switch(m, [Mode::zpx, Mode::absx], ",X", [Mode::zpy, Mode::absy], ",Y", "")
+.func closing(m) = .switch(m,
+    [Mode::zpx, Mode::absx], ",X",
+    [Mode::zpy, Mode::absy], ",Y",
+    "")
 FAST = SPEED .in [2, 4..8]
 ```
 
@@ -4744,6 +4768,8 @@ primary     := number | char | string | cpu-name | '*' | '(' expr ')'
 range       := expr ('..' expr)?
 binop       := '*' | '/' | '.mod' | '+' | '-' | '<<' | '>>' | '<' | '<=' | '>' | '>='
              | '.in' | '==' | '!=' | '&' | '^' | '|' | '&&' | '^^' | '||'
+                                                      ; a line break may stand anywhere inside
+                                                      ; the '(' and '[' of an expression (§4)
 builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.sizeof'
              | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.strsub' | '.strcat'
              | '.min' | '.max'

@@ -17,7 +17,10 @@
     rts
 }
 
-.func operand_size(m) = .switch(m, [Mode::imp, Mode::acc], 0, [Mode::abs..Mode::ind], 2, 1)
+.func operand_size(m) = .switch(m,
+    [Mode::imp, Mode::acc], 0,
+    [Mode::abs..Mode::ind], 2,
+    1)
 .assert main .in [$8000..$ffff], "main is in ROM"
 
 .segment RODATA

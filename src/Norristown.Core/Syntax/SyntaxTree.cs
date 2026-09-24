@@ -5,9 +5,14 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// Represents the syntax of one file. It holds the file's lines, each lexed and parsed on its
-/// own, and the block structure over them. A tree is immutable. <see cref="WithChange"/> returns
-/// the tree for an edited text, reusing the green lines and statements the edit did not touch.
+/// Represents the syntax of one file. It holds the file's lines, each lexed on its own, the lines
+/// the parser reads, which are those lines with any that continue an expression joined, and the
+/// block structure over them. A tree is immutable. <see cref="WithChange"/> returns the tree for
+/// an edited text, reusing the green lines and statements the edit did not touch.
+/// <para>
+/// A line number here is a line of the file, as <see cref="LineStarts"/> counts them. A line the
+/// parser reads may cover several, and each of them leads to it.
+/// </para>
 /// </summary>
 public sealed class SyntaxTree
 {
@@ -16,16 +21,23 @@ public sealed class SyntaxTree
     // The file's lines and blocks, over which the root is the red node. A tree holding a single
     // built node has neither, and answers questions from that node instead.
     private readonly GreenFile? green;
+
+    // Indexed by the lines the parser reads, which are joined lines of the file where an
+    // expression continues. `firsts` gives the line of the file where each starts, and `joinedOf`
+    // gives, for each line of the file, the line it is part of.
+    private readonly ImmutableArray<int> firsts;
+    private readonly int[] joinedOf;
     private readonly ImmutableArray<Parser.Result> statements;
     private readonly ImmutableArray<Blocks.Error> blockErrors;
     private readonly bool[] reported;
     private FileSyntax? root;
 
     // For each line that an annotating rewrite reattached annotations to, this holds the parse to
-    // use instead of parsing the line's tokens afresh. It is null for every other line, and the
-    // array is default or empty when no line has such a parse. An edit keeps these entries for
-    // every line that keeps its green node. That lets an annotation survive an edit elsewhere in
-    // the file, and drops it when its own line is parsed again.
+    // use instead of parsing the line's tokens afresh. It is indexed by the line of the file where
+    // the joined line starts, is null for every other line, and the array is default or empty
+    // when no line has such a parse. An edit keeps these entries for every line that keeps its
+    // green node. That lets an annotation survive an edit elsewhere in the file, and drops it
+    // when its own line is parsed again.
     private readonly ImmutableArray<Parser.Result?> keptParses;
 
     // Records which lines hold an annotation, and is allocated only once some line does. A green
@@ -46,6 +58,9 @@ public sealed class SyntaxTree
         Text = built.ToFullString();
         LineStarts = SplitLines(Text);
         Lines = [];
+        PhysicalLines = [];
+        firsts = [];
+        joinedOf = [];
         statements = [];
         blockErrors = [];
         reported = [];
@@ -58,14 +73,28 @@ public sealed class SyntaxTree
     }
 
     private SyntaxTree(
-        string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> lines,
-        ImmutableArray<Parser.Result?> keptParses)
+        string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> physical,
+        ImmutableArray<Parser.Result?> keptParses, ImmutableArray<GreenLine> previous)
     {
         Path = path;
         Text = text;
         LineStarts = lineStarts;
+        PhysicalLines = physical;
+        var lines = Continuations.Join(physical, previous, out firsts);
         Lines = lines;
+        joinedOf = new int[physical.Length];
+        for (var i = 0; i < firsts.Length; i++)
+        {
+            var end = i + 1 < firsts.Length ? firsts[i + 1] : physical.Length;
+            for (var at = firsts[i]; at < end; at++)
+                joinedOf[at] = i;
+        }
+
+        // A kept parse belongs to the line it was made for, so it is kept only where that line
+        // itself was kept, and not where an edit joined it to another or split it from one.
         this.keptParses = keptParses;
+        var kept = keptParses.IsDefaultOrEmpty ? default : Kept(lines, previous, keptParses, firsts);
+
         var errors = new List<Blocks.Error>();
         green = Blocks.Build(lines, errors);
         blockErrors = [.. errors];
@@ -75,7 +104,7 @@ public sealed class SyntaxTree
         // surroundings across an edit keeps the statement it already has.
         var parsed = new Parser.Result[lines.Length];
         var line = 0;
-        ParseLines(green, BlockKind.None, parsed, keptParses, ref line);
+        ParseLines(green, BlockKind.None, parsed, kept, ref line);
         statements = ImmutableCollectionsMarshal.AsImmutableArray(parsed);
 
         // Which lines have diagnostics is computed once, here, so that a node asked whether it
@@ -125,9 +154,17 @@ public sealed class SyntaxTree
     public int LineCount => LineStarts.Length;
 
     /// <summary>
-    /// Gets the green lines, one per source line. A text with n line breaks has n + 1 lines.
+    /// Gets the green lines the parser reads. Each is one line of the file, or several joined
+    /// where an expression continues, so there may be fewer of them than
+    /// <see cref="LineCount"/>.
     /// </summary>
     internal ImmutableArray<GreenLine> Lines { get; }
+
+    /// <summary>
+    /// Gets the green lines as the lexer read them, one per line of the file. A text with n line
+    /// breaks has n + 1 lines.
+    /// </summary>
+    internal ImmutableArray<GreenLine> PhysicalLines { get; }
 
     /// <summary>Parses a source file.</summary>
     public static SyntaxTree Parse(SourceFile file) => Parse(file.Path, file.Text);
@@ -147,7 +184,7 @@ public sealed class SyntaxTree
         var lines = ImmutableArray.CreateBuilder<GreenLine>(starts.Length);
         for (var i = 0; i < starts.Length; i++)
             lines.Add(Lexer.LexLine(LineText(text, starts, i)));
-        return new SyntaxTree(path, text, starts, lines.MoveToImmutable(), default);
+        return new SyntaxTree(path, text, starts, lines.MoveToImmutable(), default, default);
     }
 
     /// <summary>
@@ -247,12 +284,13 @@ public sealed class SyntaxTree
         }
 
         var lines = ImmutableArray.CreateBuilder<GreenLine>(newCount);
-        lines.AddRange(Lines, prefix);
+        lines.AddRange(PhysicalLines, prefix);
         for (var i = prefix; i < newCount - suffix; i++)
             lines.Add(Lexer.LexLine(LineText(text, starts, i)));
         for (var i = oldCount - suffix; i < oldCount; i++)
-            lines.Add(Lines[i]);
-        return new SyntaxTree(Path, text, starts, lines.MoveToImmutable(), KeptParsesAfter(prefix, suffix, newCount));
+            lines.Add(PhysicalLines[i]);
+        return new SyntaxTree(
+            Path, text, starts, lines.MoveToImmutable(), KeptParsesAfter(prefix, suffix, newCount), Lines);
     }
 
     /// <summary>
@@ -278,12 +316,14 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// Returns the 0-based line <paramref name="line"/> of the file as a node of the tree, with
-    /// what it parsed to and the tokens it contains. It is the same node the walk down from
-    /// <see cref="Root"/> reaches, so it knows the blocks that contain it.
+    /// Returns the line that holds the 0-based line <paramref name="line"/> of the file as a node of
+    /// the tree, with what it parsed to and the tokens it contains. Where an expression continues
+    /// across several lines of the file, each of them gives the one line they were joined into. It
+    /// is the same node the walk down from <see cref="Root"/> reaches, so it knows the blocks that
+    /// contain it.
     /// </summary>
-    /// <param name="line">The 0-based line.</param>
-    public LineSyntax GetLine(int line) => Root.Lines[line];
+    /// <param name="line">The 0-based line of the file.</param>
+    public LineSyntax GetLine(int line) => Root.Lines[joinedOf[line]];
 
     /// <summary>
     /// Returns the offset where the 0-based line <paramref name="line"/> ends, after its line
@@ -291,12 +331,18 @@ public sealed class SyntaxTree
     /// </summary>
     public int GetLineEnd(int line) => LineEnd(Text, LineStarts, line);
 
-    /// <summary>Returns the diagnostic span for a range on one line.</summary>
+    /// <summary>
+    /// Returns the diagnostic span for a range. A diagnostic span is on one line, so a range that
+    /// continues onto the next line of the file is cut at the end of the line it starts on.
+    /// </summary>
     public Span GetSpan(TextSpan span)
     {
         var line = GetLineIndex(span.Start);
         var column = span.Start - LineStarts[line] + 1;
-        return new Span(Path, line + 1, column, column + span.Length);
+        var width = span.Length;
+        if (line + 1 < LineStarts.Length && span.Start + width > LineStarts[line + 1])
+            width = Math.Max(0, ContentEnd(line) - span.Start);
+        return new Span(Path, line + 1, column, column + width);
     }
 
     /// <summary>
@@ -317,13 +363,14 @@ public sealed class SyntaxTree
     /// One entry per line, holding either a parse to keep or null to use the line's own parse.
     /// </param>
     internal SyntaxTree WithKeptParses(ImmutableArray<Parser.Result?> kept) =>
-        new(Path, Text, LineStarts, Lines, kept);
+        new(Path, Text, LineStarts, PhysicalLines, kept, Lines);
 
     /// <summary>
-    /// Returns everything the 0-based line <paramref name="line"/> parsed to. That is its
-    /// statement and the nodes and tokens the line holds outside the statement.
+    /// Returns everything the line holding the 0-based line <paramref name="line"/> of the file
+    /// parsed to. That is its statement and the nodes and tokens the line holds outside the
+    /// statement.
     /// </summary>
-    internal Parser.Result Parsed(int line) => statements[line];
+    internal Parser.Result Parsed(int line) => statements[joinedOf[line]];
 
     /// <summary>
     /// Adds the diagnostics of <paramref name="green"/> and everything under it to
@@ -350,12 +397,12 @@ public sealed class SyntaxTree
 
     /// <summary>
     /// Checks whether any line from <paramref name="first"/> to <paramref name="last"/>, both
-    /// 0-based and inclusive, has a diagnostic on it. A line, a block and the file use this method
-    /// to answer <see cref="SyntaxNode.ContainsDiagnostics"/>.
+    /// 0-based and inclusive lines of the file, has a diagnostic on it. A line, a block and the
+    /// file use this method to answer <see cref="SyntaxNode.ContainsDiagnostics"/>.
     /// </summary>
     internal bool LinesContainDiagnostics(int first, int last)
     {
-        for (var i = first; i <= last; i++)
+        for (var i = joinedOf[first]; i <= joinedOf[last]; i++)
         {
             if (reported[i])
                 return true;
@@ -372,7 +419,7 @@ public sealed class SyntaxTree
     {
         if (annotated is null)
             return false;
-        for (var i = first; i <= last; i++)
+        for (var i = joinedOf[first]; i <= joinedOf[last]; i++)
         {
             if (annotated[i])
                 return true;
@@ -382,10 +429,10 @@ public sealed class SyntaxTree
 
     /// <summary>
     /// Adds the diagnostics of the lines from <paramref name="first"/> to <paramref name="last"/>,
-    /// both 0-based and inclusive, to <paramref name="result"/> in source order.
+    /// both 0-based and inclusive lines of the file, to <paramref name="result"/> in source order.
     /// </summary>
     internal void CollectLines(int first, int last, List<Diagnostic> result) =>
-        result.AddRange(CollectRange(first, last));
+        result.AddRange(CollectRange(joinedOf[first], joinedOf[last]));
 
     /// <summary>
     /// Returns the offset where each line starts. <c>\r\n</c>, <c>\n</c> and a lone <c>\r</c> each
@@ -453,6 +500,38 @@ public sealed class SyntaxTree
         _ => block,
     };
 
+    /// <summary>
+    /// Returns where the 0-based line <paramref name="line"/> of the file ends, before its line
+    /// break.
+    /// </summary>
+    private int ContentEnd(int line)
+    {
+        var end = GetLineEnd(line);
+        while (end > LineStarts[line] && Text[end - 1] is '\r' or '\n')
+            end--;
+        return end;
+    }
+
+    /// <summary>
+    /// Returns the kept parse of each line the parser reads, indexed as <paramref name="lines"/>
+    /// are, where <paramref name="keptParses"/> has one for the line of the file it starts on and
+    /// the line is one <paramref name="previous"/> also has. Without a previous tree, every line is
+    /// the one its parse was kept for.
+    /// </summary>
+    private static ImmutableArray<Parser.Result?> Kept(
+        ImmutableArray<GreenLine> lines, ImmutableArray<GreenLine> previous,
+        ImmutableArray<Parser.Result?> keptParses, ImmutableArray<int> firsts)
+    {
+        var before = previous.IsDefault ? null : new HashSet<GreenLine>(previous, ReferenceEqualityComparer.Instance);
+        var kept = new Parser.Result?[lines.Length];
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (firsts[i] < keptParses.Length && (before is null || before.Contains(lines[i])))
+                kept[i] = keptParses[firsts[i]];
+        }
+        return ImmutableCollectionsMarshal.AsImmutableArray(kept);
+    }
+
     private static int LineEnd(string text, ImmutableArray<int> starts, int line) =>
         line + 1 < starts.Length ? starts[line + 1] : text.Length;
 
@@ -481,7 +560,7 @@ public sealed class SyntaxTree
         || parsed.SkippedTokens is { ContainsAnnotations: true };
 
     /// <summary>
-    /// Returns every diagnostic on the lines from <paramref name="first"/> to
+    /// Returns every diagnostic on the lines the parser reads from <paramref name="first"/> to
     /// <paramref name="last"/>, ordered by line and column. Lines with no diagnostics are skipped,
     /// so collecting the whole file's diagnostics walks only the subtrees that contain one.
     /// </summary>
@@ -498,7 +577,7 @@ public sealed class SyntaxTree
             // also holds the missing tokens and the nodes that carry the parser's diagnostics.
             var line = Lines[i];
             var parsed = statements[i];
-            var at = LineStarts[i];
+            var at = LineStarts[firsts[i]];
             if (parsed.ExportKeyword is { } export)
             {
                 Collect(export, at, result);
@@ -510,7 +589,7 @@ public sealed class SyntaxTree
 
             // The line break is the line's own, and the last of its tokens.
             var end = line.Tokens[^1];
-            Collect(end, LineStarts[i] + line.FullWidth - end.FullWidth, result);
+            Collect(end, LineStarts[firsts[i]] + line.FullWidth - end.FullWidth, result);
         }
 
         // A block error concerns the brace structure rather than anything inside a line, so it is
@@ -520,9 +599,9 @@ public sealed class SyntaxTree
             .Select(error =>
             {
                 var token = Lines[error.Line].Tokens[error.Token];
-                var column = Lines[error.Line].TextOffset(error.Token) + 1;
+                var at = LineStarts[firsts[error.Line]] + Lines[error.Line].TextOffset(error.Token);
                 var width = token.Kind == SyntaxKind.EndOfLine ? 0 : token.Text.Length;
-                return new Diagnostic(new Span(Path, error.Line + 1, column, column + width), error.Message);
+                return new Diagnostic(GetSpan(new TextSpan(at, width)), error.Message);
             }));
         return [.. result
             .OrderBy(d => d.Span.Line)

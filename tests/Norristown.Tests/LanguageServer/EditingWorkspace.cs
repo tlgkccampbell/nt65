@@ -103,9 +103,11 @@ internal static class EditingWorkspace
             lines.Add(line);
         else
             lines[at] = line;
-        var column = lines[at].IndexOf('|', StringComparison.Ordinal);
+        // The line may be several, for an expression that continues, with the caret on any of them.
+        var before = line[..Math.Max(0, line.IndexOf('|', StringComparison.Ordinal))].Split('\n');
+        var column = line.Contains('|', StringComparison.Ordinal) ? before[^1].Length : 0;
         lines[at] = lines[at].Replace("|", "", StringComparison.Ordinal);
-        return (string.Join('\n', lines), new Position(at, Math.Max(0, column)));
+        return (string.Join('\n', lines), new Position(at + before.Length - 1, column));
     }
 
     /// <summary>Starts a client with the three files open and <paramref name="main"/> as the main file.</summary>

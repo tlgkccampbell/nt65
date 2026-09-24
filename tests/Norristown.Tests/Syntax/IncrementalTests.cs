@@ -17,23 +17,25 @@ public sealed class IncrementalTests
     public void EditingOneLineRelexesOnlyThatLine()
     {
         var tree = SyntaxTree.Parse("main.nt65", Corpus);
-        var line = tree.Lines.Length / 2;
+        var line = tree.LineCount / 2;
         var edited = tree.WithChange(new TextChange(tree.LineStarts[line], 0, "  "));
 
         Assert.Equal(SyntaxDump.Full(SyntaxTree.Parse("main.nt65", edited.Text)), SyntaxDump.Full(edited));
-        for (var i = 0; i < tree.Lines.Length; i++)
+        for (var i = 0; i < tree.LineCount; i++)
         {
             if (i == line)
             {
-                Assert.NotSame(tree.Lines[i], edited.Lines[i]);
+                Assert.NotSame(tree.PhysicalLines[i], edited.PhysicalLines[i]);
             }
             else
             {
-                Assert.Same(tree.Lines[i], edited.Lines[i]);
+                Assert.Same(tree.PhysicalLines[i], edited.PhysicalLines[i]);
 
                 // A line's syntax depends on its tokens and the kind of block around it, and
-                // neither changed, so the statement is the same object too.
-                Assert.Same(tree.Parsed(i).Node, edited.Parsed(i).Node);
+                // neither changed, so the statement is the same object too, unless the line
+                // continues an expression across the edited one.
+                if (tree.GetLine(i) != tree.GetLine(line))
+                    Assert.Same(tree.Parsed(i).Node, edited.Parsed(i).Node);
             }
         }
     }
@@ -216,20 +218,21 @@ public sealed class IncrementalTests
         if (SyntaxDump.Full(expected) != SyntaxDump.Full(after))
             yield return $"step {index}: {change} gives a different tree than a full parse";
 
-        // Lines clear of the change keep their nodes.
-        var shift = after.Lines.Length - before.Lines.Length;
-        for (var i = 0; i < before.Lines.Length; i++)
+        // Lines clear of the change keep their nodes. That is the lines the lexer read: a line the
+        // parser reads may join lines on both sides of the change, and is then joined again.
+        var shift = after.PhysicalLines.Length - before.PhysicalLines.Length;
+        for (var i = 0; i < before.PhysicalLines.Length; i++)
         {
-            var end = i + 1 < before.Lines.Length ? before.LineStarts[i + 1] : before.Text.Length;
+            var end = i + 1 < before.PhysicalLines.Length ? before.LineStarts[i + 1] : before.Text.Length;
             if (end < change.Start)
             {
-                if (!ReferenceEquals(before.Lines[i], after.Lines[i]))
-                    yield return $"step {index}: {change} parsed line {i + 1} again, and it is before the edit";
+                if (!ReferenceEquals(before.PhysicalLines[i], after.PhysicalLines[i]))
+                    yield return $"step {index}: {change} lexed line {i + 1} again, and it is before the edit";
             }
             else if (before.LineStarts[i] > change.Start + change.Length)
             {
-                if (!ReferenceEquals(before.Lines[i], after.Lines[i + shift]))
-                    yield return $"step {index}: {change} parsed line {i + 1} again, and it is after the edit";
+                if (!ReferenceEquals(before.PhysicalLines[i], after.PhysicalLines[i + shift]))
+                    yield return $"step {index}: {change} lexed line {i + 1} again, and it is after the edit";
             }
         }
     }

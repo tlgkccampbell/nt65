@@ -12,6 +12,12 @@ public enum SyntaxKind : byte
     /// <summary>A <c>;</c> comment, running to the end of the line.</summary>
     CommentTrivia,
 
+    /// <summary>
+    /// A line break inside a line that continues onto the next, because a bracket of an
+    /// expression is still open.
+    /// </summary>
+    LineBreakTrivia,
+
     /// <summary>A name, such as <c>foo</c>, <c>_bar</c> or <c>Baz9</c>.</summary>
     Identifier,
 

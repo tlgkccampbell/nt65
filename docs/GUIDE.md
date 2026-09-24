@@ -611,9 +611,18 @@ it chooses, as `.select` does, and a `.switch` with no `otherwise` is an error f
 holds:
 
 ```nt65
-.func operand_size(m) = .switch(m, [Mode::imp, Mode::acc], 0, [Mode::abs..Mode::ind], 2, 1)
+.func operand_size(m) = .switch(m,
+    [Mode::imp, Mode::acc], 0,
+    [Mode::abs..Mode::ind], 2,
+    1)
 .assert main .in [$8000..$ffff], "main is in ROM"
 ```
+
+**Long expressions.** A line whose `(` or `[` is still open at its end continues onto the next,
+as the `.switch` above does, and each line may have a comment. Only an expression's brackets
+carry a line on: the parentheses of `(ptr),y` and of a macro call's arguments stay on one line.
+A line that starts a statement of its own, such as an instruction or a directive, is never
+joined to the one before it, so a bracket left open by mistake is reported where it is.
 
 **CPU tests.** `.if .has(phx)` holds on every CPU that has the `phx` instruction, and
 `.target(65c02)` names one CPU exactly. The CPU is part of the configuration.

@@ -1,0 +1,25 @@
+; Only an expression's brackets may hold a line break. An operand's parentheses and a macro
+; call's arguments stay on one line.
+.module main
+
+.cpu 6502
+
+.macro pair(first, second) {
+    .byte first, second
+}
+
+.segment ZEROPAGE
+.data ptr: .word
+
+.segment CODE
+.export .proc main {
+    lda (ptr                        ;! error[continuation-outside-expression]: a line continues onto the next only inside the parentheses or brackets of an expression
+    ),y
+    rts
+    .next ?
+    pair!(1,                        ;! error[continuation-outside-expression]: a line continues onto the next only inside the parentheses or brackets of an expression
+        2)
+    .byte (3                        ;! error[expected-parenthesis]: expected `)`
+    .byte 4
+    .next ?
+}

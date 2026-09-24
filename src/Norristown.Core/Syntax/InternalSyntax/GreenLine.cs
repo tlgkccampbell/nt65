@@ -3,17 +3,24 @@ using System.Collections.Immutable;
 namespace Norristown.Syntax.InternalSyntax;
 
 /// <summary>
-/// Represents one source line, holding its tokens. Its kind and brace value come from its own
-/// tokens alone, so a line is lexed and classified without knowing anything about the lines
-/// around it.
+/// Represents one line as the parser reads it, holding its tokens. That is one line of the file,
+/// or several that <see cref="Continuations"/> joined because an expression's bracket stayed open
+/// across them. Its kind and brace value come from its own tokens alone, so a line is classified
+/// without knowing anything about the lines around it.
 /// </summary>
 internal sealed class GreenLine : GreenNode
 {
     private Parser.Result? parsed;
 
-    internal GreenLine(ImmutableArray<GreenToken> tokens) : base(SyntaxKind.Line, SumWidths(tokens))
+    internal GreenLine(ImmutableArray<GreenToken> tokens) : this(tokens, default)
+    {
+    }
+
+    internal GreenLine(ImmutableArray<GreenToken> tokens, ImmutableArray<GreenLine> parts)
+        : base(SyntaxKind.Line, SumWidths(tokens))
     {
         Tokens = tokens;
+        Parts = parts.IsDefault ? [this] : parts;
         LineKind = Lines.Classify(tokens);
         (Opens, Closes) = Lines.Braces(tokens);
         OpensBlockKind = Opens ? Lines.BlockKindOf(this)
@@ -33,6 +40,12 @@ internal sealed class GreenLine : GreenNode
 
     /// <summary>Gets the line's tokens, which always end with an <see cref="SyntaxKind.EndOfLine"/> token.</summary>
     public ImmutableArray<GreenToken> Tokens { get; }
+
+    /// <summary>
+    /// Gets the lines of the file this line was joined from, in order, or this line alone when it
+    /// is one line of the file.
+    /// </summary>
+    public ImmutableArray<GreenLine> Parts { get; }
 
     /// <summary>Gets the kind of line this is.</summary>
     public LineKind LineKind { get; }

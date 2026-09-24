@@ -21,6 +21,11 @@ namespace Norristown.Syntax;
 /// <item><description>
 /// A run of consecutive named data lines is aligned so that their directives start in one column.
 /// </description></item>
+/// <item><description>
+/// A line that continues an expression from the line before it is indented one step further
+/// than the line the expression starts on, and a line that starts with a closing bracket goes
+/// back to that line's margin.
+/// </description></item>
 /// </list>
 /// The generated ca65 already uses this layout.
 /// </summary>
@@ -64,7 +69,7 @@ public static class Formatter
         for (var i = Math.Max(first, 0); i <= Math.Min(last, tree.LineCount - 1); i++)
         {
             var start = tree.LineStarts[i];
-            var length = Width(tree.GetLine(i));
+            var length = Width(tree, i);
             if (!tree.Text.AsSpan(start, length).SequenceEqual(formatted[i]))
                 changes.Add(new TextChange(start, length, formatted[i]));
         }
@@ -78,8 +83,7 @@ public static class Formatter
     private static string[] Formatted(SyntaxTree tree)
     {
         var depths = new int[tree.LineCount];
-        var at = 0;
-        Walk(tree.Root, 0, depths, ref at);
+        Walk(tree.Root, 0, depths);
 
         // Each line is split into its indent, the name it declares, and the rest. Only a named
         // data line gets a separate name, so that it can be aligned; every other line is kept
@@ -91,10 +95,22 @@ public static class Formatter
         for (var i = 0; i < tree.LineCount; i++)
         {
             var line = tree.GetLine(i);
-            var content = tree.Text.AsSpan(tree.LineStarts[i], Width(line)).TrimEnd(Blank);
+            var content = tree.Text.AsSpan(tree.LineStarts[i], Width(tree, i)).TrimEnd(Blank);
             if (content.TrimStart(Blank).IsEmpty)
             {
                 rest[i] = "";
+                continue;
+            }
+
+            // A line that continues an expression is part of the line it starts on, one step in,
+            // except that a line starting with the bracket that closes it goes back to that line's
+            // margin, below where it opened.
+            if (line.LineIndex != i)
+            {
+                var trimmed = content.TrimStart(Blank);
+                var closes = trimmed[0] is ')' or ']';
+                indents[i] = (depths[line.LineIndex] + (closes ? 0 : 1)) * IndentWidth;
+                rest[i] = trimmed.ToString();
                 continue;
             }
 
@@ -102,7 +118,7 @@ public static class Formatter
             // points into the middle of, so it goes at the routine's own margin.
             indents[i] = Math.Max(depths[i] - (IsCheapLocal(line) ? 1 : 0), 0) * IndentWidth;
             var colon = NamedData(line);
-            if (colon < 0)
+            if (colon < 0 || TextOffset(line, colon + 1) > content.Length)
             {
                 rest[i] = content.TrimStart(Blank).ToString();
                 comments[i] = line.LineKind == LineKind.Blank;
@@ -151,10 +167,11 @@ public static class Formatter
     }
 
     /// <summary>
-    /// Records in <paramref name="depths"/> how many blocks hold each line. Top-level lines have
-    /// depth 0. A block's opening line, and its closing line if it has one, count as outside it.
+    /// Records in <paramref name="depths"/> how many blocks hold each line, at the line of the file
+    /// it starts on. Top-level lines have depth 0. A block's opening line, and its closing line if
+    /// it has one, count as outside it.
     /// </summary>
-    private static void Walk(SyntaxNode node, int depth, int[] depths, ref int line)
+    private static void Walk(SyntaxNode node, int depth, int[] depths)
     {
         // A region (a file-level `.segment NAME` with no brace) holds the rest of its segment.
         // It is the only block whose contents are not indented past its opening line.
@@ -165,14 +182,24 @@ public static class Formatter
         {
             var own = block is not null && (i == 0 || (block.HasCloser && i == members.Length - 1)) ? depth : inner;
             if (members[i] is BlockSyntax child)
-                Walk(child, own, depths, ref line);
+                Walk(child, own, depths);
             else
-                depths[line++] = own;
+                depths[members[i].LineIndex] = own;
         }
     }
 
-    /// <summary>Returns the width of a line's text, without the line break that ends it.</summary>
-    private static int Width(LineSyntax line) => line.FullSpan.Length - line.EndOfLineToken.Text.Length;
+    /// <summary>
+    /// Returns the width of the text of the 0-based line <paramref name="line"/> of the file,
+    /// without the line break that ends it.
+    /// </summary>
+    private static int Width(SyntaxTree tree, int line)
+    {
+        var start = tree.LineStarts[line];
+        var end = tree.GetLineEnd(line);
+        while (end > start && tree.Text[end - 1] is '\r' or '\n')
+            end--;
+        return end - start;
+    }
 
     /// <summary>
     /// Returns the offset of token <paramref name="index"/>'s text from the start of its line.

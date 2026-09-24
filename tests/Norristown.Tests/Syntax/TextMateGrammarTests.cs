@@ -100,11 +100,16 @@ public sealed class TextMateGrammarTests
         {
             var tree = SyntaxTree.Parse(name, text);
             var bodies = Bodies(tree);
-            var syntax = tree.Root.DescendantNodes().OfType<LineSyntax>().ToList();
-            var lineScopes = TextMateTokenizer.Nt65.Scope([.. tree.Lines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
-            for (var l = 0; l < tree.Lines.Length; l++)
+            // The grammar reads one line of the file at a time, as the lexer does. Where an
+            // expression continues, the line the parser reads started some tokens earlier.
+            var lineScopes = TextMateTokenizer.Nt65.Scope([.. tree.PhysicalLines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
+            var earlier = 0;
+            for (var l = 0; l < tree.PhysicalLines.Length; l++)
             {
-                var line = tree.Lines[l];
+                var line = tree.PhysicalLines[l];
+                var statement = tree.GetLine(l);
+                if (statement.LineIndex == l)
+                    earlier = 0;
                 var lineText = line.ToFullString().TrimEnd('\r', '\n');
                 var scopes = lineScopes[l];
                 var offset = 0;
@@ -123,11 +128,12 @@ public sealed class TextMateGrammarTests
                     }
                     if (token.Kind is SyntaxKind.EndOfLine or SyntaxKind.BadToken || token.ContainsDiagnostics)
                         continue;
-                    var expected = Expected(syntax[l], t, bodies.GetValueOrDefault(l));
+                    var expected = Expected(statement, earlier + t, bodies.GetValueOrDefault(statement.LineIndex));
                     var actual = scopes[start..triviaStart].Distinct().ToList();
                     if (actual.Count != 1 || actual[0] != expected)
                         failures.Add($"{name}:{l + 1}: `{token.Text}` is {token.Kind}, expected {expected ?? "no scope"}, grammar gives {string.Join(" + ", actual.Select(s => s ?? "no scope"))}");
                 }
+                earlier += line.Tokens.Length - 1;
             }
         }
         Assert.True(failures.Count == 0, string.Join("\n", failures));

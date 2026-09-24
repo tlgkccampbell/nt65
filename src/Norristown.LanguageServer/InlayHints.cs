@@ -64,11 +64,16 @@ internal static class InlayHints
         {
             cancellation.ThrowIfCancellationRequested();
             var line = tree.GetLine(i);
+
+            // A line that continues an expression is part of the line it starts on, whose hints
+            // go at the end of its last line.
+            if (line.LineIndex != i)
+                continue;
             if (settings.ParameterNames)
                 Arguments(model, line, hints);
             var marks = Ending(analysis, model, settings, layout, flow, states, following, line).ToList();
             if (marks.Count > 0)
-                hints.Add(Ended(tree, i, marks));
+                hints.Add(Ended(tree, tree.GetLineIndex(line.FullSpan.End - 1), marks));
         }
         return hints;
     }
