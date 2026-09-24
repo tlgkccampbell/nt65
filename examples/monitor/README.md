@@ -199,8 +199,9 @@ it; the C64's screen editor and the Apple II's `GETLN` already do that, and more
 - **One library for two processors.** The library is compiled as 6502 code for the C64 and as
   65816 code for the IIGS. What differs is chosen with `.if .target(65816)`: the registers'
   record, the enum members of the 65816's addressing modes, its opcode rows, and how `G` enters
-  code. A `.func` that describes a mode names a 65816 member only inside
-  `.select(.target(65816), ...)`, which reads only the value it chooses. Every routine declares
+  code. A `.func` that describes a mode is a `.switch` over the modes' enum, written one arm to
+  a line, and names a 65816 member only inside `.select(.target(65816), ...)`, which reads only
+  the value it chooses. Every routine declares
   the platform's signature set `running`, so on the 65816 nt65 checks the mode and the widths
   through every call, and on the 6502 the same text is accepted as it stands.
 - **Text in the machine's own characters.** Every character the library writes or compares is

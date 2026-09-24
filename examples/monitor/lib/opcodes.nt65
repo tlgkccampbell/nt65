@@ -39,21 +39,43 @@
 }
 
 ; Returns how many bytes follow an opcode in mode m. An immediate as wide as a register has one
-; more byte when that register is 16 bits wide.
-.func operand_size(m) = .select(m == Mode::imp || m == Mode::acc, 0, .select(two_bytes(m), 2, .select(three_bytes(m), 3, 1)))
-.func two_bytes(m) = m == Mode::abs || m == Mode::absx || m == Mode::absy || m == Mode::ind || .select(.target(65816), m == Mode::indabsx || m == Mode::indabsl || m == Mode::rell || m == Mode::move, 0)
-.func three_bytes(m) = .select(.target(65816), m == Mode::long || m == Mode::longx, 0)
+; more byte when that register is 16 bits wide. Each function below reads the 65816's own modes
+; only on the 65816, whose build is the only one that declares them.
+.func operand_size(m) = .switch(m,
+    [Mode::imp, Mode::acc], 0,
+    [Mode::abs, Mode::absx, Mode::absy, Mode::ind], 2,
+    .select(.target(65816), .switch(m,
+    [Mode::long, Mode::longx], 3,
+    [Mode::indabsx, Mode::indabsl, Mode::rell, Mode::move], 2,
+    1), 1))
 
 ; Returns the text that an operand in mode m shows before its number. That is `#`, `(` or `[`
 ; where the mode has one, followed by `$`.
-.func opening(m) = .select(immediate(m), "#$", .select(indirect(m), "($", .select(long_indirect(m), "[$", "$")))
-.func immediate(m) = m == Mode::imm || .select(.target(65816), m == Mode::imma || m == Mode::immi, 0)
-.func indirect(m) = m == Mode::ind || m == Mode::indx || m == Mode::indy || .select(.target(65816), m == Mode::indzp || m == Mode::sry || m == Mode::indabsx, 0)
-.func long_indirect(m) = .select(.target(65816), m == Mode::indl || m == Mode::indly || m == Mode::indabsl, 0)
+.func opening(m) = .switch(m,
+    [Mode::imm], "#$",
+    [Mode::ind, Mode::indx, Mode::indy], "($",
+    .select(.target(65816), .switch(m,
+    [Mode::imma, Mode::immi], "#$",
+    [Mode::indzp, Mode::sry, Mode::indabsx], "($",
+    [Mode::indl, Mode::indly, Mode::indabsl], "[$",
+    "$"), "$"))
 
 ; Returns the text that an operand in mode m shows after its number, which may be empty.
-.func closing(m) = .select(.target(65816), .select(m == Mode::longx, ",X", .select(m == Mode::indabsx, ",X)", .select(m == Mode::indzp, ")", .select(m == Mode::indl || m == Mode::indabsl, "]", .select(m == Mode::indly, "],Y", .select(m == Mode::sr, ",S", .select(m == Mode::sry, ",S),Y", closing_6502(m)))))))), closing_6502(m))
-.func closing_6502(m) = .select(m == Mode::zpx || m == Mode::absx, ",X", .select(m == Mode::zpy || m == Mode::absy, ",Y", .select(m == Mode::indx, ",X)", .select(m == Mode::indy, "),Y", .select(m == Mode::ind, ")", "")))))
+.func closing(m) = .switch(m,
+    [Mode::zpx, Mode::absx], ",X",
+    [Mode::zpy, Mode::absy], ",Y",
+    [Mode::indx], ",X)",
+    [Mode::indy], "),Y",
+    [Mode::ind], ")",
+    .select(.target(65816), .switch(m,
+    [Mode::longx], ",X",
+    [Mode::indabsx], ",X)",
+    [Mode::indzp], ")",
+    [Mode::indl, Mode::indabsl], "]",
+    [Mode::indly], "],Y",
+    [Mode::sr], ",S",
+    [Mode::sry], ",S),Y",
+    ""), ""))
 
 ; Returns whether mode m is a branch's, whose operand is shown as the address it goes to.
 .func branch(m) = m == Mode::rel || .select(.target(65816), m == Mode::rell, 0)
