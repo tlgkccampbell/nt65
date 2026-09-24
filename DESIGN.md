@@ -128,9 +128,9 @@ one structurally.
    No setting, declaration or other file can change how a line is read.
 2. **Declarations** are a set. The meaning of any item depends only on which
    declarations exist in the program, not their order or file. Which declarations exist
-   is fixed by the build configuration (the defines of §5.3) before anything in the
-   program is evaluated, because `.if` conditions test defines and never program
-   symbols (§10). The one thing the configuration does not fix by itself is a family's
+   is fixed by the build configuration (its CPU and settings, §5.3) before anything in the
+   program is evaluated, because an `.if` condition tests only what the configuration
+   decides, never what the declarations measure or where the linker places them (§10). The one thing the configuration does not fix by itself is a family's
    instances, which are one declaration per member of an enum (§10): the members are a list
    written out in the source, under conditions the configuration answers like any others, so
    reading the enum's headers is enough and nothing has to be evaluated to know which
@@ -208,22 +208,26 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
 - **Leading whitespace is insignificant.** Labels may be indented. Because it means nothing
   there is nothing to argue about, so nt65 has one layout and writes it (§5.3): names at the
   margin of whatever holds them, what a block holds indented four columns further than the
-  line that opens it, a routine's cheap locals at the routine's own margin, a run of named
-  data lines with nothing between them lined up one column past the longest name in the run,
-  and nothing after a line's last token. A `.segment NAME` region opens a block with no
-  brace, so it indents nothing. It is the layout the generated ca65 is written in (§13), and
-  the only whitespace inside a line it touches is the gap a run lines up on, so laying a file
-  out cannot change what any line of it means.
+  line that opens it, a routine's cheap locals at the routine's own margin, and nothing after
+  a line's last token. A **run** is lines of one kind with nothing between them but lines that
+  hold only a comment, and three kinds of run line up: named data lines, one column past the
+  longest name in the run; `.const` lines, on their `=`, where a `?=` puts its `?` in the
+  column before, so that every value starts in one column and a setting shows in the gap; and
+  a record initializer's `name = value` lines, on their `=`. A run's trailing comments start
+  in one column, the 37th or two past the run's longest line where that is further. A
+  `.segment NAME` region opens a block with no brace, so it indents nothing. It is the layout
+  the generated ca65 is written in (§13), and the only whitespace inside a line it touches is
+  the gaps a run lines up on, so laying a file out cannot change what any line of it means.
 - **Identifiers:** `[A-Za-z_][A-Za-z0-9_]*`, case-sensitive. Scoped names use `::`
   (`gfx::init`, `::hw::init`); `::` is one token, so `z::foo` walks into scope `z`
   and a prefix on a path from the root of the modules is written `z: ::hw::foo`. Cheap
   locals are `@name` (§6.2).
 - **Reserved words:** the registers `a`, `x`, `y`, `s` (case-insensitive) and every
   `.directive` (also case-insensitive). **No mnemonic is reserved**, on any CPU. A line that
-  starts with a mnemonic is an instruction unless the token after it is `:` or `=`, or `!`
-  followed by `(`, which is what makes `rts:` a label, `lda = 5` a constant, `bne!(x)` a call
-  to a macro named `bne` and `jmp rts` a jump to that label, while `lda !flag` stays an
-  instruction; a
+  starts with a mnemonic is an instruction unless the token after it is `:`, `=` or `?=`, or
+  `!` followed by `(`, which is what makes `rts:` a label, `bne!(x)` a call to a macro named
+  `bne` and `jmp rts` a jump to that label, and `lda = 5` a constant written without the
+  `.const` it needs, while `lda !flag` stays an instruction; a
   mnemonic of a CPU the program is not built for is an error only where it is written as an
   instruction. The mnemonics are the canonical WDC names, with the bit number in
   `bbr0`–`bbr7`, `bbs0`–`bbs7`, `rmb0`–`rmb7` and `smb0`–`smb7` as ca65 spells them; ca65's
@@ -299,7 +303,7 @@ items after a missing `}` are still found.
 
 A program is the set of `.nt65` files handed to the transpiler. Each file is a module, and
 begins by saying which, `.module name` (§12). After that it is a sequence of **items**:
-constants, `.config` settings, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`, `.struct`, `.union`,
+constants and settings, `.data` declarations, `.proc`, `.scope`, `.macro`, `.enum`, `.struct`, `.union`,
 `.charmap`, `.list`, `.func`, `.signature`, `.export`, `.import`, `.use`, `.if`, `.repeat` and
 `.each` at item level, unnamed `.res` and `.align` padding, segment declarations, segment regions,
 segment blocks and `.place`.
@@ -336,7 +340,7 @@ and using one the target lacks is a semantic diagnostic that says which CPUs hav
 
 Code that differs between CPUs tests what the CPU has, `.if .has(phx)`, which holds on every
 CPU with the instruction; `.target(65c02)` names one CPU exactly (§9, §10). The CPU is
-configuration, like a define.
+configuration, like a setting.
 
 **The undocumented opcodes.** The NMOS 6502 does something for every one of the 256 bytes it
 can read as an opcode, and what it does for the 105 nobody documented is used by C64 and NES
@@ -549,7 +553,7 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   "cpu": "65816",
   "files": ["src/**/*.nt65"],
   "out": "build",
-  "defines": { "DEBUG": 1, "VERSION": "$0102" },
+  "settings": { "DEBUG": 1, "main::VERSION": "$0102" },
   "diagnostics": { "unused-symbol": "off", "mnemonic-name": "error" },
   "spaces": { "spc": "data" },
   "segments": {
@@ -564,8 +568,8 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
     "$4200-$43ff": ["$00-$3f", "$80-$bf"]
   },
   "configurations": {
-    "debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" },
-    "pal":   { "defines": { "hw::PAL": 1 }, "out": "build/pal" }
+    "debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" },
+    "pal":   { "settings": { "hw::PAL": 1 }, "out": "build/pal" }
   }
 }
 ```
@@ -580,15 +584,15 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   nothing to write has none at all (§13). nt65 records what it wrote in `out/.nt65-outputs`,
   and a later build deletes the output of a module that has gone from the program or no
   longer writes anything; it deletes nothing the record does not name.
-- `defines`: the build configuration. Each define is a constant visible in every file,
-  as if every module had brought it in, and defines are the only symbols an `.if` condition
-  may test (§10). `-D NAME=value` on the command line adds a define or overrides one
-  given here, and `-D NAME` on its own defines it as 1, for a define a condition only
-  tests. A declaration in a file may not reuse a define's name. A name with a module's
-  path, `"hw::SOUND_CHANNELS": 2` or `-D hw::SOUND_CHANNELS=2`, is no define: it sets the
-  `.config` that module exports (§10), and setting one the module does not export, or one
-  no module declares, is an error. The output always writes a define as its value,
-  never by name, so a `-D` given to ca65 cannot collide with it.
+- `settings`: the build configuration, which is a value for each setting (§10) the build
+  changes. A setting is named by its path, `"hw::SOUND_CHANNELS": 2`, or by its name alone,
+  `"DEBUG": 1`, where only one module declares a setting of that name. `-D NAME=value` on the
+  command line does the same over what the project file gives, and `-D NAME` on its own gives
+  1, for a setting a condition only tests. A name that no module declares as a setting is an
+  error, and so is a name alone that two modules declare, which the error lists by path. A
+  module declares its settings, so nothing the build gives is a name of its own. The output
+  writes a setting as its value, never by name, so a `-D` given to ca65 cannot collide with
+  it.
 - `diagnostics`: how much each diagnostic matters to this program, by name. The names are
   the catalogue's (§14), the same ones the command writes in brackets after a message, and the
   answers are `"off"`, `"warning"` and `"error"`. A diagnostic nt65 reports as an error is not
@@ -623,7 +627,7 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   from (§7.5), for hardware registers that are mirrored in some banks only. A key is a
   range of addresses or a single address, each item a range of banks or a single bank,
   and no two keys may overlap.
-- `configurations`: named builds of the program. Each gives `defines` over the project's,
+- `configurations`: named builds of the program. Each gives `settings` over the project's,
   by name, `diagnostics` over the project's, by name, `links` over the project's, by name, and
   an `out` in place of the project's,
   so that a release build can be stricter than the one being worked in; `--config name`
@@ -645,7 +649,7 @@ normally runs in; what it tells the person running it is from where they are.
 | `--project <file>` | the project file, or the directory that holds it |
 | `--config <name>` | a named configuration |
 | `--cpu <cpu>` | the processor, when the project does not say |
-| `-D NAME[=value]` | a define, or a module's `.config` |
+| `-D NAME[=value]` | a setting's value, by its path or its name alone (§5.3) |
 | `--out <dir>` | where output goes, in place of the configuration's `out` |
 | `--depfile <file>` | make-style dependencies: each output depends on its source, the sources of the modules whose interfaces it uses and of those they use, the files that declare segments or settings, the `.incbin` files among them and `nt65.json`, and each of those has an empty rule so a deleted source does not stop make |
 | `--c-header <file>` | a C header of what the program exports (§13) |
@@ -730,9 +734,9 @@ marker file.
 | form | declares |
 |---|---|
 | `name:` | a position in code, inside a proc: an address and nothing else. It may be followed by an instruction, data directive or macro call on the same line, and has no size whatever follows it. |
-| `NAME = expr` | a constant if `expr` contains no address symbols, otherwise an **address alias**, sized, exported and imported like a label. Single assignment; forward references allowed; cycles are errors. A constant may hold text, and is then usable wherever a string literal is (§8). |
-| `.config NAME = expr` | a **setting**: a constant a condition may test, whose value the build may set (§10). |
-| `@name:`, `@name = expr` | a cheap local: a label or constant private to its proc or scope, or a position private to a `.data` block (§6.2). |
+| `.const NAME = expr` | a **constant**: a number or a text, never an address. Single assignment; forward references allowed; cycles are errors. A constant that holds text is usable wherever a string literal is (§8). Whether a condition may test it follows from what it is built from (§10). |
+| `.const NAME ?= expr` | a **setting**: a constant whose value the build may set (§5.3, §10). |
+| `@name:`, `.const @name = expr` | a cheap local: a label or constant private to its proc or scope, or a position private to a `.data` block (§6.2). |
 | `.proc name [: signature] { ... }` | a label **and** a scope, with a processor-state signature (§7.3). At file level or in a `.scope` outside any proc: procs do not nest. |
 | `.multiproc E, b [: signature] { ... }` | a **family**: one routine per member of the named enum `E`, each named after its member, in the scope around the line. It stands where `.proc` stands (§10). |
 | `.proc b [: signature] { ... }`, `.data b: element`, in an `.each E, b` body | the same family written out: a declaration in a repetition's body whose name is the name it binds declares one per member (§10). |
@@ -741,6 +745,7 @@ marker file.
 | `.enum [name] { ... }` | constants (§6.3). |
 | `.struct name { ... }`, `.union name { ... }` | member offsets and a size (§6.3). |
 | `.data name: element`, `.data name { ... }` | data: an address with a size in bytes, a count of elements for an element type, and a scope of its members or of its type's fields (§8). |
+| `.data name [: element] = expr` | **data found elsewhere**: data at the address `expr` gives, with no bytes of its own. Without an element it is the data `expr` names, under another name (§8). |
 | `.charmap name { ... }` | a text encoding (§8). |
 | `.list name { ... }` | a named sequence of expressions (§6.4). |
 | `.func name(...) = expr` | a pure expression function (§9). |
@@ -756,8 +761,7 @@ address size (from its value, or from its segment), and for data its size in byt
 ### 6.2 Scoping rules
 
 - Name lookup proceeds from the innermost scope outward to the module's top level, then to
-  what its `.use` items bring in and to the defines, then to the modules themselves
-  (§12). `a::b` walks into a named scope, or into a module; `::hw::name` starts at the
+  what its `.use` items bring in, then to the modules themselves (§12). `a::b` walks into a named scope, or into a module; `::hw::name` starts at the
   root of the modules.
 - **Cheap locals** `@name` are labels or constants private to the innermost enclosing
   `.proc` or `.scope`. A macro expansion and each `.repeat` or `.each` iteration also have their
@@ -2022,6 +2026,23 @@ changes what a name means.
 }
 ```
 
+**Data found elsewhere.** `.data name: element = expr` declares data that something else put at
+the address `expr` gives: another declaration, the hardware or another program. It writes no
+bytes, and has the element, count, size and members its type gives it, as data declared here
+does, so `.sizeof(TXTPTR)` below is 2.
+
+```nt65
+.data PPUCTRL: .byte = $2000                     ; a port
+.data TXTPTR: .addr = CHRGOT + 1                 ; the operand of an instruction in CHRGOT
+.data TEMP3 = FNCNAM                             ; FNCNAM, under another name
+```
+
+Without an element, `expr` must name data, and the declaration is that data under another
+name, with its element, count and members. With one, `expr` may be any address, and where it
+is the bare name of data, the element must be that data's. A `.const` is never an address
+(§6.1), so a place is always declared as what is there: data with `.data`, a routine with
+`.proc name = expr` (§7.3) and a position in code with a label.
+
 The element types are the numbers `.byte`, `.word` (16 bits), `.long` (24) and `.dword` (32),
 their big-endian partners `.beword`, `.belong` and `.bedword`, the addresses `.addr` and
 `.faraddr`, and `.type T` for a struct or union `T`, which is dotted as they are. Every width
@@ -2166,8 +2187,8 @@ distances: a routine's size is layout (§14).
     }
 }
 
-ERR_NOFOR = messages::NOFOR - messages
-ERR_SYNTAX = messages::SYNTAX - messages
+.const ERR_NOFOR  = messages::NOFOR - messages
+.const ERR_SYNTAX = messages::SYNTAX - messages
 ```
 
 `ldx #ERR_SYNTAX` loads 16, the offset of the message in the table, and the output writes
@@ -2220,10 +2241,10 @@ machines takes its charmap from the program, as a name a module of each program 
 `.strlen` and `.strat`, as a `.type` member's value and as a macro argument, and wherever one is
 usable, each of these is:
 
-- **a text constant**, `TITLE = "NT65"`, which crosses modules by value like any constant and
+- **a text constant**, `.const TITLE = "NT65"`, which crosses modules by value like any constant and
   never reaches ca65 as a symbol;
 - **a call of a function whose body is text** (§9), `htasc("SYNTAX")`, which is text when its
-  body is and may define a text constant, `GREETING = htasc("HI")`;
+  body is and may define a text constant, `.const GREETING = htasc("HI")`;
 - **`.select(c, a, b)`** choosing between texts;
 - **`.strsub(s, start, count)`**, the `count` bytes of `s` from `start`, counting from 0. A start
   or a count below zero, or one that reaches past the end, is an error rather than a shorter
@@ -2233,7 +2254,7 @@ usable, each of these is:
   `.strcat(.strsub(s, 0, n - 1), .strat(s, n - 1) | $80)` sets bit 7 on the last byte.
 
 `.strlen(s)` is how many bytes `s` is, and `.strat(s, i)` the byte at `i`. There are no
-operators on text: `+` and the rest are on numbers, and joining is `.strcat`. A define is never
+operators on text: `+` and the rest are on numbers, and joining is `.strcat`. A setting is never
 text, and a literal a call builds text from is ASCII as any literal outside a charmap is.
 
 Text never reaches ca65: the output writes its bytes, with the source expression in a comment,
@@ -2280,7 +2301,7 @@ Operators and precedence, highest first:
 | 13 | `\|\|` |
 
 This is C's order, with `.mod` in place of `%` (which begins a binary number), `^^` for
-logical exclusive or, and `.in` beside the comparisons (below). `=` only defines; equality is
+logical exclusive or, and `.in` beside the comparisons (below). `=` never compares; equality is
 `==` and `!=`.
 
 Where the order is easy to misread, parentheses are required:
@@ -2310,10 +2331,7 @@ is an expression like any other.
 `.cos(angle, turn, scale)` (below), `.addrsize(x)`, the address size in bytes (1, 2 or 3) that
 §7.2 gives a symbol or expression, `.target(cpu)`, true when the program's CPU is the one named
 (§5.1), `.has(mnemonic)`, true when the program's CPU has that instruction,
-`.select(c, a, b)`, and `.defined(NAME)`, which is true if NAME is a define (§5.3) and false
-otherwise. Naming a symbol the program declares in `.defined` is an error, since
-conditions never test the program (§10). Macro bodies add `.mode`, `.byteof`, `.exprof` and
-`.empty` (§11).
+and `.select(c, a, b)`. Macro bodies add `.mode`, `.byteof`, `.exprof` and `.empty` (§11).
 
 **Numbers worked out at build time.** Four built-ins work a number out rather than ask about the
 program, so that a table a routine reads is written where the routine is and not in a script in
@@ -2345,8 +2363,8 @@ at which the nearest whole number is not in doubt. `.sin(1, 12, 127)` is 64 and
 decide.
 
 ```nt65
-TURN  = 256
-SCALE = 127
+.const TURN  = 256
+.const SCALE = 127
 
 .segment RODATA
 .data sine: .byte[TURN] {
@@ -2364,7 +2382,7 @@ bodies and address expressions, where the output writes the chosen address. Ther
 export's size.
 
 ```nt65
-COLUMNS = .select(WIDE, 80, 40)
+.const COLUMNS = .select(WIDE, 80, 40)
 .func clamp(v) = .select(v > 255, 255, v)
 ```
 
@@ -2388,7 +2406,7 @@ and anywhere else it is an error.
     [Mode::zpx, Mode::absx], ",X",
     [Mode::zpy, Mode::absy], ",Y",
     "")
-FAST = SPEED .in [2, 4..8]
+.const FAST = SPEED .in [2, 4..8]
 ```
 
 **Functions.** `.func` declares a pure expression function, which is what a function-like
@@ -2404,9 +2422,8 @@ A call is written like a charmap application, `name(args)`. The body is one expr
 whose names resolve where the function is declared. Arguments are values, not tokens: a
 call means its body with each parameter replaced by its parenthesized argument, so
 `rgb15(1 + 1, 0, 0)` passes 2. A call is constant when its arguments are, and may then
-appear wherever a constant may, including `.res` counts, but not in an `.if` condition: a
-function is a declaration of the program, and conditions are answered before any declaration
-is read (§10). Functions may call functions, but not in a cycle, which is an error whether or
+appear wherever a constant may, including `.res` counts, and in an `.if` condition where the
+configuration decides the function and the arguments (§10). Functions may call functions, but not in a cycle, which is an error whether or
 not anything calls them. A function
 is exported and used across modules like a constant, and the output writes each call as
 its parenthesized body, or as its value where nt65 has one.
@@ -2425,7 +2442,7 @@ length when they do, and a distance past it in a data declaration is a constant:
     .data NOFOR: .byte htasc("NEXT WITHOUT FOR")
     .data SYNTAX: .byte htasc("SYNTAX")
 }
-ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES   ; 16, a constant
+.const ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES   ; 16, a constant
 ```
 
 nt65 evaluates every expression it can (anything built only from constants) and uses
@@ -2495,49 +2512,79 @@ their lines are values (§8). `.if` is allowed in an `.enum` body too, where its
 members (§6.3); a repetition is not, because a member's name is written, never computed.
 `.multiproc` is allowed where `.proc` is, and nowhere else.
 
-**Conditions test the configuration, not the program.** An `.if` condition may use
-literals, operators, built-in functions, defines (§5.3) and settings. Inside a macro body it may
-also use the macro's `const` and `one(...)` parameters, `.mode(p)` (§11.2) and
-`.empty(p)` (§11.4), inside a `.repeat` body the repetition index, and inside an
-`.each` body a binding whose value is a constant or a word. It may not otherwise name a constant, label or any other symbol
-the program declares. nt65 therefore evaluates every condition outside those bodies
-before it looks up any declaration, and which declarations exist follows from the
-configuration alone. A check that depends on the program, such as
-`.sizeof(Player) <= 16`, is an `.assert`, which is evaluated last.
+**Conditions test the configuration, not the program.** An `.if` decides which declarations
+exist, so nt65 answers it before it reads any declaration, and its condition may use only what
+the configuration alone decides:
+
+- literals, operators, and every built-in that does not measure a declaration, which excludes
+  `.sizeof`, `.countof`, `.endof`, `.spanof`, `.loadof`, `.runof`, `.mincycles`,
+  `.maxcycles` and the built-ins only a macro body has;
+- settings (below);
+- constants, functions and enum members declared at file level, outside every block, whose
+  values and bodies use only these.
+
+Nothing marks a value the configuration decides: nt65 works it out from what the declaration
+uses, and the editor shows it on the name. A constant declared under an `.if` is not one,
+because whether it exists depends on a condition, but the same value declared once with
+`.select` is. A constant built from a measurement, such as a size, an offset or a distance
+inside data, is not one either, because a measurement is known only once the declarations
+are read. A condition that uses such a value is an error that follows the chain to its cause:
+
+```text
+sound.nt65:40:5: error: the configuration alone does not decide `VOICES`, so an `.if` cannot test it: use `.assert` to check it, or `.select` to choose with it [condition-uses-a-measurement]
+sound.nt65:12:1: note: `VOICES` uses `per_voice`
+sound.nt65:9:1: note: `per_voice` measures `Voice` with `.sizeof`, which is known only once the declarations are read
+```
+
+Inside a macro body a condition may also use the macro's `const` and `one(...)` parameters,
+`.mode(p)` (§11.2) and `.empty(p)` (§11.4), inside a `.repeat` body the repetition index, and
+inside an `.each` body a binding whose value is a constant or a word. nt65 therefore evaluates
+every condition outside those bodies before it looks up any declaration, and which
+declarations exist follows from the configuration alone. A check that depends on the program,
+such as `.sizeof(Player) <= 16`, is an `.assert`, which is evaluated last.
 
 The exceptions are safe because names declared in a macro body, a `.repeat` body or an
 `.each` body are local to the expansion or the iteration, so which names the program
 declares still follows from the configuration. They do read program constants, through
 an argument such as `gen!(MAX_ACTORS)` or a list item, which is why expansion comes after
 constants are evaluated and nothing that decides a constant contains a macro call (§3.1,
-§11.1).
+§11.1). A body's condition names no other constant, so an expansion depends only on what
+§11.1 lists.
 
-**Settings.** `.config NAME = value` is a define a file declares:
+**Settings.** `.const NAME ?= value` declares a **setting**, a constant whose value the build
+may set. The `?=` is GNU Make's: the value is a default, used unless the build gives another.
 
 ```nt65
 .module hw
-.export .config SOUND_CHANNELS = 3
-.config PAL = 0
+.export .const SOUND_CHANNELS ?= 3
+.const PAL                    ?= 0
 
 .if SOUND_CHANNELS > 2 {
     ...
 }
 ```
 
-A setting is written at file level, outside every block, so that which settings a program has
-depends on no condition, and its value may use only literals, built-ins, defines and other
-settings. Conditions anywhere may test it. It is private to its module and exported like a
-constant, reached as `hw::SOUND_CHANNELS` or brought in with `.use`. The build may set an
-exported one by its qualified name (§5.3), which makes the value in the file a default; a
-setting the module keeps to itself is not part of its configuration, and setting it is an
-error. The output writes a setting as its value, as it writes a define. The spelling is not
-ca65's `.define`, which substitutes text. A condition that names a constant where a setting could
-stand, at file level and outside every block, is told to declare it with `.config`, and the
-editor's fix does.
+A setting is a number. It is declared at file level, outside every block, so that which
+settings a program has depends on no condition, and its default must be one the configuration
+decides. The build sets it by its path, `hw::PAL`, or by its name alone where no other module
+declares a setting of that name (§5.3). It may set a setting the module does not export,
+because the build is not a module: `.export` says which modules may read a setting, and `?=`
+says that the build may change it. Everything else true of a constant is true of a setting,
+and the output writes it as its value. A `?=` anywhere else is an error, as is a default the
+configuration does not decide.
+
+A setting states what a module lets a build change, so a value that follows from the settings
+is a plain `.const`, even one a condition tests. It then cannot be set against the settings it
+follows from:
+
+```nt65
+.export .const APPLE    ?= 0
+.export .const KIM      ?= 0
+.export .const CONFIG_11 = APPLE || KIM
+```
 
 In `&&` and `||` the right operand is evaluated, and its names checked, only when the
-left operand does not already decide the result, so `.if .defined(TRACE) && TRACE`
-works when `TRACE` is not defined.
+left operand does not already decide the result.
 
 **Declarations under an `.if` belong to the enclosing scope**, as if the `.if` were not
 there, and a declaration in a branch that is not taken does not exist. The same name
@@ -2545,12 +2592,15 @@ may be declared under several `.if`s, in one chain or in separate ones:
 
 ```nt65
 .if PLATFORM == 1 {
-    LINES = 262
+    .const LINES = 262
 }
 .if PLATFORM == 2 {
-    LINES = 312
+    .const LINES = 312
 }
 ```
+
+Another `.if` cannot test either `LINES`, because each exists only under a condition.
+`.const LINES = .select(PLATFORM == 1, 262, 312)` is one declaration, which it can.
 
 Two declarations of one name in taken branches are a duplicate, and a use of a name
 with none is undefined. Both are reported for the configuration being built, as with
@@ -2774,7 +2824,7 @@ Variable-length argument lists, the usual reason for recursion in ca65 macros, a
 `list` parameters.
 
 An expansion depends only on the macro's definition, the values of its arguments and the
-defines, so expansions are cached on those, and an edit re-expands only the calls whose
+settings, so expansions are cached on those, and an edit re-expands only the calls whose
 inputs changed.
 
 ### 11.2 Parameters and arguments
@@ -3171,7 +3221,7 @@ A module's symbols are private unless exported. `.export` goes before a declarat
 lists names:
 
 ```nt65
-.export BORDER = $D020
+.export .const BORDER = $D020
 .export .proc init {
     rts
 }
@@ -3218,9 +3268,8 @@ looked for in this order:
 
 1. the scopes around it, out to the module's top level;
 2. what a `.use` names, explicitly or with `as`;
-3. the defines;
-4. the first part of a module's path, for a qualified name;
-5. what a `.use module::*` brings in.
+3. the first part of a module's path, for a qualified name;
+4. what a `.use module::*` brings in.
 
 A local declaration beats a name a `*` brings in, and a name two `*` imports bring in is an
 error only where it is used. A name a `.use` brings in explicitly may not also be declared
@@ -3239,7 +3288,7 @@ name, through `as` or an identifier containing `__`, are an error.
 
 What another module's output does with a name depends on its kind:
 
-- **address symbols**, labels and address aliases alike, become `.import`/`.importzp`
+- **address symbols**, labels and data found elsewhere alike, become `.import`/`.importzp`
   under their linker names in the referencing module's output, sized from the export;
   a module that measures another's routine or data with `.endof` or `.spanof` imports the
   `f__end` label beside it, and the module that declares `f` exports that label for it — it
@@ -3405,7 +3454,7 @@ ca65 and ld65 built from cc65 commit `e11fb5c39371046ebe25485f984f644c5a0d65d3`
 (2026-08-20). nt65's tests run against that build. The pin moves forward deliberately,
 and this list is revisited when it does. The rest of
 the output is written for the options the header cannot reach: character and string
-data is bytes, so `-t` cannot translate it; defines are values, so `-D` cannot collide
+data is bytes, so `-t` cannot translate it; settings are values, so `-D` cannot collide
 with them; and every `.segment` carries its address size, so a memory model (`-mm`) that
 disagrees with the segment table is a ca65 error naming the segment rather than a change
 of addressing modes.
@@ -3534,7 +3583,8 @@ generated ca65, which is what ld65 wrote and is still true.
 | `.belong`, `.bedword` | `.byte` with the bytes high first: the values of a constant, or `.bankbyte(e)`, `.hibyte(e)`, `.lobyte(e)` |
 | `.select(c, a, b)` | the chosen value |
 | `.assert c, "m"` that nt65 cannot answer | `.assert c, lderror, "m"` |
-| `.config`, `.warning` | nothing; a setting is written as its value where it is used |
+| `.const NAME ?= expr` | nothing; a setting is written as its value where it is used |
+| `.warning` | nothing |
 | `.endof(f)`, `.spanof(f)` | `f__end`, `(f__end - f)`, with `f__end:` after the last byte of `f` |
 | `.export s`, `.export .proc s {` | `.export m__s`, `.exportzp m__s`, `.export m__s: far` or `.export m__s: abs`, in module `m`, with nt65's address size or the export's |
 | `.import N = v` | `.import N` and `.assert N = v, lderror, ...`; uses of `N` are emitted as `v` |
@@ -3544,8 +3594,8 @@ generated ca65, which is what ld65 wrote and is still true.
 | `.place m` | `m`'s items where the line stands, in each segment it writes to, between `; .place m  file:line` and `; end of m`, and the placing file's segment written again after them where `m` left another |
 | reference to another module's address | `.import m__s` or `.importzp m__s` in the referencing module, or an import's own name |
 | reference to another module's constant, enum, struct, charmap, list, function or macro | emitted by value, or expanded in the referencing module |
-| `NAME = expr` | `NAME = expr`, for a constant or an address alias, written where it stands and opening no segment; one using `*` is in its segment |
-| a define | its value |
+| `.const NAME = expr` | `NAME = expr`, written where it stands and opening no segment |
+| `.data name [: element] = expr` | `name = expr`, written where it stands and opening no segment; one using `*` is in its segment |
 
 **The C header.** `nt65 build --c-header nt65.h` writes what the program exports as C for
 cc65, so C and nt65 share one declaration of each type rather than two kept in step by hand:
@@ -3579,8 +3629,8 @@ opinion of a name it never sees.
 
 .cpu 6502
 
-SCREEN       = $0400
-SCREEN_PAGES = 4
+.const SCREEN       = $0400
+.const SCREEN_PAGES = 4
 
 .export fill_page
 
@@ -3696,8 +3746,9 @@ alone and without an assembler:
   to say about it, and a blank line or a line of code between ends them. Every instance of a
   family is declared on the family's line, so each of them shows the family's comment. A
   hover is read from the top down, and is ordered so that it can be: the declaring line, the
-  comment, the one or two facts that kind of thing is pointed at for — a constant's value, a
-  member's offset, what a call to a routine costs and which registers it hands back, which
+  comment, the one or two facts that kind of thing is pointed at for — a constant's value and
+  whether the configuration decides it (§10), a setting's default and the value the build
+  gives it, a member's offset, what a call to a routine costs and which registers it hands back, which
   module a name came from — then a rule, and everything else the analysis worked out under
   it. Nothing is left out for standing far down: the first screenful is the answer and the
   rest is the working;
@@ -3959,7 +4010,7 @@ the interface unchanged, no other file is re-analyzed, and the file it is in is 
 followed again whole: where control goes is read off the order layout wrote the bytes in, so
 the unit is the file rather than the proc. Where the file is one of several in a translation
 unit (§12), the unit is laid out again, since a `.fallthrough` from one of its modules into
-another is checked against that layout. The only program-wide tables are the defines, the
+another is checked against that layout. The only program-wide tables are the settings, the
 module table, the segment and range tables (§5.2, §5.3) and the CPU, all small. Keeping
 signatures declared rather than inferred is what protects this: inference would make
 every caller depend on every callee's body.
@@ -3968,7 +4019,7 @@ every caller depend on every callee's body.
 
 | ca65 feature | reason |
 |---|---|
-| `.define` | textual substitution; constants, `.func` and `.config` replace it (§9, §10) |
+| `.define` | textual substitution; constants, settings and `.func` replace it (§9, §10) |
 | `.constructor`, `.destructor`, `.interruptor` | cc65 start-up registration stays in a ca65 stub that calls the nt65 routine |
 | `.feature`, `.setcpu` mid-file | changes the grammar or mnemonic set |
 | `.set`, `.org` | positional state |
@@ -4037,8 +4088,8 @@ Recorded so the reasoning survives. None is open.
   without a parser of nt65's, and a project file holds settings, not expressions.
 - **Output is named by module**, not by source file. A module is one file, so the mapping is
   one to one, and a source can move or live outside the project without its output moving.
-- **Named configurations in the project file**, over one set of defines. A debug build and a
-  release build differ in a few defines and where their output goes, and a Makefile or an
+- **Named configurations in the project file**, over one set of settings. A debug build and a
+  release build differ in a few settings and where their output goes, and a Makefile or an
   editor names one rather than repeating its `-D`s; each writing to its own `out` is what lets
   a build switch between them without marker files.
 - **The C header comes from exports.** Declaring a struct in C and in nt65 is two layouts kept
@@ -4239,17 +4290,39 @@ Recorded so the reasoning survives. None is open.
   fraction; everywhere else the nearest whole number is settled long before the precision runs
   out. `.muldiv` is there for the same reason: `a * b / c` written out overflows in the middle
   or loses the fraction at the end, and neither is what anybody meant.
-- **Conditions test only the configuration.** `.if` sees defines and never program
-  symbols, as `#if` in C and C#, `#[cfg]` in Rust and `#if` in Swift do. A conditional
-  that can test program constants (ca65's `.if`, D's `static if`) makes which
-  declarations exist depend on evaluating those declarations. Checks on program values
-  are `.assert`.
-- **In-file defines are `.config` settings.** An in-file define was left out at first; in C#
-  it is mostly a temporary per-file toggle. A library needs somewhere to state its own
-  configuration and its defaults, though, and a program somewhere to change them. A setting
-  is a module's own, exported like a constant, written outside every block so that no
-  condition decides which settings exist, and set by the build through its qualified name.
-  It is spelled `.config` rather than ca65's `.define`, which means textual substitution.
+- **Conditions test only the configuration.** `.if` sees what the configuration decides and
+  never what the declarations measure, as `#if` in C and C#, `#[cfg]` in Rust and `#if` in
+  Swift do. A conditional that can test any program constant (ca65's `.if`, D's `static if`)
+  makes which declarations exist depend on evaluating those declarations. Checks on program
+  values are `.assert`.
+- **What the configuration decides is worked out, not declared.** A constant a condition may
+  test needs no marker, as a Zig `const` needs none to be known at compile time and D runs any
+  function it can. C++'s `constexpr` and Rust's `const fn` are markers because a library
+  compiled on its own promises them to code it never sees. nt65 builds a whole program, so a
+  change that stops a condition working is reported in the same build, with the chain that
+  caused it. A marker would also spread to every value a marked one uses. That is the ceremony
+  that once made constants into settings only so that a condition could test them.
+- **A setting is a constant with `?=`.** A library needs somewhere to state its configuration
+  and its defaults, and a program somewhere to change them. The general-purpose languages that
+  let the source declare such a value mark a constant as settable: Nim's `{.intdefine.}`, Odin's
+  `#config`. A keyword of its own, as `.config` was, has its precedent in hardware description
+  (`parameter` beside `localparam`) and infrastructure languages, and it had come to mean two
+  things: that a condition may test the value, and that the build may change it. The operator is
+  GNU Make's `?=`, "unless already set". It cannot be mistaken for a call, as `.config(0)` could,
+  it needs no rule about where in an expression it may stand, and it shows in the gap of an
+  aligned run. The build sets only what a module declares with it. A derived value set against
+  the settings it follows from is a configuration nobody meant, which is why Verilog's
+  `defparam` and Go's `-X` are warned against.
+- **Every declaration starts with its keyword.** A constant is `.const NAME = expr` rather than
+  ca65's `NAME = expr`. A bare `=` also sets a record member and names an argument, and a vector
+  table's `nmi = nmi` read exactly like a declaration. And `NAME = expr` decided from its
+  expression whether it was a number or an address, so an edit could turn a constant into an
+  address alias, with the error far away where the value was used. A place is declared as what
+  is there, `.data name = expr` or `.proc name = expr`, rather than as an alias, a word most
+  languages use for something else.
+- **Defines are gone.** A build sets the settings modules declare, not names of its own that
+  every file sees. Such a name had no default, no module and no place to document it, and
+  `.defined` existed only to ask whether a build had given one.
 - **The CMOS variants are CPUs of their own.** The 65SC02, the R65C02 and the WDC 65C02
   differ in whole instructions, and a program for one is wrong on another in exactly those,
   so each checks its own set and sets ca65's matching CPU. `.has` asks about an instruction,
@@ -4716,16 +4789,15 @@ is in the sections above.
 ; regard to case.
 ; What the parser reads and the binder then rejects is noted in comments.
 ; No mnemonic is reserved (§4), so every `ident` that names a declaration below may also be
-; a mnemonic: `rts:` is a label, `lda = 5` a constant and `bne!(x)` a macro call, because
+; a mnemonic: `rts:` is a label, `.const lda = 5` a constant and `bne!(x)` a macro call, because
 ; what follows the first word is what decides. A register may not, except as a `member-name`.
 file        := module-decl item* (region item*)*
 module-decl := '.module' module-path (':' ('placed' | 'placeable'))?   ; first
 region      := '.segment' ident NL                    ; at file level only
-item        := const | config | data-decl | padding | proc | multiproc | extern-proc | scope | macro
+item        := const | data-decl | padding | proc | multiproc | extern-proc | scope | macro
              | enum | struct | union | charmap | list | func | signature | export | import | use
              | cpu | segment-decl | segment | if-block | repeat-block | each-block | assert
              | warning | error | place
-config      := '.config' ident '=' expr                ; at file level, outside every block
 place       := '.place' module-path                    ; at file level, in no block but a region
 assert      := '.assert' expr (',' string)?
 warning     := '.warning' string
@@ -4738,9 +4810,11 @@ banks       := expr ('..' expr)? (',' expr ('..' expr)?)*
 padding     := '.res' expr (',' expr)? | '.align' expr (',' expr)?
 local       := '@'ident                               ; one token
 label-line  := (ident | local) ':' (instr | data | macro-call)?   ; inside a proc
-const       := (ident | local) '=' expr
+const       := '.const' (ident | local) ('=' | '?=') expr   ; `?=` at file level, outside
+                                                      ; every block, and never on a local
 data-decl   := '.data' ident ':' data
              | '.data' ident '{' NL mixed* '}'
+             | '.data' ident (':' element count?)? '=' expr   ; found elsewhere
 mixed       := data | data-decl | local ':' data? | macro-call
              | if-block | repeat-block | each-block  ; their contents mixed too
 data        := element count? values?
@@ -4867,7 +4941,7 @@ builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.s
              | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.strsub' | '.strcat'
              | '.min' | '.max'
              | '.sqrt' | '.muldiv' | '.sin' | '.cos' | '.mincycles' | '.maxcycles'
-             | '.addrsize' | '.target' | '.defined' | '.has' | '.select' | '.switch'
+             | '.addrsize' | '.target' | '.has' | '.select' | '.switch'
              | '.loadof' | '.runof'                     ; of a segment
              | '.mode' | '.byteof' | '.exprof' | '.empty' ; the last four in macro bodies
 ```
@@ -4890,7 +4964,7 @@ has been seen so far, or on `.set`), **layout** (depends on addresses or distanc
 | include guards; `.global` in a shared include file | text | modules (§12) |
 | `.set` counters that number states or IDs | order, names | `.enum` (§6.3) |
 | `.ident` and `.concat` building `name_lo` or one label per entry | names | scopes; `.each` over an enum (§10) |
-| `module_header`, which exports and declares a label in the caller | names | the caller writes the label and `.export`; `.if` on a define picks the segment |
+| `module_header`, which exports and declares a label in the caller | names | the caller writes the label and `.export`; `.if` on a setting picks the segment |
 | `add` and `sub` (generic), which count parameters because `add buf,x` splits at the comma | text | macros with an `operand` parameter (§11.2) |
 | `bge`, `blt`, `bnz`, `bze` (generic) | none; bare invocation | macros |
 | `bgt` (generic) as `beq *+4` then `bcs` | flow: a computed target | a macro with a local `@skip` |
@@ -4916,7 +4990,7 @@ has been seen so far, or on `.set`), **layout** (depends on addresses or distanc
 | file and cartridge headers: iNES, the C64 BASIC stub, Atari XEX | layout | `.endof` and `.spanof` (§7.6) with macros |
 | `zp_var name, 2` through `.pushseg` | names, modal segment | a nested segment block (§5.2) |
 | allocators that advance `.set RAM_PTR` | order, names | segments placed by ld65, or `.struct` offsets from a base |
-| `.ifdef DEBUG` trace and break wrappers | none | `.if` on a define, with macros |
+| `.ifdef DEBUG` trace and break wrappers | none | `.if` on a setting, with macros |
 | emulator hooks | flow | `wdm #n` (§7.1) |
 | checking that a symbol is zero page | order | `.assert .addrsize(sym) == 1` (§9) |
 | CPU-conditional code, `.ifp816` | modal CPU | `.if .target(65816)` (§9) |

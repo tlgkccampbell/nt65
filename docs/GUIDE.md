@@ -101,8 +101,8 @@ A build that finds an error writes nothing, so a half-built program never reache
 
 .cpu 6502
 
-SCREEN       = $0400
-SCREEN_PAGES = 4
+.const SCREEN       = $0400
+.const SCREEN_PAGES = 4
 
 .segment ZEROPAGE
 .data ptr: .word                ; destination pointer
@@ -466,7 +466,7 @@ message in a table of messages, which a one-byte immediate can then load:
     .data SYNTAX: .byte "SYNTA", 'X' | $80
 }
 
-ERR_SYNTAX = messages::SYNTAX - messages    ; 16
+.const ERR_SYNTAX = messages::SYNTAX - messages ; 16
 ```
 
 **Enums and unions.** `.enum` and `.union` are ca65's, with braces:
@@ -557,7 +557,7 @@ character of each keyword by setting bit 7:
     .data END: .byte htasc("END")
     .data FOR: .byte htasc("FOR")
 }
-TOKEN_FOR = keywords::FOR - keywords        ; 3
+.const TOKEN_FOR = keywords::FOR - keywords  ; 3
 ```
 
 A function is worked out along with the constants, before anything is assembled, so the text
@@ -572,30 +572,32 @@ because the string would end early.
 `.define` is gone, because it substitutes text. Each of its uses has a replacement:
 
 ```nt65
-LINES = 25                          ; a constant
+.const LINES = 25                   ; a constant
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
-.config VOICES = 3                  ; a setting the build may change
+.const VOICES ?= 3                  ; a setting: 3 unless the build says otherwise
+.const DEBUG  ?= 0
 
-.if .defined(DEBUG) && DEBUG {
-    TRACE_LEVEL = 2
-} .else {
-    TRACE_LEVEL = 0
-}
+.const TRACE_LEVEL = .select(DEBUG, 2, 0)
 ```
 
 - **A constant** is assigned once, may be used before it is defined, and may not depend on
-  itself.
+  itself. It is a number or a text, never an address: an address is declared as what is there,
+  `.data TXTPTR: .addr = CHRGOT + 1` or `.proc CHROUT = $ffd2`.
 - **A `.func`** takes values, not tokens. `rgb15(1 + 1, 0, 0)` passes 2, where a ca65
   `.define` would substitute the text `1 + 1` and let precedence decide what it meant.
-- **A define** comes from `nt65.json` or the command line, `-D DEBUG=1`, and is visible in
-  every module.
-- **A `.config` setting** is a define a module declares, with a default. The build overrides
-  it by its path: `-D audio::VOICES=4`, or `"audio::VOICES": 4` under `defines`.
+- **A setting** is a constant declared with `?=`, whose value is a default the build may
+  change. The build sets it by its path, `-D audio::VOICES=4` or `"audio::VOICES": 4` under
+  `settings` in `nt65.json`, or by its name alone, `-D DEBUG=1`, when no other module has a
+  setting of that name. A setting is declared at file level, outside every block.
 
 **Conditions test the configuration, never the program.** An `.if` condition may use numbers,
-operators, built-in functions, defines and `.config` settings, and nothing else the program
-declares. That is what lets nt65 know which declarations exist before it reads any of them.
-A check that depends on the program, such as a table's size, is an `.assert`:
+operators, the built-in functions that measure nothing, settings, and the constants and
+functions built only from those at file level, outside every block. That is what lets nt65
+know which declarations exist before it reads any of them. Nothing marks such a constant:
+nt65 works it out, and the editor says so on hover. A constant declared under an `.if`, or
+built from a size or an offset, is known only once the declarations are read, and a
+condition that uses one is an error that says why. A check that depends on the program, such
+as a table's size, is an `.assert`:
 
 ```nt65
 .assert .sizeof(Actor) <= 8, "Actor must fit an 8-byte slot"
@@ -606,18 +608,19 @@ linker knows, nt65 writes it into the output for ld65 to check. `.assert` takes 
 failed assertion is always an error. `.error "text"` inside an `.if` refuses a configuration,
 and `.warning "text"` builds it with a message.
 
-In `&&` and `||`, the right side is evaluated only when the left does not decide the answer,
-so `.defined(DEBUG) && DEBUG` works when `DEBUG` is not defined.
+In `&&` and `||`, the right side is evaluated only when the left does not decide the answer.
 
 Declarations inside an `.if` belong to the surrounding scope. The same name may be declared
 in several branches, and only the branch the configuration takes counts. The editor greys
-out the branches the current configuration does not take.
+out the branches the current configuration does not take. Another `.if` cannot test a
+constant declared in a branch, so a value that differs between builds is one declaration with
+`.select`, as `TRACE_LEVEL` is above.
 
 **`.select(c, a, b)`** is `a` when `c` holds and `b` when it does not. Only the chosen side is
 evaluated, so the other may name something this build does not declare:
 
 ```nt65
-COLUMNS = .select(WIDE, 80, 40)
+.const COLUMNS = .select(WIDE, 80, 40)
 ```
 
 **Sets.** `v .in [a, b, c..d]` is 1 when the set holds `v` and 0 when it does not, and
@@ -650,10 +653,9 @@ joined to the one before it, so a bracket left open by mistake is reported where
   "cpu": "6502",
   "files": ["src/**/*.nt65"],
   "out": "build",
-  "defines": { "DEBUG": 0 },
   "configurations": {
-    "debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" },
-    "pal":   { "defines": { "hw::PAL": 1 }, "out": "build/pal" }
+    "debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" },
+    "pal":   { "settings": { "hw::PAL": 1 }, "out": "build/pal" }
   }
 }
 ```
@@ -675,7 +677,7 @@ so nothing in the output depends on ca65's own table.
 | `.bitand`, `.bitor`, `.bitxor`, `.bitnot` | `&`, `\|`, `^`, `~` |
 | `.and`, `.or`, `.not` | `&&`, `\|\|`, `!` |
 
-`=` only ever defines. Where C's order is easy to misread, nt65 requires parentheses:
+`=` never compares. Where C's order is easy to misread, nt65 requires parentheses:
 
 - `a & $0f == 0` is an error, because it means `a & ($0f == 0)`. Write `(a & $0f) == 0`.
 - `1 << n + 1` is an error. Write `1 << (n + 1)` or `(1 << n) + 1`.
@@ -698,8 +700,8 @@ them uses floating point, so every machine builds the same bytes. A lookup table
 come from a script can sit beside the code that reads it:
 
 ```nt65
-TURN  = 256
-SCALE = 127
+.const TURN  = 256
+.const SCALE = 127
 
 .segment RODATA
 .data sine: .byte[TURN] {
@@ -713,7 +715,7 @@ SCALE = 127
 `.cos` is the same a quarter turn on.
 
 The other built-in functions are `.lobyte`, `.hibyte`, `.bankbyte`, `.loword`, `.hiword`,
-`.min`, `.max`, `.addrsize` (1, 2 or 3 for an address's size), `.defined`, `.has`,
+`.min`, `.max`, `.addrsize` (1, 2 or 3 for an address's size), `.has`,
 `.target`, `.select`, `.switch`, the size functions of [Data has a type](#data-has-a-type), the text
 functions of [Text](#text), and `.mincycles` and `.maxcycles`, which are in [Cycle counts and
 branch range](#cycle-counts-and-branch-range).
@@ -1557,7 +1559,7 @@ whole program and writes only those files' output. Its options are:
 | `--project <file>` | the project file, or the folder that holds it |
 | `--config <name>` | a named configuration |
 | `--cpu <cpu>` | `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`, when the project does not say |
-| `-D NAME[=value]` | a define, or a module's `.config` setting by its path |
+| `-D NAME[=value]` | a setting's value, by its path or its name alone |
 | `--out <dir>` | where output goes |
 | `--depfile <file>` | make-style dependencies of every output |
 | `--c-header <file>` | a C header of what the program exports |
@@ -1601,12 +1603,13 @@ CPUs that have it.
 | `.include "part.s"` of code that must land where the line is | a module declared `placed`, and `.place` |
 | `.export` and `.import` between files | `.export` in one module, a path or `.use` in the other |
 | `.global`, `.local` | `.export`, and scoping by structure |
-| `.define NAME 5` | `NAME = 5` |
+| `.define NAME 5` | `.const NAME = 5` |
 | a function-like `.define` | `.func name(args) = expr` |
 | `.define` of a list | `.list name { … }` |
 | `.set` counters | `.enum`, or the index of a `.repeat` |
-| `.ifdef NAME` | `.if .defined(NAME)` |
-| `.if` on a program symbol | `.assert`, or a define |
+| `.ifdef NAME` | a setting, `.const NAME ?= 0`, and `.if NAME` |
+| `.if` on a program symbol | `.assert`, or a setting |
+| `NAME = label + 1`, an address under a name | `.data NAME: .byte = label + 1`, or `.proc NAME = label` for a routine |
 | `.ifp02`, `.ifpc02`, `.ifp816` | `.if .target(6502)` and so on, or `.if .has(phx)` |
 | `.assert expr, error, "m"` | `.assert expr, "m"` |
 | `.a8`, `.a16`, `.i8`, `.i16`, `.smart` | a signature, `.state` and `.ensure` |
@@ -1640,15 +1643,15 @@ as it was for you and the diagnostics to work through.
 ### Things that will catch you out
 
 1. `%` is not modulo; it starts a binary number. Use `.mod`.
-2. `=` defines; compare with `==`.
+2. A constant starts with `.const`, and `=` never compares; compare with `==`.
 3. `#<label+1` is an error. Say which you mean with parentheses.
 4. A label outside a `.proc` is an error. Data is `.data name: ...`.
 5. `.byte[4] { 1, 2, 4 }` is an error, not padding.
 6. The register names `a`, `x`, `y` and `s` are reserved in any case, so `S` and `X` cannot be
-   names either. Mnemonics are not reserved: `lda = 5` is a constant, with a warning.
+   names either. Mnemonics are not reserved: `.const lda = 5` is a constant, with a warning.
 7. `.use` paths start at the root of the modules.
 8. A module's names are private until exported, even to the module next to it.
-9. `.if` cannot test a program symbol, only defines and `.config` settings.
+9. `.if` cannot test a program symbol, only settings and the constants built from them.
 10. On the 65816, a routine with no widths in its signature assumes nothing about them, so
     `lda #$12` in it is an error until the signature says `a8` or `a16`.
 11. On the 65816, a `jsr` to a far routine is an error, not a truncated address.
