@@ -601,6 +601,14 @@
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
     </Field>
+    <Field Name="SkippedTokens" Type="SkippedTokensSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the tokens the parser skipped between the name and the <c>:</c>, or null if there
+          are none.
+        </summary>
+      </PropertyComment>
+    </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>Gets the <c>:</c> token before the data directive that describes the data, or null.</summary>
@@ -646,6 +654,14 @@
     <Field Name="Type" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
         <summary>Gets the <c>T</c> of <c>.type T</c>, or null.</summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="SkippedTokens" Type="SkippedTokensSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the tokens the parser skipped where the <c>T</c> of <c>.type T</c> belongs, or null if
+          there are none.
+        </summary>
       </PropertyComment>
     </Field>
     <Field Name="Count" Type="ElementCountSyntax" Optional="true">

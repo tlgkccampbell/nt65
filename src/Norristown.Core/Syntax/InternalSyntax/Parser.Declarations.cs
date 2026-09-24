@@ -611,14 +611,14 @@ internal sealed partial class Parser
         var element = SyntaxFacts.IsElementType(directive.DirectiveKind);
         if (!element)
             Report(at, Catalogue.ImportNeedsAnElementType.Message(directive.Text));
-        var type = ParseRecordType(directive);
+        var (type, skipped) = ParseRecordType(directive);
         var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
         // One cause gets one diagnostic. A directive that is not an element type has been
         // reported already, and anything after it is part of the same mistake.
         if (element && !AtEnd && Kind != SyntaxKind.Comma)
             Report(Catalogue.ImportHoldsNoValues.Message(directive.Text));
-        return new DataDirectiveSyntax(directive, type, count, null);
+        return new DataDirectiveSyntax(directive, type, skipped, count, null);
     }
 
     private ImportSignatureSyntax ParseImportSignature()

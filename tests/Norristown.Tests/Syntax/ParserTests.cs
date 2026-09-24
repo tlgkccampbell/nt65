@@ -197,7 +197,7 @@ public sealed class ParserTests
     [InlineData(".rodata {", "ca65's `.rodata` is `.segment RODATA` in nt65")]
     [InlineData(".tag Point", "`.tag T` is `.type T` in nt65, and `.tag T, n` is `.type T[n]`")]
     [InlineData(".data {", "`.data` declares data, and needs a name: the segment is `.segment DATA`")]
-    [InlineData(".data x .byte", "expected `:` and what the data is, or `{` for mixed data")]
+    [InlineData(".data x .byte", "expected `:` before what the data is")]
     [InlineData(".data x: lda", "expected what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, `.type T`, or bytes such as `.incbin`")]
     [InlineData(".data x: .byte[4 {", "expected `]`")]
     [InlineData(".data x: .byte[4] 1, 2, 3, 4", "the values of an array go in braces: `.byte[n] { 1, 2 }`")]

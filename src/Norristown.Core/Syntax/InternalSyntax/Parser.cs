@@ -374,6 +374,20 @@ internal sealed partial class Parser
         skippedTokens = Own(new SkippedTokensSyntax(TakeRest()));
     }
 
+    /// <summary>
+    /// Skips tokens up to the first one at which <paramref name="stop"/> holds, or to the end of
+    /// the line, and returns them. The first of them gets <paramref name="message"/>, if nothing
+    /// has been reported on the line yet.
+    /// </summary>
+    private SkippedTokensSyntax SkipUntil(Func<bool> stop, DiagnosticMessage message)
+    {
+        ReportOnce(message);
+        var skipped = new GreenListBuilder();
+        while (!AtEnd && !stop())
+            skipped.Add(Advance());
+        return Own(new SkippedTokensSyntax(skipped.ToList()));
+    }
+
     private GreenNode ErrorLine(DiagnosticMessage message, DiagnosticFix? fix = null)
     {
         Report(index, message, fix);

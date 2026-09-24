@@ -15,10 +15,10 @@ internal sealed partial class Parser
     {
         var directive = Advance();
         if (!SyntaxFacts.IsElementType(directive.DirectiveKind))
-            return new DataDirectiveSyntax(directive, null, null, AtEnd ? null : ParseInlineData());
+            return new DataDirectiveSyntax(directive, null, null, null, AtEnd ? null : ParseInlineData());
 
         var record = directive.DirectiveKind == DirectiveKind.Type;
-        var type = ParseRecordType(directive);
+        var (type, skipped) = ParseRecordType(directive);
         var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
         DataTailSyntax? tail = null;
@@ -46,21 +46,28 @@ internal sealed partial class Parser
             }
             tail = ParseInlineData();
         }
-        return new DataDirectiveSyntax(directive, type, count, tail);
+        return new DataDirectiveSyntax(directive, type, skipped, count, tail);
     }
 
     /// <summary>
-    /// Parses the type after <c>.type</c>, or returns null for any other element type. A
-    /// <c>.type</c> with no type after it is reported, and also gives null.
+    /// Parses the type after <c>.type</c>, or returns no type for any other element type. A
+    /// <c>.type</c> with no type after it is reported, and also gives no type. Tokens where the
+    /// type belongs that cannot be one, as in <c>.type @T[2]</c>, are reported once and skipped, so
+    /// the count and the values after them are still read.
     /// </summary>
-    private NameExpressionSyntax? ParseRecordType(GreenToken directive)
+    private (NameExpressionSyntax? Type, SkippedTokensSyntax? Skipped) ParseRecordType(GreenToken directive)
     {
         if (directive.DirectiveKind != DirectiveKind.Type)
-            return null;
+            return (null, null);
         if (AtName || Kind == SyntaxKind.ColonColon)
-            return ParseName();
-        Report(Catalogue.ExpectedDataType.Message("the type: `.type T`"));
-        return null;
+            return (ParseName(), null);
+        var message = Catalogue.ExpectedDataType.Message("the type: `.type T`");
+        if (AtEnd || Kind is SyntaxKind.OpenBracket or SyntaxKind.OpenBrace or SyntaxKind.Comma)
+        {
+            Report(message);
+            return (null, null);
+        }
+        return (null, SkipUntil(() => Kind is SyntaxKind.OpenBracket or SyntaxKind.OpenBrace or SyntaxKind.Comma, message));
     }
 
     /// <summary>
@@ -91,6 +98,16 @@ internal sealed partial class Parser
             ? Catalogue.DataNeedsAName.Message()
             : Catalogue.ExpectedName.Message("a name: `.data name: .byte 1, 2` or `.data name { }`"));
 
+        // Tokens between the name and a `:` later on the line are reported once and skipped, and
+        // the line is read on from the `:`, so the element type and the body it opens still count.
+        SkippedTokensSyntax? skipped = null;
+        if (Kind is not (SyntaxKind.Colon or SyntaxKind.OpenBrace) && ColonAhead())
+        {
+            skipped = SkipUntil(
+                () => Kind == SyntaxKind.Colon,
+                Catalogue.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
+        }
+
         GreenToken? colon = null;
         DataDirectiveSyntax? element = null;
         GreenToken? brace = null;
@@ -115,11 +132,28 @@ internal sealed partial class Parser
         {
             brace = Advance();
         }
+        else if (SyntaxFacts.LineDirectiveKind(Current.DirectiveKind) == SyntaxKind.DataDirective)
+        {
+            // Only the `:` is missing, as in `.data name .byte[2] {`, so the element type is read.
+            colon = Expect(SyntaxKind.Colon, Catalogue.ExpectedColon.Message("`:` before what the data is"));
+            element = ParseDataDirective();
+        }
         else
         {
             ReportOnce(Catalogue.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
         }
-        return new DataDeclarationSyntax(keyword, name, colon, element, brace);
+        return new DataDeclarationSyntax(keyword, name, skipped, colon, element, brace);
+    }
+
+    /// <summary>Returns a value indicating whether a <c>:</c> appears from the current token on.</summary>
+    private bool ColonAhead()
+    {
+        for (var at = index; at < tokens.Length; at++)
+        {
+            if (tokens[at].Kind == SyntaxKind.Colon)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

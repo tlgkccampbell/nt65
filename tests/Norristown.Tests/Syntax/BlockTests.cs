@@ -216,16 +216,31 @@ public sealed class BlockTests
         new[] { ".proc f {", "    .word {", "        1, 2", "    }", "    rts", "}" },
         "Proc 2-7\n  DataBody 3-5\n",
         new[] { "3: values in a body need a count: `.word[] {` counts them" })]
-    // The parser reads `.data` as far as the first token out of place, so a data line with
-    // something before its `:` opens mixed data.
+    // Tokens before the `:` of a data line are reported once and skipped, so the line still
+    // opens the body its element type and count give.
     [InlineData(
         new[] { ".data table extra: .byte[2] {", "    1, 2", "}" },
-        "Data 2-4\n",
-        new[]
-        {
-            "2: expected `:` and what the data is, or `{` for mixed data",
-            "3: expected a label, a constant, an instruction or a directive",
-        })]
+        "DataBody 2-4\n",
+        new[] { "2: expected `:` and what the data is, or `{` for mixed data" })]
+    [InlineData(
+        new[] { ".data table 1 + 2: .byte[2] {", "    1, 2", "}" },
+        "DataBody 2-4\n",
+        new[] { "2: expected `:` and what the data is, or `{` for mixed data" })]
+    // A data line missing only its `:` still reads its element type.
+    [InlineData(
+        new[] { ".data table .byte[2] {", "    1, 2", "}" },
+        "DataBody 2-4\n",
+        new[] { "2: expected `:` before what the data is" })]
+    // Tokens that cannot be the type of a `.type` are reported once and skipped, so the count
+    // after them still makes the body one of values.
+    [InlineData(
+        new[] { ".struct T {", "    x: .byte", "}", ".data table: .type @T[2] {", "    { x = 1 }, { x = 2 }", "}" },
+        "Struct 2-4\nDataBody 5-7\n",
+        new[] { "5: expected the type: `.type T`" })]
+    [InlineData(
+        new[] { ".struct T {", "    x: .byte", "}", ".data table: .type 5 {", "    x = 1", "}" },
+        "Struct 2-4\nRecordInitializer 5-7\n",
+        new[] { "5: expected the type: `.type T`" })]
     public void ABrokenLineOpensTheBlockItParsesAs(string[] lines, string blocks, string[] problems)
     {
         var tree = Parse([".module m", .. lines]);
@@ -234,6 +249,20 @@ public sealed class BlockTests
         Assert.Equal(
             problems,
             tree.Diagnostics.Concat(model.Diagnostics).Select(d => $"{d.Span.Line}: {d.Message}").Distinct().Order());
+    }
+
+    /// <summary>
+    /// Checks that the tokens a data line's parse skips are reported where they are, at the first
+    /// of them.
+    /// </summary>
+    [Theory]
+    [InlineData(".data table extra: .byte[2] {", "extra")]
+    [InlineData(".data table: .type @T[2] {", "@T")]
+    public void SkippedTokensAreReportedWhereTheyAre(string line, string junk)
+    {
+        var reported = Assert.Single(Parse(line, "    1, 2", "}").Diagnostics);
+        Assert.Equal(line.IndexOf(junk, StringComparison.Ordinal) + 1, reported.Span.StartColumn);
+        Assert.Equal(line.IndexOf(junk, StringComparison.Ordinal) + junk.Length + 1, reported.Span.EndColumn);
     }
 
     [Fact]
