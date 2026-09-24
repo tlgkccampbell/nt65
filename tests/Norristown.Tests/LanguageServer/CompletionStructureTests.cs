@@ -13,13 +13,6 @@ public sealed class CompletionStructureTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
-    /// <summary>The directives that open a block, each of which a completion inserts as the whole block.</summary>
-    private static readonly string[] Openers =
-    [
-        ".proc", ".multiproc", ".scope", ".macro", ".struct", ".union", ".enum", ".segment", ".if",
-        ".repeat", ".each",
-    ];
-
     /// <summary>
     /// A 65816 file whose routines all declare the same signature, so that the snippet for a new
     /// routine can offer that signature too.
@@ -42,6 +35,13 @@ public sealed class CompletionStructureTests
             rts
         }
         """;
+
+    /// <summary>The directives that open a block, each of which a completion inserts as the whole block.</summary>
+    private static readonly string[] Openers =
+    [
+        ".proc", ".multiproc", ".scope", ".macro", ".struct", ".union", ".enum", ".segment", ".if",
+        ".repeat", ".each",
+    ];
 
     /// <summary>
     /// Only the block openers are snippets. The name is the first tab stop and the body the last.

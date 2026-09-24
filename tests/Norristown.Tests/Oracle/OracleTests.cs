@@ -392,6 +392,15 @@ public sealed partial class OracleTests
         LinksLikeByHand(output, ByHand);
     }
 
+    [Fact]
+    public void RefusesABuildThatIsNotThePinnedCommit()
+    {
+        var ca65 = Repo.Path(".cache", "cc65", "bin", OperatingSystem.IsWindows() ? "ca65.exe" : "ca65");
+        var e = Assert.Throws<InvalidOperationException>(
+            () => new Ca65Oracle(ca65, "547d9230000000000000000000000000000000", cacheDirectory: null));
+        Assert.Contains("refusing to use ca65", e.Message);
+    }
+
     /// <summary>
     /// Assembles <paramref name="output"/> as <paramref name="fileName"/> and returns a message
     /// for each way ca65 disagrees with it. A disagreement is any message from ca65, or a line
@@ -461,15 +470,6 @@ public sealed partial class OracleTests
         Assert.NotEmpty(fromHand.Binary);
         Assert.Equal(fromHand.Binary, fromNt65.Binary);
         return fromHand.Binary;
-    }
-
-    [Fact]
-    public void RefusesABuildThatIsNotThePinnedCommit()
-    {
-        var ca65 = Repo.Path(".cache", "cc65", "bin", OperatingSystem.IsWindows() ? "ca65.exe" : "ca65");
-        var e = Assert.Throws<InvalidOperationException>(
-            () => new Ca65Oracle(ca65, "547d9230000000000000000000000000000000", cacheDirectory: null));
-        Assert.Contains("refusing to use ca65", e.Message);
     }
 
     [GeneratedRegex(@";=\s*(\d+)\s*$")]

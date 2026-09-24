@@ -10,9 +10,6 @@ namespace Norristown.Tests.Layout;
 /// </summary>
 public sealed class BranchTests
 {
-    /// <summary>Returns filler of <paramref name="bytes"/> bytes, one <c>nop</c> each.</summary>
-    private static string Nops(int bytes) => $".repeat {bytes}, i {{\n        nop\n    }}\n";
-
     [Fact]
     public void AForwardLongBranchWithinRangeIsTheShortBranch()
     {
@@ -105,6 +102,9 @@ public sealed class BranchTests
 
         Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", text)).Problems());
     }
+
+    /// <summary>Returns filler of <paramref name="bytes"/> bytes, one <c>nop</c> each.</summary>
+    private static string Nops(int bytes) => $".repeat {bytes}, i {{\n        nop\n    }}\n";
 
     /// <summary>
     /// Returns the ca65 source written for <paramref name="text"/>, which is put in the code

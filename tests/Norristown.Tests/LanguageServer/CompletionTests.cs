@@ -10,6 +10,22 @@ namespace Norristown.Tests.LanguageServer;
 /// </summary>
 public sealed class CompletionTests
 {
+    [Fact]
+    public async Task AnnouncesWhatTheEditingLayerCanDo()
+    {
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.StartAsync(timeout);
+
+        var capabilities = client.Initialized.Capabilities;
+        Assert.Equal(
+            [" ", ".", ":", "@", "!", "#", "(", "[", ","], capabilities.CompletionProvider?.TriggerCharacters);
+        Assert.Equal(["(", ",", "="], capabilities.SignatureHelpProvider?.TriggerCharacters);
+        Assert.NotNull(capabilities.CodeLensProvider);
+        Assert.True(capabilities.WorkspaceSymbolProvider);
+        Assert.Equal(
+            ["quickfix", "refactor.rewrite", "refactor.extract"], capabilities.CodeActionProvider?.CodeActionKinds);
+    }
+
     public static TheoryData<string, string, string[], string[]> Completions => new()
     {
         // After `::`, what the module or type the path names exports, and nothing it keeps private.
@@ -121,22 +137,6 @@ public sealed class CompletionTests
         { "body", "    lda #1 ; load the |", [], ["lda", "clear", ".sizeof"] },
         { "top", ".error \"what went |", [], ["clear", ".proc"] },
     };
-
-    [Fact]
-    public async Task AnnouncesWhatTheEditingLayerCanDo()
-    {
-        var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-
-        var capabilities = client.Initialized.Capabilities;
-        Assert.Equal(
-            [" ", ".", ":", "@", "!", "#", "(", "[", ","], capabilities.CompletionProvider?.TriggerCharacters);
-        Assert.Equal(["(", ",", "="], capabilities.SignatureHelpProvider?.TriggerCharacters);
-        Assert.NotNull(capabilities.CodeLensProvider);
-        Assert.True(capabilities.WorkspaceSymbolProvider);
-        Assert.Equal(
-            ["quickfix", "refactor.rewrite", "refactor.extract"], capabilities.CodeActionProvider?.CodeActionKinds);
-    }
 
     [Theory]
     [MemberData(nameof(Completions))]

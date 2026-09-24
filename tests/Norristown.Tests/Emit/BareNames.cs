@@ -16,17 +16,6 @@ namespace Norristown.Tests.Emit;
 internal static partial class BareNames
 {
     /// <summary>
-    /// Matches a name defined at the start of a line. The definition is a label, an assignment,
-    /// or the <c>z := *</c> that nt65 writes for a label named <c>z</c>.
-    /// </summary>
-    [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?::=|:|=)")]
-    private static partial Regex Defined();
-
-    /// <summary>Matches the <c>.setcpu</c> line that the output's own header writes.</summary>
-    [GeneratedRegex(@"^\.setcpu\s+""(?<cpu>[^""]+)""")]
-    private static partial Regex SetCpu();
-
-    /// <summary>
     /// Returns a problem for each line of <paramref name="text"/> that defines a name ca65 would
     /// read as an instruction.
     /// </summary>
@@ -46,6 +35,17 @@ internal static partial class BareNames
             }
         }
     }
+
+    /// <summary>
+    /// Matches a name defined at the start of a line. The definition is a label, an assignment,
+    /// or the <c>z := *</c> that nt65 writes for a label named <c>z</c>.
+    /// </summary>
+    [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?::=|:|=)")]
+    private static partial Regex Defined();
+
+    /// <summary>Matches the <c>.setcpu</c> line that the output's own header writes.</summary>
+    [GeneratedRegex(@"^\.setcpu\s+""(?<cpu>[^""]+)""")]
+    private static partial Regex SetCpu();
 
     /// <summary>
     /// Returns the CPU that the output's header names, or null if the file has no header. A line

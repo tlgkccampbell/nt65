@@ -190,18 +190,6 @@ public sealed class ExtensionTests : IDisposable
     }
 
     /// <summary>
-    /// Returns the commands the client's own code registers, found from the calls that register them.
-    /// </summary>
-    private static IEnumerable<string> Registered() =>
-        ClientFiles
-            .SelectMany(file => Regex.Matches(
-                Repo.ReadText(Repo.Path("editors", "vscode", file)),
-                @"registerCommand\('(?<name>[^']+)'",
-                RegexOptions.None,
-                TimeSpan.FromSeconds(5)))
-            .Select(match => match.Groups["name"].Value);
-
-    /// <summary>
     /// The grammar that colours the grid in a hover is checked against the lines the server
     /// writes into it. Markdown formatting does not apply inside a fenced block, so the grid is
     /// fenced as a language of its own, and this grammar is the only thing that tells its parts
@@ -251,6 +239,18 @@ public sealed class ExtensionTests : IDisposable
             Assert.Equal(scope, Scoped(line, line.IndexOf(text, StringComparison.Ordinal)));
         }
     }
+
+    /// <summary>
+    /// Returns the commands the client's own code registers, found from the calls that register them.
+    /// </summary>
+    private static IEnumerable<string> Registered() =>
+        ClientFiles
+            .SelectMany(file => Regex.Matches(
+                Repo.ReadText(Repo.Path("editors", "vscode", file)),
+                @"registerCommand\('(?<name>[^']+)'",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(5)))
+            .Select(match => match.Groups["name"].Value);
 
     /// <summary>
     /// Returns the scope the grammar gives the character at <paramref name="at"/>, or null where

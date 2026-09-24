@@ -46,8 +46,30 @@ public sealed class MacroRequestsTests
         ptr = $10
         """;
 
-    private static Task<TestClient> OpenAsync(CancellationToken timeout) =>
-        TestClient.OpenedAsync(timeout, (Uri, Source));
+    /// <summary>
+    /// A macro whose parameters say what they take, and calls that pass an enum's member by its
+    /// bare name, one of them beside data of the same name.
+    /// </summary>
+    private const string Typed = """
+        .module main
+        .enum Instrument {
+            kick
+            snare
+        }
+        .macro play(what: Instrument, note: const(0..127), src: operand(imm, abs), reg: one(x, y)) {
+            .if .mode(src) == imm && reg != y {
+                .byte what, note
+            } .elseif .mode(src) == absx {
+                .byte note
+            }
+        }
+        .segment RODATA
+        .data kick: .byte 1
+        .data tune {
+            play!(kick, 5, {#1}, x)
+            play!(Instrument::snare, 6, kick, y)
+        }
+        """;
 
     /// <summary>A body is ordinary nt65, so it has nothing wrong with it to report.</summary>
     [Fact]
@@ -153,31 +175,6 @@ public sealed class MacroRequestsTests
     }
 
     /// <summary>
-    /// A macro whose parameters say what they take, and calls that pass an enum's member by its
-    /// bare name, one of them beside data of the same name.
-    /// </summary>
-    private const string Typed = """
-        .module main
-        .enum Instrument {
-            kick
-            snare
-        }
-        .macro play(what: Instrument, note: const(0..127), src: operand(imm, abs), reg: one(x, y)) {
-            .if .mode(src) == imm && reg != y {
-                .byte what, note
-            } .elseif .mode(src) == absx {
-                .byte note
-            }
-        }
-        .segment RODATA
-        .data kick: .byte 1
-        .data tune {
-            play!(kick, 5, {#1}, x)
-            play!(Instrument::snare, 6, kick, y)
-        }
-        """;
-
-    /// <summary>
     /// Hover on a parameter, or anywhere in the kind after its <c>:</c>, says what the parameter
     /// accepts. Hover on a mode that an <c>operand</c> lists also says how an operand in that mode
     /// is written.
@@ -274,4 +271,7 @@ public sealed class MacroRequestsTests
         Assert.Equal("enumMember", at[(6, 36)]);
         Assert.Equal("variable", at[(16, 32)]);
     }
+
+    private static Task<TestClient> OpenAsync(CancellationToken timeout) =>
+        TestClient.OpenedAsync(timeout, (Uri, Source));
 }

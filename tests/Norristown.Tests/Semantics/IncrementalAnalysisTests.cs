@@ -246,12 +246,6 @@ public sealed class IncrementalAnalysisTests
         Assert.Equal(scratch.Problems(), incremental.Problems());
     }
 
-    /// <summary>
-    /// Returns no length for any path, because no file of these programs has an <c>.incbin</c> in
-    /// it.
-    /// </summary>
-    private static long? Nothing(string path) => null;
-
     /// <summary>An <c>.incbin</c> file that changed on disk is a change to the files that include it.</summary>
     [Fact]
     public void AnIncbinThatChangedIsAnalyzedAgain()
@@ -262,4 +256,10 @@ public sealed class IncrementalAnalysisTests
         Assert.Equal(WholeProgramReason.BinaryFileChanged,
             replay.Change("main.nt65", replay.Text("main.nt65").IndexOf("inx", StringComparison.Ordinal), 3, "dex").WholeProgram);
     }
+
+    /// <summary>
+    /// Returns no length for any path, because no file of these programs has an <c>.incbin</c> in
+    /// it.
+    /// </summary>
+    private static long? Nothing(string path) => null;
 }

@@ -60,6 +60,43 @@ internal sealed class TestClient : IAsyncDisposable
         StartAsync(null, null, cancellation, name);
 
     /// <summary>
+    /// Connects with <paramref name="rootUri"/> as the folder the client opened, and
+    /// <paramref name="configuration"/> as the configuration its settings choose.
+    /// <paramref name="refreshesTokens"/> indicates whether the client can be asked to fetch
+    /// semantic tokens again.
+    /// </summary>
+    public static Task<TestClient> StartAsync(
+        string? rootUri, string? configuration, CancellationToken cancellation, string name = "test-client",
+        bool refreshesTokens = false) =>
+        StartAsync(
+            Capable(refreshesTokens), cancellation, rootUri: rootUri, configuration: configuration, name: name);
+
+    /// <summary>
+    /// Connects as a client that declares <paramref name="capabilities"/>, an object sent as the
+    /// protocol's own <c>capabilities</c> field, so that a test declares what it supports in the
+    /// same JSON a real client would send.
+    /// </summary>
+    public static async Task<TestClient> StartAsync(
+        object capabilities, CancellationToken cancellation, string? rootUri = null, string? configuration = null,
+        string name = "test-client", Delay? delay = null, int? processId = null, object? inlayHints = null,
+        Analyzer? analyzer = null)
+    {
+        var client = new TestClient(delay, analyzer);
+        client.Initialized = await client.rpc.InvokeWithParameterObjectAsync<InitializeResult>("initialize",
+            new
+            {
+                processId,
+                clientInfo = new { name, version = "1.0" },
+                capabilities,
+                rootUri,
+                initializationOptions = new { configuration, inlayHints },
+            },
+            cancellation);
+        await client.rpc.NotifyWithParameterObjectAsync("initialized", new { });
+        return client;
+    }
+
+    /// <summary>
     /// Connects, opens each of <paramref name="files"/> in order, and waits for the diagnostics
     /// published for the last of them. This is the setup most server tests share.
     /// </summary>
@@ -89,18 +126,6 @@ internal sealed class TestClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Connects with <paramref name="rootUri"/> as the folder the client opened, and
-    /// <paramref name="configuration"/> as the configuration its settings choose.
-    /// <paramref name="refreshesTokens"/> indicates whether the client can be asked to fetch
-    /// semantic tokens again.
-    /// </summary>
-    public static Task<TestClient> StartAsync(
-        string? rootUri, string? configuration, CancellationToken cancellation, string name = "test-client",
-        bool refreshesTokens = false) =>
-        StartAsync(
-            Capable(refreshesTokens), cancellation, rootUri: rootUri, configuration: configuration, name: name);
-
-    /// <summary>
     /// Returns the capabilities declared by the kind of client nt65 is built for. Such a client
     /// accepts an outline as a tree, edits against a named document version and snippets. It
     /// reports the folders it has open and is asked before it moves a file. VS Code declares
@@ -123,31 +148,6 @@ internal sealed class TestClient : IAsyncDisposable
             completion = new { completionItem = new { snippetSupport = true } },
         },
     };
-
-    /// <summary>
-    /// Connects as a client that declares <paramref name="capabilities"/>, an object sent as the
-    /// protocol's own <c>capabilities</c> field, so that a test declares what it supports in the
-    /// same JSON a real client would send.
-    /// </summary>
-    public static async Task<TestClient> StartAsync(
-        object capabilities, CancellationToken cancellation, string? rootUri = null, string? configuration = null,
-        string name = "test-client", Delay? delay = null, int? processId = null, object? inlayHints = null,
-        Analyzer? analyzer = null)
-    {
-        var client = new TestClient(delay, analyzer);
-        client.Initialized = await client.rpc.InvokeWithParameterObjectAsync<InitializeResult>("initialize",
-            new
-            {
-                processId,
-                clientInfo = new { name, version = "1.0" },
-                capabilities,
-                rootUri,
-                initializationOptions = new { configuration, inlayHints },
-            },
-            cancellation);
-        await client.rpc.NotifyWithParameterObjectAsync("initialized", new { });
-        return client;
-    }
 
     /// <summary>Opens a document at version 1.</summary>
     public Task OpenAsync(string uri, string text) =>
@@ -197,18 +197,6 @@ internal sealed class TestClient : IAsyncDisposable
         await notifications.Published.Reader.ReadAsync(cancellation);
 
     /// <summary>
-    /// Removes and returns every set of diagnostics published and not yet read, without waiting
-    /// for more.
-    /// </summary>
-    public IReadOnlyList<PublishDiagnosticsParams> Pending()
-    {
-        var found = new List<PublishDiagnosticsParams>();
-        while (notifications.Published.Reader.TryRead(out var published))
-            found.Add(published);
-        return found;
-    }
-
-    /// <summary>
     /// Waits for and returns the next set of diagnostics published for <paramref name="uri"/>,
     /// discarding the sets published for other files.
     /// </summary>
@@ -220,6 +208,18 @@ internal sealed class TestClient : IAsyncDisposable
             if (published.Uri == uri)
                 return published;
         }
+    }
+
+    /// <summary>
+    /// Removes and returns every set of diagnostics published and not yet read, without waiting
+    /// for more.
+    /// </summary>
+    public IReadOnlyList<PublishDiagnosticsParams> Pending()
+    {
+        var found = new List<PublishDiagnosticsParams>();
+        while (notifications.Published.Reader.TryRead(out var published))
+            found.Add(published);
+        return found;
     }
 
     /// <summary>Waits for the server to ask for semantic tokens to be fetched again.</summary>

@@ -15,6 +15,14 @@ public sealed class ApiSurfaceTests
     /// <summary>The namespace whose types belong to the syntax layer and to nobody else.</summary>
     private const string Internal = "Norristown.Syntax.InternalSyntax";
 
+    /// <summary>
+    /// Gets the binding flags that select every member a type declares, at every accessibility,
+    /// so that each member can be judged.
+    /// </summary>
+    private static BindingFlags Everything =>
+        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
+        | BindingFlags.DeclaredOnly;
+
     /// <summary>No green-tree type is one a consumer of the assembly can name.</summary>
     [Fact]
     public void TheGreenTreeIsNotPartOfTheAssemblysTypes()
@@ -100,14 +108,6 @@ public sealed class ApiSurfaceTests
         Assert.IsType<InstructionStatementSyntax>(nop.Parent);
         Assert.Same(read.Parent, nop.Parent);
     }
-
-    /// <summary>
-    /// Gets the binding flags that select every member a type declares, at every accessibility,
-    /// so that each member can be judged.
-    /// </summary>
-    private static BindingFlags Everything =>
-        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
-        | BindingFlags.DeclaredOnly;
 
     /// <summary>
     /// Determines whether <paramref name="member"/> should be checked on its own. The accessor

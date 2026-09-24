@@ -221,18 +221,18 @@ internal sealed partial record FixtureCase(
         return expected;
     }
 
+    // A line may hold more than one annotation, so a message runs to the next `;!` rather than
+    // to the end of the line. The `;!` marker delimits them, not a bare `;`, so a message may
+    // contain a `;`, as in "`COUNTR` is not declared; `COUNTER` is".
+    [GeneratedRegex(@";!\s*(?<severity>error|warning|info)\s*\[(?<id>[a-z0-9-]+)\]\s*:(?<message>(?:(?!;!).)*)")]
+    private static partial Regex InlineDiagnostic();
+
     /// <summary>
     /// Returns the files a fixture may contain annotations in, which are its sources and its
     /// project file.
     /// </summary>
     private IEnumerable<SourceFile> Annotated() =>
         Sources.Concat(ProjectFileText is null ? [] : [ProjectFileText]);
-
-    // A line may hold more than one annotation, so a message runs to the next `;!` rather than
-    // to the end of the line. The `;!` marker delimits them, not a bare `;`, so a message may
-    // contain a `;`, as in "`COUNTR` is not declared; `COUNTER` is".
-    [GeneratedRegex(@";!\s*(?<severity>error|warning|info)\s*\[(?<id>[a-z0-9-]+)\]\s*:(?<message>(?:(?!;!).)*)")]
-    private static partial Regex InlineDiagnostic();
 
     /// <summary>
     /// Represents one diagnostic as a fixture expects it: its location, the name it is reported

@@ -18,20 +18,6 @@ namespace Norristown.Tests.Layout;
 public sealed partial class Ca65InstructionTests
 {
     /// <summary>
-    /// Matches a row of one of ca65's instruction tables, which begins with the mnemonic in
-    /// quotes.
-    /// </summary>
-    [GeneratedRegex(@"^\s*\{\s*""(?<name>[A-Za-z0-9]+)""")]
-    private static partial Regex Row();
-
-    /// <summary>
-    /// Matches the line where one of the tables begins. The table's name follows the closing
-    /// brace of its struct type.
-    /// </summary>
-    [GeneratedRegex(@"^\}\s*(?<table>InsTab\w+)\s*=\s*\{")]
-    private static partial Regex Table();
-
-    /// <summary>
     /// For every CPU, the words the emitter writes with a module prefix when they are used as
     /// names are exactly ca65's table for the <c>.setcpu</c> nt65 writes. If a newer ca65 gains
     /// an instruction, this fails when the pinned version is moved, which is when there is
@@ -55,6 +41,20 @@ public sealed partial class Ca65InstructionTests
         }
         Assert.True(problems.Count == 0, string.Join("\n", problems.Order(StringComparer.Ordinal)));
     }
+
+    /// <summary>
+    /// Matches a row of one of ca65's instruction tables, which begins with the mnemonic in
+    /// quotes.
+    /// </summary>
+    [GeneratedRegex(@"^\s*\{\s*""(?<name>[A-Za-z0-9]+)""")]
+    private static partial Regex Row();
+
+    /// <summary>
+    /// Matches the line where one of the tables begins. The table's name follows the closing
+    /// brace of its struct type.
+    /// </summary>
+    [GeneratedRegex(@"^\}\s*(?<table>InsTab\w+)\s*=\s*\{")]
+    private static partial Regex Table();
 
     /// <summary>
     /// Returns each table of ca65's <c>instr.c</c>, keyed by its name, holding its mnemonics in

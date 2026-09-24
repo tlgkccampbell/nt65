@@ -21,6 +21,12 @@ public sealed class FixesTests
     /// <summary>A body long enough that a branch over it cannot reach.</summary>
     private static readonly string Far = string.Concat(Enumerable.Repeat("    nop\n", 130));
 
+    /// <summary>
+    /// Gets a range covering the whole file, as a client sends when it asks for actions across all
+    /// of it.
+    /// </summary>
+    private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
+
     public static TheoryData<string, string, string> Fixes => new()
     {
         {
@@ -242,12 +248,6 @@ public sealed class FixesTests
         Assert.DoesNotContain(CodeActions.In(analysis, model, Whole, ["refactor"]), action => action.Kind == "quickfix");
         Assert.NotEmpty(CodeActions.In(analysis, model, Whole, ["quickfix"]));
     }
-
-    /// <summary>
-    /// Gets a range covering the whole file, as a client sends when it asks for actions across all
-    /// of it.
-    /// </summary>
-    private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string text)
     {

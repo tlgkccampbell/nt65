@@ -22,13 +22,6 @@ public sealed class WorkspaceTests
     /// </summary>
     private const string Named = "c:/work/main.nt65";
 
-    private static Workspace OpenSource(out Document document)
-    {
-        var workspace = new Workspace();
-        document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Source));
-        return workspace;
-    }
-
     /// <summary>The URI the editor uses becomes the path diagnostics and output carry.</summary>
     [Fact]
     public void AWorkspacePathComesFromItsUri()
@@ -176,5 +169,12 @@ public sealed class WorkspaceTests
         Assert.NotNull(workspace.Find(Uri));
         workspace.Close(Uri);
         Assert.Null(workspace.Find(Uri));
+    }
+
+    private static Workspace OpenSource(out Document document)
+    {
+        var workspace = new Workspace();
+        document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Source));
+        return workspace;
     }
 }

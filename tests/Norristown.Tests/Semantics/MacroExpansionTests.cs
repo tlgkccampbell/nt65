@@ -6,30 +6,6 @@ namespace Norristown.Tests.Semantics;
 /// </summary>
 public sealed class MacroExpansionTests
 {
-    /// <summary>
-    /// Returns the ca65 a one-file program becomes, without the header lines every output starts
-    /// with.
-    /// A program that names no segment is given a <c>.segment CODE</c> line before the rest, and
-    /// every program is given a <c>.module main</c> line before that.
-    /// </summary>
-    private static string Body(string text)
-    {
-        if (!text.Contains(".segment", StringComparison.Ordinal))
-            text = ".segment CODE\n" + text;
-        text = ".module main\n" + text;
-        var outputs = Analysis.Outputs(("main.nt65", text));
-        Assert.True(outputs.ContainsKey("main.s"),
-            "the program did not transpile:\n" + string.Join(
-                "\n", Analysis.Program(("main.nt65", text)).Problems()));
-        return string.Join("\n", outputs["main.s"].Split('\n').SkipWhile(IsHeader)).Trim();
-    }
-
-    /// <summary>Returns whether a line is part of the header every output starts with.</summary>
-    private static bool IsHeader(string line) =>
-        line.Length == 0 || line.StartsWith(';') || line.StartsWith(".setcpu", StringComparison.Ordinal)
-            || line.StartsWith(".smart", StringComparison.Ordinal) || line.StartsWith(".case", StringComparison.Ordinal)
-            || line.StartsWith(".feature", StringComparison.Ordinal);
-
     [Fact]
     public void ACallBecomesItsBodyWithTheArgumentsInPlace()
     {
@@ -307,4 +283,28 @@ public sealed class MacroExpansionTests
         Assert.Contains("tune:", written);
         Assert.Contains(".byte 1, 2", written);
     }
+
+    /// <summary>
+    /// Returns the ca65 a one-file program becomes, without the header lines every output starts
+    /// with.
+    /// A program that names no segment is given a <c>.segment CODE</c> line before the rest, and
+    /// every program is given a <c>.module main</c> line before that.
+    /// </summary>
+    private static string Body(string text)
+    {
+        if (!text.Contains(".segment", StringComparison.Ordinal))
+            text = ".segment CODE\n" + text;
+        text = ".module main\n" + text;
+        var outputs = Analysis.Outputs(("main.nt65", text));
+        Assert.True(outputs.ContainsKey("main.s"),
+            "the program did not transpile:\n" + string.Join(
+                "\n", Analysis.Program(("main.nt65", text)).Problems()));
+        return string.Join("\n", outputs["main.s"].Split('\n').SkipWhile(IsHeader)).Trim();
+    }
+
+    /// <summary>Returns whether a line is part of the header every output starts with.</summary>
+    private static bool IsHeader(string line) =>
+        line.Length == 0 || line.StartsWith(';') || line.StartsWith(".setcpu", StringComparison.Ordinal)
+            || line.StartsWith(".smart", StringComparison.Ordinal) || line.StartsWith(".case", StringComparison.Ordinal)
+            || line.StartsWith(".feature", StringComparison.Ordinal);
 }

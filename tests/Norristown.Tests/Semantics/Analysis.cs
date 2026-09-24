@@ -12,13 +12,6 @@ internal static class Analysis
 {
     public const string Path = "main.nt65";
 
-    /// <summary>Returns the model for <paramref name="text"/>, with the segments the file declares.</summary>
-    public static SemanticModel Model(string text)
-    {
-        var tree = SyntaxTree.Parse(Path, text);
-        return SemanticModel.Create(tree, SegmentTable.Build([tree], []));
-    }
-
     /// <summary>
     /// Gets the settings for a test whose source is a fragment rather than a whole program. Such a
     /// fragment is typically an unexported routine that nothing calls, which would draw the
@@ -30,6 +23,13 @@ internal static class Analysis
         {
             Severities = new SortedDictionary<string, Severity?>(StringComparer.Ordinal) { ["unused-symbol"] = null },
         };
+
+    /// <summary>Returns the model for <paramref name="text"/>, with the segments the file declares.</summary>
+    public static SemanticModel Model(string text)
+    {
+        var tree = SyntaxTree.Parse(Path, text);
+        return SemanticModel.Create(tree, SegmentTable.Build([tree], []));
+    }
 
     /// <summary>
     /// Analyzes several files as one program, the way the compiler reads them, so that every file
@@ -57,6 +57,10 @@ internal static class Analysis
     public static IReadOnlyList<string> Problems(this ProgramAnalysis analysis) =>
         [.. analysis.Diagnostics.Select(d => $"{d.Span.File}:{d.Span.Line}: {d.Message}")];
 
+    /// <summary>Returns the file's diagnostics, each as <c>line: message</c>.</summary>
+    public static IReadOnlyList<string> Problems(this SemanticModel model) =>
+        [.. model.Diagnostics.Select(d => $"{d.Span.Line}: {d.Message}")];
+
     /// <summary>Compiles several files as one program and returns the ca65 output, keyed by output path.</summary>
     public static Dictionary<string, string> Outputs(params (string Path, string Text)[] files) =>
         Outputs(ProjectSettings.None, files);
@@ -73,10 +77,6 @@ internal static class Analysis
     /// <summary>Returns the single symbol named <paramref name="name"/>, in any scope of the file.</summary>
     public static Symbol Symbol(this SemanticModel model, string name) =>
         model.Symbols.Single(symbol => symbol.DisplayName == name);
-
-    /// <summary>Returns the file's diagnostics, each as <c>line: message</c>.</summary>
-    public static IReadOnlyList<string> Problems(this SemanticModel model) =>
-        [.. model.Diagnostics.Select(d => $"{d.Span.Line}: {d.Message}")];
 
     /// <summary>
     /// Returns the offset of the <paramref name="occurrence"/>th <paramref name="find"/> in the

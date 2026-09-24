@@ -34,6 +34,15 @@ internal sealed record CorpusProgram(
     IReadOnlyList<(string Name, byte[] Content)> Other)
 {
     /// <summary>
+    /// Names the programs with build steps that this loader does not model. The LoROM template
+    /// converts its assets with Python before nt65 can read their sizes, links a second image
+    /// with a second configuration, and assembles its hand-written ca65 with no CPU. The msbasic
+    /// example is ten programs, one per configuration, each with its own linker configuration
+    /// and a matching image. The gate builds both end to end.
+    /// </summary>
+    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "lorom-template", "msbasic" };
+
+    /// <summary>
     /// Returns every corpus program and example, or only those whose name contains NT65_FIXTURE
     /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>). It leaves out the programs that only their own
     /// build scripts can build, which <c>scripts/corpus.ps1</c> runs.
@@ -50,15 +59,6 @@ internal sealed record CorpusProgram(
             .Order(StringComparer.Ordinal)
             .Select(Load)];
     }
-
-    /// <summary>
-    /// Names the programs with build steps that this loader does not model. The LoROM template
-    /// converts its assets with Python before nt65 can read their sizes, links a second image
-    /// with a second configuration, and assembles its hand-written ca65 with no CPU. The msbasic
-    /// example is ten programs, one per configuration, each with its own linker configuration
-    /// and a matching image. The gate builds both end to end.
-    /// </summary>
-    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "lorom-template", "msbasic" };
 
     public static CorpusProgram Load(string directory)
     {

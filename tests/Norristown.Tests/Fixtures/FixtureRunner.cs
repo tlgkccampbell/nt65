@@ -47,6 +47,83 @@ internal static class FixtureRunner
         return failures;
     }
 
+    public static IEnumerable<string> Run(
+        FixtureCase fixture, Func<IReadOnlyCollection<SourceFile>, Compilation> compile, bool update = false,
+        bool thorough = false)
+    {
+        var failures = new List<string>();
+        void Fail(string message) => failures.Add($"[{fixture.Name}] {message}");
+
+        var compilation = compile(fixture.Sources);
+
+        // Every fixture is checked for full fidelity: the tree and each statement reproduce the
+        // source text.
+        foreach (var file in fixture.Sources)
+        {
+            foreach (var problem in Syntax.Fidelity.Problems(SyntaxTree.Parse(file)))
+                Fail($"{file.Path}: {problem}");
+        }
+
+        // Output is deterministic, so the same sources give byte-identical output. A program is
+        // a set of files, so other orders must give identical results too. Other orders are
+        // tried only in a thorough run, but every run compiles the same files a second time.
+        if (!Same(compilation, compile(fixture.Sources)))
+            Fail("output or diagnostics change between two runs over the same files");
+        foreach (var (label, order) in OtherOrders(fixture.Sources, thorough))
+        {
+            if (!Same(compilation, compile(order)))
+                Fail($"output or diagnostics change when the files are {label}");
+        }
+
+        // No name the output defines at the start of a line may be a word ca65 reads as an
+        // instruction. It is checked here, on this fixture's existing compilation, rather than
+        // by a separate pass that compiles every fixture again.
+        foreach (var output in compilation.Outputs)
+            failures.AddRange(Emit.BareNames.Problems(fixture.Name, output.Path, output.Text));
+
+        var actualDiagnostics = compilation.Diagnostics.Select(FixtureCase.Of).ToList();
+        var expectedDiagnostics = update
+            ? fixture.UpdateInlineDiagnostics(actualDiagnostics)
+            : fixture.ExpectedDiagnostics();
+        CompareDiagnostics(expectedDiagnostics, actualDiagnostics, Fail);
+
+        var expected = fixture.ExpectedOutputs();
+        var actual = compilation.Outputs.ToDictionary(o => o.Path, o => o.Text, StringComparer.Ordinal);
+        var expectedDir = Path.Combine(fixture.Directory, fixture.ExpectedDirectory);
+
+        if (update)
+        {
+            foreach (var path in expected.Keys.Except(actual.Keys))
+            {
+                File.Delete(Path.Combine(expectedDir, path));
+                for (var directory = Path.GetDirectoryName(Path.Combine(expectedDir, path));
+                    directory is not null && directory.Length > expectedDir.Length
+                        && !System.IO.Directory.EnumerateFileSystemEntries(directory).Any();
+                    directory = Path.GetDirectoryName(directory))
+                {
+                    System.IO.Directory.Delete(directory);
+                }
+            }
+            foreach (var (path, text) in actual)
+            {
+                if (!expected.TryGetValue(path, out var old) || old != text)
+                    Repo.WriteText(Path.Combine(expectedDir, path), text);
+            }
+            return failures;
+        }
+
+        foreach (var path in expected.Keys.Except(actual.Keys))
+            Fail($"expected output not produced: {path}");
+        foreach (var path in actual.Keys.Except(expected.Keys))
+            Fail($"unexpected output (NT65_UPDATE=1 to accept): {path}");
+        foreach (var (path, text) in actual)
+        {
+            if (expected.TryGetValue(path, out var want) && want != text)
+                Fail($"output differs (NT65_UPDATE=1 to accept): {path}\n{FirstDifference(want, text)}");
+        }
+        return failures;
+    }
+
     /// <summary>
     /// Inlines, one at a time, every macro call the editor offers to inline, and reports each call
     /// whose inlining changes the program. With the call replaced by its expansion, the file has
@@ -149,83 +226,6 @@ internal static class FixtureRunner
             else if (preview.Text != output.Text || !preview.SourceLines.SequenceEqual(output.LineSources))
                 yield return $"[{fixture.Name}] what is shown beside {output.Source} is not what was written";
         }
-    }
-
-    public static IEnumerable<string> Run(
-        FixtureCase fixture, Func<IReadOnlyCollection<SourceFile>, Compilation> compile, bool update = false,
-        bool thorough = false)
-    {
-        var failures = new List<string>();
-        void Fail(string message) => failures.Add($"[{fixture.Name}] {message}");
-
-        var compilation = compile(fixture.Sources);
-
-        // Every fixture is checked for full fidelity: the tree and each statement reproduce the
-        // source text.
-        foreach (var file in fixture.Sources)
-        {
-            foreach (var problem in Syntax.Fidelity.Problems(SyntaxTree.Parse(file)))
-                Fail($"{file.Path}: {problem}");
-        }
-
-        // Output is deterministic, so the same sources give byte-identical output. A program is
-        // a set of files, so other orders must give identical results too. Other orders are
-        // tried only in a thorough run, but every run compiles the same files a second time.
-        if (!Same(compilation, compile(fixture.Sources)))
-            Fail("output or diagnostics change between two runs over the same files");
-        foreach (var (label, order) in OtherOrders(fixture.Sources, thorough))
-        {
-            if (!Same(compilation, compile(order)))
-                Fail($"output or diagnostics change when the files are {label}");
-        }
-
-        // No name the output defines at the start of a line may be a word ca65 reads as an
-        // instruction. It is checked here, on this fixture's existing compilation, rather than
-        // by a separate pass that compiles every fixture again.
-        foreach (var output in compilation.Outputs)
-            failures.AddRange(Emit.BareNames.Problems(fixture.Name, output.Path, output.Text));
-
-        var actualDiagnostics = compilation.Diagnostics.Select(FixtureCase.Of).ToList();
-        var expectedDiagnostics = update
-            ? fixture.UpdateInlineDiagnostics(actualDiagnostics)
-            : fixture.ExpectedDiagnostics();
-        CompareDiagnostics(expectedDiagnostics, actualDiagnostics, Fail);
-
-        var expected = fixture.ExpectedOutputs();
-        var actual = compilation.Outputs.ToDictionary(o => o.Path, o => o.Text, StringComparer.Ordinal);
-        var expectedDir = Path.Combine(fixture.Directory, fixture.ExpectedDirectory);
-
-        if (update)
-        {
-            foreach (var path in expected.Keys.Except(actual.Keys))
-            {
-                File.Delete(Path.Combine(expectedDir, path));
-                for (var directory = Path.GetDirectoryName(Path.Combine(expectedDir, path));
-                    directory is not null && directory.Length > expectedDir.Length
-                        && !System.IO.Directory.EnumerateFileSystemEntries(directory).Any();
-                    directory = Path.GetDirectoryName(directory))
-                {
-                    System.IO.Directory.Delete(directory);
-                }
-            }
-            foreach (var (path, text) in actual)
-            {
-                if (!expected.TryGetValue(path, out var old) || old != text)
-                    Repo.WriteText(Path.Combine(expectedDir, path), text);
-            }
-            return failures;
-        }
-
-        foreach (var path in expected.Keys.Except(actual.Keys))
-            Fail($"expected output not produced: {path}");
-        foreach (var path in actual.Keys.Except(expected.Keys))
-            Fail($"unexpected output (NT65_UPDATE=1 to accept): {path}");
-        foreach (var (path, text) in actual)
-        {
-            if (expected.TryGetValue(path, out var want) && want != text)
-                Fail($"output differs (NT65_UPDATE=1 to accept): {path}\n{FirstDifference(want, text)}");
-        }
-        return failures;
     }
 
     /// <summary>

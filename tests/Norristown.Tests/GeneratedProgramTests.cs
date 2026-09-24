@@ -27,6 +27,26 @@ public sealed class GeneratedProgramTests
     /// <summary>How many programs are generated.</summary>
     private const int Programs = 120;
 
+    private static readonly int[] Depths = [1, 2, 99, 100, 101, 600, 800];
+
+    private static readonly string[] Numbers =
+    [
+        "0", "1", "(0 - 1)", "$7fffffffffffffff", "(0 - $7fffffffffffffff - 1)",
+        "99999999999999999999", "$10000", "70", "$1G", "%102",
+    ];
+
+    private static readonly string[] Operators = ["/", ".mod", "*", "+", "-", "<<", ">>"];
+
+    private static readonly string[] Literals =
+    [
+        "1", "'a'", @"'\xZZ'", @"'\q'", @"""\x4""", "'ab'", "''", @"""unterminated", "'é'",
+    ];
+
+    private static readonly string[] IterationCounts =
+    [
+        "0", "3", "-1", "65537", "$7fffffff", "$7fffffffffffffff", "99999999999999999999",
+    ];
+
     [Fact]
     public void ARandomProgramIsAnalyzedAndEmittedWithoutThrowing()
     {
@@ -125,24 +145,4 @@ public sealed class GeneratedProgramTests
     /// rather than interesting.
     /// </summary>
     private static string IterationCount(Random random) => IterationCounts[random.Next(IterationCounts.Length)];
-
-    private static readonly int[] Depths = [1, 2, 99, 100, 101, 600, 800];
-
-    private static readonly string[] Numbers =
-    [
-        "0", "1", "(0 - 1)", "$7fffffffffffffff", "(0 - $7fffffffffffffff - 1)",
-        "99999999999999999999", "$10000", "70", "$1G", "%102",
-    ];
-
-    private static readonly string[] Operators = ["/", ".mod", "*", "+", "-", "<<", ">>"];
-
-    private static readonly string[] Literals =
-    [
-        "1", "'a'", @"'\xZZ'", @"'\q'", @"""\x4""", "'ab'", "''", @"""unterminated", "'é'",
-    ];
-
-    private static readonly string[] IterationCounts =
-    [
-        "0", "3", "-1", "65537", "$7fffffff", "$7fffffffffffffff", "99999999999999999999",
-    ];
 }
