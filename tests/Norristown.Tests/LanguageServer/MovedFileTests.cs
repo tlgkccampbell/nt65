@@ -79,10 +79,11 @@ public sealed class MovedFileTests : IDisposable
     public async Task ARewrittenPathIsPlacedInAFileWithCarriageReturnLineEnds()
     {
         var timeout = TestTimeout.Token();
-        Write("nt65.json", """{ "cpu": "6502", "files": ["gfx/*.nt65"], "out": "build" }""");
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["gfx/*.nt65"], "out": "build" }""");
         const string Sprite = ".module gfx::sprite\r.segment RODATA\r.export .data tiles: .incbin \"../data/tiles.bin\"\r";
-        File.WriteAllText(Path.Combine(root.CreateSubdirectory("gfx").FullName, "sprite.nt65"), Sprite);
-        Write("data/tiles.bin", "0123");
+        Directory.CreateDirectory(root.PathOf("gfx"));
+        File.WriteAllText(root.PathOf("gfx/sprite.nt65"), Sprite);
+        root.Write("data/tiles.bin", "0123");
 
         await using var client = await TestClient.StartAsync(
             TestClient.Capable(), timeout, rootUri: Folder(""));
