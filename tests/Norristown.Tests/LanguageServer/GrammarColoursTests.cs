@@ -37,7 +37,7 @@ public sealed class GrammarColoursTests
             {
                 if (analysis.ModelFor(tree.Path) is not { } model)
                     continue;
-                var scopes = TextMateGrammar.Scope([.. tree.Lines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
+                var scopes = TextMateTokenizer.Nt65.Scope([.. tree.Lines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
                 var data = NameHighlighting.In(model).Data;
                 var (line, character) = (0, 0);
                 for (var i = 0; i < data.Count; i += 5)

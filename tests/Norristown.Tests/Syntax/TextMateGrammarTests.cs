@@ -1,3 +1,5 @@
+using Norristown.LanguageServer;
+using Norristown.Semantics;
 using Norristown.Syntax;
 using Norristown.Tests.Fixtures;
 
@@ -69,16 +71,18 @@ public sealed class TextMateGrammarTests
         K == 1
         """;
 
+    private static readonly string GrammarPath = Repo.Path("editors", "vscode", "syntaxes", "nt65.tmLanguage.json");
+
     [Fact]
     public void GrammarFileIsUpToDate()
     {
         var generated = TextMateGrammar.Generate();
         if (FixtureRunner.UpdateMode)
         {
-            Repo.WriteText(TextMateGrammar.Path, generated);
+            Repo.WriteText(GrammarPath, generated);
             return;
         }
-        Assert.True(File.Exists(TextMateGrammar.Path) && Repo.ReadText(TextMateGrammar.Path) == generated,
+        Assert.True(File.Exists(GrammarPath) && Repo.ReadText(GrammarPath) == generated,
             "editors/vscode/syntaxes/nt65.tmLanguage.json is out of date; run scripts/test.ps1 -Update");
     }
 
@@ -97,7 +101,7 @@ public sealed class TextMateGrammarTests
             var tree = SyntaxTree.Parse(name, text);
             var bodies = Bodies(tree);
             var syntax = tree.Root.DescendantNodes().OfType<LineSyntax>().ToList();
-            var lineScopes = TextMateGrammar.Scope([.. tree.Lines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
+            var lineScopes = TextMateTokenizer.Nt65.Scope([.. tree.Lines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
             for (var l = 0; l < tree.Lines.Length; l++)
             {
                 var line = tree.Lines[l];
@@ -119,7 +123,7 @@ public sealed class TextMateGrammarTests
                     }
                     if (token.Kind is SyntaxKind.EndOfLine or SyntaxKind.BadToken || token.ContainsDiagnostics)
                         continue;
-                    var expected = TextMateGrammar.Expected(syntax[l], t, bodies.GetValueOrDefault(l));
+                    var expected = Expected(syntax[l], t, bodies.GetValueOrDefault(l));
                     var actual = scopes[start..triviaStart].Distinct().ToList();
                     if (actual.Count != 1 || actual[0] != expected)
                         failures.Add($"{name}:{l + 1}: `{token.Text}` is {token.Kind}, expected {expected ?? "no scope"}, grammar gives {string.Join(" + ", actual.Select(s => s ?? "no scope"))}");
@@ -128,6 +132,111 @@ public sealed class TextMateGrammarTests
         }
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
+
+    /// <summary>
+    /// Returns the scope the grammar should give a token, or null for punctuation, which gets no
+    /// scope. The scope follows from how the parser reads the line and from the block it is in.
+    /// </summary>
+    private static string? Expected(LineSyntax line, int index, BlockKind body)
+    {
+        var tokens = Tokens(line);
+        var token = tokens[index];
+        if (IsName(token) && NameScope(tokens, index, body) is { } name)
+            return name;
+        return token.Kind switch
+        {
+            SyntaxKind.Identifier => TextMateGrammar.Identifier,
+            SyntaxKind.CheapLocal => TextMateGrammar.CheapLocal,
+            SyntaxKind.Mnemonic => TextMateGrammar.Mnemonic,
+            SyntaxKind.Register => TextMateGrammar.Register,
+            SyntaxKind.Directive when token.Text.Equals(".mod", StringComparison.OrdinalIgnoreCase) => TextMateGrammar.OperatorWord,
+            SyntaxKind.Directive => TextMateGrammar.Directive,
+            SyntaxKind.NumberLiteral => TextMateGrammar.Number,
+            SyntaxKind.CharacterLiteral => TextMateGrammar.Character,
+            SyntaxKind.StringLiteral => TextMateGrammar.String,
+            SyntaxKind.CpuName => TextMateGrammar.Cpu,
+            SyntaxKind.ColonColon or SyntaxKind.Colon or SyntaxKind.Comma or SyntaxKind.OpenParen or SyntaxKind.CloseParen
+                or SyntaxKind.OpenBracket or SyntaxKind.CloseBracket or SyntaxKind.OpenBrace or SyntaxKind.CloseBrace => null,
+            _ => TextMateGrammar.Operator,
+        };
+    }
+
+    /// <summary>
+    /// Returns the scope of a name the parser reads as a declaration, a member or a parameter, or
+    /// null for a name whose role the grammar cannot recognize.
+    /// </summary>
+    private static string? NameScope(List<SyntaxToken> tokens, int index, BlockKind body)
+    {
+        if (index > 0 && tokens[index - 1].Kind == SyntaxKind.ColonColon)
+            return TextMateGrammar.Identifier;
+
+        // The first name a node holds is the one a declaration declares.
+        var token = tokens[index];
+        var first = !token.Parent.ChildTokens.TakeWhile(earlier => earlier != token).Any(IsName);
+        return token.Parent switch
+        {
+            // These are the parts of what a macro parameter takes: the kind's word, the modes an
+            // `operand` lists and the words a `one` lists. The enum that an enum kind names is a
+            // use, which only the server can see.
+            ParameterKindSyntax kind when token == kind.Keyword => TextMateGrammar.Kind,
+            ModuleDirectiveSyntax module when token == module.Placement => TextMateGrammar.Kind,
+            IdentifierNameSyntax { Parent: ParameterKindSyntax { Keyword.Text: var keyword } }
+                when keyword.Equals("one", StringComparison.OrdinalIgnoreCase) => TextMateGrammar.EnumMember,
+            IdentifierNameSyntax { Parent: ParameterKindSyntax } =>
+                ArgumentKind.OperandModes.Contains(token.Text.ToLowerInvariant()) ? TextMateGrammar.Mode : TextMateGrammar.Identifier,
+            LabelSyntax when first => body is BlockKind.Struct or BlockKind.Union ? TextMateGrammar.Property : TextMateGrammar.Label,
+            ProcDeclarationSyntax or ExternProcDeclarationSyntax or FuncDeclarationSyntax when first => TextMateGrammar.Function,
+            MacroDeclarationSyntax when first => TextMateGrammar.Macro,
+            MacroParameterSyntax when first => TextMateGrammar.Parameter,
+            ImportItemSyntax item when first => item.EqualsToken is not null ? TextMateGrammar.Constant : TextMateGrammar.Variable,
+            RepeatDirectiveSyntax or EachDirectiveSyntax or MultiProcDeclarationSyntax => TextMateGrammar.Constant,
+            ParameterSyntax => TextMateGrammar.Parameter,
+            EnumDeclarationSyntax when first => TextMateGrammar.Enum,
+            StructDeclarationSyntax or UnionDeclarationSyntax when first => TextMateGrammar.Struct,
+            ScopeDeclarationSyntax when first => TextMateGrammar.Namespace,
+            CharmapDeclarationSyntax or SignatureDeclarationSyntax when first => TextMateGrammar.Type,
+            DataDeclarationSyntax or ListDeclarationSyntax or FrameDirectiveSyntax when first => TextMateGrammar.Variable,
+            ConstantDeclarationSyntax or ConfigDeclarationSyntax when first => TextMateGrammar.Constant,
+            EnumMemberSyntax when first => TextMateGrammar.EnumMember,
+            MemberValueSyntax when first => TextMateGrammar.Property,
+            NamedArgumentSyntax when first => TextMateGrammar.Parameter,
+            MacroCallSyntax when first && index + 1 < tokens.Count && tokens[index + 1].Kind == SyntaxKind.Bang => TextMateGrammar.Macro,
+            _ => token.Kind == SyntaxKind.Identifier && index + 1 < tokens.Count && tokens[index + 1].Kind == SyntaxKind.Bang
+                ? TextMateGrammar.Macro
+                : null,
+        };
+    }
+
+    /// <summary>
+    /// Returns every token of a line in source order, taken from the line's child elements. Those
+    /// are the <c>.export</c> that exports what the line declares, its statement, the tokens the
+    /// statement could not take, and the line break that ends it. A missing token has no text, so
+    /// the grammar has nothing to scope for it, and it is left out.
+    /// </summary>
+    private static List<SyntaxToken> Tokens(LineSyntax line)
+    {
+        var tokens = new List<SyntaxToken>();
+        void Walk(SyntaxNode node)
+        {
+            foreach (var child in node.ChildNodesAndTokens())
+            {
+                if (child.AsNode() is { } inner)
+                    Walk(inner);
+                else if (child.AsToken() is { IsMissing: false } token)
+                    tokens.Add(token);
+            }
+        }
+        if (line.ExportKeyword is { } export)
+            tokens.Add(export);
+        Walk(line.Statement);
+        if (line.SkippedTokens is { } skipped)
+            Walk(skipped);
+        tokens.Add(line.EndOfLineToken);
+        return tokens;
+    }
+
+    private static bool IsName(SyntaxToken token) =>
+        token.Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic or SyntaxKind.CheapLocal;
 
     /// <summary>
     /// Returns, for each line, the kind of block whose body it is in, looking through
