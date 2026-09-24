@@ -569,6 +569,15 @@ internal sealed partial class Evaluator
         }
 
         var values = given.Select(Evaluate).ToArray();
+
+        // A closed function called again with the same arguments gives the result it gave before.
+        var kept = KeepsResults ? FunctionResults.For(resolved) : null;
+        if (kept is not null && !kept.IsClosed(symbol, IsClosed))
+            kept = null;
+        if (kept?.Find(symbol, values) is { } known)
+            return known;
+        var before = problems;
+
         var bound = names.Values;
         var shadowed = new List<(Symbol Symbol, Value Value, bool Had)>();
         try
@@ -579,8 +588,12 @@ internal sealed partial class Evaluator
                 shadowed.Add((parameter, bound.GetValueOrDefault(parameter), bound.ContainsKey(parameter)));
                 bound[parameter] = values[i];
             }
+            Value result;
             using (Evaluating(symbol))
-                return Evaluate(symbol.Items[0]);
+                result = Evaluate(symbol.Items[0]);
+            if (kept is not null && problems == before)
+                kept.Keep(symbol, values, result);
+            return result;
         }
         finally
         {

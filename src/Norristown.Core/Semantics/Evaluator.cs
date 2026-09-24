@@ -49,6 +49,10 @@ internal sealed partial class Evaluator
     // same expression around that value are the same mistake, so only the first is reported.
     private readonly HashSet<Symbol> wide = [];
 
+    // How many problems evaluation has met, counting one it found again and did not report. A
+    // call that meets one is evaluated again at each use, so that each use reports it.
+    private int problems;
+
     // The literals already reported for holding a character outside ASCII. A macro body is
     // evaluated once per call, but each literal in it is one piece of source and is reported
     // once.
@@ -264,8 +268,12 @@ internal sealed partial class Evaluator
         // there rather than again at every use of the name.
         if (node is NameExpressionSyntax || context.Declaring is not { } within)
             return value;
-        if (value.AsNumber() is { } number && !FitsCa65(number) && wide.Add(within))
-            Report(node, TooWide(number));
+        if (value.AsNumber() is { } number && !FitsCa65(number))
+        {
+            problems++;
+            if (wide.Add(within))
+                Report(node, TooWide(number));
+        }
         return value;
     }
 
@@ -775,8 +783,11 @@ internal sealed partial class Evaluator
     private void Report(SyntaxNode node, DiagnosticMessage message) =>
         Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message, []));
 
-    private void Add(Diagnostic diagnostic) =>
+    private void Add(Diagnostic diagnostic)
+    {
+        problems++;
         report(diagnostic, context.Owner?.Tree.Path ?? diagnostic.Span.File);
+    }
 
     /// <summary>
     /// Replaces the walk context with <paramref name="inner"/> until the returned scope is
