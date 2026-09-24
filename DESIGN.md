@@ -694,7 +694,12 @@ line that is wrong comes straight back, because no file changing fixes it.
 **Starting.** `nt65 init` writes an `nt65.json` and a `src/main.nt65` that builds, in the
 directory it is given or the one it runs in, with `--cpu` choosing the processor. It refuses
 to overwrite either, and writes neither when it would have to, so a directory that already
-holds a program is left as it was.
+holds a program is left as it was. The project links the ld65 configs in that directory and
+the folders beneath it, leaving out hidden folders, `node_modules` and the build output. One
+config is the project's link. Several are taken to be alternative targets, and each becomes a
+configuration that links it and builds into a folder of its own, since linking them all at
+once would make them agree about every segment they share. `src/main.nt65` puts its routine in
+`CODE`, or when the one config does not place `CODE`, in the first segment it places for code.
 
 **Formatting.** `nt65 fmt` writes the files it names in the one layout (§4), in place;
 `--check` writes nothing, lists the files that are not in it already and exits 1, which is

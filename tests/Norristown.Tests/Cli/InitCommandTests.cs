@@ -89,6 +89,77 @@ public sealed class InitCommandTests : IDisposable
         Assert.Empty(Directory.GetFileSystemEntries(root.FullName));
     }
 
+    /// <summary>
+    /// A linker config in the folder becomes the project's link, so it declares the segments, and
+    /// the program it writes still builds against it.
+    /// </summary>
+    [Fact]
+    public void ItLinksTheConfigInTheFolder()
+    {
+        root.Write("c64.cfg", """
+            MEMORY { MAIN: file = %O, start = $0801, size = $9000; }
+            SEGMENTS { CODE: load = MAIN, type = ro; }
+            """);
+        root.Write("build/stale.cfg", "MEMORY { M: start = 0, size = 1; } SEGMENTS { OLD: load = M; }");
+        root.Write("notes.cfg", "[section]\nkey = value\n");
+
+        var (code, printed) = Run(root.FullName, "init");
+
+        Assert.Equal((ExitCode.Success, "nt65.json\nsrc/main.nt65\nlinks c64.cfg\n"), (code, printed));
+        Assert.Contains("\"links\": {\n    \"c64\": { \"config\": \"c64.cfg\" }\n  }", root.Read(ProjectFile.Name));
+        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build"));
+    }
+
+    /// <summary>
+    /// When the one config places no <c>CODE</c>, the program's routine goes in the first segment
+    /// it places for code, so the build still has nowhere left to fail.
+    /// </summary>
+    [Fact]
+    public void ItPutsTheRoutineInASegmentTheConfigPlaces()
+    {
+        root.Write("rom.cfg", """
+            MEMORY { ZP: start = 0, size = $100; ROM: start = $E000, size = $2000, file = %O; }
+            SEGMENTS { ZP: load = ZP, type = zp; KERNEL: load = ROM, type = ro; }
+            """);
+
+        Assert.Equal(ExitCode.Success, Run(root.FullName, "init").Code);
+
+        Assert.Contains(".segment KERNEL\n", root.Read("src/main.nt65"));
+        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build"));
+    }
+
+    /// <summary>
+    /// Several configs are alternative targets, as msbasic's are, so each becomes a configuration
+    /// that links it and builds into a folder of its own. The project's own build links none.
+    /// </summary>
+    [Fact]
+    public void ItMakesAConfigurationForEachOfSeveralConfigs()
+    {
+        const string Config = "MEMORY { ROM: file = %O, start = $C000, size = $4000; } SEGMENTS { CODE: load = ROM; }";
+        root.Write("cfg/osi.cfg", Config);
+        root.Write("cfg/apple soft.cfg", Config);
+        root.Write("other/osi.cfg", Config);
+
+        var (code, printed) = Run(root.FullName, "init");
+
+        Assert.Equal(
+            (ExitCode.Success, "nt65.json\nsrc/main.nt65\n"
+                + "configuration apple-soft links cfg/apple soft.cfg\n"
+                + "configuration osi links cfg/osi.cfg\n"
+                + "configuration osi-2 links other/osi.cfg\n"),
+            (code, printed));
+        var project = Repo.ReadProject(root.FullName);
+        Assert.Empty(project.Diagnostics);
+        Assert.Empty(project.Links);
+        Assert.Equal(["apple-soft", "osi", "osi-2"], project.Configurations.Select(configuration => configuration.Name));
+        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build"));
+        foreach (var configuration in project.Configurations)
+        {
+            Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build", "--config", configuration.Name));
+            Assert.True(File.Exists(Path.Combine(root.FullName, "build", configuration.Name, "main.s")));
+        }
+    }
+
     private static (ExitCode Code, string Printed) Run(string directory, params string[] arguments)
     {
         var output = new StringWriter { NewLine = "\n" };

@@ -46,7 +46,8 @@ public sealed record CommandLine(
         Naming files builds the whole program and writes output only for those files.
 
         `init` writes an nt65.json and a src/main.nt65 that builds, in this directory or the one
-        named, and refuses to overwrite either.
+        named, and refuses to overwrite either. The project links the ld65 configs it finds
+        there: one as its link, and several as one configuration each.
 
         `fmt` rewrites files in nt65's one standard layout, or with `--check` lists the ones
         that are not in it already and exits 1. Named nothing, it formats every file the

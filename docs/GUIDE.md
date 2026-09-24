@@ -63,8 +63,10 @@ dotnet tool install --global nt65 --configfile artifacts/nuget.config
 code --install-extension artifacts/nt65-<version>.vsix
 ```
 
-`nt65 init` writes a project that builds: an `nt65.json` and a `src/main.nt65`. A project is
-a folder with an `nt65.json` in it:
+`nt65 init` writes a project that builds: an `nt65.json` and a `src/main.nt65`. Run it in a
+folder that already has your ld65 configs, and the project links them, so they declare its
+segments: one config directly, and several as one named configuration each. A project is a
+folder with an `nt65.json` in it:
 
 ```json
 {
