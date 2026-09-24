@@ -14,9 +14,9 @@ public sealed class WatchCommandTests : IDisposable
     private const string Good = ".module main\n.export main\n.segment CODE\n.proc main {\n    rts\n}\n";
     private const string Wrong = ".module main\n.export main\n.segment CODE\n.proc main {\n    lda nowhere\n    rts\n}\n";
 
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-watch-");
+    private readonly TempFolder root = new("nt65-watch-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>
     /// A change to a source triggers another build, whether it fixes the program or breaks it,
@@ -27,8 +27,8 @@ public sealed class WatchCommandTests : IDisposable
     public async Task ItBuildsAgainWheneverTheProgramChanges()
     {
         var timeout = TestTimeout.Token();
-        Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build" }""");
-        Write("src/main.nt65", Good);
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build" }""");
+        root.Write("src/main.nt65", Good);
 
         var printed = new Lines();
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
@@ -39,15 +39,15 @@ public sealed class WatchCommandTests : IDisposable
         Assert.Empty(await WaitAsync(printed, timeout));
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "main.s")));
 
-        Write("src/main.nt65", Wrong);
+        root.Write("src/main.nt65", Wrong);
         Assert.Equal(
             ["src/main.nt65:5:9: error: `nowhere` is not declared [not-declared]"], await WaitAsync(printed, timeout));
 
-        Write("src/main.nt65", Good);
+        root.Write("src/main.nt65", Good);
         Assert.Empty(await WaitAsync(printed, timeout));
 
         // A module written after the watch began is part of the program from the next build on.
-        Write("src/gfx.nt65", ".module gfx\n.export clear\n.segment CODE\n.proc clear {\n    rts\n}\n");
+        root.Write("src/gfx.nt65", ".module gfx\n.export clear\n.segment CODE\n.proc clear {\n    rts\n}\n");
         Assert.Empty(await WaitAsync(printed, timeout));
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "gfx.s")));
 
@@ -84,8 +84,6 @@ public sealed class WatchCommandTests : IDisposable
             lines.Add(line);
         return lines;
     }
-
-    private void Write(string path, string text) => Repo.WriteText(Path.Combine(root.FullName, path), text);
 
     /// <summary>
     /// Represents a writer whose lines can be awaited one at a time. A watch writes its lines as

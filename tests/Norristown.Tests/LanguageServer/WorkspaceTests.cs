@@ -67,29 +67,28 @@ public sealed class WorkspaceTests
     [Fact]
     public async Task TheActiveConfigurationIsWhatTheProgramIsAnalyzedAs()
     {
-        var root = Directory.CreateTempSubdirectory("nt65-workspace-");
-        try
-        {
-            File.WriteAllText(Path.Combine(root.FullName, "nt65.json"),
-                """{ "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 }, "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }""");
-            File.WriteAllText(Path.Combine(root.FullName, "main.nt65"), ".module main\n.if DEBUG {\n    .error \"built for debugging\"\n}\n");
-            var uri = new Uri(root.FullName).AbsoluteUri;
-            var main = Uris.ToPath(new Uri(Path.Combine(root.FullName, "main.nt65")).AbsoluteUri);
-            var workspace = new Workspace();
+        using var root = new TempFolder("nt65-workspace-");
+        root.Write("nt65.json",
+            """{ "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 }, "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }""");
+        root.Write("main.nt65", """
+            .module main
+            .if DEBUG {
+                .error "built for debugging"
+            }
 
-            workspace.Load(uri);
-            Assert.Empty((await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics);
+            """);
+        var uri = new Uri(root.FullName).AbsoluteUri;
+        var main = Uris.ToPath(new Uri(root.PathOf("main.nt65")).AbsoluteUri);
+        var workspace = new Workspace();
 
-            workspace.Load(uri, "debug");
-            Assert.Equal(["built for debugging"], (await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics.Select(d => d.Message));
+        workspace.Load(uri);
+        Assert.Empty((await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics);
 
-            workspace.Load(uri, "ntsc");
-            Assert.Equal(["`ntsc` is not a configuration: nt65.json names `debug`"], (await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics.Select(d => d.Message));
-        }
-        finally
-        {
-            root.Delete(recursive: true);
-        }
+        workspace.Load(uri, "debug");
+        Assert.Equal(["built for debugging"], (await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics.Select(d => d.Message));
+
+        workspace.Load(uri, "ntsc");
+        Assert.Equal(["`ntsc` is not a configuration: nt65.json names `debug`"], (await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics.Select(d => d.Message));
     }
 
     /// <summary>

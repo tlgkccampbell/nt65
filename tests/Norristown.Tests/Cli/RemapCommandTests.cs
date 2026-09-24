@@ -26,9 +26,9 @@ public sealed class RemapCommandTests : IDisposable
 
         """;
 
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-remap-");
+    private readonly TempFolder root = new("nt65-remap-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>
     /// The line map is found beside the <c>.s</c> the debug file names, whose path is relative to
@@ -37,8 +37,8 @@ public sealed class RemapCommandTests : IDisposable
     [Fact]
     public void TheDebugFileIsRemappedInPlaceFromTheMapBesideTheOutput()
     {
-        Write("build/main.s.lines", Map);
-        Write("game.dbg", Linked);
+        root.Write("build/main.s.lines", Map);
+        root.Write("game.dbg", Linked);
 
         var (code, printed) = Run("remap-dbg", "game.dbg");
 
@@ -51,8 +51,8 @@ public sealed class RemapCommandTests : IDisposable
     [Fact]
     public void OutWritesElsewhereAndLeavesTheOriginal()
     {
-        Write("build/main.s.lines", Map);
-        Write("game.dbg", Linked);
+        root.Write("build/main.s.lines", Map);
+        root.Write("game.dbg", Linked);
 
         Assert.Equal(0, Run("remap-dbg", "game.dbg", "--out", "mapped.dbg").Code);
 
@@ -67,7 +67,7 @@ public sealed class RemapCommandTests : IDisposable
     [Fact]
     public void ADebugFileWithNoMapIsLeftAlone()
     {
-        Write("game.dbg", Linked);
+        root.Write("game.dbg", Linked);
 
         Assert.Equal(0, Run("remap-dbg", "game.dbg").Code);
 
@@ -83,8 +83,8 @@ public sealed class RemapCommandTests : IDisposable
     [InlineData(new[] { "remap-dbg", "--bogus", "game.dbg" }, 2, "nt65: `--bogus` is not an option")]
     public void EachFailureIsReportedWithItsExitCode(string[] arguments, int expected, string message)
     {
-        Write("a.dbg", Linked);
-        Write("game.dbg", Linked);
+        root.Write("a.dbg", Linked);
+        root.Write("game.dbg", Linked);
 
         var result = Run(arguments);
 
@@ -96,7 +96,7 @@ public sealed class RemapCommandTests : IDisposable
     [Fact]
     public void SomethingThatIsNotADebugFileIsRefused()
     {
-        Write("game.dbg", "not a debug file at all\n");
+        root.Write("game.dbg", "not a debug file at all\n");
 
         var (code, printed) = Run("remap-dbg", "game.dbg");
 
@@ -113,8 +113,6 @@ public sealed class RemapCommandTests : IDisposable
         return (code, output.ToString() + error.ToString());
     }
 
-    private void Write(string path, string text) => Repo.WriteText(Path.Combine(root.FullName, path), text);
-
     private string Read(string path) =>
-        File.ReadAllText(Path.Combine(root.FullName, path)).ReplaceLineEndings("\n");
+        root.Read(path).ReplaceLineEndings("\n");
 }

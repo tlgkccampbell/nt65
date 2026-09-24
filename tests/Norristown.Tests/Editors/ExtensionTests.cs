@@ -25,9 +25,9 @@ public sealed class ExtensionTests : IDisposable
     private static readonly JsonDocument Hover = JsonDocument.Parse(
         Repo.ReadText(Repo.Path("editors", "vscode", "syntaxes", "nt65-hover.tmLanguage.json")));
 
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-extension-");
+    private readonly TempFolder root = new("nt65-extension-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>Every key the reader knows is in the schema, and the schema has no others.</summary>
     [Fact]
@@ -85,8 +85,8 @@ public sealed class ExtensionTests : IDisposable
     [Fact]
     public void TheProblemMatcherReadsWhatTheCommandWrites()
     {
-        Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
-        Write("main.nt65", ".module main\n.segment CODE\n.proc main {\n    lda nowhere\n    rts\n}\n");
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
+        root.Write("main.nt65", ".module main\n.segment CODE\n.proc main {\n    lda nowhere\n    rts\n}\n");
 
         var error = new StringWriter { NewLine = "\n" };
         Assert.Equal(1, Commands.Run(["build"], root.FullName, new StringWriter { NewLine = "\n" }, error,
@@ -309,6 +309,4 @@ public sealed class ExtensionTests : IDisposable
             .GetProperty("problemMatchers").EnumerateArray().Single().GetProperty("pattern").GetProperty(field);
         return pattern.ValueKind == JsonValueKind.Number ? pattern.GetInt32().ToString() : pattern.GetString() ?? "";
     }
-
-    private void Write(string path, string text) => Repo.WriteText(Path.Combine(root.FullName, path), text);
 }

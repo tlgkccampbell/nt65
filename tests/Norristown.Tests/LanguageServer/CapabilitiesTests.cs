@@ -29,9 +29,9 @@ public sealed class CapabilitiesTests : IDisposable
         }
         """;
 
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-folders-");
+    private readonly TempFolder root = new("nt65-folders-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     [Fact]
     public void EveryCapabilityIsReadFromWhereTheProtocolPutsIt()
@@ -136,11 +136,11 @@ public sealed class CapabilitiesTests : IDisposable
     public async Task AFolderAddedToTheWorkspaceBringsItsProjects()
     {
         var timeout = TestTimeout.Token();
-        Write("opened/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
-        Write("later/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
-        Write("later/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
+        root.Write("opened/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
+        root.Write("later/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
+        root.Write("later/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
         var caller = ".module main\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    rts\n}\n";
-        Write("later/main.nt65", caller);
+        root.Write("later/main.nt65", caller);
 
         await using var client = await TestClient.StartAsync(
             TestClient.Capable(), timeout, rootUri: Folder("opened"));
@@ -149,13 +149,6 @@ public sealed class CapabilitiesTests : IDisposable
 
         await client.FoldersChangedAsync([Folder("later")], []);
         Assert.Empty((await client.NextDiagnosticsAsync(Folder("later/main.nt65"), timeout)).Diagnostics);
-    }
-
-    private void Write(string path, string text)
-    {
-        var file = Path.Combine(root.FullName, path);
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, text.ReplaceLineEndings("\n"));
     }
 
     private string Folder(string path) => new Uri(Path.Combine(root.FullName, path)).AbsoluteUri;

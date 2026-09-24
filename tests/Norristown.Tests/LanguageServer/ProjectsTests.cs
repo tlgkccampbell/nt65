@@ -12,9 +12,9 @@ public sealed class ProjectsTests : IDisposable
 {
     private const string Caller = ".module main\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    rts\n}\n";
 
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-projects-");
+    private readonly TempFolder root = new("nt65-projects-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>
     /// With two projects in subfolders and a file in neither, each project's files see one another
@@ -24,12 +24,12 @@ public sealed class ProjectsTests : IDisposable
     public async Task EachProjectBeneathTheFolderIsItsOwnProgram()
     {
         var timeout = TestTimeout.Token();
-        Write("games/snake/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
-        Write("games/snake/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
-        Write("games/snake/main.nt65", Caller);
-        Write("tools/nt65.json", """{ "cpu": "6502", "files": ["**/*.nt65"] }""");
-        Write("tools/src/main.nt65", Caller);
-        Write("scratch.nt65", Caller);
+        root.Write("games/snake/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
+        root.Write("games/snake/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
+        root.Write("games/snake/main.nt65", Caller);
+        root.Write("tools/nt65.json", """{ "cpu": "6502", "files": ["**/*.nt65"] }""");
+        root.Write("tools/src/main.nt65", Caller);
+        root.Write("scratch.nt65", Caller);
         await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
 
         Assert.Empty(await DiagnosticsAsync(client, "games/snake/main.nt65", timeout));
@@ -47,16 +47,16 @@ public sealed class ProjectsTests : IDisposable
     public async Task AFolderWithAnEscapedDriveFindsItsProject()
     {
         var timeout = TestTimeout.Token();
-        Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"] }""");
-        Write("src/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
-        Write("src/main.nt65", Caller);
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"] }""");
+        root.Write("src/gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
+        root.Write("src/main.nt65", Caller);
         static string AsVsCode(string uri) =>
             Regex.Replace(uri, "^file:///([A-Za-z]):", m => $"file:///{m.Groups[1].Value.ToLowerInvariant()}%3A");
         await using var client = await TestClient.StartAsync(AsVsCode(Uri("")), null, timeout);
 
         // Once the client has opened a file under its own form of the URI, diagnostics are
         // published under that form.
-        await client.OpenAsync(AsVsCode(Uri("src/main.nt65")), Read("src/main.nt65"));
+        await client.OpenAsync(AsVsCode(Uri("src/main.nt65")), root.Read("src/main.nt65"));
         Assert.Empty((await client.NextDiagnosticsAsync(AsVsCode(Uri("src/main.nt65")), timeout)).Diagnostics);
     }
 
@@ -70,10 +70,10 @@ public sealed class ProjectsTests : IDisposable
     public async Task WhatAProgramReadsChangingOnDiskIsPublishedAgain()
     {
         var timeout = TestTimeout.Token();
-        Write("nt65.json", """{ "cpu": "6502", "files": ["main.nt65"] }""");
-        Write("gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
-        Write("tiles.bin", "1234");
-        Write("main.nt65", Caller + """
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["main.nt65"] }""");
+        root.Write("gfx.nt65", ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n");
+        root.Write("tiles.bin", "1234");
+        root.Write("main.nt65", Caller + """
             .segment RODATA
             .data tiles: .incbin "tiles.bin"
             .assert .sizeof(tiles) == 4, "four tiles"
@@ -83,17 +83,17 @@ public sealed class ProjectsTests : IDisposable
             (await NextForAsync(client, "main.nt65", timeout)).Diagnostics.Select(d => d.Message));
 
         // The project names gfx.nt65 as well from here on.
-        Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
         await client.ChangedOnDiskAsync(Uri("nt65.json"));
         Assert.Empty((await NextForAsync(client, "main.nt65", timeout)).Diagnostics);
 
-        Write("gfx.nt65", ".module gfx\n.segment CODE\n.proc clear {\n    rts\n}\n");
+        root.Write("gfx.nt65", ".module gfx\n.segment CODE\n.proc clear {\n    rts\n}\n");
         await client.ChangedOnDiskAsync(Uri("gfx.nt65"));
         Assert.Equal(["`gfx::clear` is not exported by module `gfx`"],
             (await NextForAsync(client, "main.nt65", timeout)).Diagnostics.Select(d => d.Message));
 
-        Write("tiles.bin", "123");
-        Write("unrelated.txt", "");
+        root.Write("tiles.bin", "123");
+        root.Write("unrelated.txt", "");
         await client.ChangedOnDiskAsync(Uri("unrelated.txt"));
         await client.ChangedOnDiskAsync(Uri("tiles.bin"));
         Assert.Equal(["`gfx::clear` is not exported by module `gfx`", "four tiles"],
@@ -109,8 +109,8 @@ public sealed class ProjectsTests : IDisposable
     public async Task WhatIsWrongWithTheProjectFileIsPublishedForIt()
     {
         var timeout = TestTimeout.Token();
-        Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "define": {} }""");
-        Write("main.nt65", ".module main\n");
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "define": {} }""");
+        root.Write("main.nt65", ".module main\n");
         await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
 
         var published = await NextForAsync(client, "nt65.json", timeout);
@@ -129,13 +129,13 @@ public sealed class ProjectsTests : IDisposable
     public async Task TheChosenConfigurationDecidesWhatIsDimmed()
     {
         var timeout = TestTimeout.Token();
-        Write("app/nt65.json", """
+        root.Write("app/nt65.json", """
             { "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 },
               "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }
             """);
-        Write("app/main.nt65", ".module main\n.if DEBUG {\n    X = 1\n} .else {\n    X = 2\n}\n.assert X > 0\n");
-        Write("lib/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
-        Write("lib/main.nt65", ".module lib\n");
+        root.Write("app/main.nt65", ".module main\n.if DEBUG {\n    X = 1\n} .else {\n    X = 2\n}\n.assert X > 0\n");
+        root.Write("lib/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
+        root.Write("lib/main.nt65", ".module lib\n");
         await using var client = await TestClient.StartAsync(Uri(""), "debug", timeout);
 
         Assert.Equal(["debug"], await client.RequestAsync<IReadOnlyList<string>>("nt65/configurations", new { }, timeout));
@@ -153,7 +153,7 @@ public sealed class ProjectsTests : IDisposable
 
     private async Task<IReadOnlyList<string>> DiagnosticsAsync(TestClient client, string path, CancellationToken timeout)
     {
-        await client.OpenAsync(Uri(path), Read(path));
+        await client.OpenAsync(Uri(path), root.Read(path));
         return [.. (await NextForAsync(client, path, timeout)).Diagnostics.Select(d => d.Message)];
     }
 
@@ -165,14 +165,5 @@ public sealed class ProjectsTests : IDisposable
     private Task<PublishDiagnosticsParams> NextForAsync(TestClient client, string path, CancellationToken timeout) =>
         client.NextDiagnosticsAsync(Uri(path), timeout);
 
-    private string Read(string path) => File.ReadAllText(Path.Combine(root.FullName, path));
-
     private string Uri(string path) => new Uri(Path.Combine(root.FullName, path)).AbsoluteUri;
-
-    private void Write(string path, string text)
-    {
-        var full = Path.Combine(root.FullName, path);
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        File.WriteAllText(full, text.ReplaceLineEndings("\n"));
-    }
 }

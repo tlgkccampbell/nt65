@@ -11,9 +11,9 @@ namespace Norristown.Tests.LanguageServer;
 /// </summary>
 public sealed class MovedFileTests : IDisposable
 {
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-moved-");
+    private readonly TempFolder root = new("nt65-moved-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>
     /// A <c>files</c> entry naming the file literally is rewritten, and the <c>.incbin</c> paths
@@ -24,7 +24,7 @@ public sealed class MovedFileTests : IDisposable
     public async Task WhatMovesWithAFileIsRewrittenAndWhatCannotBeIsReported()
     {
         var timeout = TestTimeout.Token();
-        Write("nt65.json", """
+        root.Write("nt65.json", """
             {
               // The sources, one of them named outright.
               "cpu": "6502",
@@ -32,14 +32,14 @@ public sealed class MovedFileTests : IDisposable
               "out": "build"
             }
             """);
-        Write("src/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    rts\n}\n");
-        Write("gfx/sprite.nt65",
+        root.Write("src/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    rts\n}\n");
+        root.Write("gfx/sprite.nt65",
             ".module gfx::sprite\n.segment RODATA\n.export .data tiles: .incbin \"../data/tiles.bin\"\n");
-        Write("data/tiles.bin", "0123");
+        root.Write("data/tiles.bin", "0123");
 
         await using var client = await TestClient.StartAsync(
             TestClient.Capable(), timeout, rootUri: Folder(""));
-        await client.OpenAsync(Folder("src/main.nt65"), Read("src/main.nt65"));
+        await client.OpenAsync(Folder("src/main.nt65"), root.Read("src/main.nt65"));
         await client.NextDiagnosticsAsync(Folder("src/main.nt65"), timeout);
 
         // The named source moves: the entry that names it has to name it where it now is.
@@ -95,15 +95,6 @@ public sealed class MovedFileTests : IDisposable
         client.RequestAsync<WorkspaceEdit?>("workspace/willRenameFiles",
             new RenameFilesParams([.. files.Select(file => new FileRename(Folder(file.From), Folder(file.To)))]),
             cancellation);
-
-    private void Write(string path, string text)
-    {
-        var file = Path.Combine(root.FullName, path);
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        File.WriteAllText(file, text.ReplaceLineEndings("\n"));
-    }
-
-    private string Read(string path) => File.ReadAllText(Path.Combine(root.FullName, path));
 
     private string Folder(string path) =>
         new Uri(Path.Combine(root.FullName, path.Replace('/', Path.DirectorySeparatorChar))).AbsoluteUri;

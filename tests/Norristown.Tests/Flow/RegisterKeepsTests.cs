@@ -279,9 +279,23 @@ public sealed class RegisterKeepsTests
     [Fact]
     public void AScopeBranchedIntoPastItsStartGetsNoRegisterAnswer()
     {
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n"
-            + ".proc p {\n    beq body::mid\n    .scope body {\n        pha\n        ldx #2\n    mid:\n        pla\n"
-            + "        bne @out\n    }\n@out:\n    rts\n}\n"));
+        const string Text = """
+            .proc p {
+                beq body::mid
+                .scope body {
+                    pha
+                    ldx #2
+                mid:
+                    pla
+                    bne @out
+                }
+            @out:
+                rts
+            }
+
+            """;
+
+        var analysis = FlowFragment.Analyze("6502", Text);
         Assert.Empty(analysis.Problems());
         var region = analysis.FlowFor("main.nt65")!.Regions.Single();
         Assert.Empty(region.Scopes);
@@ -292,31 +306,17 @@ public sealed class RegisterKeepsTests
 
     private static RoutineRegisters Found(string text, string routine)
     {
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n" + text));
+        var analysis = FlowFragment.Analyze("6502", text);
         var flow = analysis.FlowFor("main.nt65");
         Assert.NotNull(flow);
         return flow.Regions.Single(region => region.Routine.DisplayName == routine).Registers;
     }
 
-    private static IReadOnlyList<string> Problems(string text) =>
-        [.. Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n" + text)).Problems()
-            .Select(Renumbered)];
+    private static IReadOnlyList<string> Problems(string text) => FlowFragment.Problems("6502", text);
 
     /// <summary>
     /// Returns <see cref="Problems"/> for a 65816 program, where a push is as wide as the register
     /// it moves.
     /// </summary>
-    private static IReadOnlyList<string> Wide(string text) =>
-        [.. Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)).Problems()
-            .Select(Renumbered)];
-
-    /// <summary>
-    /// Returns the problem with its line number counted from the start of the test's own text,
-    /// not counting the three prefix lines every test is compiled after.
-    /// </summary>
-    private static string Renumbered(string problem)
-    {
-        var parts = problem.Split(':', 3);
-        return $"{parts[0]}:{int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) - 3}:{parts[2]}";
-    }
+    private static IReadOnlyList<string> Wide(string text) => FlowFragment.Problems("65816", text);
 }

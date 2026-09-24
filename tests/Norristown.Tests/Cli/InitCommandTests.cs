@@ -12,9 +12,9 @@ namespace Norristown.Tests.Cli;
 /// </summary>
 public sealed class InitCommandTests : IDisposable
 {
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-init-");
+    private readonly TempFolder root = new("nt65-init-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>The files it writes build, and it reports which files it wrote.</summary>
     [Fact]
@@ -36,11 +36,11 @@ public sealed class InitCommandTests : IDisposable
     {
         Assert.Equal(0, Run(root.FullName, "init").Code);
 
-        var project = Read(ProjectFile.Name);
+        var project = root.Read(ProjectFile.Name);
         foreach (var key in JsonDocument.Parse(project).RootElement.EnumerateObject().Select(each => each.Name))
             Assert.Contains(key, ProjectFile.Keys);
 
-        var main = Read("src/main.nt65");
+        var main = root.Read("src/main.nt65");
         Assert.Equal(main, Formatter.Format(SyntaxTree.Parse("src/main.nt65", main)));
         Assert.Equal((0, ""), Run(root.FullName, "fmt", "--check"));
     }
@@ -52,7 +52,7 @@ public sealed class InitCommandTests : IDisposable
         var (code, printed) = Run(root.FullName, "init", "game", "--cpu", "65816");
 
         Assert.Equal((0, "game/nt65.json\ngame/src/main.nt65\n"), (code, printed));
-        Assert.Contains("\"cpu\": \"65816\"", Read("game/nt65.json"));
+        Assert.Contains("\"cpu\": \"65816\"", root.Read("game/nt65.json"));
         Assert.Equal(0, Run(Path.Combine(root.FullName, "game"), "build").Code);
     }
 
@@ -68,13 +68,13 @@ public sealed class InitCommandTests : IDisposable
         var (code, printed) = Run(root.FullName, "init");
 
         Assert.Equal((1, "nt65: src/main.nt65 exists already\n"), (code, printed));
-        Assert.Equal(".module mine\n", Read("src/main.nt65"));
+        Assert.Equal(".module mine\n", root.Read("src/main.nt65"));
         Assert.False(File.Exists(Path.Combine(root.FullName, ProjectFile.Name)));
 
         File.Delete(Path.Combine(root.FullName, "src", "main.nt65"));
         Repo.WriteText(Path.Combine(root.FullName, ProjectFile.Name), "{}");
         Assert.Equal((1, "nt65: nt65.json exists already\n"), Run(root.FullName, "init"));
-        Assert.Equal("{}", Read(ProjectFile.Name));
+        Assert.Equal("{}", root.Read(ProjectFile.Name));
     }
 
     /// <summary>A processor nt65 does not have, and a second directory, are command-line mistakes.</summary>
@@ -97,6 +97,4 @@ public sealed class InitCommandTests : IDisposable
             cancellation: TestTimeout.Token());
         return (code, output.ToString() + error.ToString());
     }
-
-    private string Read(string path) => File.ReadAllText(Path.Combine(root.FullName, path));
 }

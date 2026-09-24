@@ -6,9 +6,9 @@ namespace Norristown.Tests.Fixtures;
 /// </summary>
 public sealed class FixtureHarnessTests : IDisposable
 {
-    private readonly DirectoryInfo dir = Directory.CreateTempSubdirectory("nt65-fixture-");
+    private readonly TempFolder dir = new("nt65-fixture-");
 
-    public void Dispose() => dir.Delete(recursive: true);
+    public void Dispose() => dir.Dispose();
 
     [Fact]
     public void InlineDiagnosticsAreParsedWithFileAndLine()
@@ -95,7 +95,7 @@ public sealed class FixtureHarnessTests : IDisposable
     private FixtureCase Write(params (string Path, string Text)[] files)
     {
         foreach (var (path, text) in files)
-            Repo.WriteText(Path.Combine(dir.FullName, path), text);
+            dir.Write(path, text);
         return FixtureCase.Load(dir.FullName).Single();
     }
 }

@@ -1,7 +1,5 @@
 using Norristown.Flow;
 using Norristown.Semantics;
-using Norristown.Syntax;
-using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
 
@@ -254,7 +252,7 @@ public sealed class StateAnalysisTests
                 rts
             }
             """;
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + Text));
+        var analysis = FlowFragment.Analyze("65816", Text);
 
         var problem = Assert.Single(analysis.Diagnostics);
         Assert.Equal(9, problem.Span.Line);
@@ -430,43 +428,11 @@ public sealed class StateAnalysisTests
             Problems(".proc p: dp = $2100 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
     }
 
-    private static int MaximumWalks(string text)
-    {
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
-        return Assert.Single(analysis.Files).State!.MaximumWalks;
-    }
+    private static int MaximumWalks(string text) =>
+        Assert.Single(FlowFragment.Analyze("65816", text).Files).State!.MaximumWalks;
 
-    private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)).Problems()
-            .Select(problem => Renumbered(problem))
-            .ToList();
-
-    /// <summary>
-    /// Returns the problem with its line number counted from the start of the test's own text,
-    /// not counting the <c>.module</c>, <c>.cpu</c> and <c>.segment</c> lines every test is
-    /// compiled after.
-    /// </summary>
-    private static string Renumbered(string problem)
-    {
-        var parts = problem.Split(':', 3);
-        return $"{parts[0]}:{int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) - 3}:{parts[2]}";
-    }
+    private static IReadOnlyList<string> Problems(string text) => FlowFragment.Problems("65816", text);
 
     private static FlowState StateAt(string text, string line) =>
-        StateAt(Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)), line);
-
-    /// <summary>
-    /// Returns the state reaching the first statement whose text is <paramref name="line"/>.
-    /// </summary>
-    private static FlowState StateAt(ProgramAnalysis analysis, string line)
-    {
-        var model = analysis.File("main.nt65");
-        var statement = model.Tree.Root.DescendantNodes()
-            .OfType<LineSyntax>()
-            .Select(node => node.Statement)
-            .First(statement => statement.GetText().Trim() == line);
-        var state = analysis.StatesFor("main.nt65")?.Before(statement);
-        Assert.NotNull(state);
-        return state;
-    }
+        FlowFragment.StateAt(FlowFragment.Analyze("65816", text), line);
 }

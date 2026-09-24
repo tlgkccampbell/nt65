@@ -11,20 +11,20 @@ public sealed class FormatCommandTests : IDisposable
     private const string Crooked = ".module main\n.segment CODE\n  .proc main {\nrts   \n   }\n";
     private const string Straight = ".module main\n.segment CODE\n.proc main {\n    rts\n}\n";
 
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-fmt-");
+    private readonly TempFolder root = new("nt65-fmt-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>A file named on the command line is rewritten in the standard layout, and nothing is printed.</summary>
     [Fact]
     public void ANamedFileIsWrittenInTheOneLayout()
     {
-        File("main.nt65", Crooked);
+        root.Write("main.nt65", Crooked);
 
         var (code, printed) = Run(root.FullName, "fmt", "main.nt65");
 
         Assert.Equal((0, ""), (code, printed));
-        Assert.Equal(Straight, Read("main.nt65"));
+        Assert.Equal(Straight, root.Read("main.nt65"));
     }
 
     /// <summary>
@@ -35,13 +35,13 @@ public sealed class FormatCommandTests : IDisposable
     [Fact]
     public void CheckListsWhatIsNotFormattedAndWritesNothing()
     {
-        File("src/main.nt65", Crooked);
-        File("src/hw.nt65", ".module hw\n");
+        root.Write("src/main.nt65", Crooked);
+        root.Write("src/hw.nt65", ".module hw\n");
 
         var (code, printed) = Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65");
 
         Assert.Equal((1, "src/main.nt65\n"), (code, printed));
-        Assert.Equal(Crooked, Read("src/main.nt65"));
+        Assert.Equal(Crooked, root.Read("src/main.nt65"));
 
         Assert.Equal((0, ""), Run(root.FullName, "fmt", "src/main.nt65"));
         Assert.Equal((0, ""), Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65"));
@@ -54,18 +54,18 @@ public sealed class FormatCommandTests : IDisposable
     [Fact]
     public void NamedNothingItFormatsWhatTheProjectNames()
     {
-        File("app/nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"] }""");
-        File("app/src/main.nt65", Crooked);
-        File("app/src/hw.nt65", "  .module hw\n");
-        File("app/notes.nt65", Crooked);
+        root.Write("app/nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"] }""");
+        root.Write("app/src/main.nt65", Crooked);
+        root.Write("app/src/hw.nt65", "  .module hw\n");
+        root.Write("app/notes.nt65", Crooked);
 
         Assert.Equal((0, ""), Run(Path.Combine(root.FullName, "app", "src"), "fmt"));
 
-        Assert.Equal(Straight, Read("app/src/main.nt65"));
-        Assert.Equal(".module hw\n", Read("app/src/hw.nt65"));
+        Assert.Equal(Straight, root.Read("app/src/main.nt65"));
+        Assert.Equal(".module hw\n", root.Read("app/src/hw.nt65"));
 
         // The project's `files` are the program, and a file it does not name is not part of it.
-        Assert.Equal(Crooked, Read("app/notes.nt65"));
+        Assert.Equal(Crooked, root.Read("app/notes.nt65"));
     }
 
     /// <summary>
@@ -95,8 +95,4 @@ public sealed class FormatCommandTests : IDisposable
             cancellation: TestTimeout.Token());
         return (code, output.ToString() + error.ToString());
     }
-
-    private void File(string path, string text) => Repo.WriteText(Path.Combine(root.FullName, path), text);
-
-    private string Read(string path) => System.IO.File.ReadAllText(Path.Combine(root.FullName, path));
 }

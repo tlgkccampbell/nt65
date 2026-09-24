@@ -1,6 +1,4 @@
-using Norristown.Flow;
 using Norristown.Semantics;
-using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
@@ -174,10 +172,10 @@ public sealed class RequirementsTests
         var analysis = Program(Text);
 
         Assert.Empty(analysis.Problems());
-        var back = StateAt(analysis, "tax");
+        var back = FlowFragment.StateAt(analysis, "tax");
         Assert.Equal(Width.Sixteen, back.Processor.A);
         Assert.Equal(0, back.Stack?.Depth);
-        Assert.Equal(0, StateAt(analysis, "tay").Stack?.Depth);
+        Assert.Equal(0, FlowFragment.StateAt(analysis, "tay").Stack?.Depth);
     }
 
     /// <summary>
@@ -200,7 +198,7 @@ public sealed class RequirementsTests
         var analysis = Program(Text);
 
         Assert.Empty(analysis.Problems());
-        Assert.Equal(0, StateAt(analysis, "tax").Stack?.Depth);
+        Assert.Equal(0, FlowFragment.StateAt(analysis, "tax").Stack?.Depth);
     }
 
     /// <summary>
@@ -240,7 +238,7 @@ public sealed class RequirementsTests
                 "main.nt65:13: `jsr wider` needs `a8`, but A is 16-bit here",
             ],
             analysis.Problems());
-        Assert.Equal("a16, i?, native", StateAt(analysis, "tax").Processor.ToString());
+        Assert.Equal("a16, i?, native", FlowFragment.StateAt(analysis, "tax").Processor.ToString());
     }
 
     /// <summary>
@@ -266,7 +264,7 @@ public sealed class RequirementsTests
         var analysis = Program(Text);
 
         Assert.Empty(analysis.Problems());
-        Assert.Equal("a16, i8, native", StateAt(analysis, "lda #$5678").Processor.ToString());
+        Assert.Equal("a16, i8, native", FlowFragment.StateAt(analysis, "lda #$5678").Processor.ToString());
     }
 
     /// <summary>
@@ -344,20 +342,5 @@ public sealed class RequirementsTests
             Program(Text).Problems());
     }
 
-    private static ProgramAnalysis Program(string text) => Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
-
-    /// <summary>
-    /// Returns the state reaching the first statement whose text is <paramref name="line"/>.
-    /// </summary>
-    private static FlowState StateAt(ProgramAnalysis analysis, string line)
-    {
-        var model = analysis.File("main.nt65");
-        var statement = model.Tree.Root.DescendantNodes()
-            .OfType<LineSyntax>()
-            .Select(node => node.Statement)
-            .First(statement => statement.GetText().Trim() == line);
-        var state = analysis.StatesFor("main.nt65")?.Before(statement);
-        Assert.NotNull(state);
-        return state;
-    }
+    private static ProgramAnalysis Program(string text) => FlowFragment.Analyze("65816", text);
 }

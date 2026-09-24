@@ -13,9 +13,9 @@ public sealed class BuildCommandTests : IDisposable
     private const string Main = ".module main\n.use hw::BORDER\n.segment CODE\n.export .proc main {\n    lda #DEBUG\n    sta BORDER\n    rts\n}\n";
     private const string Hw = ".module hw::vic\n.export BORDER = $d020\n";
 
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-build-");
+    private readonly TempFolder root = new("nt65-build-");
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>
     /// The project is found from a directory below it, and an output is named after its module
@@ -25,16 +25,16 @@ public sealed class BuildCommandTests : IDisposable
     public void OutputIsNamedByModuleUnderTheProjectsOut()
     {
         Project("""{ "cpu": "6502", "files": ["src/*.nt65", "../lib/*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
-        File("app/src/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
-        File("lib/vic.nt65", Hw);
+        root.Write("app/src/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
+        root.Write("lib/vic.nt65", Hw);
 
         var (code, printed) = Run(Path.Combine(root.FullName, "app", "src"), "build");
 
         Assert.Equal((0, ""), (code, printed));
         Assert.True(Exists("app/build/main.s"));
         Assert.True(Exists("app/build/hw/vic.s"));
-        Assert.Contains("from ../lib/vic.nt65.", Read("app/build/hw/vic.s"));
-        Assert.Contains("file 0, \"src/main.nt65\"", Read("app/build/main.s.lines"));
+        Assert.Contains("from ../lib/vic.nt65.", root.Read("app/build/hw/vic.s"));
+        Assert.Contains("file 0, \"src/main.nt65\"", root.Read("app/build/main.s.lines"));
 
         // A module of nothing but constants generates no bytes, so nothing maps back to it.
         Assert.False(Exists("app/build/hw/vic.s.lines"));
@@ -56,13 +56,13 @@ public sealed class BuildCommandTests : IDisposable
               "configurations": { "debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" } }
             }
             """);
-        File("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
         var app = Path.Combine(root.FullName, "app");
 
         Assert.Equal(0, Run(app, "build").Code);
         Assert.Equal(0, Run(app, "build", "--config", "debug").Code);
-        Assert.Contains("lda #$00", Read("app/build/release/main.s"));
-        Assert.Contains("lda #$01", Read("app/build/debug/main.s"));
+        Assert.Contains("lda #$00", root.Read("app/build/release/main.s"));
+        Assert.Contains("lda #$01", root.Read("app/build/debug/main.s"));
 
         var (code, printed) = Run(app, "build", "--config", "ntsc");
         Assert.Equal(1, code);
@@ -77,14 +77,14 @@ public sealed class BuildCommandTests : IDisposable
     public void AnOutputWhoseModuleIsGoneIsDeleted()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
-        File("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
-        File("app/vic.nt65", Hw);
-        File("app/build/notes.txt", "mine");
+        root.Write("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
+        root.Write("app/vic.nt65", Hw);
+        root.Write("app/build/notes.txt", "mine");
         var app = Path.Combine(root.FullName, "app");
         Assert.Equal(0, Run(app, "build").Code);
         Assert.True(Exists("app/build/hw/vic.s"));
 
-        File("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
         System.IO.File.Delete(Path.Combine(app, "vic.nt65"));
         var (code, printed) = Run(app, "build");
 
@@ -104,10 +104,10 @@ public sealed class BuildCommandTests : IDisposable
     public void TheDependencyFileNamesWhatEachOutputDependsOn()
     {
         Project("""{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
-        File("app/src/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal)
+        root.Write("app/src/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal)
             + ".segment RODATA\n.data font: .incbin \"../data/font.bin\"\n.export font\n");
-        File("app/src/vic.nt65", Hw);
-        File("app/data/font.bin", "ABCD");
+        root.Write("app/src/vic.nt65", Hw);
+        root.Write("app/data/font.bin", "ABCD");
         var app = Path.Combine(root.FullName, "app");
 
         Assert.Equal(0, Run(app, "build", "--depfile", "build/nt65.d").Code);
@@ -135,7 +135,7 @@ public sealed class BuildCommandTests : IDisposable
 
             src/vic.nt65:
 
-            """.ReplaceLineEndings("\n"), Read("app/build/nt65.d"));
+            """.ReplaceLineEndings("\n"), root.Read("app/build/nt65.d"));
     }
 
     /// <summary>
@@ -146,8 +146,8 @@ public sealed class BuildCommandTests : IDisposable
     public void ANamedFileIsBuiltWithinItsProject()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 } }""");
-        File("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
-        File("app/vic.nt65", Hw);
+        root.Write("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
+        root.Write("app/vic.nt65", Hw);
 
         var (code, printed) = Run(Path.Combine(root.FullName, "app"), "build", "main.nt65");
 
@@ -182,8 +182,8 @@ public sealed class BuildCommandTests : IDisposable
     [Fact]
     public void WithoutAProjectWhatIsMissingIsReported()
     {
-        File("alone/main.nt65", Main.Replace("#DEBUG", "#1", StringComparison.Ordinal));
-        File("alone/other.nt65", ".module other\n.export N = 1\n");
+        root.Write("alone/main.nt65", Main.Replace("#DEBUG", "#1", StringComparison.Ordinal));
+        root.Write("alone/other.nt65", ".module other\n.export N = 1\n");
         var alone = Path.Combine(root.FullName, "alone");
 
         var (code, printed) = Run(alone, "build", "main.nt65");
@@ -204,7 +204,7 @@ public sealed class BuildCommandTests : IDisposable
     public void CheckReportsAndWritesNothing()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
-        File("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020\nUNUSED = 1", StringComparison.Ordinal));
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020\nUNUSED = 1", StringComparison.Ordinal));
         var app = Path.Combine(root.FullName, "app");
 
         var (code, printed) = Run(app, "build", "--check", "--depfile", "nt65.d", "--c-header", "nt65.h");
@@ -216,7 +216,7 @@ public sealed class BuildCommandTests : IDisposable
         Assert.False(System.IO.File.Exists(Path.Combine(app, "nt65.h")));
 
         // It exits with the code a build would, so a program a build rejects fails the check too.
-        File("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
+        root.Write("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
         Assert.Equal(1, Run(app, "build", "--check").Code);
     }
 
@@ -228,7 +228,7 @@ public sealed class BuildCommandTests : IDisposable
     public void JsonWritesOneObjectPerDiagnostic()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
-        File("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nBORDER = $d021\n");
+        root.Write("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nBORDER = $d021\n");
         var app = Path.Combine(root.FullName, "app");
 
         var (code, output, error) = Apart(app, false, "build", "--json");
@@ -247,7 +247,7 @@ public sealed class BuildCommandTests : IDisposable
             (related.GetProperty("line").GetInt32(), related.GetProperty("message").GetString()));
 
         // A diagnostic with nothing else to point at has no related spans field at all.
-        File("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
+        root.Write("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
         Assert.DoesNotContain("related", Apart(app, false, "build", "--json").Output);
     }
 
@@ -260,7 +260,7 @@ public sealed class BuildCommandTests : IDisposable
     public void ColourMarksWhatADiagnosticIs()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
-        File("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
+        root.Write("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
         var app = Path.Combine(root.FullName, "app");
 
         Assert.Equal(
@@ -272,7 +272,7 @@ public sealed class BuildCommandTests : IDisposable
                 + "[unused-symbol]\n",
             Apart(app, false, "build").Error);
 
-        File("app/main.nt65", ".module main\n.export BORDER\nBORDER = nowhere\n");
+        root.Write("app/main.nt65", ".module main\n.export BORDER\nBORDER = nowhere\n");
         Assert.Equal(
             "main.nt65:3:10: [31merror:[0m `nowhere` is not declared [not-declared]\n",
             Apart(app, true, "build").Error);
@@ -327,7 +327,7 @@ public sealed class BuildCommandTests : IDisposable
     public void StdoutWritesOneFilesOutputAndNoFiles()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
-        File("app/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    rts\n}\n");
+        root.Write("app/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    rts\n}\n");
         var app = Path.Combine(root.FullName, "app");
 
         var (code, output, error) = Apart(app, false, "build", "--stdout", "main.nt65");
@@ -338,7 +338,7 @@ public sealed class BuildCommandTests : IDisposable
 
         // A program with errors still prints what could be written, under a line saying it is
         // incomplete.
-        File("app/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    lda nowhere\n    rts\n}\n");
+        root.Write("app/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    lda nowhere\n    rts\n}\n");
         var (wrong, incomplete, reported) = Apart(app, false, "build", "--stdout", "main.nt65");
         Assert.Equal(1, wrong);
         Assert.Contains("`nowhere` is not declared", reported, StringComparison.Ordinal);
@@ -363,12 +363,12 @@ public sealed class BuildCommandTests : IDisposable
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
         var app = Path.Combine(root.FullName, "app");
-        File("app/main.nt65", ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n");
-        File("app/part.nt65", ".module part: placeable\n\n.segment CODE\n.export .proc tail {\n    rts\n}\n");
+        root.Write("app/main.nt65", ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n");
+        root.Write("app/part.nt65", ".module part: placeable\n\n.segment CODE\n.export .proc tail {\n    rts\n}\n");
         Assert.Equal(0, Run(app, "build").Code);
         Assert.True(Exists("app/build/part.s"));
 
-        File("app/main.nt65", ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n\n.place part\n");
+        root.Write("app/main.nt65", ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n\n.place part\n");
         var (code, output, error) = Apart(app, false, "build", "--stdout", "part.nt65");
         Assert.Equal((0, ""), (code, error));
         Assert.Equal(
@@ -376,7 +376,7 @@ public sealed class BuildCommandTests : IDisposable
             output);
 
         Assert.Equal(0, Run(app, "build", "part.nt65").Code);
-        Assert.Contains("; .place part  main.nt65:8\n", Read("app/build/main.s"), StringComparison.Ordinal);
+        Assert.Contains("; .place part  main.nt65:8\n", root.Read("app/build/main.s"), StringComparison.Ordinal);
         Assert.True(Exists("app/build/part.s"));
 
         var (whole, deleted) = Run(app, "build");
@@ -408,11 +408,7 @@ public sealed class BuildCommandTests : IDisposable
         return (code, output.ToString(), error.ToString());
     }
 
-    private void Project(string text) => File("app/nt65.json", text);
+    private void Project(string text) => root.Write("app/nt65.json", text);
 
-    private void File(string path, string text) => Repo.WriteText(Path.Combine(root.FullName, path), text);
-
-    private string Read(string path) => System.IO.File.ReadAllText(Path.Combine(root.FullName, path));
-
-    private bool Exists(string path) => System.IO.File.Exists(Path.Combine(root.FullName, path));
+    private bool Exists(string path) => System.IO.File.Exists(root.PathOf(path));
 }
