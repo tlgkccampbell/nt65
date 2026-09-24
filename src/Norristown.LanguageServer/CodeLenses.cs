@@ -128,14 +128,14 @@ internal static class CodeLenses
     /// way but leaves off the word "preserves", because the label beside it already says what the
     /// list is.
     /// </summary>
-    private static string Format(Registers kept, bool complete) => $"preserves {Hover.Format(kept, complete)}";
+    private static string Format(Registers kept, bool complete) => $"preserves {Hovers.Format(kept, complete)}";
 
     /// <summary>
     /// Formats a cycle count as an interval, or as the minimum followed by a <c>+</c> when there
     /// is no maximum.
     /// </summary>
     private static string Count(int minimum, int? maximum) =>
-        maximum is { } bound ? Hover.Format(new CycleCount(minimum, bound)) : $"{minimum}+ cycles";
+        maximum is { } bound ? Hovers.Format(new CycleCount(minimum, bound)) : $"{minimum}+ cycles";
 
     /// <summary>
     /// Formats a cycle count as an interval, or as the minimum followed by a <c>+</c> when there

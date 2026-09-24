@@ -5,7 +5,7 @@ namespace Norristown.LanguageServer;
 
 /// <summary>
 /// Converts analysis results to protocol types, so the analysis stays free of LSP. This class
-/// holds all of the 0-based counting, which <see cref="Hover"/>, <see cref="Rename"/> and the
+/// holds all of the 0-based counting, which <see cref="Hovers"/>, <see cref="Rename"/> and the
 /// other answers use through <see cref="ToRange(SyntaxTree, TextSpan)"/> and
 /// <see cref="ToPosition"/>.
 /// <para>

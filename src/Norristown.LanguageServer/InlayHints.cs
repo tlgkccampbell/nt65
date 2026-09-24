@@ -198,7 +198,7 @@ internal static class InlayHints
             return null;
         var mnemonic = SyntaxFacts.TextOf(branch.MnemonicKind);
         var over = SyntaxFacts.TextOf(Instructions.FormsOf(branch.MnemonicKind).Skipped);
-        var cost = laid.Cycles is { } cycles ? $" and {Hover.Format(cycles)}" : "";
+        var cost = laid.Cycles is { } cycles ? $" and {Hovers.Format(cycles)}" : "";
         return new Mark(
             "long",
             $"`{mnemonic}` cannot reach its target in the two-byte form, so it is written as a "
@@ -262,7 +262,7 @@ internal static class InlayHints
             var why = laid.Causes is { Count: > 0 } causes && !cycles.IsExact
                 ? " " + string.Join(", ", causes) + "."
                 : "";
-            return new Mark(cycles.ToString(), $"This line takes {Hover.Format(cycles)}.{why}");
+            return new Mark(cycles.ToString(), $"This line takes {Hovers.Format(cycles)}.{why}");
         }
         if (statement is not LabeledLineSyntax { Statement: null } labelled
             || model.SymbolAt(labelled.Label.Name) is not { } label)
@@ -275,7 +275,7 @@ internal static class InlayHints
         return block?.Cycles is not { } total
             ? null
             : new Mark($"block {total}", $"The lines under `{label.DisplayName}`, as far as the next "
-                + $"label or branch, take {Hover.Format(total)} together.");
+                + $"label or branch, take {Hovers.Format(total)} together.");
     }
 
     /// <summary>

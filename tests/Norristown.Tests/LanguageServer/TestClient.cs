@@ -6,7 +6,6 @@ using Norristown.LanguageServer.Protocol;
 using StreamJsonRpc;
 
 // The protocol defines its own Range type, and this client uses that one.
-using Hover = Norristown.LanguageServer.Protocol.Hover;
 using Range = Norristown.LanguageServer.Protocol.Range;
 
 namespace Norristown.Tests.LanguageServer;

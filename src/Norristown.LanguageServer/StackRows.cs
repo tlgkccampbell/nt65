@@ -80,7 +80,7 @@ internal static class StackRows
             // one of its pushes.
             var push = covered == 1 ? pushes[next] : (SavedPush?)null;
             next += covered;
-            var text = group.Name ?? (push is { } held ? Hover.Held(held.Value, null) : "unknown");
+            var text = group.Name ?? (push is { } held ? Hovers.Held(held.Value, null) : "unknown");
 
             // Only the 65816 pushes a register whose width the caller cannot read off the CPU,
             // and only there does the width decide whether a pull gets the value back.

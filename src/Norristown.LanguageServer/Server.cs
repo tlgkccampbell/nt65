@@ -475,8 +475,8 @@ internal sealed class Server : IDisposable
     }
 
     [JsonRpcMethod("textDocument/hover")]
-    public Protocol.Hover? Hover(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked ? LanguageServer.Hover.At(asked.Analysis, asked.Model, asked.Position) : null;
+    public Hover? Hover(TextDocumentPositionParams request, CancellationToken cancellation) =>
+        At(request, cancellation) is { } asked ? Hovers.At(asked.Analysis, asked.Model, asked.Position) : null;
 
     [JsonRpcMethod("textDocument/definition")]
     public Location? Definition(TextDocumentPositionParams request, CancellationToken cancellation) =>

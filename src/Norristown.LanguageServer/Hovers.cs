@@ -18,7 +18,7 @@ namespace Norristown.LanguageServer;
 /// The first screenful answers the question and the rest is supporting detail.
 /// </para>
 /// </summary>
-internal static class Hover
+internal static class Hovers
 {
     /// <summary>The column on the <c>cycles</c> row where the enclosing block's count starts, after the line's own.</summary>
     private const int BlockColumn = 10;
