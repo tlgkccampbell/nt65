@@ -22,9 +22,11 @@ namespace Norristown.LanguageServer;
 internal static class LineBreaks
 {
     /// <summary>
-    /// Returns the changes offered where the caret is inside a call's arguments or a set. They are
-    /// for the innermost of those around the caret that has something to lay out, so that the
-    /// caret on the one value of a <c>.switch</c> arm's set still offers the <c>.switch</c>.
+    /// Returns the changes offered where the caret is in an expression. They are for the whole
+    /// expression, which is laid out at its outermost call or set around the caret that has
+    /// something to lay out, so that the caret anywhere in a <c>.switch</c>, one of its sets
+    /// included, offers the <c>.switch</c>. Where no brackets hold the caret, the expression's
+    /// first that have something to lay out are offered.
     /// </summary>
     public static IEnumerable<Change> In(SemanticModel model, int caret)
     {
@@ -114,18 +116,35 @@ internal static class LineBreaks
     }
 
     /// <summary>
-    /// Returns the brackets of each call's arguments and each set that holds the caret, innermost
-    /// first, with their items and what the items are.
+    /// Returns the brackets of each call's arguments and each set that holds the caret, outermost
+    /// first, and then those of the whole expression the caret is in, in source order, each with
+    /// its items and what the items are. The brackets are the whole expression's alone: those of
+    /// another expression on the same line are never offered.
     /// </summary>
     private static IEnumerable<(SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)> Around(
         SyntaxTree tree, int caret)
     {
         if (tree.Text.Length == 0)
             yield break;
-        for (var node = tree.Root.FindToken(Math.Min(caret, tree.Text.Length - 1)).Parent; node is not null; node = node.Parent)
+        var holding = new List<(SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)>();
+        ExpressionSyntax? whole = null;
+        for (var node = tree.Root.FindToken(Math.Min(caret, tree.Text.Length - 1)).Parent;
+            node is not null and not StatementSyntax;
+            node = node.Parent)
         {
+            if (node is ExpressionSyntax expression)
+                whole = expression;
             if (Brackets(node) is var (open, items, close, what) && caret >= open.Span.End && caret <= close.Span.Start)
-                yield return (open, items, close, what);
+                holding.Add((open, items, close, what));
+        }
+        for (var i = holding.Count - 1; i >= 0; i--)
+            yield return holding[i];
+        if (whole is null)
+            yield break;
+        foreach (var node in (IEnumerable<SyntaxNode>)[whole, .. whole.DescendantNodes()])
+        {
+            if (Brackets(node) is { } brackets)
+                yield return brackets;
         }
     }
 

@@ -81,6 +81,31 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
+    /// The actions work on the whole expression. The caret in a set that is one of a
+    /// <c>.switch</c>'s arms lays out the <c>.switch</c>, not the set, and the caret between the
+    /// brackets of an expression lays out its first call. A <c>.switch</c> laid across lines
+    /// joins back as a whole from anywhere inside it.
+    /// </summary>
+    [Fact]
+    public void TheActionsWorkOnTheWholeExpression()
+    {
+        const string Switch = ".module main\n.export X\nX = .switch(2, [1, 4], 10, [2, 3], 20, 30)\n";
+        var arms = Single(Switch, "4]", "Put each arm of the `.switch` on its own line");
+        Assert.Equal(".module main\n.export X\nX = .switch(2,\n    [1, 4], 10,\n    [2, 3], 20,\n    30)\n",
+            Editing.Apply(Switch, arms.Edit.Changes[Uri]));
+
+        const string Sum = ".module main\n.export X\nX = .select(1, 2, 3) + 4\n";
+        var arguments = Single(Sum, "+ 4", "Put each argument on its own line");
+        Assert.Equal(".module main\n.export X\nX = .select(\n    1,\n    2,\n    3) + 4\n",
+            Editing.Apply(Sum, arguments.Edit.Changes[Uri]));
+
+        const string Broken = ".module main\n.export X\nX = .switch(2,\n    [1, 4], 10,\n    [2, 3], 20,\n    30)\n";
+        var joined = Single(Broken, "3]", "Join onto one line");
+        Assert.Equal(".module main\n.export X\nX = .switch(2, [1, 4], 10, [2, 3], 20, 30)\n",
+            Editing.Apply(Broken, joined.Edit.Changes[Uri]));
+    }
+
+    /// <summary>
     /// Brackets laid across lines join back onto one, and not where a comment would be lost. A
     /// set's values go one to a line as a call's arguments do.
     /// </summary>
