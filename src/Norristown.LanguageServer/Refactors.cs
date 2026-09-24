@@ -19,6 +19,7 @@ namespace Norristown.LanguageServer;
 /// <item>Inline a macro call.</item>
 /// <item>Extract code into a routine.</item>
 /// <item>Convert ca65 to nt65.</item>
+/// <item>Lay out a call's arguments or a set across lines, or join them onto one.</item>
 /// </list>
 /// <para>
 /// Each is offered only where it would change something, and each is computed from the analysis
@@ -54,6 +55,7 @@ internal static class Refactors
             .. InlineMacro.In(analysis, model, caret),
             .. ExtractProc.In(analysis, model, range),
             .. Ca65Conversion.In(model, range),
+            .. LineBreaks.In(model, caret),
         ];
     }
 

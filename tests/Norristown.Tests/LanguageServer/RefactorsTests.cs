@@ -53,6 +53,52 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
+    /// <summary>
+    /// A call's arguments go one to a line, one step in from the line the expression starts on,
+    /// and the result reads back as the same statement.
+    /// </summary>
+    [Fact]
+    public void ACallsArgumentsGoOneToALine()
+    {
+        const string Main = ".module main\n.export X\nX = .select(1, 2, 3)\n";
+
+        var action = Single(Main, "2,", "Put each argument on its own line");
+
+        Assert.Equal(".module main\n.export X\nX = .select(\n    1,\n    2,\n    3)\n",
+            Editing.Apply(Main, action.Edit.Changes[Uri]));
+    }
+
+    /// <summary>A <c>.switch</c> keeps its value on the first line and each set beside its result.</summary>
+    [Fact]
+    public void ASwitchsArmsGoOneToALine()
+    {
+        const string Main = ".module main\n.export X\nX = .switch(2, [1], 10, [2, 3], 20, 30)\n";
+
+        var action = Single(Main, "[1]", "Put each arm of the `.switch` on its own line", 1);
+
+        Assert.Equal(".module main\n.export X\nX = .switch(2,\n    [1], 10,\n    [2, 3], 20,\n    30)\n",
+            Editing.Apply(Main, action.Edit.Changes[Uri]));
+    }
+
+    /// <summary>
+    /// Brackets laid across lines join back onto one, and not where a comment would be lost. A
+    /// set's values go one to a line as a call's arguments do.
+    /// </summary>
+    [Fact]
+    public void LinesJoinBackUnlessACommentWouldBeLost()
+    {
+        const string Broken = ".module main\n.export X\nX = .select(\n    1,\n    2, 3)\n";
+        var joined = Single(Broken, "2,", "Join onto one line");
+        Assert.Equal(".module main\n.export X\nX = .select(1, 2, 3)\n", Editing.Apply(Broken, joined.Edit.Changes[Uri]));
+
+        const string Commented = ".module main\n.export X\nX = .select(\n    1,  ; one\n    2, 3)\n";
+        Assert.DoesNotContain(Actions(Commented, At(Commented, "2,")), action => action.Title == "Join onto one line");
+
+        const string Set = ".module main\n.export X\nX = 2 .in [1, 2]\n";
+        var values = Single(Set, "1,", "Put each value of the set on its own line");
+        Assert.Equal(".module main\n.export X\nX = 2 .in [\n    1,\n    2]\n", Editing.Apply(Set, values.Edit.Changes[Uri]));
+    }
+
     /// <summary>Organizing sorts the <c>.use</c> items and removes any that nothing names.</summary>
     [Fact]
     public void TheUseItemsAreOrderedAndWhatNothingNamesGoes()
@@ -332,13 +378,17 @@ public sealed class RefactorsTests
     /// <paramref name="at"/> first appears in <paramref name="text"/>, moved by
     /// <paramref name="offset"/> characters.
     /// </summary>
-    private static CodeAction Single(string text, string at, string title, int offset = 0)
+    private static CodeAction Single(string text, string at, string title, int offset = 0) =>
+        Assert.Single(Actions(text, At(text, at, offset)), action => action.Title == title);
+
+    /// <summary>Returns an empty range at <paramref name="at"/> in the text, plus the offset.</summary>
+    private static Range At(string text, string at, int offset = 0)
     {
         var start = text.IndexOf(at, StringComparison.Ordinal) + offset;
         var line = text[..start].Count(c => c == '\n');
         var character = start - (text[..start].LastIndexOf('\n') + 1);
         var caret = new Position(line, character);
-        return Assert.Single(Actions(text, new Range(caret, caret)), action => action.Title == title);
+        return new Range(caret, caret);
     }
 
     /// <summary>
