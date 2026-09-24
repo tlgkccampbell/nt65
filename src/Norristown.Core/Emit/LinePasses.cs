@@ -30,6 +30,8 @@ internal static class LinePasses
                 {
                     Text = label + new string(' ', column - label.Length) + line.Text,
                     Label = null,
+                    Kind = EmittedLineKind.Declaration,
+                    Value = null,
                 };
             }
         }
@@ -59,7 +61,13 @@ internal static class LinePasses
             if (run >= 3 && RepeatedByte(lines[i]) is { } value)
             {
                 var indent = lines[i].Text[..(lines[i].Text.Length - lines[i].Text.TrimStart().Length)];
-                kept.Add(lines[i] with { Text = $"{indent}.res {run}, {value}", Bytes = run * lines[i].Bytes });
+                kept.Add(lines[i] with
+                {
+                    Text = $"{indent}.res {run}, {value}",
+                    Bytes = run * lines[i].Bytes,
+                    Kind = EmittedLineKind.Other,
+                    Value = null,
+                });
                 i += run - 1;
                 continue;
             }
@@ -173,8 +181,7 @@ internal static class LinePasses
             return null;
         for (var i = 0; i < opening; i++)
         {
-            var text = lines[starts[0] + i].Text.TrimStart();
-            if (text.Length != 0 && !text.StartsWith(".segment ", StringComparison.Ordinal))
+            if (lines[starts[0] + i] is { Text.Length: not 0, Kind: not EmittedLineKind.Segment })
                 return null;
         }
 
@@ -229,7 +236,13 @@ internal static class LinePasses
             {
                 return null;
             }
-            body.Add(line with { Text = text });
+
+            // A byte's value is part of the line's text, so it takes the counter wherever the
+            // text does.
+            var value = line.Value is null ? null : Templated(line.Value, iterations[1][i].Value ?? "", mark);
+            if (line.Value is not null && value is null)
+                return null;
+            body.Add(line with { Text = text, Value = value });
         }
         for (var iteration = 0; iteration < iterations.Count; iteration++)
         {
@@ -241,8 +254,11 @@ internal static class LinePasses
         }
 
         var counter = counterName();
-        return (counter, [.. body.Select(line =>
-            line with { Text = line.Text.Replace(mark, counter, StringComparison.Ordinal) })]);
+        return (counter, [.. body.Select(line => line with
+        {
+            Text = line.Text.Replace(mark, counter, StringComparison.Ordinal),
+            Value = line.Value?.Replace(mark, counter, StringComparison.Ordinal),
+        })]);
     }
 
     /// <summary>
@@ -310,26 +326,19 @@ internal static class LinePasses
     /// </summary>
     private static bool InAName(char letter) => char.IsLetterOrDigit(letter) || letter == '_' || letter == '.';
 
-    /// <summary>Returns whether two lines agree in everything but their text.</summary>
+    /// <summary>
+    /// Returns whether two lines agree in everything but their text and the value it spells, which
+    /// may differ by the repetition's counter.
+    /// </summary>
     private static bool Alongside(EmittedLine one, EmittedLine other) =>
-        one.Bytes == other.Bytes && one.Source == other.Source
+        one.Bytes == other.Bytes && one.Source == other.Source && one.Kind == other.Kind
             && one.Label == other.Label && one.Comment == other.Comment;
 
     /// <summary>
     /// Returns whether a line declares a name. A name declared in a repetition's body is a different
     /// name on every iteration, and a ca65 <c>.repeat</c> has no way to express that.
     /// </summary>
-    private static bool Declares(EmittedLine line)
-    {
-        if (line.Label is not null)
-            return true;
-        var text = line.Text.TrimStart();
-        var name = 0;
-        while (name < text.Length && (char.IsLetterOrDigit(text[name]) || text[name] == '_'))
-            name++;
-        var rest = text[name..].TrimStart();
-        return name > 0 && (rest.StartsWith(':') || rest.StartsWith('='));
-    }
+    private static bool Declares(EmittedLine line) => line.Label is not null || line.Kind == EmittedLineKind.Declaration;
 
     /// <summary>
     /// Returns whether two lines have the same text, label and comment. Their byte counts and
@@ -341,19 +350,12 @@ internal static class LinePasses
 
     /// <summary>
     /// Returns the value of the single byte a line writes, or null for a line that writes
-    /// anything more, because only such a line can be one byte of a fill. The line's comment is kept on the
-    /// fill, because what it says about the byte is equally true of the fill the run becomes.
+    /// anything else or carries a name, because only such a line can be one byte of a fill. The
+    /// line's comment is kept on the fill, because what it says about the byte is equally true of
+    /// the fill the run becomes.
     /// </summary>
-    private static string? RepeatedByte(EmittedLine line)
-    {
-        if (line.Label is not null)
-            return null;
-        var text = line.Text.TrimStart();
-        if (!text.StartsWith(".byte ", StringComparison.Ordinal))
-            return null;
-        var value = text[".byte ".Length..].Trim();
-        return value.Length == 0 || value.Contains(',') || value.Contains(';') ? null : value;
-    }
+    private static string? RepeatedByte(EmittedLine line) =>
+        line is { Kind: EmittedLineKind.Byte, Label: null } ? line.Value : null;
 
     /// <summary>Returns the runs of lines to line up, which are named data lines with nothing in between.</summary>
     private static List<List<int>> NamedRuns(List<EmittedLine> lines)

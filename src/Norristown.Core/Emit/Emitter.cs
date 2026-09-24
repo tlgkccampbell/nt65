@@ -312,7 +312,7 @@ public sealed class Emitter
             return;
         Segment();
         Flush();
-        Line(LabelText(EndLabelOf(symbol)));
+        Line(LabelText(EndLabelOf(symbol)), EmittedLineKind.Declaration);
     }
 
     /// <summary>
@@ -833,7 +833,7 @@ public sealed class Emitter
     private void Label(LineSyntax line, Symbol? routine)
     {
         if (routine is not null)
-            Code(line, LabelText(NameOf(routine)), 0);
+            Declare(line, LabelText(NameOf(routine)));
     }
 
     /// <summary>
@@ -861,7 +861,7 @@ public sealed class Emitter
         var jump = rewriter.Render(statement, Body);
         Code(line, $"{Body}{SyntaxFacts.TextOf(skipped)} {over}", Instructions.Length(AddressingMode.Relative));
         Write(new EmittedLine(jump, Instructions.Length(AddressingMode.Absolute)));
-        Line($"{over}:");
+        Line($"{over}:", EmittedLineKind.Declaration);
     }
 
     private void LabeledLine(LineSyntax line, LabeledLineSyntax statement)
@@ -902,7 +902,7 @@ public sealed class Emitter
 
         if (model.SymbolAt(label.Name) is not { } reference)
         {
-            Code(line, rewriter.Render(statement), bytes);
+            Declare(line, rewriter.Render(statement), bytes);
             return;
         }
 
@@ -912,14 +912,14 @@ public sealed class Emitter
         var text = LabelText(NameOf(reference));
         if (rest is not null && !text.EndsWith(':'))
         {
-            Code(line, text, 0);
+            Declare(line, text);
             Code(line, rewriter.Render(rest, Body), bytes);
             return;
         }
 
         rewriter.Replacements[label.Name.Position] = text;
         rewriter.Replacements[label.ColonToken.Position] = "";
-        Code(line, rewriter.Render(statement), bytes);
+        Declare(line, rewriter.Render(statement), bytes);
     }
 
     /// <summary>
@@ -933,7 +933,7 @@ public sealed class Emitter
             return;
         if (declaration.Directive is not { } element)
         {
-            Code(line, LabelText(NameOf(symbol)), 0);
+            Declare(line, LabelText(NameOf(symbol)));
             return;
         }
         if (DataSyntax.IsElementType(element))
@@ -963,7 +963,7 @@ public sealed class Emitter
         if (DataSyntax.BodyOf(directive) is { BlockKind: BlockKind.DataBody })
         {
             if (symbol is not null)
-                Code(line, LabelText(NameOf(symbol)), 0);
+                Declare(line, LabelText(NameOf(symbol)));
             return;
         }
         if (directive.Type is { } named)
@@ -984,6 +984,7 @@ public sealed class Emitter
         var rewriter = new TokenRewriter();
         string text;
         string? comment = null;
+        string? single;
         if (directive.Tail is BracedDataSyntax { Value: ValueListSyntax list })
         {
             var (width, bigEndian) = ElementFormat(directive);
@@ -992,12 +993,15 @@ public sealed class Emitter
             rewriter.Replacements[list.OpenBraceToken.Position] = "";
             if (!list.CloseBraceToken.IsMissing)
                 rewriter.Replacements[list.CloseBraceToken.Position] = "";
-            text = $"{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {rewriter.Bare(list, out comment)}";
+            var values = rewriter.Bare(list, out comment);
+            text = $"{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {values}";
+            single = list.Values.Count == 1 ? values : null;
         }
-        else if (directive.Tail is InlineDataSyntax)
+        else if (directive.Tail is InlineDataSyntax { Values: var inline })
         {
             Substitute(directive, rewriter, nested: false);
             text = rewriter.Bare(directive, out comment);
+            single = inline is [var only] ? rewriter.Render(only).Trim() : null;
         }
         else
         {
@@ -1011,7 +1015,8 @@ public sealed class Emitter
         // One text in a counted `.byte` array is padded with zero to the count, so the line
         // holds the text and the line below it the zeros that fill the array out.
         var zeros = (int)(PaddedText.Padding(directive, model, context.Expansion)?.Zeros ?? 0);
-        WithName(line, symbol, text, laid.Length - zeros, comment);
+        var bytes = laid.Length - zeros;
+        WithName(line, symbol, text, bytes, comment, ByteValue(directive, single, bytes));
         Padding(line, directive);
     }
 
@@ -1042,9 +1047,21 @@ public sealed class Emitter
         }
         var rewriter = new TokenRewriter();
         Substitute(values, rewriter, nested: false);
-        Code(line, $"{Body}{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {rewriter.Bare(values, out var comment)}",
-            laid.Length, comment);
+        var text = rewriter.Bare(values, out var comment);
+        Code(line, $"{Body}{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {text}",
+            laid.Length, comment, value: ByteValue(directive, values.Values.Count == 1 ? text : null, laid.Length));
     }
+
+    /// <summary>
+    /// Returns the value of the one byte a line of <paramref name="directive"/>'s values writes,
+    /// or null when the line writes anything else. A <c>.byte</c> with a single value can still
+    /// write more or fewer bytes than one, as text does, so the length decides.
+    /// </summary>
+    /// <param name="directive">The directive whose type the line's values have.</param>
+    /// <param name="single">The line's value as written, or null when it has more than one.</param>
+    /// <param name="bytes">The number of bytes the line assembles to.</param>
+    private static string? ByteValue(DataDirectiveSyntax directive, string? single, long bytes) =>
+        directive.Directive.DirectiveKind == DirectiveKind.Byte && bytes == 1 ? single : null;
 
     /// <summary>
     /// Writes a line of data with its name in front, where it has one. The name goes on the same
@@ -1052,17 +1069,18 @@ public sealed class Emitter
     /// shares the line, the directive is lined up with those of the lines around it rather than
     /// where the source had it, because the name in front is rarely the one the source used.
     /// </summary>
-    private void WithName(LineSyntax line, Symbol? symbol, string text, int bytes, string? comment = null)
+    private void WithName(
+        LineSyntax line, Symbol? symbol, string text, int bytes, string? comment = null, string? value = null)
     {
         if (symbol is null)
         {
-            Code(line, Body + text, bytes, comment);
+            Code(line, Body + text, bytes, comment, value: value);
             return;
         }
         if (LabelText(NameOf(symbol)) is var label && !label.EndsWith(':'))
         {
-            Code(line, label, 0);
-            Code(line, Body + text, bytes, comment);
+            Declare(line, label);
+            Code(line, Body + text, bytes, comment, value: value);
             return;
         }
         WriteNamedData(line, label, text, bytes, comment);
@@ -1072,7 +1090,7 @@ public sealed class Emitter
     private void LabelOnly(LineSyntax line, LabelSyntax label)
     {
         if (model.SymbolAt(label.Name) is { } reference)
-            Code(line, LabelText(NameOf(reference)), 0);
+            Declare(line, LabelText(NameOf(reference)));
     }
 
     /// <summary>
@@ -1178,7 +1196,7 @@ public sealed class Emitter
             Substitute(statement.Value, rewriter, nested: false);
             var text = rewriter.Render(statement);
             if (statement.DescendantNodes().OfType<CurrentAddressExpressionSyntax>().Any())
-                Code(line, text, 0);
+                Declare(line, text);
             else
                 Definition(text);
         }
@@ -1344,12 +1362,33 @@ public sealed class Emitter
     /// reports problems with those against the output's own line regardless of the map, and
     /// mapping them would only add lines that cover no bytes.
     /// </summary>
-    private void Code(LineSyntax line, string text, int bytes, string? comment = null, bool located = false)
+    /// <param name="line">The line of the source the output line came from.</param>
+    /// <param name="text">The output line's text.</param>
+    /// <param name="bytes">The number of bytes the line assembles to.</param>
+    /// <param name="comment">The comment nt65 adds about the line, if any.</param>
+    /// <param name="located">Whether the line is mapped even though it holds no bytes.</param>
+    /// <param name="kind">What the line is, for the passes that rewrite runs of lines.</param>
+    /// <param name="value">
+    /// The value of the one byte the line writes, which makes it a
+    /// <see cref="EmittedLineKind.Byte"/> line, or null for any other line.
+    /// </param>
+    private void Code(
+        LineSyntax line, string text, int bytes, string? comment = null, bool located = false,
+        EmittedLineKind kind = EmittedLineKind.Other, string? value = null)
     {
         Segment();
         Flush();
-        Write(new EmittedLine(text, bytes, Mapped(line, bytes, located), Comment: comment));
+        Write(new EmittedLine(
+            text, bytes, Mapped(line, bytes, located), Comment: comment,
+            Kind: value is null ? kind : EmittedLineKind.Byte, Value: value));
     }
+
+    /// <summary>
+    /// Writes one line that came from the source and declares a name, such as a label, and
+    /// records where it came from as <see cref="Code"/> does.
+    /// </summary>
+    private void Declare(LineSyntax line, string text, int bytes = 0) =>
+        Code(line, text, bytes, kind: EmittedLineKind.Declaration);
 
     /// <summary>
     /// Writes a named data line, which shares its line with the name at its margin. The two are kept
@@ -1384,7 +1423,7 @@ public sealed class Emitter
     private void Definition(string text)
     {
         Flush();
-        Line(text);
+        Line(text, EmittedLineKind.Declaration);
     }
 
     /// <summary>
@@ -1405,7 +1444,7 @@ public sealed class Emitter
             AddressSize.ZeroPage => "zeropage",
             AddressSize.Far => "far",
             _ => "absolute",
-        }}");
+        }}", EmittedLineKind.Segment);
         writtenSegment = segment;
     }
 
@@ -1432,7 +1471,8 @@ public sealed class Emitter
     /// Appends one line of output that the map should not point at any source line, such as a
     /// directive, a name, or a blank between them.
     /// </summary>
-    private void Line(string text) => Write(new EmittedLine(text));
+    private void Line(string text, EmittedLineKind kind = EmittedLineKind.Other) =>
+        Write(new EmittedLine(text, Kind: kind));
 
     private void Write(EmittedLine line) => lines.Add(line with { Text = line.Text.TrimEnd(), File = file });
 
@@ -2139,12 +2179,12 @@ public sealed class Emitter
     private sealed class RecordOutput(Emitter emitter) : IRecordOutput
     {
         /// <inheritdoc/>
-        public void Code(LineSyntax line, string text, int bytes, string? comment) =>
-            emitter.Code(line, text, bytes, comment);
+        public void Code(LineSyntax line, string text, int bytes, string? comment, string? value) =>
+            emitter.Code(line, text, bytes, comment, value: value);
 
         /// <inheritdoc/>
         public void Label(LineSyntax line, Symbol symbol) =>
-            emitter.Code(line, LabelText(emitter.NameOf(symbol)), 0);
+            emitter.Declare(line, LabelText(emitter.NameOf(symbol)));
 
         /// <inheritdoc/>
         public void Named(LineSyntax line, Symbol? symbol, string text, int bytes, string? comment) =>

@@ -33,8 +33,20 @@ namespace Norristown.Emit;
 /// the module the output is named after, and one more for each module placed in it, in the
 /// order they are emitted.
 /// </param>
+/// <param name="Kind">What the line is, for the passes that rewrite runs of lines.</param>
+/// <param name="Value">
+/// The value of the byte a <see cref="EmittedLineKind.Byte"/> line writes, as the line spells it.
+/// Null for every other kind of line.
+/// </param>
 internal sealed record EmittedLine(
-    string Text, int Bytes = 0, int Source = 0, string? Label = null, string? Comment = null, int File = 0)
+    string Text,
+    int Bytes = 0,
+    int Source = 0,
+    string? Label = null,
+    string? Comment = null,
+    int File = 0,
+    EmittedLineKind Kind = EmittedLineKind.Other,
+    string? Value = null)
 {
     /// <summary>Where a generated comment starts, so that a column of them lines up.</summary>
     private const int CommentColumn = 36;

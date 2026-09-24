@@ -12,9 +12,10 @@ internal interface IRecordOutput
 {
     /// <summary>
     /// Writes one line that came from <paramref name="line"/>, holding <paramref name="bytes"/>
-    /// bytes, with an optional comment.
+    /// bytes, with an optional comment. <paramref name="value"/> is the value of the one byte the
+    /// line writes, or null when it writes anything else.
     /// </summary>
-    void Code(LineSyntax line, string text, int bytes, string? comment);
+    void Code(LineSyntax line, string text, int bytes, string? comment, string? value);
 
     /// <summary>Writes the label of <paramref name="symbol"/> on a line of its own.</summary>
     void Label(LineSyntax line, Symbol symbol);

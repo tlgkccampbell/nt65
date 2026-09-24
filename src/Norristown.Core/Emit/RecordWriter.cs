@@ -43,7 +43,7 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
             var reserved = Reservations(room.Bytes).ToList();
             output.Named(line, symbol, $".res {reserved[0]}", (int)reserved[0], type.QualifiedName);
             foreach (var rest in reserved.Skip(1))
-                output.Code(line, $"{Emitter.Body}.res {rest}", (int)rest, type.QualifiedName);
+                output.Code(line, $"{Emitter.Body}.res {rest}", (int)rest, type.QualifiedName, value: null);
             return;
         }
         else
@@ -149,9 +149,10 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
                     continue;
                 }
                 var (width, bigEndian) = ElementFormat(element);
+                var texts = items.Select(item => output.ValueText(item, width, bigEndian)).ToList();
                 Field(line,
-                    $"{ForCa65(element.Directive.DirectiveKind, DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => output.ValueText(item, width, bigEndian)))}",
-                    named, size);
+                    $"{ForCa65(element.Directive.DirectiveKind, DataSyntax.NameOf(element))} {string.Join(", ", texts)}",
+                    named, size, ByteValue(element.Directive.DirectiveKind, texts, size));
                 bytes += size;
                 continue;
             }
@@ -162,8 +163,8 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
                 bytes += Fields(line, inner, ValuesIn(given), named);
                 continue;
             }
-            foreach (var (text, part) in Member(member, element, given))
-                Field(line, text, named, part);
+            foreach (var (text, part, value) in Member(member, element, given))
+                Field(line, text, named, part, value);
             bytes += size;
         }
 
@@ -176,16 +177,26 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
         return bytes;
     }
 
-    /// <summary>Writes one member's directive, with the path it fills in a comment.</summary>
-    private void Field(LineSyntax line, string directive, string path, long size) =>
-        output.Code(line, Emitter.Body + directive, (int)size, path);
+    /// <summary>Returns the value of the one byte a directive writes, or null when it writes anything else.</summary>
+    /// <param name="directive">The directive's element type.</param>
+    /// <param name="values">The directive's values, as written.</param>
+    /// <param name="size">The number of bytes the directive writes.</param>
+    private static string? ByteValue(DirectiveKind directive, IReadOnlyList<string> values, long size) =>
+        directive == DirectiveKind.Byte && size == 1 && values is [var only] ? only : null;
+
+    /// <summary>
+    /// Writes one member's directive, with the path it fills in a comment. <paramref name="value"/>
+    /// is the value of the one byte the directive writes, or null when it writes anything else.
+    /// </summary>
+    private void Field(LineSyntax line, string directive, string path, long size, string? value = null) =>
+        output.Code(line, Emitter.Body + directive, (int)size, path, value);
 
     /// <summary>
     /// Returns the directives for one member of a record, written with the directive its type
     /// gave it. A member that no value names is zero, and a member reserved by <c>.res</c> takes
     /// text, padded to the room it has with the byte it pads with.
     /// </summary>
-    private IEnumerable<(string Text, long Size)> Member(Symbol member, DataDirectiveSyntax? element, SyntaxNode? given)
+    private IEnumerable<(string Text, long Size, string? Value)> Member(Symbol member, DataDirectiveSyntax? element, SyntaxNode? given)
     {
         var size = member.Size ?? 0;
         var directive = element?.Directive.DirectiveKind ?? DirectiveKind.Res;
@@ -197,16 +208,20 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
             var values = given is null ? [] : model.BytesOf(given, expansion)?.ToList() ?? [];
             var used = Math.Min(values.Count, size);
             if (used > 0)
-                yield return ($".byte {string.Join(", ", values.Take((int)used).Select(b => Hex(b & 0xff, 2)))}", used);
+            {
+                var bytes = values.Take((int)used).Select(b => Hex(b & 0xff, 2)).ToList();
+                yield return ($".byte {string.Join(", ", bytes)}", used, ByteValue(DirectiveKind.Byte, bytes, used));
+            }
             if (size > used)
             {
                 foreach (var reserved in Reservations(size - used))
-                    yield return ($".res {reserved}, {Hex(Fill(member), 2)}", reserved);
+                    yield return ($".res {reserved}, {Hex(Fill(member), 2)}", reserved, null);
             }
             yield break;
         }
         var (width, bigEndian) = ElementFormat(element!);
         var value = given is null ? Constant(0) : output.ValueText(given, width, bigEndian);
-        yield return ($"{ForCa65(directive, SyntaxFacts.TextOf(directive))} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}", size);
+        yield return ($"{ForCa65(directive, SyntaxFacts.TextOf(directive))} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}",
+            size, ByteValue(directive, [value], size));
     }
 }
