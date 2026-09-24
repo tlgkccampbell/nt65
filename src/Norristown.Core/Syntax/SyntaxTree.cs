@@ -106,11 +106,6 @@ public sealed class SyntaxTree
     public ImmutableArray<int> LineStarts { get; }
 
     /// <summary>
-    /// Gets the green lines, one per source line. A text with n line breaks has n + 1 lines.
-    /// </summary>
-    internal ImmutableArray<GreenLine> Lines { get; }
-
-    /// <summary>
     /// Gets the root node, which is created on first use; every caller gets the same instance. A
     /// tree holding a single node built by <see cref="SyntaxFactory"/> is not a file and has no
     /// root.
@@ -128,6 +123,11 @@ public sealed class SyntaxTree
 
     /// <summary>Gets the number of lines in the file. A text with n line breaks has n + 1 lines.</summary>
     public int LineCount => LineStarts.Length;
+
+    /// <summary>
+    /// Gets the green lines, one per source line. A text with n line breaks has n + 1 lines.
+    /// </summary>
+    internal ImmutableArray<GreenLine> Lines { get; }
 
     /// <summary>Parses a source file.</summary>
     public static SyntaxTree Parse(SourceFile file) => Parse(file.Path, file.Text);
@@ -160,6 +160,9 @@ public sealed class SyntaxTree
         return index >= 0 ? index : ~index - 1;
     }
 
+    /// <summary>Returns the 0-based line holding <paramref name="position"/>.</summary>
+    public int GetLineIndex(int position) => GetLineIndex(LineStarts, position);
+
     /// <summary>
     /// Returns the offset in <paramref name="text"/> of a 0-based line and character, given where
     /// each line starts as <see cref="LineOffsets"/> returns it. The offset is clamped to the
@@ -177,12 +180,10 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// Returns the red node for <paramref name="built"/>, in a tree that contains only that node.
-    /// <see cref="SyntaxFactory"/> returns such nodes, and an <c>Update</c> creates them. The node
-    /// has no file around it, and its text is its own.
+    /// Returns the offset of a 0-based line and character, clamped to the text. An editor may name
+    /// a position past the end of a line or of the file, and that is not an error here.
     /// </summary>
-    /// <param name="built">The green node just built.</param>
-    internal static SyntaxNode Detached(GreenNode built) => built.CreateRed(new SyntaxTree(built), null, 0);
+    public int GetPosition(int line, int character) => GetPosition(Text, LineStarts, line, character);
 
     /// <summary>
     /// Returns the tree for this text with <paramref name="change"/> applied. Only the lines the
@@ -277,6 +278,36 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
+    /// Returns the 0-based line <paramref name="line"/> of the file as a node of the tree, with
+    /// what it parsed to and the tokens it contains. It is the same node the walk down from
+    /// <see cref="Root"/> reaches, so it knows the blocks that contain it.
+    /// </summary>
+    /// <param name="line">The 0-based line.</param>
+    public LineSyntax GetLine(int line) => Root.Lines[line];
+
+    /// <summary>
+    /// Returns the offset where the 0-based line <paramref name="line"/> ends, after its line
+    /// break. That is where the next line starts, or the end of the text for the last line.
+    /// </summary>
+    public int GetLineEnd(int line) => LineEnd(Text, LineStarts, line);
+
+    /// <summary>Returns the diagnostic span for a range on one line.</summary>
+    public Span GetSpan(TextSpan span)
+    {
+        var line = GetLineIndex(span.Start);
+        var column = span.Start - LineStarts[line] + 1;
+        return new Span(Path, line + 1, column, column + span.Length);
+    }
+
+    /// <summary>
+    /// Returns the red node for <paramref name="built"/>, in a tree that contains only that node.
+    /// <see cref="SyntaxFactory"/> returns such nodes, and an <c>Update</c> creates them. The node
+    /// has no file around it, and its text is its own.
+    /// </summary>
+    /// <param name="built">The green node just built.</param>
+    internal static SyntaxNode Detached(GreenNode built) => built.CreateRed(new SyntaxTree(built), null, 0);
+
+    /// <summary>
     /// Returns a copy of this tree that uses <paramref name="kept"/> as the parse of each line that
     /// has an entry. <see cref="AnnotationCarrier"/> uses this method to restore the annotations a
     /// rewrite carried across a reparse. Nothing else changes. The text and the lines are this tree's, and a kept parse is
@@ -295,35 +326,66 @@ public sealed class SyntaxTree
     internal Parser.Result Parsed(int line) => statements[line];
 
     /// <summary>
-    /// Returns the 0-based line <paramref name="line"/> of the file as a node of the tree, with
-    /// what it parsed to and the tokens it contains. It is the same node the walk down from
-    /// <see cref="Root"/> reaches, so it knows the blocks that contain it.
+    /// Adds the diagnostics of <paramref name="green"/> and everything under it to
+    /// <paramref name="result"/>, as spans in the file. <paramref name="position"/> is the offset
+    /// where the node starts. Only subtrees whose flags show they hold a diagnostic are walked.
     /// </summary>
-    /// <param name="line">The 0-based line.</param>
-    public LineSyntax GetLine(int line) => Root.Lines[line];
-
-    /// <summary>Returns the 0-based line holding <paramref name="position"/>.</summary>
-    public int GetLineIndex(int position) => GetLineIndex(LineStarts, position);
-
-    /// <summary>
-    /// Returns the offset where the 0-based line <paramref name="line"/> ends, after its line
-    /// break. That is where the next line starts, or the end of the text for the last line.
-    /// </summary>
-    public int GetLineEnd(int line) => LineEnd(Text, LineStarts, line);
-
-    /// <summary>
-    /// Returns the offset of a 0-based line and character, clamped to the text. An editor may name
-    /// a position past the end of a line or of the file, and that is not an error here.
-    /// </summary>
-    public int GetPosition(int line, int character) => GetPosition(Text, LineStarts, line, character);
-
-    /// <summary>Returns the diagnostic span for a range on one line.</summary>
-    public Span GetSpan(TextSpan span)
+    internal void Collect(GreenNode green, int position, List<Diagnostic> result)
     {
-        var line = GetLineIndex(span.Start);
-        var column = span.Start - LineStarts[line] + 1;
-        return new Span(Path, line + 1, column, column + span.Length);
+        if (!green.ContainsDiagnostics)
+            return;
+        foreach (var diagnostic in green.Diagnostics)
+        {
+            var span = GetSpan(new TextSpan(position + diagnostic.Offset, diagnostic.Width));
+            result.Add(new Diagnostic(span, diagnostic.Message) { Fix = diagnostic.Fix });
+        }
+        for (var i = 0; i < green.SlotCount; i++)
+        {
+            if (green.GetSlot(i) is not { } slot)
+                continue;
+            Collect(slot, position, result);
+            position += slot.FullWidth;
+        }
     }
+
+    /// <summary>
+    /// Checks whether any line from <paramref name="first"/> to <paramref name="last"/>, both
+    /// 0-based and inclusive, has a diagnostic on it. A line, a block and the file use this method
+    /// to answer <see cref="SyntaxNode.ContainsDiagnostics"/>.
+    /// </summary>
+    internal bool LinesContainDiagnostics(int first, int last)
+    {
+        for (var i = first; i <= last; i++)
+        {
+            if (reported[i])
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether any line from <paramref name="first"/> to <paramref name="last"/>, both
+    /// 0-based and inclusive, has an annotation. A line, a block and the file use this method to
+    /// answer <see cref="SyntaxNode.ContainsAnnotations"/>.
+    /// </summary>
+    internal bool LinesContainAnnotations(int first, int last)
+    {
+        if (annotated is null)
+            return false;
+        for (var i = first; i <= last; i++)
+        {
+            if (annotated[i])
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Adds the diagnostics of the lines from <paramref name="first"/> to <paramref name="last"/>,
+    /// both 0-based and inclusive, to <paramref name="result"/> in source order.
+    /// </summary>
+    internal void CollectLines(int first, int last, List<Diagnostic> result) =>
+        result.AddRange(CollectRange(first, last));
 
     /// <summary>
     /// Returns the offset where each line starts. <c>\r\n</c>, <c>\n</c> and a lone <c>\r</c> each
@@ -417,68 +479,6 @@ public sealed class SyntaxTree
         || parsed.Node.ContainsAnnotations
         || parsed.ExportKeyword is { ContainsAnnotations: true }
         || parsed.SkippedTokens is { ContainsAnnotations: true };
-
-    /// <summary>
-    /// Adds the diagnostics of <paramref name="green"/> and everything under it to
-    /// <paramref name="result"/>, as spans in the file. <paramref name="position"/> is the offset
-    /// where the node starts. Only subtrees whose flags show they hold a diagnostic are walked.
-    /// </summary>
-    internal void Collect(GreenNode green, int position, List<Diagnostic> result)
-    {
-        if (!green.ContainsDiagnostics)
-            return;
-        foreach (var diagnostic in green.Diagnostics)
-        {
-            var span = GetSpan(new TextSpan(position + diagnostic.Offset, diagnostic.Width));
-            result.Add(new Diagnostic(span, diagnostic.Message) { Fix = diagnostic.Fix });
-        }
-        for (var i = 0; i < green.SlotCount; i++)
-        {
-            if (green.GetSlot(i) is not { } slot)
-                continue;
-            Collect(slot, position, result);
-            position += slot.FullWidth;
-        }
-    }
-
-    /// <summary>
-    /// Checks whether any line from <paramref name="first"/> to <paramref name="last"/>, both
-    /// 0-based and inclusive, has a diagnostic on it. A line, a block and the file use this method
-    /// to answer <see cref="SyntaxNode.ContainsDiagnostics"/>.
-    /// </summary>
-    internal bool LinesContainDiagnostics(int first, int last)
-    {
-        for (var i = first; i <= last; i++)
-        {
-            if (reported[i])
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// Checks whether any line from <paramref name="first"/> to <paramref name="last"/>, both
-    /// 0-based and inclusive, has an annotation. A line, a block and the file use this method to
-    /// answer <see cref="SyntaxNode.ContainsAnnotations"/>.
-    /// </summary>
-    internal bool LinesContainAnnotations(int first, int last)
-    {
-        if (annotated is null)
-            return false;
-        for (var i = first; i <= last; i++)
-        {
-            if (annotated[i])
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// Adds the diagnostics of the lines from <paramref name="first"/> to <paramref name="last"/>,
-    /// both 0-based and inclusive, to <paramref name="result"/> in source order.
-    /// </summary>
-    internal void CollectLines(int first, int last, List<Diagnostic> result) =>
-        result.AddRange(CollectRange(first, last));
 
     /// <summary>
     /// Returns every diagnostic on the lines from <paramref name="first"/> to

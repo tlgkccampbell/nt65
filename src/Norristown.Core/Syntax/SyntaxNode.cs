@@ -541,15 +541,9 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Returns <paramref name="built"/> with this node's own annotations added. An
-    /// <c>Update</c> method returns this, because a node rebuilt from new pieces is still the node
-    /// that was tagged. The pieces keep their own annotations.
+    /// Checks whether <paramref name="node"/> is a list node, whose items its parent exposes directly.
     /// </summary>
-    /// <typeparam name="T">The type of the node.</typeparam>
-    /// <param name="built">The node just rebuilt out of this one's pieces.</param>
-    /// <returns>That node, or the node it has become.</returns>
-    private protected T Annotated<T>(T built) where T : SyntaxNode =>
-        Green.Annotations.IsEmpty ? built : (T)built.WithAdditionalAnnotations(Green.Annotations);
+    internal static bool IsList(GreenNode node) => node is GreenList or GreenSeparatedList;
 
     /// <summary>
     /// Returns every node and token at or below this node that has an annotation of any kind, in
@@ -618,9 +612,15 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Checks whether <paramref name="node"/> is a list node, whose items its parent exposes directly.
+    /// Returns <paramref name="built"/> with this node's own annotations added. An
+    /// <c>Update</c> method returns this, because a node rebuilt from new pieces is still the node
+    /// that was tagged. The pieces keep their own annotations.
     /// </summary>
-    internal static bool IsList(GreenNode node) => node is GreenList or GreenSeparatedList;
+    /// <typeparam name="T">The type of the node.</typeparam>
+    /// <param name="built">The node just rebuilt out of this one's pieces.</param>
+    /// <returns>That node, or the node it has become.</returns>
+    private protected T Annotated<T>(T built) where T : SyntaxNode =>
+        Green.Annotations.IsEmpty ? built : (T)built.WithAdditionalAnnotations(Green.Annotations);
 
     /// <summary>
     /// Adds this node's diagnostics to <paramref name="result"/>. For most nodes, the diagnostics

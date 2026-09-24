@@ -5,6 +5,25 @@ namespace Norristown.Syntax.InternalSyntax;
 internal sealed partial class Parser
 {
     /// <summary>
+    /// Returns, for a ca65 directive that has a different form in nt65, the message that gives the
+    /// nt65 form and, when one word is enough, the word to use in its place. Returns null for any
+    /// other directive.
+    /// </summary>
+    private static (DiagnosticMessage Message, string? Replacement)? Replaced(string directive) => directive.ToLowerInvariant() switch
+    {
+        ".zeropage" or ".code" or ".bss" or ".rodata" =>
+            (Catalogue.Ca65Spelling.Message(directive, $".segment {directive[1..].ToUpperInvariant()}"),
+                $".segment {directive[1..].ToUpperInvariant()}"),
+        ".tag" => (Catalogue.Ca65Tag.Message(), ".type"),
+        ".asciiz" => (Catalogue.Ca65Spelling.Message(directive, ".strz"), ".strz"),
+        ".dbyt" => (Catalogue.Ca65Spelling.Message(directive, ".beword"), ".beword"),
+        ".endproc" or ".endscope" or ".endmacro" or ".endstruct" or ".endunion" or ".endenum"
+            or ".endif" or ".endrep" or ".endrepeat" =>
+            (Catalogue.Ca65BlockEnd.Message(directive), "}"),
+        _ => null,
+    };
+
+    /// <summary>
     /// Parses a line that starts with a directive, according to the kind
     /// <see cref="SyntaxFacts.LineDirectiveKind"/> gives it. The two <c>.if</c> continuations,
     /// <c>.elseif</c> and <c>.else</c>, may only follow a <c>}</c>, so they are rejected here. Any
@@ -84,25 +103,6 @@ internal sealed partial class Parser
         }
         return false;
     }
-
-    /// <summary>
-    /// Returns, for a ca65 directive that has a different form in nt65, the message that gives the
-    /// nt65 form and, when one word is enough, the word to use in its place. Returns null for any
-    /// other directive.
-    /// </summary>
-    private static (DiagnosticMessage Message, string? Replacement)? Replaced(string directive) => directive.ToLowerInvariant() switch
-    {
-        ".zeropage" or ".code" or ".bss" or ".rodata" =>
-            (Catalogue.Ca65Spelling.Message(directive, $".segment {directive[1..].ToUpperInvariant()}"),
-                $".segment {directive[1..].ToUpperInvariant()}"),
-        ".tag" => (Catalogue.Ca65Tag.Message(), ".type"),
-        ".asciiz" => (Catalogue.Ca65Spelling.Message(directive, ".strz"), ".strz"),
-        ".dbyt" => (Catalogue.Ca65Spelling.Message(directive, ".beword"), ".beword"),
-        ".endproc" or ".endscope" or ".endmacro" or ".endstruct" or ".endunion" or ".endenum"
-            or ".endif" or ".endrep" or ".endrepeat" =>
-            (Catalogue.Ca65BlockEnd.Message(directive), "}"),
-        _ => null,
-    };
 
     /// <summary>
     /// Parses <c>.if expr {</c>, or, with <paramref name="closeBrace"/>, the

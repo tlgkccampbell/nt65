@@ -101,14 +101,6 @@ internal sealed partial class Parser
     /// </summary>
     private bool AtName => Lines.IsName(Kind);
 
-    /// <summary>
-    /// Returns a value indicating whether the current token is the contextual word
-    /// <paramref name="word"/>, such as <c>dp</c> or <c>proc</c>. Those words are matched without
-    /// regard to case, as every other word the language fixes is.
-    /// </summary>
-    private bool AtWord(string word) =>
-        Kind == SyntaxKind.Identifier && Current.Text.Equals(word, StringComparison.OrdinalIgnoreCase);
-
     /// <summary>Parses <paramref name="line"/> as it stands inside a block of <paramref name="context"/>.</summary>
     public static Result Parse(GreenLine line, BlockKind context)
     {
@@ -117,6 +109,16 @@ internal sealed partial class Parser
         parser.AttachPending(node);
         return new Result(context, parser.exportKeyword, node, parser.skippedTokens);
     }
+
+    private static string Describe(GreenToken token) => $"`{token.Text}`";
+
+    /// <summary>
+    /// Returns a value indicating whether the current token is the contextual word
+    /// <paramref name="word"/>, such as <c>dp</c> or <c>proc</c>. Those words are matched without
+    /// regard to case, as every other word the language fixes is.
+    /// </summary>
+    private bool AtWord(string word) =>
+        Kind == SyntaxKind.Identifier && Current.Text.Equals(word, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Returns the current token and moves past it. The position stays on the end-of-line token
@@ -282,8 +284,6 @@ internal sealed partial class Parser
         }
         return starts[at];
     }
-
-    private static string Describe(GreenToken token) => $"`{token.Text}`";
 
     private GreenNode ParseLine(LineKind kind)
     {

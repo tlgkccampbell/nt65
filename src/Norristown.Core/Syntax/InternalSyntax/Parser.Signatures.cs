@@ -6,6 +6,9 @@ namespace Norristown.Syntax.InternalSyntax;
 // import and the `.state` and `.ensure` directives all take.
 internal sealed partial class Parser
 {
+    private static bool LooksLikeAWidth(string text) =>
+        text.Length > 1 && char.ToLowerInvariant(text[0]) is 'a' or 'i' && text[1..].All(char.IsAsciiDigit);
+
     /// <summary>Parses the <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
     private ProcSignatureSyntax ParseSignature()
     {
@@ -126,7 +129,4 @@ internal sealed partial class Parser
     private bool AtKeptRegister(int at) =>
         at < tokens.Length && tokens[at].Kind is SyntaxKind.Identifier or SyntaxKind.Register
         && SyntaxFacts.IsKeptRegister(tokens[at].Text);
-
-    private static bool LooksLikeAWidth(string text) =>
-        text.Length > 1 && char.ToLowerInvariant(text[0]) is 'a' or 'i' && text[1..].All(char.IsAsciiDigit);
 }

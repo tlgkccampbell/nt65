@@ -176,10 +176,6 @@ public static partial class SyntaxFactory
         return children.IsEmpty ? default : new SyntaxTokenList(SyntaxTree.Detached(new GreenList(children)));
     }
 
-    /// <summary>Returns the red node for <paramref name="built"/>, in a tree of its own.</summary>
-    /// <param name="built">The green node the factory just created.</param>
-    private static SyntaxNode Detached(GreenNode built) => SyntaxTree.Detached(built);
-
     /// <summary>
     /// Returns a red token for <paramref name="built"/>, put in a one-item list so that it has a
     /// parent.
@@ -187,6 +183,10 @@ public static partial class SyntaxFactory
     /// <param name="built">The green token the factory just created.</param>
     internal static SyntaxToken Detached(GreenToken built) =>
         SyntaxTree.Detached(new GreenList([built])).SlotToken(0);
+
+    /// <summary>Returns the red node for <paramref name="built"/>, in a tree of its own.</summary>
+    /// <param name="built">The green node the factory just created.</param>
+    private static SyntaxNode Detached(GreenNode built) => SyntaxTree.Detached(built);
 
     /// <summary>Returns the green nodes of <paramref name="items"/>, in order.</summary>
     private static ImmutableArray<GreenNode> Green<T>(IEnumerable<T> items) where T : SyntaxNode =>

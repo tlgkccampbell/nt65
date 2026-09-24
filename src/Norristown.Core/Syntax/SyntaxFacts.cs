@@ -25,14 +25,6 @@ public static class SyntaxFacts
     // Static field initializers run in text order, so each field here is declared after the
     // fields its initializer reads.
 
-    // The text of each mnemonic kind, indexed by the kind. The text of None is empty.
-    private static readonly string[] mnemonicTexts =
-        [.. Enum.GetValues<MnemonicKind>().Select(kind => kind == MnemonicKind.None ? "" : kind.ToString().ToLowerInvariant())];
-
-    // The text of each directive kind, indexed by the kind. The text of None is empty.
-    private static readonly string[] directiveTexts =
-        [.. Enum.GetValues<DirectiveKind>().Select(kind => kind == DirectiveKind.None ? "" : "." + kind.ToString().ToLowerInvariant())];
-
     /// <summary>Every mnemonic, in the order <see cref="MnemonicKind"/> declares them.</summary>
     public static readonly IReadOnlyList<MnemonicKind> Mnemonics =
         [.. Enum.GetValues<MnemonicKind>().Where(kind => kind != MnemonicKind.None)];
@@ -50,10 +42,6 @@ public static class SyntaxFacts
     /// it is not the same set as the names the lexer treats as registers.
     /// </summary>
     public static readonly IReadOnlyList<string> KeptRegisters = ["a", "x", "y", "c"];
-
-    // The text of each built-in kind, indexed by the kind. The text of None is empty.
-    private static readonly string[] builtinTexts =
-        [.. Enum.GetValues<BuiltinKind>().Select(kind => kind == BuiltinKind.None ? "" : "." + kind.ToString().ToLowerInvariant())];
 
     /// <summary>
     /// Every built-in function, in the order <see cref="BuiltinKind"/> declares them, with how many
@@ -109,6 +97,18 @@ public static class SyntaxFacts
     /// </summary>
     public static readonly string ListedCpuNames =
         string.Join(", ", CpuNames.SkipLast(1).Select(name => $"`{name}`")) + $" or `{CpuNames[^1]}`";
+
+    // The text of each mnemonic kind, indexed by the kind. The text of None is empty.
+    private static readonly string[] mnemonicTexts =
+        [.. Enum.GetValues<MnemonicKind>().Select(kind => kind == MnemonicKind.None ? "" : kind.ToString().ToLowerInvariant())];
+
+    // The text of each directive kind, indexed by the kind. The text of None is empty.
+    private static readonly string[] directiveTexts =
+        [.. Enum.GetValues<DirectiveKind>().Select(kind => kind == DirectiveKind.None ? "" : "." + kind.ToString().ToLowerInvariant())];
+
+    // The text of each built-in kind, indexed by the kind. The text of None is empty.
+    private static readonly string[] builtinTexts =
+        [.. Enum.GetValues<BuiltinKind>().Select(kind => kind == BuiltinKind.None ? "" : "." + kind.ToString().ToLowerInvariant())];
 
     private static readonly FrozenDictionary<string, MnemonicKind> mnemonicKinds =
         Mnemonics.ToFrozenDictionary(TextOf, StringComparer.OrdinalIgnoreCase);
