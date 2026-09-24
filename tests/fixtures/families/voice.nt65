@@ -12,7 +12,7 @@
 .segment ZEROPAGE
 .scope level {
     .each Channel, ch {                     ; the form `.multiproc` stands for
-        .data ch: .byte                     ; level::pulse1, level::pulse2, ...
+        .data ch: .byte             ; level::pulse1, level::pulse2, ...
     }
 }
 

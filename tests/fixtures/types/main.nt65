@@ -73,7 +73,7 @@
 .data boss: .type Player { pos = { x = 100, y = 40 }, hp = 99 }
 
 .data hero: .type Player {
-    hp = 3
+    hp   = 3
     name = "ZIP"
 }
 

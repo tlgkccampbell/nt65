@@ -13,7 +13,7 @@
 ROWS = 25
 
 COLUMNS = $50
-BORDER = $00
+BORDER  = $00
 
 .segment "ZEROPAGE": zeropage
 narrow: .res 2

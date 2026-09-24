@@ -2,7 +2,7 @@
 .module hw::cfg
 
 .export .const SPEED ?= 3
-.const LATE ?= 7
+.const LATE          ?= 7
 
 .segment CODE
 .export LATE

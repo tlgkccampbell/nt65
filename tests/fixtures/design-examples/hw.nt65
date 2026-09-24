@@ -2,7 +2,7 @@
 ; example of `.use` brings names in from.
 .module hw
 .export .const SOUND_CHANNELS ?= 3
-.const PAL ?= 0
+.const PAL                    ?= 0
 
 .if SOUND_CHANNELS > 2 {
     .const VOICES = 3

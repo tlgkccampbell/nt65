@@ -15,7 +15,7 @@
 .export .data Z15: .byte
 .if CBM2 {
     .res 1
-    .export .data POSX: .byte = $C6                  ; the KERNAL's
+    .export .data POSX: .byte = $C6  ; the KERNAL's
 } .else {
     .export .data POSX: .byte
 }
@@ -29,7 +29,7 @@
 }
 .export .data LINNUM: .word
 .if !(CONFIG_NO_INPUTBUFFER_ZP || AIM65 || SYM1) {
-    .export .data INPUTBUFFER: .byte = *             ; up to the next block
+    .export .data INPUTBUFFER: .byte = *  ; up to the next block
 }
 
 .segment ZP3
@@ -131,7 +131,7 @@
 }
 .if KBD {
     .export .data JMPADRS: .word = $0093
-    .export .data LOWTRX:  .byte = $0094              ; $AB also EXPSGN?
+    .export .data LOWTRX:  .byte = $0094  ; $AB also EXPSGN?
 } .else {
     .export .data JMPADRS: .word = DSCLEN + 1
     .export .data LOWTRX:  .byte = LOWTR

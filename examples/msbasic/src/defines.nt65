@@ -5,16 +5,16 @@
 ; ----------------------------------------------------------------------------
 ; The targets. Each configuration in nt65.json sets exactly one.
 ; ----------------------------------------------------------------------------
-.export .const CBM1 ?= 0                ; Commodore BASIC 1, the original PET
-.export .const OSI ?= 0                 ; Ohio Scientific
-.export .const APPLE ?= 0               ; AppleSoft I
-.export .const KIM ?= 0                 ; KIM-1 BASIC
-.export .const CBM2 ?= 0                ; Commodore BASIC 2
-.export .const KBD ?= 0                 ; Intellivision Keyboard Component BASIC
-.export .const MICROTAN ?= 0            ; Microtan 65
-.export .const AIM65 ?= 0               ; Rockwell AIM-65
-.export .const SYM1 ?= 0                ; Synertek SYM-1
-.export .const W65C816SXB ?= 0          ; WDC's W65C816SXB board
+.export .const CBM1       ?= 0      ; Commodore BASIC 1, the original PET
+.export .const OSI        ?= 0      ; Ohio Scientific
+.export .const APPLE      ?= 0      ; AppleSoft I
+.export .const KIM        ?= 0      ; KIM-1 BASIC
+.export .const CBM2       ?= 0      ; Commodore BASIC 2
+.export .const KBD        ?= 0      ; Intellivision Keyboard Component BASIC
+.export .const MICROTAN   ?= 0      ; Microtan 65
+.export .const AIM65      ?= 0      ; Rockwell AIM-65
+.export .const SYM1       ?= 0      ; Synertek SYM-1
+.export .const W65C816SXB ?= 0      ; WDC's W65C816SXB board
 
 .if CBM1 + OSI + APPLE + KIM + CBM2 + KBD + MICROTAN + AIM65 + SYM1 + W65C816SXB != 1 {
     .error "choose one target: nt65 build --config <target>, a configuration in nt65.json"
@@ -24,12 +24,12 @@
 ; Microsoft's versions, in the order they were forked. Each has every fix of the ones
 ; before it, so a target based on version 2B is also 2A, 2, 1.1A, 1.1 and 1.0A.
 ; ----------------------------------------------------------------------------
-.export .const CONFIG_2C ?= MICROTAN || W65C816SXB
-.export .const CONFIG_2B ?= CONFIG_2C || KBD
-.export .const CONFIG_2A ?= CONFIG_2B || CBM2 || AIM65 || SYM1
-.export .const CONFIG_2 ?= CONFIG_2A
+.export .const CONFIG_2C  ?= MICROTAN || W65C816SXB
+.export .const CONFIG_2B  ?= CONFIG_2C || KBD
+.export .const CONFIG_2A  ?= CONFIG_2B || CBM2 || AIM65 || SYM1
+.export .const CONFIG_2   ?= CONFIG_2A
 .export .const CONFIG_11A ?= CONFIG_2 || KIM
-.export .const CONFIG_11 ?= CONFIG_11A || APPLE
+.export .const CONFIG_11  ?= CONFIG_11A || APPLE
 .export .const CONFIG_10A ?= CONFIG_11 || OSI
 
 ; ----------------------------------------------------------------------------
@@ -37,63 +37,63 @@
 ; to build or to work.
 ; ----------------------------------------------------------------------------
 ; jump out into CBM1's binary patches instead of doing the right thing inline
-.export .const CONFIG_CBM1_PATCHES ?= CBM1
+.export .const CONFIG_CBM1_PATCHES           ?= CBM1
 ; all Commodore-specific additions except file I/O
-.export .const CONFIG_CBM_ALL ?= CBM1 || CBM2
-.export .const CONFIG_DATAFLG ?= CBM1 || OSI || CBM2
+.export .const CONFIG_CBM_ALL                ?= CBM1 || CBM2
+.export .const CONFIG_DATAFLG                ?= CBM1 || OSI || CBM2
 ; the CBM2 "WAIT 6502" easter egg
-.export .const CONFIG_EASTER_EGG ?= CBM2
+.export .const CONFIG_EASTER_EGG             ?= CBM2
 ; Commodore PRINT#, INPUT#, GET#, CMD
-.export .const CONFIG_FILE ?= CBM1 || CBM2
+.export .const CONFIG_FILE                   ?= CBM1 || CBM2
 ; all I/O has bit 7 set
-.export .const CONFIG_IO_MSB ?= APPLE
+.export .const CONFIG_IO_MSB                 ?= APPLE
 ; Y needs to be preserved when calling MONCOUT
-.export .const CONFIG_MONCOUT_DESTROYS_Y ?= KIM || MICROTAN
+.export .const CONFIG_MONCOUT_DESTROYS_Y     ?= KIM || MICROTAN
 ; the terminal doesn't need explicit CRs on line ends
-.export .const CONFIG_NO_CR ?= CBM1 || CBM2 || W65C816SXB
+.export .const CONFIG_NO_CR                  ?= CBM1 || CBM2 || W65C816SXB
 ; no Microsoft-style line editing: "@", "_", BEL and so on
-.export .const CONFIG_NO_LINE_EDITING ?= CBM1 || CBM2
+.export .const CONFIG_NO_LINE_EDITING        ?= CBM1 || CBM2
 ; no PEEK, POKE or WAIT
-.export .const CONFIG_NO_POKE ?= KBD
+.export .const CONFIG_NO_POKE                ?= KBD
 ; don't do a very volatile trick that saves one byte
 .export .const CONFIG_NO_READ_Y_IS_ZERO_HACK ?= CBM2 || KBD
 ; the NULL statement
-.export .const CONFIG_NULL ?= OSI || KIM || MICROTAN || AIM65 || SYM1
+.export .const CONFIG_NULL                   ?= OSI || KIM || MICROTAN || AIM65 || SYM1
 ; preserve LINNUM on a PEEK
-.export .const CONFIG_PEEK_SAVE_LINNUM ?= CBM2 || MICROTAN || AIM65 || SYM1
+.export .const CONFIG_PEEK_SAVE_LINNUM       ?= CBM2 || MICROTAN || AIM65 || SYM1
 ; whether PRINTNULLS does anything
-.export .const CONFIG_PRINTNULLS ?= CBM1
+.export .const CONFIG_PRINTNULLS             ?= CBM1
 ; print CR when the line end is reached
-.export .const CONFIG_PRINT_CR ?= OSI || APPLE || KIM || MICROTAN || AIM65 || SYM1
+.export .const CONFIG_PRINT_CR               ?= OSI || APPLE || KIM || MICROTAN || AIM65 || SYM1
 ; optimizations for a RAM version of BASIC; only for 1.x
-.export .const CONFIG_RAM ?= KIM
+.export .const CONFIG_RAM                    ?= KIM
 ; work around the ROR bug of 6502s from 1975 and 1976; not safe with CONFIG_SMALL
-.export .const CONFIG_ROR_WORKAROUND ?= KIM || MICROTAN
+.export .const CONFIG_ROR_WORKAROUND         ?= KIM || MICROTAN
 ; check both bytes of the caller's address in NAMENOTFOUND
-.export .const CONFIG_SAFE_NAMENOTFOUND ?= APPLE || KIM || KBD || MICROTAN || AIM65 || SYM1
+.export .const CONFIG_SAFE_NAMENOTFOUND      ?= APPLE || KIM || KBD || MICROTAN || AIM65 || SYM1
 ; where in the init code to call SCRTCH
-.export .const CONFIG_SCRTCH_ORDER ?= .select(MICROTAN || AIM65 || SYM1, 1, .select(OSI || APPLE || KBD, 3, 2))
+.export .const CONFIG_SCRTCH_ORDER           ?= .select(MICROTAN || AIM65 || SYM1, 1, .select(OSI || APPLE || KBD, 3, 2))
 ; 6-digit floating point instead of 9, 2-character error messages, and no GET
-.export .const CONFIG_SMALL ?= OSI || KBD
+.export .const CONFIG_SMALL                  ?= OSI || KBD
 ; 2-character error messages
-.export .const CONFIG_SMALL_ERROR ?= CONFIG_SMALL || AIM65 || SYM1
+.export .const CONFIG_SMALL_ERROR            ?= CONFIG_SMALL || AIM65 || SYM1
 ; the input buffer is outside zero page, and at $0200
-.export .const CONFIG_NO_INPUTBUFFER_ZP ?= APPLE || CBM2 || KBD
-.export .const CONFIG_INPUTBUFFER_0200 ?= APPLE || CBM2
+.export .const CONFIG_NO_INPUTBUFFER_ZP      ?= APPLE || CBM2 || KBD
+.export .const CONFIG_INPUTBUFFER_0200       ?= APPLE || CBM2
 
 ; ----------------------------------------------------------------------------
 ; Sizes
 ; ----------------------------------------------------------------------------
-.export .const BYTES_FP = .select(CONFIG_SMALL, 4, 5)
-.export .const BYTES_PER_ELEMENT = .select(APPLE, 6, BYTES_FP)
+.export .const BYTES_FP           = .select(CONFIG_SMALL, 4, 5)
+.export .const BYTES_PER_ELEMENT  = .select(APPLE, 6, BYTES_FP)
 .export .const BYTES_PER_VARIABLE = BYTES_FP + 2
-.export .const MANTISSA_BYTES = BYTES_FP - 1
-.export .const BYTES_PER_FRAME = 2 * BYTES_FP + 8
-.export .const FOR_STACK1 = 2 * BYTES_FP + 5
-.export .const FOR_STACK2 = BYTES_FP + 4
-.export .const MAX_EXPON = .select(CBM1, 12, 10)
+.export .const MANTISSA_BYTES     = BYTES_FP - 1
+.export .const BYTES_PER_FRAME    = 2 * BYTES_FP + 8
+.export .const FOR_STACK1         = 2 * BYTES_FP + 5
+.export .const FOR_STACK2         = BYTES_FP + 4
+.export .const MAX_EXPON          = .select(CBM1, 12, 10)
 
-.export .const STACK = $0100
+.export .const STACK  = $0100
 .export .const STACK2 = .select(AIM65, $0200, STACK)
 
 .export .const CR = 13
@@ -104,20 +104,20 @@
 ; ----------------------------------------------------------------------------
 .if CBM1 || CBM2 {
     .export .const SPACE_FOR_GOSUB = .select(CBM1, $36, $3E)
-    .export .const STACK_TOP = .select(CBM1, $FC, $FA)
-    .export .const RAMSTART2 = $0400
+    .export .const STACK_TOP       = .select(CBM1, $FC, $FA)
+    .export .const RAMSTART2       = $0400
     .if CBM1 {
         .export .const NULL_MAX = $0A
     } .else {
-        .export .const WIDTH = 40
+        .export .const WIDTH  = 40
         .export .const WIDTH2 = 30
     }
     .export .const CRLF_1 = CR
     .export .const CRLF_2 = LF
 
-    .export .const CURDVC = .select(CBM1, $0003, $000E)
-    .export .const TISTR = .select(CBM1, $0200, $008D)
-    .export .const Z96 = .select(CBM1, $020C, $0096)
+    .export .const CURDVC  = .select(CBM1, $0003, $000E)
+    .export .const TISTR   = .select(CBM1, $0200, $008D)
+    .export .const Z96     = .select(CBM1, $020C, $0096)
     .export .const ENTROPY = .select(CBM1, $9044, $E844)
 
     ; the KERNAL
@@ -138,15 +138,15 @@
 }
 
 .if OSI {
-    .export .const STACK_TOP = $FC
+    .export .const STACK_TOP       = $FC
     .export .const SPACE_FOR_GOSUB = $33
-    .export .const NULL_MAX = $0A
-    .export .const WIDTH = 72
-    .export .const WIDTH2 = 56
-    .export .const CRLF_1 = CR
-    .export .const CRLF_2 = LF
-    .export .const RAMSTART2 = $0300
-    .export .const L0200 = $0200
+    .export .const NULL_MAX        = $0A
+    .export .const WIDTH           = 72
+    .export .const WIDTH2          = 56
+    .export .const CRLF_1          = CR
+    .export .const CRLF_2          = LF
+    .export .const RAMSTART2       = $0300
+    .export .const L0200           = $0200
 
     .export .proc MONRDKEY = $FFEB
     .export .proc MONCOUT = $FFEE
@@ -154,13 +154,13 @@
 }
 
 .if APPLE {
-    .export .const STACK_TOP = $F8
+    .export .const STACK_TOP       = $F8
     .export .const SPACE_FOR_GOSUB = $36
-    .export .const CRLF_1 = CR
-    .export .const CRLF_2 = $80
-    .export .const WIDTH = 40
-    .export .const WIDTH2 = 14
-    .export .const RAMSTART2 = $2A00
+    .export .const CRLF_1          = CR
+    .export .const CRLF_2          = $80
+    .export .const WIDTH           = 40
+    .export .const WIDTH2          = 14
+    .export .const RAMSTART2       = $2A00
 
     .export .proc MONRDKEY = $FD0C
     .export .proc MONCOUT = $FDED
@@ -178,14 +178,14 @@
 }
 
 .if KIM {
-    .export .const STACK_TOP = $FC
+    .export .const STACK_TOP       = $FC
     .export .const SPACE_FOR_GOSUB = $36
     ; probably different in the original version; the image this is from seems modified
-    .export .const NULL_MAX = $F2
-    .export .const WIDTH = 72
-    .export .const WIDTH2 = 56
-    .export .const CRLF_1 = CR
-    .export .const CRLF_2 = LF
+    .export .const NULL_MAX        = $F2
+    .export .const WIDTH           = 72
+    .export .const WIDTH2          = 56
+    .export .const CRLF_1          = CR
+    .export .const CRLF_2          = LF
 
     .export .proc L1800 = $1800
     .export .proc L1873 = $1873
@@ -194,14 +194,14 @@
 }
 
 .if KBD {
-    .export .const STACK_TOP = $FE
+    .export .const STACK_TOP       = $FE
     .export .const SPACE_FOR_GOSUB = $49
-    .export .const CRLF_1 = LF
-    .export .const CRLF_2 = CR
-    .export .const RAMSTART2 = $0300
-    .export .const CONST_MEMSIZ = $3FFF
+    .export .const CRLF_1          = LF
+    .export .const CRLF_2          = CR
+    .export .const RAMSTART2       = $0300
+    .export .const CONST_MEMSIZ    = $3FFF
 
-    .export .const Z96 = $0096
+    .export .const Z96   = $0096
     .export .const L06FE = $06FE
 
     .export .proc L6874 = $6874
@@ -217,14 +217,14 @@
 }
 
 .if MICROTAN {
-    .export .const STACK_TOP = $FE
+    .export .const STACK_TOP       = $FE
     .export .const SPACE_FOR_GOSUB = $3E
-    .export .const NULL_MAX = $F0
-    .export .const WIDTH = 80
-    .export .const WIDTH2 = 56
-    .export .const CRLF_1 = CR
-    .export .const CRLF_2 = LF
-    .export .const RAMSTART2 = $0400
+    .export .const NULL_MAX        = $F0
+    .export .const WIDTH           = 80
+    .export .const WIDTH2          = 56
+    .export .const CRLF_1          = CR
+    .export .const CRLF_2          = LF
+    .export .const RAMSTART2       = $0400
 
     .export .proc MONRDKEY = $E210
     .export .proc MONRDKEY2 = $E213
@@ -245,20 +245,20 @@
 }
 
 .if AIM65 {
-    .export .const STACK_TOP = $FD
+    .export .const STACK_TOP       = $FD
     .export .const SPACE_FOR_GOSUB = $44
-    .export .const NULL_MAX = $F2
-    .export .const CRLF_1 = CR
-    .export .const CRLF_2 = LF
-    .export .const WIDTH = 20
-    .export .const WIDTH2 = 10
-    .export .const RAMSTART2 = $0211
+    .export .const NULL_MAX        = $F2
+    .export .const CRLF_1          = CR
+    .export .const CRLF_2          = LF
+    .export .const WIDTH           = 20
+    .export .const WIDTH2          = 10
+    .export .const RAMSTART2       = $0211
 
     .export .const PRIFLG = $A411
-    .export .const INFLG = $A412
+    .export .const INFLG  = $A412
     .export .const OUTFLG = $A413
-    .export .const DRA2 = $A480
-    .export .const DRB2 = $A482
+    .export .const DRA2   = $A480
+    .export .const DRB2   = $A482
 
     .export .proc DU13 = $E520
     .export .proc PSLS = $E7DC
@@ -274,14 +274,14 @@
 }
 
 .if SYM1 {
-    .export .const STACK_TOP = $FE
+    .export .const STACK_TOP       = $FE
     .export .const SPACE_FOR_GOSUB = $3E
-    .export .const NULL_MAX = $F0
-    .export .const CRLF_1 = CR
-    .export .const CRLF_2 = LF
-    .export .const WIDTH = 72
-    .export .const WIDTH2 = 56
-    .export .const RAMSTART2 = $0200
+    .export .const NULL_MAX        = $F0
+    .export .const CRLF_1          = CR
+    .export .const CRLF_2          = LF
+    .export .const WIDTH           = 72
+    .export .const WIDTH2          = 56
+    .export .const RAMSTART2       = $0200
 
     .export .const ZD3 = $D3
     .export .const ZD4 = $D4
@@ -302,13 +302,13 @@
 }
 
 .if W65C816SXB {
-    .export .const STACK_TOP = $FC
+    .export .const STACK_TOP       = $FC
     .export .const SPACE_FOR_GOSUB = $33
-    .export .const WIDTH = 72
-    .export .const WIDTH2 = 56
-    .export .const CRLF_1 = CR
-    .export .const CRLF_2 = LF
-    .export .const RAMSTART2 = $5000
+    .export .const WIDTH           = 72
+    .export .const WIDTH2          = 56
+    .export .const CRLF_1          = CR
+    .export .const CRLF_2          = LF
+    .export .const RAMSTART2       = $5000
 }
 
 ; Where a machine's routine is BASIC's own

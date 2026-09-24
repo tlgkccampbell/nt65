@@ -3,10 +3,10 @@
 ; `underline_in_numbers` off, so nothing downstream ever sees one.
 .module main
 
-.const BYTES   = $7f_ff
-.const BITS    = %1010_1010
-.const COUNT   = 1_000
-.const LONG    = $01_23_45
+.const BYTES = $7f_ff
+.const BITS  = %1010_1010
+.const COUNT = 1_000
+.const LONG  = $01_23_45
 
 ; What a separated number is worth, decided by nt65 rather than by the assembler.
 .assert BYTES == 32767, "a separator counts for nothing"

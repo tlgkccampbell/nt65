@@ -18,8 +18,8 @@
 .export macros__sum
 
 SCREEN = $0400
-C4 = 60
-E4 = 64
+C4     = 60
+E4     = 64
 
 .segment "ZEROPAGE": zeropage
 ptr:       .res 2

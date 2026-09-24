@@ -214,7 +214,7 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   longest name in the run; `.const` lines, on their `=`, where a `?=` puts its `?` in the
   column before, so that every value starts in one column and a setting shows in the gap; and
   a record initializer's `name = value` lines, on their `=`. A run's trailing comments start
-  in one column, the 37th or two past the run's longest line where that is further. A
+  in one column, the 37th or two past the longest line that has one where that is further. A
   `.segment NAME` region opens a block with no brace, so it indents nothing. It is the layout
   the generated ca65 is written in (§13), and the only whitespace inside a line it touches is
   the gaps a run lines up on, so laying a file out cannot change what any line of it means.

@@ -3,10 +3,10 @@
 ; makes the value written here a default.
 .module hw
 
-.export .const PAL ?= 0
-.const VOICES ?= 1
+.export .const PAL      ?= 0
+.const VOICES           ?= 1
 .export .const CHANNELS ?= .min(VOICES + EXTRA, 3)
-.const EXTRA ?= 1
+.const EXTRA            ?= 1
 
 .if PAL {
     .export .const LINES = 312

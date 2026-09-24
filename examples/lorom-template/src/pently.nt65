@@ -7,65 +7,65 @@
 
 ; The driver's eight channels, and how loud a channel may be set: an instrument's volume, 0
 ; to 15, times the channel's times 2 must fit the S-DSP's signed volume.
-.export .const NUM_CHANNELS = 8
+.export .const NUM_CHANNELS       = 8
 .export .const MAX_CHANNEL_VOLUME = 4
 
 ; Conductor commands.
-.export .const CON_PLAYPAT = $00       ; low bits: channel; next: pattern, transpose, instrument
-.export .const CON_WAITROWS = $20      ; next: number of rows to wait minus 1
-.export .const CON_FINE = $21          ; stop music now
-.export .const CON_SEGNO = $22         ; set loop point
-.export .const CON_DALSEGNO = $23      ; jump to loop point. if no point was set, jump to start of song.
-.export .const CON_NOTEON = $28
-.export .const CON_SETTEMPO = $30      ; low bits: bits 10-8 of tempo in rows/min; next: bits 7-0 of tempo
+.export .const CON_PLAYPAT  = $00   ; low bits: channel; next: pattern, transpose, instrument
+.export .const CON_WAITROWS = $20   ; next: number of rows to wait minus 1
+.export .const CON_FINE     = $21   ; stop music now
+.export .const CON_SEGNO    = $22   ; set loop point
+.export .const CON_DALSEGNO = $23   ; jump to loop point. if no point was set, jump to start of song.
+.export .const CON_NOTEON   = $28
+.export .const CON_SETTEMPO = $30   ; low bits: bits 10-8 of tempo in rows/min; next: bits 7-0 of tempo
 
 ; Pattern commands: a note is its pitch times 8, ored with a duration.
-.export .const N_C  =  0*8
-.export .const N_CS =  1*8
-.export .const N_D  =  2*8
-.export .const N_DS =  3*8
-.export .const N_E  =  4*8
-.export .const N_F  =  5*8
-.export .const N_FS =  6*8
-.export .const N_G  =  7*8
-.export .const N_GS =  8*8
-.export .const N_A  =  9*8
-.export .const N_AS = 10*8
-.export .const N_B  = 11*8
-.export .const N_DB = N_CS
-.export .const N_EB = N_DS
-.export .const N_GB = N_FS
-.export .const N_AB = N_GS
-.export .const N_BB = N_AS
-.export .const N_CH  = N_C  + 12*8
-.export .const N_CSH = N_CS + 12*8
-.export .const N_DBH = N_DB + 12*8
-.export .const N_DH  = N_D  + 12*8
-.export .const N_DSH = N_DS + 12*8
-.export .const N_EBH = N_EB + 12*8
-.export .const N_EH  = N_E  + 12*8
-.export .const N_FH  = N_F  + 12*8
-.export .const N_FSH = N_FS + 12*8
-.export .const N_GBH = N_GB + 12*8
-.export .const N_GH  = N_G  + 12*8
-.export .const N_GSH = N_GS + 12*8
-.export .const N_ABH = N_AB + 12*8
-.export .const N_AH  = N_A  + 12*8
-.export .const N_ASH = N_AS + 12*8
-.export .const N_BBH = N_BB + 12*8
-.export .const N_BH  = N_B  + 12*8
-.export .const N_CHH = N_CH + 12*8
-.export .const N_TIE = 25*8
-.export .const REST  = 26*8
+.export .const N_C        = 0*8
+.export .const N_CS       = 1*8
+.export .const N_D        = 2*8
+.export .const N_DS       = 3*8
+.export .const N_E        = 4*8
+.export .const N_F        = 5*8
+.export .const N_FS       = 6*8
+.export .const N_G        = 7*8
+.export .const N_GS       = 8*8
+.export .const N_A        = 9*8
+.export .const N_AS       = 10*8
+.export .const N_B        = 11*8
+.export .const N_DB       = N_CS
+.export .const N_EB       = N_DS
+.export .const N_GB       = N_FS
+.export .const N_AB       = N_GS
+.export .const N_BB       = N_AS
+.export .const N_CH       = N_C  + 12*8
+.export .const N_CSH      = N_CS + 12*8
+.export .const N_DBH      = N_DB + 12*8
+.export .const N_DH       = N_D  + 12*8
+.export .const N_DSH      = N_DS + 12*8
+.export .const N_EBH      = N_EB + 12*8
+.export .const N_EH       = N_E  + 12*8
+.export .const N_FH       = N_F  + 12*8
+.export .const N_FSH      = N_FS + 12*8
+.export .const N_GBH      = N_GB + 12*8
+.export .const N_GH       = N_G  + 12*8
+.export .const N_GSH      = N_GS + 12*8
+.export .const N_ABH      = N_AB + 12*8
+.export .const N_AH       = N_A  + 12*8
+.export .const N_ASH      = N_AS + 12*8
+.export .const N_BBH      = N_BB + 12*8
+.export .const N_BH       = N_B  + 12*8
+.export .const N_CHH      = N_CH + 12*8
+.export .const N_TIE      = 25*8
+.export .const REST       = 26*8
 .export .const INSTRUMENT = $D8
-.export .const ARPEGGIO = $D9
+.export .const ARPEGGIO   = $D9
 .export .const LEGATO_OFF = $DA
-.export .const LEGATO_ON = $DB
-.export .const TRANSPOSE = $DC
-.export .const GRACE = $DD
-.export .const VIBRATO = $DE
-.export .const CHVOLUME = $DF
-.export .const PATEND = $FF
+.export .const LEGATO_ON  = $DB
+.export .const TRANSPOSE  = $DC
+.export .const GRACE      = $DD
+.export .const VIBRATO    = $DE
+.export .const CHVOLUME   = $DF
+.export .const PATEND     = $FF
 
 ; The default duration is one row (a sixteenth note in the tracker).
 ; OR the pitch with one of these constants.

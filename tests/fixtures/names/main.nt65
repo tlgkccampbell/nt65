@@ -5,9 +5,9 @@
 .module main
 
 .const SIZE = 1
-.const SIZE = 2                    ;! error[name-already-declared]: `SIZE` is already declared in this scope
+.const SIZE = 2                     ;! error[name-already-declared]: `SIZE` is already declared in this scope
 
-.const lda = 5                     ;! warning[mnemonic-name]: `lda` is an instruction on the 6502; as a name it is legal and easy to misread
+.const lda = 5                      ;! warning[mnemonic-name]: `lda` is an instruction on the 6502; as a name it is legal and easy to misread
 
 ; The one name the output cannot spell: an `as` name is written into the output exactly,
 ; and ca65 defines no symbol spelled like one of its own instructions — on any CPU, since
@@ -17,7 +17,7 @@
 .export SIZE as "swa"       ;! error[linker-name-is-an-instruction]: cannot export as `swa`: ca65 reads it as an instruction, and an `as` name is written to the output unchanged
 
 .segment CODE
-.data x: .byte 0                 ;! error[register-name]: `x` is a register name and cannot be used as a name
+.data x: .byte 0                    ;! error[register-name]: `x` is a register name and cannot be used as a name
 
 ; An anonymous enum declares its members where it is written, so they are ordinary names.
 .enum {

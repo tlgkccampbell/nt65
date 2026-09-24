@@ -25,9 +25,9 @@
 .func size(m) = .switch(m, [Mode::imp], 0, [Mode::zpx, Mode::zpy], 1, [Mode::absx..Mode::ind], 2)
 .func pick(n) = .switch(n, [1], 10, [2], NOT_IN_THIS_BUILD, 30)
 
-.const HIGH = 200
+.const HIGH    = 200
 .const IS_HIGH = HIGH .in [128..255]
-.const BY_X = Mode::absx .in by_x
+.const BY_X    = Mode::absx .in by_x
 
 .segment RODATA
 .data sizes: .byte[] {

@@ -6,5 +6,5 @@
 .export prompt, banner
 
 .segment RODATA
-.data prompt: .byte petscii("READY."), $0D     ; for CHROUT
-.data banner: .byte screen("SCORE")             ; for screen memory
+.data prompt: .byte petscii("READY."), $0D  ; for CHROUT
+.data banner: .byte screen("SCORE")         ; for screen memory

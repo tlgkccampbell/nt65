@@ -12,8 +12,8 @@
 
 .export ROWS, TEXT_ROWS, screen, row, column, frames, setup, putc
 
-.const ROWS = 28                           ; the rows of tiles the screen shows
-.const TEXT_ROWS = 24                      ; the rows the monitor writes on
+.const ROWS      = 28               ; the rows of tiles the screen shows
+.const TEXT_ROWS = 24               ; the rows the monitor writes on
 
 .assert TEXT_ROWS * COLUMNS == 3 * 256, "scrolling moves three pages"
 

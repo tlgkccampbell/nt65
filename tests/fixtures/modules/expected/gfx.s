@@ -29,7 +29,7 @@
 gfx__ptr: .res 2
 
 gfx__SCREEN = $0400
-rows   = 25
+rows           = 25
 
 gfx__Color__black = $00
 gfx__Color__white = $01

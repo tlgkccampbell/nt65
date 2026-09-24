@@ -20,16 +20,16 @@
 
 .segment HEADER
 .data header: .type RomHeader {
-    title = "NT65 SNES DEMO"
-    map_mode = $30              ; LoROM, FastROM
-    cart_type = $00             ; ROM only
-    rom_size = $08              ; 256 KiB rounded
-    ram_size = $00
-    region = $01                ; North America
-    developer = $33
-    version = 0
+    title               = "NT65 SNES DEMO"
+    map_mode            = $30       ; LoROM, FastROM
+    cart_type           = $00       ; ROM only
+    rom_size            = $08       ; 256 KiB rounded
+    ram_size            = $00
+    region              = $01       ; North America
+    developer           = $33
+    version             = 0
     checksum_complement = $ffff
-    checksum = $0000
+    checksum            = $0000
 }
 .assert .sizeof(RomHeader) == 32, "header must be 32 bytes"
 

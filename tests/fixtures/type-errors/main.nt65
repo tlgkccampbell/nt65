@@ -14,8 +14,8 @@
 .struct Point {
     x:      .word
     y:      .word
-    bad:    .strz "no"    ;! error[member-reserves-nothing]: `bad` reserves no room: declare a member with a type such as `.byte`, `.word[n]` or `.res n`
-    colors: .word 16        ;! error[member-has-no-value]: `colors` is a struct member and cannot have a value: for several `.word` elements, use `.word[n]`
+    bad:    .strz "no"              ;! error[member-reserves-nothing]: `bad` reserves no room: declare a member with a type such as `.byte`, `.word[n]` or `.res n`
+    colors: .word 16                ;! error[member-has-no-value]: `colors` is a struct member and cannot have a value: for several `.word` elements, use `.word[n]`
 }
 
 .union Value {
@@ -27,7 +27,7 @@
 ; An instance of one is still written out, as every file of a program with errors is, and
 ; the writer walks into the type, so it has to stop where the analysis stopped.
 .struct Ring {          ;! error[defined-in-terms-of-itself]: `Ring` is defined in terms of itself
-    self: .type Ring       ;! error[member-reserves-nothing]: `self` reserves no room: declare a member with a type such as `.byte`, `.word[n]` or `.res n`
+    self: .type Ring                ;! error[member-reserves-nothing]: `self` reserves no room: declare a member with a type such as `.byte`, `.word[n]` or `.res n`
 }
 
 .segment RODATA
@@ -44,13 +44,13 @@
 .segment RODATA
 .data hero: .type Named { name = "HERO", count = 300, title = "LONG" }  ;! error[member-not-text]: `name` is one `.addr`, and this text is 4 bytes: text takes a member reserved with `.res`;! error[value-too-wide]: $012c does not fit in `count`, a `.byte`;! error[member-text-too-long]: `title` has room for 3 bytes, and this text is 4 bytes
 .data boss: .type Named {
-    at = { x = 1, z = 2 }   ;! error[member-unknown]: `Point` has no member `z`
+    at    = { x = 1, z = 2 }        ;! error[member-unknown]: `Point` has no member `z`
     count = 1
-    level = 1               ;! error[member-unknown]: `Named` has no member `level`
-    count = 2               ;! error[member-given-twice]: `count` is given a value twice: a member is named at most once
+    level = 1                       ;! error[member-unknown]: `Named` has no member `level`
+    count = 2                       ;! error[member-given-twice]: `count` is given a value twice: a member is named at most once
 }
-.data flat: .type Named { at = 3 }   ;! error[member-needs-a-record]: `at` is a `Point` record, so its value goes in braces: `{ member = value }`
-.data both: .type Value { b = 1, w = 2 } ;! error[union-many-members-given]: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
+.data flat: .type Named { at = 3 }        ;! error[member-needs-a-record]: `at` is a `Point` record, so its value goes in braces: `{ member = value }`
+.data both: .type Value { b = 1, w = 2 }  ;! error[union-many-members-given]: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
 .data mistakes {
     .byte screen("hi")  ;! error[charmap-has-no-entry]: charmap `screen` has no entry for `h`
     .byte twice(1, 2)   ;! error[function-argument-count]: `twice` takes 1 argument(s), and 2 were given

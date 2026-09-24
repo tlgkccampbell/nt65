@@ -9,7 +9,7 @@
 
 .export init, player_update, player_reset
 
-.const SPRITE_BLOCK = 13               ; sprite data at 13 * 64 = $0340 (cassette buffer)
+.const SPRITE_BLOCK = 13            ; sprite data at 13 * 64 = $0340 (cassette buffer)
 .const SPRITE_ADDR  = SPRITE_BLOCK * 64
 .const MIN_X        = 24
 .const MAX_X        = 320

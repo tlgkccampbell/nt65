@@ -5,7 +5,7 @@
 .export other as "common"   ;! error[export-name-taken]: `second::other` and `first::shared` are both exported to the linker as `common`
 .export .use first::*       ;! error[reexport-star]: `.export .use` must name what it re-exports: `*` would re-export everything the other module exports, including names it adds later
 
-.const other  = 3
+.const other = 3
 
 ; A name a `.use` brings in may not also be declared here, and two may not bring in one name.
 .use first::shared          ;! error[use-collides-with-declaration]: `shared` is already declared in this module, so a `.use` cannot bring in another: use `as` to give it a different name

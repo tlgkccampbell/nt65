@@ -1,4 +1,4 @@
 .module hw::vic
 
 .export .const BACKGROUND = $d021
-.const hidden = 2              ;! warning[unused-symbol]: `hidden` is never used: nothing names it, and it is not exported
+.const hidden             = 2       ;! warning[unused-symbol]: `hidden` is never used: nothing names it, and it is not exported

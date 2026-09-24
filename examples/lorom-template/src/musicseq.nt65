@@ -60,9 +60,9 @@
 }
 
 ; A drum pattern plays a middle C with the instrument a note names in place of its pitch.
-.const PD_KICK = Instrument::kick * 8
+.const PD_KICK  = Instrument::kick * 8
 .const PD_SNARE = Instrument::snare * 8
-.const PD_HAT = Instrument::hat * 8
+.const PD_HAT   = Instrument::hat * 8
 
 ; Instrument format
 ; $00: Left volume (bit 7-4) and right volume (bit 3-0),

@@ -17,8 +17,8 @@
 ; those, and four otherwise, so that it always starts at a round address. A line stays narrower
 ; than the screen, so that the cursor does not wrap onto the next row.
 .const BYTES_PER_LINE = .select(line_width(16) < COLUMNS, 16, .select(line_width(8) < COLUMNS, 8, 4))
-.const LINES = 8                           ; what M shows when it is not told where to stop
-.const TOP = (1 << (8 * ADDRESS_SIZE)) - 1 ; the last address there is
+.const LINES          = 8                              ; what M shows when it is not told where to stop
+.const TOP            = (1 << (8 * ADDRESS_SIZE)) - 1  ; the last address there is
 
 .assert line_width(BYTES_PER_LINE) < COLUMNS, "a line of M must fit on the screen"
 

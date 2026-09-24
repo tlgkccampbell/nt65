@@ -13,8 +13,8 @@
 ; A name spelled like an instruction is still a name here, and is warned about where it is
 ; declared: the same word reads as an instruction to whoever reads it next.
 .segment ZEROPAGE
-.data REP: .byte                ;! warning[mnemonic-name]: `REP` is an instruction on the 65816; as a name it is legal and easy to misread
-.data per: .byte                ;! warning[mnemonic-name]: `per` is an instruction on the 65816; as a name it is legal and easy to misread
+.data REP: .byte                    ;! warning[mnemonic-name]: `REP` is an instruction on the 65816; as a name it is legal and easy to misread
+.data per: .byte                    ;! warning[mnemonic-name]: `per` is an instruction on the 65816; as a name it is legal and easy to misread
 
 .segment CODE
 .export .proc main {

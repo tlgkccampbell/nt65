@@ -9,7 +9,7 @@
 .export fill_page
 
 .segment ZEROPAGE
-.data ptr:   .word             ; destination pointer
+.data ptr:   .word                  ; destination pointer
 .data frame: .byte
 
 .segment CODE

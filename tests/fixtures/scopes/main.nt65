@@ -54,7 +54,7 @@
 @done:
     lda table,x
     .segment RODATA {
-        table: .byte 1, 2, 4, 8    ; a nested segment block changes the segment, not the scope
+        table: .byte 1, 2, 4, 8     ; a nested segment block changes the segment, not the scope
     }
     rts
 }

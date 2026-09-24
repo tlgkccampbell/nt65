@@ -11,7 +11,7 @@
 }
 
 .const COLUMNS = .select(WIDE, 80, 40)
-.const BORDER = .select(WIDE, 0, NOT_IN_THIS_BUILD)
+.const BORDER  = .select(WIDE, 0, NOT_IN_THIS_BUILD)
 .func clamp(value) = .select(value > 255, 255, value)
 
 .segment ZEROPAGE

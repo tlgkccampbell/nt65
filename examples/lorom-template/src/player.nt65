@@ -14,14 +14,14 @@
 .segment ZEROPAGE
 
 ; Game variables
-.data player_xlo:       .byte   ; horizontal position is xhi + xlo/256 px
+.data player_xlo:       .byte       ; horizontal position is xhi + xlo/256 px
 .data player_xhi:       .byte
-.data player_dxlo:      .byte   ; signed speed in pixels per 256 frames
+.data player_dxlo:      .byte       ; signed speed in pixels per 256 frames
 .data player_yhi:       .byte
 .data player_frame_sub: .byte
 .data player_frame:     .byte
 .data player_facing:    .byte
-.data scratch:          .byte   ; move_player's animation arithmetic
+.data scratch:          .byte       ; move_player's animation arithmetic
 
 .segment CODE4
 
@@ -76,9 +76,9 @@
 ; PAL frames are about 20% longer than NTSC frames.  So if you make dual NTSC and PAL
 ; versions, or you auto-adapt to the TV system, you'll want PAL velocity values to be 1.2
 ; times the corresponding NTSC values, and PAL accelerations should be 1.44 times NTSC.
-.const WALK_SPD   = 105                ; speed limit in 1/256 px/frame
-.const WALK_ACCEL = 4                  ; movement acceleration in 1/256 px/frame^2
-.const WALK_BRAKE = 8                  ; stopping acceleration in 1/256 px/frame^2
+.const WALK_SPD   = 105             ; speed limit in 1/256 px/frame
+.const WALK_ACCEL = 4               ; movement acceleration in 1/256 px/frame^2
+.const WALK_BRAKE = 8               ; stopping acceleration in 1/256 px/frame^2
 
 .const LEFT_WALL  = 32
 .const RIGHT_WALL = 224

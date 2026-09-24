@@ -11,5 +11,5 @@
 
 .const TRACE_LEVEL = .select(DEBUG, 2, 0)
 
-.const WIDE ?= 0
+.const WIDE   ?= 0
 .const COLUMNS = .select(WIDE, 80, 40)

@@ -3,14 +3,14 @@
 
 .module main
 
-.const FIRST   = SECOND + 1        ; a name may be used before the line that declares it
-.const SECOND  = 2
-.const SCREEN  = $0400
-.const LOW     = <(SCREEN + 1)
-.const TEXT    = "hi"
-.const LENGTH  = .strlen(TEXT)
-.const WIDE    = .addrsize(SCREEN)
-.const PICK    = .max(FIRST, SECOND)
+.const FIRST  = SECOND + 1          ; a name may be used before the line that declares it
+.const SECOND = 2
+.const SCREEN = $0400
+.const LOW    = <(SCREEN + 1)
+.const TEXT   = "hi"
+.const LENGTH = .strlen(TEXT)
+.const WIDE   = .addrsize(SCREEN)
+.const PICK   = .max(FIRST, SECOND)
 
 .segment ZEROPAGE
 .data ptr: .word
@@ -20,9 +20,9 @@
 .data HERE: .byte = *
 
 ; A name that needs itself, directly or through another, is an error reported once.
-.const SELF    = SELF + 1          ;! error[defined-in-terms-of-itself]: `SELF` is defined in terms of itself
-.const LOOP_A  = LOOP_B            ;! error[defined-in-terms-of-itself]: `LOOP_A` is defined in terms of itself
-.const LOOP_B  = LOOP_A
+.const SELF   = SELF + 1            ;! error[defined-in-terms-of-itself]: `SELF` is defined in terms of itself
+.const LOOP_A = LOOP_B              ;! error[defined-in-terms-of-itself]: `LOOP_A` is defined in terms of itself
+.const LOOP_B = LOOP_A
 
-.const DIVIDE  = 1 / 0             ;! error[division-by-zero]: division by zero
-.const JOIN    = TEXT + 1          ;! error[operator-on-text]: `+` cannot be used on a string
+.const DIVIDE = 1 / 0               ;! error[division-by-zero]: division by zero
+.const JOIN   = TEXT + 1            ;! error[operator-on-text]: `+` cannot be used on a string

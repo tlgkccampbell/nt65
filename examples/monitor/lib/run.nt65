@@ -12,8 +12,8 @@
 .if .target(65816) {
     ; The 65816's registers take a line of 47 columns. A narrower screen shows them in two
     ; lines, the second starting at D.
-    .const FIRST = "  PC     AC   XR   YR   SP"   ; the heading of PC to S
-    .const SECOND = "  DP   DB NVMXDIZC E"         ; the heading of D to E
+    .const FIRST   = "  PC     AC   XR   YR   SP"  ; the heading of PC to S
+    .const SECOND  = "  DP   DB NVMXDIZC E"        ; the heading of D to E
     .const HEADING = .select(COLUMNS > 47, .strcat(FIRST, " ", SECOND), FIRST)
 }
 

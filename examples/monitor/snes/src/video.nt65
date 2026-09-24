@@ -11,8 +11,8 @@
 
 .export setup, refresh
 
-.const MAP = $0000                         ; the word address in VRAM of BG1's tilemap
-.const TILES = $1000                       ; the word address in VRAM of BG1's tile 0
+.const MAP   = $0000                ; the word address in VRAM of BG1's tilemap
+.const TILES = $1000                ; the word address in VRAM of BG1's tile 0
 
 ; Returns a color, from five bits each of red, green and blue.
 .func rgb(r, g, b) = r | (g << 5) | (b << 10)
@@ -61,22 +61,22 @@
 
 ; The DMAs that `dma!` runs. The first three set VRAM and CGRAM up, and the NMI runs the last.
 .data clear_vram: .type Dma {
-    mode = DMA_TWO_PORTS | DMA_FIXED
-    port = <VMDATAL
+    mode   = DMA_TWO_PORTS | DMA_FIXED
+    port   = <VMDATAL
     source = zero
     length = 0                      ; all 64K
 }
 
 .data load_font: .type Dma {
-    mode = DMA_TWO_PORTS
-    port = <VMDATAL
+    mode   = DMA_TWO_PORTS
+    port   = <VMDATAL
     source = font
     length = .sizeof(font)
 }
 
 .data load_palette: .type Dma {
-    mode = DMA_ONE_PORT
-    port = <CGDATA
+    mode   = DMA_ONE_PORT
+    port   = <CGDATA
     source = palette
     length = .sizeof(palette)
 }
@@ -84,8 +84,8 @@
 ; The tiles of the screen, which are the tilemap's low bytes. The high bytes stay 0, for
 ; palette 0.
 .data show_screen: .type Dma {
-    mode = DMA_ONE_PORT
-    port = <VMDATAL
+    mode   = DMA_ONE_PORT
+    port   = <VMDATAL
     source = screen
     length = .sizeof(screen)
 }

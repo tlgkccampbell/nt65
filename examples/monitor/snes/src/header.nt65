@@ -6,8 +6,8 @@
 
 .use platform::{start, nmi_native, nmi_emulation, brk_native, brk_emulation, ignore}
 
-.const LOROM = $20                         ; the map mode of a LoROM cartridge, at slow ROM speed
-.const ROM_32K = 5                         ; the size of the ROM, as log2 of its kilobytes
+.const LOROM         = $20          ; the map mode of a LoROM cartridge, at slow ROM speed
+.const ROM_32K       = 5            ; the size of the ROM, as log2 of its kilobytes
 .const NORTH_AMERICA = 1
 
 ; The header, from $FFC0.
@@ -40,25 +40,25 @@
 
 .segment HEADER
 .data header: .type Header {
-    title = "NT65 MONITOR"
-    map_mode = LOROM
-    rom_size = ROM_32K
-    region = NORTH_AMERICA
+    title      = "NT65 MONITOR"
+    map_mode   = LOROM
+    rom_size   = ROM_32K
+    region     = NORTH_AMERICA
     complement = $FFFF              ; a checksum of 0, until build.ps1 writes the real one
 }
 
 .data native: .type Vectors {
-    cop = ignore
-    brk = brk_native
+    cop   = ignore
+    brk   = brk_native
     abort = ignore
-    nmi = nmi_native
-    irq = ignore
+    nmi   = nmi_native
+    irq   = ignore
 }
 
 .data emulation: .type Vectors {
-    cop = ignore
+    cop   = ignore
     abort = ignore
-    nmi = nmi_emulation
+    nmi   = nmi_emulation
     reset = start
-    irq = brk_emulation
+    irq   = brk_emulation
 }

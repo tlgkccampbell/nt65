@@ -57,45 +57,45 @@
 
 ; The extended header at $FFB0, then the header proper at $FFC0.
 .struct RomHeader {
-    publisher_id:        .res 2, ' '    ; ASCII
-    game_code:           .res 4, ' '    ; as in SNS-xxxx-USA
+    publisher_id:        .res 2, ' '   ; ASCII
+    game_code:           .res 4, ' '   ; as in SNS-xxxx-USA
     reserved:            .res 6
-    flash_size:          .byte          ; log2(backup flash size) - 10
-    expansion_ram_size:  .byte          ; log2(expansion work RAM size) - 10
-    special_version:     .byte          ; related to promo versions
-    coprocessor:         .byte          ; coprocessor subtype
-    title:               .res 21, ' '   ; no longer than 21 characters, space padded
+    flash_size:          .byte         ; log2(backup flash size) - 10
+    expansion_ram_size:  .byte         ; log2(expansion work RAM size) - 10
+    special_version:     .byte         ; related to promo versions
+    coprocessor:         .byte         ; coprocessor subtype
+    title:               .res 21, ' '  ; no longer than 21 characters, space padded
     map_mode:            .byte
-    cart_type:           .byte          ; 00: no extra RAM; 02: RAM with battery
-    rom_size:            .byte          ; log2(ROM size) - 10; 08-0C typical
-    ram_size:            .byte          ; log2(backup RAM size) - 10; 01,03,05 typical
+    cart_type:           .byte         ; 00: no extra RAM; 02: RAM with battery
+    rom_size:            .byte         ; log2(ROM size) - 10; 08-0C typical
+    ram_size:            .byte         ; log2(backup RAM size) - 10; 01,03,05 typical
     region:              .byte
-    developer:           .byte          ; publisher ID, or $33 for see 16 bytes before header
-    version:             .byte          ; ROM revision number
-    checksum_complement: .word          ; $FFFF minus the sum of all bytes, poked after linking
-    checksum:            .word          ; the sum of all bytes, poked after linking
+    developer:           .byte         ; publisher ID, or $33 for see 16 bytes before header
+    version:             .byte         ; ROM revision number
+    checksum_complement: .word         ; $FFFF minus the sum of all bytes, poked after linking
+    checksum:            .word         ; the sum of all bytes, poked after linking
 }
 .assert .sizeof(RomHeader) == $30, "the header must run from $FFB0 to $FFE0"
 
 .segment SNESHEADER
 .data header: .type RomHeader {
-    publisher_id = "  "
-    game_code = "XLRW"
-    flash_size = MemSize::none
-    expansion_ram_size = MemSize::none
-    special_version = 0
-    coprocessor = 0
+    publisher_id        = "  "
+    game_code           = "XLRW"
+    flash_size          = MemSize::none
+    expansion_ram_size  = MemSize::none
+    special_version     = 0
+    coprocessor         = 0
     ; Longest possible is "PINO'S LOROM TEMPLATE"
-    title = "PINO'S LOROM TEMPLATE"
-    map_mode = Mapper::lorom | RomSpeed::slow_200ns
-    cart_type = $00
-    rom_size = MemSize::kb256
-    ram_size = MemSize::none
-    region = Region::america
-    developer = $33
-    version = $00
+    title               = "PINO'S LOROM TEMPLATE"
+    map_mode            = Mapper::lorom | RomSpeed::slow_200ns
+    cart_type           = $00
+    rom_size            = MemSize::kb256
+    ram_size            = MemSize::none
+    region              = Region::america
+    developer           = $33
+    version             = $00
     checksum_complement = $0000
-    checksum = $0000
+    checksum            = $0000
 }
 
 ; The vectors follow the header, at $FFE0.

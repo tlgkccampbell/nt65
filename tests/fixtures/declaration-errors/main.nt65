@@ -10,17 +10,17 @@
 
 .struct Palette {
     colors: .word[3]
-    tiles:  .byte[]             ;! error[member-count-not-a-number]: `tiles` needs an element count: use `.byte[n]`
+    tiles:  .byte[]                 ;! error[member-count-not-a-number]: `tiles` needs an element count: use `.byte[n]`
 }
 
 .segment RODATA
 ; An array's count must equal the number of values given, whether there are too few or too many.
-.data short: .byte[4] { 1, 2, 3 }       ;! error[element-count-mismatch]: this array is declared with 4 elements, but 3 given
-.data long:  .addr[2] {                  ;! error[element-count-mismatch]: this array is declared with 2 elements, but 3 given
+.data short: .byte[4] { 1, 2, 3 }   ;! error[element-count-mismatch]: this array is declared with 4 elements, but 3 given
+.data long:  .addr[2] {             ;! error[element-count-mismatch]: this array is declared with 2 elements, but 3 given
     0, 0, 0
 }
-.data none:    .word[]                     ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.word[n]` to reserve n elements
-.data padding: .res 4                   ;! error[res-not-a-declaration]: a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros where no values are given
+.data none:    .word[]              ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.word[n]` to reserve n elements
+.data padding: .res 4               ;! error[res-not-a-declaration]: a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros where no values are given
 
 ; An element is a value, or a record for an array of records.
 .data records: .type Point[] {
@@ -35,13 +35,13 @@
 ; Mixed data holds data, and names its members with `.data`.
 .data mixed {
     .byte 1
-    stray: .byte 2                      ;! error[label-in-data]: `stray` is a label in `.data`: a named member is `.data stray: ...`, and a position is `@stray:`
+    stray: .byte 2                  ;! error[label-in-data]: `stray` is a label in `.data`: a named member is `.data stray: ...`, and a position is `@stray:`
     lda #1                              ;! error[instruction-in-data]: an instruction belongs in a `.proc`, not in a `.data` declaration
 }
 
 ; Outside a routine, bytes belong to a declaration and code to a routine.
 .byte 3                             ;! error[padding-outside-a-routine]: `.byte` outside a `.proc` must be part of a `.data` declaration: `.data name: .byte ...`
-label: .word 4                          ;! error[label-outside-a-routine]: `label` is a label outside a `.proc`: labels mark positions in code, and data is named by a declaration, `.data label: ...`
+label: .word 4                      ;! error[label-outside-a-routine]: `label` is a label outside a `.proc`: labels mark positions in code, and data is named by a declaration, `.data label: ...`
 rts                                 ;! error[instruction-outside-a-routine]: an instruction belongs in a `.proc`: nt65 follows and checks code only inside routines
 .res 2                              ; padding is fine
 

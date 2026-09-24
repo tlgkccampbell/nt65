@@ -6,7 +6,7 @@
 
 .use platform::{start, nmi, on_brk}
 
-.const NROM = 0                            ; the mapper of a cartridge that holds only ROM, unbanked
+.const NROM = 0                     ; the mapper of a cartridge that holds only ROM, unbanked
 
 ; The iNES header.
 .struct Header {
@@ -30,17 +30,17 @@
 
 .segment HEADER
 .data header: .type Header {
-    name = "NES"
-    eof = $1A
+    name     = "NES"
+    eof      = $1A
     prg_size = 1
     chr_size = 1
-    flags_6 = (NROM & $0F) << 4
-    flags_7 = NROM & $F0
+    flags_6  = (NROM & $0F) << 4
+    flags_7  = NROM & $F0
 }
 
 .segment VECTORS
 .data vectors: .type Vectors {
-    nmi = nmi
+    nmi   = nmi
     reset = start
-    irq = on_brk
+    irq   = on_brk
 }

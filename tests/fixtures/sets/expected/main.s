@@ -17,9 +17,9 @@ Mode__zpy = $03
 Mode__absy = $04
 Mode__ind = $05
 
-HIGH = 200
+HIGH    = 200
 IS_HIGH = $01
-BY_X = $01
+BY_X    = $01
 
 .segment "RODATA": absolute
 sizes:

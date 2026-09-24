@@ -20,7 +20,7 @@
 }
 
 .if KBD {
-    .data UNKNOWN: .byte $54, $D2       ; ???
+    .data UNKNOWN: .byte $54, $D2   ; ???
 
     .export .proc OKPRT {
         jsr PRIMM

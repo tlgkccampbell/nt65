@@ -15,7 +15,7 @@
     .data NOFOR:  .byte message("NF", "NEXT WITHOUT FOR")
     .data SYNTAX: .byte message("SN", "SYNTAX")
 }
-.export .const ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES   ; a constant: 16
+.export .const ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES  ; a constant: 16
 .segment CODE
 .export .proc f {
     ldx #ERR_SYNTAX

@@ -12,18 +12,18 @@
 
 ; A constant, which the output writes where it stands.
 .const swa = $12
-.const per = $34                       ;! warning[mnemonic-name]: `per` is an instruction on the 65816; as a name it is legal and easy to misread
+.const per = $34                    ;! warning[mnemonic-name]: `per` is an instruction on the 65816; as a name it is legal and easy to misread
 
 ; A word only the 6502x has an instruction by. The rule is the same in every project, so the
 ; warning is here whichever of these CPUs the build is for.
-.const arr = $56                       ;! warning[mnemonic-name]: `arr` is an instruction on the 6502x; as a name it is legal and easy to misread
+.const arr = $56                    ;! warning[mnemonic-name]: `arr` is an instruction on the 6502x; as a name it is legal and easy to misread
 
 .segment ZEROPAGE
-.data tad: .byte                ; data named for an alias ca65 has on the 65816
-.data ina: .byte                ; and for one it has on every CMOS part
+.data tad: .byte                    ; data named for an alias ca65 has on the 65816
+.data ina: .byte                    ; and for one it has on every CMOS part
 
 .segment RODATA
-.data pair: .byte swa, per, arr ; the constants, written where they are used
+.data pair: .byte swa, per, arr     ; the constants, written where they are used
 
 .segment CODE
 

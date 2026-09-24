@@ -29,15 +29,15 @@
 
 ; What is declared reaches the output, and ca65 has 32 bits for it — for the value, and
 ; for every step of the expression it is written with, which ca65 works out again.
-.const BIG    = $7fffffffffffffff          ;! error[number-too-wide]: $7fffffffffffffff does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
-.const SUM    = $ffffffff + 1              ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
-.const STEP   = ($ffffffff + 1) / 2        ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
-.const ROOM   = (1 << 40) >> 20            ;! error[number-too-wide]: $10000000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
-.const LOWEST = 0 - $80000001              ;! error[number-too-wide]: -2147483649 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+.const BIG    = $7fffffffffffffff    ;! error[number-too-wide]: $7fffffffffffffff does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+.const SUM    = $ffffffff + 1        ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+.const STEP   = ($ffffffff + 1) / 2  ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+.const ROOM   = (1 << 40) >> 20      ;! error[number-too-wide]: $10000000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+.const LOWEST = 0 - $80000001        ;! error[number-too-wide]: -2147483649 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
 
 ; The edges of what ca65 holds are values like any other.
-.const LIMIT  = $ffffffff
-.const FLOOR  = 0 - $80000000
+.const LIMIT = $ffffffff
+.const FLOOR = 0 - $80000000
 
 .enum Counted {
     near = $ffffffff

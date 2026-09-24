@@ -25,7 +25,7 @@
 }
 
 .export .scope cia1 {
-    .const PRA = $DC00                 ; joystick port 2
+    .const PRA = $DC00              ; joystick port 2
     .const ICR = $DC0D
 }
 
@@ -34,9 +34,9 @@
 }
 
 .export .scope kernal {
-    .const IRQ_VECTOR = $0314          ; CINV
-    .const IRQ        = $EA31          ; full KERNAL IRQ (keyboard scan, cursor blink)
-    .const IRQ_EXIT   = $EA81          ; restore registers and RTI
+    .const IRQ_VECTOR = $0314       ; CINV
+    .const IRQ        = $EA31       ; full KERNAL IRQ (keyboard scan, cursor blink)
+    .const IRQ_EXIT   = $EA81       ; restore registers and RTI
 
     ; CHROUT is documented as using A alone, so X and Y come back; the rest use all three
     ; and promise nothing.

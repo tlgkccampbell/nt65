@@ -15,7 +15,7 @@
 .segment CODE
 .proc indirect: a8, i8 {
     jmp (@table,x)          ;! error[indirect-jump-unchecked]: `jmp (@table,x)` is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` to end the path
-@table: .addr @go           ;! error[code-label-as-data]: the address of code label `@go` is taken here, so it may be jumped to where nt65 cannot see: add a `.state` after the label, or name it in a `.next` in `indirect`
+@table: .addr @go                   ;! error[code-label-as-data]: the address of code label `@go` is taken here, so it may be jumped to where nt65 cannot see: add a `.state` after the label, or name it in a `.next` in `indirect`
 @go:
     jsr (@table,x)          ;! error[indirect-call-unchecked]: `jsr (@table,x)` is an indirect call, which nt65 cannot follow: add a `.next` naming the routines it may call
     rts

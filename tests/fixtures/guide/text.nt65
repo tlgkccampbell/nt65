@@ -20,7 +20,7 @@
     .data END: .byte htasc("END")
     .data FOR: .byte htasc("FOR")
 }
-.const TOKEN_FOR = keywords::FOR - keywords        ; 3
+.const TOKEN_FOR = keywords::FOR - keywords  ; 3
 
 .const TURN  = 256
 .const SCALE = 127

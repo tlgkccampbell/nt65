@@ -13,11 +13,11 @@
 .export spc_entry as "spc_entry"
 
 ; MMIO at $00F0-$00FF
-.const TIMEREN     = $00F1     ; 0-2: enable timer; 7: enable ROM in $FFC0-$FFFF
+.const TIMEREN     = $00F1          ; 0-2: enable timer; 7: enable ROM in $FFC0-$FFFF
 .const DSPADDR     = $00F2
 .const DSPDATA     = $00F3
-.const TIMERPERIOD = $00FA     ; Divisors for timers (0, 1: 8 kHz base; 2: 64 kHz base)
-.const TIMERVAL    = $00FD     ; Number of times timer incremented (bits 3-0; cleared on read)
+.const TIMERPERIOD = $00FA          ; Divisors for timers (0, 1: 8 kHz base; 2: 64 kHz base)
+.const TIMERVAL    = $00FD          ; Number of times timer incremented (bits 3-0; cleared on read)
 
 ; A voice's registers are at its number times 16 plus these.
 .enum Voice {
@@ -751,7 +751,7 @@
     .byte $C3,$88,$99,$AA,$BB,$CC,$DD,$EE,$FF
 }
 .data karplusbassloop_brr: .incbin "../build/assets/karplusbassloop.brr"
-.data karplusbass_loop:    .byte = .endof(karplusbassloop_brr) - 36     ; period 64 samples (36 bytes)
+.data karplusbass_loop:    .byte = .endof(karplusbassloop_brr) - 36  ; period 64 samples (36 bytes)
 .data hat_brr:             .incbin "../build/assets/hat.brr"
 .data kick_brr:            .incbin "../build/assets/kickgen.brr"
 .data snare_brr:           .incbin "../build/assets/decentsnare.brr"

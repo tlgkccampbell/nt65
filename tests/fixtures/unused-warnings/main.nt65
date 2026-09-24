@@ -9,7 +9,7 @@
 ; several in braces is the one reported.
 .use other::{work, SPARE}       ;! warning[unused-use-item]: `SPARE` is brought in and nothing names it: the `.use` item may go
 
-.const LIMIT = 10                      ;! warning[unused-symbol]: `LIMIT` is never used: nothing names it, and it is not exported
+.const LIMIT = 10                   ;! warning[unused-symbol]: `LIMIT` is never used: nothing names it, and it is not exported
 .const WIDTH = 40
 .export WIDTH
 
@@ -50,7 +50,7 @@
 }
 
 .segment RODATA
-.data table: .byte[3]                ;! warning[unused-symbol]: `table` is never used: nothing names it, and it is not exported
+.data table: .byte[3]               ;! warning[unused-symbol]: `table` is never used: nothing names it, and it is not exported
 
 ; A routine is reported like anything else: nothing calls it, jumps to it or names it, and it
 ; is not exported, so nothing can reach it.

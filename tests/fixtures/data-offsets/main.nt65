@@ -17,8 +17,8 @@
     }
 }
 
-.const ERR_NOFOR = messages::NOFOR - messages
-.const ERR_SYNTAX = messages::SYNTAX - messages
+.const ERR_NOFOR    = messages::NOFOR - messages
+.const ERR_SYNTAX   = messages::SYNTAX - messages
 .const MESSAGES_END = .endof(messages) - messages
 
 .assert ERR_SYNTAX == .sizeof(messages::NOFOR), "SYNTAX follows NOFOR"

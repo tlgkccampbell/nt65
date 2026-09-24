@@ -29,8 +29,8 @@ main__messages__SYNTAX:
     .byte $53, $59, $4e, $54, $41, $58 | $80  ; "SYNTA", 'X'
 main__messages__end:
 
-main__ERR_NOFOR = $00               ; messages::NOFOR - messages
-main__ERR_SYNTAX = $10              ; messages::SYNTAX - messages
+main__ERR_NOFOR    = $00            ; messages::NOFOR - messages
+main__ERR_SYNTAX   = $10            ; messages::SYNTAX - messages
 main__MESSAGES_END = $16            ; .endof(messages) - messages
 
 main__more:

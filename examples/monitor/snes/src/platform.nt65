@@ -32,10 +32,10 @@
     ' '..'_' = ' '
 }
 
-.const COLUMNS ?= 32                ; the 256 dots of a line, eight to a tile, as a setting
-.const LINE_LENGTH = COLUMNS - 2           ; a row, after the prompt and with room for the cursor
-.const NEWLINE = $0D                       ; RETURN, which is outside `text`
-.const DELETE = $7F                        ; what the keyboard's DEL key types
+.const COLUMNS    ?= 32             ; the 256 dots of a line, eight to a tile, as a setting
+.const LINE_LENGTH = COLUMNS - 2    ; a row, after the prompt and with room for the cursor
+.const NEWLINE     = $0D            ; RETURN, which is outside `text`
+.const DELETE      = $7F            ; what the keyboard's DEL key types
 
 .segment CODE
 ; Starts the monitor on a reset, with the screen blank, NMIs off and the S-CPU in emulation mode.

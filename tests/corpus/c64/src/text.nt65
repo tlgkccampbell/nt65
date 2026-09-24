@@ -19,7 +19,7 @@
 }
 
 .const ROW_COUNT = 25
-.const COLS = 40
+.const COLS      = 40
 
 .segment RODATA
 ; Row start offsets into screen RAM

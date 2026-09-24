@@ -11,8 +11,8 @@
 .export .data frame_flag:  .byte
 .export .data frame_count: .word
 .export .data game_state:  .byte
-.export .data score:       .byte[3]      ; BCD, least significant byte first
-.export .data player_x:    .word         ; 9-bit sprite X
+.export .data score:       .byte[3]  ; BCD, least significant byte first
+.export .data player_x:    .word     ; 9-bit sprite X
 .export .data player_y:    .byte
 .export .data joy_prev:    .byte
 .export .data lives:       .byte

@@ -31,10 +31,10 @@ public sealed class ImportIncCommandTests
         Assert.Contains(".module hw", text, StringComparison.Ordinal);
         Assert.Contains(".export KBD, KBDSTRB, WNDLFT, SCREEN, CHARS, MASK", text, StringComparison.Ordinal);
         Assert.Contains("; Hardware, as a project keeps it.", text, StringComparison.Ordinal);
-        Assert.Contains(".const KBD = $C000", text, StringComparison.Ordinal);
+        Assert.Contains(".const KBD     = $C000", text, StringComparison.Ordinal);
         Assert.Contains(".const KBDSTRB = $C010", text, StringComparison.Ordinal);
         Assert.Contains("; the strobe", text, StringComparison.Ordinal);
-        Assert.Contains(".const CHARS = SCREEN + $400", text, StringComparison.Ordinal);
+        Assert.Contains(".const CHARS  = SCREEN + $400", text, StringComparison.Ordinal);
         Assert.Contains("asm/apple2.inc", text, StringComparison.Ordinal);
     }
 
@@ -86,7 +86,7 @@ public sealed class ImportIncCommandTests
         Assert.Equal(ExitCode.Success, code);
         Assert.Empty(problems);
         Assert.Contains(".module apple2", output, StringComparison.Ordinal);
-        Assert.Contains(".const KBD = $C000", output, StringComparison.Ordinal);
+        Assert.Matches(@"\.const KBD += \$C000", output);
     }
 
     [Fact]

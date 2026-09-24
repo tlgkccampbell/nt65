@@ -17,8 +17,8 @@
 ; much, but you can enable them when building it to see what they look like.  They're
 ; described at https://wiki.superfamicom.org/registers
 .const USE_PSEUDOHIRES ?= 0
-.const USE_INTERLACE ?= 0
-.const USE_AUDIO ?= 1
+.const USE_INTERLACE   ?= 0
+.const USE_AUDIO       ?= 1
 
 ; What the demo writes to PPURES: split horizontal pixels, interlace, both or neither.
 .const PPURES_BITS = .select(USE_PSEUDOHIRES, SUB_HIRES, 0) | .select(USE_INTERLACE, INTERLACE, 0)

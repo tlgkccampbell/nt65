@@ -135,7 +135,7 @@
 ; (on all non-CONFIG_SMALL)
 ; ----------------------------------------------------------------------------
 .if KBD {
-    .export .data RNDSEED: .byte[4] = .endof(CHRGOT2)   ; KBD copies no seed, and uses the bytes after CHRGET
+    .export .data RNDSEED: .byte[4] = .endof(CHRGOT2)  ; KBD copies no seed, and uses the bytes after CHRGET
 } .elseif CONFIG_SMALL {
     .export .data RNDSEED: .byte $80, $4F, $C7, $52
 } .elseif CONFIG_11 {

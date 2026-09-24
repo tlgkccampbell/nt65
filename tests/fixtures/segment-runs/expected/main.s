@@ -56,5 +56,5 @@ main__prompts: .byte $52, $45, $41, $44, $59  ; "READY"
     .align 2
 main__far_apart: .byte 0
 
-PROMPTS_AT = $0a                    ; prompts - table
+PROMPTS_AT   = $0a                  ; prompts - table
 FAR_APART_AT = main__far_apart - main__table

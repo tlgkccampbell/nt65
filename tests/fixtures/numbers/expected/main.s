@@ -13,10 +13,10 @@
 .export main__third
 .export main__main
 
-BYTES   = $7fff
-BITS    = %10101010
-COUNT   = 1000
-LONG    = $012345
+BYTES = $7fff
+BITS  = %10101010
+COUNT = 1000
+LONG  = $012345
 
 .segment "RODATA": absolute
 main__masks:

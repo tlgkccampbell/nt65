@@ -68,7 +68,7 @@
 .data boss: .type Actor { x = 100, y = 40, hp = 99, ai = chase }
 
 .data hero: .type Actor {
-    x = 16
+    x  = 16
     hp = 3
     ai = player_input
 }

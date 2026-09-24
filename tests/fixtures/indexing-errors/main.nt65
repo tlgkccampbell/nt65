@@ -21,11 +21,11 @@
 
 .segment RODATA
 ; A count catches a table with too few values; only a single text is padded out to the count.
-.data table:   .addr[4] { one, one }    ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
-.data letters: .byte[4] { "a", "b" }    ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
-.data letter:  .byte[4] { 'A' }         ;! error[element-count-mismatch]: this array is declared with 4 elements, but 1 given
-.data over:    .byte[2] { "hello" }     ;! error[element-count-mismatch]: this array is declared with 2 elements, but 5 given
-.data words:   .word[4] { "hi" }        ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
+.data table:   .addr[4] { one, one }  ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
+.data letters: .byte[4] { "a", "b" }  ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
+.data letter:  .byte[4] { 'A' }       ;! error[element-count-mismatch]: this array is declared with 4 elements, but 1 given
+.data over:    .byte[2] { "hello" }   ;! error[element-count-mismatch]: this array is declared with 2 elements, but 5 given
+.data words:   .word[4] { "hi" }      ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
 
 .list order {
     one

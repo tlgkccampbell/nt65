@@ -26,6 +26,6 @@
     bne @loop
     rts
     .segment RODATA {
-        .data table: .byte 1, 2, 4, 8       ; this is draw::table
+        .data table: .byte 1, 2, 4, 8  ; this is draw::table
     }
 }

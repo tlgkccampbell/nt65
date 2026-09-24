@@ -26,15 +26,15 @@
 }
 
 .const KEY_COLUMNS = 16
-.const KEY_ROWS = 3
-.const KEYS = KEY_COLUMNS * KEY_ROWS       ; the places on the keyboard
-.const FIRST_ROW = TEXT_ROWS + 1           ; the screen's row of the keyboard's first row
-.const DELAY = 16                          ; the frames a held button waits before it repeats
-.const REPEAT = 4                          ; the frames between its repeats
-.const BLINK = $10                         ; the bit of `frames` that blinks the text cursor
+.const KEY_ROWS    = 3
+.const KEYS        = KEY_COLUMNS * KEY_ROWS  ; the places on the keyboard
+.const FIRST_ROW   = TEXT_ROWS + 1           ; the screen's row of the keyboard's first row
+.const DELAY       = 16                      ; the frames a held button waits before it repeats
+.const REPEAT      = 4                       ; the frames between its repeats
+.const BLINK       = $10                     ; the bit of `frames` that blinks the text cursor
 
-.const DPAD = Button::up | Button::down | Button::left | Button::right
-.const REPEATS = DPAD | Button::delete     ; the buttons that repeat
+.const DPAD    = Button::up | Button::down | Button::left | Button::right
+.const REPEATS = DPAD | Button::delete  ; the buttons that repeat
 
 .assert ROWS - FIRST_ROW == KEY_ROWS, "the keyboard must fill the rows below the text"
 .assert KEY_COLUMNS * 2 == COLUMNS, "each place on the keyboard must be two columns wide"

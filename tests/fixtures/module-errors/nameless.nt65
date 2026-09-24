@@ -1,2 +1,2 @@
-.const LONELY = 1              ;! error[module-missing]: this file has no `.module` line: start it with `.module name`
+.const LONELY = 1                   ;! error[module-missing]: this file has no `.module` line: start it with `.module name`
 .export LONELY

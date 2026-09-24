@@ -24,7 +24,7 @@
 
 ; S-PPU configuration ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const PPUBRIGHT = $2100
+.export .const PPUBRIGHT  = $2100
 ; 76543210
 ; |   ++++- brightness (F: max)
 ; +-------- 1: disable rendering
@@ -36,7 +36,7 @@
 ; "Negative."
 .export .const FORCEBLANK = $80
 
-.export .const PPURES = $2133
+.export .const PPURES       = $2133
 ; 76543210
 ; ||  |||+- Screen interlace
 ; ||  ||+-- Shrink sprites vertically during interlace
@@ -67,7 +67,7 @@
 
 ; S-PPU sprites ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const OBSEL = $2101
+.export .const OBSEL        = $2101
 ; 76543210
 ; ||||| ++- Sprite main pattern table (0=$0000, 1=$2000, 2=$4000, 3=$6000)
 ; |||++---- Alt pattern table offset (0=$1000, 1=$2000, 2=$3000, 3=$4000)
@@ -80,7 +80,7 @@
 .export .const OBSIZE_16_64 = $80
 .export .const OBSIZE_32_64 = $A0
 
-.export .const OAMADDR   = $2102       ; 16-bit, 128 sprites followed by high-X/size table
+.export .const OAMADDR   = $2102    ; 16-bit, 128 sprites followed by high-X/size table
 .export .const OAMDATA   = $2104
 .export .const OAMDATARD = $2138
 ; Parallels NES $2003, except apparently word-addressed.
@@ -116,7 +116,7 @@
 ; ||||+---- Apply mosaic to plane 3
 ; ++++----- Pixel size minus 1 (0=1x1, 15=16x16)
 
-.export .const NTADDR = $2107          ; through $210A
+.export .const NTADDR = $2107       ; through $210A
 ; 76543210
 ;  ||||||+- Nametable width (0: 1 screen, 1: 2 screens)
 ;  |||||+-- Nametable height (0: 1 screen, 1: 2 screens)
@@ -131,7 +131,7 @@
 ;  ||| +++---------- Same for plane 2
 ;  +++-------------- Same for plane 3
 
-.export .const M7SEL = $211A
+.export .const M7SEL       = $211A
 ; 76543210
 ; ||    ||
 ; ||    |+- Flip screen horizontally
@@ -146,8 +146,8 @@
 
 ; S-PPU scrolling ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const BGSCROLLX = $210D       ; double write low then high (000-3FF m0-6, 000-7FF m7)
-.export .const BGSCROLLY = $210E       ; similar. reg 210F-2114 are same for other planes
+.export .const BGSCROLLX = $210D    ; double write low then high (000-3FF m0-6, 000-7FF m7)
+.export .const BGSCROLLY = $210E    ; similar. reg 210F-2114 are same for other planes
 ; Hi-res scrolling in modes 5-6 moves by whole (sub+main) pixels in X
 ; but half scanlines in Y.
 ; The top visible line is the line below the value written here.
@@ -161,7 +161,7 @@
 
 ; S-PPU VRAM data port ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const PPUCTRL = $2115
+.export .const PPUCTRL     = $2115
 ; 76543210
 ; |   ||++- VRAM address increment (1, 32, 128, 128)
 ; |   ++--- Rotate low bits of address left by 3 (off, 8, 9, or 10)
@@ -171,17 +171,17 @@
 .export .const VRAM_M7DOWN = $02
 .export .const INC_DATAHI  = $80
 
-.export .const PPUADDR     = $2116     ; Word address, not double-write anymore
+.export .const PPUADDR     = $2116  ; Word address, not double-write anymore
 .export .const PPUDATA     = $2118
 .export .const PPUDATAHI   = $2119
-.export .const PPUDATARD   = $2139     ; Same dummy read as on NES is needed
+.export .const PPUDATARD   = $2139  ; Same dummy read as on NES is needed
 .export .const PPUDATARDHI = $213A
 
 ; S-PPU palette ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 .export .const CGADDR   = $2121
-.export .const CGDATA   = $2122        ; 5-bit BGR, write twice, low byte first
-.export .const CGDATARD = $213B        ; 5-bit BGR, read twice, low byte first
+.export .const CGDATA   = $2122     ; 5-bit BGR, write twice, low byte first
+.export .const CGDATARD = $213B     ; 5-bit BGR, read twice, low byte first
 .export .func RGB(r, g, b) = r | (g << 5) | (b << 10)
 
 ; S-PPU window ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -200,8 +200,8 @@
 .export .const WINDOW2L = $2128
 .export .const WINDOW2R = $2129
 
-.export .const BGWINDOP  = $212A       ; Window op is how windows are combined when both
-.export .const OBJWINDOP = $212B       ; windows 1 and 2 are enabled.
+.export .const BGWINDOP  = $212A    ; Window op is how windows are combined when both
+.export .const OBJWINDOP = $212B    ; windows 1 and 2 are enabled.
 ; 76543210
 ; ||||||++- Window op for plane 0 or sprites (0: or, 1: and, 2: xor, 3: xnor)
 ; ||||++--- Window op for plane 1 or color window
@@ -212,10 +212,10 @@
 
 ; The main layer enable reg, corresponding to PPUMASK on the NES,
 ; is BLENDMAIN.
-.export .const BLENDMAIN  = $212C      ; Layers enabled for main input of blending
-.export .const BLENDSUB   = $212D      ; Layers enabled for sub input of blending
-.export .const WINDOWMAIN = $212E      ; Windows enabled for main input of blending
-.export .const WINDOWSUB  = $212F      ; Windows enabled for sub input of blending
+.export .const BLENDMAIN  = $212C   ; Layers enabled for main input of blending
+.export .const BLENDSUB   = $212D   ; Layers enabled for sub input of blending
+.export .const WINDOWMAIN = $212E   ; Windows enabled for main input of blending
+.export .const WINDOWSUB  = $212F   ; Windows enabled for sub input of blending
 ; 76543210
 ;    ||||+- plane 0
 ;    |||+-- plane 1
@@ -233,15 +233,15 @@
 
 ; When BGMODE is 0-6 (or during vblank in mode 7), a fast 16x8
 ; signed multiply is available, finishing by the next CPU cycle.
-.export .const M7MCAND    = $211B      ; write low then high
-.export .const M7MUL      = $211C      ; 8-bit factor
+.export .const M7MCAND    = $211B   ; write low then high
+.export .const M7MUL      = $211C   ; 8-bit factor
 .export .const M7PRODLO   = $2134
 .export .const M7PRODHI   = $2135
 .export .const M7PRODBANK = $2136
 
-.export .const GETXY  = $2137          ; read while $4201 D7 is set: populate x and y coords
-.export .const XCOORD = $213C          ; used with light guns, read twice
-.export .const YCOORD = $213D          ; also read twice
+.export .const GETXY  = $2137       ; read while $4201 D7 is set: populate x and y coords
+.export .const XCOORD = $213C       ; used with light guns, read twice
+.export .const YCOORD = $213D       ; also read twice
 
 ; SPC700 communication ports ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -252,7 +252,7 @@
 
 ; S-CPU interrupt control ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const PPUNMI = $4200
+.export .const PPUNMI     = $4200
 ; 76543210
 ; | ||   +- Automatically read controllers in first 4 lines of vblank
 ; | ++----- 0: no IRQ (and acknowledge any pending); 1: IRQs at HTIME;
@@ -269,7 +269,7 @@
 .export .const VTIME   = $4209
 .export .const VTIMEHI = $420A
 
-.export .const NMISTATUS = $4210       ; read to acknowledge NMI
+.export .const NMISTATUS = $4210    ; read to acknowledge NMI
 ; 76543210
 ; |   ||||
 ; |   ++++- DMA controller version (1, 2) where v1 has an HDMA glitch
@@ -306,10 +306,10 @@
 ; +-------- Controller 2 pin 6 output
 
 ; Results of the autoreader
-.export .const JOY1CUR   = $4218       ; Bit 0: used by standard controllers
+.export .const JOY1CUR   = $4218    ; Bit 0: used by standard controllers
 .export .const JOY2CUR   = $421A
-.export .const JOY1B1CUR = $421C       ; Bit 1: used by multitap and a few oddball
-.export .const JOY2B1CUR = $421E       ; input devices
+.export .const JOY1B1CUR = $421C    ; Bit 1: used by multitap and a few oddball
+.export .const JOY2B1CUR = $421E    ; input devices
 ; FEDCBA98 76543210
 ; BYSRUDLR AXLRTTTT
 ; |||||||| ||||++++- controller type (0: controller, 1: mouse)
@@ -345,15 +345,15 @@
 
 ; Multiply unit.  Also good for shifting pixels when drawing
 ; text in a proportional font.
-.export .const CPUMCAND  = $4202       ; unchanged by multiplications
-.export .const CPUMUL    = $4203       ; write here to fill CPUPROD 8 cycles later
+.export .const CPUMCAND  = $4202    ; unchanged by multiplications
+.export .const CPUMUL    = $4203    ; write here to fill CPUPROD 8 cycles later
 .export .const CPUPROD   = $4216
 .export .const CPUPRODHI = $4217
 
 ; Divide unit
 .export .const CPUNUM    = $4204
 .export .const CPUNUMHI  = $4205
-.export .const CPUDEN    = $4206       ; write divisor to fill CPUQUOT/CPUREM 16 cycles later
+.export .const CPUDEN    = $4206    ; write divisor to fill CPUQUOT/CPUREM 16 cycles later
 .export .const CPUQUOT   = $4214
 .export .const CPUQUOTHI = $4215
 .export .const CPUREM    = CPUPROD
@@ -361,14 +361,14 @@
 
 ; S-CPU DMA ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const COPYSTART = $420B       ; writes of 1 << n start a DMA copy on channel n
-.export .const HDMASTART = $420C       ; writes of 1 << n start HDMA on channel n
+.export .const COPYSTART = $420B    ; writes of 1 << n start a DMA copy on channel n
+.export .const HDMASTART = $420C    ; writes of 1 << n start HDMA on channel n
 ; Don't run a DMA copy while HDMA is enabled, or you might run into
 ; a defect in revision 1 of the S-CPU that causes crashing.
 
 ; There are 8 DMA channels.
 ; Registers for channels 1-7 start at $4310, $4320, ...
-.export .const DMAMODE = $4300
+.export .const DMAMODE      = $4300
 ; 76543210
 ; || ||+++- PPU address offset pattern
 ; || ||     0: 0     1: 01    2: 00    3: 0011  4: 0123  5: 0101
@@ -377,10 +377,10 @@
 ; +-------- Direction (0: read CPU write PPU; 1: read PPU write CPU)
 .export .const DMA_LINEAR   = $00
 .export .const DMA_01       = $01
-.export .const DMA_00       = $02      ; For HDMA to double write ports; copies can use linear
-.export .const DMA_0011     = $03      ; For HDMA to scroll positions and mode 7 matrices
-.export .const DMA_0123     = $04      ; For HDMA to window registers
-.export .const DMA_0101     = $05      ; Not sure how this would be useful for HDMA
+.export .const DMA_00       = $02   ; For HDMA to double write ports; copies can use linear
+.export .const DMA_0011     = $03   ; For HDMA to scroll positions and mode 7 matrices
+.export .const DMA_0123     = $04   ; For HDMA to window registers
+.export .const DMA_0101     = $05   ; Not sure how this would be useful for HDMA
 .export .const DMA_FORWARD  = $00
 .export .const DMA_CONST    = $08
 .export .const DMA_BACKWARD = $10
@@ -391,7 +391,7 @@
 .export .const DMAADDR     = $4302
 .export .const DMAADDRHI   = $4303
 .export .const DMAADDRBANK = $4304
-.export .const DMALEN      = $4305     ; number of bytes, not number of transfers; 0 means 65536
+.export .const DMALEN      = $4305  ; number of bytes, not number of transfers; 0 means 65536
 .export .const DMALENHI    = $4306
 
 ; A future demo that includes HDMA effects would include port definitions.
@@ -422,8 +422,8 @@
 .export .const BG2SC   = NTADDR + 1
 .export .const BG3SC   = NTADDR + 2
 .export .const BG4SC   = NTADDR + 3
-.export .const BG12NBA = BGCHRADDR + 0 ; Welcome to...
-.export .const BG34NBA = BGCHRADDR + 1 ; BG34NBA JAM!!!
+.export .const BG12NBA = BGCHRADDR + 0  ; Welcome to...
+.export .const BG34NBA = BGCHRADDR + 1  ; BG34NBA JAM!!!
 .export .const BG1HOFS = BGSCROLLX + 0
 .export .const BG1VOFS = BGSCROLLY + 0
 .export .const BG2HOFS = BGSCROLLX + 2
@@ -477,7 +477,7 @@
 .export .const STAT78  = PPUSTATUS2
 
 ; other B bus devices
-.export .const APUIO0 = APU0           ; didn't want to use capital O with digit 0
+.export .const APUIO0 = APU0        ; didn't want to use capital O with digit 0
 .export .const APUIO1 = APU1
 .export .const APUIO2 = APU2
 .export .const APUIO3 = APU3
@@ -498,7 +498,7 @@
 .export .const HTIMEH   = HTIMEHI
 .export .const VTIMEL   = VTIME
 .export .const VTIMEH   = VTIMEHI
-.export .const MDMAEN   = COPYSTART    ; where I come from MDMA is a drug
+.export .const MDMAEN   = COPYSTART  ; where I come from MDMA is a drug
 .export .const HDMAEN   = HDMASTART
 .export .const MEMSEL   = ROMSPEED
 

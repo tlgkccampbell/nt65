@@ -12,4 +12,4 @@
     .data NOFOR:  .byte htasc("NEXT WITHOUT FOR")
     .data SYNTAX: .byte htasc("SYNTAX")
 }
-.const ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES   ; 16, a constant
+.const ERR_SYNTAX = ERROR_MESSAGES::SYNTAX - ERROR_MESSAGES  ; 16, a constant

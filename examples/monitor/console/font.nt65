@@ -17,13 +17,13 @@
 
 .export GLYPHS, PLAIN, KEY, CHOSEN, STYLES, bands, plane
 
-.const GLYPHS = 64                         ; the characters from space to `_`
+.const GLYPHS = 64                  ; the characters from space to `_`
 .const STYLES = 3
 
 ; The styles, as what they add to a character's code.
-.const PLAIN  = 0                          ; the monitor's text, in ink on paper
-.const KEY    = GLYPHS                     ; a key, in ink on the keys' color
-.const CHOSEN = 2 * GLYPHS                 ; the key the cursor is on, in paper on the light color
+.const PLAIN  = 0                   ; the monitor's text, in ink on paper
+.const KEY    = GLYPHS              ; a key, in ink on the keys' color
+.const CHOSEN = 2 * GLYPHS          ; the key the cursor is on, in paper on the light color
 
 .assert text(' ') + STYLES * GLYPHS <= 256, "every tile of every style must fit in a byte"
 

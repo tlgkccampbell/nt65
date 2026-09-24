@@ -18,9 +18,9 @@
 
 .export setup, refresh
 
-.const MAP = $2000                         ; the VRAM address of nametable 0
-.const TOP = MAP + COLUMNS                 ; where the screen's first row shows
-.const BATCH = 3                           ; the rows copied in turn at each vblank
+.const MAP   = $2000                ; the VRAM address of nametable 0
+.const TOP   = MAP + COLUMNS        ; where the screen's first row shows
+.const BATCH = 3                    ; the rows copied in turn at each vblank
 
 .assert ROWS + 2 == 30, "the screen must leave out the nametable's first and last rows"
 

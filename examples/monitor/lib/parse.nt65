@@ -10,12 +10,12 @@
 
 .export LINE_SIZE, line, value, begin, skip, blanks, number, byte, expect_end
 
-.const LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, and its zero
+.const LINE_SIZE = platform::LINE_LENGTH + 1  ; the longest line the platform reads, and its zero
 
 .segment BSS
 .data line:  .byte[LINE_SIZE]
-.data at:    .byte                     ; the offset in `line` of the next character to read
-.data value: .byte[ADDRESS_SIZE]   ; the number `number` read
+.data at:    .byte                  ; the offset in `line` of the next character to read
+.data value: .byte[ADDRESS_SIZE]    ; the number `number` read
 
 .segment CODE
 ; Starts reading the line: returns its first character in A, with Z set if there is none.

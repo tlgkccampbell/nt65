@@ -44,7 +44,7 @@
 
 .segment RODATA
 .data module {
-    .data header: .word .spanof(module) ; length in a header
+    .data header: .word .spanof(module)  ; length in a header
 }
 
 .assert .spanof(irq) <= 64, "irq handler too big"

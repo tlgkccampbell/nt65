@@ -9,7 +9,7 @@
 .export .data ptr: .word
 
 .export .const SCREEN = $0400
-.const rows   = 25
+.const rows           = 25
 
 ; An exported type is not a symbol to the linker: each of its members crosses instead, as
 ; the flat constant it becomes.
