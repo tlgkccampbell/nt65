@@ -121,8 +121,8 @@ Intellivision's Keyboard Component, each byte for byte the original ROM.
 
 [`examples/monitor`](examples/monitor) is a machine-language monitor written for nt65 from the
 start: a library that knows nothing of the machine it runs on, and a project for each platform
-that supplies what it needs: the Commodore 64, and the Apple IIGS with its 65816. Its sessions
-run in VICE and MAME.
+that supplies what it needs: the Commodore 64, the Apple IIGS with its 65816, and the Super NES,
+typed on with the joypad. Its sessions run in VICE and MAME.
 
 ## Building from source
 

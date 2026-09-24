@@ -1,0 +1,213 @@
+; This module runs the monitor on the Super NES, as a LoROM cartridge. The monitor runs in
+; emulation mode, with D and B at 0, in bank 0, where the cartridge's first 32K of ROM, the first
+; 8K of RAM and the ports are all seen.
+;
+; The monitor writes on a text screen that `platform::screen` keeps, and reads each line from
+; the on-screen keyboard of `platform::keyboard`. An NMI at each vblank copies the screen into
+; VRAM, and the S-CPU reads the joypad as that vblank starts.
+;
+; There is no firmware, so the BRK handlers save the registers themselves. A BRK in native mode
+; comes in through the native BRK vector, and one in emulation mode through the IRQ vector, which
+; emulation mode shares with BRK. Nothing turns an IRQ on, so the handler takes every entry as a
+; BRK.
+.module platform
+
+.cpu 65816
+
+.use snes::*
+.use monitor::registers
+.use monitor::text::print
+.use platform::{screen, keyboard}
+
+.export COLUMNS, LINE_LENGTH, NEWLINE, DELETE, exit, halt
+.export start, nmi_native, nmi_emulation, brk_native, brk_emulation, ignore
+.export .use platform::screen::putc
+.export .use platform::keyboard::read_line
+; The monitor runs in emulation mode, as a reset leaves the S-CPU and as `G` returns to it.
+.export .signature running = emu, dp = 0, dbr = 0
+
+; The characters from space to `_`, which are ASCII's codes and the font's tiles.
+.export .charmap text {
+    ' '..'_' = ' '
+}
+
+COLUMNS = 32                        ; the 256 dots of a line, eight to a tile
+LINE_LENGTH = COLUMNS - 2           ; a row, after the prompt and with room for the cursor
+NEWLINE = $0D                       ; RETURN, which is outside `text`
+DELETE = $7F                        ; what the keyboard's DEL key types
+
+.segment CODE
+; Starts the monitor on a reset, with the screen blank, NMIs off and the S-CPU in emulation mode.
+.proc start: emu, dp?, dbr?, noreturn {
+    sei
+    cld
+    ldx #$FF
+    txs
+    pea 0
+    pld
+    lda #0
+    pha
+    plb
+    lda #FORCED_BLANK
+    sta INIDISP
+    stz NMITIMEN
+    stz HDMAEN
+    jsr screen::setup
+    jsr keyboard::setup
+    lda #FULL_BRIGHT
+    sta INIDISP
+    lda #VBLANK_NMI | AUTO_JOYPAD
+    sta NMITIMEN
+    jmp monitor::main
+}
+
+; Says the monitor has stopped, and stops. There is nothing to return to.
+.proc exit: running, noreturn {
+    jsr print
+    .strz text("PRESS RESET TO START AGAIN")
+    .fallthrough halt
+}
+
+; Waits for interrupts for good. The NMI goes on showing the screen.
+.proc halt: running, noreturn {
+@wait:
+    wai
+    bra @wait
+}
+
+; Takes an NMI in emulation mode, from the monitor or from code that `G` runs.
+.proc nmi_emulation: interrupt, emu {
+    pha
+    phx
+    phy
+    phb
+    phd
+    pea 0
+    pld
+    lda #0
+    pha
+    plb
+    jsr screen::refresh
+    pld
+    plb
+    ply
+    plx
+    pla
+    rti
+}
+
+; Takes an NMI in native mode, from code that `G` runs.
+.proc nmi_native: interrupt, native {
+    rep #$30
+    pha
+    phx
+    phy
+    phb
+    phd
+    sep #$30
+    pea 0
+    pld
+    lda #0
+    pha
+    plb
+    jsr screen::refresh
+    rep #$30
+    pld
+    plb
+    ply
+    plx
+    pla
+    rti
+}
+
+; Takes a BRK in emulation mode. The S-CPU has pushed the PC past the BRK and P, and no program
+; bank, which is not known.
+.proc brk_emulation: interrupt, emu {
+    sta f:registers::ac
+    xba
+    sta f:registers::ac+1
+    txa
+    sta f:registers::xr
+    tya
+    sta f:registers::yr
+    lda #0
+    sta f:registers::xr+1           ; X and Y are 8 bits wide in emulation mode
+    sta f:registers::yr+1
+    sta f:registers::pc+2
+    tdc
+    sta f:registers::dp
+    xba
+    sta f:registers::dp+1
+    phb
+    pla
+    sta f:registers::db
+    ; S before the BRK, which pushed three bytes, in page 1.
+    tsc
+    clc
+    adc #3
+    sta f:registers::sp
+    xba
+    adc #0
+    sta f:registers::sp+1
+    lda 1,s
+    sta f:registers::sr
+    lda 2,s
+    sec
+    sbc #2
+    sta f:registers::pc
+    lda 3,s
+    sbc #0
+    sta f:registers::pc+1
+    lda #1
+    sta f:registers::e
+    pea 0
+    pld
+    lda #0
+    pha
+    plb
+    jmp monitor::broke
+}
+
+; Takes a BRK in native mode. The S-CPU has pushed the program bank, the PC past the BRK and P.
+.proc brk_native: interrupt, native {
+    rep #$30
+    sta f:registers::ac
+    txa                             ; at 16 bits, whose high byte is 0 if X was 8 bits wide
+    sta f:registers::xr
+    tya
+    sta f:registers::yr
+    tdc
+    sta f:registers::dp
+    ; S before the BRK, which pushed four bytes.
+    tsc
+    clc
+    adc #4
+    sta f:registers::sp
+    lda 2,s
+    sec
+    sbc #2
+    sta f:registers::pc
+    sep #$30
+    lda 4,s
+    sta f:registers::pc+2
+    lda 1,s
+    sta f:registers::sr
+    phb
+    pla
+    sta f:registers::db
+    lda #0
+    sta f:registers::e
+    pea 0
+    pld
+    lda #0
+    pha
+    plb
+    sec
+    xce
+    jmp monitor::broke
+}
+
+; Takes the interrupts that nothing here causes: COP, ABORT, and IRQ in native mode.
+.proc ignore: interrupt {
+    rti
+}

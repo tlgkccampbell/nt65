@@ -1,0 +1,68 @@
+; This module names the Super NES's ports that the platform uses, with the names Fullsnes gives
+; them, and the bits it sets in them.
+.module snes
+
+.cpu 65816
+
+; The S-PPU's ports, which are written in the page at $2100.
+.export INIDISP = $2100             ; brightness, and forced blank
+.export BGMODE  = $2105
+.export BG1SC   = $2107             ; where BG1's tilemap is, and its size
+.export BG12NBA = $210B             ; where BG1's and BG2's tiles are
+.export BG1HOFS = $210D             ; written twice, low byte first
+.export BG1VOFS = $210E             ; written twice, low byte first
+.export VMAIN   = $2115             ; how the VRAM address steps
+.export VMADDL  = $2116             ; the VRAM address, in words
+.export VMDATAL = $2118             ; the low byte of a VRAM word
+.export VMDATAH = $2119             ; the high byte of a VRAM word
+.export CGADD   = $2121             ; the palette entry CGDATA writes next
+.export CGDATA  = $2122             ; written twice, low byte first
+.export TM      = $212C             ; the layers the main screen shows
+.export PPU     = $2100             ; the page of the S-PPU's ports
+
+; The S-CPU's ports.
+.export NMITIMEN = $4200            ; which interrupts are on, and reading the joypads
+.export MDMAEN   = $420B            ; starts a DMA on each channel whose bit is set
+.export HDMAEN   = $420C
+.export RDNMI    = $4210            ; read to acknowledge an NMI
+.export HVBJOY   = $4212            ; whether vblank is on, and joypads are being read
+.export JOY1L    = $4218            ; joypad 1, as `Button` says
+.export JOY1H    = $4219
+.export DMA0     = $4300            ; DMA channel 0, laid out as `Dma`
+
+.export FORCED_BLANK = $80          ; INIDISP: the screen shows nothing, and VRAM may be written
+.export FULL_BRIGHT  = $0F          ; INIDISP: the screen shows, at full brightness
+.export BG1          = $01          ; TM: the layer the monitor uses
+.export VBLANK_NMI   = $80          ; NMITIMEN: an NMI at the start of each vblank
+.export AUTO_JOYPAD  = $01          ; NMITIMEN: the joypads are read at the start of each vblank
+.export JOYPAD_BUSY  = $01          ; HVBJOY: the joypads are being read
+.export STEP_LOW     = $00          ; VMAIN: the address steps after each write of VMDATAL
+.export STEP_HIGH    = $80          ; VMAIN: the address steps after each write of VMDATAH
+
+; The buttons of a joypad, as JOY1L and JOY1H read them together, JOY1H being the high byte.
+.export .enum Button {
+    b      = $8000
+    y      = $4000
+    select = $2000
+    start  = $1000
+    up     = $0800
+    down   = $0400
+    left   = $0200
+    right  = $0100
+    a      = $0080
+    x      = $0040
+    l      = $0020
+    r      = $0010
+}
+
+; The registers of a DMA channel, in their order from $43n0.
+.export .struct Dma {
+    mode:   .byte                   ; how the bytes are written, as the DMA_ constants say
+    port:   .byte                   ; the port they are written to, as its offset from $2100
+    source: .faraddr
+    length: .word                   ; in bytes, where 0 is 65,536
+}
+
+.export DMA_ONE_PORT  = $00         ; each byte to the port
+.export DMA_TWO_PORTS = $01         ; the bytes to the port and the one after it, in turn
+.export DMA_FIXED     = $08         ; the same byte, over and over

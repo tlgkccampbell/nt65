@@ -1,0 +1,8 @@
+{
+  "cpu": "65816",
+  "files": ["src/*.nt65", "../lib/*.nt65"],
+  "out": "../build/snes",
+  "segments": {
+    "HEADER": { "size": "abs" }
+  }
+}

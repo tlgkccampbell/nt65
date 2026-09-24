@@ -1,0 +1,64 @@
+; This module holds the cartridge's header, which the Super NES's emulators and copiers read at
+; $FFC0, and the interrupt vectors after it, at $FFE0.
+.module platform::header
+
+.cpu 65816
+
+.use platform::{start, nmi_native, nmi_emulation, brk_native, brk_emulation, ignore}
+
+LOROM = $20                         ; the map mode of a LoROM cartridge, at slow ROM speed
+ROM_32K = 5                         ; the size of the ROM, as log2 of its kilobytes
+NORTH_AMERICA = 1
+
+; The header, from $FFC0.
+.struct Header {
+    title:      .res 21, ' '        ; in ASCII
+    map_mode:   .byte
+    cart_type:  .byte               ; 0 for a cartridge that holds only ROM
+    rom_size:   .byte
+    ram_size:   .byte
+    region:     .byte
+    developer:  .byte
+    version:    .byte
+    complement: .word               ; the checksum with every bit flipped
+    checksum:   .word               ; the sum of every byte of the ROM, which build.ps1 writes
+}
+
+; A mode's vectors. The 65816 reads the native mode's from $FFE0 and emulation mode's from $FFF0.
+.struct Vectors {
+    unused: .res 4
+    cop:    .addr
+    brk:    .addr                   ; native mode only; in emulation mode a BRK uses `irq`
+    abort:  .addr
+    nmi:    .addr
+    reset:  .addr                   ; emulation mode only, which is the mode a reset starts in
+    irq:    .addr
+}
+
+.assert .sizeof(Header) == $20, "the header must run from $FFC0 to $FFE0"
+.assert .sizeof(Vectors) == $10, "each mode has sixteen bytes of vectors"
+
+.segment HEADER
+.data header: .type Header {
+    title = "NT65 MONITOR"
+    map_mode = LOROM
+    rom_size = ROM_32K
+    region = NORTH_AMERICA
+    complement = $FFFF              ; a checksum of 0, until build.ps1 writes the real one
+}
+
+.data native: .type Vectors {
+    cop = ignore
+    brk = brk_native
+    abort = ignore
+    nmi = nmi_native
+    irq = ignore
+}
+
+.data emulation: .type Vectors {
+    cop = ignore
+    abort = ignore
+    nmi = nmi_emulation
+    reset = start
+    irq = brk_emulation
+}

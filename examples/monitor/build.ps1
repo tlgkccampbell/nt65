@@ -2,7 +2,7 @@
 # ca65 and ld65 from the path or from the paths given. Exits 1 if any build fails.
 [CmdletBinding()]
 param(
-    [string[]]$Platform = @('c64', 'apple2gs'),
+    [string[]]$Platform = @('c64', 'apple2gs', 'snes'),
     [string]$Nt65 = 'nt65',
     [string]$Ca65 = 'ca65',
     [string]$Ld65 = 'ld65'
@@ -14,10 +14,24 @@ $Nt65, $Ca65, $Ld65 = foreach ($tool in $Nt65, $Ca65, $Ld65) {
     if (Test-Path $tool -PathType Leaf) { (Resolve-Path $tool).Path } else { (Get-Command $tool).Source }
 }
 
-# What each platform links into: its linker configuration and the image it writes.
+# What each platform links into: its linker configuration and the image it writes, and for the
+# Super NES the offset in the image of the header's checksum.
 $platforms = @{
     c64      = @{ Config = 'c64.cfg'; Image = 'monitor.prg' }
     apple2gs = @{ Config = 'apple2gs.cfg'; Image = 'monitor.bin' }
+    snes     = @{ Config = 'snes.cfg'; Image = 'monitor.sfc'; Checksum = 0x7FDC }
+}
+
+# Writes a Super NES header's checksum at an offset in an image, after its complement. The
+# checksum is the sum of every byte of the image, taken with the complement $FFFF and the checksum
+# 0, whose four bytes add up to what any complement and checksum do.
+function Set-Checksum([string]$image, [int]$at) {
+    $bytes = [IO.File]::ReadAllBytes($image)
+    $bytes[$at], $bytes[$at + 1], $bytes[$at + 2], $bytes[$at + 3] = 0xFF, 0xFF, 0, 0
+    $sum = [Linq.Enumerable]::Sum([int[]]$bytes) -band 0xFFFF
+    $bytes[$at], $bytes[$at + 1] = (($sum -bxor 0xFFFF) -band 0xFF), (($sum -bxor 0xFFFF) -shr 8)
+    $bytes[$at + 2], $bytes[$at + 3] = ($sum -band 0xFF), ($sum -shr 8)
+    [IO.File]::WriteAllBytes($image, $bytes)
 }
 
 function Run([string]$exe, [string[]]$arguments) {
@@ -47,6 +61,7 @@ foreach ($p in $Platform) {
         Run $Ld65 (@('-C', $settings.Config, '-o', $image, '-m', "$stem.map", '-Ln', "$stem.lbl",
                      '--dbgfile', "$stem.dbg") + $objects)
         Run $Nt65 @('remap-dbg', "$stem.dbg")
+        if ($settings.Checksum) { Set-Checksum $image $settings.Checksum }
         Write-Host ('{0,-8} {1,6:N0} bytes in build/{0}/{2}' -f $p, (Get-Item $image).Length, $settings.Image)
     }
     catch {

@@ -134,7 +134,8 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ("   {0,-11} {1,7} targets in {2:0.0}s, each the original ROM" -f 'msbasic', 10, $watch.Elapsed.TotalSeconds)
 
 # The monitor builds once per platform, from a library each platform's project shares, and each
-# platform's sessions run where its emulator is installed: VICE for the C64, MAME for the IIGS.
+# platform's sessions run where its emulator is installed: VICE for the C64, MAME for the IIGS
+# and the Super NES.
 $watch = [Diagnostics.Stopwatch]::StartNew()
 $monitor = Join-Path $root 'examples/monitor'
 & (Join-Path $monitor 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
@@ -143,7 +144,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host 'monitor: a platform failed to build' -ForegroundColor Red
     exit 1
 }
-$emulators = [ordered]@{ c64 = 'x64sc'; apple2gs = 'mame' }
+$emulators = [ordered]@{ c64 = 'x64sc'; apple2gs = 'mame'; snes = 'mame' }
 $ready = @($emulators.Keys | Where-Object { Get-Command $emulators[$_] -ErrorAction SilentlyContinue })
 if ($ready.Count -gt 0) {
     & (Join-Path $monitor 'test.ps1') -Platform $ready | Out-Null
@@ -153,7 +154,7 @@ if ($ready.Count -gt 0) {
         exit 1
     }
 }
-$ran = if ($ready.Count -gt 0) { "its sessions passed on $($ready -join ' and ')" } else { 'no sessions ran' }
+$ran = if ($ready.Count -gt 0) { "its sessions passed on $($ready -join ', ')" } else { 'no sessions ran' }
 Write-Host ("   {0,-11} {1,7} built, {2} in {3:0.0}s" -f 'monitor', "$($emulators.Count) platforms", $ran, $watch.Elapsed.TotalSeconds)
 foreach ($p in $emulators.Keys | Where-Object { $_ -notin $ready }) {
     Write-Host ("   {0,-11} {1,7} sessions did not run, because {2} is not on the path" -f '', $p, $emulators[$p]) -ForegroundColor Yellow

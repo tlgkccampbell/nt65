@@ -1,0 +1,356 @@
+; This module reads a line from an on-screen keyboard, which the joypad drives. The keyboard is
+; drawn on the rows below the text, three rows of sixteen places. The d-pad moves a cursor over
+; it, and wraps round at its edges. The buttons do what `read_line` says.
+.module platform::keyboard
+
+.cpu 65816
+
+.use snes::*
+.use platform::{text, NEWLINE, DELETE, COLUMNS, LINE_LENGTH, running, putc}
+.use platform::screen::{screen, colors, row, column, frames, TEXT_ROWS, ROWS}
+.use monitor::parse::line
+
+.export setup, read_line, keys, pad
+
+KEY_COLUMNS = 16
+KEY_ROWS = 3
+KEYS = KEY_COLUMNS * KEY_ROWS       ; the places on the keyboard
+FIRST_ROW = TEXT_ROWS + 1           ; the screen's row of the keyboard's first row
+DELAY = 16                          ; the frames a held button waits before it repeats
+REPEAT = 4                          ; the frames between its repeats
+BLINK = $10                         ; the bit of `frames` that blinks the text cursor
+
+KEY_COLOR = 2 << 2                  ; the tilemap's high byte for a key, in palette 2
+CHOSEN_COLOR = 1 << 2               ; the same for the key the cursor is on, in palette 1
+
+DPAD = >(Button::up | Button::down | Button::left | Button::right)
+REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's high byte
+
+.assert ROWS - FIRST_ROW == KEY_ROWS, "the keyboard must fill the rows below the text"
+.assert KEY_COLUMNS * 2 == COLUMNS, "each place on the keyboard must be two columns wide"
+.assert KEYS * 2 < 256, "the keyboard's columns must be counted in a byte"
+
+; The keys of the first two rows, which type what they show.
+.list letters {
+    "0123456789ABCDEF"
+    "GHIJKLMNOPQRSTUV"
+}
+
+.segment RODATA
+; What each place on the keyboard types. A key that spans several places types the same at each.
+.data keys: .byte[KEYS] {
+    .each letters, names {
+        text(names)
+    }
+    text("WXYZ:.?   ")
+    DELETE, DELETE, NEWLINE, NEWLINE, NEWLINE, NEWLINE
+}
+
+; The keyboard as it is drawn, with each key's name in the second column of its first place.
+.data picture: .byte[KEY_ROWS * COLUMNS] {
+    .each letters, names {
+        .repeat KEY_COLUMNS, place {
+            text(' '), text(.strsub(names, place, 1))
+        }
+    }
+    text(" W X Y Z : . ? SPACE DEL RETURN ")
+}
+
+.segment BSS
+.data pad:     .byte[2]             ; the buttons held at the last frame, as JOY1L and JOY1H
+.data pressed: .byte[2]             ; the buttons pressed since the frame before, the same way
+.data key:     .byte                ; the place on the keyboard the cursor is on
+.data chosen:  .byte                ; what that place types
+.data length:  .byte                ; the characters in `line`
+.data timer:   .byte                ; the frames until the buttons held repeat
+
+.segment CODE
+; Draws the keyboard below the text, with the cursor on its first key.
+.proc setup: running {
+    ldx #COLUMNS - 1
+@gap:
+    lda #text(' ')
+    sta screen + TEXT_ROWS * COLUMNS,x
+    stz colors,x
+    dex
+    bpl @gap
+    ldx #.sizeof(picture) - 1
+@draw:
+    lda picture,x
+    sta screen + FIRST_ROW * COLUMNS,x
+    dex
+    bpl @draw
+    stz key
+    stz pad
+    stz pad+1
+    jmp draw_keys
+}
+
+; Reads a line from the keyboard into `parse::line`, echoing it on the screen. The buttons do
+; these things:
+;
+;   A          Types the key the cursor is on.
+;   B          Deletes the last character typed.
+;   Y          Types a space.
+;   START      Ends the line, as RETURN does.
+;   d-pad      Moves the cursor over the keyboard. A held button repeats, and so does B.
+.proc read_line: running {
+    stz length
+@frame:
+    jsr show_cursor
+    jsr next_frame
+    lda pressed+1
+    and #DPAD
+    beq @moved
+    jsr move
+@moved:
+    lda pressed+1
+    and #>Button::b
+    beq @kept
+    jsr delete
+@kept:
+    lda pressed+1
+    and #>Button::y
+    beq @spaced
+    lda #text(' ')
+    jsr type
+@spaced:
+    lda pressed
+    and #<Button::a
+    beq @keyed
+    ldx key
+    lda keys,x
+    cmp #NEWLINE
+    beq @done
+    cmp #DELETE
+    beq @delete
+    jsr type
+    bra @keyed
+@delete:
+    jsr delete
+@keyed:
+    lda pressed+1
+    and #>Button::start
+    beq @frame
+@done:
+    ldy column
+    lda #text(' ')
+    sta (row),y                     ; the cursor
+    ldx length
+    stz line,x
+    lda #NEWLINE
+    jmp putc
+}
+
+; Adds the character in A to the line, and writes it, unless the line is full.
+.proc type: running {
+    ldx length
+    cpx #LINE_LENGTH
+    bcs @full
+    sta line,x
+    inc length
+    jmp putc
+@full:
+    rts
+}
+
+; Takes the last character off the line, and off the screen.
+.proc delete: running {
+    lda length
+    beq @empty
+    dec length
+    ldy column
+    lda #text(' ')
+    sta (row),y                     ; the cursor
+    dey
+    sty column
+    sta (row),y
+@empty:
+    rts
+}
+
+; Shows the text cursor where the next character goes, blinking.
+.proc show_cursor: running {
+    ldy column
+    cpy #COLUMNS
+    bcs @past
+    lda frames
+    and #BLINK
+    beq @on
+    lda #text(' ')
+    bra @draw
+@on:
+    lda #text('_')
+@draw:
+    sta (row),y
+@past:
+    rts
+}
+
+; Waits for the next frame, and reads the joypad as the S-CPU read it at the start of that
+; frame's vblank. It leaves the buttons held in `pad`, and the buttons pressed since the frame
+; before in `pressed`. A button that repeats counts as pressed again once it has been held for
+; DELAY frames, and every REPEAT frames after that.
+.proc next_frame: running {
+    lda frames
+@wait:
+    wai
+    cmp frames
+    beq @wait
+@busy:
+    lda HVBJOY
+    and #JOYPAD_BUSY
+    bne @busy
+    ldx #1
+@byte:
+    lda pad,x
+    eor #$FF                        ; the buttons that were up
+    and JOY1L,x                     ; and are down now
+    sta pressed,x
+    lda JOY1L,x
+    sta pad,x
+    dex
+    bpl @byte
+    lda pressed+1
+    and #REPEATS
+    beq @held
+    lda #DELAY
+    sta timer
+    rts
+@held:
+    lda pad+1
+    and #REPEATS
+    beq @done
+    dec timer
+    bne @done
+    lda #REPEAT
+    sta timer
+    lda pad+1
+    and #REPEATS
+    ora pressed+1
+    sta pressed+1
+@done:
+    rts
+}
+
+; Moves the cursor as the d-pad buttons in `pressed` say, across and then up or down, and colors
+; the keys again.
+.proc move: running {
+    lda pressed+1
+    and #>Button::right
+    beq @not_right
+    jsr right
+@not_right:
+    lda pressed+1
+    and #>Button::left
+    beq @not_left
+    jsr left
+@not_left:
+    lda pressed+1
+    and #>Button::up
+    beq @not_up
+    jsr up
+@not_up:
+    lda pressed+1
+    and #>Button::down
+    beq @not_down
+    jsr down
+@not_down:
+    .fallthrough draw_keys
+}
+
+; Colors each key, the one the cursor is on in the cursor's colors and the rest in a key's.
+.proc draw_keys: running {
+    ldx key
+    lda keys,x
+    sta chosen
+    ldx #KEYS - 1
+@place:
+    txa
+    asl a
+    tay                             ; the place's first column
+    lda keys,x
+    cmp chosen
+    beq @chosen
+    lda #KEY_COLOR
+    bra @color
+@chosen:
+    lda #CHOSEN_COLOR
+@color:
+    sta colors + COLUMNS,y
+    sta colors + COLUMNS + 1,y
+    dex
+    bpl @place
+    rts
+}
+
+; Moves the cursor right, past the rest of the key it is on, and from the end of a row round to
+; its start.
+.proc right: running {
+    ldx key
+    lda keys,x
+    sta chosen
+@step:
+    inx
+    txa
+    and #KEY_COLUMNS - 1
+    bne @same_row
+    txa
+    sec
+    sbc #KEY_COLUMNS
+    tax
+@same_row:
+    lda keys,x
+    cmp chosen
+    beq @step
+    stx key
+    rts
+}
+
+; Moves the cursor left, past the rest of the key it is on, and from the start of a row round to
+; its end.
+.proc left: running {
+    ldx key
+    lda keys,x
+    sta chosen
+@step:
+    txa
+    and #KEY_COLUMNS - 1
+    bne @same_row
+    txa
+    clc
+    adc #KEY_COLUMNS
+    tax
+@same_row:
+    dex
+    lda keys,x
+    cmp chosen
+    beq @step
+    stx key
+    rts
+}
+
+; Moves the cursor up a row, and from the top row round to the bottom one.
+.proc up: running {
+    lda key
+    sec
+    sbc #KEY_COLUMNS
+    bcs @done
+    adc #KEYS
+@done:
+    sta key
+    rts
+}
+
+; Moves the cursor down a row, and from the bottom row round to the top one.
+.proc down: running {
+    lda key
+    clc
+    adc #KEY_COLUMNS
+    cmp #KEYS
+    bcc @done
+    sbc #KEYS
+@done:
+    sta key
+    rts
+}

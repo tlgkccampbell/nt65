@@ -13,14 +13,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Each platform's emulator, the file it runs, and the routines where a session starts typing
-# and where it ends. VICE saves the C64's screen memory, which is read here; MAME's script reads
-# the IIGS's screen itself.
+# Each platform's emulator, the file it runs, the function that starts a session in it, and what
+# that function needs. VICE saves the C64's screen memory, which is read here; MAME's scripts read
+# the IIGS's and the Super NES's screens themselves.
 $platforms = [ordered]@{
-    c64      = @{ Emulator = 'x64sc'; Given = $Vice; Image = 'monitor.prg'
+    c64      = @{ Emulator = 'x64sc'; Given = $Vice; Image = 'monitor.prg'; Run = 'Start-Vice'
                   Start = 'monitor__main'; End = 'platform__exit'; Screen = '0400 07e7'; Columns = 40 }
-    apple2gs = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.bin'; Load = 0x2000
-                  Start = 'monitor__main'; End = 'platform__exit' }
+    apple2gs = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.bin'; Run = 'Start-Apple2gs'
+                  Load = 0x2000; Start = 'monitor__main'; End = 'platform__exit' }
+    snes     = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.sfc'; Run = 'Start-Snes' }
 }
 
 # An emulator from the path, or from the folder or program given.
@@ -59,8 +60,9 @@ function Start-Vice($settings, $emulator, $image, $labels, $lines, $screen, $wor
         -RedirectStandardOutput (Join-Path $work "$name.log")
 }
 
-# Starts MAME on a session, with a script that sets what mame-session.lua is to do and runs it.
-function Start-Mame($settings, $emulator, $image, $labels, $lines, $screen, $work, $name) {
+# Starts MAME's IIGS on a session, with a script that sets what apple2gs-session.lua is to do and
+# runs it.
+function Start-Apple2gs($settings, $emulator, $image, $labels, $lines, $screen, $work, $name) {
     $typed = ($lines | ForEach-Object { $_ + '\r' }) -join ''
     $script = Join-Path $work "$name.lua"
     @(
@@ -73,13 +75,38 @@ function Start-Mame($settings, $emulator, $image, $labels, $lines, $screen, $wor
         "    screen = [[$screen]],"
         '}'
         # MAME runs the script in an environment of its own, which the other has to share.
-        "assert(loadfile([[$(Join-Path $PSScriptRoot 'mame-session.lua')]], 't', _ENV))()"
+        "assert(loadfile([[$(Join-Path $PSScriptRoot 'apple2gs-session.lua')]], 't', _ENV))()"
     ) | Set-Content $script
     # The ROMs are looked for beside MAME. What MAME writes of its own goes in the work folder,
     # and a session stops after a minute of the IIGS's time.
     $roms = Join-Path (Split-Path $emulator) 'roms'
     $arguments = @('apple2gs', '-rompath', "`"$roms`"", '-video', 'none', '-sound', 'none', '-nothrottle',
                    '-skip_gameinfo', '-nonvram_save', '-seconds_to_run', '60', '-debug', '-debugger', 'none',
+                   '-autoboot_script', "`"$script`"")
+    Start-Process $emulator -ArgumentList $arguments -PassThru -WindowStyle Hidden -WorkingDirectory $work `
+        -RedirectStandardOutput (Join-Path $work "$name.log")
+}
+
+# Starts MAME's Super NES on a session, with a script that sets what snes-session.lua is to do and
+# runs it. The script types on the monitor's keyboard, and saves the screen once the monitor has
+# stopped. A session stops after ten minutes of the Super NES's time.
+function Start-Snes($settings, $emulator, $image, $labels, $lines, $screen, $work, $name) {
+    $typed = ($lines | ForEach-Object { $_ + '\r' }) -join ''
+    $script = Join-Path $work "$name.lua"
+    @(
+        'session = {'
+        "    typed = `"$typed`","
+        "    keys = 0x$($labels['platform__keyboard__keys']),"
+        "    pad = 0x$($labels['platform__keyboard__pad']),"
+        "    screen = 0x$($labels['platform__screen__screen']),"
+        "    halt = 0x$($labels['platform__halt']),"
+        "    output = [[$screen]],"
+        '}'
+        "assert(loadfile([[$(Join-Path $PSScriptRoot 'snes-session.lua')]], 't', _ENV))()"
+    ) | Set-Content $script
+    $roms = Join-Path (Split-Path $emulator) 'roms'
+    $arguments = @('snes', '-rompath', "`"$roms`"", '-cart', "`"$image`"", '-video', 'none', '-sound', 'none',
+                   '-nothrottle', '-skip_gameinfo', '-nonvram_save', '-seconds_to_run', '600',
                    '-autoboot_script', "`"$script`"")
     Start-Process $emulator -ArgumentList $arguments -PassThru -WindowStyle Hidden -WorkingDirectory $work `
         -RedirectStandardOutput (Join-Path $work "$name.log")
@@ -111,7 +138,6 @@ $runs = foreach ($p in $platforms.Keys) {
     $emulator = Emulator $settings.Emulator $settings.Given
     $work = Join-Path $build 'tests'
     New-Item -ItemType Directory -Force $work | Out-Null
-    $start = if ($settings.Emulator -eq 'mame') { 'Start-Mame' } else { 'Start-Vice' }
 
     foreach ($file in Get-ChildItem (Join-Path $PSScriptRoot "tests/$p") -Filter *.txt | Sort-Object Name) {
         if ($Session.Count -gt 0 -and $file.BaseName -notin $Session) { continue }
@@ -121,7 +147,7 @@ $runs = foreach ($p in $platforms.Keys) {
         Remove-Item $screen -ErrorAction SilentlyContinue
         [pscustomobject]@{
             Platform = $p; Settings = $settings; File = $file; Expected = $expected; Screen = $screen
-            Process = & $start $settings $emulator $image $labels $lines $screen $work $file.BaseName
+            Process = & $settings.Run $settings $emulator $image $labels $lines $screen $work $file.BaseName
         }
     }
 }
