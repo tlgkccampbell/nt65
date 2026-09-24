@@ -110,6 +110,10 @@ public sealed class Emitter
     private IReadOnlyDictionary<PlaceDirectiveSyntax, Emitter> placing = new Dictionary<PlaceDirectiveSyntax, Emitter>();
     private IReadOnlySet<string> unit = new HashSet<string>(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Initializes an emitter for one file of the program. <paramref name="file"/> is the file's
+    /// index in the output's source list, which each line records for the map.
+    /// </summary>
     private Emitter(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
         string source, string output, IReadOnlySet<Symbol> measuredElsewhere, int file = 0)
@@ -532,6 +536,7 @@ public sealed class Emitter
         return symbol.Value.AsNumber() is { } value ? $"{name} = {Constant(value)}" : null;
     }
 
+    /// <summary>Writes a whole file, from its first top-level line to its last.</summary>
     private void WalkContainer(FileSyntax file) => Walk(file.Members, from: 0);
 
     /// <summary>
@@ -550,7 +555,10 @@ public sealed class Emitter
         }
     }
 
-
+    /// <summary>
+    /// Writes one block as its kind requires. <paramref name="kind"/> is passed apart from the
+    /// block, because a <c>.multiproc</c> writes its body once per member as a <c>.proc</c>.
+    /// </summary>
     private void WalkBlock(BlockSyntax block, BlockKind kind)
     {
         var lines = block.Members;
@@ -758,6 +766,7 @@ public sealed class Emitter
         }
     }
 
+    /// <summary>Writes what one line generates, through the visitor that picks a method by statement kind.</summary>
     private void WalkLine(LineSyntax line) => statements.Walk(line);
 
     /// <summary>
@@ -876,6 +885,10 @@ public sealed class Emitter
         Line($"{over}:", EmittedLineKind.Declaration);
     }
 
+    /// <summary>
+    /// Writes a line that starts with a label. The label is written in whatever form ca65 reads
+    /// as a label, and the statement after it is written as it would be on its own.
+    /// </summary>
     private void LabeledLine(LineSyntax line, LabeledLineSyntax statement)
     {
         var label = statement.Label;
@@ -1178,6 +1191,11 @@ public sealed class Emitter
             : text;
     }
 
+    /// <summary>
+    /// Writes a constant as a ca65 assignment under its flat name. A constant whose value uses
+    /// the current address is written as a declaration where it stands, any other as a
+    /// <see cref="Definition"/>, and a string constant not at all.
+    /// </summary>
     private void WriteConstant(LineSyntax line, ConstantDeclarationSyntax statement)
     {
         // A string cannot be expressed as a ca65 constant. It is used through `.strlen` and
@@ -1209,6 +1227,15 @@ public sealed class Emitter
         Definition($"{NameOf(reference)} = {rewriter.Render(address)}");
     }
 
+    /// <summary>
+    /// Writes a statement as its own source, with names, immediates, frame slots and direct-page
+    /// operands rewritten for ca65. It is how an instruction or a directive with no special
+    /// handling is written.
+    /// </summary>
+    /// <param name="line">The line that holds the statement.</param>
+    /// <param name="statement">The statement.</param>
+    /// <param name="bytes">The number of bytes the statement assembles to.</param>
+    /// <param name="located">Whether the line is mapped even though it holds no bytes.</param>
     private void Source(LineSyntax line, StatementSyntax statement, int bytes, bool located = false)
     {
         WriteWidthDirective(statement);
@@ -1453,6 +1480,10 @@ public sealed class Emitter
         Flush();
     }
 
+    /// <summary>
+    /// Writes the blank line <see cref="Blank"/> asked for, if one is pending. A blank is never
+    /// written as the first line of the output.
+    /// </summary>
     private void Flush()
     {
         if (!pendingBlank)
@@ -1469,6 +1500,10 @@ public sealed class Emitter
     private void Line(string text, EmittedLineKind kind = EmittedLineKind.Other) =>
         Write(new EmittedLine(text, Kind: kind));
 
+    /// <summary>
+    /// Appends a line to the output, without trailing spaces and tagged with this emitter's
+    /// file.
+    /// </summary>
     private void Write(EmittedLine line) => lines.Add(line with { Text = line.Text.TrimEnd(), File = file });
 
     /// <summary>
@@ -1693,6 +1728,11 @@ public sealed class Emitter
         return true;
     }
 
+    /// <summary>
+    /// Rewrites a name as ca65 needs it. Most names become the flat name of the symbol they
+    /// refer to. A list becomes its items, a member path its offset, a macro parameter the
+    /// argument given for it, a string its bytes, and a define or a checked import its value.
+    /// </summary>
     private void Name(NameExpressionSyntax name, TokenRewriter rewriter)
     {
         // A path names one symbol, and the whole of it becomes that symbol's flat name. A body is
