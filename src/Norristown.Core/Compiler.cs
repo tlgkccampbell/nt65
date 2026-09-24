@@ -15,32 +15,30 @@ namespace Norristown;
 /// </summary>
 public static class Compiler
 {
-    /// <summary>Compiles <paramref name="files"/> as one program, with no project file.</summary>
-    public static Compilation Compile(IReadOnlyCollection<SourceFile> files) =>
-        Compile(files, ProjectSettings.None);
-
     /// <summary>
-    /// Compiles <paramref name="files"/> for <paramref name="cpu"/>, the processor the command
-    /// line names, if it names one. A <c>.cpu</c> directive in the source must agree with it.
+    /// Compiles <paramref name="files"/> as one program, and returns its ca65 output and
+    /// diagnostics.
     /// </summary>
-    public static Compilation Compile(IReadOnlyCollection<SourceFile> files, Cpu? cpu) =>
-        Compile(files, ProjectSettings.None with { Cpu = cpu });
-
-    /// <summary>Compiles <paramref name="files"/> as the program <paramref name="project"/> describes.</summary>
-    public static Compilation Compile(IReadOnlyCollection<SourceFile> files, ProjectSettings project) =>
-        Compile(files, project, BinaryLengthOnDisk);
-
-    /// <summary>
-    /// Compiles <paramref name="files"/> as the program <paramref name="project"/> describes,
-    /// calling <paramref name="binaryLength"/> to get the length of each file an <c>.incbin</c>
-    /// names. A caller whose files are not at the paths the source gives passes its own function.
-    /// When <paramref name="cHeader"/> names a file, the result also includes a C header of what
-    /// the program exports.
-    /// </summary>
+    /// <param name="files">The program's source files.</param>
+    /// <param name="project">
+    /// The settings the program is built with, or null to build it with no project file. A CPU
+    /// that the settings name must agree with any <c>.cpu</c> directive in the source.
+    /// </param>
+    /// <param name="binaryLength">
+    /// The function that returns the length of each file an <c>.incbin</c> names, or null to read
+    /// the length from disk. A caller whose files are not at the paths the source gives passes its
+    /// own function.
+    /// </param>
+    /// <param name="cHeader">
+    /// The file to write a C header of what the program exports to, or null to write none.
+    /// </param>
     public static Compilation Compile(
-        IReadOnlyCollection<SourceFile> files, ProjectSettings project, Func<string, long?> binaryLength,
-        string? cHeader = null) =>
-        Emit(Analyze([.. files.Select(SyntaxTree.Parse)], project, binaryLength), project, cHeader);
+        IReadOnlyCollection<SourceFile> files, ProjectSettings? project = null, Func<string, long?>? binaryLength = null,
+        string? cHeader = null)
+    {
+        project ??= ProjectSettings.None;
+        return Emit(Analyze([.. files.Select(SyntaxTree.Parse)], project, binaryLength), project, cHeader);
+    }
 
     /// <summary>
     /// Emits the program that <paramref name="analysis"/> describes, and a C header of what it
@@ -125,51 +123,56 @@ public static class Compiler
     /// <summary>
     /// Parses <paramref name="files"/> and analyzes them as one program, without emitting
     /// anything. An editor calls this, and
-    /// <see cref="Compile(IReadOnlyCollection{SourceFile}, ProjectSettings)"/> emits from its result.
+    /// <see cref="Emit(ProgramAnalysis, ProjectSettings, string?)"/> emits from its result.
     /// </summary>
-    public static ProgramAnalysis Analyze(IReadOnlyCollection<SourceFile> files, ProjectSettings project) =>
-        Analyze([.. files.Select(SyntaxTree.Parse)], project);
-
-    /// <summary>
-    /// Analyzes already-parsed files as one program. An editor keeps its trees across edits
-    /// and reparses only what changed, so this overload takes the trees rather than their text.
-    /// </summary>
-    public static ProgramAnalysis Analyze(IReadOnlyCollection<SyntaxTree> files, ProjectSettings project) =>
-        Analyze(files, project, BinaryLengthOnDisk);
-
-    /// <summary>
-    /// Analyzes already-parsed files as one program, calling <paramref name="binaryLength"/> to
-    /// get the length of each file an <c>.incbin</c> names. Tests pass their own function so that
-    /// they need not write files to disk.
-    /// </summary>
+    /// <param name="files">The program's source files.</param>
+    /// <param name="project">The settings the program is built with.</param>
+    /// <param name="binaryLength">
+    /// The function that returns the length of each file an <c>.incbin</c> names, or null to read
+    /// the length from disk.
+    /// </param>
     public static ProgramAnalysis Analyze(
-        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength) =>
+        IReadOnlyCollection<SourceFile> files, ProjectSettings project, Func<string, long?>? binaryLength = null) =>
+        Analyze([.. files.Select(SyntaxTree.Parse)], project, binaryLength);
+
+    /// <summary>
+    /// Analyzes already-parsed files as one program. An editor keeps its trees across edits and
+    /// reparses only what changed, so this overload takes the trees rather than their text.
+    /// </summary>
+    /// <param name="files">The program's files.</param>
+    /// <param name="project">The settings the program is built with.</param>
+    /// <param name="binaryLength">
+    /// The function that returns the length of each file an <c>.incbin</c> names, or null to read
+    /// the length from disk. Tests pass their own function so that they need not write files to
+    /// disk.
+    /// </param>
+    public static ProgramAnalysis Analyze(
+        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?>? binaryLength = null) =>
         Analyze(files, project, binaryLength, previous: null);
 
     /// <summary>
-    /// Analyzes already-parsed files as one program, reusing <paramref name="previous"/>, the
-    /// analysis from before an edit. When a file changed and what the other files can see of it
-    /// did not, only that file is analyzed again and everything else is kept. Otherwise the whole
-    /// program is analyzed again. <paramref name="cancellation"/> is checked between files and
-    /// between the stages of the analysis.
-    /// </summary>
-    public static ProgramAnalysis Analyze(
-        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, ProgramAnalysis? previous,
-        CancellationToken cancellation = default) =>
-        Analyze(files, project, BinaryLengthOnDisk, previous, cancellation);
-
-    /// <summary>
     /// Analyzes already-parsed files as one program, reusing <paramref name="previous"/> when it
-    /// is not null, and calling <paramref name="binaryLength"/> to get the length of each file an
-    /// <c>.incbin</c> names. <paramref name="cancellation"/> is checked between files and between
-    /// the stages of the analysis, and a cancelled analysis throws
-    /// <see cref="OperationCanceledException"/>.
+    /// is not null. When a file changed and what the other files can see of it did not, only that
+    /// file is analyzed again and everything else is kept. Otherwise the whole program is analyzed
+    /// again.
     /// </summary>
+    /// <param name="files">The program's files.</param>
+    /// <param name="project">The settings the program is built with.</param>
+    /// <param name="binaryLength">
+    /// The function that returns the length of each file an <c>.incbin</c> names, or null to read
+    /// the length from disk.
+    /// </param>
+    /// <param name="previous">The analysis from before an edit, or null to analyze from scratch.</param>
+    /// <param name="cancellation">
+    /// The token checked between files and between the stages of the analysis. A cancelled
+    /// analysis throws <see cref="OperationCanceledException"/>.
+    /// </param>
     public static ProgramAnalysis Analyze(
-        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength,
+        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?>? binaryLength,
         ProgramAnalysis? previous, CancellationToken cancellation = default)
     {
         cancellation.ThrowIfCancellationRequested();
+        binaryLength ??= BinaryLengthOnDisk;
         var reason = previous is null
             ? WholeProgramReason.NoPreviousAnalysis
             : ReasonForWholeProgram(previous, files, project, binaryLength);

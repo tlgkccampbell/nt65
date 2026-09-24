@@ -112,7 +112,8 @@ public sealed class DebugFileRemapTests
     [Fact]
     public void ADebugFileWithNoMapsIsUnchanged()
     {
-        Assert.Equal(Linked, DebugFile.Remap(Linked, _ => null, out var problem));
+        Assert.True(DebugFile.TryRemap(Linked, _ => null, out var remapped, out var problem));
+        Assert.Equal(Linked, remapped);
         Assert.Null(problem);
     }
 
@@ -135,7 +136,8 @@ public sealed class DebugFileRemapTests
     [InlineData("nothing of the sort\n")]
     public void WhatIsNotADebugFileIsRefused(string text)
     {
-        Assert.Null(DebugFile.Remap(text, _ => Map, out var problem));
+        Assert.False(DebugFile.TryRemap(text, _ => Map, out var remapped, out var problem));
+        Assert.Null(remapped);
         Assert.Contains("not a version 2.0 ld65 debug file", problem);
     }
 
@@ -143,15 +145,15 @@ public sealed class DebugFileRemapTests
     [Fact]
     public void AMapThatCannotBeReadIsReported()
     {
-        Assert.Null(DebugFile.Remap(Linked, _ => "version 9\n", out var problem));
+        Assert.False(DebugFile.TryRemap(Linked, _ => "version 9\n", out var remapped, out var problem));
+        Assert.Null(remapped);
         Assert.Contains("cannot read main.s.lines, the line map nt65 wrote for main.s", problem);
     }
 
     private static string Remapped(string text)
     {
-        var remapped = DebugFile.Remap(text, name => name == "main.s" ? Map : null, out var problem);
+        Assert.True(DebugFile.TryRemap(text, name => name == "main.s" ? Map : null, out var remapped, out var problem), problem);
         Assert.Null(problem);
-        Assert.NotNull(remapped);
         return remapped;
     }
 }

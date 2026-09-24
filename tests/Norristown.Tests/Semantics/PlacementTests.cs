@@ -61,7 +61,7 @@ public sealed class PlacementTests
             .Where(file => file.Tree != before.Defines)
             .Select(file => file.Tree.Path == "platform.nt65" ? SyntaxTree.Parse("platform.nt65", Platform(1)) : file.Tree)
             .ToList();
-        var after = Compiler.Analyze(trees, Project, before, TestContext.Current.CancellationToken);
+        var after = Compiler.Analyze(trees, Project, binaryLength: null, before, TestContext.Current.CancellationToken);
         var fresh = Analyze(Main, Platform(1));
 
         Assert.Equal(1, after.Reanalyzed);

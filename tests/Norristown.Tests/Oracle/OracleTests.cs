@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Norristown.Project;
 using Norristown.Tests.Fixtures;
 
 namespace Norristown.Tests.Oracle;
@@ -238,7 +239,8 @@ public sealed partial class OracleTests
             """;
 
         var generated = Compiler.Compile(
-            [new SourceFile("main.nt65", Main), new SourceFile("part.nt65", Part)], Processor.Cpu.Mos6502);
+            [new SourceFile("main.nt65", Main), new SourceFile("part.nt65", Part)],
+            ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
         Assert.DoesNotContain(generated.Diagnostics, d => d.Severity == Severity.Error);
 
         var linked = LinksLikeByHand(Assert.Single(generated.Ca65).Text, ByHand);
@@ -284,7 +286,8 @@ public sealed partial class OracleTests
 
         var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
         var generated = Compiler.Compile(
-            [new SourceFile("main.nt65", Main), new SourceFile("lib.nt65", Library)], Processor.Cpu.Mos6502);
+            [new SourceFile("main.nt65", Main), new SourceFile("lib.nt65", Library)],
+            ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
         Assert.Empty(generated.Diagnostics);
         var output = generated.Ca65.Single(o => o.Path.EndsWith("main.s", StringComparison.Ordinal));
         Assert.DoesNotContain(".strat", output.Text, StringComparison.Ordinal);
@@ -331,7 +334,8 @@ public sealed partial class OracleTests
                 .byte second - messages, third + 4 - messages, messages_end - messages
             """;
 
-        var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)], Processor.Cpu.Mos6502);
+        var generated = Compiler.Compile(
+            [new SourceFile("main.nt65", Nt65)], ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
         Assert.Empty(generated.Diagnostics);
         var output = Assert.Single(generated.Ca65).Text;
         Assert.Contains(".byte $05, $13, $17", output, StringComparison.Ordinal);
@@ -379,7 +383,8 @@ public sealed partial class OracleTests
                 rts
             """;
 
-        var generated = Compiler.Compile([new SourceFile("main.nt65", Nt65)], Processor.Cpu.Mos6502);
+        var generated = Compiler.Compile(
+            [new SourceFile("main.nt65", Nt65)], ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
         Assert.Empty(generated.Diagnostics);
         var output = Assert.Single(generated.Ca65).Text;
         Assert.Contains("ERR_SYNTAX = $10", output, StringComparison.Ordinal);

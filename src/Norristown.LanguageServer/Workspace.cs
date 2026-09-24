@@ -50,7 +50,9 @@ internal sealed class Workspace
     /// </param>
     public Workspace(Analyzer? analyzer = null)
     {
-        this.analyzer = analyzer ?? Compiler.Analyze;
+        this.analyzer = analyzer
+            ?? ((files, project, previous, cancellation) =>
+                Compiler.Analyze(files, project, binaryLength: null, previous, cancellation));
         loose = new LiveAnalysis(this.analyzer);
     }
 

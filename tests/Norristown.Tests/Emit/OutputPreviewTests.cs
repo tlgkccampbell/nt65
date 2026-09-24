@@ -30,9 +30,8 @@ public sealed class OutputPreviewTests
 
         var map = LineMap.For(output);
         Assert.NotNull(map);
-        var read = LineMap.Read(map.Text, out var problem);
+        Assert.True(LineMap.TryRead(map.Text, out var read, out var problem), problem);
         Assert.Null(problem);
-        Assert.NotNull(read);
         for (var i = 0; i < preview.SourceLines.Count; i++)
         {
             var mapped = read.Lines.TryGetValue(i + 1, out var line) ? line.Line : (int?)null;

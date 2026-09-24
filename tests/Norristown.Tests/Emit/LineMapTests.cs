@@ -47,10 +47,8 @@ public sealed class LineMapTests
     {
         var (code, map) = Compiled(Program);
 
-        var read = LineMap.Read(map.Text, out var problem);
-
+        Assert.True(LineMap.TryRead(map.Text, out var read, out var problem), problem);
         Assert.Null(problem);
-        Assert.NotNull(read);
         Assert.Equal([("main.nt65", Program.Length)], read.Sources);
         foreach (var (at, from) in read.Lines)
             Assert.Equal((0, code.LineSources[at - 1]), from);
@@ -80,7 +78,8 @@ public sealed class LineMapTests
     [InlineData("version 1\nfile 0, main.nt65, 12\n", "is not a line map record")]
     public void WhatIsNotAMapIsRefused(string text, string expected)
     {
-        Assert.Null(LineMap.Read(text, out var problem));
+        Assert.False(LineMap.TryRead(text, out var read, out var problem));
+        Assert.Null(read);
         Assert.Contains(expected, problem);
     }
 

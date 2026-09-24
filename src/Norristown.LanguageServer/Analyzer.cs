@@ -5,7 +5,7 @@ namespace Norristown.LanguageServer;
 
 /// <summary>
 /// Represents the analysis of a program. The workspace takes an analyzer rather than calling
-/// <see cref="Compiler.Analyze(IReadOnlyCollection{SyntaxTree}, ProjectSettings, ProgramAnalysis?, CancellationToken)"/>
+/// <see cref="Compiler.Analyze(IReadOnlyCollection{SyntaxTree}, ProjectSettings, Func{string, long?}?, ProgramAnalysis?, CancellationToken)"/>
 /// directly, so that a test can hold an analysis back and see what the server does meanwhile.
 /// </summary>
 /// <param name="files">The program's files.</param>

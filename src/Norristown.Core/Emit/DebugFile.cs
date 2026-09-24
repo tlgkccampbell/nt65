@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 
@@ -30,19 +31,27 @@ public static class DebugFile
     private const string Version = "version\tmajor=2,minor=0";
 
     /// <summary>
-    /// Returns <paramref name="text"/> with every mapped <c>.s</c> line also named as the source
-    /// line it came from, or null with <paramref name="problem"/> describing what is wrong.
-    /// <paramref name="map"/> returns the text of the line map beside the <c>.s</c> at the path it
-    /// is given, or null when there is none.
+    /// Names every mapped <c>.s</c> line of a debug file also as the source line it came from.
     /// </summary>
-    public static string? Remap(string text, Func<string, string?> map, out string? problem)
+    /// <param name="text">The text of the debug file.</param>
+    /// <param name="map">
+    /// The function that returns the text of the line map beside the <c>.s</c> at the path it is
+    /// given, or null when there is none.
+    /// </param>
+    /// <param name="remapped">The remapped debug file, or null when it could not be remapped.</param>
+    /// <param name="problem">What is wrong, or null when the debug file was remapped.</param>
+    /// <returns>True if the debug file was remapped.</returns>
+    public static bool TryRemap(
+        string text, Func<string, string?> map,
+        [NotNullWhen(true)] out string? remapped, [NotNullWhen(false)] out string? problem)
     {
+        remapped = null;
         problem = null;
         var records = text.Split('\n').Select(Record.Parse).ToList();
         if (!records.Any(record => record.Line.TrimEnd('\r') == Version))
         {
             problem = "it is not a version 2.0 ld65 debug file, the kind ld65 writes with `--dbgfile`";
-            return null;
+            return false;
         }
 
         var files = records.Where(record => record.Keyword == "file").ToList();
@@ -64,10 +73,10 @@ public static class DebugFile
                 continue;
             if (map(path) is not { } beside)
                 continue;
-            if (LineMap.Read(beside, out var wrong) is not { } lines)
+            if (!LineMap.TryRead(beside, out var lines, out var wrong))
             {
                 problem = $"cannot read {path}{LineMap.Extension}, the line map nt65 wrote for {path}: {wrong}";
-                return null;
+                return false;
             }
 
             // A source this debug file already names is one a previous run added.
@@ -84,7 +93,10 @@ public static class DebugFile
             sources[id] = (lines, ids);
         }
         if (sources.Count == 0)
-            return text;
+        {
+            remapped = text;
+            return true;
+        }
 
         // There is one new line record per source line, regardless of how many lines of the `.s`
         // came from it, with the spans of all of them. ld65 attaches a span to the line in effect,
@@ -116,8 +128,9 @@ public static class DebugFile
         // ld65 writes the file in text mode, so on Windows it arrives with CRLF. The result is
         // written with the same line endings, even though the tools that read it hardly care.
         var written = Written(records, sources, replaced, added, lineRecords);
-        return text.Contains("\r\n", StringComparison.Ordinal)
+        remapped = text.Contains("\r\n", StringComparison.Ordinal)
             ? written.Replace("\n", "\r\n", StringComparison.Ordinal) : written;
+        return true;
     }
 
     /// <summary>Returns the debug file with the added records in place and the counts updated to match.</summary>

@@ -59,8 +59,7 @@ public static class RemapCommand
         // ca65 records a `.s` path relative to the directory the build ran in. That is normally
         // this directory, so the map is looked for here first and then beside the debug file.
         var beside = Path.GetDirectoryName(path) ?? directory;
-        var remapped = DebugFile.Remap(File.ReadAllText(path), source => Map(source, directory, beside), out var problem);
-        if (remapped is null)
+        if (!DebugFile.TryRemap(File.ReadAllText(path), source => Map(source, directory, beside), out var remapped, out var problem))
         {
             error.WriteLine($"{file}: error: {problem}");
             return ExitCode.InputError;

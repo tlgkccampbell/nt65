@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 
@@ -57,14 +58,20 @@ public static class LineMap
     }
 
     /// <summary>
-    /// Reads a map, or returns null with <paramref name="problem"/> describing what is wrong with it.
-    /// Anything that is not in the form nt65 writes is rejected outright rather than partly read.
+    /// Reads a map. Anything that is not in the form nt65 writes is rejected outright rather than
+    /// partly read.
     /// </summary>
-    public static SourceLines? Read(string text, out string? problem)
+    /// <param name="text">The text of the map.</param>
+    /// <param name="lines">The map that was read, or null when the text is not a map.</param>
+    /// <param name="problem">What is wrong with the text, or null when it was read.</param>
+    /// <returns>True if the text was read as a map.</returns>
+    public static bool TryRead(
+        string text, [NotNullWhen(true)] out SourceLines? lines, [NotNullWhen(false)] out string? problem)
     {
+        lines = null;
         problem = null;
         var sources = new List<(string Path, int Size)>();
-        var lines = new Dictionary<int, (int File, int Line)>();
+        var mapped = new Dictionary<int, (int File, int Line)>();
         var seenVersion = false;
         foreach (var raw in text.Split('\n'))
         {
@@ -80,7 +87,7 @@ public static class LineMap
                     if (version != Version)
                     {
                         problem = $"it is a version {version} line map, but this nt65 reads only version {Version}: build again with this nt65 to rewrite it";
-                        return null;
+                        return false;
                     }
                     seenVersion = true;
                     break;
@@ -89,7 +96,7 @@ public static class LineMap
                     if (id != sources.Count)
                     {
                         problem = $"its `file` records are out of order: found `file {id}` where `file {sources.Count}` was expected";
-                        return null;
+                        return false;
                     }
                     sources.Add((path, size));
                     break;
@@ -98,21 +105,22 @@ public static class LineMap
                     if (file >= sources.Count)
                     {
                         problem = $"`line {at}` names file {file}, which no `file` record declares";
-                        return null;
+                        return false;
                     }
-                    lines[at] = (file, source);
+                    mapped[at] = (file, source);
                     break;
                 default:
                     problem = $"`{record}` is not a line map record";
-                    return null;
+                    return false;
             }
         }
         if (!seenVersion)
         {
             problem = "it has no `version` record";
-            return null;
+            return false;
         }
-        return new SourceLines(sources, lines);
+        lines = new SourceLines(sources, mapped);
+        return true;
     }
 
     /// <summary>Returns the comma-separated fields of a record, trimmed.</summary>

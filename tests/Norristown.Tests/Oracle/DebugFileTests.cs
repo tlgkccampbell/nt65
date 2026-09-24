@@ -42,9 +42,8 @@ public sealed class DebugFileTests
                 yield break;
             }
 
-            var remapped = DebugFile.Remap(result.DebugFile, name => maps.GetValueOrDefault(name + LineMap.Extension),
-                out var problem);
-            if (remapped is null)
+            if (!DebugFile.TryRemap(
+                result.DebugFile, name => maps.GetValueOrDefault(name + LineMap.Extension), out var remapped, out var problem))
             {
                 yield return $"[{fixture.Name}] the debug file could not be remapped: {problem}";
                 yield break;
@@ -63,7 +62,7 @@ public sealed class DebugFileTests
                 var spans = Spans(record);
                 if (spans.Count == 0)
                     continue;
-                var map = LineMap.Read(maps[name + LineMap.Extension], out _)!;
+                Assert.True(LineMap.TryRead(maps[name + LineMap.Extension], out var map, out var wrong), wrong);
                 if (!map.Lines.TryGetValue(int.Parse(record["line"]), out var from))
                 {
                     yield return $"[{fixture.Name}] {name}:{record["line"]} covers {spans.Count} span(s), "
@@ -98,7 +97,8 @@ public sealed class DebugFileTests
         Assert.True(result.Succeeded, result.Messages);
 
         string? Remap(string text) =>
-            DebugFile.Remap(text, name => maps.GetValueOrDefault(name + LineMap.Extension), out _);
+            DebugFile.TryRemap(text, name => maps.GetValueOrDefault(name + LineMap.Extension), out var remapped, out _)
+                ? remapped : null;
 
         var once = Remap(result.DebugFile);
         Assert.NotNull(once);
@@ -123,8 +123,10 @@ public sealed class DebugFileTests
         var result = Ca65Oracle.Pinned.Link(
             LinkConfig(fixture), [.. compilation.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))], debugFile: true);
         Assert.True(result.Succeeded, result.Messages);
-        var remapped = DebugFile.Remap(result.DebugFile, name => maps.GetValueOrDefault(name + LineMap.Extension), out var problem);
-        Assert.True(remapped is not null, problem);
+        Assert.True(
+            DebugFile.TryRemap(
+                result.DebugFile, name => maps.GetValueOrDefault(name + LineMap.Extension), out var remapped, out var problem),
+            problem);
 
         // The object assembled from main.s is attributed to main's source, and every source in
         // its translation unit has line records of its own.
