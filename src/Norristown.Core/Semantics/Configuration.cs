@@ -269,10 +269,11 @@ public sealed class Configuration
         private bool Branch(BlockSyntax block, StatementSyntax opener, bool already)
         {
             // The CPU is configuration, and a condition may test it with `.target`, so a
-            // `.cpu` under an `.if` would change the very thing its condition may depend on.
+            // `.cpu` under an `.if` would change the very thing its condition may depend on. The
+            // placement of `.cpu`, which the editor reads too, bars it there.
             foreach (var node in block.DescendantNodes())
             {
-                if (node is CpuDirectiveSyntax)
+                if (node is CpuDirectiveSyntax && SyntaxFacts.PlacementOf(DirectiveKind.Cpu).IsBarredBy(DirectiveNesting.Condition))
                     Report(node.Span, Catalogue.CpuUnderACondition);
             }
 

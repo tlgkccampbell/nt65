@@ -140,11 +140,10 @@ public sealed class DirectivePlacesTests
     }
 
     /// <summary>
-    /// Checks the places where the server's offers and the binder agree. The two skipped places
-    /// are ones where they disagree. The server offers <c>.use</c> inside a <c>.scope</c>, which
-    /// the binder refuses because a <c>.use</c> must be at the module's top level. It also offers
-    /// <c>.cpu</c> under an <c>.if</c>, which the binder refuses because a condition may test the
-    /// processor.
+    /// Checks that the server offers what the binder takes in each place. A <c>.scope</c> and an
+    /// <c>.if</c> are among the places because each rules out a directive the other allows. A
+    /// <c>.use</c> must be at the module's top level, outside every scope of names, and a
+    /// <c>.cpu</c> may not be under a condition, which may test the processor.
     /// </summary>
     [Theory]
     [InlineData("file level")]
@@ -157,8 +156,8 @@ public sealed class DirectivePlacesTests
     [InlineData("a scope in a routine")]
     [InlineData("a macro in a scope")]
     [InlineData("a repetition in a macro")]
-    [InlineData("a scope", Skip = "The server offers `.use` in a `.scope`, and the binder refuses it there")]
-    [InlineData("an if", Skip = "The server offers `.cpu` under an `.if`, and the binder refuses it there")]
+    [InlineData("a scope")]
+    [InlineData("an if")]
     public void WhatIsOfferedIsWhatTheBinderTakes(string place)
     {
         var offered = Offered(place);

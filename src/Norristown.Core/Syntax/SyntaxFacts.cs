@@ -17,6 +17,8 @@ public static class SyntaxFacts
 
     // A macro body and a repetition are expanded more than once, so neither may hold what is
     // declared once for the program. A routine may not hold another routine or a macro either.
+    // What a module brings in with `.use` is part of its interface, so a `.use` goes where no
+    // scope of names holds it, and a condition may test the processor, so none may hold `.cpu`.
     private const DirectiveNesting Expanded = DirectiveNesting.MacroBody | DirectiveNesting.Repetition;
     private const DirectiveNesting RoutineOrExpanded = DirectiveNesting.Routine | Expanded;
 
@@ -130,7 +132,8 @@ public static class SyntaxFacts
     // one of two; the rest of the line decides which.
     private static readonly FrozenDictionary<DirectiveKind, Directive> directiveRows = new Dictionary<DirectiveKind, Directive>
     {
-        [DirectiveKind.Cpu] = new(SyntaxKind.CpuDirective, new(DirectiveContexts.Items, Expanded)),
+        [DirectiveKind.Cpu] = new(
+            SyntaxKind.CpuDirective, new(DirectiveContexts.Items, Expanded | DirectiveNesting.Condition)),
         [DirectiveKind.Segment] = new(SyntaxKind.SegmentDeclaration, new(Declarations, Expanded), BlockKind.Segment),
         [DirectiveKind.Data] = new(
             SyntaxKind.DataDeclaration, new(Declarations | DirectiveContexts.Data), BlockKind.Data, Exportable: true),
@@ -143,7 +146,7 @@ public static class SyntaxFacts
         [DirectiveKind.Module] = new(
             SyntaxKind.ModuleDirective, new(DirectiveContexts.Items, Required: DirectiveNesting.FirstLine)),
         [DirectiveKind.Place] = new(SyntaxKind.PlaceDirective, new(DirectiveContexts.Items, DirectiveNesting.PastFileLevel)),
-        [DirectiveKind.Use] = new(SyntaxKind.UseDirective, new(Declarations, RoutineOrExpanded), Exportable: true),
+        [DirectiveKind.Use] = new(SyntaxKind.UseDirective, new(Declarations, DirectiveNesting.NameScope), Exportable: true),
 
         // The element types give the size of one element. `.type T` is the only other element
         // type, and its size is that of T. Every multi-byte integer width has a big-endian
@@ -334,9 +337,12 @@ public static class SyntaxFacts
                 continue;
             nesting |= DirectiveNesting.Block | around.BlockKind switch
             {
-                BlockKind.Proc => DirectiveNesting.Routine,
-                BlockKind.Macro => DirectiveNesting.MacroBody,
-                BlockKind.Repeat or BlockKind.Each => DirectiveNesting.Repetition,
+                BlockKind.Proc => DirectiveNesting.Routine | DirectiveNesting.NameScope,
+                BlockKind.Macro => DirectiveNesting.MacroBody | DirectiveNesting.NameScope,
+                BlockKind.Repeat or BlockKind.Each => DirectiveNesting.Repetition | DirectiveNesting.NameScope,
+                BlockKind.If => DirectiveNesting.Condition,
+                BlockKind.MultiProc or BlockKind.MacroBlock or BlockKind.Scope or BlockKind.Data
+                    or BlockKind.Enum or BlockKind.Struct or BlockKind.Union => DirectiveNesting.NameScope,
                 _ => DirectiveNesting.None,
             };
             if (around.BlockKind != BlockKind.Region)

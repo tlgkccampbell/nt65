@@ -28,4 +28,14 @@ public enum DirectiveNesting
 
     /// <summary>A block other than an open <c>.segment</c> region holds the line.</summary>
     PastFileLevel = 1 << 5,
+
+    /// <summary>A branch of an <c>.if</c>, <c>.elseif</c> or <c>.else</c> holds the line.</summary>
+    Condition = 1 << 6,
+
+    /// <summary>
+    /// A block that opens a scope of names holds the line. That is a routine, a macro body, a
+    /// block argument, a <c>.scope</c>, mixed data, a type, or a repetition. A segment block, a
+    /// region and a condition leave names in the scope around them.
+    /// </summary>
+    NameScope = 1 << 7,
 }

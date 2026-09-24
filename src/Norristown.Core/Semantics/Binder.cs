@@ -1736,11 +1736,12 @@ internal sealed partial class Binder
     /// <summary>
     /// Binds a <c>.use</c>, which is resolved once the program is known. What an exported
     /// <c>.use</c> re-exports is recorded as part of the module's exports straight away, using
-    /// the path it gives.
+    /// the path it gives. Where a <c>.use</c> may appear comes from its placement, which the editor
+    /// reads too.
     /// </summary>
     private void BindUse(UseDirectiveSyntax statement)
     {
-        if (scope != fileScope)
+        if (SyntaxFacts.PlacementOf(DirectiveKind.Use).IsBarredBy(SyntaxFacts.NestingOf(statement)))
         {
             Report(statement.Keyword.Span, Catalogue.UseMisplaced);
             return;
