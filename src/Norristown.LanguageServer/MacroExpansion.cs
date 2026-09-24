@@ -115,6 +115,18 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
+    /// Checks whether a macro body declares any names of its own. Each expansion gets its own
+    /// copy of those names, so two expansions inserted in the same place would declare them twice.
+    /// The line that opens the block declares the macro and its parameters and is not counted as
+    /// part of the body.
+    /// </summary>
+    public static bool Declares(ProgramAnalysis analysis, BlockSyntax definition) =>
+        analysis.ModelFor(definition.Tree.Path) is { } declaring
+        && declaring.Symbols.Any(symbol => symbol.Tree == definition.Tree
+            && symbol.NameSpan.Start >= definition.Opener.FullSpan.End
+            && symbol.NameSpan.Start < definition.FullSpan.End);
+
+    /// <summary>
     /// Returns a one-line summary of what the call expands to, as the hover's summary row shows
     /// it. The summary gives the number of lines, then bytes, then cycles. Cycles are left out
     /// where the expansion contains no code.
@@ -158,18 +170,6 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// Checks whether a macro body declares any names of its own. Each expansion gets its own
-    /// copy of those names, so two expansions inserted in the same place would declare them twice.
-    /// The line that opens the block declares the macro and its parameters and is not counted as
-    /// part of the body.
-    /// </summary>
-    public static bool Declares(ProgramAnalysis analysis, BlockSyntax definition) =>
-        analysis.ModelFor(definition.Tree.Path) is { } declaring
-        && declaring.Symbols.Any(symbol => symbol.Tree == definition.Tree
-            && symbol.NameSpan.Start >= definition.Opener.FullSpan.End
-            && symbol.NameSpan.Start < definition.FullSpan.End);
-
-    /// <summary>
     /// Checks whether a line emitted under expansion <paramref name="on"/> comes from inside
     /// <paramref name="call"/>'s expansion, at any depth of nesting.
     /// </summary>
@@ -181,6 +181,58 @@ internal sealed class MacroExpansion
                 return true;
         }
         return false;
+    }
+
+    /// <summary>Returns the <c>} name {</c> blocks that continue a call's block arguments.</summary>
+    private static IEnumerable<BlockSyntax> Continuations(BlockSyntax opened)
+    {
+        if (opened.Parent is not { } container)
+            yield break;
+        foreach (var sibling in container.ChildNodes.SkipWhile(node => node != opened).Skip(1))
+        {
+            if (sibling is not BlockSyntax { BlockKind: BlockKind.MacroBlock, Opener.Statement: BlockContinuationSyntax } next)
+                yield break;
+            yield return next;
+        }
+    }
+
+    /// <summary>
+    /// Returns a statement and all the nodes under it, which covers everywhere a parameter name
+    /// may appear.
+    /// </summary>
+    private static IEnumerable<SyntaxNode> Under(SyntaxNode statement) =>
+        [statement, .. statement.DescendantNodes()];
+
+    /// <summary>
+    /// Returns an <c>operand</c> argument in the form the body used it. That is the operand
+    /// itself where the body used it whole, the byte a <c>.byteof</c> selects, or, for
+    /// <c>+ n</c>, the offset address followed by the argument's own index register.
+    /// </summary>
+    private static string? Argument(OperandSubstitution given)
+    {
+        if (given is { ByteOf: true, Operand: ImmediateOperandSyntax })
+        {
+            if (given.Expression is not { } value)
+                return null;
+            var text = value.GetText().Trim();
+            var whole = value is BinaryExpressionSyntax or UnaryExpressionSyntax ? $"({text})" : text;
+            return given.Offset switch
+            {
+                0 => $"#<{whole}",
+                1 => $"#>{whole}",
+                _ => string.Create(CultureInfo.InvariantCulture, $"#(({text} >> {8 * given.Offset}) & $ff)"),
+            };
+        }
+
+        if (given.Offset == 0)
+            return given.Operand.GetText().Trim();
+        if (given.Expression is not { } addressed)
+            return null;
+        var index = given.Index is { } register ? "," + register.Text : "";
+        var address = addressed.GetText().Trim();
+        return given.Offset > 0
+            ? string.Create(CultureInfo.InvariantCulture, $"{address}+{given.Offset}{index}")
+            : string.Create(CultureInfo.InvariantCulture, $"{address}{given.Offset}{index}");
     }
 
     /// <summary>
@@ -346,19 +398,6 @@ internal sealed class MacroExpansion
         Emit(level.Indent + "}");
     }
 
-    /// <summary>Returns the <c>} name {</c> blocks that continue a call's block arguments.</summary>
-    private static IEnumerable<BlockSyntax> Continuations(BlockSyntax opened)
-    {
-        if (opened.Parent is not { } container)
-            yield break;
-        foreach (var sibling in container.ChildNodes.SkipWhile(node => node != opened).Skip(1))
-        {
-            if (sibling is not BlockSyntax { BlockKind: BlockKind.MacroBlock, Opener.Statement: BlockContinuationSyntax } next)
-                yield break;
-            yield return next;
-        }
-    }
-
     /// <summary>
     /// Adds one statement as it would have been written by hand, at <paramref name="indent"/>,
     /// and returns its text.
@@ -424,13 +463,6 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// Returns a statement and all the nodes under it, which covers everywhere a parameter name
-    /// may appear.
-    /// </summary>
-    private static IEnumerable<SyntaxNode> Under(SyntaxNode statement) =>
-        [statement, .. statement.DescendantNodes()];
-
-    /// <summary>
     /// Returns the text that replaces one use of a parameter name. That is the argument's text,
     /// in parentheses where it sits inside a larger expression, since <c>#&lt;value</c> given
     /// <c>a + b</c> means <c>#&lt;(a + b)</c> and not <c>(#&lt;a) + b</c>.
@@ -463,38 +495,6 @@ internal sealed class MacroExpansion
         return name.Parent is ExpressionSyntax && unbraced is BinaryExpressionSyntax or UnaryExpressionSyntax
             ? $"({text})"
             : text;
-    }
-
-    /// <summary>
-    /// Returns an <c>operand</c> argument in the form the body used it. That is the operand
-    /// itself where the body used it whole, the byte a <c>.byteof</c> selects, or, for
-    /// <c>+ n</c>, the offset address followed by the argument's own index register.
-    /// </summary>
-    private static string? Argument(OperandSubstitution given)
-    {
-        if (given is { ByteOf: true, Operand: ImmediateOperandSyntax })
-        {
-            if (given.Expression is not { } value)
-                return null;
-            var text = value.GetText().Trim();
-            var whole = value is BinaryExpressionSyntax or UnaryExpressionSyntax ? $"({text})" : text;
-            return given.Offset switch
-            {
-                0 => $"#<{whole}",
-                1 => $"#>{whole}",
-                _ => string.Create(CultureInfo.InvariantCulture, $"#(({text} >> {8 * given.Offset}) & $ff)"),
-            };
-        }
-
-        if (given.Offset == 0)
-            return given.Operand.GetText().Trim();
-        if (given.Expression is not { } addressed)
-            return null;
-        var index = given.Index is { } register ? "," + register.Text : "";
-        var address = addressed.GetText().Trim();
-        return given.Offset > 0
-            ? string.Create(CultureInfo.InvariantCulture, $"{address}+{given.Offset}{index}")
-            : string.Create(CultureInfo.InvariantCulture, $"{address}{given.Offset}{index}");
     }
 
     /// <summary>Adds one line of the expansion.</summary>

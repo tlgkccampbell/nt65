@@ -458,56 +458,6 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>
-    /// Returns the analysis of the open documents that no project names. Each open document
-    /// supplies its own tree in place of the file on disk, and an edit re-parsed only the lines it
-    /// touched. The caller holds the lock.
-    /// </summary>
-    private Task<ProgramAnalysis> LooseAsync(CancellationToken cancellation) =>
-        loose.AnalysisAsync(
-            () => ([.. open.Values.Where(document => Owner(document.Tree.Path) is null).Select(document => document.Tree)],
-                ProjectSettings.None),
-            cancellation);
-
-    /// <summary>
-    /// Returns the project a file belongs to, or null for none. A library two projects share is part of
-    /// both, but for what the editor shows about it, it belongs to the project whose root is
-    /// nearest.
-    /// </summary>
-    private WorkspaceProject? Owner(string path) =>
-        projects.Where(project => project.Owns(path))
-            .OrderByDescending(project => Within(project.Root, path) ? project.Root.Length : -1)
-            .FirstOrDefault();
-
-    /// <summary>Marks every program that names a changed file to be analyzed again.</summary>
-    private void Invalidate(string path)
-    {
-        var owned = false;
-        foreach (var project in projects.Where(project => project.Owns(path)))
-        {
-            project.Invalidate();
-            owned = true;
-        }
-        if (!owned)
-            loose.Invalidate();
-    }
-
-    /// <summary>
-    /// Builds each project in the active configuration. A project that lacks it builds with its
-    /// own settings, unless no project has it at all, in which case every project reports the
-    /// unknown name.
-    /// </summary>
-    private void ConfigureAll()
-    {
-        var anyNames = AnyNames();
-        foreach (var project in projects)
-            project.Configure(Named(project, configuration, anyNames));
-        loose.Invalidate();
-    }
-
-    private bool AnyNames() =>
-        projects.Any(project => project.Own.Configurations.Any(c => c.Name == configuration));
-
     private static string? Named(WorkspaceProject project, string? configuration, bool anyNames) =>
         configuration is { Length: > 0 } && (!anyNames || project.Own.Configurations.Any(c => c.Name == configuration))
             ? configuration
@@ -584,4 +534,54 @@ internal sealed class Workspace
         }
         return tree.WithChanges(applied);
     }
+
+    /// <summary>
+    /// Returns the analysis of the open documents that no project names. Each open document
+    /// supplies its own tree in place of the file on disk, and an edit re-parsed only the lines it
+    /// touched. The caller holds the lock.
+    /// </summary>
+    private Task<ProgramAnalysis> LooseAsync(CancellationToken cancellation) =>
+        loose.AnalysisAsync(
+            () => ([.. open.Values.Where(document => Owner(document.Tree.Path) is null).Select(document => document.Tree)],
+                ProjectSettings.None),
+            cancellation);
+
+    /// <summary>
+    /// Returns the project a file belongs to, or null for none. A library two projects share is part of
+    /// both, but for what the editor shows about it, it belongs to the project whose root is
+    /// nearest.
+    /// </summary>
+    private WorkspaceProject? Owner(string path) =>
+        projects.Where(project => project.Owns(path))
+            .OrderByDescending(project => Within(project.Root, path) ? project.Root.Length : -1)
+            .FirstOrDefault();
+
+    /// <summary>Marks every program that names a changed file to be analyzed again.</summary>
+    private void Invalidate(string path)
+    {
+        var owned = false;
+        foreach (var project in projects.Where(project => project.Owns(path)))
+        {
+            project.Invalidate();
+            owned = true;
+        }
+        if (!owned)
+            loose.Invalidate();
+    }
+
+    /// <summary>
+    /// Builds each project in the active configuration. A project that lacks it builds with its
+    /// own settings, unless no project has it at all, in which case every project reports the
+    /// unknown name.
+    /// </summary>
+    private void ConfigureAll()
+    {
+        var anyNames = AnyNames();
+        foreach (var project in projects)
+            project.Configure(Named(project, configuration, anyNames));
+        loose.Invalidate();
+    }
+
+    private bool AnyNames() =>
+        projects.Any(project => project.Own.Configurations.Any(c => c.Name == configuration));
 }

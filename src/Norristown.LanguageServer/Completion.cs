@@ -122,6 +122,19 @@ internal static class Completion
     }
 
     /// <summary>
+    /// Returns the macro or function a call names, given as the name or path that ends at token
+    /// index <paramref name="end"/>, exclusive.
+    /// </summary>
+    public static Symbol? Callee(SemanticModel model, LineContext line, int end)
+    {
+        var before = line.Before;
+        if (end < 1 || !LineContext.IsWord(before[end - 1].Kind))
+            return null;
+        var path = line.PathBefore(end - 1) ?? [];
+        return model.GetSymbolInfo(line.Caret, [.. path, before[end - 1].Text]).Symbol;
+    }
+
+    /// <summary>
     /// Makes each directive that opens a block insert the whole block as a snippet rather than
     /// just the directive, for a client that accepts snippets. Nothing else is a snippet.
     /// </summary>
@@ -135,19 +148,6 @@ internal static class Completion
                 items[name] = suggestion with { Text = snippet, IsSnippet = true };
             }
         }
-    }
-
-    /// <summary>
-    /// Returns the macro or function a call names, given as the name or path that ends at token
-    /// index <paramref name="end"/>, exclusive.
-    /// </summary>
-    public static Symbol? Callee(SemanticModel model, LineContext line, int end)
-    {
-        var before = line.Before;
-        if (end < 1 || !LineContext.IsWord(before[end - 1].Kind))
-            return null;
-        var path = line.PathBefore(end - 1) ?? [];
-        return model.GetSymbolInfo(line.Caret, [.. path, before[end - 1].Text]).Symbol;
     }
 
     /// <summary>

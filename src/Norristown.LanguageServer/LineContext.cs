@@ -132,6 +132,26 @@ internal sealed class LineContext
     }
 
     /// <summary>
+    /// Returns all of a line's tokens except its line break, each with its start position in the
+    /// file.
+    /// </summary>
+    public static List<(SyntaxKind Kind, string Text, int Start)> TokensOf(SyntaxTree tree, int line) =>
+        [.. tree.GetLine(line).Tokens
+            .Where(token => token.Kind != SyntaxKind.EndOfLine)
+            .Select(token => (token.Kind, token.Text, token.Span.Start))];
+
+    /// <summary>
+    /// Returns the position where the code on a line ends, before any comment, or the line's
+    /// start for a line with no code.
+    /// </summary>
+    public static int CodeEnd(SyntaxTree tree, int line) =>
+        TokensOf(tree, line) is [.., var last] ? last.Start + last.Text.Length : tree.LineStarts[line];
+
+    /// <summary>Checks whether a token of this kind can be a name.</summary>
+    public static bool IsWord(SyntaxKind kind) =>
+        kind is SyntaxKind.Identifier or SyntaxKind.Mnemonic or SyntaxKind.Register;
+
+    /// <summary>
     /// Finds the innermost call whose argument list holds the caret. Returns the index of the
     /// <c>(</c> that opens the list and how many arguments come before the caret's argument, or
     /// null outside every call.
@@ -184,26 +204,6 @@ internal sealed class LineContext
         }
         return parts.Count == 0 ? null : parts;
     }
-
-    /// <summary>
-    /// Returns all of a line's tokens except its line break, each with its start position in the
-    /// file.
-    /// </summary>
-    public static List<(SyntaxKind Kind, string Text, int Start)> TokensOf(SyntaxTree tree, int line) =>
-        [.. tree.GetLine(line).Tokens
-            .Where(token => token.Kind != SyntaxKind.EndOfLine)
-            .Select(token => (token.Kind, token.Text, token.Span.Start))];
-
-    /// <summary>
-    /// Returns the position where the code on a line ends, before any comment, or the line's
-    /// start for a line with no code.
-    /// </summary>
-    public static int CodeEnd(SyntaxTree tree, int line) =>
-        TokensOf(tree, line) is [.., var last] ? last.Start + last.Text.Length : tree.LineStarts[line];
-
-    /// <summary>Checks whether a token of this kind can be a name.</summary>
-    public static bool IsWord(SyntaxKind kind) =>
-        kind is SyntaxKind.Identifier or SyntaxKind.Mnemonic or SyntaxKind.Register;
 
     /// <summary>
     /// Returns the line's surroundings. The innermost block holding the line determines the
