@@ -40,6 +40,16 @@ internal static class Repo
     public static string ReadText(string path) => File.ReadAllText(path);
 
     /// <summary>
+    /// Reads the project file in <paramref name="directory"/>, and the linker configs it links
+    /// from beside it.
+    /// </summary>
+    public static Norristown.Project.ProjectSettings ReadProject(string directory, string file = "nt65.json") =>
+        Norristown.Project.ProjectFile.Read(
+            Norristown.Project.ProjectFile.Name,
+            ReadText(System.IO.Path.Combine(directory, file)),
+            path => File.Exists(System.IO.Path.Combine(directory, path)) ? ReadText(System.IO.Path.Combine(directory, path)) : null);
+
+    /// <summary>
     /// Writes a file with <c>\n</c> line endings on every platform, creating its folder if needed.
     /// </summary>
     public static void WriteText(string path, string text)

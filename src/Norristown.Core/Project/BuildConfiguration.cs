@@ -18,4 +18,10 @@ public sealed record BuildConfiguration(string Name, IReadOnlyList<Define> Defin
     /// the project's own.
     /// </summary>
     public IReadOnlyDictionary<string, Severity?> Severities { get; init; } = ProjectSettings.NoSeverities;
+
+    /// <summary>
+    /// Gets the links the configuration gives, each replacing the project's link of the same
+    /// name, or null when it gives none.
+    /// </summary>
+    public IReadOnlyList<Link>? Links { get; init; }
 }

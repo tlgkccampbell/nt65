@@ -208,7 +208,7 @@ public sealed class ProjectFileTests
         Assert.Equal(
             [(4, "`N`: a define's value must be a number"),
                 (4, "configuration `a` cannot set `cpu`: a configuration may set only `defines`, "
-                    + "`diagnostics` and `out`")],
+                    + "`diagnostics`, `links` and `out`")],
             project.Diagnostics.Select(diagnostic => (diagnostic.Span.Line, diagnostic.Message)).Order());
     }
 

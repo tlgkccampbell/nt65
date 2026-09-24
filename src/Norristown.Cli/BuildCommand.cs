@@ -55,6 +55,7 @@ public static class BuildCommand
             return new BuildResult(ExitCode.UsageError, run.Root, watched);
         }
         var project = ResolveProject(run, projectFile);
+        watched = [.. watched, .. project.Links.Select(link => Path.Combine(run.Root, link.ConfigPath))];
         if (NamedFiles(run) is not { } named)
             return new BuildResult(ExitCode.InputError, run.Root, watched);
         var paths = project.Files.SelectMany(glob => SourceGlobs.Matching(run.Root, glob)).Concat(named)
@@ -101,7 +102,10 @@ public static class BuildCommand
         // `--check` asks only for the diagnostics, which have now been reported. It writes no
         // output, no header, no dependency file, and no record of what was written.
         if (!command.Check)
-            WriteArtifacts(run, project, compilation, named, paths, header, projectFile is null ? [] : [ProjectFile.Name]);
+        {
+            WriteArtifacts(run, project, compilation, named, paths, header,
+                projectFile is null ? [] : [ProjectFile.Name, .. project.Links.Select(link => link.ConfigPath)]);
+        }
         return new BuildResult(ExitCode.Success, run.Root, watched);
     }
 
@@ -114,7 +118,7 @@ public static class BuildCommand
         var command = run.Command;
         var project = projectFile is null
             ? ProjectSettings.None
-            : ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile));
+            : ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile), path => Linked(run.Root, path));
 
         var arguments = new List<Diagnostic>();
         if (command.Configuration is { } configuration)
@@ -126,6 +130,16 @@ public static class BuildCommand
         if (command.Out is { } chosen)
             project = project with { Out = ProjectRoot.Logical(run.Root, Path.GetFullPath(chosen, run.Directory)) };
         return project;
+    }
+
+    /// <summary>
+    /// Returns the text of the linker config at the logical path <paramref name="path"/>, or null
+    /// when there is no such file.
+    /// </summary>
+    private static string? Linked(string root, string path)
+    {
+        var full = Path.Combine(root, path);
+        return File.Exists(full) ? File.ReadAllText(full) : null;
     }
 
     /// <summary>

@@ -1,0 +1,41 @@
+; The segments come from the linked ld65 config. Each gets its size from its `type` and its bank
+; from where it runs, and the project gives the memory it runs in its mirrors and its space.
+.module main
+
+.cpu 65816
+
+.export boot, table, far_table, image, frames
+
+.segment ZEROPAGE
+.data temp: .byte
+
+.segment BSS
+.data frames: .byte
+
+.segment WRAM
+.data score: .word
+
+.segment SPCIMAGE
+.data image: .byte $e8, $05, $6f
+
+.segment RODATA
+.data table: .byte 1, 2, 4, 8
+
+.segment FARDATA
+.data far_table: .byte 16, 32
+
+.segment CODE
+.proc boot: a8, i16, dbr = $80 {
+    lda table               ; RODATA runs in bank $80, where B points
+    sta frames              ; BSS is in bank $00 and mirrored in bank $80
+    lda f:far_table
+    sta f:score
+    ldx #0
+@next:
+    lda f:.loadof(SPCIMAGE),x
+    inx
+    cpx #.spanof(SPCIMAGE)
+    bne @next
+    lda temp
+    rts
+}

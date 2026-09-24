@@ -1260,6 +1260,21 @@ internal sealed partial class Binder
     }
 
     /// <summary>
+    /// Reports a <c>.loadof</c> or <c>.runof</c> of a linked segment that no linked config gives
+    /// <c>define = yes</c>, since ld65 then defines no symbol for it to stand for. A <c>.spanof</c>
+    /// is not checked here, because it measures a symbol of the same name when there is one, and
+    /// that is not known until the program's names are resolved.
+    /// </summary>
+    private void ReportUndefined(CallExpressionSyntax call, SyntaxToken name)
+    {
+        if (segments.Find(name.Text) is not { Placements: [var placed, ..], IsDefined: false } segment)
+            return;
+        var function = call.BuiltinKind == BuiltinKind.Loadof ? ".loadof" : ".runof";
+        Report(name.Span, Catalogue.SegmentNotDefined.Message(
+            function, segment.Name, placed.File, SegmentFunctions.LinkerName(call.BuiltinKind, segment)));
+    }
+
+    /// <summary>
     /// Returns the segment a block or a region puts its contents in, or null when its opener
     /// names none.
     /// </summary>
@@ -1274,8 +1289,8 @@ internal sealed partial class Binder
         // A region or block that names a segment declared nowhere is an error, so a misspelled
         // name is caught before ld65 runs. Its contents still go there, which keeps the mistake
         // to one diagnostic.
-        if (segments.Find(name) is null)
-            Report(token.Span, Catalogue.SegmentUndeclared.Message(name));
+        if (segments.Unusable(name) is { } problem)
+            Report(token.Span, problem);
         return name;
     }
 
@@ -1343,9 +1358,9 @@ internal sealed partial class Binder
             // that segment's bank, direct page and address space.
             if (item.Segment is { IsMissing: false } segment)
             {
-                if (segments.Find(segment.Text) is null)
-                    Report(segment.Span, Catalogue.SegmentUndeclared.Message(segment.Text));
-                else
+                if (segments.Unusable(segment.Text) is { } problem)
+                    Report(segment.Span, problem);
+                if (segments.Find(segment.Text) is not null)
                     symbol.Segment = segment.Text;
             }
         }
@@ -1618,8 +1633,10 @@ internal sealed partial class Binder
         {
             if (SegmentFunctions.TakesOnlyASegment(call))
             {
-                if (segments.Find(segmentName.Text) is null)
-                    Report(segmentName.Span, Catalogue.SegmentUndeclared.Message(segmentName.Text));
+                if (segments.Unusable(segmentName.Text) is { } problem)
+                    Report(segmentName.Span, problem);
+                else
+                    ReportUndefined(call, segmentName);
                 return;
             }
             if (call.BuiltinKind == BuiltinKind.Spanof && segments.Find(segmentName.Text) is not null)

@@ -30,7 +30,7 @@ internal sealed class WorkspaceProject
         analysis = new LiveAnalysis(analyzer);
         File = file;
         Root = Paths.Directory(file);
-        Settings = ProjectFile.Read(file, Workspace.Read(file) ?? "");
+        Settings = ProjectFile.Read(file, Workspace.Read(file) ?? "", Workspace.Read);
         Own = Settings;
     }
 
@@ -58,6 +58,13 @@ internal sealed class WorkspaceProject
             owned[path] = owns = Own.Files.Any(glob => SourceGlobs.Matches(Root, glob, path));
         return owns;
     }
+
+    /// <summary>
+    /// Returns whether the project, in any of its configurations, links the linker config at
+    /// <paramref name="path"/>.
+    /// </summary>
+    public bool Links(string path) =>
+        Own.LinkedFiles.Any(linked => string.Equals(Paths.Normalized(linked), Paths.Normalized(path), FilePaths.Comparison));
 
     /// <summary>
     /// Builds the project in the named configuration, or with its own settings for null. A name

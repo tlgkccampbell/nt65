@@ -69,7 +69,7 @@ internal sealed record CorpusProgram(
             .OrderBy(file => file.Relative, StringComparer.Ordinal)
             .ToList();
 
-        var project = ProjectFile.Read(ProjectFile.Name, Repo.ReadText(Path.Combine(directory, ProjectFile.Name)));
+        var project = Repo.ReadProject(directory);
         return new CorpusProgram(
             Path.GetFileName(directory),
             directory,

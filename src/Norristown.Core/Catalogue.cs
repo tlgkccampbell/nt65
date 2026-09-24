@@ -2003,9 +2003,10 @@ public static class Catalogue
         "segment-undeclared",
         Severity.Error,
         "segment \"{0}\" is not declared",
-        "Every segment is declared once, either in a source file (`.segment NAME: abs`) or in the project file's "
-            + "`segments`, with the address size it is reached at. nt65 does not create a segment just because a "
-            + "line names it. Declare the segment, or check the spelling of its name.");
+        "Every segment is declared once, with the address size it is reached at: in a source file "
+            + "(`.segment NAME: abs`), in the project file's `segments`, or in a linked ld65 config. nt65 does not "
+            + "create a segment just because a line names it. Declare the segment, or check the spelling of its "
+            + "name.");
 
     internal static DiagnosticDescriptor SegmentDeclaredTwice { get; } = Entry(
         Area.Placement,
@@ -2015,6 +2016,34 @@ public static class Catalogue
         "A segment is declared, with its size, once for the whole program, in one file or in the project, so that "
             + "every file reaches it the same way. After that, `.segment NAME` with no size just switches to it. "
             + "Remove the size from this line, or remove one of the declarations.");
+
+    internal static DiagnosticDescriptor SegmentNotLinked { get; } = Entry(
+        Area.Placement,
+        "segment-not-linked",
+        Severity.Error,
+        "segment \"{0}\" is not in any linked config, so ld65 has nowhere to put it",
+        "A project with `links` in its project file takes its segments from the `SEGMENTS` block of each linked "
+            + "ld65 config. A segment none of them places would stop the link with \"missing memory area "
+            + "assignment\", so nt65 reports it where it is named. Add the segment to a config, or check the "
+            + "spelling of its name.");
+
+    internal static DiagnosticDescriptor LinkedSegmentsDisagree { get; } = Entry(
+        Area.Placement,
+        "linked-segments-disagree",
+        Severity.Error,
+        "segment \"{0}\" {1} in `{2}`",
+        "nt65 analyzes each module once, whichever links it goes into, so a segment that two linked configs both "
+            + "place must be the same segment to nt65 in each: the same size, space, bank and mirrors. Make the "
+            + "configs agree, or give one of the segments another name.");
+
+    internal static DiagnosticDescriptor SegmentNotDefined { get; } = Entry(
+        Area.Placement,
+        "segment-not-defined",
+        Severity.Error,
+        "`{0}` needs `define = yes` on segment \"{1}\" in `{2}`: ld65 defines `{3}` only for such a segment",
+        "`.loadof`, `.runof` and `.spanof` stand for the symbols ld65 defines for a segment whose config entry has "
+            + "`define = yes`. Without it the link fails with an unresolved import, so nt65 reports it here. Add "
+            + "`define = yes` to the segment's line in the config.");
 
     internal static DiagnosticDescriptor CodeInADataSpace { get; } = Entry(
         Area.Placement,
@@ -3178,10 +3207,11 @@ public static class Catalogue
         Area.TheProjectFile,
         "configuration-key-unknown",
         Severity.Error,
-        "configuration `{0}` cannot set `{1}`: a configuration may set only `defines`, `diagnostics` and `out`",
-        "A named configuration changes only a few things about a build: its defines, its diagnostic severities and "
-            + "its output directory. Everything else, such as `cpu`, `files` and `segments`, is set once for the "
-            + "whole project.");
+        "configuration `{0}` cannot set `{1}`: a configuration may set only `defines`, `diagnostics`, `links` and "
+            + "`out`",
+        "A named configuration changes only a few things about a build: its defines, its diagnostic severities, "
+            + "its links and its output directory. Everything else, such as `cpu`, `files` and `segments`, is set "
+            + "once for the whole project.");
 
     internal static DiagnosticDescriptor ConfigurationUnknown { get; } = Entry(
         Area.TheProjectFile,
@@ -3207,6 +3237,58 @@ public static class Catalogue
         "A segment's `size` is how wide addresses in it are: \"zp\" for one-byte zero-page addresses, \"abs\" for "
             + "two-byte absolute ones, and \"far\" for three-byte long ones. It decides how every reference to the "
             + "segment's contents is assembled, so every segment has to give one.");
+
+    internal static DiagnosticDescriptor ProjectSegmentFromLink { get; } = Entry(
+        Area.TheProjectFile,
+        "project-segment-from-link",
+        Severity.Error,
+        "segment \"{0}\" is linked, so its `{1}` {2}",
+        "With `links`, a segment is declared by the ld65 configs that place it. Its size comes from its `type`, "
+            + "and its bank from where it runs. Mirrors and spaces are facts about memory, so they are given on the "
+            + "memory area under the link. An entry under `segments` adds only what no config can say: `far`, a "
+            + "`dp`, or a `bank` the config leaves unclear.");
+
+    internal static DiagnosticDescriptor LinkNotAnObject { get; } = Entry(
+        Area.TheProjectFile,
+        "link-not-an-object",
+        Severity.Error,
+        "link `{0}` must be an object with a `config`",
+        "Each entry under `links` names a link and describes it: `config`, the path of its ld65 config from the "
+            + "project file, which is required, and optionally `space` and `memory`.");
+
+    internal static DiagnosticDescriptor LinkKeyUnknown { get; } = Entry(
+        Area.TheProjectFile,
+        "link-key-unknown",
+        Severity.Error,
+        "{0} cannot set `{1}`: {2}",
+        "A link sets its `config`, the `space` everything in it is in, and `memory`, which describes the "
+            + "config's memory areas by name. A memory area sets its `mirrors` and its `space`. Any other key is an "
+            + "error, so that a misspelt one does not silently do nothing.");
+
+    internal static DiagnosticDescriptor LinkedConfigUnreadable { get; } = Entry(
+        Area.TheProjectFile,
+        "linked-config-unreadable",
+        Severity.Error,
+        "cannot read the linker config `{0}`",
+        "A link's `config` is a path from the project file to an ld65 config, which nt65 reads for the segments "
+            + "it declares. Check that the file exists at that path.");
+
+    internal static DiagnosticDescriptor LinkedConfigInvalid { get; } = Entry(
+        Area.TheProjectFile,
+        "linked-config-invalid",
+        Severity.Error,
+        "this linker config cannot be read: {0}",
+        "nt65 reads the `MEMORY`, `SEGMENTS` and `SYMBOLS` blocks of a linked ld65 config and skips the rest. "
+            + "Each entry is a name, a colon, attributes such as `start = $8000` and a semicolon. ld65 would "
+            + "reject the same text, so fix it there.");
+
+    internal static DiagnosticDescriptor LinkMemoryUnknown { get; } = Entry(
+        Area.TheProjectFile,
+        "link-memory-unknown",
+        Severity.Error,
+        "`{0}` has no memory area `{1}`",
+        "A link's `memory` describes the memory areas of its config by the names the config's `MEMORY` block "
+            + "gives them. Check the spelling against the config.");
 
     internal static DiagnosticDescriptor ProjectSpaceHoldsUnknown { get; } = Entry(
         Area.TheProjectFile,

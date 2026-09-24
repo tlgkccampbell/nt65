@@ -55,24 +55,31 @@ public sealed class SegmentTable
     public IEnumerable<AddressSpace> Spaces => spaces.Values.OrderBy(s => s.Name, StringComparer.Ordinal);
 
     /// <summary>
+    /// Gets a value indicating whether the project links configs, which then declare its
+    /// segments. A segment that none of them places cannot be linked.
+    /// </summary>
+    public bool IsLinked { get; private init; }
+
+    /// <summary>
     /// Builds the table for a program from the declarations found in <paramref name="trees"/>.
     /// Declarations are read in file and line order, so that a program built from the same files
     /// reports the same diagnostics in whatever order the files arrive.
     /// </summary>
     public static SegmentTable Build(IEnumerable<SyntaxTree> trees, List<Diagnostic> diagnostics) =>
-        Build(trees, [], [], Configuration.Everything, diagnostics);
+        Build(trees, [], [], linked: false, Configuration.Everything, diagnostics);
 
     /// <summary>
-    /// Builds the table for a program whose project file declares some of its segments. Those
-    /// are read first, so when a file also declares one of them, the file's declaration is the one
-    /// reported as the duplicate.
+    /// Builds the table for a program whose project declares some of its segments, in its project
+    /// file or its linked configs. Those are read first, so when a file also declares one of them,
+    /// the file's declaration is the one reported as the duplicate. <paramref name="linked"/> says
+    /// whether the project links configs.
     /// </summary>
     public static SegmentTable Build(
         IEnumerable<SyntaxTree> trees, IEnumerable<Segment> configured, IEnumerable<AddressSpace> configuredSpaces,
-        Configuration configuration, List<Diagnostic> diagnostics)
+        bool linked, Configuration configuration, List<Diagnostic> diagnostics)
     {
         var segments = Predeclared();
-        var table = new SegmentTable(segments);
+        var table = new SegmentTable(segments) { IsLinked = linked };
         var ordered = trees.ToList();
 
         // The spaces come first, because a segment names the space it is in. Only the project
@@ -194,6 +201,20 @@ public sealed class SegmentTable
 
     /// <summary>Returns the segment <paramref name="name"/>, or null when nothing declares it.</summary>
     public Segment? Find(string name) => segments.GetValueOrDefault(name);
+
+    /// <summary>
+    /// Returns what is wrong with naming the segment <paramref name="name"/>, or null when nothing
+    /// is. A segment must be declared, and in a project that links configs, one of them must
+    /// place it.
+    /// </summary>
+    public DiagnosticMessage? Unusable(string name)
+    {
+        if (Find(name) is not { } segment)
+            return Catalogue.SegmentUndeclared.Message(name);
+        if (IsLinked && segment.Placements.Count == 0)
+            return Catalogue.SegmentNotLinked.Message(name);
+        return null;
+    }
 
     /// <summary>
     /// Returns the space the segment <paramref name="name"/> is in, or null for the host's space

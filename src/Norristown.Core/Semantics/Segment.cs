@@ -8,7 +8,10 @@ namespace Norristown.Semantics;
 /// </summary>
 /// <param name="Name">The segment's name, as it is written between the quotes.</param>
 /// <param name="Size">The address size of symbols in the segment.</param>
-/// <param name="Declaration">Where the segment was declared, or null for one of the standard names.</param>
+/// <param name="Declaration">
+/// Where the segment was declared, or null for one of the standard names. For a segment that a
+/// linked configuration declares, it is the first configuration line that places it.
+/// </param>
 /// <param name="DirectPage">
 /// The value of the segment's <c>dp = e</c>, which is the direct page its symbols are meant to be
 /// reached through on the 65816. Null when it declares none, in which case nothing about D is
@@ -34,6 +37,25 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     public string? Space { get; init; }
 
     /// <summary>
+    /// Gets where the project's linked configurations place the segment, one line for each
+    /// configuration that has it. It is empty for a program without <c>links</c>.
+    /// </summary>
+    public IReadOnlyList<Span> Placements { get; init; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether a linked configuration gives the segment
+    /// <c>define = yes</c>, so that ld65 defines the symbols <c>.loadof</c>, <c>.runof</c> and
+    /// <c>.spanof</c> stand for.
+    /// </summary>
+    public bool IsDefined { get; init; }
+
+    /// <summary>
+    /// Gets where the project file's <c>segments</c> adds to a segment that a linked configuration
+    /// declares, or null when it adds nothing.
+    /// </summary>
+    public Span? Addition { get; init; }
+
+    /// <summary>
     /// Returns a value indicating whether the segment's symbols are reached with the data bank at
     /// <paramref name="bank"/>, which is so when it is the home bank or a mirror.
     /// </summary>
@@ -54,7 +76,8 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     public bool Equals(Segment? other) =>
         other is not null && Name == other.Name && Size == other.Size && Declaration == other.Declaration
         && DirectPage == other.DirectPage && Bank == other.Bank && Mirrors.SequenceEqual(other.Mirrors)
-        && Space == other.Space;
+        && Space == other.Space && Placements.SequenceEqual(other.Placements) && IsDefined == other.IsDefined
+        && Addition == other.Addition;
 
     /// <inheritdoc/>
     public override int GetHashCode() => HashCode.Combine(Name, Size, Declaration, DirectPage, Bank, Mirrors.Count);

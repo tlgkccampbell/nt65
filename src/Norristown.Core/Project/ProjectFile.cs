@@ -31,6 +31,9 @@ public static class ProjectFile
     private const string SegmentsKey = "segments";
     private const string RangesKey = "ranges";
     private const string ConfigurationsKey = "configurations";
+    private const string LinksKey = "links";
+    private const string ConfigKey = "config";
+    private const string MemoryKey = "memory";
     private const string SizeKey = "size";
     private const string MirrorsKey = "mirrors";
     private const string SpaceKey = "space";
@@ -41,7 +44,7 @@ public static class ProjectFile
     private const string Data = "data";
 
     private static readonly string[] known =
-        [CpuKey, FilesKey, OutKey, DefinesKey, DiagnosticsKey, SpacesKey, SegmentsKey, RangesKey, ConfigurationsKey];
+        [CpuKey, FilesKey, OutKey, DefinesKey, DiagnosticsKey, SpacesKey, SegmentsKey, RangesKey, LinksKey, ConfigurationsKey];
 
     /// <summary>
     /// Keys nt65 accepts and reads nothing from. <c>$schema</c> names the schema an editor
@@ -63,7 +66,7 @@ public static class ProjectFile
     public static IReadOnlyList<string> Keys { get; } = [.. known, .. ignored];
 
     /// <summary>Gets the keys one named configuration may hold.</summary>
-    public static IReadOnlyList<string> ConfigurationKeys { get; } = [DefinesKey, DiagnosticsKey, OutKey];
+    public static IReadOnlyList<string> ConfigurationKeys { get; } = [DefinesKey, DiagnosticsKey, LinksKey, OutKey];
 
     /// <summary>
     /// Gets the values a <c>diagnostics</c> entry may give, which are the severity at which to
@@ -74,6 +77,12 @@ public static class ProjectFile
     /// <summary>Gets the keys one segment may hold.</summary>
     public static IReadOnlyList<string> SegmentKeys { get; } = [SizeKey, "dp", "bank", MirrorsKey, SpaceKey];
 
+    /// <summary>Gets the keys one link may hold.</summary>
+    public static IReadOnlyList<string> LinkKeys { get; } = [ConfigKey, MemoryKey, SpaceKey];
+
+    /// <summary>Gets the keys one memory area of a link may hold.</summary>
+    public static IReadOnlyList<string> MemoryKeys { get; } = [MirrorsKey, SpaceKey];
+
     /// <summary>
     /// Gets the values that say what a space may hold, which are code for this program's
     /// processor, or data and macro calls.
@@ -81,11 +90,20 @@ public static class ProjectFile
     public static IReadOnlyList<string> SpaceHolds { get; } = [Code, Data];
 
     /// <summary>
-    /// Reads the project described by <paramref name="text"/>. <paramref name="path"/> is the
-    /// logical path that diagnostics use to refer to the file. Problems with the file are
-    /// returned in the settings.
+    /// Reads the project described by <paramref name="text"/>, finding no linker config it links.
+    /// <paramref name="path"/> is the logical path that diagnostics use to refer to the file.
+    /// Problems with the file are returned in the settings.
     /// </summary>
-    public static ProjectSettings Read(string path, string text)
+    public static ProjectSettings Read(string path, string text) => Read(path, text, _ => null);
+
+    /// <summary>
+    /// Reads the project described by <paramref name="text"/>, and the linker configs its
+    /// <c>links</c> name. <paramref name="path"/> is the logical path that diagnostics use to refer
+    /// to the file. <paramref name="readFile"/> returns the text of the file at a logical path, or
+    /// null when there is none. Problems with the file and its configs are returned in the
+    /// settings.
+    /// </summary>
+    public static ProjectSettings Read(string path, string text, Func<string, string?> readFile)
     {
         var diagnostics = new List<Diagnostic>();
         JsonDocument document;
@@ -110,7 +128,7 @@ public static class ProjectFile
         using (document)
         {
             var root = document.RootElement;
-            var reader = new Reader(path, text, diagnostics);
+            var reader = new Reader(path, text, diagnostics, readFile);
             if (root.ValueKind != JsonValueKind.Object)
             {
                 reader.Report(null, Catalogue.ProjectNotAnObject.Message(Name));
@@ -128,19 +146,22 @@ public static class ProjectFile
                 reader.Report(keys[property.Name], Unknown(property.Name));
             }
 
-            return new ProjectSettings(
+            var settings = new ProjectSettings(
                 reader.Cpu(root, keys),
                 reader.Strings(root, keys, FilesKey),
                 reader.String(root, keys, OutKey),
                 reader.Defines(root, keys),
-                reader.Segments(root, keys),
+                [],
                 diagnostics)
             {
                 Ranges = reader.Ranges(root, keys),
                 Spaces = reader.Spaces(root, keys),
                 Severities = reader.Severities(root, keys),
-                Configurations = reader.Configurations(root, keys),
+                SegmentEntries = reader.Segments(root, keys),
             };
+            var links = reader.Links(root, keys) ?? [];
+            settings = settings with { Configurations = reader.Configurations(root, keys) };
+            return settings.Linked(links, [.. diagnostics]);
         }
     }
 
@@ -307,8 +328,12 @@ public static class ProjectFile
     }
 
     /// <summary>Reads one project file, keeping its text so that diagnostics can point into it.</summary>
-    private sealed class Reader(string path, string text, List<Diagnostic> diagnostics)
+    private sealed class Reader(string path, string text, List<Diagnostic> diagnostics, Func<string, string?> readFile)
     {
+        // The configs read so far, by logical path, since the project and its configurations may
+        // link the same one.
+        private readonly Dictionary<string, LinkerConfig?> configs = new(StringComparer.Ordinal);
+
         public Cpu? Cpu(JsonElement root, Key keys)
         {
             if (String(root, keys, CpuKey) is not { } named)
@@ -428,17 +453,23 @@ public static class ProjectFile
                     At(key))
                 {
                     Severities = Severities(property.Value, key),
+                    Links = Links(property.Value, key),
                 });
             }
             return [.. read.OrderBy(configuration => configuration.Name, StringComparer.Ordinal)];
         }
 
-        public IReadOnlyList<Segment> Segments(JsonElement root, Key keys)
+        /// <summary>
+        /// Reads the entries of <c>segments</c> as the file gives them. Whether an entry needs a
+        /// <c>size</c>, and what else it may say, depends on the build's links, which a
+        /// configuration may change, so <see cref="SegmentLinks"/> decides that afterwards.
+        /// </summary>
+        public IReadOnlyList<ProjectSegment> Segments(JsonElement root, Key keys)
         {
             if (!Object(root, keys, SegmentsKey, out var segments))
                 return [];
 
-            var read = new List<Segment>();
+            var read = new List<ProjectSegment>();
             var within = keys[SegmentsKey];
             foreach (var property in segments.EnumerateObject())
             {
@@ -449,15 +480,7 @@ public static class ProjectFile
                     continue;
                 }
 
-                var size = property.Value.TryGetProperty(SizeKey, out var sizeElement) && sizeElement.ValueKind == JsonValueKind.String
-                    ? SegmentNames.ParseSize(sizeElement.GetString() ?? "")
-                    : null;
-                if (size is not { } address)
-                {
-                    Report(key, Catalogue.ProjectSegmentSizeMissing.Message(property.Name));
-                    continue;
-                }
-                var segment = new Segment(property.Name, address, At(key));
+                var segment = new ProjectSegment(property.Name, At(key));
                 foreach (var attribute in property.Value.EnumerateObject())
                 {
                     if (!SegmentKeys.Contains(attribute.Name, StringComparer.Ordinal))
@@ -466,7 +489,18 @@ public static class ProjectFile
                         continue;
                     }
                     if (attribute.Name == SizeKey)
+                    {
+                        if (attribute.Value.ValueKind == JsonValueKind.String
+                            && SegmentNames.ParseSize(attribute.Value.GetString() ?? "") is { } size)
+                        {
+                            segment = segment with { Size = size };
+                        }
+                        else
+                        {
+                            Report(key, Catalogue.ProjectSegmentSizeMissing.Message(property.Name));
+                        }
                         continue;
+                    }
                     if (attribute.Name == SpaceKey)
                     {
                         if (attribute.Value.ValueKind == JsonValueKind.String && attribute.Value.GetString() is { Length: > 0 } space)
@@ -482,19 +516,99 @@ public static class ProjectFile
                     }
                     if (StateRegister.FromAttribute(attribute.Name) is not { } register)
                         continue;
-                    var value = Number(attribute.Value);
-                    if (Semantics.SegmentTable.Check(property.Name, address, register, value, At(key),
-                        (segment.DirectPage, segment.Bank), diagnostics) is not { } valid)
-                    {
-                        continue;
-                    }
-                    segment = register == StateRegister.DirectPage ? segment with { DirectPage = valid } : segment with { Bank = valid };
+                    var value = new Given(Number(attribute.Value));
+                    segment = register == StateRegister.DirectPage ? segment with { DirectPage = value } : segment with { Bank = value };
                 }
-                if (segment is { Mirrors.Count: > 0, Bank: null })
-                    Report(key, SegmentTable.MirrorsNeedABank(property.Name));
                 read.Add(segment);
             }
             return [.. read.OrderBy(segment => segment.Name, StringComparer.Ordinal)];
+        }
+
+        /// <summary>
+        /// Reads the <c>links</c> of <paramref name="owner"/>, which is the project or one of its
+        /// configurations, and the linker config each names. Returns null when the owner gives no
+        /// <c>links</c>, so that a configuration without them keeps the project's.
+        /// </summary>
+        public IReadOnlyList<Link>? Links(JsonElement owner, Key? keys)
+        {
+            if (!Object(owner, keys, LinksKey, out var links))
+                return null;
+
+            var read = new List<Link>();
+            var within = keys?[LinksKey];
+            foreach (var property in links.EnumerateObject())
+            {
+                var key = within?[property.Name];
+                if (property.Value.ValueKind != JsonValueKind.Object
+                    || !property.Value.TryGetProperty(ConfigKey, out var config)
+                    || config.ValueKind != JsonValueKind.String || config.GetString() is not { Length: > 0 } configPath)
+                {
+                    Report(key, Catalogue.LinkNotAnObject.Message(property.Name));
+                    continue;
+                }
+
+                var logical = Paths.Beside(path, configPath);
+                var link = new Link(property.Name, logical, At(key)) { Config = Config(logical) };
+                foreach (var setting in property.Value.EnumerateObject())
+                {
+                    if (!LinkKeys.Contains(setting.Name, StringComparer.Ordinal))
+                    {
+                        Report(key?[setting.Name], Catalogue.LinkKeyUnknown.Message(
+                            $"link `{property.Name}`", setting.Name, "a link may set only `config`, `memory` and `space`"));
+                    }
+                }
+                if (property.Value.TryGetProperty(SpaceKey, out var space))
+                {
+                    if (space.ValueKind == JsonValueKind.String && space.GetString() is { Length: > 0 } named)
+                        link = link with { Space = named };
+                    else
+                        Report(key?[SpaceKey], Catalogue.SpaceNotAName);
+                }
+                if (Object(property.Value, key, MemoryKey, out var memory))
+                    link = link with { Memory = Areas(memory, key?[MemoryKey]) };
+                read.Add(link);
+            }
+            return [.. read.OrderBy(link => link.Name, StringComparer.Ordinal)];
+        }
+
+        /// <summary>
+        /// Reads what a link's <c>memory</c> says about each memory area of its config, as in
+        /// <c>"SPCRAM": { "space": "spc" }</c>.
+        /// </summary>
+        public List<Link.Area> Areas(JsonElement memory, Key? keys)
+        {
+            var read = new List<Link.Area>();
+            foreach (var property in memory.EnumerateObject())
+            {
+                var key = keys?[property.Name];
+                if (property.Value.ValueKind != JsonValueKind.Object)
+                {
+                    Report(key, Catalogue.ProjectValueNotAnObject.Message(property.Name));
+                    continue;
+                }
+                var area = new Link.Area(property.Name, At(key));
+                foreach (var setting in property.Value.EnumerateObject())
+                {
+                    if (setting.Name == MirrorsKey)
+                    {
+                        area = area with { Mirrors = Banks(property.Name, key, setting.Value) };
+                    }
+                    else if (setting.Name == SpaceKey)
+                    {
+                        if (setting.Value.ValueKind == JsonValueKind.String && setting.Value.GetString() is { Length: > 0 } space)
+                            area = area with { Space = space };
+                        else
+                            Report(key, Catalogue.SpaceNotAName);
+                    }
+                    else
+                    {
+                        Report(key?[setting.Name], Catalogue.LinkKeyUnknown.Message(
+                            $"memory area `{property.Name}`", setting.Name, "a memory area may set only `mirrors` and `space`"));
+                    }
+                }
+                read.Add(area);
+            }
+            return [.. read.OrderBy(area => area.Name, StringComparer.Ordinal)];
         }
 
         /// <summary>
@@ -614,6 +728,17 @@ public static class ProjectFile
                 return value.GetString();
             Report(keys?[name], Catalogue.ProjectNotAString.Message(name));
             return null;
+        }
+
+        /// <summary>
+        /// Returns the linker config at the logical path <paramref name="logical"/>, read once, or
+        /// null when it cannot be read.
+        /// </summary>
+        private LinkerConfig? Config(string logical)
+        {
+            if (!configs.TryGetValue(logical, out var config))
+                configs[logical] = config = readFile(logical) is { } read ? LinkerConfig.Parse(logical, read) : null;
+            return config;
         }
 
         /// <summary>

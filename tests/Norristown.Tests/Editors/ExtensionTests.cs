@@ -42,10 +42,18 @@ public sealed class ExtensionTests : IDisposable
         Assert.Equal(
             ProjectFile.SegmentKeys.Order(StringComparer.Ordinal),
             Keys(Definition("segment")).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ProjectFile.LinkKeys.Order(StringComparer.Ordinal),
+            Keys(Definition("link")).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ProjectFile.MemoryKeys.Order(StringComparer.Ordinal),
+            Keys(Definition("linkMemory")).Order(StringComparer.Ordinal));
 
         // nt65 reports any other key, so the schema forbids them and the editor flags one before
         // a build does.
-        foreach (var element in (ReadOnlySpan<JsonElement>)[Schema.RootElement, Definition("configuration"), Definition("segment")])
+        foreach (var element in (ReadOnlySpan<JsonElement>)[
+            Schema.RootElement, Definition("configuration"), Definition("segment"), Definition("link"),
+            Definition("linkMemory")])
             Assert.False(element.GetProperty("additionalProperties").GetBoolean());
     }
 

@@ -58,6 +58,30 @@ public sealed record ProjectSettings(
     public IReadOnlyList<BuildConfiguration> Configurations { get; init; } = [];
 
     /// <summary>
+    /// Gets the linker configs the build is linked with, in name order. When there are any, they
+    /// declare the program's segments.
+    /// </summary>
+    public IReadOnlyList<Link> Links { get; init; } = [];
+
+    /// <summary>
+    /// Gets the entries of the project file's <c>segments</c> as it gives them, from which
+    /// <see cref="Segments"/> is built with the links.
+    /// </summary>
+    public IReadOnlyList<ProjectSegment> SegmentEntries { get; init; } = [];
+
+    /// <summary>
+    /// Gets the logical paths of every linker config the project links, in any configuration. A
+    /// change to one of them changes the project.
+    /// </summary>
+    public IEnumerable<string> LinkedFiles =>
+        Links.Concat(Configurations.SelectMany(configuration => configuration.Links ?? []))
+            .Select(link => link.ConfigPath)
+            .Distinct(StringComparer.Ordinal);
+
+    // The problems with the project file itself, to which the problems with its links are added.
+    private IReadOnlyList<Diagnostic> FileDiagnostics { get; init; } = [];
+
+    /// <summary>
     /// Returns the settings that the configuration named <paramref name="name"/> builds with,
     /// which are its defines over the project's, and its <c>out</c> if it gives one. If the
     /// project has no configuration with that name, reports an error at <paramref name="given"/>
@@ -67,11 +91,17 @@ public sealed record ProjectSettings(
     {
         if (Configurations.FirstOrDefault(configuration => configuration.Name == name) is { } chosen)
         {
-            return With(chosen.Defines) with
+            var configured = With(chosen.Defines) with
             {
                 Out = chosen.Out ?? Out,
                 Severities = Reported(chosen.Severities),
             };
+            if (chosen.Links is not { } links)
+                return configured;
+            var byName = Links.ToDictionary(link => link.Name, StringComparer.Ordinal);
+            foreach (var link in links)
+                byName[link.Name] = link;
+            return configured.Linked([.. byName.Values.OrderBy(link => link.Name, StringComparer.Ordinal)], FileDiagnostics);
         }
         var named = Configurations.Select(configuration => $"`{configuration.Name}`").ToList();
         var message = Catalogue.ConfigurationUnknown.Message(
@@ -95,6 +125,24 @@ public sealed record ProjectSettings(
         foreach (var define in defines)
             byName[define.Name] = define;
         return this with { Defines = [.. byName.Values.OrderBy(define => define.Name, StringComparer.Ordinal)] };
+    }
+
+    /// <summary>
+    /// Returns these settings linked with <paramref name="links"/>, with the segments they and
+    /// the project file's <c>segments</c> declare. The problems found are reported after
+    /// <paramref name="fileDiagnostics"/>, the problems with the project file itself.
+    /// </summary>
+    internal ProjectSettings Linked(IReadOnlyList<Link> links, IReadOnlyList<Diagnostic> fileDiagnostics)
+    {
+        var diagnostics = new List<Diagnostic>(fileDiagnostics);
+        var segments = SegmentLinks.Resolve(SegmentEntries, links, Spaces, diagnostics);
+        return this with
+        {
+            Links = links,
+            Segments = segments,
+            FileDiagnostics = fileDiagnostics,
+            Diagnostics = diagnostics,
+        };
     }
 
     /// <summary>

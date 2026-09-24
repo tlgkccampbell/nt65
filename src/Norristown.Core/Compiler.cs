@@ -265,7 +265,8 @@ public static class Compiler
         var conditions = new List<Diagnostic>();
         var configuration = Configuration.Resolve(trees, target, project.Defines, conditions);
         var segmentTable = new List<Diagnostic>();
-        var segments = SegmentTable.Build(trees, project.Segments, project.Spaces, configuration, segmentTable);
+        var segments = SegmentTable.Build(
+            trees, project.Segments, project.Spaces, project.Links.Count > 0, configuration, segmentTable);
         cancellation.ThrowIfCancellationRequested();
 
         // Every file is read before any is resolved, because a name one file uses may be one

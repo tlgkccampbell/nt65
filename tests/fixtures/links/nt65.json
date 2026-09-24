@@ -1,0 +1,18 @@
+{
+  "cpu": "65816",
+  "files": ["*.nt65"],
+  "spaces": { "spc": "data" },
+  "links": {
+    "rom": {
+      "config": "rom.cfg",
+      "memory": {
+        "RAM":    { "mirrors": ["$01-$3f", "$80-$bf"] },
+        "SPCRAM": { "space": "spc" }
+      }
+    }
+  },
+  "segments": {
+    "ZEROPAGE": { "dp": 0 },
+    "FARDATA":  { "size": "far" }
+  }
+}

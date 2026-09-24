@@ -89,10 +89,10 @@ internal sealed class Server : IDisposable
     // and read by the publishing code, which run on different threads.
     private volatile bool watchingOutput;
 
-    // The binaries the client has been asked to watch. The editor watches the sources and the
-    // project files by itself, but which files `.incbin` directives include is up to the
-    // program and is not known until it has been read.
-    private IReadOnlyList<string> watchedBinaries = [];
+    // The binaries and linker configs the client has been asked to watch. The editor watches the
+    // sources and the project files by itself, but which files `.incbin` directives include and
+    // which configs a project links are not known until the programs have been read.
+    private IReadOnlyList<string> watchedFiles = [];
 
     private Server(ServerLog log, Framing framing, Delay delay, Analyzer? analyzer)
     {
@@ -965,10 +965,10 @@ internal sealed class Server : IDisposable
                 new PublishDiagnosticsParams(gone, null, [])).ConfigureAwait(false);
         }
 
-        // The set of binaries the programs include may have changed, and the editor watches
-        // only what it can know about without reading the program.
+        // The set of binaries and linker configs the programs read may have changed, and the
+        // editor watches only what it can know about without reading the program.
         if (client.WatchesWhatItIsAsked)
-            await WatchBinariesAsync(await workspace.BinariesAsync(cancellation).ConfigureAwait(false)).ConfigureAwait(false);
+            await WatchReadFilesAsync(await workspace.ReadFilesAsync(cancellation).ConfigureAwait(false)).ConfigureAwait(false);
 
         // The output view follows the whole program rather than the caret, so it is notified
         // once typing has stopped, after the same wait as the rest of the diagnostics.
@@ -1036,32 +1036,33 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// Asks the client to watch the binaries this workspace's programs include. The caller checks
-    /// that the client supports that. The editor watches the sources and the project files by itself; which
-    /// files <c>.incbin</c> directives include is known only from reading the program, so the
-    /// watch is registered here and registered again whenever that set changes.
+    /// Asks the client to watch the binaries this workspace's programs include and the linker
+    /// configs its projects link. The caller checks that the client supports that. The editor
+    /// watches the sources and the project files by itself. The other files are known only from
+    /// reading the programs, so the watch is registered here and registered again whenever that
+    /// set changes.
     /// </summary>
-    /// <param name="binaries">The binaries the programs include, as logical paths.</param>
-    private async Task WatchBinariesAsync(IReadOnlyList<string> binaries)
+    /// <param name="files">The files the programs read, as logical paths.</param>
+    private async Task WatchReadFilesAsync(IReadOnlyList<string> files)
     {
-        if (binaries.SequenceEqual(watchedBinaries, StringComparer.Ordinal))
+        if (files.SequenceEqual(watchedFiles, StringComparer.Ordinal))
             return;
-        const string id = "nt65-binaries";
+        const string id = "nt65-read-files";
         try
         {
-            if (watchedBinaries.Count > 0)
+            if (watchedFiles.Count > 0)
             {
                 await rpc!.InvokeWithParameterObjectAsync<object?>("client/unregisterCapability",
                     new UnregistrationParams([new Unregistration(id, "workspace/didChangeWatchedFiles")]))
                     .ConfigureAwait(false);
             }
-            watchedBinaries = binaries;
-            if (binaries.Count == 0)
+            watchedFiles = files;
+            if (files.Count == 0)
                 return;
             await rpc!.InvokeWithParameterObjectAsync<object?>("client/registerCapability",
                 new RegistrationParams([new Registration(id, "workspace/didChangeWatchedFiles",
                     new DidChangeWatchedFilesRegistrationOptions(
-                        [.. binaries.Select(path => new Protocol.FileSystemWatcher(path))]))]))
+                        [.. files.Select(path => new Protocol.FileSystemWatcher(path))]))]))
                 .ConfigureAwait(false);
         }
         catch (Exception e) when (e is RemoteInvocationException or ConnectionLostException or ObjectDisposedException)

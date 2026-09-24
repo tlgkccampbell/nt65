@@ -224,6 +224,18 @@ internal sealed class Workspace
                     continue;
                 }
 
+                // A linked config declares the segments of the projects that link it, so those
+                // projects are read again, as if their project files had changed.
+                var linking = projects.Where(project => project.Links(path)).ToList();
+                if (linking.Count > 0)
+                {
+                    foreach (var project in linking)
+                        projects[projects.IndexOf(project)] = new WorkspaceProject(project.File, analyzer);
+                    ConfigureAll();
+                    changed = true;
+                    continue;
+                }
+
                 foreach (var project in projects.Where(project => project.Owns(path)))
                 {
                     project.Reread(path);
@@ -263,23 +275,26 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Returns the binaries that <c>.incbin</c> directives include, across every program, as
-    /// logical paths.
-    /// The editor has to be asked to watch these in addition to the sources and project files,
-    /// because only the program says which files it includes.
+    /// Returns the files the programs read besides their sources and project files, as logical
+    /// paths. These are the binaries that <c>.incbin</c> directives include and the linker configs
+    /// the projects link. The editor has to be asked to watch them, because only the programs say
+    /// which files they are.
     /// </summary>
-    public async Task<IReadOnlyList<string>> BinariesAsync(CancellationToken cancellation)
+    public async Task<IReadOnlyList<string>> ReadFilesAsync(CancellationToken cancellation)
     {
         List<Task<ProgramAnalysis>> analyses;
         ProgramAnalysis? looseAnalysis;
+        List<string> linked;
         lock (gate)
         {
             analyses = [.. projects.Select(project => project.AnalysisAsync(open.Values, cancellation))];
             looseAnalysis = loose.Finished;
+            linked = [.. projects.SelectMany(project => project.Own.LinkedFiles)];
         }
         return [.. (await Task.WhenAll(analyses).ConfigureAwait(false))
             .Concat(looseAnalysis is null ? [] : [looseAnalysis])
             .SelectMany(analysis => analysis.Binaries)
+            .Concat(linked)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)];
     }

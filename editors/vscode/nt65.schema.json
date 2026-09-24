@@ -56,6 +56,12 @@
       "description": "Which banks an absolute constant address in each range may be reached from, for hardware registers mirrored in some banks only. A key is one address or a range of them, and no two keys may overlap.",
       "examples": [{ "$2100-$21ff": ["$00-$3f", "$80-$bf"] }]
     },
+    "links": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/link" },
+      "description": "The ld65 linker configs the output is linked with, by name. With links, each config's `SEGMENTS` block declares the segments it places: a segment's size comes from its `type`, and its bank from where it runs. `segments` then adds only what no config can say.",
+      "examples": [{ "prg": { "config": "c64.cfg" } }]
+    },
     "configurations": {
       "type": "object",
       "additionalProperties": { "$ref": "#/definitions/configuration" },
@@ -285,6 +291,12 @@
         "label-in-data",
         "label-outside-a-routine",
         "label-unreachable",
+        "link-key-unknown",
+        "link-memory-unknown",
+        "link-not-an-object",
+        "linked-config-invalid",
+        "linked-config-unreadable",
+        "linked-segments-disagree",
         "linker-name-is-an-instruction",
         "long-line",
         "macro-distance",
@@ -372,6 +384,7 @@
         "project-not-a-list",
         "project-not-a-string",
         "project-not-an-object",
+        "project-segment-from-link",
         "project-segment-key-unknown",
         "project-segment-not-an-object",
         "project-segment-size-missing",
@@ -407,6 +420,8 @@
         "segment-mirror-invalid",
         "segment-mirrors-need-a-bank",
         "segment-name-quoted",
+        "segment-not-defined",
+        "segment-not-linked",
         "segment-region-misplaced",
         "segment-standard-size",
         "segment-undeclared",
@@ -501,10 +516,9 @@
     "segment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["size"],
       "properties": {
         "size": {
-          "description": "How wide an address in the segment is: \"zp\" for the direct page, \"abs\" for two bytes, \"far\" for three.",
+          "description": "How wide an address in the segment is: \"zp\" for the direct page, \"abs\" for two bytes, \"far\" for three. Required without `links`; with them it comes from the config, and only \"far\" may be given.",
           "enum": ["zp", "abs", "far"]
         },
         "dp": {
@@ -537,9 +551,48 @@
           "description": "How much each diagnostic matters in this configuration, over the project's own answers.",
           "allOf": [{ "$ref": "#/definitions/diagnostics" }]
         },
+        "links": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/link" },
+          "description": "Links over the project's, each replacing the project's link of the same name."
+        },
         "out": {
           "type": "string",
           "description": "Where this configuration's output goes, in place of the project's `out`."
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config"],
+      "properties": {
+        "config": {
+          "type": "string",
+          "description": "The ld65 linker config, as a path from the project file."
+        },
+        "memory": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/linkMemory" },
+          "description": "What the config cannot say about its memory areas, by the names its `MEMORY` block gives them."
+        },
+        "space": {
+          "type": "string",
+          "description": "The address space everything in this link is in, one `spaces` declares. A memory area's own `space` takes precedence."
+        }
+      }
+    },
+    "linkMemory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mirrors": {
+          "description": "The other banks the memory area appears in, in the same form as the banks in `ranges`.",
+          "allOf": [{ "$ref": "#/definitions/banks" }]
+        },
+        "space": {
+          "type": "string",
+          "description": "The address space the memory area is in, one `spaces` declares."
         }
       }
     }

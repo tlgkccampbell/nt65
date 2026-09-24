@@ -107,7 +107,7 @@ public sealed class GrammarColoursTests
             if (trees.Count == 0)
                 continue;
             var project = Path.Combine(folder, ProjectFile.Name);
-            yield return (trees, File.Exists(project) ? ProjectFile.Read(ProjectFile.Name, Repo.ReadText(project)) : ProjectSettings.None);
+            yield return (trees, File.Exists(project) ? Repo.ReadProject(folder) : ProjectSettings.None);
         }
     }
 }

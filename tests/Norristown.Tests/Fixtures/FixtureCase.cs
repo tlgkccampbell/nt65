@@ -77,7 +77,7 @@ internal sealed partial record FixtureCase(
             var label = file.Length > "nt65.json".Length ? file["nt65.".Length..^".json".Length] : "";
 
             var text = new SourceFile(file, Repo.ReadText(json));
-            var project = Norristown.Project.ProjectFile.Read(Norristown.Project.ProjectFile.Name, text.Text);
+            var project = Repo.ReadProject(directory, file);
             cases.Add(new FixtureCase(
                 label.Length == 0 ? name : $"{name} ({label})",
                 directory,
