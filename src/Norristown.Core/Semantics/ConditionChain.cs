@@ -36,8 +36,8 @@ public sealed class ConditionChain
 
             case ElseIfDirectiveSyntax:
             case ElseDirectiveSyntax:
-                // A continuation with no chain to continue has already been reported; it is
-                // left out rather than written twice.
+                // A continuation with no chain to continue has already been reported, so its
+                // block is left out.
                 if (!chaining)
                     return false;
                 var take = Holds(model, block, opener, taken, on);

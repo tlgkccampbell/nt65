@@ -479,9 +479,12 @@ public sealed class ControlFlow
                 continue;
             }
             var target = Targets.Of(model, Transfers.TargetOf(tail.Step.Statement, mode), tail.Step.On);
-            var inside = target is { } named2 && found.TryGetValue(named2, out var reached);
-            if (inside)
-                Edge(i, found[target!.Value], calls ? EdgeKind.Call : EdgeKind.Taken);
+            var inside = false;
+            if (target is { } resolved && found.TryGetValue(resolved, out var landing))
+            {
+                inside = true;
+                Edge(i, landing, calls ? EdgeKind.Call : EdgeKind.Taken);
+            }
 
             // What a call reaches costs what that routine costs, and so does what a tail jump
             // reaches, since control comes back from it to this routine's caller. A target
@@ -741,12 +744,6 @@ public sealed class ControlFlow
                 Catalogue.LabelUnreachable.Message(label.DisplayName)));
         }
     }
-
-    /// <summary>
-    /// Returns whether anything other than its declaration refers to <paramref name="symbol"/>.
-    /// </summary>
-    private bool IsNamed(Symbol symbol) =>
-        model.ReferencesTo(symbol).Any(reference => !reference.IsDeclaration);
 
     /// <summary>
     /// Reports data that the instruction above falls through into, as happens with the

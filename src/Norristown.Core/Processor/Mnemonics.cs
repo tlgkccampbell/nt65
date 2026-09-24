@@ -204,7 +204,7 @@ public static class Mnemonics
     /// Returns the mnemonic without the bit number a bit instruction names, since the eight
     /// forms of each are one instruction as far as the name and the flags go.
     /// </summary>
-    private static MnemonicKind Bare(MnemonicKind mnemonic) => SyntaxFacts.BitOf(mnemonic)?.Family ?? mnemonic;
+    private static MnemonicKind Bare(MnemonicKind mnemonic) => SyntaxFacts.BitOf(mnemonic)?.Group ?? mnemonic;
 
     /// <summary>
     /// Formats the flags a <c>rep</c> or <c>sep</c> mask names, in the status register's own

@@ -50,25 +50,50 @@ internal static class Json
             .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     /// <summary>
-    /// Returns the position just past the first string in the file equal to the key, or -1 when
-    /// there is none. A matching string inside a nested object counts too.
+    /// Returns the position just past <paramref name="key"/> where it names a property of the
+    /// top-level object, or -1 when it names none. The same string as a value, or as a key in a
+    /// nested object such as a configuration, does not count.
     /// </summary>
     private static int Start(string text, string key)
     {
         var quoted = Quoted(key);
+        var depth = 0;
         for (var at = 0; at < text.Length;)
         {
             if (text[at] != '"')
             {
+                if (text[at] is '{' or '[')
+                    depth++;
+                else if (text[at] is '}' or ']')
+                    depth--;
                 at = Past(text, at);
                 continue;
             }
             var end = End(text, at);
-            if (string.CompareOrdinal(text, at, quoted, 0, quoted.Length) == 0 && end == at + quoted.Length)
+            if (depth == 1 && end == at + quoted.Length
+                && string.CompareOrdinal(text, at, quoted, 0, quoted.Length) == 0 && IsKey(text, end))
+            {
                 return end;
+            }
             at = end;
         }
         return -1;
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether a colon follows <paramref name="at"/>, past any
+    /// whitespace and comments, so that the string before it is a key.
+    /// </summary>
+    private static bool IsKey(string text, int at)
+    {
+        while (at < text.Length && text[at] != ':')
+        {
+            var next = Past(text, at);
+            if (next == at + 1 && !char.IsWhiteSpace(text[at]))
+                return false;
+            at = next;
+        }
+        return at < text.Length;
     }
 
     /// <summary>

@@ -194,7 +194,7 @@ public static class SyntaxFacts
     /// every other mnemonic. The group is named by its bit-0 member, so <c>bbr3</c> gives
     /// <see cref="MnemonicKind.Bbr0"/> and 3.
     /// </summary>
-    public static (MnemonicKind Family, int Bit)? BitOf(MnemonicKind kind)
+    public static (MnemonicKind Group, int Bit)? BitOf(MnemonicKind kind)
     {
         if (kind is < MnemonicKind.Bbr0 or > MnemonicKind.Smb7)
             return null;

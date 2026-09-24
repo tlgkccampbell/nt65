@@ -323,12 +323,13 @@ public static class DataLengths
                 continue;
             }
 
-            // Every member of a union is at offset 0, so a second value would write over the first.
             if (!named.Add(name))
             {
                 Report(value, model, diagnostics, on, Catalogue.MemberGivenTwice.Message(name));
                 continue;
             }
+
+            // Every member of a union is at offset 0, so a second value would write over the first.
             if (type.Kind == SymbolKind.Union && named.Count > 1)
             {
                 Report(value, model, diagnostics, on,

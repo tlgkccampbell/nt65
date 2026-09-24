@@ -24,7 +24,8 @@ public sealed class MacroBindingTests
         Assert.Equal(SymbolKind.Macro, macro.Kind);
         Assert.Equal(["dest", "value"], macro.Parameters.Select(p => p.Name));
 
-        // A parameter with no kind given takes an expression, the kind that accepts the most.
+        // A parameter keeps the kind it declares, and one with no kind given takes an
+        // expression, the kind that accepts the most.
         Assert.Equal(ParameterKind.Operand, macro.Parameters[0].Kind);
         Assert.Equal(ParameterKind.Expr, macro.Parameters[1].Kind);
 
