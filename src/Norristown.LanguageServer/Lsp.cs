@@ -22,11 +22,16 @@ internal static class Lsp
 
     /// <summary>
     /// Converts everything wrong with one file to protocol diagnostics, together with the
-    /// branches this build leaves out. An omitted branch is not a problem, so it is a hint the
-    /// client renders faded rather than anything that appears in a problem list.
+    /// branches this build leaves out and the lines longer than <paramref name="lineLength"/>
+    /// that could be broken. Neither is a problem, so each is a hint rather than anything that
+    /// appears in a problem list. An omitted branch is rendered faded.
     /// </summary>
+    /// <param name="diagnostics">What the analysis reported about the file.</param>
+    /// <param name="tree">The file, or null when it is not open.</param>
+    /// <param name="configuration">The build configuration, which decides the omitted branches.</param>
+    /// <param name="lineLength">The longest a line may be before breaking it is suggested, or 0 for no limit.</param>
     public static IReadOnlyList<Protocol.Diagnostic> ToDiagnostics(
-        IEnumerable<Diagnostic> diagnostics, SyntaxTree? tree, Configuration configuration) =>
+        IEnumerable<Diagnostic> diagnostics, SyntaxTree? tree, Configuration configuration, int lineLength = 0) =>
         [
             .. diagnostics.Select(ToDiagnostic),
             .. (tree is null ? [] : configuration.Omitted(tree)).Select(span => new Protocol.Diagnostic(
@@ -37,7 +42,32 @@ internal static class Lsp
                 Catalogue.OmittedBranch.Format,
                 null,
                 [Protocol.DiagnosticTag.Unnecessary])),
+            .. tree is null || lineLength <= 0 ? [] : LongLines(tree, lineLength),
         ];
+
+    /// <summary>
+    /// Returns a suggestion for each line of <paramref name="tree"/> longer than
+    /// <paramref name="lineLength"/> whose brackets could be laid out across lines, over the
+    /// contents of those brackets.
+    /// </summary>
+    private static IEnumerable<Protocol.Diagnostic> LongLines(SyntaxTree tree, int lineLength)
+    {
+        for (var line = 0; line < tree.LineCount; line++)
+        {
+            var width = tree.Text.AsSpan(tree.LineStarts[line], tree.GetLineEnd(line) - tree.LineStarts[line])
+                .TrimEnd("\r\n").Length;
+            if (width <= lineLength || LineBreaks.Breakable(tree, line) is not { } span)
+                continue;
+            yield return new Protocol.Diagnostic(
+                ToRange(tree, span),
+                Protocol.DiagnosticSeverity.Hint,
+                Catalogue.LongLine.Id,
+                SourceName,
+                Catalogue.LongLine.Message(lineLength).Text,
+                null,
+                null);
+        }
+    }
 
     /// <summary>Returns the file's outline, nested the way its blocks are.</summary>
     public static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree) =>

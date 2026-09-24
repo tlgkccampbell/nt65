@@ -16,6 +16,12 @@ namespace Norristown.LanguageServer;
 internal sealed class Server : IDisposable
 {
     /// <summary>
+    /// The longest a line may be before the editor suggests breaking it, unless the editor's
+    /// settings give another length.
+    /// </summary>
+    private const int DefaultLineLength = 100;
+
+    /// <summary>
     /// The time to wait after the last edit before publishing the rest of the program's diagnostics.
     /// </summary>
     private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(200);
@@ -60,6 +66,9 @@ internal sealed class Server : IDisposable
     // for as long as this server runs. The toggle lasts for the session and is not saved,
     // because cycle counts are wanted while a routine is being timed, not permanently.
     private HintSettings hints = HintSettings.Default;
+
+    // The longest a line may be before the editor suggests breaking it, or 0 for no limit.
+    private int lineLength = DefaultLineLength;
     private bool? cyclesThisSession;
 
     // The documentation of each item in the last completion list, kept until the next list
@@ -210,6 +219,7 @@ internal sealed class Server : IDisposable
             : request.RootUri is { } root ? [root] : [];
         workspace.Load(roots, ActiveConfiguration(request.InitializationOptions));
         hints = HintSettings.Of(request.InitializationOptions);
+        lineLength = LineLengthOf(request.InitializationOptions);
         client = ClientCapabilities.Of(request.Capabilities);
         outgoing = new Outgoing(workspace, client);
         Watch(request.ProcessId);
@@ -295,6 +305,7 @@ internal sealed class Server : IDisposable
             hints = shown;
             RefreshHints();
         }
+        lineLength = LineLengthOf(settings);
         return PublishEverythingAsync(null, cancellation);
     }
 
@@ -772,6 +783,18 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
+    /// Returns the longest a line may be before breaking it is suggested, from an editor's
+    /// <c>nt65</c> settings. A length the settings do not give, or give as other than a whole
+    /// number from 0, is the default, and 0 turns the suggestion off.
+    /// </summary>
+    private static int LineLengthOf(JsonElement? settings) =>
+        settings is { ValueKind: JsonValueKind.Object } options
+            && options.TryGetProperty("lineLength", out var given)
+            && given.ValueKind == JsonValueKind.Number && given.TryGetInt32(out var length) && length >= 0
+            ? length
+            : DefaultLineLength;
+
+    /// <summary>
     /// Returns the named configuration the client's <c>nt65</c> settings choose, or null for the
     /// project's own settings.
     /// </summary>
@@ -1008,7 +1031,7 @@ internal sealed class Server : IDisposable
         if (file.Version is { } version && newest.TryGetValue(file.Uri, out var latest) && latest > version)
             return false;
         var diagnostics = outgoing.ToClient(
-            Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration));
+            Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration, lineLength));
         var signature = Signature(diagnostics);
         if (!always && published.TryGetValue(file.Uri, out var before) && before == signature)
             return false;

@@ -135,7 +135,7 @@ public sealed class CatalogueAreaTests
         ("Output",
         [
             "c-header-name-left-out", "c-header-untyped", "cannot-be-translated", "export-name-taken",
-            "omitted-branch", "output-name-collision",
+            "long-line", "omitted-branch", "output-name-collision",
         ]),
         ("The project file",
         [

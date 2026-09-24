@@ -34,6 +34,21 @@ public static class Catalogue
         "The build configuration does not take this branch, so its lines are parsed and nothing else. The editor "
             + "shows them faded.");
 
+    /// <summary>
+    /// Gets the suggestion the editor shows on a line longer than its setting allows, where a
+    /// call's arguments or a set could be laid out across lines. Like <see cref="OmittedBranch"/>,
+    /// it is the editor's own, and no build reports it.
+    /// </summary>
+    public static DiagnosticDescriptor LongLine { get; } = Entry(
+        Area.Output,
+        "long-line",
+        Severity.Info,
+        "this line is longer than {0} columns: its brackets can be laid out one item to a line",
+        "The formatter keeps the line breaks a file has and adds none, so a long line stays long until it is "
+            + "broken. Where a call's arguments or a set could go one to a line, the editor suggests it, and the "
+            + "refactoring there breaks them. The limit is the editor's `nt65.lineLength` setting, and 0 turns "
+            + "the suggestion off.");
+
     // Reading a line
 
     internal static DiagnosticDescriptor NumberInvalid { get; } = Entry(

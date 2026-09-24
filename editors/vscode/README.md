@@ -85,6 +85,7 @@ The extension carries the language server and runs it on the installed .NET 10 r
 | `nt65.cli.path` | the `nt65` command the build tasks run, in place of the one on the path |
 | `nt65.inlayHints.stateChanges`, `.longBranches`, `.impliedValues`, `.parameterNames` | each kind of hint, on unless switched off |
 | `nt65.inlayHints.cycles` | cycle counts at the end of every instruction; off unless switched on |
+| `nt65.lineLength` | the longest a line may be before the editor suggests laying out a call's arguments or a set one item to a line, 100 unless set; 0 for no suggestion |
 
 ## The language
 

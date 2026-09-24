@@ -286,6 +286,7 @@
         "label-outside-a-routine",
         "label-unreachable",
         "linker-name-is-an-instruction",
+        "long-line",
         "macro-distance",
         "macro-keeps",
         "macro-misplaced",

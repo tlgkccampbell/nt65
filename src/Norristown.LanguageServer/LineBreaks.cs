@@ -37,6 +37,30 @@ internal static class LineBreaks
     }
 
     /// <summary>
+    /// Returns the contents of the outermost call's arguments or set that opens on the 0-based line
+    /// <paramref name="line"/> of the file and could be laid out one item to a line, or null when
+    /// there is none. A long line gets a suggestion over those contents, where the refactoring
+    /// that breaks them is offered.
+    /// </summary>
+    public static TextSpan? Breakable(SyntaxTree tree, int line)
+    {
+        var start = tree.LineStarts[line];
+        var end = tree.GetLineEnd(line);
+        foreach (var token in tree.GetLine(line).Tokens)
+        {
+            if (token.Span.Start < start || token.Span.Start >= end
+                || token.Kind is not (SyntaxKind.OpenParen or SyntaxKind.OpenBracket)
+                || Brackets(token.Parent) is not var (open, items, close, what))
+            {
+                continue;
+            }
+            if (For(tree, open, items, close, what) is { Title: not "Join onto one line" })
+                return new TextSpan(open.Span.End, close.Span.Start - open.Span.End);
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Returns the change that lays out the contents of one pair of brackets, or null when there
     /// is nothing to lay out: one item on one line, or a comment a join would drop.
     /// </summary>
@@ -100,21 +124,28 @@ internal static class LineBreaks
             yield break;
         for (var node = tree.Root.FindToken(Math.Min(caret, tree.Text.Length - 1)).Parent; node is not null; node = node.Parent)
         {
-            var found = node switch
-            {
-                ArgumentListSyntax { Parent: CallExpressionSyntax call } arguments =>
-                    ((SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)?)(
-                        arguments.OpenParenToken, [.. arguments.Arguments], arguments.CloseParenToken,
-                        call.BuiltinKind == BuiltinKind.Switch ? Contents.Arms : Contents.Arguments),
-                SetExpressionSyntax set => (set.OpenBracketToken, [.. set.Items], set.CloseBracketToken, Contents.Values),
-                _ => null,
-            };
-            if (found is var (open, _, close, _) && !open.IsMissing && !close.IsMissing
-                && caret >= open.Span.End && caret <= close.Span.Start)
-            {
-                yield return found.Value;
-            }
+            if (Brackets(node) is var (open, items, close, what) && caret >= open.Span.End && caret <= close.Span.Start)
+                yield return (open, items, close, what);
         }
+    }
+
+    /// <summary>
+    /// Returns the brackets, the items and what the items are, where <paramref name="node"/> is a
+    /// call's arguments or a set whose brackets are both in the source, or null otherwise.
+    /// </summary>
+    private static (SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)? Brackets(
+        SyntaxNode? node)
+    {
+        var found = node switch
+        {
+            ArgumentListSyntax { Parent: CallExpressionSyntax call } arguments =>
+                ((SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)?)(
+                    arguments.OpenParenToken, [.. arguments.Arguments], arguments.CloseParenToken,
+                    call.BuiltinKind == BuiltinKind.Switch ? Contents.Arms : Contents.Arguments),
+            SetExpressionSyntax set => (set.OpenBracketToken, [.. set.Items], set.CloseBracketToken, Contents.Values),
+            _ => null,
+        };
+        return found is var (open, _, close, _) && !open.IsMissing && !close.IsMissing ? found : null;
     }
 
     /// <summary>Checks whether a comment stands between two brackets.</summary>

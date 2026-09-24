@@ -167,6 +167,12 @@
           "type": "boolean",
           "default": false,
           "description": "Show what every instruction costs, and above each block its total. Every line has one, so this is off until it is asked for; `nt65: Toggle Cycle Counts` turns it on for the session without saving it."
+        },
+        "nt65.lineLength": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 0,
+          "description": "Suggest laying out a call's arguments or a set one item to a line where a line is longer than this many columns. 0 turns the suggestion off."
         }
       }
     }
