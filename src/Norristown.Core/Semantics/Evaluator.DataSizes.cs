@@ -51,8 +51,10 @@ internal sealed partial class Evaluator
         SyntaxNode argument,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound))).BytesIn(argument);
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
+        Configuration? configuration = null) =>
+        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound)) { Configuration = configuration })
+            .BytesIn(argument);
 
     /// <summary>
     /// Determines whether mixed data contains a macro call, whose bytes are unknown until it is

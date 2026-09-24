@@ -19,9 +19,7 @@ main__main:
     phx
     stz z:flags
     ; set_ready!(flags)  main.nt65:25
-    lda z:flags
-    ora #%00001000
-    sta z:flags
+    smb3 flags
     ; end of set_ready!
     bbs3 flags, main__done
     nop

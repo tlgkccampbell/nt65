@@ -130,13 +130,15 @@ internal sealed partial class Evaluator
         Func<string, long?>? binaryLength,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
-        Func<Symbol, Symbol, bool, CycleSpan>? cycles = null)
+        Func<Symbol, Symbol, bool, CycleSpan>? cycles = null,
+        Configuration? configuration = null)
     {
         var inputs = new EvaluationInputs(segments, new BoundNames(resolved, bound))
         {
             BinaryLength = binaryLength,
             Spans = spans,
             Cycles = cycles,
+            Configuration = configuration,
         };
         new Evaluator(EvaluationMode.Check, inputs, (diagnostic, _) => diagnostics.Add(diagnostic)).Bytes(expression);
     }
@@ -152,9 +154,14 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
-        Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
-        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound)) { Spans = spans, Cycles = cycles })
-            .Evaluate(expression);
+        Func<Symbol, Symbol, bool, CycleSpan>? cycles = null,
+        Configuration? configuration = null) =>
+        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound))
+        {
+            Spans = spans,
+            Cycles = cycles,
+            Configuration = configuration,
+        }).Evaluate(expression);
 
     /// <summary>
     /// Creates an evaluator for the conditions of a build, which are evaluated before any

@@ -431,9 +431,11 @@ public sealed class ProgramModel
         // A segment's `dp` and `bank`, and a signature's `dp = e` and `dbr = e`, are expressions
         // that nothing before the analysis reads, so they are evaluated after the constants.
         if (segmentValues is not null)
-            segments.Evaluate(expression => Evaluator.ValueOf(expression, segments, resolved).AsNumber(), segmentValues);
+            segments.Evaluate(
+                expression => Evaluator.ValueOf(expression, segments, resolved, configuration: configuration).AsNumber(),
+                segmentValues);
         foreach (var result in bound)
-            Value(result.Symbols, segments, resolved, byFile);
+            Value(result.Symbols, segments, resolved, configuration, byFile);
         foreach (var result in bound)
         {
             CheckAliases(result.Symbols, resolved, byFile);
@@ -527,7 +529,11 @@ public sealed class ProgramModel
     /// the problems of each signature set, once, where the set is declared.
     /// </summary>
     private static void Value(
-        IEnumerable<Symbol> symbols, SegmentTable segments, SymbolMap resolved, Dictionary<string, List<Diagnostic>> byFile)
+        IEnumerable<Symbol> symbols,
+        SegmentTable segments,
+        SymbolMap resolved,
+        Configuration configuration,
+        Dictionary<string, List<Diagnostic>> byFile)
     {
         var names = new BoundNames(resolved);
         Symbol? SetOf(NameExpressionSyntax name) => names.SymbolOf(name);
@@ -538,7 +544,8 @@ public sealed class ProgramModel
             var bound = symbol.Bound is { } held
                 ? new Dictionary<Symbol, Expansion.Bound> { [held.Binding] = held.Value }
                 : null;
-            long? ValueOf(ExpressionSyntax expression) => Evaluator.ValueOf(expression, segments, resolved, bound).AsNumber();
+            long? ValueOf(ExpressionSyntax expression) =>
+                Evaluator.ValueOf(expression, segments, resolved, bound, configuration: configuration).AsNumber();
             void Report(TextSpan span, DiagnosticMessage message) =>
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message));
             if (symbol.Kind == SymbolKind.SignatureSet)

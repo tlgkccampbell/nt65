@@ -290,7 +290,7 @@ public sealed class SemanticModel
     public Value ValueOf(
         SyntaxNode expression, Expansion? on = null, Func<Symbol, long?>? spans = null,
         Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
-        Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans, cycles);
+        Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans, cycles, Configuration);
 
     /// <summary>
     /// Returns the symbol a name refers to, or null when it names none. <paramref name="on"/> is
@@ -323,13 +323,13 @@ public sealed class SemanticModel
         SyntaxNode expression, List<Diagnostic> diagnostics, Expansion? on = null,
         Func<Symbol, long?>? spans = null, Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
         Evaluator.Check(
-            expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on), spans, cycles);
+            expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on), spans, cycles, Configuration);
 
     /// <summary>
     /// Returns the bytes an operand becomes, for a literal or for text that a charmap maps.
     /// </summary>
     public IReadOnlyList<long>? BytesOf(SyntaxNode operand, Expansion? on = null) =>
-        Evaluator.BytesOf(operand, Segments, resolved, BindingsOf(on));
+        Evaluator.BytesOf(operand, Segments, resolved, BindingsOf(on), Configuration);
 
     /// <summary>
     /// Returns the items of the list <paramref name="operand"/> names, or null when it does not
@@ -343,7 +343,7 @@ public sealed class SemanticModel
     /// <paramref name="segment"/>, and has none outside every segment.
     /// </summary>
     public AddressSize? AddressSizeOf(SyntaxNode expression, string? segment = null, Expansion? on = null) =>
-        Evaluator.AddressSizeOf(expression, segment, Segments, resolved, BindingsOf(on));
+        Evaluator.AddressSizeOf(expression, segment, Segments, resolved, BindingsOf(on), Configuration);
 
     /// <summary>
     /// Returns what every name bound at <paramref name="on"/> and at the levels around it is

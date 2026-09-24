@@ -20,8 +20,10 @@ internal sealed partial class Evaluator
         string? segment,
         SegmentTable segments,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
-        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null) =>
-        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound))).SizeOf(expression, segment);
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
+        Configuration? configuration = null) =>
+        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound)) { Configuration = configuration })
+            .SizeOf(expression, segment);
 
     /// <summary>Returns the wider of two address sizes, either of which may be unknown.</summary>
     private static AddressSize? Widest(AddressSize? a, AddressSize? b) =>

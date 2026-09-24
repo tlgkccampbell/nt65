@@ -148,6 +148,37 @@ public sealed class ConfigurationTests
         Assert.Equal(holds, program.File("main.nt65").Symbols.Any(symbol => symbol.Name == "AT_FILE"));
     }
 
+    /// <summary>
+    /// A function asks about the CPU wherever it is called, a data directive's operand included,
+    /// and a <c>.select</c> reads only the value it chooses, so the other may name a member that
+    /// only the other CPU's build declares.
+    /// </summary>
+    [Theory]
+    [InlineData(Cpu.Mos6502, "$01")]
+    [InlineData(Cpu.Wdc65816, "$03")]
+    public void TargetAnswersInAFunctionCalledFromData(Cpu cpu, string written)
+    {
+        var project = ProjectSettings.None with { Cpu = cpu };
+        var outputs = Analysis.Outputs(project, ("main.nt65", """
+            .module main
+            .enum Mode {
+                short
+                .if .target(65816) {
+                    long
+                }
+            }
+            .func size(m) = .select(.target(65816), .select(m == Mode::long, 3, 1), 1)
+            .segment RODATA
+            .data sizes: .byte[] {
+                .each Mode, m {
+                    size(m)
+                }
+            }
+            """));
+
+        Assert.Contains(written, outputs["main.s"]);
+    }
+
     /// <summary><c>.has</c> takes a mnemonic, and <c>.target</c> a CPU.</summary>
     [Theory]
     [InlineData(".if .has(LIMIT) {", "`.has` takes a mnemonic, such as `.has(phx)`")]
