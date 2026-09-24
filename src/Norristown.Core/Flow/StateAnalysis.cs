@@ -538,7 +538,7 @@ public sealed class StateAnalysis : IProcessorStates
     {
         var statement = step.Statement;
         var transfer = Transfers.Of(statement, mode);
-        var calls = Instructions.Facts(mnemonic).Control == Control.Calls;
+        var calls = Instructions.IsCall(mnemonic);
         var target = Targets.Of(model, Transfers.TargetOf(statement, mode), step.On)?.Symbol;
 
         if (transfer == Transfer.Call)

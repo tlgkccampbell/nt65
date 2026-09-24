@@ -128,6 +128,12 @@ public static class Instructions
         Facts(mnemonic).Control is Control.Branches or Control.Jumps or Control.Calls || mnemonic == Per;
 
     /// <summary>
+    /// Returns a value indicating whether <paramref name="mnemonic"/> is a call instruction,
+    /// <c>jsr</c> or <c>jsl</c>.
+    /// </summary>
+    public static bool IsCall(MnemonicKind mnemonic) => Facts(mnemonic).Control == Control.Calls;
+
+    /// <summary>
     /// Returns the two short branches a long branch is emitted with. <c>Taken</c> is the branch
     /// used when the target is in reach, and <c>Skipped</c> is its opposite, which skips over the
     /// <c>jmp</c> when the target is out of reach.

@@ -426,7 +426,7 @@ public static class RegisterKeeps
 
             // A call is handled for the block as a whole, because its effect depends on which
             // routine it reaches.
-            if (facts.Control == Control.Calls)
+            if (Instructions.IsCall(mnemonic))
                 return state;
 
             // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
