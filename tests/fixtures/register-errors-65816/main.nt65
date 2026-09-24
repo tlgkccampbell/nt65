@@ -128,3 +128,30 @@
     plp
     rts
 }
+
+; A jump or a branch back to the routine's own entry is a tail call to itself, which returns X as
+; it was at the jump.
+.export .proc loops_back: a8, i8, keeps x {
+    lda $10
+    bne work
+    rts
+    work:
+    dex
+    jmp loops_back ;! error[keeps-broken]: `loops_back` promises `keeps x`, but X is not the same as on entry here: restore it before returning, or add `.state keeps x` at the point where the entry value is restored
+}
+
+.export .proc branches_back: a8, i8, keeps x {
+    lda $10
+    bne work
+    rts
+    work:
+    dex
+    bra branches_back ;! error[keeps-broken]: `branches_back` promises `keeps x`, but X is not the same as on entry here: restore it before returning, or add `.state keeps x` at the point where the entry value is restored
+}
+
+; Where X is the same at the jump, the promise holds.
+.export .proc waits: a8, i8, keeps x {
+    lda $10
+    beq waits
+    rts
+}

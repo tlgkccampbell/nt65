@@ -1134,9 +1134,10 @@ public static class RegisterKeeps
         /// <summary>
         /// Returns what a block hands control to. That is the other routines, and the labels inside
         /// them, that its jump or branch names, that a <c>.next</c> on it names in their place, or
-        /// that the <c>.fallthrough</c> ending it runs into. Control never comes back from any of
-        /// them, because that routine returns to this routine's caller. The path therefore ends
-        /// there, as a tail call's does.
+        /// that the <c>.fallthrough</c> ending it runs into. It is also this routine's own entry,
+        /// where the jump or branch names that. Control never comes back from any of them, because
+        /// that routine returns to this routine's caller. The path therefore ends there, as a tail
+        /// call's does.
         /// </summary>
         public IEnumerable<Symbol> Leaves(BasicBlock block, Symbol routine)
         {
@@ -1162,16 +1163,19 @@ public static class RegisterKeeps
             var transfer = Transfers.Of(step.Statement, mode);
             if (transfer is not (Transfer.Jump or Transfer.Branch))
                 yield break;
-            if (Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is not { } target
-                || !Outside(target, routine))
-            {
+            // A jump or a branch to the routine's own entry is a tail call to itself. The flow
+            // graph does not follow it back into the routine's body, so the path ends here.
+            if (Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is not { } target)
                 yield break;
-            }
+            var outside = Outside(target, routine);
+            if (!outside && target.Signature is null)
+                yield break;
 
-            // A `jmp` to a routine's entry is the tail call the block already accounts for, and
-            // what that routine keeps is applied there. A branch is not accounted for that way,
-            // and neither is a jump into a routine's interior, so both are returned here.
-            if (transfer != Transfer.Jump || target.Signature is null)
+            // A `jmp` to another routine's entry is the tail call the block already accounts for,
+            // and what that routine keeps is applied there. A branch is not accounted for that
+            // way, and neither is a jump into a routine's interior or to this routine's own
+            // entry, so each is returned here.
+            if (transfer != Transfer.Jump || target.Signature is null || !outside)
                 yield return target;
         }
 
