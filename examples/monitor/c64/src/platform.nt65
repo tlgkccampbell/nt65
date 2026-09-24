@@ -12,7 +12,7 @@
 .export .signature running = a8, i8 ; the 6502's registers, which are all it has
 .export .use nt65::cbm::petscii as text  ; the KERNAL reads and writes PETSCII
 
-.const COLUMNS    ?= 40             ; a setting, so that the monitor's conditions may test it
+.const COLUMNS     = 40             ; the characters in a row of the screen
 .const LINE_LENGTH = 80             ; the screen editor's logical line: two rows of the screen
 .const NEWLINE     = $0D            ; RETURN
 

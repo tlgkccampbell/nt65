@@ -17,7 +17,7 @@
 .export .use nt65::apple2::normal as text   ; the firmware reads and writes normal video
 
 .const LOAD        = $2000          ; where BRUN loads the file, and enters it
-.const COLUMNS    ?= 80             ; the 80-column screen, as a setting conditions may test
+.const COLUMNS     = 80             ; the 80-column screen
 .const LINE_LENGTH = COLUMNS        ; a row of the screen
 .const NEWLINE     = $8D            ; RETURN, in normal video
 

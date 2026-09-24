@@ -13,8 +13,8 @@
 ;                       in ASCII's order.
 ;   NEWLINE             The character that ends a line.
 ;   COLUMNS             The width of the screen, which decides how many bytes a line of M
-;                       shows, and whether the 65816's registers fit on one line of R. It is
-;                       a `.config` setting, so that the monitor's conditions may test it.
+;                       shows, and whether the 65816's registers fit on one line of R. The
+;                       monitor's conditions test it, so the configuration must decide it.
 ;   LINE_LENGTH         The length of the longest line that `read_line` reads.
 ;   putc: keeps x, y    Writes the character in A, which is a capital letter, a digit, a
 ;                       punctuation mark, a space or `NEWLINE`, in `text`.
