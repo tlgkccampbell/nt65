@@ -17,8 +17,9 @@ internal sealed partial class Binder
         var steps = new List<(int Reference, Scope At, Symbol Symbol, SyntaxToken Token)>();
         foreach (var use in list)
         {
-            var (token, at, _, first, last, splice, _, _) = use;
-            if (first)
+            var token = use.Token;
+            var at = use.Scope;
+            if (use.First)
             {
                 previous = null;
                 broken = false;
@@ -41,21 +42,21 @@ internal sealed partial class Binder
             }
             if (place.Symbol is not { } symbol)
             {
-                if (last)
+                if (use.Last)
                 {
                     Report(token.Span, Catalogue.ModuleUsedAsAName.Message(place.Module, place.Module));
                     broken = true;
                 }
                 continue;
             }
-            var inMacro = RecordBodyUse(at, symbol, token, last);
-            if (!last)
+            var inMacro = RecordBodyUse(at, symbol, token, use.Last);
+            if (!use.Last)
                 steps.Add((references.Count, at, symbol, token));
-            references.Add(new SymbolReference(symbol, token.Span, false, place.IsAlias, IsStep: !last, InMacro: inMacro));
+            references.Add(new SymbolReference(symbol, token.Span, false, place.IsAlias, IsStep: !use.Last, InMacro: inMacro));
 
             // A path to a member is an offset into the symbols it walks through, so those count
             // as used too: `oam::x` is the address of `oam` plus the offset of `x`.
-            if (last && symbol.Kind == SymbolKind.Member)
+            if (use.Last && symbol.Kind == SymbolKind.Member)
             {
                 foreach (var step in steps)
                 {
@@ -63,7 +64,7 @@ internal sealed partial class Binder
                     RecordBodyUse(step.At, step.Symbol, step.Token, last: true);
                 }
             }
-            if (splice && symbol.Parameter is not { Kind: ParameterKind.Block })
+            if (use.Splice && symbol.Parameter is not { Kind: ParameterKind.Block })
             {
                 Report(token.Span, Catalogue.NameAloneOnALine.Message(token.Text, symbol.KindPhrase));
             }
@@ -102,10 +103,11 @@ internal sealed partial class Binder
     /// </summary>
     private Resolution? Resolve(Use use, Resolution? previous)
     {
-        var (token, at, path, _, last, _, word, _) = use;
+        var token = use.Token;
+        var at = use.Scope;
         if (token.Kind == SyntaxKind.CheapLocal)
         {
-            if (path)
+            if (use.Path)
             {
                 Report(token.Span, Catalogue.CheapLocalInAPath.Message(token.Text));
                 return null;
@@ -121,7 +123,7 @@ internal sealed partial class Binder
             return local is null ? null : new Resolution(local);
         }
 
-        if (!path)
+        if (!use.Path)
         {
             // A register parses as a name so that a macro body may pass it as a word. Outside a
             // macro body it can only be a mistake, and reporting that it is a register is more
@@ -129,15 +131,15 @@ internal sealed partial class Binder
             // anyway, which is an error, has already been reported at its declaration.
             if (at.Lookup(token.Text) is { } symbol)
                 return new Resolution(symbol);
-            if (!word && !CheckReservedWord(token))
+            if (!use.Word && !CheckReservedWord(token))
                 return null;
-            if (Outside(token, last, report) is { } found)
+            if (Outside(token, use.Last, report) is { } found)
                 return found;
 
             // In a condition a bare name may be a word rather than a name at all, and a word
             // is compared, never looked up.
-            if (!word)
-                ReportUndeclared(token, last, at);
+            if (!use.Word)
+                ReportUndeclared(token, use.Last, at);
             return null;
         }
 
@@ -145,7 +147,7 @@ internal sealed partial class Binder
         if (previous is not { } before)
             return ModuleRoot(token, report);
         if (before.Module is { } prefix)
-            return InModule(token, prefix, last, report);
+            return InModule(token, prefix, use.Last, report);
 
         // For a part after `::`, the scope to look in is the one the part before it opened.
         var container = BodyOf(before.Symbol!);
@@ -161,7 +163,7 @@ internal sealed partial class Binder
             // A repetition's binding at the end of a path refers to the member of that scope
             // named by the binding's current value, which is a different member on each
             // iteration, so each iteration resolves it.
-            if (last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
+            if (use.Last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
                 return new Resolution(binding);
             var near = Spelling.Nearest(token.Text, Lookup.Members(container));
             Report(token.Span, Catalogue.NotDeclaredIn.Message(token.Text, $"`{container.Name}`", Lookup.Suggesting(near)));
@@ -169,7 +171,7 @@ internal sealed partial class Binder
                 Fixed(new DiagnosticFix(FixKind.NearestName, near));
             return null;
         }
-        return new Resolution(CheckExported(token, member, last));
+        return new Resolution(CheckExported(token, member, use.Last));
     }
 
     /// <summary>

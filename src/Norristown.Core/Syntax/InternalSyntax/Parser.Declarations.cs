@@ -237,23 +237,29 @@ internal sealed partial class Parser
         {
             return new SegmentAttributeSyntax(
                 Missing(SyntaxKind.Identifier, Catalogue.ExpectedSegmentAttribute.Message("`dp`, `bank`, `mirrors` or `space`")),
-                GreenToken.Missing(SyntaxKind.Equals), null, null, null, null);
+                GreenToken.Missing(SyntaxKind.Equals),
+                value: null, openBracketToken: null, ranges: null, closeBracketToken: null);
         }
         var mirrors = AtWord("mirrors");
         var name = Advance();
         if (Kind != SyntaxKind.Equals)
         {
             return new SegmentAttributeSyntax(
-                name, Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`")), null, null, null, null);
+                name, Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`")),
+                value: null, openBracketToken: null, ranges: null, closeBracketToken: null);
         }
         var equals = Advance();
         if (!mirrors)
-            return new SegmentAttributeSyntax(name, equals, ParseExpression(), null, null, null);
+        {
+            return new SegmentAttributeSyntax(
+                name, equals, ParseExpression(), openBracketToken: null, ranges: null, closeBracketToken: null);
+        }
 
         if (Kind != SyntaxKind.OpenBracket)
         {
             Report(Catalogue.ExpectedBracket.Message("`[` and the banks: `mirrors = [$00..$3f, $80..$bf]`"));
-            return new SegmentAttributeSyntax(name, equals, null, null, null, null);
+            return new SegmentAttributeSyntax(
+                name, equals, value: null, openBracketToken: null, ranges: null, closeBracketToken: null);
         }
         var openBracket = Advance();
         var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseBankRange) : null;
@@ -455,13 +461,21 @@ internal sealed partial class Parser
         var named = AtName;
         var path = ParsePath(Catalogue.ExpectedName.Message("what to use: `.use module::name`"));
         if (!named)
-            return new UseDirectiveSyntax(keyword, path, null, null, null, null, null, null, null);
+        {
+            return new UseDirectiveSyntax(
+                keyword, path, colonColonToken: null, starToken: null, openBraceToken: null, items: null,
+                closeBraceToken: null, asKeyword: null, alias: null);
+        }
 
         if (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Star or SyntaxKind.OpenBrace)
         {
             var colonColon = Advance();
             if (Kind == SyntaxKind.Star)
-                return new UseDirectiveSyntax(keyword, path, colonColon, Advance(), null, null, null, null, null);
+            {
+                return new UseDirectiveSyntax(
+                    keyword, path, colonColon, starToken: Advance(), openBraceToken: null, items: null,
+                    closeBraceToken: null, asKeyword: null, alias: null);
+            }
 
             var openBrace = Advance();
             var items = ParseSeparatedList(ParseUseItem);
@@ -470,10 +484,12 @@ internal sealed partial class Parser
             // it. If the source does not, a missing token fills the slot.
             var closeBrace = Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Message("`}`"));
             return new UseDirectiveSyntax(
-                keyword, path, colonColon, null, openBrace, items, closeBrace, null, null);
+                keyword, path, colonColon, starToken: null, openBrace, items, closeBrace, asKeyword: null, alias: null);
         }
         var (asKeyword, alias) = ParseUseAlias();
-        return new UseDirectiveSyntax(keyword, path, null, null, null, null, null, asKeyword, alias);
+        return new UseDirectiveSyntax(
+            keyword, path, colonColonToken: null, starToken: null, openBraceToken: null, items: null,
+            closeBraceToken: null, asKeyword, alias);
     }
 
     /// <summary>
@@ -611,8 +627,8 @@ internal sealed partial class Parser
         if (Kind != SyntaxKind.OpenParen)
         {
             return new ImportSignatureSyntax(
-                keyword, Missing(SyntaxKind.OpenParen, Catalogue.ExpectedParenthesis.Message("`(`")), null, null, null,
-                GreenToken.Missing(SyntaxKind.CloseParen));
+                keyword, Missing(SyntaxKind.OpenParen, Catalogue.ExpectedParenthesis.Message("`(`")),
+                entry: null, arrowToken: null, exit: null, GreenToken.Missing(SyntaxKind.CloseParen));
         }
         var openParen = Advance();
 

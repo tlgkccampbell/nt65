@@ -72,14 +72,19 @@ internal sealed partial class Parser
         // A name that is not one of the parameter-kind words names an enum, and the parameter
         // takes that enum's members.
         if (Kind == SyntaxKind.ColonColon || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsParameterKind(Current.Text)))
-            return new ParameterKindSyntax(null, ParseName(), null, null, null, null, null, null, null);
+        {
+            return new ParameterKindSyntax(
+                keyword: null, type: ParseName(), openParenToken: null, words: null, element: null,
+                low: null, dotDotToken: null, high: null, closeParenToken: null);
+        }
         if (Kind != SyntaxKind.Identifier)
         {
             return new ParameterKindSyntax(
                 Missing(SyntaxKind.Identifier,
                     Catalogue.ExpectedParameterKind.Message(
                         "`expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)`, `block` or an enum's name")),
-                null, null, null, null, null, null, null, null);
+                type: null, openParenToken: null, words: null, element: null,
+                low: null, dotDotToken: null, high: null, closeParenToken: null);
         }
 
         var listed = AtWord("one");
@@ -91,11 +96,17 @@ internal sealed partial class Parser
         // A `one` and a `list` must say what they take, in parentheses after the word; a `const`
         // and an `operand` may.
         if (!listed && !nested && !((ranged || moded) && Kind == SyntaxKind.OpenParen))
-            return new ParameterKindSyntax(keyword, null, null, null, null, null, null, null, null);
+        {
+            return new ParameterKindSyntax(
+                keyword, type: null, openParenToken: null, words: null, element: null,
+                low: null, dotDotToken: null, high: null, closeParenToken: null);
+        }
         if (Kind != SyntaxKind.OpenParen)
         {
             Report(Catalogue.ExpectedParenthesis.Message("`(`"));
-            return new ParameterKindSyntax(keyword, null, null, null, null, null, null, null, null);
+            return new ParameterKindSyntax(
+                keyword, type: null, openParenToken: null, words: null, element: null,
+                low: null, dotDotToken: null, high: null, closeParenToken: null);
         }
 
         var openParen = Advance();
@@ -105,7 +116,7 @@ internal sealed partial class Parser
             var dotDot = Expect(SyntaxKind.DotDot, Catalogue.ExpectedDotDot.Message("`..` and the greatest value: `const(0..15)`"));
             var high = ParseExpression();
             return new ParameterKindSyntax(
-                keyword, null, openParen, null, null, low, dotDot, high,
+                keyword, type: null, openParen, words: null, element: null, low, dotDot, high,
                 Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`")));
         }
 
@@ -114,7 +125,7 @@ internal sealed partial class Parser
         var words = listed || moded ? ParseSeparatedList(ParseListedWord) : null;
         var element = nested ? ParseParameterKind() : null;
         return new ParameterKindSyntax(
-            keyword, null, openParen, words, element, null, null, null,
+            keyword, type: null, openParen, words, element, low: null, dotDotToken: null, high: null,
             Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`")));
     }
 

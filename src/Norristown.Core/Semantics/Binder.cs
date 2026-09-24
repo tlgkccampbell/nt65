@@ -1563,7 +1563,7 @@ internal sealed partial class Binder
             var first = true;
             foreach (var token in name.Names)
             {
-                into.Add(new Use(token, scope, path, first, Last: false, Word: words, Chosen: chosen));
+                into.Add(new Use(token, scope, Path: path, First: first, Last: false, Word: words, Chosen: chosen));
                 path = true;
                 first = false;
             }
