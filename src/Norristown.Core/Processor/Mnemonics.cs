@@ -22,10 +22,10 @@ public static class Mnemonics
     /// <c>M</c> and <c>X</c> are the 65816's width flags, and only <c>rep</c>, <c>sep</c> and
     /// the instructions that write the whole register change them.
     /// </summary>
-    private static readonly (int Bit, string Name)[] Status =
+    private static readonly (StatusFlags Flag, string Name)[] Status =
     [
-        (0x80, "N"), (0x40, "V"), (0x20, "M"), (0x10, "X"),
-        (0x08, "D"), (0x04, "I"), (0x02, "Z"), (0x01, "C"),
+        (StatusFlags.Negative, "N"), (StatusFlags.Overflow, "V"), (StatusFlags.M, "M"), (StatusFlags.X, "X"),
+        (StatusFlags.Decimal, "D"), (StatusFlags.InterruptDisable, "I"), (StatusFlags.Zero, "Z"), (StatusFlags.Carry, "C"),
     ];
 
     /// <summary>
@@ -211,5 +211,5 @@ public static class Mnemonics
     /// order.
     /// </summary>
     private static string Format(long mask) =>
-        string.Join(" ", Status.Where(flag => (mask & flag.Bit) != 0).Select(flag => flag.Name));
+        string.Join(" ", Status.Where(flag => (mask & (long)flag.Flag) != 0).Select(flag => flag.Name));
 }

@@ -28,7 +28,7 @@ public static class RegisterEffects
 
         // `rep` and `sep` write the flags their operand names, and bit 0 is the carry. An
         // operand whose value nt65 cannot work out may name the carry, so it is assumed to.
-        MnemonicKind.Rep or MnemonicKind.Sep => constant is { } flags && (flags & 1) == 0 ? Registers.None : Registers.C,
+        MnemonicKind.Rep or MnemonicKind.Sep => constant is { } flags && (flags & (long)StatusFlags.Carry) == 0 ? Registers.None : Registers.C,
 
         _ => Instructions.Facts(mnemonic).Writes,
     };

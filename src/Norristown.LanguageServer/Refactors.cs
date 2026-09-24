@@ -263,13 +263,13 @@ internal static class Refactors
             && model.ValueOf(immediate.Value) is { Kind: ValueKind.Number } value)
         {
             var flags = value.Number;
-            if (flags != 0 && (flags & ~0x30) == 0)
+            if (flags != 0 && (flags & ~(long)(StatusFlags.M | StatusFlags.X)) == 0)
             {
                 var width = mnemonic == MnemonicKind.Rep ? 16 : 8;
                 var items = string.Join(", ", new[]
                 {
-                    (flags & 0x20) != 0 ? $"a{width}" : null,
-                    (flags & 0x10) != 0 ? $"i{width}" : null,
+                    (flags & (long)StatusFlags.M) != 0 ? $"a{width}" : null,
+                    (flags & (long)StatusFlags.X) != 0 ? $"i{width}" : null,
                 }.OfType<string>());
                 yield return new Change($"Rewrite as `.ensure {items}`", CodeActionKinds.Rewrite,
                     [new Edit(tree, statement.Span, $".ensure {items}")]);

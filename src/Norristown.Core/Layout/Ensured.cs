@@ -1,3 +1,4 @@
+using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -30,7 +31,7 @@ public readonly record struct Ensured(int Reset, int Set)
         {
             if (item.Part is not (StatePart.A or StatePart.Index) || item.Width is not (Width.Eight or Width.Sixteen))
                 continue;
-            var flag = item.Part == StatePart.A ? 0x20 : 0x10;
+            var flag = (int)(item.Part == StatePart.A ? StatusFlags.M : StatusFlags.X);
             var here = item.Part == StatePart.A ? before?.A : before?.Index;
             if (here == item.Width)
                 continue;

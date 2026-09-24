@@ -710,8 +710,8 @@ public sealed class StateAnalysis : IProcessorStates
             : Width.Eight;
         return state with
         {
-            A = (flags & 0x20) != 0 ? width : state.A,
-            Index = (flags & 0x10) != 0 ? width : state.Index,
+            A = (flags & (long)StatusFlags.M) != 0 ? width : state.A,
+            Index = (flags & (long)StatusFlags.X) != 0 ? width : state.Index,
         };
     }
 
