@@ -1042,8 +1042,9 @@ public static class Catalogue
         Severity.Error,
         "{0} does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff",
         "nt65 computes in 64-bit signed arithmetic, but ca65 computes in 32 bits, so every value that reaches the "
-            + "output must fit ca65's range. The check is made where the value is declared, not again at every "
-            + "place it is used.");
+            + "output must fit ca65's range. The output writes a declaration, an operand or a data value as the "
+            + "source has it, so each step of that expression is checked too. A name is checked where it is "
+            + "declared, not again at every place it is used.");
 
     internal static DiagnosticDescriptor ArithmeticOverflow { get; } = Entry(
         Area.Values,

@@ -431,7 +431,7 @@ public sealed partial class CodeLayout
             // The values of an operand's expressions are checked here, as a data directive's are,
             // because no symbol holds them and no other pass evaluates them and reports problems.
             foreach (var expression in sourceOperand?.ChildNodes.OfType<ExpressionSyntax>() ?? [])
-                model.Check(expression, diagnostics, expansion, SpanOf, CyclesOf);
+                model.Check(expression, diagnostics, expansion, SpanOf, CyclesOf, written: true);
             var operand = substituted?.Operand ?? sourceOperand;
 
             var candidates = Plausible(operand).Where(available.Contains).ToArray();

@@ -45,3 +45,20 @@
 }
 
 .export LIMIT, FLOOR, Counted
+
+; An operand and a data value are written as they stand, too, so their steps are held to
+; the same 32 bits.
+.segment RODATA
+.data shifted: .byte (1 << 40) >> 40  ;! error[number-too-wide]: $10000000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+.data within:  .byte (1 << 30) >> 30
+
+.segment CODE
+.export .proc wide {
+    lda #((1 << 40) >> 38)           ;! error[number-too-wide]: $10000000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+    rts
+}
+
+; A setting is written as its value, which must fit, whether the build or the default gives it.
+.const HUGE ?= $100000000           ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+
+.export shifted, within, HUGE

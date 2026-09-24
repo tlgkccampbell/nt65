@@ -325,13 +325,17 @@ public sealed class SemanticModel
     /// <summary>
     /// Evaluates an expression and reports its problems into <paramref name="diagnostics"/>. It
     /// is used for the operands of a data directive, which are not any symbol's value and so
-    /// would otherwise never be evaluated with their problems reported.
+    /// would otherwise never be evaluated with their problems reported. When
+    /// <paramref name="written"/> is true, the output writes the expression as it stands, so every
+    /// step of it must also fit ca65's 32-bit arithmetic.
     /// </summary>
     public void Check(
         SyntaxNode expression, List<Diagnostic> diagnostics, Expansion? on = null,
-        Func<Symbol, long?>? spans = null, Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
+        Func<Symbol, long?>? spans = null, Func<Symbol, Symbol, bool, CycleSpan>? cycles = null,
+        bool written = false) =>
         Evaluator.Check(
-            expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on), spans, cycles, Configuration);
+            expression, Segments, resolved, diagnostics, binaryLength, BindingsOf(on), spans, cycles, Configuration,
+            written);
 
     /// <summary>
     /// Returns the bytes an operand becomes, for a literal or for text that a charmap maps.

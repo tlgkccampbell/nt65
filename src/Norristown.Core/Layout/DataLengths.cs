@@ -38,7 +38,7 @@ public static class DataLengths
         if (diagnostics is not null)
         {
             foreach (var operand in ElementsOf(directive))
-                model.Check(operand, diagnostics, on);
+                model.Check(operand, diagnostics, on, written: true);
         }
         Check(directive, model, diagnostics, on);
         if (directive is DataDirectiveSyntax data)

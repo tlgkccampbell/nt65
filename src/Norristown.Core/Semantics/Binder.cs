@@ -1970,6 +1970,10 @@ internal sealed partial class Binder
                     setting.Value = binder.configuration.SettingOf(binder.tree, node.Name.Text) is { } given
                         ? Value.Of(given)
                         : Value.Unknown;
+
+                    // The output writes a setting as its value, which ca65 has to be able to hold.
+                    if (setting.Value.AsNumber() is { } number && !Evaluator.FitsCa65(number))
+                        binder.Report(node.Name.Span, Evaluator.TooWide(number));
                 }
                 binder.CollectUses(node.Value, binder.uses, words: true);
                 return;

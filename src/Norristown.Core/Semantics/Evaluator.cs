@@ -45,9 +45,10 @@ internal sealed partial class Evaluator
     private readonly HashSet<Symbol> evaluated = [];
     private readonly List<Symbol> evaluating = [];
 
-    // The declarations already reported for a value wider than ca65 can hold. The steps of the
-    // same expression around that value are the same mistake, so only the first is reported.
-    private readonly HashSet<Symbol> wide = [];
+    // The declarations and operands already reported for a value wider than ca65 can hold. The
+    // steps of the same expression around that value are the same mistake, so only the first is
+    // reported.
+    private readonly HashSet<object> wide = [];
 
     // How many problems evaluation has met, counting one it found again and did not report. A
     // call that meets one is evaluated again at each use, so that each use reports it.
@@ -125,6 +126,8 @@ internal sealed partial class Evaluator
     /// Evaluates <paramref name="expression"/> and reports any problems with it. An
     /// expression that is not a symbol's value, such as an operand of a data directive, is never
     /// reached by the pass over the symbols, so the code that reads it calls this to check it.
+    /// When <paramref name="written"/> is true, the output writes the expression as it stands,
+    /// and every step of it is checked against what ca65 can hold.
     /// </summary>
     public static void Check(
         SyntaxNode expression,
@@ -135,7 +138,8 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
         Func<Symbol, Symbol, bool, CycleSpan>? cycles = null,
-        Configuration? configuration = null)
+        Configuration? configuration = null,
+        bool written = false)
     {
         var inputs = new EvaluationInputs(segments, new BoundNames(resolved, bound))
         {
@@ -144,7 +148,9 @@ internal sealed partial class Evaluator
             Cycles = cycles,
             Configuration = configuration,
         };
-        new Evaluator(EvaluationMode.Check, inputs, (diagnostic, _) => diagnostics.Add(diagnostic)).Bytes(expression);
+        var evaluator = new Evaluator(EvaluationMode.Check, inputs, (diagnostic, _) => diagnostics.Add(diagnostic));
+        using (evaluator.Enter(evaluator.context with { Written = written ? expression : null }))
+            evaluator.Bytes(expression);
     }
 
     /// <summary>
@@ -199,7 +205,16 @@ internal sealed partial class Evaluator
     /// only queries goes through <see cref="ValueOf"/>.
     /// </summary>
     public Value Evaluate(SyntaxNode node) =>
-        context.Declaring is null ? Evaluated(node) : CheckedForCa65(node, Evaluated(node));
+        context.Written is null ? Evaluated(node) : CheckedForCa65(node, Evaluated(node));
+
+    /// <summary>
+    /// Determines whether ca65 can hold a value. ca65's own arithmetic is 32-bit signed, and it
+    /// also reads a 32-bit value as unsigned.
+    /// </summary>
+    internal static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
+
+    /// <summary>Returns the diagnostic message for a value too wide for ca65 to hold.</summary>
+    internal static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Message(Value.Of(number));
 
     /// <summary>
     /// Returns an evaluator that answers a query, reporting nothing and changing no symbol.
@@ -217,14 +232,6 @@ internal sealed partial class Evaluator
         return false;
     }
 
-    /// <summary>Returns the diagnostic message for a value too wide for ca65 to hold.</summary>
-    private static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Message(Value.Of(number));
-
-    /// <summary>
-    /// Determines whether ca65 can hold a value. ca65's own arithmetic is 32-bit signed, and it
-    /// also reads a 32-bit value as unsigned.
-    /// </summary>
-    private static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
 
     /// <summary>
     /// Returns the word that one side of a comparison gives. This is the value when it is
@@ -259,14 +266,15 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// Checks a value on its way into the output against what ca65 can hold, and returns it.
-    /// ca65 computes in 32 bits, and the output emits a declaration's expression as it appears in
-    /// the source, so every step of the expression has to be a number that ca65 can also reach.
+    /// ca65 computes in 32 bits, and the output emits a declaration's expression or an operand as
+    /// it appears in the source, so every step of the expression has to be a number that ca65 can
+    /// also reach.
     /// </summary>
     private Value CheckedForCa65(SyntaxNode node, Value value)
     {
         // A name's value comes from its declaration, and a value too wide for ca65 is reported
         // there rather than again at every use of the name.
-        if (node is NameExpressionSyntax || context.Declaring is not { } within)
+        if (node is NameExpressionSyntax || context.Written is not { } within)
             return value;
         if (value.AsNumber() is { } number && !FitsCa65(number))
         {
@@ -477,7 +485,7 @@ internal sealed partial class Evaluator
         {
             // The address is read with this symbol on the stack, so that an address that reaches
             // back to it through other data is reported as a cycle.
-            using (Evaluating(symbol, context with { Declaring = null }))
+            using (Evaluating(symbol, context with { Written = null }))
                 landing = LandingOf(elsewhere);
         }
         if (elsewhere?.Parent is DataDeclarationSyntax { Directive: null } && landing is { } target && target.Storage != symbol)
@@ -494,7 +502,7 @@ internal sealed partial class Evaluator
             // while another symbol's value is being evaluated. The output contains only the
             // resulting count, in a `.res`, so its steps are not checked against what ca65 can
             // hold.
-            using (Evaluating(symbol, context with { Declaring = null }))
+            using (Evaluating(symbol, context with { Written = null }))
             {
                 if (symbol.Data is { } element && RoomFor(element) is { } room)
                 {
@@ -528,7 +536,7 @@ internal sealed partial class Evaluator
 
         // The output contains the symbol's value and every step of the expression that
         // defines it, because ca65 computes those steps again from the text.
-        using (Evaluating(symbol, context with { Declaring = symbol }))
+        using (Evaluating(symbol, context with { Written = symbol }))
             symbol.Value = Evaluate(expression);
 
         // `NAME = expr` is a constant if the expression names no address, and an address
@@ -1018,9 +1026,10 @@ internal sealed partial class Evaluator
     /// The symbol whose evaluation is under way at the outermost level, whose file each problem
     /// found belongs to.
     /// </param>
-    /// <param name="Declaring">
-    /// The symbol whose value expression is being evaluated. The output emits that expression as
-    /// it appears in the source, so every step of it is checked against what ca65 can hold.
+    /// <param name="Written">
+    /// The symbol whose value expression is being evaluated, or the operand being checked, when
+    /// the output writes that expression as it appears in the source. ca65 then works every step
+    /// of it out again, so every step is checked against what ca65 can hold.
     /// </param>
     /// <param name="Choosing">
     /// The number of <c>.select</c>-chosen values that evaluation is inside, where an unresolved
@@ -1035,7 +1044,7 @@ internal sealed partial class Evaluator
     /// again.
     /// </param>
     private readonly record struct WalkContext(
-        Symbol? Owner, Symbol? Declaring, int Choosing, bool ReadingBody, bool Apart);
+        Symbol? Owner, object? Written, int Choosing, bool ReadingBody, bool Apart);
 
     /// <summary>
     /// Represents where an address lands in a declaration that has an element type.
