@@ -545,12 +545,10 @@ internal sealed class Workspace
     }
 
     private static bool SamePath(string a, string b) =>
-        string.Equals(Paths.Normalized(a), Paths.Normalized(b),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        string.Equals(Paths.Normalized(a), Paths.Normalized(b), FilePaths.Comparison);
 
     private static bool Within(string directory, string path) =>
-        Paths.Normalized(path).StartsWith(Paths.Normalized(directory) + "/",
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        Paths.Normalized(path).StartsWith(Paths.Normalized(directory) + "/", FilePaths.Comparison);
 
     /// <summary>
     /// Returns <paramref name="tree"/> with the edits of one notification applied in order. The
