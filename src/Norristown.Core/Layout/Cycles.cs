@@ -221,7 +221,7 @@ public static class Cycles
     {
         Width.Eight => new Timing(0),
         Width.Sixteen => new Timing(cycles),
-        _ => new Timing(new CycleCount(0, cycles), $"+{cycles} when {register.Name} is 16-bit"),
+        _ => new Timing(new CycleCount(0, cycles), $"+{cycles} when {register.Name} {register.Is} 16-bit"),
     };
 
     /// <summary>Returns what native mode adds to an interrupt or a return from one.</summary>
