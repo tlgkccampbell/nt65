@@ -2536,6 +2536,35 @@ what ca65 code uses `.ident` for.
 Over a list or a count the binding names no member, so a path ending in it is an error, and
 so is a scope with no member of the name the binding stands for on some turn.
 
+**A list of lists.** A list's items may name other lists, or enums, and an `.each` may walk
+what an outer `.each` has bound, so a table laid out in rows is walked row by row:
+
+```nt65
+.list low {
+    1
+    2
+}
+.list high {
+    10
+    20
+}
+.list rows {
+    low
+    high
+}
+
+.data table: .byte[] {
+    .each rows, row {
+        .each row, value {
+            value
+        }
+    }
+}
+```
+
+The binding is the item as written, a name, so what the inner `.each` walks follows from the
+source as any other `.each` does.
+
 **A declaration named after the binding is a family**: one declaration per member of the enum,
 under the member's name, in the scope around the `.each`. It is the rule that lets
 `actions::c` *find* a member's declaration, run the other way to *make* one.

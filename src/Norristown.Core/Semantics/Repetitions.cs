@@ -137,11 +137,14 @@ public static class Repetitions
         }
 
         // A list item is kept as it was written, because the items may be labels, which have no
-        // value at all, and a name bound to a label must behave as that label.
-        if (model.ItemsOf(walked) is { } items)
+        // value at all, and a name bound to a label must behave as that label. The name walked may
+        // be an outer repetition's, bound to an item that names a list or an enum, which is how a
+        // list of lists is walked.
+        var named = model.SymbolOf(walked, outer);
+        if ((model.ItemsOf(walked) ?? (named is { Kind: SymbolKind.List } list ? list.Items : null)) is { } items)
             return [.. items.Select((item, i) => Expansion.Iteration(outer, block, binding, Value.Unknown, item, i))];
 
-        if (model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } members })
+        if (named is { Kind: SymbolKind.Enum, Body: { } members })
             return [.. members.Symbols.Where(member => member.IsEnumMember).Select(
                 (member, i) => Expansion.Iteration(outer, block, binding, member.Value, null, i, member))];
 

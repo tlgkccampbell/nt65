@@ -1,0 +1,17 @@
+; An `.each` may walk what an outer `.each` bound only where that names a list or an enum.
+.module main
+
+.cpu 6502
+
+.list numbers {
+    3
+}
+
+.segment RODATA
+.export .data refused: .byte[] {
+    .each numbers, n {
+        .each n, value {        ;! error[each-not-over-a-list]: `.each` walks a list or an enum, and this is neither
+            value
+        }
+    }
+}

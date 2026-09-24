@@ -1,0 +1,48 @@
+; A list's items may name other lists, or enums, and an `.each` may walk what an outer `.each`
+; bound, so a table laid out in rows is walked row by row.
+.module main
+
+.cpu 6502
+
+.export table, colors
+
+.list low {
+    1
+    2
+}
+.list high {
+    10
+    20
+}
+.list rows {
+    low
+    high
+}
+
+.segment RODATA
+.data table: .byte[] {
+    .each rows, row {
+        .each row, value {
+            value
+        }
+    }
+}
+
+.enum Color {
+    red
+    green
+}
+.list kinds {
+    Color
+}
+
+.data colors: .byte[] {
+    .each kinds, kind {
+        .each kind, color {
+            color
+        }
+    }
+}
+
+.assert .sizeof(table) == 4
+.assert .sizeof(colors) == 2
