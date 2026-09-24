@@ -1,0 +1,108 @@
+; This module runs the monitor on the NES, as an NROM cartridge.
+;
+; The monitor writes on a text screen that `platform::screen` keeps, and reads each line from
+; the on-screen keyboard of `platform::keyboard`, both of which it shares with the Super NES. An
+; NMI at each vblank copies part of the screen into VRAM, as `platform::video` says.
+;
+; There is no firmware, so the BRK handler saves the registers itself. A BRK comes in through the
+; IRQ vector, which it shares with the IRQ. The start code turns off the APU's IRQs, and nothing
+; turns on a cartridge's, so the handler takes every entry as a BRK.
+.module platform
+
+.cpu 6502
+
+.use nes::*
+.use monitor::registers
+.use monitor::text::print
+.use platform::{screen, keyboard, video}
+
+.export COLUMNS, LINE_LENGTH, NEWLINE, DELETE, exit, halt, start, nmi, on_brk
+.export .use platform::screen::putc
+.export .use platform::keyboard::read_line
+.export .signature running = a8, i8 ; the 6502's registers, which are all it has
+
+; The characters from space to `_`, which are ASCII's codes and the font's tiles.
+.export .charmap text {
+    ' '..'_' = ' '
+}
+
+.config COLUMNS = 32                ; the 256 dots of a line, eight to a tile, as a setting
+LINE_LENGTH = COLUMNS - 2           ; a row, after the prompt and with room for the cursor
+NEWLINE = $0D                       ; RETURN, which is outside `text`
+DELETE = $7F                        ; what the keyboard's DEL key types
+
+.segment CODE
+; Starts the monitor on a reset, with the screen off and NMIs off. The PPU takes two frames to
+; wake, and the monitor sets its own part of the screen up meanwhile.
+.proc start: running, noreturn {
+    sei
+    cld
+    ldx #$FF
+    txs
+    inx
+    stx PPUCTRL
+    stx PPUMASK
+    stx DMC_FREQ                    ; no sample IRQ
+    lda #IRQ_OFF
+    sta FRAME_COUNTER
+    bit PPUSTATUS                   ; a vblank that started before the reset does not count
+@first:
+    bit PPUSTATUS
+    bpl @first
+    jsr screen::setup
+    jsr keyboard::setup
+@second:
+    bit PPUSTATUS
+    bpl @second
+    jsr video::setup
+    jmp monitor::main
+}
+
+; Says the monitor has stopped, and stops. There is nothing to return to.
+.proc exit: running, noreturn {
+    jsr print
+    .strz text("PRESS RESET TO START AGAIN")
+    .fallthrough halt
+}
+
+; Waits for good. The NMI goes on showing the screen.
+.proc halt: running, noreturn {
+@wait:
+    jmp @wait
+}
+
+; Takes an NMI, from the monitor or from code that `G` runs.
+.proc nmi: interrupt {
+    pha
+    txa
+    pha
+    tya
+    pha
+    jsr video::refresh
+    pla
+    tay
+    pla
+    tax
+    pla
+    rti
+}
+
+; Takes a BRK. The 6502 has pushed the PC past the BRK and P.
+.proc on_brk: interrupt {
+    sta registers::ac
+    stx registers::xr
+    sty registers::yr
+    pla
+    sta registers::sr
+    ; The return address is two past the BRK.
+    pla
+    sec
+    sbc #2
+    sta registers::pc
+    pla
+    sbc #0
+    sta registers::pc+1
+    tsx
+    stx registers::sp
+    jmp monitor::broke
+}

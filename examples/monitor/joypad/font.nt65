@@ -1,14 +1,31 @@
-; This module draws the monitor's font, the characters from space to `_` in ASCII's order, as
-; 2bpp tiles for BG1.
+; This module draws the monitor's font, the characters from space to `_` in ASCII's order, for
+; the machines whose screens are 2bpp tiles.
 ;
 ; The font is drawn below as a type specimen lays it out, in eight bands of eight characters,
 ; each character eight dots wide and eight high, with `#` for a dot that shows. nt65 turns the
-; bands into tiles as it compiles, so the picture here is the only source of the font.
+; bands into tiles as each platform compiles them, so the picture here is the only source of the
+; font. The machines lay a tile's planes out differently, so each platform writes its own tiles,
+; with `.each` over `bands` and `plane`.
+;
+; The font is drawn in three *styles*, each a set of GLYPHS tiles after the one before, which
+; differ only in the colors of the tile's background and of its dots. A character's tile in a
+; style is its code plus the style. So one palette serves the whole screen, and the keyboard
+; shows which key the cursor is on by the tiles it draws.
 .module platform::font
 
-.export font, GLYPHS
+.use platform::text
+
+.export GLYPHS, PLAIN, KEY, CHOSEN, STYLES, bands, plane
 
 GLYPHS = 64                         ; the characters from space to `_`
+STYLES = 3
+
+; The styles, as what they add to a character's code.
+PLAIN  = 0                          ; the monitor's text, in ink on paper
+KEY    = GLYPHS                     ; a key, in ink on the keys' color
+CHOSEN = 2 * GLYPHS                 ; the key the cursor is on, in paper on the light color
+
+.assert text(' ') + STYLES * GLYPHS <= 256, "every tile of every style must fit in a byte"
 
 ; space ! " # $ % & '
 .list band_0 {
@@ -130,15 +147,18 @@ GLYPHS = 64                         ; the characters from space to `_`
 ; Returns the eight dots from `at` in a row of a band, as a byte whose bit 7 is the leftmost.
 .func dots(row, at) = (nibble(row, at) << 4) | nibble(row, at + 4)
 
-.segment RODATA
-; The tiles, each eight rows of two bytes. A dot's first plane is the font's, and its second
-; plane is always set, so a dot is color 2 or 3 of its palette and never transparent.
-.data font: .byte[GLYPHS * 16] {
-    .each bands, band {
-        .repeat 8, glyph {
-            .each band, row {
-                dots(row, glyph * 8), $FF
-            }
-        }
-    }
-}
+; Returns the color a style draws a tile's background in: 0 is paper, 1 the keys' color, 2 the
+; light color and 3 ink.
+.func paper(style) = .switch(style, [PLAIN], 0, [KEY], 1, 2)
+
+; Returns the color a style draws a tile's dots in.
+.func ink(style) = .select(style == CHOSEN, 0, 3)
+
+; Returns 1 where bit `p` of a color is set, and 0 where it is not.
+.func has(color, p) = (color >> p) & 1
+
+; Returns plane `p` of the eight dots `d`, drawn in a style's colors.
+.func paint(d, style, p) = (d * has(ink(style), p)) | ((~d & $FF) * has(paper(style), p))
+
+; Returns plane `p` of glyph `glyph`'s eight dots in a row of its band, in a style's colors.
+.func plane(row, glyph, style, p) = paint(dots(row, glyph * 8), style, p)

@@ -1,0 +1,141 @@
+; This module shows the text screen of `platform::screen` on BG1, in mode 0. At the start of each
+; vblank the NMI copies the whole screen into the tilemap in VRAM by DMA.
+.module platform::video
+
+.cpu 65816
+
+.use snes::*
+.use platform::{text, running}
+.use platform::screen::{screen, frames}
+.use platform::font::{GLYPHS, STYLES, bands, plane}
+
+.export setup, refresh
+
+MAP = $0000                         ; the word address in VRAM of BG1's tilemap
+TILES = $1000                       ; the word address in VRAM of BG1's tile 0
+
+; Returns a color, from five bits each of red, green and blue.
+.func rgb(r, g, b) = r | (g << 5) | (b << 10)
+
+.segment RODATA
+; The palette, in the order of the font's colors.
+.data palette: .word[] {
+    rgb(2, 5, 12)                   ; paper
+    rgb(7, 7, 9)                    ; the keys' color
+    rgb(31, 26, 6)                  ; the light color
+    rgb(28, 28, 24)                 ; ink
+}
+
+; The font's tiles, in each of its styles, each tile eight rows of the two planes of a row.
+.data font: .byte[STYLES * GLYPHS * 16] {
+    .repeat STYLES, style {
+        .each bands, band {
+            .repeat 8, glyph {
+                .each band, row {
+                    plane(row, glyph, style * GLYPHS, 0), plane(row, glyph, style * GLYPHS, 1)
+                }
+            }
+        }
+    }
+}
+
+; What each S-PPU port that the monitor relies on is set to, before the screen is turned on.
+.struct Setting {
+    port:  .byte                    ; the port's offset from $2100
+    value: .byte
+}
+
+.data settings: .type Setting[] {
+    { port = <BGMODE, value = 0 }           ; mode 0, with 8 by 8 tiles
+    { port = <BG1SC, value = >MAP }         ; a tilemap of 32 by 32 tiles
+    { port = <BG12NBA, value = TILES >> 12 }
+    { port = <BG1HOFS, value = 0 }
+    { port = <BG1HOFS, value = 0 }
+    { port = <BG1VOFS, value = $FF }        ; -1, so that the first line shows row 0 of the tiles
+    { port = <BG1VOFS, value = $FF }
+    { port = <TM, value = BG1 }
+    { port = <VMAIN, value = STEP_HIGH }
+}
+
+.data zero: .byte 0
+
+; The DMAs that `dma!` runs. The first three set VRAM and CGRAM up, and the NMI runs the last.
+.data clear_vram: .type Dma {
+    mode = DMA_TWO_PORTS | DMA_FIXED
+    port = <VMDATAL
+    source = zero
+    length = 0                      ; all 64K
+}
+
+.data load_font: .type Dma {
+    mode = DMA_TWO_PORTS
+    port = <VMDATAL
+    source = font
+    length = .sizeof(font)
+}
+
+.data load_palette: .type Dma {
+    mode = DMA_ONE_PORT
+    port = <CGDATA
+    source = palette
+    length = .sizeof(palette)
+}
+
+; The tiles of the screen, which are the tilemap's low bytes. The high bytes stay 0, for
+; palette 0.
+.data show_screen: .type Dma {
+    mode = DMA_ONE_PORT
+    port = <VMDATAL
+    source = screen
+    length = .sizeof(screen)
+}
+
+; Runs the DMA that `settings`, a `Dma` record, describes, on channel 0.
+.macro dma(settings) {
+    ldx #.sizeof(Dma) - 1
+@copy:
+    lda settings,x
+    sta DMA0,x
+    dex
+    bpl @copy
+    lda #1
+    sta MDMAEN
+}
+
+.segment CODE
+; Sets up the S-PPU for the text screen, and loads the font and the palette. The screen must be
+; in forced blank, and stays in it.
+.proc setup: running {
+    ldx #0
+@setting:
+    ldy settings + Setting::port,x
+    lda settings + Setting::value,x
+    sta PPU,y
+    inx
+    inx
+    cpx #.sizeof(settings)
+    bne @setting
+    stz VMADDL
+    stz VMADDL+1
+    dma!(clear_vram)
+    lda #<(TILES + text(' ') * 8)
+    sta VMADDL
+    lda #>(TILES + text(' ') * 8)
+    sta VMADDL+1
+    dma!(load_font)
+    stz CGADD
+    dma!(load_palette)
+    lda #STEP_LOW
+    sta VMAIN
+    rts
+}
+
+; Copies `screen` into the tilemap, and counts the frame. The NMI calls this at the start of
+; each vblank, in either mode.
+.proc refresh: e*, a8, i8, dp = 0, dbr = 0 {
+    stz VMADDL
+    stz VMADDL+1
+    dma!(show_screen)
+    inc frames
+    rts
+}

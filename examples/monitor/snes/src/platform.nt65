@@ -3,8 +3,9 @@
 ; 8K of RAM and the ports are all seen.
 ;
 ; The monitor writes on a text screen that `platform::screen` keeps, and reads each line from
-; the on-screen keyboard of `platform::keyboard`. An NMI at each vblank copies the screen into
-; VRAM, and the S-CPU reads the joypad as that vblank starts.
+; the on-screen keyboard of `platform::keyboard`, both of which it shares with the NES. An NMI at
+; each vblank copies the screen into VRAM, as `platform::video` says, and the S-CPU reads the
+; joypad as that vblank starts.
 ;
 ; There is no firmware, so the BRK handlers save the registers themselves. A BRK in native mode
 ; comes in through the native BRK vector, and one in emulation mode through the IRQ vector, which
@@ -17,7 +18,7 @@
 .use snes::*
 .use monitor::registers
 .use monitor::text::print
-.use platform::{screen, keyboard}
+.use platform::{screen, keyboard, video}
 
 .export COLUMNS, LINE_LENGTH, NEWLINE, DELETE, exit, halt
 .export start, nmi_native, nmi_emulation, brk_native, brk_emulation, ignore
@@ -52,6 +53,7 @@ DELETE = $7F                        ; what the keyboard's DEL key types
     sta INIDISP
     stz NMITIMEN
     stz HDMAEN
+    jsr video::setup
     jsr screen::setup
     jsr keyboard::setup
     lda #FULL_BRIGHT
@@ -87,7 +89,7 @@ DELETE = $7F                        ; what the keyboard's DEL key types
     lda #0
     pha
     plb
-    jsr screen::refresh
+    jsr video::refresh
     pld
     plb
     ply
@@ -110,7 +112,7 @@ DELETE = $7F                        ; what the keyboard's DEL key types
     lda #0
     pha
     plb
-    jsr screen::refresh
+    jsr video::refresh
     rep #$30
     pld
     plb

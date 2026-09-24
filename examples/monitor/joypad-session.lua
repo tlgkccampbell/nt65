@@ -1,10 +1,13 @@
--- This script runs the monitor on MAME's Super NES for test.ps1. test.ps1 writes a script that
--- sets `session` and then runs this one. `session` holds these fields:
+-- This script runs the monitor on MAME's Super NES or NES for test.ps1. test.ps1 writes a script
+-- that sets `session` and then runs this one. `session` holds these fields:
 --
 --   typed    The text to type, with a carriage return at the end of each line.
+--   space    The name MAME gives the button that types a space, which is Y on the Super NES
+--            and SELECT on the NES.
 --   keys     The address of the keyboard's table, `platform::keyboard::keys`, which says what
 --            each of its places types.
---   pad      The address of `platform::keyboard::pad`, the buttons the monitor last read.
+--   pad      The address of `platform::keyboard::pad`, the buttons the monitor last read, as
+--            `platform::keyboard::Button` says.
 --   screen   The address of `platform::screen::screen`, the text screen.
 --   halt     The address of `platform::halt`, where the monitor stops after `X`.
 --   output   The file the text screen is saved to, once the monitor stops.
@@ -19,19 +22,18 @@ local KEYS = 48
 local COLUMNS = 32
 local TEXT_ROWS = 24
 
--- The buttons, as MAME names them, and as the S-CPU reads them.
+-- The buttons, as MAME names them, and as `platform::keyboard::Button` has them.
 local BUTTONS = {
-    { name = "P1 B", bit = 0x8000 },
-    { name = "P1 Y", bit = 0x4000 },
-    { name = "P1 Select", bit = 0x2000 },
-    { name = "P1 Start", bit = 0x1000 },
-    { name = "P1 Up", bit = 0x0800 },
-    { name = "P1 Down", bit = 0x0400 },
-    { name = "P1 Left", bit = 0x0200 },
-    { name = "P1 Right", bit = 0x0100 },
-    { name = "P1 A", bit = 0x0080 },
+    { name = "P1 A", bit = 0x80 },
+    { name = "P1 B", bit = 0x40 },
+    { name = session.space, bit = 0x20 },
+    { name = "P1 Start", bit = 0x10 },
+    { name = "P1 Up", bit = 0x08 },
+    { name = "P1 Down", bit = 0x04 },
+    { name = "P1 Left", bit = 0x02 },
+    { name = "P1 Right", bit = 0x01 },
 }
-local B, START, UP, DOWN, LEFT, RIGHT, A = 0x8000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080
+local A, START, UP, DOWN, LEFT, RIGHT = 0x80, 0x10, 0x08, 0x04, 0x02, 0x01
 
 local cpu = manager.machine.devices[":maincpu"]
 local memory = cpu.spaces["program"]
@@ -167,7 +169,7 @@ frames = emu.add_machine_frame_notifier(function()
     end
     if next_state <= #states then
         -- The monitor has read the state held, so the next one goes down.
-        if memory:read_u16(session.pad) == states[next_state] then
+        if memory:read_u8(session.pad) == states[next_state] then
             next_state = next_state + 1
             hold(states[next_state] or 0)
         end

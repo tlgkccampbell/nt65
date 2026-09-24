@@ -1,16 +1,29 @@
 ; This module reads a line from an on-screen keyboard, which the joypad drives. The keyboard is
 ; drawn on the rows below the text, three rows of sixteen places. The d-pad moves a cursor over
 ; it, and wraps round at its edges. The buttons do what `read_line` says.
+;
+; The platform's `joypad::read` reads the joypad as a set of `Button`s, whatever the machine
+; calls its buttons.
 .module platform::keyboard
 
-.cpu 65816
-
-.use snes::*
 .use platform::{text, NEWLINE, DELETE, COLUMNS, LINE_LENGTH, running, putc}
-.use platform::screen::{screen, colors, row, column, frames, TEXT_ROWS, ROWS}
+.use platform::screen::{screen, row, column, frames, TEXT_ROWS, ROWS}
+.use platform::font::{KEY, CHOSEN}
 .use monitor::parse::line
 
-.export setup, read_line, keys, pad
+.export Button, setup, read_line, keys, pad
+
+; What the joypad's buttons do, each a bit of a byte, laid out as the NES reads its joypad.
+.enum Button {
+    type   = $80                    ; types the key the cursor is on
+    delete = $40                    ; deletes the last character
+    space  = $20                    ; types a space
+    enter  = $10                    ; ends the line, as RETURN does
+    up     = $08
+    down   = $04
+    left   = $02
+    right  = $01
+}
 
 KEY_COLUMNS = 16
 KEY_ROWS = 3
@@ -20,11 +33,8 @@ DELAY = 16                          ; the frames a held button waits before it r
 REPEAT = 4                          ; the frames between its repeats
 BLINK = $10                         ; the bit of `frames` that blinks the text cursor
 
-KEY_COLOR = 2 << 2                  ; the tilemap's high byte for a key, in palette 2
-CHOSEN_COLOR = 1 << 2               ; the same for the key the cursor is on, in palette 1
-
-DPAD = >(Button::up | Button::down | Button::left | Button::right)
-REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's high byte
+DPAD = Button::up | Button::down | Button::left | Button::right
+REPEATS = DPAD | Button::delete     ; the buttons that repeat
 
 .assert ROWS - FIRST_ROW == KEY_ROWS, "the keyboard must fill the rows below the text"
 .assert KEY_COLUMNS * 2 == COLUMNS, "each place on the keyboard must be two columns wide"
@@ -47,6 +57,7 @@ REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's h
 }
 
 ; The keyboard as it is drawn, with each key's name in the second column of its first place.
+; `draw_keys` draws it in each key's style.
 .data picture: .byte[KEY_ROWS * COLUMNS] {
     .each letters, names {
         .repeat KEY_COLUMNS, place {
@@ -57,10 +68,11 @@ REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's h
 }
 
 .segment BSS
-.data pad:     .byte[2]             ; the buttons held at the last frame, as JOY1L and JOY1H
-.data pressed: .byte[2]             ; the buttons pressed since the frame before, the same way
+.data pad:     .byte                ; the buttons held at the last frame
+.data pressed: .byte                ; the buttons pressed since the frame before
 .data key:     .byte                ; the place on the keyboard the cursor is on
 .data chosen:  .byte                ; what that place types
+.data style:   .byte                ; the style `draw_keys` draws a place in
 .data length:  .byte                ; the characters in `line`
 .data timer:   .byte                ; the frames until the buttons held repeat
 
@@ -68,55 +80,49 @@ REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's h
 ; Draws the keyboard below the text, with the cursor on its first key.
 .proc setup: running {
     ldx #COLUMNS - 1
-@gap:
     lda #text(' ')
+@gap:
     sta screen + TEXT_ROWS * COLUMNS,x
-    stz colors,x
     dex
     bpl @gap
-    ldx #.sizeof(picture) - 1
-@draw:
-    lda picture,x
-    sta screen + FIRST_ROW * COLUMNS,x
-    dex
-    bpl @draw
-    stz key
-    stz pad
-    stz pad+1
+    lda #0
+    sta key
+    sta pad
     jmp draw_keys
 }
 
 ; Reads a line from the keyboard into `parse::line`, echoing it on the screen. The buttons do
 ; these things:
 ;
-;   A          Types the key the cursor is on.
-;   B          Deletes the last character typed.
-;   Y          Types a space.
-;   START      Ends the line, as RETURN does.
-;   d-pad      Moves the cursor over the keyboard. A held button repeats, and so does B.
+;   type       Types the key the cursor is on.
+;   delete     Deletes the last character typed.
+;   space      Types a space.
+;   enter      Ends the line, as RETURN does.
+;   d-pad      Moves the cursor over the keyboard. A held button repeats, and so does delete.
 .proc read_line: running {
-    stz length
+    lda #0
+    sta length
 @frame:
     jsr show_cursor
     jsr next_frame
-    lda pressed+1
+    lda pressed
     and #DPAD
     beq @moved
     jsr move
 @moved:
-    lda pressed+1
-    and #>Button::b
+    lda pressed
+    and #Button::delete
     beq @kept
     jsr delete
 @kept:
-    lda pressed+1
-    and #>Button::y
+    lda pressed
+    and #Button::space
     beq @spaced
     lda #text(' ')
     jsr type
 @spaced:
     lda pressed
-    and #<Button::a
+    and #Button::type
     beq @keyed
     ldx key
     lda keys,x
@@ -125,19 +131,20 @@ REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's h
     cmp #DELETE
     beq @delete
     jsr type
-    bra @keyed
+    jmp @keyed
 @delete:
     jsr delete
 @keyed:
-    lda pressed+1
-    and #>Button::start
+    lda pressed
+    and #Button::enter
     beq @frame
 @done:
     ldy column
     lda #text(' ')
     sta (row),y                     ; the cursor
     ldx length
-    stz line,x
+    lda #0
+    sta line,x
     lda #NEWLINE
     jmp putc
 }
@@ -178,7 +185,7 @@ REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's h
     and #BLINK
     beq @on
     lda #text(' ')
-    bra @draw
+    bne @draw                       ; always taken
 @on:
     lda #text('_')
 @draw:
@@ -187,79 +194,72 @@ REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's h
     rts
 }
 
-; Waits for the next frame, and reads the joypad as the S-CPU read it at the start of that
-; frame's vblank. It leaves the buttons held in `pad`, and the buttons pressed since the frame
-; before in `pressed`. A button that repeats counts as pressed again once it has been held for
-; DELAY frames, and every REPEAT frames after that.
+; Waits for the next frame, and reads the joypad. It leaves the buttons held in `pad`, and the
+; buttons pressed since the frame before in `pressed`. A button that repeats counts as pressed
+; again once it has been held for DELAY frames, and every REPEAT frames after that.
 .proc next_frame: running {
     lda frames
 @wait:
-    wai
+    .if .target(65816) {
+        wai                         ; until the next interrupt, which may be the frame's NMI
+    }
     cmp frames
     beq @wait
-@busy:
-    lda HVBJOY
-    and #JOYPAD_BUSY
-    bne @busy
-    ldx #1
-@byte:
-    lda pad,x
+    jsr platform::joypad::read
+    tax
+    lda pad
     eor #$FF                        ; the buttons that were up
-    and JOY1L,x                     ; and are down now
-    sta pressed,x
-    lda JOY1L,x
-    sta pad,x
-    dex
-    bpl @byte
-    lda pressed+1
+    stx pad
+    and pad                         ; and are down now
+    sta pressed
     and #REPEATS
     beq @held
     lda #DELAY
     sta timer
     rts
 @held:
-    lda pad+1
+    lda pad
     and #REPEATS
     beq @done
     dec timer
     bne @done
     lda #REPEAT
     sta timer
-    lda pad+1
+    lda pad
     and #REPEATS
-    ora pressed+1
-    sta pressed+1
+    ora pressed
+    sta pressed
 @done:
     rts
 }
 
-; Moves the cursor as the d-pad buttons in `pressed` say, across and then up or down, and colors
+; Moves the cursor as the d-pad buttons in `pressed` say, across and then up or down, and draws
 ; the keys again.
 .proc move: running {
-    lda pressed+1
-    and #>Button::right
+    lda pressed
+    and #Button::right
     beq @not_right
     jsr right
 @not_right:
-    lda pressed+1
-    and #>Button::left
+    lda pressed
+    and #Button::left
     beq @not_left
     jsr left
 @not_left:
-    lda pressed+1
-    and #>Button::up
+    lda pressed
+    and #Button::up
     beq @not_up
     jsr up
 @not_up:
-    lda pressed+1
-    and #>Button::down
+    lda pressed
+    and #Button::down
     beq @not_down
     jsr down
 @not_down:
     .fallthrough draw_keys
 }
 
-; Colors each key, the one the cursor is on in the cursor's colors and the rest in a key's.
+; Draws each key, the one the cursor is on in the chosen style and the rest in the keys' style.
 .proc draw_keys: running {
     ldx key
     lda keys,x
@@ -272,13 +272,18 @@ REPEATS = DPAD | >Button::b         ; the buttons that repeat, in the joypad's h
     lda keys,x
     cmp chosen
     beq @chosen
-    lda #KEY_COLOR
-    bra @color
+    lda #KEY
+    bne @style                      ; always taken
 @chosen:
-    lda #CHOSEN_COLOR
-@color:
-    sta colors + COLUMNS,y
-    sta colors + COLUMNS + 1,y
+    lda #CHOSEN
+@style:
+    sta style
+    clc
+    adc picture,y
+    sta screen + FIRST_ROW * COLUMNS,y
+    lda style
+    adc picture + 1,y               ; the carry is clear, as no tile passes 255
+    sta screen + FIRST_ROW * COLUMNS + 1,y
     dex
     bpl @place
     rts

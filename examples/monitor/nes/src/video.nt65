@@ -1,0 +1,181 @@
+; This module shows the text screen of `platform::screen` on the NES's background. The font is in
+; the cartridge's character ROM, and the screen shows on nametable 0, from its second row. A
+; television hides about the top and bottom eight lines of the NES's 240, which are the rows
+; the screen leaves out.
+;
+; The PPU's VRAM can be written only through one port, a byte at a time, and only in vblank, which
+; has room for a few rows. So at each vblank the NMI copies the cursor's row, where the monitor
+; is typing or writing, and the next BATCH rows in turn. A change elsewhere shows within a few
+; frames, and the whole screen is copied every ten.
+.module platform::video
+
+.cpu 6502
+
+.use nes::*
+.use platform::{text, COLUMNS, running}
+.use platform::screen::{screen, row, frames, ROWS}
+.use platform::font::{GLYPHS, STYLES, bands, plane}
+
+.export setup, refresh
+
+MAP = $2000                         ; the VRAM address of nametable 0
+TOP = MAP + COLUMNS                 ; where the screen's first row shows
+BATCH = 3                           ; the rows copied in turn at each vblank
+
+.assert ROWS + 2 == 30, "the screen must leave out the nametable's first and last rows"
+
+.segment RODATA
+; The palette, in the order of the font's colors.
+.data palette: .byte[] {
+    $01                             ; paper, a dark blue
+    $2D                             ; the keys' color, a dark gray
+    $28                             ; the light color, a yellow
+    $30                             ; ink, a white
+}
+
+.segment CHARS
+; The background's pattern table, whose tiles below the font are blank, in paper.
+.res text(' ') * 16
+
+; The font's tiles, in each of its styles, each tile the eight rows of its first plane and then
+; the eight of its second.
+.data font: .byte[STYLES * GLYPHS * 16] {
+    .repeat STYLES, style {
+        .each bands, band {
+            .repeat 8, glyph {
+                .each band, row {
+                    plane(row, glyph, style * GLYPHS, 0)
+                }
+                .each band, row {
+                    plane(row, glyph, style * GLYPHS, 1)
+                }
+            }
+        }
+    }
+}
+
+.segment ZEROPAGE
+.data source: .addr                 ; the row `copy` copies
+
+.segment BSS
+.data turn:  .addr                  ; the row `copy_turn` copies next
+.data count: .byte                  ; the rows `refresh` has still to copy in turn
+
+.segment CODE
+; Loads the palette, clears the nametable, copies the whole screen into it, and then shows it,
+; with an NMI at each vblank. The PPU must be awake, in vblank, and drawing nothing.
+.proc setup: running {
+    lda #>PALETTE
+    sta PPUADDR
+    lda #<PALETTE
+    sta PPUADDR
+    ldx #0
+@color:
+    lda palette,x
+    sta PPUDATA
+    inx
+    cpx #.sizeof(palette)
+    bne @color
+    ; The nametable and its attributes, which choose palette 0 everywhere.
+    lda #>MAP
+    sta PPUADDR
+    lda #<MAP
+    sta PPUADDR
+    lda #0
+    tax
+    ldy #4
+@page:
+    sta PPUDATA
+    inx
+    bne @page
+    dey
+    bne @page
+    lda #<screen
+    sta turn
+    lda #>screen
+    sta turn+1
+    lda #ROWS
+    sta count
+@row:
+    jsr copy_turn
+    dec count
+    bne @row
+    .fallthrough show
+}
+
+; Turns on the NMI and the background, and scrolls the screen to the top of the nametable. The
+; NMI does this again after each copy, since writing PPUADDR moves the scroll.
+.proc show: running {
+    lda #NMI_ON
+    sta PPUCTRL
+    lda #0
+    sta PPUSCROLL
+    sta PPUSCROLL
+    lda #SHOW_BG | BG_LEFT
+    sta PPUMASK
+    rts
+}
+
+; Copies the cursor's row and the next BATCH rows into the nametable, and counts the frame. The
+; NMI calls this at the start of each vblank.
+.proc refresh: running {
+    bit PPUSTATUS                   ; PPUADDR's next write is its high byte
+    lda row
+    ldx row+1
+    jsr copy
+    lda #BATCH
+    sta count
+@row:
+    jsr copy_turn
+    dec count
+    bne @row
+    inc frames
+    jmp show
+}
+
+; Copies the row `turn` points at into the nametable, and moves `turn` to the next row, and from
+; the last to the first.
+.proc copy_turn: running {
+    lda turn
+    ldx turn+1
+    jsr copy
+    lda turn
+    clc
+    adc #COLUMNS
+    sta turn
+    bcc @same_page
+    inc turn+1
+@same_page:
+    cmp #<(screen + ROWS * COLUMNS)
+    bne @done
+    lda turn+1
+    cmp #>(screen + ROWS * COLUMNS)
+    bne @done
+    lda #<screen
+    sta turn
+    lda #>screen
+    sta turn+1
+@done:
+    rts
+}
+
+; Copies the row of `screen` at A, the low byte, and X, the high byte, to where it shows in the
+; nametable. The loop is unrolled, since vblank has room for few rows even so.
+.proc copy: running {
+    sta source
+    stx source+1
+    clc
+    adc #<(TOP - screen)
+    tay
+    txa
+    adc #>(TOP - screen)
+    sta PPUADDR
+    sty PPUADDR
+    ldy #0
+    .repeat COLUMNS {
+        lda (source),y
+        sta PPUDATA
+        iny
+    }
+    rts
+}

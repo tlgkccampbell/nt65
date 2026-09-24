@@ -1,0 +1,10 @@
+{
+  "cpu": "6502",
+  "files": ["src/*.nt65", "../lib/*.nt65", "../joypad/*.nt65"],
+  "out": "../build/nes",
+  "segments": {
+    "HEADER":  { "size": "abs" },
+    "VECTORS": { "size": "abs" },
+    "CHARS":   { "size": "abs" }
+  }
+}

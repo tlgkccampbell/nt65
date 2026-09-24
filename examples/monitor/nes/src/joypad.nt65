@@ -1,0 +1,32 @@
+; This module reads joypad 1 for the on-screen keyboard. A and B type the key and delete, SELECT
+; types a space, and START ends the line.
+.module platform::joypad
+
+.cpu 6502
+
+.use nes::JOY1
+.use platform::running
+
+.export read
+
+.segment BSS
+.data keys: .byte
+
+.segment CODE
+; Returns in A the buttons of joypad 1 that are held, as a set of `keyboard::Button`s. The joypad
+; sends A, B, SELECT, START, up, down, left and right, one to a read. Each goes in at bit 0 and
+; moves up, so A ends at bit 7, as `Button` lays them out.
+.proc read: running {
+    lda #1
+    sta JOY1                        ; latch the buttons
+    sta keys                        ; a 1 that moves out of bit 7 once all eight are in
+    lsr a
+    sta JOY1                        ; and send them
+@button:
+    lda JOY1
+    lsr a
+    rol keys
+    bcc @button
+    lda keys
+    rts
+}

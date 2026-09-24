@@ -3,10 +3,11 @@
 A small monitor in the manner of the ones the 8-bit machines shipped with, written for nt65
 from the start rather than ported: it shows memory, changes it, disassembles it, and runs code
 in it. The monitor itself knows nothing about the machine it runs on. Each machine is a
-*platform* that supplies a handful of routines. There are three: the Commodore 64, with a 6502,
-and the Apple IIGS and the Super NES, with a 65816, on which the monitor reaches all sixteen
-megabytes, shows the 65816's registers and disassembles all of its instructions. The Super NES
-has no keyboard, so the monitor draws one on the screen and types on it with the joypad.
+*platform* that supplies a handful of routines. There are four: the Commodore 64 and the NES,
+with a 6502, and the Apple IIGS and the Super NES, with a 65816, on which the monitor reaches all
+sixteen megabytes, shows the 65816's registers and disassembles all of its instructions. The
+Super NES and the NES have no keyboard, so the monitor draws one on the screen and types on it
+with the joypad. The two share that keyboard, the text screen and the font.
 
 ```text
 NT65 MONITOR
@@ -56,6 +57,20 @@ BRK
 PRESS RESET TO START AGAIN
 ```
 
+The NES has the Super NES's 32 columns and the C64's 6502:
+
+```text
+NT65 MONITOR
+.:600 A9 12 A2 34
+.:604 A0 56 00 00
+.G 600
+BRK
+  PC   AC XR YR SP NV-BDIZC
+  0606 12 34 56 FB 00110000
+.X
+PRESS RESET TO START AGAIN
+```
+
 ## Commands
 
 Numbers are hex, of one to four digits. On the 65816 they are of one to six, and an address's
@@ -63,13 +78,13 @@ first two digits are its bank.
 
 | Command | Does |
 |---|---|
-| `M [from [to]]` | shows memory, eight bytes to a line on the C64, sixteen on the IIGS and four on the Super NES, from `from`, or from where the last `M` or `D` stopped; eight lines unless told where to stop |
+| `M [from [to]]` | shows memory, eight bytes to a line on the C64, sixteen on the IIGS and four on the Super NES and the NES, from `from`, or from where the last `M` or `D` stopped; eight lines unless told where to stop |
 | `:address byte...` | writes up to as many bytes from `address` as a line of `M` shows |
 | `F from to byte` | fills memory from `from` up to and including `to` |
 | `D [from [to]]` | disassembles, from `from` or from where the last `M` or `D` stopped; sixteen instructions unless told where to stop |
 | `G [address]` | calls `address`, or the PC shown by `R`, with the registers `R` shows; the code comes back to the monitor with `RTS` or `BRK`, or on the 65816 with `RTL` or `BRK` |
 | `R` | shows the registers, as a `BRK` or the last `G` left them |
-| `X` | leaves the monitor, or on the Super NES, which has nothing to leave it for, stops |
+| `X` | leaves the monitor, or on the Super NES and the NES, which have nothing to leave it for, stops |
 | `?` | lists the commands |
 
 A line of `M` is itself a `:` command. On the C64, move the cursor up to one, change a byte and
@@ -85,10 +100,10 @@ the second from `DP`. A line of `D` with a nine-character operand, such as `LDA 
 
 A command the monitor cannot read gets a `?`.
 
-### Typing on the Super NES
+### Typing on the Super NES and the NES
 
-The Super NES shows the monitor's text on the top 24 rows of its screen and a keyboard on the
-rows below, with the hex digits along the top:
+The Super NES and the NES show the monitor's text on the top 24 rows of their screens and a
+keyboard on the rows below, with the hex digits along the top:
 
 ```text
  0 1 2 3 4 5 6 7 8 9 A B C D E F
@@ -99,12 +114,15 @@ rows below, with the hex digits along the top:
 The d-pad moves the cursor over the keys, and wraps round at the keyboard's edges. A held
 button repeats.
 
-| Button | Does |
-|---|---|
-| A | types the key under the cursor |
-| B | deletes the last character |
-| Y | types a space |
-| START | ends the line, as RETURN does |
+| Super NES | NES | Does |
+|---|---|---|
+| A | A | types the key under the cursor |
+| B | B | deletes the last character |
+| Y | SELECT | types a space |
+| START | START | ends the line, as RETURN does |
+
+On the NES the monitor has the RAM from `$0200` to `$05FF`, and `$0600` to `$07FF` are free for
+code to run with `G`.
 
 ## Building
 
@@ -114,8 +132,8 @@ With `nt65`, `ca65` and `ld65` on the path, in PowerShell:
 ./build.ps1
 ```
 
-`build/c64/monitor.prg` is the C64 program, `build/apple2gs/monitor.bin` the IIGS's and
-`build/snes/monitor.sfc` the Super NES's cartridge, each with a debug file beside it that points
+`build/c64/monitor.prg` is the C64 program, `build/apple2gs/monitor.bin` the IIGS's,
+`build/snes/monitor.sfc` the Super NES's cartridge and `build/nes/monitor.nes` the NES's, each with a debug file beside it that points
 at the `.nt65` sources and a label file for an emulator's debugger. The script writes the
 checksum into the Super NES cartridge's header, which only the linked image can supply. `-Platform` builds only the platforms it names. From a build of this
 repository, with the pinned cc65 in `.cache/cc65`, run from the repository's root:
@@ -126,8 +144,8 @@ examples/monitor/build.ps1 -Nt65 src/Norristown.Cli/bin/Debug/net10.0/nt65.exe -
 
 ## Running it
 
-`./run.ps1 -Platform c64`, `./run.ps1 -Platform apple2gs` or `./run.ps1 -Platform snes` starts
-a platform's program in its emulator, to try by hand. `-Vice` and `-Mame` name the emulators when `x64sc` and `mame` are not
+`./run.ps1 -Platform c64`, `./run.ps1 -Platform apple2gs`, `./run.ps1 -Platform snes` or
+`./run.ps1 -Platform nes` starts a platform's program in its emulator, to try by hand. `-Vice` and `-Mame` name the emulators when `x64sc` and `mame` are not
 on the path.
 
 [VICE](https://vice-emu.sourceforge.io/) runs the C64's, in `x64sc`, its accurate C64, with the
@@ -144,6 +162,9 @@ which is the sound CPU's boot ROM, `spc700.rom`. MAME's keys for the joypad are 
 for the d-pad, Space for A, Alt for B, Ctrl for Y and 1 for START. After `X` the monitor stops,
 and the Super NES's reset starts it again.
 
+MAME runs the NES's as a cartridge too, and needs no ROM set for it. Its keys for the NES's
+joypad are the arrow keys for the d-pad, Alt for A, Ctrl for B, 5 for SELECT and 1 for START.
+
 On a real IIGS, or to have `X` return to BASIC, the file is a binary that loads at `$2000`. Put
 it on a ProDOS disk as a `BIN` file whose load address is `$2000`, with a disk image tool such
 as CiderPress II, and run it from BASIC.SYSTEM with `BRUN MONITOR`. The platform reads the
@@ -152,7 +173,7 @@ registers of a `BRK` where ROM 3's firmware saves them, and has been tried only 
 ## Testing it
 
 `./test.ps1` runs the sessions in `tests/<platform>` in each platform's emulator, all of them
-at once, and checks the screen each leaves; the eighteen take about four seconds. A session is
+at once, and checks the screen each leaves; the twenty-three take about four seconds. A session is
 the screen as it should be. The lines that start with the prompt, `.`, are what is typed; the
 rest is what the monitor answers. So a new session is written by typing its commands, each on a
 line of its own after a `.`, and running `./test.ps1 -Update -Session name` to fill in the
@@ -170,14 +191,15 @@ the session through MAME's natural keyboard, and at `platform::exit`, where it r
 80-column screen and quits. A session that never reaches its `X` stops after a minute of the
 IIGS's time, and fails.
 
-For the Super NES, MAME runs `snes-session.lua`, which types each line on the on-screen
-keyboard as someone with the joypad would. It reads the keyboard's layout from the cartridge,
+For the Super NES and the NES, MAME runs `joypad-session.lua`, which types each line on the
+on-screen keyboard as someone with the joypad would. It reads the keyboard's layout from the cartridge,
 finds the fewest presses of the d-pad to each character, moving across and up or down at once
 where it can, and presses A with the last of them; START ends each line. It holds each state of
 the joypad until the monitor has read it, which `platform::keyboard::pad` shows, so no press is
-lost while the monitor is busy, and nothing needs MAME's debugger. When the monitor stops in
+lost while the monitor is busy, and nothing needs MAME's debugger. `test.ps1` tells it which
+button types a space, the one button that differs between the two. When the monitor stops in
 `platform::halt`, the script saves the text from `platform::screen::screen` and quits. A session
-that never stops fails after ten minutes of the Super NES's time, which MAME runs through in
+that never stops fails after ten minutes of the machine's time, which MAME runs through in
 about twenty seconds. A session has to fit on the 24 rows of text, because a typed line that
 scrolls off the top is no longer in the screen that `-Update` writes.
 
@@ -189,6 +211,9 @@ of its own in a folder of its own, whose `nt65.json` names its files and the lib
 ```json
 "files": ["src/*.nt65", "../lib/*.nt65"]
 ```
+
+The Super NES and the NES also name `../joypad/*.nt65`, the parts of a platform that the two
+share.
 
 So each platform chooses its own processor, segments and linker configuration, which is what a
 platform differs by, and the library is analyzed as part of every program that uses it. In the
@@ -233,6 +258,26 @@ editor a library file shows as part of the first platform's program.
   BASIC.SYSTEM, and puts its zero page at `$FA` to `$FF`, which the firmware, Applesoft and
   ProDOS leave free.
 
+### What the Super NES and the NES share
+
+The files in `joypad/` are modules of the platform, `platform::screen`, `platform::keyboard` and
+`platform::font`, that each of the two platforms compiles as its own, for the 65816 on the Super
+NES and for the 6502 on the NES. They are written for the 6502, which the 65816 runs as well.
+Each machine supplies what differs: `platform::video`, which shows the screen, and
+`platform::joypad`, which reads the joypad.
+
+- `joypad/screen.nt65`: the text screen, 32 columns by 28 rows, kept in RAM one byte to a place,
+  which is the tile the place shows. `putc` writes into it and scrolls it.
+- `joypad/keyboard.nt65`: `read_line`, and the on-screen keyboard it reads from. What each
+  place on the keyboard types and how the keyboard is drawn are both built from one list of its
+  rows. The keyboard reads the joypad at each frame as a set of `Button`s, which say what each
+  button does, and which each machine's `joypad::read` makes of its own buttons.
+- `joypad/font.nt65`: the font, drawn in the source as a type specimen lays it out, eight
+  characters to a band and `#` for each dot, and the `.func`s that turn a band's row into a
+  plane of a tile. The font is drawn in three styles, the text's, the keys' and the key under
+  the cursor's, which differ only in their colors. The keyboard shows the key under the cursor
+  by the tiles it draws, so both machines show the whole screen in one palette.
+
 ### The Super NES
 
 - `snes/src/platform.nt65`: the `platform` module. The monitor runs in emulation mode, with D
@@ -242,21 +287,33 @@ editor a library file shows as part of the first platform's program.
   through the native BRK vector and one in emulation mode through the IRQ vector, and each
   handler saves every register at its full width before it goes to `monitor::broke`. `X` shows
   a message and stops in `halt`.
-- `snes/src/screen.nt65`: the text screen, on BG1 in mode 0. `putc` writes into a copy of the
-  screen in RAM, one byte to a place, and scrolls it; the NMI copies it, and the palettes of the
-  keyboard's rows, into VRAM by DMA at the start of each vblank. Each DMA is a record laid out
-  as the DMA channel's registers are.
-- `snes/src/keyboard.nt65`: `read_line`, and the on-screen keyboard it reads from. What each
-  place on the keyboard types and how the keyboard is drawn are both built from one list of its
-  rows. The S-CPU reads the joypad at each vblank, and `read_line` takes the buttons pressed
-  since the frame before.
-- `snes/src/font.nt65`: the font, drawn in the source as a type specimen lays it out, eight
-  characters to a band and `#` for each dot. nt65 turns the bands into 2bpp tiles as it
-  compiles.
+- `snes/src/video.nt65`: the screen on BG1 in mode 0, and the font's tiles, each row's two
+  planes together, as the S-PPU reads them. The NMI copies the whole screen into VRAM by DMA at
+  the start of each vblank. Each DMA is a record laid out as the DMA channel's registers are.
+- `snes/src/joypad.nt65`: the buttons of joypad 1, which the S-CPU reads at each vblank, as the
+  keyboard's `Button`s.
 - `snes/src/header.nt65`: the cartridge's header and the interrupt vectors, as records.
 - `snes/src/snes.nt65`: the ports the platform uses, and the joypad's buttons as an enum.
 - `snes/snes.cfg`: the linker configuration, a LoROM cartridge of 32K in bank 0, with the direct
   page in page 0, the stack in page 1 and the variables in the rest of the first 8K of RAM.
+
+### The NES
+
+- `nes/src/platform.nt65`: the `platform` module. There is no firmware, so the platform takes
+  the NMI and the BRK itself. A `BRK` comes in through the IRQ vector, and the start code turns
+  off the APU's IRQs so that nothing else does. `X` shows a message and stops in `halt`.
+- `nes/src/video.nt65`: the screen on the background, from the second row of nametable 0, since
+  a television hides the first and the last. The font's tiles are in the cartridge's character
+  ROM, each tile's first plane before its second, as the PPU reads them. The PPU takes VRAM a
+  byte at a time, and vblank has room for only a few rows, so at each vblank the NMI copies the
+  cursor's row and the next three in turn. The whole screen is copied every ten frames.
+- `nes/src/joypad.nt65`: the buttons of joypad 1, read one at a time. They arrive in the order
+  the keyboard's `Button`s are laid out in.
+- `nes/src/header.nt65`: the iNES header and the interrupt vectors, as records.
+- `nes/src/nes.nt65`: the ports the platform uses.
+- `nes/nes.cfg`: the linker configuration, an NROM cartridge of 16K of program ROM and 8K of
+  character ROM, with the zero page in page 0, the stack in page 1 and the variables from
+  `$0200`.
 
 ### Adding a platform
 
@@ -270,21 +327,22 @@ editor a library file shows as part of the first platform's program.
 3. A linker configuration, an entry in `build.ps1`'s table of platforms, and sessions in
    `tests/<platform>` with an entry in `test.ps1`'s table, which says which emulator runs it
    and names the function that starts a session there. `test.ps1` drives VICE for the C64 and
-   reads its screen, and MAME for the IIGS and the Super NES, each with a script of its own
-   that types a session and reads the screen. Another machine needs a function and a script of
-   its own.
+   reads its screen, and MAME for the IIGS, the Super NES and the NES, with a script for the
+   IIGS and one for the two with a joypad, which types a session and reads the screen. Another
+   machine needs a function and a script of its own, unless it is one more with a joypad.
 
 A platform whose keyboard gives only one key at a time implements `read_line` as a loop over
 it; the C64's screen editor and the Apple II's `GETLN` already do that, and more. The Super NES
-has no keyboard at all, and its `read_line` is a loop over the frames, which reads the joypad at
-each one.
+and the NES have no keyboard at all, and their `read_line` is a loop over the frames, which reads
+the joypad at each one. Another machine with a joypad and a screen of 2bpp tiles can use
+`joypad/` as they do, and supply only `video` and `joypad`.
 
 ## What it shows of nt65
 
 - **A library shared by projects.** The platforms are projects whose files include the
   library's, and the library reaches the platform only through the names `platform` exports.
-- **One library for two processors.** The library is compiled as 6502 code for the C64 and as
-  65816 code for the IIGS. What differs is chosen with `.if .target(65816)`: the registers'
+- **One library for two processors.** The library is compiled as 6502 code for the C64 and the
+  NES and as 65816 code for the IIGS and the Super NES. What differs is chosen with `.if .target(65816)`: the registers'
   record, the enum members of the 65816's addressing modes, its opcode rows, and how `G` enters
   code. A `.func` that describes a mode is a `.switch` over the modes' enum, written one arm to
   a line, and names a 65816 member only inside `.select(.target(65816), ...)`, which reads only
@@ -300,11 +358,16 @@ each one.
   the one thing the library needs of the order of a machine's characters.
 - **Data built as the program is compiled.** The opcode table is sixteen lines of text, as a
   data sheet lays it out; `.each` and `.repeat` walk it, and a `.func` packs each name into
-  two bytes, so the 256-entry tables are written by nt65, not by a script. The Super NES's font
-  is a picture in the same way, which `.func`s of `.strat` turn into tiles, and its keyboard's
+  two bytes, so the 256-entry tables are written by nt65, not by a script. The font of the
+  Super NES and the NES is a picture in the same way, which `.func`s of `.strat` turn into the
+  planes of tiles, each machine laying them out as its video chip reads them. The keyboard's
   keys and its drawing come from one list.
-- **Records for the hardware.** The Super NES's cartridge header, its vectors, the S-PPU's
-  settings and each DMA are records whose structs lay them out as the hardware reads them.
+- **Platform code shared by two machines.** The Super NES's and the NES's keyboard, text screen
+  and font are one set of modules that each machine compiles as part of its own `platform`,
+  reaching the hardware only through the `video` and `joypad` modules each supplies.
+- **Records for the hardware.** The Super NES's and the NES's cartridge headers and vectors,
+  the S-PPU's settings and each DMA are records whose structs lay them out as the hardware reads
+  them.
 - **A family of routines.** The disassembler has one routine for each addressing mode, all
   written once in a `.multiproc` over the modes' enum, and a table of them built with `.each`.
 - **What a routine keeps, checked.** The platform's `putc` promises to keep X and Y, the

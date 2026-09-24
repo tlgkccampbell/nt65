@@ -1,11 +1,11 @@
 # Runs the monitor for a platform in its emulator, to try it by hand. Build first with build.ps1.
 # The C64's runs in VICE, with the label file for VICE's monitor. The IIGS's runs in MAME, which
 # boots with no disk and then loads the file as BRUN would; `X` goes to BASIC.SYSTEM, which is
-# not there, so close MAME instead. The Super NES's runs in MAME as a cartridge, with the joypad
-# on MAME's keys for it.
+# not there, so close MAME instead. The Super NES's and the NES's run in MAME as cartridges, with
+# the joypad on MAME's keys for it.
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('c64', 'apple2gs', 'snes')][string]$Platform,
+    [Parameter(Mandatory)][ValidateSet('c64', 'apple2gs', 'snes', 'nes')][string]$Platform,
     [string]$Vice,
     [string]$Mame
 )
@@ -30,11 +30,12 @@ if ($Platform -eq 'c64') {
 # The ROMs are looked for beside MAME, and what MAME writes of its own goes in the build folder.
 $mame = Emulator 'mame' $Mame
 $roms = Join-Path (Split-Path $mame) 'roms'
-if ($Platform -eq 'snes') {
-    $image = Join-Path $build 'monitor.sfc'
-    if (-not (Test-Path $image)) { throw "snes is not built: run build.ps1 first" }
+$cartridges = @{ snes = 'monitor.sfc'; nes = 'monitor.nes' }
+if ($cartridges[$Platform]) {
+    $image = Join-Path $build $cartridges[$Platform]
+    if (-not (Test-Path $image)) { throw "$Platform is not built: run build.ps1 first" }
     Start-Process $mame -WorkingDirectory $build -ArgumentList @(
-        'snes', '-rompath', "`"$roms`"", '-cart', "`"$image`"", '-window', '-skip_gameinfo')
+        $Platform, '-rompath', "`"$roms`"", '-cart', "`"$image`"", '-window', '-skip_gameinfo')
     return
 }
 

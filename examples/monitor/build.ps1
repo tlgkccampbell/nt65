@@ -2,7 +2,7 @@
 # ca65 and ld65 from the path or from the paths given. Exits 1 if any build fails.
 [CmdletBinding()]
 param(
-    [string[]]$Platform = @('c64', 'apple2gs', 'snes'),
+    [string[]]$Platform = @('c64', 'apple2gs', 'snes', 'nes'),
     [string]$Nt65 = 'nt65',
     [string]$Ca65 = 'ca65',
     [string]$Ld65 = 'ld65'
@@ -20,6 +20,7 @@ $platforms = @{
     c64      = @{ Config = 'c64.cfg'; Image = 'monitor.prg' }
     apple2gs = @{ Config = 'apple2gs.cfg'; Image = 'monitor.bin' }
     snes     = @{ Config = 'snes.cfg'; Image = 'monitor.sfc'; Checksum = 0x7FDC }
+    nes      = @{ Config = 'nes.cfg'; Image = 'monitor.nes' }
 }
 
 # Writes a Super NES header's checksum at an offset in an image, after its complement. The

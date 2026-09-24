@@ -1,0 +1,44 @@
+; This module reads joypad 1 for the on-screen keyboard. A, B and Y type the key, delete and
+; type a space, and START ends the line.
+.module platform::joypad
+
+.cpu 65816
+
+.use snes::*
+.use platform::running
+.use platform::keyboard::Button as Key
+
+.export read
+
+; JOY1H holds B and Y a bit above where `Key` has delete and space, and START and the d-pad
+; where `Key` has them.
+.assert (>Button::b) == Key::delete << 1 && (>Button::y) == Key::space << 1, "B and Y move down a bit"
+.assert (>Button::start) == Key::enter && (>Button::up) == Key::up, "START and the d-pad stay"
+.assert (<Button::a) == Key::type, "A stays"
+
+KEPT = >(Button::start | Button::up | Button::down | Button::left | Button::right)
+
+.segment BSS
+.data keys: .byte
+
+.segment CODE
+; Returns in A the buttons of joypad 1 that are held, as the S-CPU read them at the start of the
+; frame's vblank, as a set of `keyboard::Button`s.
+.proc read: running {
+@busy:
+    lda HVBJOY
+    and #JOYPAD_BUSY
+    bne @busy
+    lda JOY1H
+    and #>(Button::b | Button::y)
+    lsr a
+    sta keys
+    lda JOY1H
+    and #KEPT
+    ora keys
+    sta keys
+    lda JOY1L
+    and #<Button::a
+    ora keys
+    rts
+}

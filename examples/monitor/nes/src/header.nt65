@@ -1,0 +1,46 @@
+; This module holds the cartridge's iNES header, which the NES's emulators read at the start of the
+; file, and the interrupt vectors, at $FFFA.
+.module platform::header
+
+.cpu 6502
+
+.use platform::{start, nmi, on_brk}
+
+NROM = 0                            ; the mapper of a cartridge that holds only ROM, unbanked
+
+; The iNES header.
+.struct Header {
+    name:     .res 3, ' '           ; "NES"
+    eof:      .byte                 ; $1A, MS-DOS's end of file
+    prg_size: .byte                 ; the program ROM, in 16K banks
+    chr_size: .byte                 ; the character ROM, in 8K banks
+    flags_6:  .byte                 ; the mapper's low four bits, and how the nametables mirror
+    flags_7:  .byte                 ; the mapper's high four bits
+    unused:   .res 8
+}
+
+; The 6502's vectors.
+.struct Vectors {
+    nmi:   .addr
+    reset: .addr
+    irq:   .addr                    ; which BRK shares
+}
+
+.assert .sizeof(Header) == 16, "an iNES header is sixteen bytes"
+
+.segment HEADER
+.data header: .type Header {
+    name = "NES"
+    eof = $1A
+    prg_size = 1
+    chr_size = 1
+    flags_6 = (NROM & $0F) << 4
+    flags_7 = NROM & $F0
+}
+
+.segment VECTORS
+.data vectors: .type Vectors {
+    nmi = nmi
+    reset = start
+    irq = on_brk
+}

@@ -1,0 +1,119 @@
+; This module keeps the text screen of a machine that shows 2bpp tiles and has a joypad for a
+; keyboard. The screen is 32 columns by 28 rows of tiles. The monitor writes on the top 24 rows,
+; and the keyboard takes the rest.
+;
+; The screen is kept in `screen`, one byte to a place, which is the tile the place shows. A tile
+; in the plain style of `platform::font` is the character in ASCII whose code is its number, so
+; the monitor's text in `screen` reads as text. The platform's `video` module shows `screen` and
+; counts the frames in `frames`.
+.module platform::screen
+
+.use platform::{text, NEWLINE, COLUMNS, running}
+
+.export ROWS, TEXT_ROWS, screen, row, column, frames, setup, putc
+
+ROWS = 28                           ; the rows of tiles the screen shows
+TEXT_ROWS = 24                      ; the rows the monitor writes on
+
+.assert TEXT_ROWS * COLUMNS == 3 * 256, "scrolling moves three pages"
+
+.segment ZEROPAGE
+.data row:    .addr                 ; the start of the cursor's row in `screen`
+.data column: .byte                 ; the cursor's column, which is COLUMNS past the end of a row
+.data frames: .byte                 ; the frames there have been, counted by `video::refresh`
+
+.segment BSS
+; The screen, which starts on a row's boundary, so that no row crosses a page.
+.align COLUMNS
+.data screen: .byte[COLUMNS * ROWS]
+.data saved:  .byte[2]              ; X and Y, which `putc` keeps
+
+.segment CODE
+; Clears the text, and puts the cursor at the start of its first row.
+.proc setup: running {
+    ldx #0
+    lda #text(' ')
+@clear:
+    .repeat 3, page {
+        sta screen + page * 256,x
+    }
+    inx
+    bne @clear
+    stx column
+    lda #<screen
+    sta row
+    lda #>screen
+    sta row+1
+    rts
+}
+
+; Writes the character in A at the cursor, and moves the cursor on. NEWLINE moves it to the
+; start of the next row. A character written past the end of a row goes at the start of the
+; next one, and a new row past the last scrolls the text up.
+.proc putc: running, keeps x, y {
+    stx saved
+    sty saved+1
+    cmp #NEWLINE
+    bne @character
+    jsr next_row
+    jmp @done
+@character:
+    ldy column
+    cpy #COLUMNS
+    bcc @place
+    pha
+    jsr next_row
+    pla
+    ldy #0
+@place:
+    sta (row),y
+    iny
+    sty column
+@done:
+    ldx saved
+    ldy saved+1
+    .state keeps x, y               ; from `saved`
+    rts
+}
+
+; Moves the cursor to the start of the next row, scrolling the text up a row when the cursor is
+; on the last one.
+.proc next_row: running {
+    lda #0
+    sta column
+    lda row
+    cmp #<(screen + (TEXT_ROWS - 1) * COLUMNS)
+    bne @down
+    lda row+1
+    cmp #>(screen + (TEXT_ROWS - 1) * COLUMNS)
+    beq scroll
+@down:
+    lda row
+    clc
+    adc #COLUMNS
+    sta row
+    bcc @done
+    inc row+1
+@done:
+    rts
+}
+
+; Moves the text up a row, and clears the last row. Each page is moved whole before the next,
+; whose first row the end of the page before reads.
+.proc scroll: running {
+    .repeat 3, page {
+        ldx #0
+    @move:
+        lda screen + COLUMNS + page * 256,x
+        sta screen + page * 256,x
+        inx
+        bne @move
+    }
+    ldx #COLUMNS - 1
+    lda #text(' ')
+@clear:
+    sta screen + (TEXT_ROWS - 1) * COLUMNS,x
+    dex
+    bpl @clear
+    rts
+}

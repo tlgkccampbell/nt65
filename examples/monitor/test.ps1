@@ -15,13 +15,17 @@ $ErrorActionPreference = 'Stop'
 
 # Each platform's emulator, the file it runs, the function that starts a session in it, and what
 # that function needs. VICE saves the C64's screen memory, which is read here; MAME's scripts read
-# the IIGS's and the Super NES's screens themselves.
+# the other machines' screens themselves. The Super NES and the NES share a script, which is told
+# which of their buttons types a space.
 $platforms = [ordered]@{
     c64      = @{ Emulator = 'x64sc'; Given = $Vice; Image = 'monitor.prg'; Run = 'Start-Vice'
                   Start = 'monitor__main'; End = 'platform__exit'; Screen = '0400 07e7'; Columns = 40 }
     apple2gs = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.bin'; Run = 'Start-Apple2gs'
                   Load = 0x2000; Start = 'monitor__main'; End = 'platform__exit' }
-    snes     = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.sfc'; Run = 'Start-Snes' }
+    snes     = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.sfc'; Run = 'Start-Joypad'
+                  System = 'snes'; Space = 'P1 Y' }
+    nes      = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.nes'; Run = 'Start-Joypad'
+                  System = 'nes'; Space = 'P1 Select' }
 }
 
 # An emulator from the path, or from the folder or program given.
@@ -87,25 +91,26 @@ function Start-Apple2gs($settings, $emulator, $image, $labels, $lines, $screen, 
         -RedirectStandardOutput (Join-Path $work "$name.log")
 }
 
-# Starts MAME's Super NES on a session, with a script that sets what snes-session.lua is to do and
-# runs it. The script types on the monitor's keyboard, and saves the screen once the monitor has
-# stopped. A session stops after ten minutes of the Super NES's time.
-function Start-Snes($settings, $emulator, $image, $labels, $lines, $screen, $work, $name) {
+# Starts MAME's Super NES or NES on a session, with a script that sets what joypad-session.lua is
+# to do and runs it. The script types on the monitor's keyboard, and saves the screen once the
+# monitor has stopped. A session stops after ten minutes of the machine's time.
+function Start-Joypad($settings, $emulator, $image, $labels, $lines, $screen, $work, $name) {
     $typed = ($lines | ForEach-Object { $_ + '\r' }) -join ''
     $script = Join-Path $work "$name.lua"
     @(
         'session = {'
         "    typed = `"$typed`","
+        "    space = `"$($settings.Space)`","
         "    keys = 0x$($labels['platform__keyboard__keys']),"
         "    pad = 0x$($labels['platform__keyboard__pad']),"
         "    screen = 0x$($labels['platform__screen__screen']),"
         "    halt = 0x$($labels['platform__halt']),"
         "    output = [[$screen]],"
         '}'
-        "assert(loadfile([[$(Join-Path $PSScriptRoot 'snes-session.lua')]], 't', _ENV))()"
+        "assert(loadfile([[$(Join-Path $PSScriptRoot 'joypad-session.lua')]], 't', _ENV))()"
     ) | Set-Content $script
     $roms = Join-Path (Split-Path $emulator) 'roms'
-    $arguments = @('snes', '-rompath', "`"$roms`"", '-cart', "`"$image`"", '-video', 'none', '-sound', 'none',
+    $arguments = @($settings.System, '-rompath', "`"$roms`"", '-cart', "`"$image`"", '-video', 'none', '-sound', 'none',
                    '-nothrottle', '-skip_gameinfo', '-nonvram_save', '-seconds_to_run', '600',
                    '-autoboot_script', "`"$script`"")
     Start-Process $emulator -ArgumentList $arguments -PassThru -WindowStyle Hidden -WorkingDirectory $work `
