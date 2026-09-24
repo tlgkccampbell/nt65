@@ -259,26 +259,10 @@ public sealed class SemanticModel
     /// </summary>
     public SymbolInfo GetSymbolInfo(int position, IReadOnlyList<string> path, bool fromRoot = false)
     {
-        var at = ScopeAt(position);
-        Resolution? found = null;
-        for (var i = 0; i < path.Count; i++)
-        {
-            var last = i == path.Count - 1;
-            found = i == 0
-                ? fromRoot
-                    ? Lookup.ModuleRoot(path[0], program)
-                    : at.Lookup(path[0]) is { } local
-                        ? new Resolution(local)
-                        : Lookup.Outside(path[0], last, program, used, Globs)
-                : found!.Value.Module is { } prefix
-                    ? Lookup.InModule(path[i], prefix, program)
-                    : Lookup.BodyOf(found.Value.Symbol!)?.FindMember(path[i]) is { } member
-                        ? new Resolution(member)
-                        : null;
-            if (found is null or { IsReported: true })
-                return SymbolInfo.None;
-        }
-        return found?.Means ?? SymbolInfo.None;
+        if (path.Count == 0)
+            return SymbolInfo.None;
+        var start = Lookup.First(path[0], path.Count == 1, fromRoot, ScopeAt(position), program, used, Globs);
+        return Lookup.Walk(start, path, program) is { IsReported: false } found ? found.Means : SymbolInfo.None;
     }
 
     /// <summary>

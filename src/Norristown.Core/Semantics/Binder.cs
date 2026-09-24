@@ -686,31 +686,23 @@ internal sealed partial class Binder
     /// <summary>
     /// Returns the symbol a path names, resolved from <paramref name="at"/> without reporting
     /// anything. A family uses this to find the enum it walks, which has to be known before the
-    /// file's names are resolved, because the declarations the family makes are among them.
+    /// file's names are resolved, because the declarations the family makes are among them. A
+    /// <c>.type</c> uses it to find the type it names.
+    /// <para>
+    /// The path is walked as far as its first missing part, and the symbol reached before that
+    /// part is returned.
+    /// </para>
     /// </summary>
-    private Symbol? NamedByPath(ExpressionSyntax expression, Scope at)
+    private Symbol? NamedByPath(ExpressionSyntax? expression, Scope at)
     {
         if (expression is not NameExpressionSyntax name)
             return null;
-        Resolution? part = null;
-        var path = name.GlobalToken is not null;
         var parts = name.Parts;
-        for (var i = 0; i < parts.Count; i++)
-        {
-            if (parts[i].Name is not { IsMissing: false } token)
-                break;
-            var last = i == parts.Count - 1;
-            part = !path
-                ? at.Lookup(token.Text) is { } local ? new Resolution(local) : Outside(token, last, null)
-                : part is null ? ModuleRoot(token, null)
-                : part.Value.Module is { } prefix ? InModule(token, prefix, last, null)
-                : BodyOf(part.Value.Symbol!)?.FindMember(token.Text) is { } member ? new Resolution(member)
-                : null;
-            path = true;
-            if (part is null or { IsReported: true })
-                return null;
-        }
-        return part?.Symbol;
+        var present = parts.TakeWhile(part => part.Name is { IsMissing: false }).Select(part => part.Name!.Text).ToList();
+        if (present.Count == 0)
+            return null;
+        var start = Lookup.First(present[0], parts.Count == 1, name.GlobalToken is not null, at, program, used, globs, Touch);
+        return Lookup.Walk(start, present, program, BodyOf, Touch)?.Symbol;
     }
 
     /// <summary>

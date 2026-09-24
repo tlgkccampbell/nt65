@@ -3,74 +3,96 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Tracks which branch of an <c>.if</c> chain is included, as a walk over a container's
-/// children reaches each branch. A chain is a run of sibling blocks, made up of the <c>.if</c>
-/// that starts it followed by any <c>.elseif</c> and <c>.else</c> blocks that continue it. Code
-/// that walks the siblings therefore keeps a little state, namely whether a chain is open and
-/// whether one of its branches has already been taken.
+/// Decides which branch of each <c>.if</c> chain in a run of siblings is included. A chain is a
+/// run of sibling blocks, made up of the <c>.if</c> that starts it followed by any
+/// <c>.elseif</c> and <c>.else</c> blocks that continue it. Every pass that walks siblings reads
+/// the chains here, so a line and a block are never included by one pass and left out by another.
 /// <para>
 /// Most conditions are evaluated once for the build, before any declaration is looked up. The
 /// ones inside a macro body, a <c>.repeat</c> or an <c>.each</c> cannot be, because they may name
-/// what the <see cref="Expansion"/> binds. This type evaluates those once per expansion.
+/// what the <see cref="Expansion"/> binds. The overload that takes a model evaluates those once
+/// per expansion.
 /// </para>
 /// </summary>
-public sealed class ConditionChain
+public static class ConditionChain
 {
-    private bool chaining;
-    private bool taken;
+    /// <summary>
+    /// Returns each of <paramref name="children"/> from index <paramref name="from"/> on, with
+    /// whether it is included. A line, and a block that is not part of a chain, is always
+    /// included, and it ends any chain that came before it.
+    /// </summary>
+    /// <param name="children">The siblings to walk.</param>
+    /// <param name="from">The index of the first sibling to walk.</param>
+    /// <param name="holds">
+    /// The function that decides whether a branch is included. It is called once for each branch
+    /// of a chain, in order, and is told whether an earlier branch of the chain was included.
+    /// </param>
+    /// <param name="orphaned">
+    /// The action called for an <c>.elseif</c> or <c>.else</c> that continues no chain, which is
+    /// never included. It may be null when the orphan has been reported elsewhere.
+    /// </param>
+    public static IEnumerable<(SyntaxNode Node, bool Included)> Walk(
+        IReadOnlyList<SyntaxNode> children, int from, Func<BlockSyntax, bool, bool> holds, Action<BlockSyntax>? orphaned = null)
+    {
+        var chaining = false;
+        var taken = false;
+        for (var i = from; i < children.Count; i++)
+        {
+            var child = children[i];
+            switch (child is BlockSyntax block ? block.Opener.Statement : null)
+            {
+                case IfDirectiveSyntax:
+                    chaining = true;
+                    taken = holds((BlockSyntax)child, false);
+                    yield return (child, taken);
+                    break;
+
+                case ElseIfDirectiveSyntax or ElseDirectiveSyntax when !chaining:
+                    orphaned?.Invoke((BlockSyntax)child);
+                    yield return (child, false);
+                    break;
+
+                case ElseIfDirectiveSyntax or ElseDirectiveSyntax:
+                    var take = holds((BlockSyntax)child, taken);
+                    taken |= take;
+                    yield return (child, take);
+                    break;
+
+                default:
+                    chaining = false;
+                    yield return (child, true);
+                    break;
+            }
+        }
+    }
 
     /// <summary>
-    /// Determines whether <paramref name="block"/> is included in the expansion
-    /// <paramref name="on"/>. A block that is not part of a chain is always included, and it ends
-    /// any chain that came before it.
+    /// Returns each of <paramref name="children"/> from index <paramref name="from"/> on, with
+    /// whether it is included in the expansion <paramref name="on"/>. The build's decision is
+    /// used for a condition the build evaluated, and any other condition is evaluated with the
+    /// model.
     /// </summary>
-    /// <param name="model">The model of the file the block is in.</param>
-    /// <param name="block">The block, which may open a branch of a chain.</param>
-    /// <param name="on">The expansion the block is in.</param>
+    /// <param name="model">The model of the file the siblings are in.</param>
+    /// <param name="children">The siblings to walk.</param>
+    /// <param name="from">The index of the first sibling to walk.</param>
+    /// <param name="on">The expansion the siblings are in.</param>
     /// <param name="diagnostics">
     /// The list that receives the problems in each condition evaluated here, or null to report
     /// nothing. No pass over the symbols reaches a condition in an expansion, so the one pass
     /// that walks every expansion once passes its list, and every other caller passes null.
     /// </param>
-    public bool Includes(SemanticModel model, BlockSyntax block, Expansion? on, List<Diagnostic>? diagnostics = null)
-    {
-        var opener = block.Opener.Statement;
-        switch (opener)
-        {
-            case IfDirectiveSyntax:
-                chaining = true;
-                taken = Holds(model, block, opener, already: false, on, diagnostics);
-                return taken;
+    public static IEnumerable<(SyntaxNode Node, bool Included)> Walk(
+        SemanticModel model, IReadOnlyList<SyntaxNode> children, int from, Expansion? on, List<Diagnostic>? diagnostics = null) =>
+        Walk(children, from, (block, already) => Holds(model, block, already, on, diagnostics));
 
-            case ElseIfDirectiveSyntax:
-            case ElseDirectiveSyntax:
-                // A continuation with no chain to continue has already been reported, so its
-                // block is left out.
-                if (!chaining)
-                    return false;
-                var take = Holds(model, block, opener, taken, on, diagnostics);
-                taken |= take;
-                return take;
-
-            default:
-                chaining = false;
-                return true;
-        }
-    }
-
-    /// <summary>Ends the chain, for a sibling that is a line rather than a block.</summary>
-    public void Break() => chaining = false;
-
-    private static bool Holds(
-        SemanticModel model, BlockSyntax block, StatementSyntax opener, bool already, Expansion? on,
-        List<Diagnostic>? diagnostics)
+    private static bool Holds(SemanticModel model, BlockSyntax block, bool already, Expansion? on, List<Diagnostic>? diagnostics)
     {
         if (model.Configuration.Answered(block))
             return model.Configuration.Includes(block);
         if (already)
             return false;
-        if (opener is not ConditionalDirectiveSyntax conditional)
-            return opener is ElseDirectiveSyntax;
+        if (block.Opener.Statement is not ConditionalDirectiveSyntax conditional)
+            return block.Opener.Statement is ElseDirectiveSyntax;
         if (diagnostics is not null)
             model.Check(conditional.Condition, diagnostics, on);
         return model.ValueOf(conditional.Condition, on).AsNumber() is { } value && value != 0;

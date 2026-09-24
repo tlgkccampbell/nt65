@@ -156,6 +156,26 @@ public sealed class LookupTests
     }
 
     /// <summary>
+    /// A path in a <c>.use</c> is walked as the same path in an expression is, so a misspelled
+    /// member gets the same message and the same nearest-name fix in both.
+    /// </summary>
+    [Fact]
+    public void AUsePathIsReportedAsTheSamePathInAnExpressionIs()
+    {
+        var analysis = Analysis.Program(
+            ("other.nt65", ".module other\n.export .scope regs {\n    BORDER = $d020\n}\n"),
+            ("main.nt65", ".module main\n.use other::regs::BORDR\n.segment CODE\n.proc main {\n    lda other::regs::BORDR\n    rts\n}\n"));
+
+        var problems = analysis.File("main.nt65").Diagnostics;
+        Assert.Equal(2, problems.Count);
+        Assert.All(problems, problem =>
+        {
+            Assert.Equal("`BORDR` is not declared in `regs`; did you mean `BORDER`?", problem.Message);
+            Assert.Equal(new DiagnosticFix(FixKind.NearestName, "BORDER"), problem.Fix);
+        });
+    }
+
+    /// <summary>
     /// Every reference to a name is found, in every file, and those are what a rename replaces.
     /// </summary>
     [Fact]

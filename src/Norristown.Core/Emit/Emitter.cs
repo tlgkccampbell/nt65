@@ -511,17 +511,11 @@ public sealed class Emitter
     /// </summary>
     private void Walk(IReadOnlyList<SyntaxNode> children, int from)
     {
-        var chain = new ConditionChain();
-        for (var i = from; i < children.Count; i++)
+        foreach (var (child, included) in ConditionChain.Walk(model, children, from, context.Expansion))
         {
-            if (children[i] is not BlockSyntax block)
-            {
-                chain.Break();
-                if (children[i] is LineSyntax line)
-                    WalkLine(line);
-                continue;
-            }
-            if (chain.Includes(model, block, context.Expansion))
+            if (child is LineSyntax line)
+                WalkLine(line);
+            else if (child is BlockSyntax block && included)
                 WalkBlock(block, block.BlockKind);
         }
     }
@@ -725,17 +719,11 @@ public sealed class Emitter
     /// </summary>
     private void Members(IReadOnlyList<SyntaxNode> lines, int from)
     {
-        var chain = new ConditionChain();
-        for (var i = from; i < lines.Count; i++)
+        foreach (var (child, included) in ConditionChain.Walk(model, lines, from, context.Expansion))
         {
-            if (lines[i] is not BlockSyntax block)
-            {
-                chain.Break();
-                if (lines[i] is LineSyntax { Statement: EnumMemberSyntax member })
-                    EnumMember(member);
-                continue;
-            }
-            if (chain.Includes(model, block, context.Expansion) && block.BlockKind == BlockKind.If)
+            if (child is LineSyntax { Statement: EnumMemberSyntax member })
+                EnumMember(member);
+            else if (child is BlockSyntax { BlockKind: BlockKind.If } block && included)
                 Members(block.Members, 1);
         }
     }

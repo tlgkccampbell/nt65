@@ -147,18 +147,11 @@ public sealed partial class CodeLayout
         /// </summary>
         private void Walk(IReadOnlyList<SyntaxNode> children, int from)
         {
-            var chain = new ConditionChain();
-            for (var i = from; i < children.Count; i++)
+            foreach (var (child, included) in ConditionChain.Walk(model, children, from, expansion, diagnostics))
             {
-                var child = children[i];
-                if (child is not BlockSyntax block)
-                {
-                    chain.Break();
-                    if (child is LineSyntax line)
-                        Statement(line.Statement);
-                    continue;
-                }
-                if (chain.Includes(model, block, expansion, diagnostics))
+                if (child is LineSyntax line)
+                    Statement(line.Statement);
+                else if (child is BlockSyntax block && included)
                     WalkBlock(block, block.BlockKind);
             }
         }

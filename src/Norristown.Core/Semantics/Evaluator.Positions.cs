@@ -84,14 +84,10 @@ internal sealed partial class Evaluator
     /// </summary>
     private void Writes(IReadOnlyList<SyntaxNode> children, int from, string? segment, List<Write> writes)
     {
-        var chaining = false;
-        var taken = false;
-        for (var i = from; i < children.Count; i++)
+        foreach (var (child, included) in ConditionChain.Walk(children, from, Holds))
         {
-            var child = children[i];
             if (child is LineSyntax line)
             {
-                chaining = false;
                 switch (line.Statement)
                 {
                     case DataDeclarationSyntax or DataDirectiveSyntax:
@@ -111,16 +107,10 @@ internal sealed partial class Evaluator
             if (child is not BlockSyntax block)
                 continue;
             var opener = block.Opener.Statement;
-            if (block.BlockKind != BlockKind.If)
-                chaining = false;
             switch (block.BlockKind)
             {
                 case BlockKind.If:
-                    var continues = opener is ElseIfDirectiveSyntax or ElseDirectiveSyntax;
-                    var take = (!continues || chaining) && Holds(block, opener, continues && taken);
-                    chaining = true;
-                    taken = (continues && taken) || take;
-                    if (take)
+                    if (included)
                         Writes(block.Members, 1, segment, writes);
                     break;
                 case BlockKind.Region or BlockKind.Segment:
@@ -156,36 +146,24 @@ internal sealed partial class Evaluator
     /// </summary>
     private void Detours(IReadOnlyList<SyntaxNode> members, string? segment, List<Write> writes)
     {
-        var chaining = false;
-        var taken = false;
-        foreach (var member in members.Skip(1))
+        foreach (var (member, included) in ConditionChain.Walk(members, 1, Holds))
         {
             if (member is not BlockSyntax block)
-            {
-                chaining = false;
                 continue;
-            }
             var opener = block.Opener.Statement;
             switch (block.BlockKind)
             {
                 case BlockKind.If:
-                    var continues = opener is ElseIfDirectiveSyntax or ElseDirectiveSyntax;
-                    var take = (!continues || chaining) && Holds(block, opener, continues && taken);
-                    chaining = true;
-                    taken = (continues && taken) || take;
-                    if (take)
+                    if (included)
                         Detours(block.Members, segment, writes);
                     break;
                 case BlockKind.Segment:
-                    chaining = false;
                     Writes(block.Members, 1, Constructs.SegmentOf(opener) ?? segment, writes);
                     break;
                 case BlockKind.Repeat or BlockKind.Each:
-                    chaining = false;
                     writes.Add(new Write(null, block.Span, null, true));
                     break;
                 default:
-                    chaining = false;
                     break;
             }
         }
@@ -308,16 +286,12 @@ internal sealed partial class Evaluator
     /// </returns>
     private bool? Seek(IReadOnlyList<SyntaxNode> children, int from, int position, ref long offset)
     {
-        var chaining = false;
-        var taken = false;
-        for (var i = from; i < children.Count; i++)
+        foreach (var (child, included) in ConditionChain.Walk(children, from, Holds))
         {
-            var child = children[i];
             var holds = child.FullSpan.Contains(position);
             long? part;
             if (child is not BlockSyntax nested)
             {
-                chaining = false;
                 if (holds)
                     return true;
                 part = child is LineSyntax childLine ? BytesOnLine(childLine.Statement) : 0;
@@ -328,16 +302,11 @@ internal sealed partial class Evaluator
                 switch (nested.BlockKind)
                 {
                     case BlockKind.If:
-                        var continues = opener is ElseIfDirectiveSyntax or ElseDirectiveSyntax;
-                        var take = (!continues || chaining) && Holds(nested, opener, continues && taken);
-                        chaining = true;
-                        taken = (continues && taken) || take;
                         if (holds)
-                            return take ? Seek(nested.Members, 1, position, ref offset) : null;
-                        part = take ? Total(nested.Members, 1, BytesOnLine, NestedBytes) : 0;
+                            return included ? Seek(nested.Members, 1, position, ref offset) : null;
+                        part = included ? Total(nested.Members, 1, BytesOnLine, NestedBytes) : 0;
                         break;
                     case BlockKind.Repeat or BlockKind.Each when opener is RepetitionDirectiveSyntax repetition:
-                        chaining = false;
                         if (holds)
                             return null;
                         part = Iterations(nested, repetition, () => Total(nested.Members, 1, BytesOnLine, NestedBytes));
@@ -345,7 +314,6 @@ internal sealed partial class Evaluator
                     case BlockKind.Data when holds:
                         return nested.Opener.FullSpan.Contains(position) ? true : Seek(nested.Members, 1, position, ref offset);
                     default:
-                        chaining = false;
                         if (holds)
                             return nested.Opener.FullSpan.Contains(position) ? true : null;
                         part = NestedBytes(nested);

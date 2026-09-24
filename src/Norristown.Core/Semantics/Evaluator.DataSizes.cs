@@ -211,15 +211,11 @@ internal sealed partial class Evaluator
         IReadOnlyList<SyntaxNode> children, int from, Func<StatementSyntax, long?> line, Func<BlockSyntax, long?> block)
     {
         long total = 0;
-        var chaining = false;
-        var taken = false;
-        for (var i = from; i < children.Count; i++)
+        foreach (var (child, included) in ConditionChain.Walk(children, from, Holds))
         {
-            var child = children[i];
             long? part;
             if (child is not BlockSyntax nested)
             {
-                chaining = false;
                 part = child is LineSyntax childLine ? line(childLine.Statement) : 0;
             }
             else
@@ -228,18 +224,12 @@ internal sealed partial class Evaluator
                 switch (nested.BlockKind)
                 {
                     case BlockKind.If:
-                        var continues = opener is ElseIfDirectiveSyntax or ElseDirectiveSyntax;
-                        var take = (!continues || chaining) && Holds(nested, opener, continues && taken);
-                        chaining = true;
-                        taken = (continues && taken) || take;
-                        part = take ? Total(nested.Members, 1, line, block) : 0;
+                        part = included ? Total(nested.Members, 1, line, block) : 0;
                         break;
                     case BlockKind.Repeat or BlockKind.Each when opener is RepetitionDirectiveSyntax repetition:
-                        chaining = false;
                         part = Iterations(nested, repetition, () => Total(nested.Members, 1, line, block));
                         break;
                     default:
-                        chaining = false;
                         part = block(nested);
                         break;
                 }
@@ -256,12 +246,13 @@ internal sealed partial class Evaluator
     /// the build evaluated the condition. Otherwise the condition is evaluated as one inside an
     /// expansion would be.
     /// </summary>
-    private bool Holds(BlockSyntax block, StatementSyntax opener, bool already)
+    private bool Holds(BlockSyntax block, bool already)
     {
         if (configuration?.Answered(block) == true)
             return configuration.Includes(block);
         if (already)
             return false;
+        var opener = block.Opener.Statement;
         if (opener is ElseDirectiveSyntax)
             return true;
         return opener is ConditionalDirectiveSyntax conditional && Evaluate(conditional.Condition).AsNumber() is { } value and not 0;

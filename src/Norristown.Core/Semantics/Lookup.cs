@@ -102,6 +102,56 @@ internal static class Lookup
     }
 
     /// <summary>
+    /// Returns what the first part of a name means at <paramref name="at"/>, without reporting
+    /// anything. The part is looked up from the root of the modules when
+    /// <paramref name="fromRoot"/> is true, and otherwise in the scopes around it and then as
+    /// <see cref="Outside"/> looks.
+    /// </summary>
+    public static Resolution? First(
+        string name,
+        bool last,
+        bool fromRoot,
+        Scope at,
+        ProgramSymbols program,
+        IReadOnlyDictionary<string, Resolution> brought,
+        IReadOnlyList<ProgramSymbols.Module> globs,
+        Action<string?, string>? touched = null) =>
+        fromRoot ? ModuleRoot(name, program)
+            : at.Lookup(name) is { } local ? new Resolution(local)
+            : Outside(name, last, program, brought, globs, touched);
+
+    /// <summary>
+    /// Returns the place that a path reaches, walking from <paramref name="start"/>, which is
+    /// what its first part means, through each part after it. The walk stops at a part that
+    /// means nothing and returns null, or at a name that has already been reported and returns
+    /// <see cref="Resolution.Reported"/>. Nothing is reported here.
+    /// </summary>
+    /// <param name="start">What the first part of the path means.</param>
+    /// <param name="parts">Every part of the path, including the first.</param>
+    /// <param name="program">The program whose modules the path may name.</param>
+    /// <param name="bodyOf">
+    /// The function that returns the scope <c>::</c> looks in after a symbol, or null to use
+    /// <see cref="BodyOf(Symbol)"/>. The binder passes one that resolves a <c>.type</c> on demand.
+    /// </param>
+    /// <param name="touched">The action told each name looked for in a module.</param>
+    public static Resolution? Walk(
+        Resolution? start,
+        IReadOnlyList<string> parts,
+        ProgramSymbols program,
+        Func<Symbol, Scope?>? bodyOf = null,
+        Action<string?, string>? touched = null)
+    {
+        var place = start;
+        for (var i = 1; i < parts.Count && place is { IsReported: false } before; i++)
+        {
+            place = before.Module is { } prefix ? InModule(parts[i], prefix, program, touched)
+                : (bodyOf ?? BodyOf)(before.Symbol!)?.FindMember(parts[i]) is { } member ? new Resolution(member)
+                : null;
+        }
+        return place;
+    }
+
+    /// <summary>
     /// Returns the names a path may contain after a scope's <c>::</c>, which are the names a
     /// misspelling could have meant.
     /// </summary>

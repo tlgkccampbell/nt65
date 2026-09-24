@@ -234,6 +234,35 @@ public sealed class ConfigurationTests
     }
 
     /// <summary>
+    /// A continuation with nothing to continue starts no chain, so the one after it has nothing
+    /// to continue either. A data body's size leaves both out, as the build does.
+    /// </summary>
+    [Fact]
+    public void AnElseAfterAnElseWithNoIfIsLeftOutOfASize()
+    {
+        var program = Built("""
+            .segment RODATA
+            .data table {
+                .repeat 1 {
+                    .byte 1
+                } .else {
+                    .byte 2
+                } .else {
+                    .byte 3
+                }
+            }
+            SIZE = .sizeof(table)
+            .export SIZE
+
+            """);
+
+        Assert.Equal(
+            ["main.nt65:6: `.else` has no `.if` before it", "main.nt65:8: `.else` has no `.if` before it"],
+            program.Problems());
+        Assert.Equal(1, program.File("main.nt65").Symbol("SIZE").Value.Number);
+    }
+
+    /// <summary>
     /// The names a condition uses are resolved like any others, so an editor can follow a
     /// define used in one to the configuration that gives it a value.
     /// </summary>

@@ -201,37 +201,32 @@ internal sealed class MacroExpansion
         IReadOnlyList<SyntaxNode> members, Expansion at, string indent,
         IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
     {
-        var chain = new ConditionChain();
-        foreach (var member in members)
+        foreach (var (member, included) in ConditionChain.Walk(model, members, 0, at))
         {
             if (member is BlockSyntax block)
-            {
-                Block(block, at, indent, into, reached, counter, chain);
-                continue;
-            }
-            chain.Break();
-            if (member is LineSyntax line)
+                Block(block, included, at, indent, into, reached, counter);
+            else if (member is LineSyntax line)
                 Statement(line, at, indent, into, reached, counter);
         }
     }
 
     /// <summary>
     /// Adds one block of a body, which is a condition chain, a repetition, a call with a block, or
-    /// a plain block.
+    /// a plain block. <paramref name="included"/> indicates whether the call takes the block,
+    /// which only a branch of a condition chain may not.
     /// </summary>
     private void Block(
-        BlockSyntax block, Expansion at, string indent,
-        IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter, ConditionChain chain)
+        BlockSyntax block, bool included, Expansion at, string indent,
+        IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
     {
         // Conditions on the arguments are resolved here, because a programmer expanding this
         // call by hand would have kept only the branch it takes.
         if (block.BlockKind == BlockKind.If)
         {
-            if (chain.Includes(model, block, at))
+            if (included)
                 Members(Macros.LinesOf(block), at, indent, into, reached, counter);
             return;
         }
-        chain.Break();
 
         // nt65 has no syntax for a call's arguments as a list, so a repetition over one is
         // expanded iteration by iteration. Every other repetition is expanded the same way, since

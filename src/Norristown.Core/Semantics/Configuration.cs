@@ -256,50 +256,19 @@ public sealed class Configuration
     {
         public void Container(SyntaxNode container)
         {
-            var chaining = false;
-            var taken = false;
-            foreach (var child in container.ChildNodes)
+            foreach (var (child, included) in ConditionChain.Walk(container.ChildNodes, 0, Branch, Orphaned))
             {
-                if (child is not BlockSyntax block)
-                {
-                    chaining = false;
-                    continue;
-                }
-
                 // A condition inside one of these may name what the expansion binds, so it
                 // has no value until there is an expansion to evaluate it in.
-                if (block.BlockKind is BlockKind.Macro or BlockKind.Repeat or BlockKind.Each or BlockKind.MultiProc)
+                if (child is not BlockSyntax block
+                    || block.BlockKind is BlockKind.Macro or BlockKind.Repeat or BlockKind.Each or BlockKind.MultiProc)
                 {
-                    chaining = false;
                     continue;
                 }
-
-                var opener = block.Opener.Statement;
-                switch (opener)
-                {
-                    case IfDirectiveSyntax:
-                        chaining = true;
-                        answered.Add((tree, block.Position));
-                        taken = Branch(block, opener, already: false);
-                        continue;
-
-                    case ElseIfDirectiveSyntax:
-                    case ElseDirectiveSyntax:
-                        if (!chaining)
-                        {
-                            Report(opener.Span, Catalogue.ElseWithoutIf.Message(Directive(opener)));
-                            Leave(block);
-                            continue;
-                        }
-                        answered.Add((tree, block.Position));
-                        taken |= Branch(block, opener, taken);
-                        continue;
-
-                    default:
-                        chaining = false;
-                        Container(block);
-                        continue;
-                }
+                if (included)
+                    Container(block);
+                else
+                    Leave(block);
             }
         }
 
@@ -309,12 +278,14 @@ public sealed class Configuration
             diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message));
 
         /// <summary>
-        /// Determines whether the build takes one branch of a chain. <paramref name="already"/>
-        /// indicates that an earlier branch was taken, in which case this one is left out
-        /// regardless of its condition.
+        /// Determines whether the build takes one branch of a chain, and records that the build
+        /// answered it. <paramref name="already"/> indicates that an earlier branch was taken, in
+        /// which case this one is left out regardless of its condition.
         /// </summary>
-        private bool Branch(BlockSyntax block, StatementSyntax opener, bool already)
+        private bool Branch(BlockSyntax block, bool already)
         {
+            answered.Add((tree, block.Position));
+
             // The CPU is configuration, and a condition may test it with `.target`, so a
             // `.cpu` under an `.if` would change the very thing its condition may depend on. The
             // placement of `.cpu`, which the editor reads too, bars it there.
@@ -324,13 +295,12 @@ public sealed class Configuration
                     Report(node.Span, Catalogue.CpuUnderACondition);
             }
 
-            var take = !already && Holds(opener);
-            if (take)
-                Container(block);
-            else
-                Leave(block);
-            return take;
+            return !already && Holds(block.Opener.Statement);
         }
+
+        /// <summary>Reports an <c>.elseif</c> or <c>.else</c> that continues no chain.</summary>
+        private void Orphaned(BlockSyntax block) =>
+            Report(block.Opener.Statement.Span, Catalogue.ElseWithoutIf.Message(Directive(block.Opener.Statement)));
 
         /// <summary>Determines whether the condition of an <c>.if</c> or <c>.elseif</c> holds.</summary>
         private bool Holds(StatementSyntax opener)
@@ -559,22 +529,15 @@ public sealed class Configuration
             if (parts.Length == 0 || !scopes.TryGetValue(tree, out var own))
                 return (null, false);
 
-            Resolution? place = null;
-            for (var i = 0; i < parts.Length; i++)
-            {
-                var text = parts[i].Text;
-                place = i == 0 && name.GlobalToken is not null ? Semantics.Lookup.ModuleRoot(text, program)
-                    : i == 0 ? First(tree, own, text, last: parts.Length == 1, defines)
-                    : place!.Value.Module is { } prefix ? Semantics.Lookup.InModule(text, prefix, program)
-                    : null;
-                if (place is not { } found)
-                    return (null, false);
+            var text = parts[0].Text;
+            var start = name.GlobalToken is not null ? Semantics.Lookup.ModuleRoot(text, program)
+                : First(tree, own, text, last: parts.Length == 1, defines);
+            var place = Semantics.Lookup.Walk(start, [.. parts.Select(part => part.Text)], program);
 
-                // A name that two `.use module::*` items bring in is ambiguous. The binder reports
-                // that, so the name has no value here and nothing more is said about it.
-                if (found.IsReported)
-                    return (null, true);
-            }
+            // A name that two `.use module::*` items bring in is ambiguous. The binder reports
+            // that, so the name has no value here and nothing more is said about it.
+            if (place is { IsReported: true })
+                return (null, true);
             if (place?.Symbol is not { } symbol || !bySymbol.TryGetValue(symbol, out var setting))
                 return (null, false);
             if (!symbol.IsExported && symbol.Tree != tree)
@@ -680,17 +643,8 @@ public sealed class Configuration
         /// Returns where a <c>.use</c> path leads from the root of the modules, or null when it
         /// leads nowhere. A setting has no members, so a path that goes on past one leads nowhere.
         /// </summary>
-        private Resolution? Walk(IReadOnlyList<string> path)
-        {
-            Resolution? place = null;
-            for (var i = 0; i < path.Count && (i == 0 || place is not null); i++)
-            {
-                place = i == 0 ? Semantics.Lookup.ModuleRoot(path[i], program)
-                    : place!.Value.Module is { } prefix ? Semantics.Lookup.InModule(path[i], prefix, program)
-                    : null;
-            }
-            return place;
-        }
+        private Resolution? Walk(IReadOnlyList<string> path) =>
+            path.Count == 0 ? null : Semantics.Lookup.Walk(Semantics.Lookup.ModuleRoot(path[0], program), path, program);
     }
 
     /// <summary>

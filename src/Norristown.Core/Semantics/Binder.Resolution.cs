@@ -333,32 +333,14 @@ internal sealed partial class Binder
     {
         if (symbol.Type is { } known)
             return known;
-        if (symbol.TypeExpression is not NameExpressionSyntax named)
-            return null;
+        var type = NamedByPath(symbol.TypeExpression, symbol.Scope);
 
-        Resolution? part = null;
-        var path = named.GlobalToken is not null;
-        var parts = named.Parts;
-        for (var i = 0; i < parts.Count; i++)
-        {
-            if (parts[i].Name is not { IsMissing: false } token)
-                break;
-            var last = i == parts.Count - 1;
-            part = !path ? (symbol.Scope.Lookup(token.Text) is { } local ? new Resolution(local) : Outside(token, last, null))
-                : part is null ? ModuleRoot(token, null)
-                : part.Value.Module is { } prefix ? InModule(token, prefix, last, null)
-                : BodyOf(part.Value.Symbol!)?.FindMember(token.Text) is { } member ? new Resolution(member)
-                : null;
-            path = true;
-            if (part is null or { IsReported: true })
-                return null;
-        }
         // A symbol of a file that was not read again after an edit belongs to a completed model,
         // which other threads may be reading, so the type is kept only on a symbol still being
         // built.
         if (symbol.IsFrozen)
-            return part?.Symbol;
-        symbol.Type = part?.Symbol;
+            return type;
+        symbol.Type = type;
         return symbol.Type;
     }
 
@@ -379,10 +361,7 @@ internal sealed partial class Binder
         for (var i = 0; i < path.Length && (i == 0 || place is not null); i++)
         {
             var last = i == path.Length - 1 && !glob && items.Count == 0;
-            place = i == 0 ? ModuleRoot(path[i], report)
-                : place!.Value.Module is { } prefix ? InModule(path[i], prefix, last, report)
-                : BodyOf(place.Value.Symbol!)?.FindMember(path[i].Text) is { } member ? new Resolution(CheckExported(path[i], member, last))
-                : NotIn(path[i], place.Value.Symbol!);
+            place = Resolve(new Use(path[i], fileScope, Path: true, First: i == 0, Last: last), place);
             if (place?.Symbol is { } symbol)
                 references.Add(new SymbolReference(symbol, path[i].Span, false, InUse: true));
         }
@@ -417,24 +396,12 @@ internal sealed partial class Binder
         {
             var name = useItem.Name;
             var itemAlias = useItem.Alias;
-            var found = target.Module is { } prefix ? InModule(name, prefix, last: true, report)
-                : BodyOf(target.Symbol!)?.FindMember(name.Text) is { } member ? new Resolution(CheckExported(name, member, last: true))
-                : NotIn(name, target.Symbol!);
-            if (found is not { } item)
+            if (Resolve(new Use(name, fileScope, Path: true, First: false, Last: true), target) is not { } item)
                 continue;
             if (item.Symbol is { } symbol)
                 references.Add(new SymbolReference(symbol, name.Span, false, InUse: true));
             BringIn(itemAlias ?? name, item, itemAlias is not null, statement.IsExported);
         }
-    }
-
-    /// <summary>Reports a part of a <c>.use</c> path that names nothing in the symbol before it.</summary>
-    private Resolution? NotIn(SyntaxToken token, Symbol container)
-    {
-        Report(token.Span, container.Body is null && container.TypeExpression is null
-            ? Catalogue.NotAScope.Message(container.DisplayName, container.KindPhrase)
-            : Catalogue.NotDeclaredIn.Message(token.Text, $"`{container.DisplayName}`", ""));
-        return null;
     }
 
     /// <summary>Brings in one name from a <c>.use</c>, under the name that <paramref name="name"/> gives.</summary>
