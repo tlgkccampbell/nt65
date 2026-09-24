@@ -32,5 +32,8 @@ public readonly record struct Step(
     /// ends, rather than a statement.
     /// </summary>
     public bool IsMarker => Statement is MacroCallSyntax or BlockSpliceSyntax;
+
+    /// <summary>Gets the key that identifies the step's statement in its expansion.</summary>
+    internal StepKey Key => StepKey.Of(Statement, On);
 }
 

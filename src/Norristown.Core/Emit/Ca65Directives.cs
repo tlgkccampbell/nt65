@@ -1,3 +1,4 @@
+using Norristown.Layout;
 using Norristown.Syntax;
 
 namespace Norristown.Emit;
@@ -35,17 +36,17 @@ internal static class Ca65Directives
 
     /// <summary>
     /// Returns how a run of reserved bytes is split across <c>.res</c> directives. ca65 reserves at
-    /// most <c>$ffff</c> bytes in one of them, and that limit should not restrict what a
-    /// program may declare, so a bigger reservation is written as several.
+    /// most <see cref="DataLengths.MaxReservation"/> bytes in one of them, and that limit should
+    /// not restrict what a program may declare, so a bigger reservation is written as several.
     /// </summary>
     public static IEnumerable<long> Reservations(long bytes)
     {
-        if (bytes <= 0xffff)
+        if (bytes <= DataLengths.MaxReservation)
         {
             yield return bytes;
             yield break;
         }
-        for (var left = bytes; left > 0; left -= 0xffff)
-            yield return Math.Min(left, 0xffff);
+        for (var left = bytes; left > 0; left -= DataLengths.MaxReservation)
+            yield return Math.Min(left, DataLengths.MaxReservation);
     }
 }

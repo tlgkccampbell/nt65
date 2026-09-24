@@ -74,14 +74,14 @@ public sealed class UnitLayout
             return;
         var points = layout.PlacePoints;
         var next = 0;
-        var seen = new HashSet<(int, Expansion?)>();
+        var seen = new HashSet<StepKey>();
         for (var i = 0; i < layout.Steps.Count; i++)
         {
             while (next < points.Count && points[next].Step == i)
                 Splice(tree, points[next++]);
             var step = layout.Steps[i];
             if (step.Segment is not { } segment || layout.PositionOf(step.Statement, step.On) is not { } position
-                || !seen.Add((step.Statement.Position, step.On)))
+                || !seen.Add(step.Key))
             {
                 continue;
             }

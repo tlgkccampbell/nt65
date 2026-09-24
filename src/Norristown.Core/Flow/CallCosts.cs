@@ -23,14 +23,14 @@ public static class CallCosts
     /// </summary>
     public static void Compose(IEnumerable<ControlFlow> flows)
     {
-        var regions = new Dictionary<(string Path, string Name), FlowRegion>();
+        var regions = new Dictionary<RoutineKey, FlowRegion>();
         foreach (var flow in flows)
         {
             foreach (var region in flow.Regions)
-                regions.TryAdd(Named(region.Routine), region);
+                regions.TryAdd(RoutineKey.Of(region.Routine), region);
         }
         var returns = Returning(regions);
-        var totals = new Dictionary<(string Path, string Name), RoutineCost>();
+        var totals = new Dictionary<RoutineKey, RoutineCost>();
         foreach (var region in regions.Values)
             region.Total = Total(region, regions, returns, totals, []);
     }
@@ -50,9 +50,9 @@ public static class CallCosts
     /// program makes that claim itself.
     /// </para>
     /// </summary>
-    private static HashSet<(string Path, string Name)> Returning(Dictionary<(string Path, string Name), FlowRegion> regions)
+    private static HashSet<RoutineKey> Returning(Dictionary<RoutineKey, FlowRegion> regions)
     {
-        var found = new HashSet<(string Path, string Name)>();
+        var found = new HashSet<RoutineKey>();
         bool moved;
         do
         {
@@ -70,15 +70,15 @@ public static class CallCosts
     /// <summary>Returns whether any exit from a routine is one through which control returns.</summary>
     private static bool ComesBack(
         FlowRegion region,
-        Dictionary<(string Path, string Name), FlowRegion> regions,
-        HashSet<(string Path, string Name)> found)
+        Dictionary<RoutineKey, FlowRegion> regions,
+        HashSet<RoutineKey> found)
     {
         foreach (var block in region.Blocks)
         {
             if (!block.IsReached || block.Successors.Any(edge => edge.Kind != EdgeKind.Call))
                 continue;
-            var handsOff = Onward(block).Any(callee => regions.ContainsKey(Named(callee))
-                ? !found.Contains(Named(callee))
+            var handsOff = Onward(block).Any(callee => regions.ContainsKey(RoutineKey.Of(callee))
+                ? !found.Contains(RoutineKey.Of(callee))
                 : callee.Signature is { NeverReturns: true });
             if (!handsOff)
                 return true;
@@ -86,14 +86,6 @@ public static class CallCosts
         return false;
     }
 
-    /// <summary>
-    /// Returns a key that identifies a routine by its file and its flattened name, rather than by
-    /// its symbol. An analysis that kept a file's results from before an edit holds a different
-    /// symbol object for the same routine. The key uses the name and not the position, because a
-    /// kept file still refers to the routines of an edited file at the positions they had before
-    /// the edit.
-    /// </summary>
-    private static (string Path, string Name) Named(Symbol routine) => (routine.Tree.Path, routine.FlatName);
 
     /// <summary>
     /// Returns what <paramref name="region"/>'s routine costs with its calls, working out what
@@ -102,12 +94,12 @@ public static class CallCosts
     /// </summary>
     private static RoutineCost Total(
         FlowRegion region,
-        Dictionary<(string Path, string Name), FlowRegion> regions,
-        HashSet<(string Path, string Name)> returns,
-        Dictionary<(string Path, string Name), RoutineCost> totals,
-        HashSet<(string Path, string Name)> walking)
+        Dictionary<RoutineKey, FlowRegion> regions,
+        HashSet<RoutineKey> returns,
+        Dictionary<RoutineKey, RoutineCost> totals,
+        HashSet<RoutineKey> walking)
     {
-        var name = Named(region.Routine);
+        var name = RoutineKey.Of(region.Routine);
         if (totals.TryGetValue(name, out var found))
             return found;
         walking.Add(name);
@@ -146,7 +138,7 @@ public static class CallCosts
             // as many times as the loop runs.
             foreach (var callee in Onward(block))
             {
-                var name = Named(callee);
+                var name = RoutineKey.Of(callee);
                 if (!regions.TryGetValue(name, out var called))
                 {
                     // A callee declared never to return ends the pass like any other.

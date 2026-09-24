@@ -40,7 +40,7 @@ public sealed partial class CodeLayout
             var changed = false;
             foreach (var branch in branches)
             {
-                var at = (branch.Statement.Position, branch.On);
+                var at = branch.Key;
                 // A long branch whose distance nt65 does not know is always lengthened: nothing
                 // shows the target is near enough, and a short branch that cannot reach is wrong.
                 if (!branch.Long || lengthened.Contains(at) || Distance(branch) is { } reach && InRange(reach))
@@ -110,7 +110,7 @@ public sealed partial class CodeLayout
         /// <summary>Records what a line assembles to in the current expansion.</summary>
         private void Laid(StatementSyntax statement, LineLayout laid)
         {
-            layout.lines[(statement.Position, expansion)] = laid;
+            layout.lines[StepKey.Of(statement, expansion)] = laid;
             layout.anyExpansion.TryAdd((statement.Tree, statement.Position), laid);
         }
 
@@ -122,7 +122,7 @@ public sealed partial class CodeLayout
         private void Place(StatementSyntax statement, int length)
         {
             var offset = filled.GetValueOrDefault(Measured);
-            layout.positions[(statement.Position, expansion)] = new BytePosition(Measured, offset, length);
+            layout.positions[StepKey.Of(statement, expansion)] = new BytePosition(Measured, offset, length);
             if (length == DataLengths.Unpredictable && segment is { } named)
                 runs[named] = nextStream++;
             else if (length == DataLengths.Unpredictable)
@@ -138,7 +138,7 @@ public sealed partial class CodeLayout
         /// </summary>
         private void FallsThrough(FallthroughDirectiveSyntax directive)
         {
-            layout.positions[(directive.Position, expansion)] = new BytePosition(Measured, filled.GetValueOrDefault(Measured), 0);
+            layout.positions[StepKey.Of(directive, expansion)] = new BytePosition(Measured, filled.GetValueOrDefault(Measured), 0);
             layout.steps.Add(new Step(directive, expansion, routine, Stream, segment, null));
         }
 
@@ -179,7 +179,7 @@ public sealed partial class CodeLayout
         /// </summary>
         private int? Distance(Branch branch)
         {
-            if (layout.positions.GetValueOrDefault((branch.Statement.Position, branch.On)) is not { Length: > 0 } from)
+            if (layout.positions.GetValueOrDefault(branch.Key) is not { Length: > 0 } from)
                 return null;
             return Located(branch.Target, branch.On) is { } to && to.Stream == from.Stream
                 ? to.Offset - from.End
@@ -237,6 +237,10 @@ public sealed partial class CodeLayout
         /// at and the target expression it names. Long branches are included, because the same
         /// distance decides their form.
         /// </summary>
-        private readonly record struct Branch(InstructionStatementSyntax Statement, Expansion? On, ExpressionSyntax Target, bool Long);
+        private readonly record struct Branch(InstructionStatementSyntax Statement, Expansion? On, ExpressionSyntax Target, bool Long)
+        {
+            /// <summary>Gets the key that identifies the branch in its expansion.</summary>
+            public StepKey Key => StepKey.Of(Statement, On);
+        }
     }
 }

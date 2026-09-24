@@ -172,7 +172,7 @@ public static class ArgumentChecks
     /// </summary>
     private static (string Mode, string? Direct)? ModeOf(SemanticModel model, SyntaxNode operand, Expansion? at, string? segment)
     {
-        for (var steps = 0; steps < 64; steps++)
+        for (var steps = 0; steps < BoundNames.ForwardingLimit; steps++)
         {
             var named = operand switch
             {

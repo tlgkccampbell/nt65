@@ -21,6 +21,9 @@ public static class DataLengths
     /// </summary>
     public const int Unpredictable = -1;
 
+    /// <summary>The most bytes ca65 reserves in one <c>.res</c> directive.</summary>
+    internal const int MaxReservation = 0xffff;
+
     /// <summary>
     /// Returns the length of <paramref name="directive"/>, a data directive or a line of a data
     /// body. Returns <see cref="Unpredictable"/> for a directive whose length only the assembler
@@ -499,7 +502,7 @@ public static class DataLengths
         var count = model.ValueOf(operands[0], on).AsNumber();
         if (count is null)
             Report(operands[0], model, diagnostics, on, Catalogue.ResCountNotConstant);
-        else if (count is < 0 or > 0xffff)
+        else if (count is < 0 or > MaxReservation)
             Report(operands[0], model, diagnostics, on, Catalogue.ResCountOutOfRange.Message(count));
     }
 

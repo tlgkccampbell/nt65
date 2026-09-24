@@ -32,8 +32,8 @@ public static class RegisterKeeps
     /// </summary>
     public static IReadOnlyList<Diagnostic> Compose(IReadOnlyList<FileAnalysis> files)
     {
-        var regions = new Dictionary<(string Path, string Name), FlowRegion>();
-        var walks = new Dictionary<(string Path, string Name), Walk>();
+        var regions = new Dictionary<RoutineKey, FlowRegion>();
+        var walks = new Dictionary<RoutineKey, Walk>();
         var byFile = new List<(ControlFlow Flow, Walk Walk)>();
         foreach (var file in files)
         {
@@ -41,7 +41,7 @@ public static class RegisterKeeps
             byFile.Add((file.Flow, walk));
             foreach (var region in file.Flow.Regions)
             {
-                var name = Named(region.Routine);
+                var name = RoutineKey.Of(region.Routine);
                 if (regions.TryAdd(name, region))
                     walks[name] = walk;
             }
@@ -94,7 +94,7 @@ public static class RegisterKeeps
             var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
             if (routine.Signature is { NeverReturns: true })
                 return RoutineRegisters.Everything;
-            return found.TryGetValue(Named(routine), out var known) ? known
+            return found.TryGetValue(RoutineKey.Of(routine), out var known) ? known
                 : routine.Signature?.Keeps is { } keeps && keeps != Registers.None ? new RoutineRegisters(keeps, true)
                 : RoutineRegisters.Nothing;
         }
@@ -106,14 +106,6 @@ public static class RegisterKeeps
             ? found with { Kept = found.Kept | keeps }
             : found;
 
-    /// <summary>
-    /// Returns a key that identifies a routine by its file and its flattened name, rather than by
-    /// its symbol. An analysis that kept a file's results from before an edit holds a different
-    /// symbol object for the same routine. The key uses the name and not the position, because a
-    /// kept file still refers to the routines of an edited file at the positions they had before
-    /// the edit.
-    /// </summary>
-    private static (string Path, string Name) Named(Symbol routine) => (routine.Tree.Path, routine.FlatName);
 
     /// <summary>Follows one file's routines, a routine at a time.</summary>
     private sealed class Walk

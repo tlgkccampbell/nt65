@@ -11,6 +11,15 @@ namespace Norristown.Emit;
 /// </summary>
 internal static class LinePasses
 {
+    /// <summary>The fewest equal lines that <see cref="FoldFills"/> rewrites as one <c>.res</c>.</summary>
+    private const int MinimumFill = 3;
+
+    /// <summary>
+    /// The fewest iterations that are written as a <c>.repeat</c>. Two iterations read no better
+    /// as a <c>.repeat</c> than written out, and one reads worse.
+    /// </summary>
+    private const int MinimumRepeat = 3;
+
     /// <summary>
     /// Lines up the directives of each run of named data lines, so that a run reads as a column
     /// the way hand-written ca65 does. The names are nt65's output names, not the source's, so
@@ -56,9 +65,9 @@ internal static class LinePasses
             // several directives, and a file with that many equal lines in it is a repetition
             // nobody would have written by hand either.
             var run = 1;
-            while (i + run < lines.Count && run < 0xffff && Same(lines[i + run], lines[i]) && RepeatedByte(lines[i]) is not null)
+            while (i + run < lines.Count && run < DataLengths.MaxReservation && Same(lines[i + run], lines[i]) && RepeatedByte(lines[i]) is not null)
                 run++;
-            if (run >= 3 && RepeatedByte(lines[i]) is { } value)
+            if (run >= MinimumFill && RepeatedByte(lines[i]) is { } value)
             {
                 var indent = lines[i].Text[..(lines[i].Text.Length - lines[i].Text.TrimStart().Length)];
                 kept.Add(lines[i] with
@@ -161,9 +170,7 @@ internal static class LinePasses
     private static List<List<EmittedLine>>? Iterations(List<EmittedLine> lines, IReadOnlyList<int> starts, out int at)
     {
         at = lines.Count;
-
-        // Two iterations read no better as a `.repeat` than written out, and one reads worse.
-        if (starts.Count < 3)
+        if (starts.Count < MinimumRepeat)
             return null;
 
         var length = lines.Count - starts[^1];

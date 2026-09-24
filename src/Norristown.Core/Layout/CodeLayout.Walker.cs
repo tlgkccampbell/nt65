@@ -46,7 +46,7 @@ public sealed partial class CodeLayout
         // The long branches already found out of reach. This set is passed from one walk to the
         // next, because lengthening a branch moves everything after it, so the file is laid out
         // again.
-        private readonly HashSet<(int Position, Expansion? On)> lengthened;
+        private readonly HashSet<StepKey> lengthened;
 
         // The routines and data declarations the file measures, and the number of bytes this walk
         // finds each one takes. A `.spanof` may appear before the thing it measures, so the spans
@@ -103,7 +103,7 @@ public sealed partial class CodeLayout
         /// <param name="measured">The routines and data declarations the file measures.</param>
         public Walker(
             CodeLayout layout, IProcessorStates? states,
-            HashSet<(int Position, Expansion? On)> lengthened, IReadOnlySet<Symbol> measured)
+            HashSet<StepKey> lengthened, IReadOnlySet<Symbol> measured)
         {
             this.layout = layout;
             statements = new Statements(this);
@@ -520,7 +520,7 @@ public sealed partial class CodeLayout
                 return;
             }
 
-            var over = lengthened.Contains((statement.Position, expansion));
+            var over = lengthened.Contains(StepKey.Of(statement, expansion));
             var length = Instructions.Length(AddressingMode.Relative)
                 + (over ? Instructions.Length(AddressingMode.Absolute) : 0);
             branches.Add(new Branch(statement, expansion, target, Long: true));
@@ -706,7 +706,7 @@ public sealed partial class CodeLayout
                     walker.Data(element);
                     if (DataSyntax.BodyOf(element) is null && walker.NameOf(node) is { } declared
                         && walker.measured.Contains(declared)
-                        && walker.layout.positions.GetValueOrDefault((element.Position, walker.expansion)) is { Length: >= 0 } position)
+                        && walker.layout.positions.GetValueOrDefault(StepKey.Of(element, walker.expansion)) is { Length: >= 0 } position)
                     {
                         walker.extents[declared] = position.Length;
                     }

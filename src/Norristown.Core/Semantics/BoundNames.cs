@@ -16,6 +16,12 @@ namespace Norristown.Semantics;
 internal sealed class BoundNames
 {
     /// <summary>
+    /// The most macro parameters that a lookup follows, one passed on to the next, before it
+    /// stops. The limit makes sure the walk ends however the parameters were passed.
+    /// </summary>
+    public const int ForwardingLimit = 64;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="BoundNames"/> class, with each name in
     /// <paramref name="bound"/> taking what it is bound to there.
     /// </summary>
@@ -143,7 +149,7 @@ internal sealed class BoundNames
     public MacroArgument? Argument(SyntaxNode name)
     {
         var argument = Parameter(name) is { } parameter ? Given.GetValueOrDefault(parameter) : null;
-        for (var steps = 0; steps < 64 && argument?.Value is NameExpressionSyntax passed; steps++)
+        for (var steps = 0; steps < ForwardingLimit && argument?.Value is NameExpressionSyntax passed; steps++)
         {
             if (Parameter(passed) is not { Kind: SymbolKind.MacroParameter } outer
                 || !Given.TryGetValue(outer, out var next))
@@ -177,7 +183,7 @@ internal sealed class BoundNames
             return null;
         SyntaxNode? operand = null;
         SyntaxNode? inner = arguments[0];
-        for (var steps = 0; steps < 64 && inner is NameExpressionSyntax; steps++)
+        for (var steps = 0; steps < ForwardingLimit && inner is NameExpressionSyntax; steps++)
         {
             if (Argument(inner) is not { Parameter.Kind: ParameterKind.Operand, Operand: { } passed })
                 break;

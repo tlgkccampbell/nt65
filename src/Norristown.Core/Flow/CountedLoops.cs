@@ -66,11 +66,11 @@ internal static class CountedLoops
         // walks an array of words. Every decrement in the unbroken run just before the branch
         // executes on each iteration, so the stride is how many of them there are.
         var stride = 0;
-        var counting = new HashSet<(int Position, Expansion? On)>();
+        var counting = new HashSet<StepKey>();
         for (var at = steps.Count - 2; at >= 0 && Mnemonic(steps[at]) == counter; at--)
         {
             stride++;
-            counting.Add((steps[at].Statement.Position, steps[at].On));
+            counting.Add(steps[at].Key);
         }
 
         // There must be one way out, and it must be that branch. A loop that something else
@@ -92,7 +92,7 @@ internal static class CountedLoops
                 continue;
             foreach (var step in InstructionsIn(blocks[i]))
             {
-                if (i == loop.Latch && counting.Contains((step.Statement.Position, step.On)))
+                if (i == loop.Latch && counting.Contains(step.Key))
                     continue;
                 if (Writes(Mnemonic(step), register))
                     return null;

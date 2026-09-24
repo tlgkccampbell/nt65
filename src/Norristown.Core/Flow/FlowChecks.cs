@@ -54,7 +54,7 @@ internal sealed class FlowChecks
     /// <param name="calls">The relative calls among those statements.</param>
     /// <returns>The statements that hold the data the calls return past.</returns>
     public HashSet<ControlFlow.Unit> FindInlineData(
-        IReadOnlyList<ControlFlow.Unit> units, IReadOnlyDictionary<(int Position, Expansion? On), RelativeCall> calls)
+        IReadOnlyList<ControlFlow.Unit> units, IReadOnlyDictionary<StepKey, RelativeCall> calls)
     {
         var found = new HashSet<ControlFlow.Unit>();
         for (var i = 0; i < units.Count; i++)

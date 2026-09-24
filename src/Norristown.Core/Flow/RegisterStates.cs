@@ -11,7 +11,7 @@ namespace Norristown.Flow;
 /// </summary>
 public sealed class RegisterStates
 {
-    private readonly Dictionary<(int Position, Expansion? On), RegisterState> reaching = [];
+    private readonly Dictionary<StepKey, RegisterState> reaching = [];
     private readonly SyntaxTree tree;
 
     internal RegisterStates(SyntaxTree tree) => this.tree = tree;
@@ -21,7 +21,7 @@ public sealed class RegisterStates
     /// <paramref name="on"/>, or null where nothing reaches it or it is in no routine.
     /// </summary>
     public RegisterState? Before(SyntaxNode statement, Expansion? on = null) =>
-        reaching.GetValueOrDefault((statement.Position, on));
+        reaching.GetValueOrDefault(StepKey.Of(statement, on));
 
     /// <summary>
     /// Returns what every <see cref="Expansion"/> of <paramref name="statement"/> agrees the
@@ -44,5 +44,5 @@ public sealed class RegisterStates
     }
 
     internal void Record(Step step, RegisterState state) =>
-        reaching[(step.Statement.Position, step.On)] = state;
+        reaching[step.Key] = state;
 }

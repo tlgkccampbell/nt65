@@ -26,13 +26,13 @@ public sealed class StateAnalysis : IProcessorStates
     private readonly ControlFlow flow;
     private readonly StateChecks checks;
     private readonly OutsideEntries outside;
-    private readonly Dictionary<(int Position, Expansion? On), FlowState> reaching = [];
-    private readonly Dictionary<(int Position, Expansion? On), int> slots = [];
+    private readonly Dictionary<StepKey, FlowState> reaching = [];
+    private readonly Dictionary<StepKey, int> slots = [];
 
     // The state at the start of each expansion of a macro with a signature, and of each block
     // spliced into one. A spliced block's end is checked against it, and a macro's exit state
     // takes its unchanged parts from it.
-    private readonly Dictionary<(int Position, Expansion? On), ProcessorState> started = [];
+    private readonly Dictionary<StepKey, ProcessorState> started = [];
 
     private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges)
     {
@@ -75,7 +75,7 @@ public sealed class StateAnalysis : IProcessorStates
     /// <paramref name="on"/>, or null where nothing reaches it or it is in no routine.
     /// </summary>
     public FlowState? Before(SyntaxNode statement, Expansion? on = null) =>
-        reaching.GetValueOrDefault((statement.Position, on));
+        reaching.GetValueOrDefault(StepKey.Of(statement, on));
 
     /// <summary>
     /// Returns the <c>n</c> of <c>n,s</c> that the frame slot in <paramref name="statement"/>'s
@@ -83,7 +83,7 @@ public sealed class StateAnalysis : IProcessorStates
     /// names no slot or the slot is not known.
     /// </summary>
     public int? SlotAt(SyntaxNode statement, Expansion? on = null) =>
-        slots.TryGetValue((statement.Position, on), out var slot) ? slot : null;
+        slots.TryGetValue(StepKey.Of(statement, on), out var slot) ? slot : null;
 
     /// <summary>
     /// Returns the processor's own part of the state <see cref="Before"/> returns, which is all
@@ -308,7 +308,7 @@ public sealed class StateAnalysis : IProcessorStates
         {
             var step = block.Steps[i];
             if (report is not null && !step.Closes)
-                reaching[(step.Statement.Position, step.On)] = state;
+                reaching[step.Key] = state;
             Step? previous = i > 0 ? block.Steps[i - 1] : null;
             var next = i == block.Steps.Count - 1 ? block.Next : null;
             state = Explained(step, next, state, Through(step, previous, next, state, routine, report));
@@ -959,7 +959,7 @@ public sealed class StateAnalysis : IProcessorStates
             var offset = name.Names.Length > 1 ? model.ValueOf(name, step.On).AsNumber() ?? 0 : 0;
 
             // The frame's lowest byte is its last member's, and `1,s` is the byte on top.
-            slots[(step.Statement.Position, step.On)] = (int)(above - size + 1 + offset + 1);
+            slots[step.Key] = (int)(above - size + 1 + offset + 1);
         }
     }
 
@@ -972,7 +972,7 @@ public sealed class StateAnalysis : IProcessorStates
     /// </summary>
     private FlowState Marked(Step step, FlowState state, StateChecks? report)
     {
-        var key = (step.Statement.Position, step.On);
+        var key = step.Key;
         var processor = state.Processor;
         if (step.Statement is BlockSpliceSyntax)
         {

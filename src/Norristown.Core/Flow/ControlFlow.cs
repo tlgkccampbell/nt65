@@ -21,9 +21,9 @@ public sealed class ControlFlow
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly List<FlowRegion> regions = [];
-    private readonly Dictionary<(int Position, Expansion? On), IReadOnlyList<StatementSyntax>> annotations;
-    private readonly Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls;
-    private readonly HashSet<(int Position, Expansion? On)> returnAddresses;
+    private readonly Dictionary<StepKey, IReadOnlyList<StatementSyntax>> annotations;
+    private readonly Dictionary<StepKey, RelativeCall> relativeCalls;
+    private readonly HashSet<StepKey> returnAddresses;
 
     private ControlFlow(SemanticModel model, CodeLayout layout)
         : this(model, layout, [], [], [])
@@ -32,9 +32,9 @@ public sealed class ControlFlow
 
     private ControlFlow(
         SemanticModel model, CodeLayout layout,
-        Dictionary<(int Position, Expansion? On), IReadOnlyList<StatementSyntax>> annotations,
-        Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls,
-        HashSet<(int Position, Expansion? On)> returnAddresses)
+        Dictionary<StepKey, IReadOnlyList<StatementSyntax>> annotations,
+        Dictionary<StepKey, RelativeCall> relativeCalls,
+        HashSet<StepKey> returnAddresses)
     {
         this.model = model;
         this.layout = layout;
@@ -135,8 +135,8 @@ public sealed class ControlFlow
     /// every other statement.
     /// </summary>
     internal static RelativeCall? RelativeCallIn(
-        IReadOnlyDictionary<(int Position, Expansion? On), RelativeCall> calls, Step step) =>
-        calls.TryGetValue((step.Statement.Position, step.On), out var call) ? call : null;
+        IReadOnlyDictionary<StepKey, RelativeCall> calls, Step step) =>
+        calls.TryGetValue(step.Key, out var call) ? call : null;
 
     /// <summary>
     /// Returns a copy of this flow for another analysis of the program to compose. Composing sets
@@ -159,7 +159,7 @@ public sealed class ControlFlow
 
     /// <summary>Returns the annotations under <paramref name="step"/>'s statement, in order.</summary>
     internal IReadOnlyList<StatementSyntax> AnnotationsOf(Step step) =>
-        annotations.GetValueOrDefault((step.Statement.Position, step.On)) ?? [];
+        annotations.GetValueOrDefault(step.Key) ?? [];
 
     /// <summary>
     /// Returns the routine a statement calls, directly or as a relative call, or null for anything
@@ -224,7 +224,7 @@ public sealed class ControlFlow
     /// <summary>
     /// Returns whether a statement is the <c>per</c> that pushes a relative call's return address.
     /// </summary>
-    internal bool IsReturnAddress(Step step) => returnAddresses.Contains((step.Statement.Position, step.On));
+    internal bool IsReturnAddress(Step step) => returnAddresses.Contains(step.Key);
 
     /// <summary>
     /// Returns whether control continues into what follows. A call does, in any form, because it
@@ -528,7 +528,7 @@ public sealed class ControlFlow
             units.Add(new Unit(step));
         }
         foreach (var unit in units.Where(unit => unit.Annotations.Count > 0))
-            annotations[(unit.Step.Statement.Position, unit.Step.On)] = unit.Annotations;
+            annotations[unit.Step.Key] = unit.Annotations;
         return units;
     }
 
@@ -541,11 +541,11 @@ public sealed class ControlFlow
     /// The call each such branch makes, and the <c>per</c> statements that push the calls' return
     /// addresses.
     /// </returns>
-    private (Dictionary<(int Position, Expansion? On), RelativeCall> Calls, List<(int Position, Expansion? On)> ReturnAddresses)
+    private (Dictionary<StepKey, RelativeCall> Calls, List<StepKey> ReturnAddresses)
         FindRelativeCalls(IReadOnlyList<Unit> units)
     {
-        var calls = new Dictionary<(int Position, Expansion? On), RelativeCall>();
-        var returnAddresses = new List<(int Position, Expansion? On)>();
+        var calls = new Dictionary<StepKey, RelativeCall>();
+        var returnAddresses = new List<StepKey>();
         for (var i = 1; i + 1 < units.Count; i++)
         {
             var branch = units[i].Step;
@@ -562,8 +562,8 @@ public sealed class ControlFlow
             }
             var far = i >= 2 && units[i - 2].Step.Stream == branch.Stream
                 && IsInstruction(units[i - 2].Step.Statement, MnemonicKind.Phk);
-            calls[(branch.Statement.Position, branch.On)] = new RelativeCall(routine.Symbol, far);
-            returnAddresses.Add((push.Step.Statement.Position, push.Step.On));
+            calls[branch.Key] = new RelativeCall(routine.Symbol, far);
+            returnAddresses.Add(push.Step.Key);
         }
         return (calls, returnAddresses);
     }
@@ -594,9 +594,9 @@ public sealed class ControlFlow
     /// never runs it, so it costs nothing, rather than leaving its block without a count.
     /// </param>
     private List<BasicBlock> Blocks(
-        IReadOnlyList<Unit> units, IReadOnlyDictionary<(int Position, Expansion? On), RelativeCall> calls, HashSet<Unit> inlineData)
+        IReadOnlyList<Unit> units, IReadOnlyDictionary<StepKey, RelativeCall> calls, HashSet<Unit> inlineData)
     {
-        var skipped = inlineData.Select(unit => (unit.Step.Statement.Position, unit.Step.On)).ToHashSet();
+        var skipped = inlineData.Select(unit => unit.Step.Key).ToHashSet();
         var blocks = new List<BasicBlock>();
         var tails = new List<Unit?>();
         var fallenInto = new List<bool>();
@@ -663,7 +663,7 @@ public sealed class ControlFlow
     /// </summary>
     private void Link(
         List<BasicBlock> blocks, List<Unit?> tails, List<bool> fallenInto,
-        Dictionary<(Symbol Symbol, Expansion? At), int> found, IReadOnlyDictionary<(int Position, Expansion? On), RelativeCall> calls)
+        Dictionary<(Symbol Symbol, Expansion? At), int> found, IReadOnlyDictionary<StepKey, RelativeCall> calls)
     {
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -728,12 +728,12 @@ public sealed class ControlFlow
     /// up. One statement nt65 has no count for leaves the block without one. The data in
     /// <paramref name="skipped"/> is returned past rather than run, so it costs nothing.
     /// </summary>
-    private CycleCount? Counted(BasicBlock block, HashSet<(int Position, Expansion? On)> skipped)
+    private CycleCount? Counted(BasicBlock block, HashSet<StepKey> skipped)
     {
         var total = new CycleCount(0);
         foreach (var step in block.Steps)
         {
-            if (TakesNoTime(step) || skipped.Contains((step.Statement.Position, step.On)))
+            if (TakesNoTime(step) || skipped.Contains(step.Key))
                 continue;
             if (layout.Of(step.Statement, step.On)?.Cycles is not { } cycles)
             {

@@ -17,12 +17,12 @@ public sealed partial class CodeLayout
 {
     private readonly SemanticModel model;
     private readonly Cpu cpu;
-    private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
+    private readonly Dictionary<StepKey, LineLayout> lines = [];
     private readonly Dictionary<(SyntaxTree Tree, int Position), LineLayout> anyExpansion = [];
 
     // These record where every line's bytes land and where every label falls among them. A
     // distance between two positions is known only when both are in the same run of bytes.
-    private readonly Dictionary<(int Position, Expansion? On), BytePosition> positions = [];
+    private readonly Dictionary<StepKey, BytePosition> positions = [];
     private readonly Dictionary<(Symbol Symbol, Expansion? At), BytePosition> labels = [];
 
     // Every statement in the order its bytes are emitted. The flow analysis reads this list,
@@ -97,16 +97,23 @@ public sealed partial class CodeLayout
         // Every long branch starts short, and those found out of reach are lengthened until none
         // changes. This terminates because a branch only ever grows. Only the last walk is kept,
         // because the walks before it laid out a file that differs from the one emitted.
-        var lengthened = new HashSet<(int Position, Expansion? On)>();
+        var lengthened = new HashSet<StepKey>();
         var measured = Extents.MeasuredIn(model);
         var spans = new Dictionary<Symbol, long>();
         Walker walker;
+        bool again;
         do
         {
             walker = new Walker(new CodeLayout(model, cpu, spans), states, lengthened, measured);
             walker.Walk();
+
+            // The spans are recorded even when a branch grew, so that the next walk starts from
+            // the spans this one worked out.
+            var branchesGrew = walker.Lengthen();
+            var spansChanged = walker.RecordSpans();
+            again = branchesGrew || spansChanged;
         }
-        while (walker.Lengthen() | walker.RecordSpans());
+        while (again);
 
         // A cycle span is counted over a walk that has finished, because the code it measures
         // may appear after the expression that measures it. Only a file that asks for a span is
@@ -205,7 +212,7 @@ public sealed partial class CodeLayout
     /// or null when it generates no bytes.
     /// </summary>
     public LineLayout? Of(SyntaxNode statement, Expansion? on = null) =>
-        lines.GetValueOrDefault((statement.Position, on));
+        lines.GetValueOrDefault(StepKey.Of(statement, on));
 
     /// <summary>
     /// Returns what a statement assembles to in its first expansion. An editor asks about a line
@@ -215,7 +222,7 @@ public sealed partial class CodeLayout
 
     /// <summary>Returns where a statement's bytes land, or null when it generates none.</summary>
     public BytePosition? PositionOf(SyntaxNode statement, Expansion? on = null) =>
-        positions.TryGetValue((statement.Position, on), out var position) ? position : null;
+        positions.TryGetValue(StepKey.Of(statement, on), out var position) ? position : null;
 
     /// <summary>
     /// Returns where <paramref name="label"/> stands in the stream around it, or null when the
