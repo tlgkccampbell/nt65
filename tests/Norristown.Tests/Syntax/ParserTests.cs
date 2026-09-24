@@ -339,6 +339,35 @@ public sealed class ParserTests
         Assert.Equal(line, tree.Root.ToFullString());
     }
 
+    /// <summary>
+    /// A parameter kind of lists within lists counts toward the same limit, and is reported
+    /// once however deep it goes, with the text still whole.
+    /// </summary>
+    [Fact]
+    public void AListOfListsTooDeepToReadIsReportedOnce()
+    {
+        const int depth = 20000;
+        var line = ".macro m(p: " + string.Concat(Enumerable.Repeat("list(", depth)) + "expr"
+            + string.Concat(Enumerable.Repeat(")", depth)) + ") {\n}\n";
+        var tree = SyntaxTree.Parse("test.nt65", line);
+        var diagnostic = Assert.Single(tree.Diagnostics);
+        Assert.Equal("expression nested more than 100 levels deep: nt65 reads no further", diagnostic.Message);
+        Assert.Equal(line, tree.Root.ToFullString());
+    }
+
+    /// <summary>
+    /// A named argument gives a value, never another named argument, so a chain of them stops at
+    /// the second <c>=</c> rather than nesting once for every one.
+    /// </summary>
+    [Fact]
+    public void AChainOfNamedArgumentsDoesNotNest()
+    {
+        var line = "m!(" + string.Concat(Enumerable.Repeat("a = ", 20000)) + "1)\n";
+        var tree = SyntaxTree.Parse("test.nt65", line);
+        Assert.NotEmpty(tree.Diagnostics);
+        Assert.Equal(line, tree.Root.ToFullString());
+    }
+
     /// <summary>Nesting within the parser's limit is read as the source has it, with no diagnostic.</summary>
     [Fact]
     public void ANestWithinReachIsReadAsTheSourceHasIt()

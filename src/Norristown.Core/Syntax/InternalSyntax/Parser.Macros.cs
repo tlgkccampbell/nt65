@@ -123,7 +123,16 @@ internal sealed partial class Parser
         // The words a `one` accepts are never looked up, so a register or a mnemonic
         // among them is a word like any other; nor are the modes an `operand` takes.
         var words = listed || moded ? ParseSeparatedList(ParseListedWord) : null;
-        var element = nested ? ParseParameterKind() : null;
+        // A `list` of lists nests once for every `list(`, so it counts toward the same limit
+        // an expression does.
+        ParameterKindSyntax? element = null;
+        if (nested)
+        {
+            nesting++;
+            if (TooDeeplyNested() is null)
+                element = ParseParameterKind();
+            nesting--;
+        }
         return new ParameterKindSyntax(
             keyword, type: null, openParen, words, element, low: null, dotDotToken: null, high: null,
             Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`")));
@@ -169,14 +178,19 @@ internal sealed partial class Parser
     /// <summary>
     /// Parses one argument, which is an expression, a braced operand, or a parameter's name
     /// followed by <c>=</c> and one of those. <c>=</c> appears in no expression, so a named
-    /// argument is unambiguous.
+    /// argument is unambiguous. What follows the <c>=</c> is never another name and <c>=</c>, so
+    /// <c>a = b = 1</c> stops at the second <c>=</c> rather than nesting once for every one.
     /// </summary>
     private GreenNode ParseArgument()
     {
         if (AtName && Next == SyntaxKind.Equals)
-            return new NamedArgumentSyntax(Advance(), Advance(), ParseArgument());
-        return Kind == SyntaxKind.OpenBrace ? ParseBracedOperand() : ParseExpression();
+            return new NamedArgumentSyntax(Advance(), Advance(), ParseArgumentValue());
+        return ParseArgumentValue();
     }
+
+    /// <summary>Parses what an argument gives, which is an expression or a braced operand.</summary>
+    private GreenNode ParseArgumentValue() =>
+        Kind == SyntaxKind.OpenBrace ? ParseBracedOperand() : ParseExpression();
 
     /// <summary>
     /// Parses <c>{buf,x}</c>, a whole operand as an argument. Only a braced argument is parsed as
