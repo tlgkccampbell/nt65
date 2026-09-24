@@ -63,4 +63,15 @@ public sealed class FlowRegion
     /// of each nested segment block, each stream in the order its bytes are emitted.
     /// </summary>
     public IReadOnlyList<BasicBlock> Blocks { get; }
+
+    /// <summary>
+    /// Returns a copy of the region whose program-wide answers another analysis can set without
+    /// changing this one. The blocks are shared.
+    /// </summary>
+    internal FlowRegion ForComposing() => new(Routine, IsEntered, Blocks, Cost, Scopes, Inline)
+    {
+        Total = Total,
+        Registers = Registers,
+        ScopeRegisters = ScopeRegisters,
+    };
 }

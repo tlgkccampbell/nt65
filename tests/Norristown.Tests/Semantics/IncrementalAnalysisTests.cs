@@ -163,6 +163,37 @@ public sealed class IncrementalAnalysisTests
     }
 
     /// <summary>
+    /// What a routine costs with its calls, and which registers it keeps, are worked out across
+    /// the program. A later analysis that keeps a file works them out on its own copy of that
+    /// file's routines, so the analysis before it, which an editor may still be reading, keeps
+    /// the answers it had.
+    /// </summary>
+    [Fact]
+    public void ALaterAnalysisLeavesTheEarlierOnesProgramWideAnswersAlone()
+    {
+        var lib = SyntaxTree.Parse("lib.nt65", ".module lib\n.segment CODE\n.export .proc helper {\n    nop\n    rts\n}\n");
+        var main = SyntaxTree.Parse("main.nt65",
+            ".module main\n.use lib::helper\n.segment CODE\n.export .proc main {\n    jsr helper\n    rts\n}\n");
+        var project = ProjectSettings.None;
+
+        var first = Compiler.Analyze([lib, main], project, Nothing);
+        var region = Assert.Single(first.FlowFor("main.nt65")!.Regions);
+        var (total, registers, states) = (region.Total, region.Registers, first.FlowFor("main.nt65")!.Registers);
+
+        var edited = lib.WithChange(new TextChange(lib.Text.IndexOf("nop", StringComparison.Ordinal), 3, "nop\n    inx"));
+        var second = Compiler.Analyze([edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
+        Assert.Equal(1, second.Reanalyzed);
+        var now = Assert.Single(second.FlowFor("main.nt65")!.Regions);
+        Assert.NotEqual(total, now.Total);
+        Assert.NotEqual(registers, now.Registers);
+
+        Assert.Same(region, Assert.Single(first.FlowFor("main.nt65")!.Regions));
+        Assert.Equal(total, region.Total);
+        Assert.Equal(registers, region.Registers);
+        Assert.Same(states, first.FlowFor("main.nt65")!.Registers);
+    }
+
+    /// <summary>
     /// Two functions in two files that call each other form a ring, which is found again whenever
     /// one of the files is read again. The function in the file that was not read again is on
     /// that ring too, and it keeps what the model before the edit found for it, because that

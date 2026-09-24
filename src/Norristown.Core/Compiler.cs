@@ -438,10 +438,11 @@ public static class Compiler
         {
             cancellation.ThrowIfCancellationRequested();
             // A file kept from before keeps what was found for it then, under the program's
-            // current model of the file.
+            // current model of the file. Its flow is copied, because composing this analysis sets
+            // program-wide answers on the routines, and the earlier analysis keeps its own.
             if (dirty?.Contains(model.Tree.Path) != true && previous?.FileFor(model.Tree.Path) is { } kept)
             {
-                files.Add(kept with { Model = model });
+                files.Add(kept with { Model = model, Flow = kept.Flow.ForComposing() });
                 continue;
             }
             var (layout, flow, state, found) = AnalyzeFile(model, target, project);

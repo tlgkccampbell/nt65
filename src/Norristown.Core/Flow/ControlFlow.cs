@@ -21,14 +21,26 @@ public sealed class ControlFlow
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly List<FlowRegion> regions = [];
-    private readonly Dictionary<(int Position, Expansion? On), IReadOnlyList<StatementSyntax>> annotations = [];
-    private readonly Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls = [];
-    private readonly HashSet<(int Position, Expansion? On)> returnAddresses = [];
+    private readonly Dictionary<(int Position, Expansion? On), IReadOnlyList<StatementSyntax>> annotations;
+    private readonly Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls;
+    private readonly HashSet<(int Position, Expansion? On)> returnAddresses;
 
     private ControlFlow(SemanticModel model, CodeLayout layout)
+        : this(model, layout, [], [], [])
+    {
+    }
+
+    private ControlFlow(
+        SemanticModel model, CodeLayout layout,
+        Dictionary<(int Position, Expansion? On), IReadOnlyList<StatementSyntax>> annotations,
+        Dictionary<(int Position, Expansion? On), RelativeCall> relativeCalls,
+        HashSet<(int Position, Expansion? On)> returnAddresses)
     {
         this.model = model;
         this.layout = layout;
+        this.annotations = annotations;
+        this.relativeCalls = relativeCalls;
+        this.returnAddresses = returnAddresses;
     }
 
     /// <summary>Gets every routine in the file, one region each.</summary>
@@ -125,6 +137,25 @@ public sealed class ControlFlow
     internal static RelativeCall? RelativeCallIn(
         IReadOnlyDictionary<(int Position, Expansion? On), RelativeCall> calls, Step step) =>
         calls.TryGetValue((step.Statement.Position, step.On), out var call) ? call : null;
+
+    /// <summary>
+    /// Returns a copy of this flow for another analysis of the program to compose. Composing sets
+    /// what each routine costs with its calls and which registers it keeps, and an analysis that
+    /// keeps this file from an earlier one composes into the copy. The earlier analysis, which a
+    /// reader on another thread may still be using, then keeps the answers it had. The blocks and
+    /// everything else worked out for the file alone are shared, because nothing changes them.
+    /// </summary>
+    internal ControlFlow ForComposing()
+    {
+        var copy = new ControlFlow(model, layout, annotations, relativeCalls, returnAddresses)
+        {
+            Diagnostics = Diagnostics,
+            RunningOn = RunningOn,
+            Registers = Registers,
+        };
+        copy.regions.AddRange(regions.Select(region => region.ForComposing()));
+        return copy;
+    }
 
     /// <summary>Returns the annotations under <paramref name="step"/>'s statement, in order.</summary>
     internal IReadOnlyList<StatementSyntax> AnnotationsOf(Step step) =>

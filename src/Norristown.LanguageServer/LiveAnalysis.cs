@@ -9,9 +9,10 @@ namespace Norristown.LanguageServer;
 /// workspace's lock. A change makes the next request start a new analysis, from the last one that
 /// finished.
 /// <para>
-/// The analyses of one program run one after another, in the order their files were taken. The
-/// next analysis starts from the one before it, and composing it updates the routines of the files
-/// it keeps from that one, so two at once would each change what the other is reading. An
+/// The analyses of one program run one after another, in the order their files were taken. An
+/// analysis leaves the one it starts from unchanged, so two could run at once safely. They wait
+/// so that each starts from the one just before it. Then only what the latest edit changed is
+/// analyzed again, and two analyses of the whole program never compete for the processor. An
 /// analysis that every request has stopped waiting for is cancelled.
 /// </para>
 /// </summary>
