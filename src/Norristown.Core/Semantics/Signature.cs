@@ -69,6 +69,14 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// </summary>
     public Processor.Registers Keeps { get; init; }
 
+    /// <summary>
+    /// Gets the registers whose values from its caller the routine may use (<c>reads a, c</c>), or
+    /// null for a routine that declares none. A routine with a body is checked against the
+    /// declaration, and a routine without one is trusted. A caller takes a routine that declares
+    /// nothing to read what its body is found to read, or anything where there is no body.
+    /// </summary>
+    public Processor.Registers? Reads { get; init; }
+
     /// <summary>Gets how the routine is called and left, as the signature item that declares it.</summary>
     public string Distance => IsInterrupt ? "interrupt" : IsFar ? "far" : "near";
 
@@ -77,10 +85,10 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// rather than taking the default or declaring an empty <c>proc()</c>. On the 65816, a routine
     /// with no body must do so, because nothing else states what a caller must hold to. A
     /// signature of only <c>keeps</c> does not count, because which registers are preserved says
-    /// nothing about the widths.
+    /// nothing about the widths, and neither does one of only <c>reads</c>.
     /// </summary>
     public bool DeclaresState =>
-        syntax is not null && StateItem.Read(syntax).Any(item => item.Part != StatePart.Keeps);
+        syntax is not null && StateItem.Read(syntax).Any(item => !item.IsAboutRegisters);
 
     /// <summary>
     /// Gets a value indicating whether no caller waits for the routine to return, because it never
@@ -88,6 +96,12 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// routine is checked only against the target's entry.
     /// </summary>
     public bool HasNoCaller => IsInterrupt || NeverReturns;
+
+    /// <summary>
+    /// Gets the list the signature was read from, whose items are the signature's own and not
+    /// those of a signature set it names, or null for the default signature.
+    /// </summary>
+    internal SyntaxNode? Syntax => syntax;
 
     /// <summary>
     /// Reads the signature a proc, an extern proc or an import declares, as far as it can be read
@@ -135,6 +149,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             entry += $", args {Arguments}";
         if (NeverReturns)
             entry += ", noreturn";
+        if (Reads is { } reads)
+            entry += $", reads {(reads == Processor.Registers.None ? "none" : Processor.RegisterEffects.Format(reads).ToLowerInvariant())}";
         if (Keeps != Processor.Registers.None)
             entry += $", keeps {Processor.RegisterEffects.Format(Keeps).ToLowerInvariant()}";
         return entry + (NeverReturns || IsInterrupt || Exit == Entry ? "" : $" -> {Exit}");
@@ -150,11 +166,12 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         other is not null
         && Entry == other.Entry && Exit == other.Exit && IsFar == other.IsFar
         && Inline?.Text == other.Inline?.Text && IsInterrupt == other.IsInterrupt
-        && NeverReturns == other.NeverReturns && Arguments == other.Arguments && Keeps == other.Keeps;
+        && NeverReturns == other.NeverReturns && Arguments == other.Arguments && Keeps == other.Keeps
+        && Reads == other.Reads;
 
     /// <summary>Returns a hash code over the same parts that <see cref="Equals(Signature?)"/> compares.</summary>
     public override int GetHashCode() =>
-        HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps);
+        HashCode.Combine(HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps), Reads);
 
     /// <summary>
     /// Returns the signature read again with the signature sets it names and the values of its
@@ -208,6 +225,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         // Every `keeps` the list gives, and whether a signature set gave it. A list may contain
         // more than one, and its own replace what a set gives.
         public readonly List<(StateItem Item, bool FromSet)> Keeps = [];
+
+        // Every `reads` the list gives, and whether a signature set gave it, in the same way.
+        public readonly List<(StateItem Item, bool FromSet)> Reads = [];
 
         // The parts the list gives itself, rather than taking from the set.
         public readonly HashSet<StatePart> Given = [];
@@ -315,11 +335,19 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
         // The registers the list promises. A list that contains its own `keeps` states which
         // they are. A list that contains none takes what the signature set it names gives.
-        private static Processor.Registers Promised(Parts parts)
+        private static Processor.Registers Promised(Parts parts) => Named(parts.Keeps);
+
+        // The registers the list says the routine reads, taken the way `keeps` is, or null where
+        // neither the list nor its set says.
+        private static Processor.Registers? Declared(Parts parts) =>
+            parts.Reads.Count == 0 ? null : Named(parts.Reads);
+
+        // The registers a list of items names, where the list's own items replace a set's.
+        private static Processor.Registers Named(List<(StateItem Item, bool FromSet)> items)
         {
-            var own = parts.Keeps.Where(kept => !kept.FromSet).ToList();
-            return (own.Count > 0 ? own : parts.Keeps)
-                .Aggregate(Processor.Registers.None, (all, kept) => all | kept.Item.Registers);
+            var own = items.Where(item => !item.FromSet).ToList();
+            return (own.Count > 0 ? own : items)
+                .Aggregate(Processor.Registers.None, (all, named) => all | named.Item.Registers);
         }
 
         // A set of banks at entry means the routine is entered with one of those banks, and
@@ -342,6 +370,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 Arguments = arguments,
                 Keeps = Promised(entry),
+                Reads = Declared(entry),
                 syntax = syntax,
                 forMacro = forMacro,
             };
@@ -379,6 +408,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 IsInterrupt = true,
                 Keeps = Promised(entry),
+                Reads = Declared(entry),
                 syntax = syntax,
                 forMacro = forMacro,
             };
@@ -468,7 +498,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
                     // An exit, and a macro, take a set's state and not how a routine is called or entered.
                     if ((isExit || forMacro) && setItem.Part is StatePart.Distance or StatePart.Inline
-                        or StatePart.Arguments or StatePart.Interrupt or StatePart.NoReturn or StatePart.Keeps)
+                        or StatePart.Arguments or StatePart.Interrupt or StatePart.NoReturn or StatePart.Keeps
+                        or StatePart.Reads)
                     {
                         continue;
                     }
@@ -528,10 +559,10 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     parts.B = Once(parts, parts.B, item, fromSet);
                     break;
 
-                case StatePart.Keeps when forMacro:
+                case StatePart.Keeps or StatePart.Reads when forMacro:
                     report(item.Node.Span, Catalogue.MacroKeeps.Message(item.Text));
                     break;
-                case StatePart.Keeps when isExit:
+                case StatePart.Keeps or StatePart.Reads when isExit:
                     report(item.Node.Span,
                         Catalogue.ItemBelongsAtEntry.Message(item.Text, "is about a routine from entry to exit"));
                     break;
@@ -539,6 +570,12 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     if (item.Registers == Processor.Registers.None)
                         break;
                     parts.Keeps.Add((item, fromSet));
+                    break;
+                case StatePart.Reads:
+                    parts.Reads.Add((item, fromSet));
+                    break;
+                case StatePart.Saves:
+                    report(At(parts, item), Catalogue.SavesInSignature.Message(item.Text));
                     break;
 
                 case StatePart.NoReturn when forMacro:

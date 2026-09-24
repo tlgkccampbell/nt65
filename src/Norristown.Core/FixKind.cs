@@ -127,4 +127,7 @@ public enum FixKind
     /// <see cref="DiagnosticFix.Text"/> spells.
     /// </summary>
     Flags,
+
+    /// <summary>The register added to the <c>reads</c> item of the routine's signature.</summary>
+    Reads,
 }

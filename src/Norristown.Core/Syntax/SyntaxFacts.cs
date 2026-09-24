@@ -203,7 +203,7 @@ public static class SyntaxFacts
         new[]
         {
             "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "args", "interrupt",
-            "noreturn", "keeps",
+            "noreturn", "keeps", "reads", "saves",
         }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> trackedStateParts =

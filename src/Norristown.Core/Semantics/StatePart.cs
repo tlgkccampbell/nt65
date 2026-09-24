@@ -42,6 +42,18 @@ public enum StatePart
     Keeps,
 
     /// <summary>
+    /// The registers whose values from its caller a routine uses: <c>reads a, c</c>, or
+    /// <c>reads none</c>.
+    /// </summary>
+    Reads,
+
+    /// <summary>
+    /// A register that the store above a <c>.state</c> only saves, so the store is not a use of
+    /// its value: <c>saves x</c>.
+    /// </summary>
+    Saves,
+
+    /// <summary>
     /// Every tracked part of the state unknown, written as <c>?</c> on its own. A routine reached
     /// from outside nt65 assumes this, and an extern proc or an import usually declares it.
     /// </summary>

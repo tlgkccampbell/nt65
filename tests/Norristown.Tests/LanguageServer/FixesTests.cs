@@ -120,6 +120,16 @@ public sealed class FixesTests
             ".proc helper {\n    rts\n}\n.export .proc main {\n    jmp helper\n}\n"
         },
         {
+            "Add `c` to `reads`",
+            ".export .proc main: a8, i8, reads a {\n    adc #1\n    sta $10\n    rts\n}\n",
+            ".export .proc main: a8, i8, reads a, c {\n    adc #1\n    sta $10\n    rts\n}\n"
+        },
+        {
+            "Add `x` to `reads`",
+            ".export .proc main: a8, i8, reads none {\n    stx $10\n    rts\n}\n",
+            ".export .proc main: a8, i8, reads x {\n    stx $10\n    rts\n}\n"
+        },
+        {
             "Jump with `jml` as a tail call",
             ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jsl helper\n    rtl\n}\n",
             ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"

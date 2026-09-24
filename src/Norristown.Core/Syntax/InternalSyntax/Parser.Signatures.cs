@@ -93,23 +93,35 @@ internal sealed partial class Parser
                 ? new StateInlineItemSyntax(name, Advance())
                 : new StateValueItemSyntax(name, null, ParseExpression());
         }
-        else if (name.Text.Equals("keeps", StringComparison.OrdinalIgnoreCase))
+        else if (name.Text.ToLowerInvariant() is "keeps" or "reads" or "saves")
         {
-            return new StateKeepsItemSyntax(name, ParseKeptRegisters());
+            return new StateRegistersItemSyntax(name, ParseRegisters(name.Text.ToLowerInvariant()));
         }
         return new StateFlagItemSyntax(name, suffix);
     }
 
     /// <summary>
-    /// Parses the registers of a <c>keeps a, x</c>. A bare register name is not an item anywhere else
-    /// in a signature, so the list continues through the commas that also separate the
-    /// signature's own items, and stops at the first comma followed by anything else.
+    /// Parses the registers of a <c>keeps a, x</c>, a <c>reads a, c</c> or a <c>saves x</c>. A bare
+    /// register name is not an item anywhere else in a signature, so the list continues through
+    /// the commas that also separate the signature's own items, and stops at the first comma
+    /// followed by anything else. <c>reads none</c> declares that a routine reads nothing, which
+    /// is not what leaving <c>reads</c> out says.
     /// </summary>
-    private GreenSeparatedList? ParseKeptRegisters()
+    private GreenSeparatedList? ParseRegisters(string word)
     {
+        if (word == "reads" && Kind == SyntaxKind.Identifier
+            && Current.Text.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            return new GreenSeparatedList([new IdentifierNameSyntax(Advance(), null)]);
+        }
         if (!AtKeptRegister(index))
         {
-            Report(Catalogue.ExpectedKeptRegisters.Message("the registers it keeps: `keeps a`, `keeps x, y`"));
+            Report(Catalogue.ExpectedKeptRegisters.Message(word switch
+            {
+                "reads" => "the registers it reads: `reads a`, `reads a, c`, or `reads none`",
+                "saves" => "the register the store saves: `saves x`",
+                _ => "the registers it keeps: `keeps a`, `keeps x, y`",
+            }));
             return null;
         }
         var pieces = ImmutableArray.CreateBuilder<GreenNode>();
@@ -124,7 +136,7 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Returns a value indicating whether the token at <paramref name="at"/> names a register that
-    /// a <c>keeps</c> may take.
+    /// a <c>keeps</c>, <c>reads</c> or <c>saves</c> may take.
     /// </summary>
     private bool AtKeptRegister(int at) =>
         at < tokens.Length && tokens[at].Kind is SyntaxKind.Identifier or SyntaxKind.Register

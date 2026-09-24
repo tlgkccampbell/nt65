@@ -37,16 +37,24 @@ public readonly record struct StateItem(
     public bool IsStrz => Node is StateInlineItemSyntax;
 
     /// <summary>
-    /// Gets the registers a <see cref="StatePart.Keeps"/> item names, or none for every other item.
+    /// Gets a value indicating whether the item names registers, as <c>keeps</c>, <c>reads</c> and
+    /// <c>saves</c> do, rather than a part of the processor state or how a routine is called.
+    /// </summary>
+    public bool IsAboutRegisters => Part is StatePart.Keeps or StatePart.Reads or StatePart.Saves;
+
+    /// <summary>
+    /// Gets the registers a <see cref="StatePart.Keeps"/>, <see cref="StatePart.Reads"/> or
+    /// <see cref="StatePart.Saves"/> item names, or none for every other item and for
+    /// <c>reads none</c>.
     /// </summary>
     public Processor.Registers Registers
     {
         get
         {
-            if (Node is not StateKeepsItemSyntax keeps)
+            if (Node is not StateRegistersItemSyntax item)
                 return Processor.Registers.None;
             var registers = Processor.Registers.None;
-            foreach (var register in keeps.Registers)
+            foreach (var register in item.Registers)
             {
                 if (Processor.RegisterEffects.Named(register.Name.Text) is { } named)
                     registers |= named;
@@ -77,16 +85,17 @@ public readonly record struct StateItem(
     }
 
     /// <summary>
-    /// Returns a value indicating whether a list has items and every item is a <c>keeps</c>. Such
-    /// a list states what a register holds and nothing about the processor state. It therefore
-    /// neither declares a label's state nor counts as the declaration a routine with no body
-    /// needs.
+    /// Returns a value indicating whether a list has items and every item names registers, as
+    /// <c>keeps</c>, <c>reads</c> and <c>saves</c> do. Such a list says something about the
+    /// registers and nothing about the processor state. It therefore neither declares a label's
+    /// state nor counts as the declaration a routine with no body needs.
     /// </summary>
-    public static bool OnlyKeeps(SyntaxNode? list)
+    public static bool OnlyRegisters(SyntaxNode? list)
     {
         var items = Read(list).ToList();
-        return items.Count > 0 && items.TrueForAll(item => item.Part == StatePart.Keeps);
+        return items.Count > 0 && items.TrueForAll(item => item.IsAboutRegisters);
     }
+
 
     /// <summary>
     /// Returns the banks a <c>dbr = [...]</c> item names, each evaluated with
@@ -128,7 +137,7 @@ public readonly record struct StateItem(
             Worded(node, valued.Name, valued.EqualsToken is null ? SyntaxKind.None : SyntaxKind.Equals),
         StateBanksItemSyntax banks => Worded(node, banks.Name, SyntaxKind.Equals),
         StateInlineItemSyntax inline => Worded(node, inline.Name, SyntaxKind.None),
-        StateKeepsItemSyntax keeps => Worded(node, keeps.Name, SyntaxKind.None),
+        StateRegistersItemSyntax named => Worded(node, named.Name, SyntaxKind.None),
         _ => null,
     };
 
@@ -160,6 +169,8 @@ public readonly record struct StateItem(
             "interrupt" => StatePart.Interrupt,
             "noreturn" => StatePart.NoReturn,
             "keeps" => StatePart.Keeps,
+            "reads" => StatePart.Reads,
+            "saves" => StatePart.Saves,
             _ => null,
         };
         return part is { } known

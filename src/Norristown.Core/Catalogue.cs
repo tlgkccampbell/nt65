@@ -408,7 +408,9 @@ public static class Catalogue
         Severity.Error,
         "expected {0}",
         "`keeps` lists the registers a routine returns with the same values they had on entry, for example `keeps "
-            + "x, y`. It must list at least one register.");
+            + "x, y`, and `reads` lists those whose values from its caller it uses, for example `reads a, c`. "
+            + "`saves x`, in a `.state`, names the register the store above it saves. Each must list at least one "
+            + "register, except that `reads none` declares a routine that reads nothing.");
 
     internal static DiagnosticDescriptor ExpectedLabel { get; } = Entry(
         Area.ReadingALine,
@@ -2764,6 +2766,25 @@ public static class Catalogue
         "The analysis already knows the register holds the value it had when the routine was entered, so the "
             + "`.state keeps` adds nothing. Remove it.");
 
+    internal static DiagnosticDescriptor ReadsUndeclared { get; } = Entry(
+        Area.ControlFlow,
+        "reads-undeclared",
+        Severity.Error,
+        "`{0}` declares `{1}`, but uses the value its caller left in {2}{3}",
+        "The routine's signature lists the registers whose values from its caller it uses, and its callers rely on "
+            + "that list. On this path the routine, or a routine it passes control to, uses a register that is not "
+            + "listed, with the value it had when the routine was entered. Add the register to `reads`, or give it a "
+            + "value first. An unlisted carry is often a missing `clc` or `sec` before `adc` or `sbc`.");
+
+    internal static DiagnosticDescriptor SavesNotAStore { get; } = Entry(
+        Area.ControlFlow,
+        "saves-not-a-store",
+        Severity.Error,
+        "`{0}` must stand directly under a store of {1}'s value: {2}",
+        "`.state saves x` says that the store on the line above it only saves X, to be restored later, so that the "
+            + "store does not count as a use of X's value. It must stand directly under `stx`, or under `sta` or "
+            + "`sty` of a register that holds the same value as X, such as `sta` after `txa`.");
+
     // Processor state
 
     internal static DiagnosticDescriptor WidthUnknown { get; } = Entry(
@@ -2822,7 +2843,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`",
         "A `.state` declares the processor state at one line: register widths, mode, D and B. Items that describe "
-            + "the routine as a whole, such as `near`, `far`, `args`, `inline`, `interrupt`, `noreturn`, a "
+            + "the routine as a whole, such as `near`, `far`, `args`, `inline`, `interrupt`, `noreturn`, `reads`, a "
             + "signature set, or a `*` item meaning unchanged since entry, belong in the signature after the "
             + "routine's name.");
 
@@ -3563,9 +3584,10 @@ public static class Catalogue
         "macro-keeps",
         Severity.Error,
         "`{0}` does not apply to a macro: its body becomes part of the routine it is expanded into, whose "
-            + "signature declares what it keeps",
-        "A macro's body is expanded into a routine, so what it saves and restores is part of what that routine "
-            + "keeps, and `keeps` belongs in the routine's signature. Remove it from the macro's.");
+            + "signature declares what it keeps and reads",
+        "A macro's body is expanded into a routine, so what it saves, restores and uses is part of what that "
+            + "routine keeps and reads, and `keeps` and `reads` belong in the routine's signature. Remove it from the "
+            + "macro's.");
 
     internal static DiagnosticDescriptor MacroNoreturn { get; } = Entry(
         Area.Signatures,
@@ -3610,6 +3632,14 @@ public static class Catalogue
         "A `*` after the arrow promises that the routine returns that part of the state as its caller left it. "
             + "That promise only means something when the entry also declares `*`, accepting whatever the caller has. "
             + "If the entry gives a value, put that value after the arrow instead.");
+
+    internal static DiagnosticDescriptor SavesInSignature { get; } = Entry(
+        Area.Signatures,
+        "saves-in-signature",
+        Severity.Error,
+        "`{0}` says what one store does, so it belongs in a `.state` directly under that store, not in a signature",
+        "`saves x` marks the store on the line above it as a save, one that does not count as a use of X's value. "
+            + "It describes one line, not a routine, so it is written in a `.state` under that line.");
 
     internal static DiagnosticDescriptor ItemBelongsAtEntry { get; } = Entry(
         Area.Signatures,

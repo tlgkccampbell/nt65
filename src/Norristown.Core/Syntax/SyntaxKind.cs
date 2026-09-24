@@ -462,8 +462,8 @@ public enum SyntaxKind : byte
     /// <summary><c>dbr = [$00..$3f, $80..$bf]</c>, the set of banks a register lies in.</summary>
     StateBanksItem,
 
-    /// <summary><c>keeps a, x</c>, the registers a routine leaves as it found them.</summary>
-    StateKeepsItem,
+    /// <summary><c>keeps a, x</c>, <c>reads a, c</c> or <c>saves x</c>, an item that names registers.</summary>
+    StateRegistersItem,
 
     /// <summary>The name of a signature set, which stands for the items it was declared with.</summary>
     StateSetItem,

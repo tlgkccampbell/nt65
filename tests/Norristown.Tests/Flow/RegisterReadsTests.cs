@@ -127,6 +127,109 @@ public sealed class RegisterReadsTests
         Assert.Equal(Registers.None, region.Reads.Read);
     }
 
+    /// <summary>
+    /// A routine whose body is not in the program is trusted to read what it declares, so a caller
+    /// is complete. <c>reads none</c> declares that it reads nothing, which leaving <c>reads</c>
+    /// out does not.
+    /// </summary>
+    [Fact]
+    public void AnExternThatDeclaresWhatItReadsIsTrusted()
+    {
+        Assert.Equal(new RoutineReads(Registers.A, true),
+            Found("6502", ".proc rom = $FFD2: reads a\n.proc p {\n    jsr rom\n    rts\n}\n", "p"));
+        Assert.Equal(new RoutineReads(Registers.None, true),
+            Found("6502", ".proc rom = $FFD2: reads none\n.proc p {\n    jsr rom\n    rts\n}\n", "p"));
+        Assert.Equal(new RoutineReads(Registers.None, false),
+            Found("6502", ".proc rom = $FFD2\n.proc p {\n    jsr rom\n    rts\n}\n", "p"));
+    }
+
+    /// <summary>
+    /// A caller goes by what a routine declares, not by what its body happens to read, so a
+    /// register the routine keeps for later use is still passed to it.
+    /// </summary>
+    [Fact]
+    public void ACallerGoesByTheDeclaration()
+    {
+        const string Text = ".proc q: reads a, x {\n    sta $10\n    rts\n}\n.proc p {\n    jsr q\n    rts\n}\n";
+        Assert.Equal(Registers.A | Registers.X, Read("6502", Text, "q"));
+        Assert.Equal(Registers.A | Registers.X, Read("6502", Text, "p"));
+        Assert.Empty(Problems(Text));
+    }
+
+    /// <summary>
+    /// A body that uses a register its <c>reads</c> does not list is reported where the value is
+    /// used, which is how a missing <c>clc</c> shows up.
+    /// </summary>
+    [Fact]
+    public void ABodyThatReadsWhatItDoesNotDeclareIsReported()
+    {
+        Assert.Equal(
+            ["main.nt65:2: `add` declares `reads a`, but uses the value its caller left in C: add `c` to `reads`, "
+                + "or set the carry with `clc` or `sec` before it is used"],
+            Problems(".proc add: reads a {\n    adc #1\n    sta $10\n    rts\n}\n"));
+        Assert.Empty(Problems(".proc add: reads a {\n    clc\n    adc #1\n    sta $10\n    rts\n}\n"));
+        Assert.Equal(
+            ["main.nt65:6: `p` declares `reads none`, but uses the value its caller left in A through `store`: "
+                + "add `a` to `reads`, or give A a value before it is used"],
+            Problems(".proc store {\n    sta $10\n    rts\n}\n.proc p: reads none {\n    jsr store\n    rts\n}\n"));
+    }
+
+    /// <summary>
+    /// A store that a <c>.state saves</c> marks only saves the register, so it is not a use of it,
+    /// and the <c>.state keeps</c> where the value is loaded back says the register is kept.
+    /// </summary>
+    [Fact]
+    public void AStoreMarkedAsASaveIsNotARead()
+    {
+        const string Text = ".proc p: reads none, keeps x {\n    stx $10\n    .state saves x\n    ldx #0\n    stx $11\n"
+            + "    ldx $10\n    .state keeps x\n    rts\n}\n";
+        Assert.Empty(Problems(Text));
+        Assert.Equal(Registers.None, Read("6502", Text.Replace("reads none, ", ""), "p"));
+
+        // The 6502 saves X by way of the accumulator, and the store of A then saves X's value.
+        Assert.Equal(Registers.None,
+            Read("6502", ".proc p {\n    txa\n    sta $10\n    .state saves x\n    rts\n}\n", "p"));
+    }
+
+    /// <summary>
+    /// A <c>.state saves</c> must stand directly under a store of the register it names, or of a
+    /// register holding the same value.
+    /// </summary>
+    [Fact]
+    public void ASaveMustStandUnderAStoreOfTheRegister()
+    {
+        Assert.Equal(
+            ["main.nt65:3: `saves x` must stand directly under a store of X's value: "
+                + "the line above it is not `sta`, `stx` or `sty`"],
+            Problems(".proc p {\n    lda #1\n    .state saves x\n    rts\n}\n"));
+        Assert.Equal(
+            ["main.nt65:3: `saves x` must stand directly under a store of X's value: "
+                + "`sta` stores A, which does not hold X's value there"],
+            Problems(".proc p {\n    sta $10\n    .state saves x\n    rts\n}\n"));
+    }
+
+    /// <summary>
+    /// <c>reads</c> describes a routine and <c>saves</c> one store, so each is an error in the
+    /// other's place, and <c>reads</c> belongs before the arrow.
+    /// </summary>
+    [Fact]
+    public void EachItemBelongsInItsOwnPlace()
+    {
+        Assert.Equal(
+            ["main.nt65:1: `saves x` says what one store does, so it belongs in a `.state` directly under that "
+                + "store, not in a signature"],
+            Problems(".proc p: saves x {\n    rts\n}\n"));
+        Assert.Equal(
+            ["main.nt65:2: `reads a` describes a whole routine, not one point in it: put it in the routine's "
+                + "signature, not in `.state`"],
+            Problems(".proc p {\n    .state reads a\n    rts\n}\n"));
+        Assert.Equal(
+            ["main.nt65:1: `reads a` is about a routine from entry to exit, and belongs before `->`"],
+            FlowFragment.Problems("65816", ".proc p: a8 -> a16, reads a {\n    rep #$20\n    rts\n}\n"));
+    }
+
+    private static IReadOnlyList<string> Problems(string text) => FlowFragment.Problems("6502", text);
+
     private static Registers Read(string cpu, string text, string routine) =>
         Found(cpu, text, routine).Read;
 

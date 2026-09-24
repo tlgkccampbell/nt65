@@ -185,6 +185,11 @@ internal static class Fixes
                 }
                 break;
 
+            case FixKind.Reads when fix is { Text: { } register, At: { } routine }
+                && Edits.ReadsItem(tree, routine.LineIndex, register) is { } added:
+                yield return Fix(diagnostic, $"Add `{register}` to `reads`", [added]);
+                break;
+
             case FixKind.Unused when fix.Text is { } unused:
                 foreach (var change in Unused(model, diagnostic, unused))
                     yield return change;

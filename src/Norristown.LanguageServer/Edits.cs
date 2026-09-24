@@ -217,6 +217,27 @@ internal static class Edits
     }
 
     /// <summary>
+    /// Returns an edit that adds <paramref name="register"/> to the <c>reads</c> item in the
+    /// signature of the routine <paramref name="line"/> opens. It replaces <c>none</c>, or follows
+    /// the registers the item already names. Returns null where the signature writes no
+    /// <c>reads</c> of its own.
+    /// </summary>
+    public static Edit? ReadsItem(SyntaxTree tree, int line, string register)
+    {
+        if (RoutineHead(tree, line) is not ({ } signature, _)
+            || signature.Entry.DescendantNodes().OfType<StateRegistersItemSyntax>()
+                .FirstOrDefault(item => item.Name.Text.Equals("reads", StringComparison.OrdinalIgnoreCase)) is not { } reads
+            || reads.Registers.Count == 0)
+        {
+            return null;
+        }
+        var last = reads.Registers[^1];
+        return last.Name.Text.Equals("none", StringComparison.OrdinalIgnoreCase)
+            ? new Edit(tree, last.Span, register)
+            : new Edit(tree, new TextSpan(last.Span.End, 0), $", {register}");
+    }
+
+    /// <summary>
     /// Returns <paramref name="wanted"/> if nothing in <paramref name="model"/>'s file declares
     /// it, and otherwise <paramref name="wanted"/> followed by the smallest number from 2 up
     /// that nothing declares. Cheap locals live in a namespace of their own and clash with

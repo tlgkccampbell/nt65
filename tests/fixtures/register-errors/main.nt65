@@ -46,7 +46,7 @@
     rts
 }
 
-.macro spill(): keeps a {   ;! error[macro-keeps]: `keeps a` does not apply to a macro: its body becomes part of the routine it is expanded into, whose signature declares what it keeps
+.macro spill(): keeps a {   ;! error[macro-keeps]: `keeps a` does not apply to a macro: its body becomes part of the routine it is expanded into, whose signature declares what it keeps and reads
     lda #0
 }
 

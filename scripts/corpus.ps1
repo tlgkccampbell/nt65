@@ -8,13 +8,16 @@
 # the documented way to build a program by hand; the gate does not depend on `make` or `sh`
 # for steps PowerShell can run, and it wants a clean build, not the incremental build the
 # Makefile exists for.
+#
+# -Nt65 names an nt65 built somewhere else, for when an editor's language server holds the
+# usual build output open and it cannot be rebuilt in place.
 [CmdletBinding()]
-param([string]$Configuration = 'Debug')
+param([string]$Configuration = 'Debug', [string]$Nt65)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $exe = if ($IsWindows) { '.exe' } else { '' }
-$nt65 = Join-Path $root "src/Norristown.Cli/bin/$Configuration/net10.0/nt65$exe"
+$nt65 = if ($Nt65) { $Nt65 } else { Join-Path $root "src/Norristown.Cli/bin/$Configuration/net10.0/nt65$exe" }
 $bin = Join-Path $root '.cache/cc65/bin'
 $ca65 = Join-Path $bin "ca65$exe"
 $cc65 = Join-Path $bin "cc65$exe"

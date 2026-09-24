@@ -1070,6 +1070,7 @@ items are:
 | `interrupt` | an interrupt handler (below) | none |
 | `noreturn` | the routine never returns (below) | none |
 | `keeps a, x, y, c` | the registers it hands back as it was entered with them (§7.7) | none |
+| `reads a, x, y, c`, `reads none` | the registers whose values from its caller it uses (§7.7) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
 | `?` | every part above unknown (below) | none |
 | a signature set's name | the items the set declares (below) | none |
@@ -1937,6 +1938,18 @@ own takes the place of what the set gives.
 This makes a signature mean something on every CPU, where until now only the 65816 read one.
 `near`, `far`, `inline`, `args` and the state items stay what they were.
 
+**`reads a, c` is the declaration of what a routine takes in.** Without it, what a routine reads
+is worked out, and shown, but promises nothing. With it, the body is checked: a register the
+routine, or a routine it passes control to, uses with its caller's value and that `reads` does
+not list is reported where the value is used. That is where a missing `clc` before `adc` shows
+up, but only in a routine whose author has said what it takes in, because nothing else can tell a
+carry passed in on purpose from one left over by accident. Callers go by the declaration and not
+by the body, as they go by `keeps`, so an edit to a body does not change what its callers are
+told. On an extern proc and an imported routine it is trusted. `reads none` says a routine reads
+nothing, which is not what writing no `reads` says of a routine with no body: that one may read
+anything. A signature set may give `reads`, and a signature that writes its own takes the place
+of the set's.
+
 **`.state keeps a` is what a restore the analysis cannot see says.** A routine that saves a
 register to memory and loads it back has handed it over, and no analysis that does not follow
 memory can see that the byte came back unchanged. Seeing it would mean ruling out every store
@@ -1948,6 +1961,16 @@ which is the contract every annotation of §7.4 has, and a program it is wrong a
 the same way. Written where the register was never destroyed it says nothing, which is a
 warning. A `.state` carrying only `keeps` is not a label's declaration: it says what a register
 holds, not what the processor state at that label is.
+
+**`.state saves x` is the other half.** Standing directly under the store that saves X to memory,
+it says the store only saves X, so the store is not a use of X's value and does not count towards
+what the routine reads. nt65 checks what it can without knowing what the memory is: that the line
+above is `sta`, `stx` or `sty`, and that the register it stores holds X's value there, which lets
+the 6502's `txa` … `sta` save X. It does not check that the byte stays put until the restore,
+because nothing about a location's behaviour is nt65's to know: it may be a mirror, a bank a
+mapper switches, or a device register. The model covers what the CPU defines, and memory is
+defined by the board, so both ends of a save through memory are the programmer's word. `saves`
+describes one store and not a routine, so it is an error in a signature.
 
 What is **not** here is a warning at a caller that holds a register across a call that destroys
 it. It can be made to work: which registers a routine reads before writing them is as

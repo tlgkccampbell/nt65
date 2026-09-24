@@ -137,5 +137,5 @@ internal static class FileInterface
 
     // A signature is compared by what it declares, not by the syntax it was read from.
     private static string Format(Signature signature) =>
-        $"{signature.Entry} -> {signature.Exit} {signature.Distance} {signature.Inline?.Text} {signature.Arguments} {signature.NeverReturns} {signature.Keeps}";
+        $"{signature.Entry} -> {signature.Exit} {signature.Distance} {signature.Inline?.Text} {signature.Arguments} {signature.NeverReturns} {signature.Keeps} {signature.Reads}";
 }

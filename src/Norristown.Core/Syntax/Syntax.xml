@@ -2523,22 +2523,26 @@
     </Field>
   </Node>
 
-  <Node Name="StateKeepsItemSyntax" Base="StateItemSyntax">
-    <Kind Name="StateKeepsItem"/>
+  <Node Name="StateRegistersItemSyntax" Base="StateItemSyntax">
+    <Kind Name="StateRegistersItem"/>
     <TypeComment>
       <summary>
-        Represents <c>keeps a, x</c>, which lists the registers a routine leaves as it found them.
+        Represents an item that names registers: <c>keeps a, x</c>, which lists the registers a
+        routine leaves as it found them, <c>reads a, c</c>, which lists those whose values from
+        its caller it uses, or <c>saves x</c>, which says the store above it only saves a register.
       </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>Gets the <c>keeps</c> keyword.</summary>
+        <summary>Gets the <c>keeps</c>, <c>reads</c> or <c>saves</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="Registers" Type="SeparatedSyntaxList&lt;IdentifierNameSyntax&gt;">
       <PropertyComment>
-        <summary>Gets the registers the routine keeps.</summary>
+        <summary>
+          Gets the registers the item names, or the single word <c>none</c> after <c>reads</c>.
+        </summary>
       </PropertyComment>
     </Field>
   </Node>

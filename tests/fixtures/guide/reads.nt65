@@ -1,0 +1,39 @@
+.module reads
+
+.cpu 6502
+
+.export print, add8, putc
+
+.segment ZEROPAGE {
+    .data operand: .byte
+    .data saved:   .byte
+    .data column:  .byte
+}
+
+.segment BSS {
+    .data line: .byte[40]
+}
+
+.proc CHROUT = $FFD2: reads a, keeps x, y
+
+.segment CODE
+.proc print: reads a, keeps x, y {
+    jmp CHROUT
+}
+
+.proc add8: reads a, c {        ; the carry comes in from the caller
+    adc operand
+    rts
+}
+
+.proc putc: reads a, keeps x {
+    stx saved
+    .state saves x
+    ldx column
+    sta line,x
+    inx
+    stx column
+    ldx saved
+    .state keeps x
+    rts
+}

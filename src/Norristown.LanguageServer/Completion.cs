@@ -41,10 +41,17 @@ internal static class Completion
     private static readonly string[] RoutineItems = ["near", "far", "inline", "args", "interrupt", "noreturn"];
 
     /// <summary>
-    /// The item that states which registers a routine preserves, inserted so that the registers
-    /// follow it. A macro is expanded into the routine that calls it, so it has no such item.
+    /// The items of a signature that name registers, inserted so that the registers follow them:
+    /// which registers a routine preserves and which it reads. A macro is expanded into the routine
+    /// that calls it, so it has neither.
     /// </summary>
-    private static readonly string[] PromiseItems = ["keeps "];
+    private static readonly string[] PromiseItems = ["keeps ", "reads "];
+
+    /// <summary>
+    /// The items of a <c>.state</c> that name registers: which registers hold their entry values
+    /// there, and which register the store above it saves.
+    /// </summary>
+    private static readonly string[] PointRegisterItems = ["keeps ", "saves "];
 
     /// <summary>The register widths an <c>.ensure</c> can require.</summary>
     private static readonly string[] Widths = ["a8", "a16", "i8", "i16"];
@@ -244,7 +251,7 @@ internal static class Completion
             return TryExpression(site);
         AddWords(PointItems, "processor state", items);
         AddWords(ValuedItems, "processor state", items);
-        AddWords(PromiseItems, "registers kept", items);
+        AddWords(PointRegisterItems, "registers", items);
         return true;
     }
 
@@ -267,7 +274,7 @@ internal static class Completion
         if (signature != DirectiveKind.Macro)
         {
             AddWords(RoutineItems, "processor state", items);
-            AddWords(PromiseItems, "registers kept", items);
+            AddWords(PromiseItems, "registers", items);
         }
         AddInScope(model, line.Caret, items, symbol => symbol.Kind == SymbolKind.SignatureSet);
         return true;

@@ -1131,6 +1131,39 @@ routine whose body is not in the program ends the list with `?`, since that rout
 anything. A register stored to memory counts as read, even where it is only being saved, because
 nt65 does not follow values through memory.
 
+A routine can declare what it reads with `reads`, and nt65 then checks its body against the
+declaration. A register the body uses without its being listed is an error where it is used,
+which is how a missing `clc` shows up. Callers go by the declaration. On an extern proc or an
+import it is trusted, which gives a ROM routine's inputs somewhere to live, and `reads none`
+says the routine reads nothing, which leaving `reads` out does not:
+
+```nt65
+.proc CHROUT = $FFD2: reads a, keeps x, y
+
+.proc add8: reads a, c {        ; the carry comes in from the caller
+    adc operand
+    rts
+}
+```
+
+Where a register is saved to memory, `.state saves x` directly under the store says the store
+only saves it, so it is not counted as a use. It pairs with the `.state keeps x` where the value
+is loaded back. Both are your word about memory, which nt65 does not check:
+
+```nt65
+.proc putc: reads a, keeps x {
+    stx saved
+    .state saves x
+    ldx column
+    sta line,x
+    inx
+    stx column
+    ldx saved
+    .state keeps x
+    rts
+}
+```
+
 On the 65816 the accumulator's two bytes are followed apart, because an 8-bit instruction leaves
 the high byte alone. A routine that writes an 8-bit A and then uses it at 16 bits, or swaps the
 halves with `xba`, reads what its caller left in the high byte.
@@ -1174,6 +1207,7 @@ The signature items are:
 | `a?`, `i?`, `e?`, `dp?`, `dbr?` | unknown |
 | `?` | everything unknown, for code entered from outside nt65 |
 | `keeps a, x, y, c` | registers handed back unchanged (see [What a routine preserves](#what-a-routine-preserves)) |
+| `reads a, x, y, c`, `reads none` | registers whose values from the caller it uses (see [What a routine preserves](#what-a-routine-preserves)) |
 | `inline n`, `inline .strz` | returns past data after each call |
 | `args n` | the caller pushes n bytes before the call |
 | `interrupt`, `noreturn` | an interrupt handler; a routine that never returns |

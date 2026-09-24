@@ -103,9 +103,50 @@ public static class RegisterKeeps
             }
         }
         while (moved);
+
+        // A routine that declares what it reads shows its declaration, which is what its callers
+        // go by, and is checked against what its body was found to read.
         foreach (var (name, region) in regions)
-            region.Reads = reads[name];
+        {
+            if (region.Routine.Signature?.Reads is not { } declared)
+            {
+                region.Reads = reads[name];
+                continue;
+            }
+            region.Reads = new RoutineReads(declared, true);
+            if ((reads[name].Read & ~declared) != Registers.None)
+                Undeclared(region, declared, walks[name], diagnostics);
+        }
         return (Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message))), readers);
+
+        // Reports each register a routine reads that its `reads` does not list, at the first place
+        // on each path where its entry value is used.
+        void Undeclared(FlowRegion region, Registers declared, Walk walk, List<Diagnostic> report)
+        {
+            var sites = new Dictionary<Registers, (Step Step, Symbol? Through)>();
+            walk.Reads(region, Of, ReadsOf, readers, sites);
+            var routine = region.Routine;
+            // The item is the signature's own where the signature writes one, and otherwise comes
+            // from a signature set, which a fix here should not change.
+            var item = StateItem.Read(routine.Signature!.Syntax).FirstOrDefault(item => item.Part == StatePart.Reads);
+            var written = item.Node is null ? $"reads {Listed(declared)}" : item.Text;
+            foreach (var (register, (step, through)) in sites)
+            {
+                if ((declared & register) != Registers.None)
+                    continue;
+                var name = RegisterEffects.Format(register).ToLowerInvariant();
+                var via = through is null ? "" : $" through `{through.DisplayName}`";
+                var fix = register == Registers.C
+                    ? $": add `{name}` to `reads`, or set the carry with `clc` or `sec` before it is used"
+                    : $": add `{name}` to `reads`, or give {RegisterEffects.Format(register)} a value before it is used";
+                report.Add(new Diagnostic(
+                    step.Statement.Tree.GetSpan(step.Statement.Span),
+                    Catalogue.ReadsUndeclared.Message(routine.DisplayName, written, RegisterEffects.Format(register), via + fix))
+                {
+                    Fix = item.Node is not null ? new DiagnosticFix(FixKind.Reads, name, routine.DeclarationSpan) : null,
+                });
+            }
+        }
 
         // Returns what a routine keeps. That is what the walk found or, for a routine whose body
         // is not in the program, what it declares. A routine that declares more than its body
@@ -128,17 +169,24 @@ public static class RegisterKeeps
                 : RoutineRegisters.Nothing;
         }
 
-        // Returns what a routine reads. A routine whose body is not in the program may read
-        // anything. So may a jump into a label inside a routine, because the entry values that
-        // routine reads may be ones its own code wrote before the label.
+        // Returns what a routine reads. A routine that declares it is taken at its word, as its
+        // callers are, and one whose body breaks the declaration is reported there. A routine
+        // whose body is not in the program and that declares nothing may read anything. So may a
+        // jump into a label inside a routine, because the entry values that routine reads may be
+        // ones its own code wrote before the label.
         RoutineReads ReadsOf(Symbol target)
         {
             var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
-            if (!reads.TryGetValue(RoutineKey.Of(routine), out var known))
-                return RoutineReads.Unknown;
+            var known = routine.Signature?.Reads is { } declared ? new RoutineReads(declared, true)
+                : reads.TryGetValue(RoutineKey.Of(routine), out var found) ? found
+                : RoutineReads.Unknown;
             return routine == target ? known : known with { Complete = false };
         }
     }
+
+    /// <summary>Formats registers as a <c>reads</c> item lists them, with <c>none</c> for no register.</summary>
+    private static string Listed(Registers registers) =>
+        registers == Registers.None ? "none" : RegisterEffects.Format(registers).ToLowerInvariant();
 
     /// <summary>Returns what a routine keeps, with what it declares taken as kept too.</summary>
     private static RoutineRegisters Declared(Symbol routine, RoutineRegisters found) =>
@@ -247,11 +295,12 @@ public static class RegisterKeeps
         /// <paramref name="of"/> gives what each routine it passes control to keeps, which must be
         /// settled, and <paramref name="reads"/> what each reads. <paramref name="readers"/> are the
         /// routines that reach below their own entry on the stack, which use what their caller
-        /// pushed.
+        /// pushed. <paramref name="sites"/>, where it is given, collects the first statement found
+        /// to use each register's entry value, and the routine it was used through, if any.
         /// </summary>
         public RoutineReads Reads(
             FlowRegion region, Func<Symbol, RoutineRegisters> of, Func<Symbol, RoutineReads> reads,
-            IReadOnlySet<RoutineKey> readers)
+            IReadOnlySet<RoutineKey> readers, Dictionary<Registers, (Step Step, Symbol? Through)>? sites = null)
         {
             var blocks = region.Blocks;
             if (!region.IsEntered || blocks.Count == 0)
@@ -275,7 +324,9 @@ public static class RegisterKeeps
                 var ends = Ends(block);
                 for (var i = 0; i < block.Steps.Count; i++)
                 {
-                    state = Step(block.Steps[i], state, null, Use);
+                    var step = block.Steps[i];
+                    var saved = i + 1 < block.Steps.Count ? Saved(step, block.Steps[i + 1], state) : Registers.None;
+                    state = Step(step, state, null, entries => Use(entries, step, null), saved);
                     if (i == block.Steps.Count - 1 && (ends.Calls || ends.Tail))
                     {
                         Called(block, state, ends.Tail);
@@ -287,11 +338,11 @@ public static class RegisterKeeps
                 // passes control to may pull it.
                 foreach (var into in Leaves(block, region.Routine))
                 {
-                    Given(reads(into), state);
-                    Use(state.Stack?.Entries ?? Registers.None);
+                    Given(reads(into), state, block, into);
+                    Use(state.Stack?.Entries ?? Registers.None, block.Steps[^1], into);
                 }
                 if (ends.Returns)
-                    Use(state.Stack?.Entries ?? Registers.None);
+                    Use(state.Stack?.Entries ?? Registers.None, block.Steps[^1], null);
                 left[block.Index] = state;
             }
 
@@ -302,18 +353,25 @@ public static class RegisterKeeps
                 if (left[block.Index] is not { Stack: { } stack })
                     continue;
                 if (flow.Onward(blocks, block).Any(to => reached[to] is { Stack: null }))
-                    Use(stack.Entries);
+                    Use(stack.Entries, block.Steps[^1], null);
             }
             return new RoutineReads(read, complete);
 
-            void Use(Registers entries) => read |= entries;
+            void Use(Registers entries, Step at, Symbol? through)
+            {
+                read |= entries;
+                if (sites is null)
+                    return;
+                foreach (var register in RegisterEffects.Each(entries))
+                    sites.TryAdd(register, (at, through));
+            }
 
             // Adds what a routine uses of the values the registers hold where control passes to it.
-            void Given(RoutineReads callee, RegisterState state)
+            void Given(RoutineReads callee, RegisterState state, BasicBlock block, Symbol through)
             {
                 complete &= callee.Complete;
                 foreach (var register in RegisterEffects.Each(callee.Read))
-                    Use(state.Whole(register).Entry);
+                    Use(state.Whole(register).Entry, block.Steps[^1], through);
             }
 
             // Adds what the routines a block ends by calling use. A call nt65 cannot follow may use
@@ -331,9 +389,9 @@ public static class RegisterKeeps
                 }
                 foreach (var callee in block.Calls)
                 {
-                    Given(reads(callee), state);
+                    Given(reads(callee), state, block, callee);
                     if (tail || callee.Signature is { Arguments: > 0 } || readers.Contains(RoutineKey.Of(callee)))
-                        Use(pushed);
+                        Use(pushed, block.Steps[^1], callee);
                 }
             }
         }
@@ -449,6 +507,11 @@ public static class RegisterKeeps
         {
             foreach (var item in StateItem.Read(step.Statement))
             {
+                if (item.Part == StatePart.Reads && report is not null)
+                {
+                    report.Add(new Diagnostic(step.Statement.Tree.GetSpan(item.Node.Span),
+                        Catalogue.StateItemNotAPoint.Message(item.Text)));
+                }
                 if (item.Part != StatePart.Keeps)
                     continue;
                 foreach (var register in RegisterEffects.Each(item.Registers))
@@ -595,11 +658,15 @@ public static class RegisterKeeps
             BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of, List<Diagnostic>? report)
         {
             var ends = Ends(block);
+            var above = state;
             for (var i = 0; i < block.Steps.Count; i++)
             {
                 var step = block.Steps[i];
                 if (report is not null && !step.Closes)
                     Held.Record(step, state);
+                if (report is not null && step.Statement is StateDirectiveSyntax)
+                    CheckSaves(i > 0 ? block.Steps[i - 1] : null, step, above, report);
+                above = state;
                 state = Step(step, state, report);
                 if (i == block.Steps.Count - 1 && (ends.Calls || ends.Tail))
                     state = Calls(block, state, of);
@@ -608,11 +675,87 @@ public static class RegisterKeeps
         }
 
         /// <summary>
+        /// Returns the register <paramref name="store"/> saves, where a <c>.state saves</c> directly
+        /// under it says the store only saves it, and none otherwise. <paramref name="before"/> is
+        /// the state before the store. A <c>.state saves</c> that names a register the store does not
+        /// save marks nothing, and <see cref="CheckSaves"/> reports it.
+        /// </summary>
+        private static Registers Saved(Step store, Step under, RegisterState before)
+        {
+            if (under.Statement is not StateDirectiveSyntax)
+                return Registers.None;
+            var saved = Registers.None;
+            foreach (var item in StateItem.Read(under.Statement))
+            {
+                if (item.Part != StatePart.Saves)
+                    continue;
+                if (Saving(store, item, before, out _) is not { } register)
+                    return Registers.None;
+                saved = register;
+            }
+            return saved;
+        }
+
+        /// <summary>
+        /// Reports each <c>saves</c> of a <c>.state</c> that does not stand directly under a store
+        /// of the register it names. <paramref name="store"/> is the statement above the
+        /// <c>.state</c> on the same path, if there is one, and <paramref name="before"/> the state
+        /// before it.
+        /// </summary>
+        private static void CheckSaves(Step? store, Step state, RegisterState before, List<Diagnostic> report)
+        {
+            foreach (var item in StateItem.Read(state.Statement))
+            {
+                if (item.Part != StatePart.Saves || item.Registers == Registers.None)
+                    continue;
+                if (Saving(store, item, before, out var why) is null)
+                {
+                    report.Add(new Diagnostic(state.Statement.Tree.GetSpan(item.Node.Span),
+                        Catalogue.SavesNotAStore.Message(item.Text, RegisterEffects.Format(item.Registers), why)));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns the register <paramref name="store"/> stores, where it is a store of a register
+        /// that holds the value of each register <paramref name="item"/> names, or null with the
+        /// reason where it is not.
+        /// </summary>
+        private static Registers? Saving(Step? store, StateItem item, RegisterState before, out string why)
+        {
+            var mnemonic = (store?.Statement as InstructionStatementSyntax)?.MnemonicKind;
+            Registers? stored = mnemonic switch
+            {
+                MnemonicKind.Sta => Registers.A,
+                MnemonicKind.Stx => Registers.X,
+                MnemonicKind.Sty => Registers.Y,
+                _ => null,
+            };
+            if (stored is not { } register)
+            {
+                why = "the line above it is not `sta`, `stx` or `sty`";
+                return null;
+            }
+            foreach (var named in RegisterEffects.Each(item.Registers))
+            {
+                if (named != register && before.Of(register) != before.Of(named))
+                {
+                    why = $"`{mnemonic.ToString()!.ToLowerInvariant()}` stores {RegisterEffects.Format(register)}, "
+                        + $"which does not hold {RegisterEffects.Format(named)}'s value there";
+                    return null;
+                }
+            }
+            why = "";
+            return register;
+        }
+
+        /// <summary>
         /// Returns what one statement does to the registers. <paramref name="use"/>, where it is
         /// given, is told the entry values the statement uses.
         /// </summary>
         private RegisterState Step(
-            Step step, RegisterState state, List<Diagnostic>? report, Action<Registers>? use = null)
+            Step step, RegisterState state, List<Diagnostic>? report, Action<Registers>? use = null,
+            Registers saved = Registers.None)
         {
             if (step.Statement is StateDirectiveSyntax)
                 return Asserted(step, state, report);
@@ -623,7 +766,7 @@ public static class RegisterKeeps
             var mode = layout.Of(statement, step.On)?.Mode;
             var facts = Instructions.Facts(mnemonic);
             if (use is not null)
-                Used(step, mnemonic, mode, state, use);
+                Used(step, mnemonic, mode, state, use, saved);
 
             // A software interrupt runs a handler that may not even be in this program.
             if (mnemonic is MnemonicKind.Brk or MnemonicKind.Cop)
@@ -677,14 +820,18 @@ public static class RegisterKeeps
 
         /// <summary>
         /// Tells <paramref name="use"/> the entry values an instruction uses. That includes those in
-        /// the registers it reads, and those in the pushes it reaches other than by pulling them.
-        /// A pull that does not match the push on top is followed in <see cref="Restored"/>.
+        /// the registers it reads, other than <paramref name="saved"/>, and those in the pushes it
+        /// reaches other than by pulling them. A pull that does not match the push on top is
+        /// followed in <see cref="Restored"/>.
         /// </summary>
-        private void Used(Step step, MnemonicKind mnemonic, AddressingMode? mode, RegisterState state, Action<Registers> use)
+        private void Used(
+            Step step, MnemonicKind mnemonic, AddressingMode? mode, RegisterState state, Action<Registers> use,
+            Registers saved)
         {
-            // What a software interrupt's handler uses is not known, so every value is used.
+            // What a software interrupt's handler uses is not known, so every value is used. A
+            // store that a `.state saves` marks does not use the register it saves.
             var everything = mnemonic is MnemonicKind.Brk or MnemonicKind.Cop;
-            var read = everything ? Registers.All : RegisterEffects.Read(mnemonic, mode);
+            var read = everything ? Registers.All : RegisterEffects.Read(mnemonic, mode) & ~saved;
             foreach (var register in RegisterEffects.Each(read))
             {
                 use((everything ? state.Whole(register)

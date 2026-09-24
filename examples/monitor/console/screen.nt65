@@ -50,9 +50,11 @@
 ; Writes the character in A at the cursor, and moves the cursor on. NEWLINE moves it to the
 ; start of the next row. A character written past the end of a row goes at the start of the
 ; next one, and a new row past the last scrolls the text up.
-.proc putc: running, keeps x, y {
+.proc putc: running, reads a, keeps x, y {
     stx saved
+    .state saves x
     sty saved+1
+    .state saves y
     cmp #NEWLINE
     bne @character
     jsr next_row
