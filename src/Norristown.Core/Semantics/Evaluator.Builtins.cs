@@ -37,6 +37,21 @@ internal sealed partial class Evaluator
             : Value.Unknown;
 
     /// <summary>
+    /// Returns the byte a charmap maps <paramref name="character"/> to, or null when no entry
+    /// names it. A later entry overrides an earlier one for the characters both name.
+    /// </summary>
+    private static long? Mapped(List<(long First, long Last, long To)> ranges, long character)
+    {
+        for (var i = ranges.Count - 1; i >= 0; i--)
+        {
+            var (first, last, to) = ranges[i];
+            if (character >= first && character <= last)
+                return to + (character - first);
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Returns the value of a call to a built-in function, a character mapping applied to text,
     /// or a function declared with <c>.func</c>. A <c>.func</c> call evaluates to its body with
     /// the arguments in place of its parameters.
@@ -305,7 +320,7 @@ internal sealed partial class Evaluator
             {
                 return Value.Unknown;
             }
-            if (from.Number < 0 || taken.Number < 0 || from.Number + taken.Number > whole.Length)
+            if (from.Number < 0 || taken.Number < 0 || from.Number > whole.Length || taken.Number > whole.Length - from.Number)
             {
                 Report(function, Catalogue.StrsubOutOfRange.Message(
                     $"{taken.Number} {(taken.Number == 1 ? "byte" : "bytes")} from {from.Number}",
@@ -531,7 +546,7 @@ internal sealed partial class Evaluator
         {
             var mapped = Map(symbol);
             return given.Count == 1 && Evaluate(given[0]) is { Kind: ValueKind.Number } character
-                && mapped.TryGetValue((int)character.Number, out var b)
+                && Mapped(mapped, character.Number) is { } b
                 ? Value.Of(b)
                 : Value.Unknown;
         }
@@ -591,13 +606,14 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Reads a charmap into the mapping it describes. Each entry maps one character to a value,
-    /// or a range of characters to consecutive values. A character that no entry names has no
-    /// byte, and applying the mapping to it is an error where that happens.
+    /// Reads a charmap into the ranges it maps. Each entry maps one character to a value, or a
+    /// range of characters to consecutive values. A character that no entry names has no byte,
+    /// and applying the mapping to it is an error where that happens. The ranges are kept as
+    /// ranges, so a wide one costs no more than a narrow one.
     /// </summary>
-    private Dictionary<int, long> Map(Symbol charmap)
+    private List<(long First, long Last, long To)> Map(Symbol charmap)
     {
-        var mapped = new Dictionary<int, long>();
+        var ranges = new List<(long First, long Last, long To)>();
         foreach (var line in charmap.Entries)
         {
             if (line is not CharmapEntrySyntax entry)
@@ -607,9 +623,8 @@ internal sealed partial class Evaluator
             var to = Evaluate(entry.Value).AsNumber();
             if (first is null || last is null || to is null || last < first)
                 continue;
-            for (var c = first.Value; c <= last.Value; c++)
-                mapped[(int)c] = to.Value + (c - first.Value);
+            ranges.Add((first.Value, last.Value, to.Value));
         }
-        return mapped;
+        return ranges;
     }
 }

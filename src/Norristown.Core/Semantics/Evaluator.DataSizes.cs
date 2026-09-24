@@ -448,7 +448,7 @@ internal sealed partial class Evaluator
         var bytes = new List<long>();
         foreach (var character in characters)
         {
-            if (!mapped.TryGetValue(character, out var b))
+            if (Mapped(mapped, character) is not { } b)
             {
                 Report(operand, Catalogue.CharmapHasNoEntry.Message(charmap.Name, (char)character));
                 return null;

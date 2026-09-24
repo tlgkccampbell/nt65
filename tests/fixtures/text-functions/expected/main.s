@@ -18,6 +18,7 @@
 .export main__padded
 .export main__labels
 .export main__screened
+.export main__whole
 .export main__parts
 .export main__length
 
@@ -39,14 +40,15 @@ main__entry:
 main__padded: .byte $50, $41, $c4   ; htasc("PAD")
     .res 5, $00                     ; padded to 8
 main__labels:
-    ; label!(htasc("GO"))  main.nt65:42
+    ; label!(htasc("GO"))  main.nt65:48
     .byte $47, $cf, $00             ; htasc("GO")
     ; end of label!
 main__screened: .byte $01, $42      ; screen(htasc("AB"))
+main__whole:    .byte $01, $42      ; identity("AB")
 main__parts:    .byte $43, $44, $45, $58, $59, $5a, $00  ; .select(1, .strsub("ABCDEF", 2, 3), "?"), .strcat('X', "YZ", 0)
 
 .segment "CODE": absolute
-; .proc length  main.nt65:48
+; .proc length  main.nt65:55
 main__length:
     lda #$03
     ldx #TOKEN_NEXT

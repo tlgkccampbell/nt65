@@ -5,7 +5,7 @@
 .cpu 6502
 .use tables::{htasc, ERROR_MESSAGES, ERR_SYNTAX}
 
-.export keywords, first, greeting, entry, padded, labels, screened, parts, length
+.export keywords, first, greeting, entry, padded, labels, screened, parts, length, whole
 
 ; A text constant defined by a call is text, as one defined by a literal is.
 .const GREETING = htasc("HELLO")
@@ -16,6 +16,12 @@
 .charmap screen {
     'A'..'Z' = $01
     '\xc1'..'\xda' = $41            ; a letter with bit 7 set, as `.strcat` and `\xHH` write it
+}
+
+; A range as wide as any is as quick to read as a narrow one, and a later entry overrides it.
+.charmap identity {
+    0..$7fffffff = 0
+    'A'          = $01
 }
 
 .struct Entry {
@@ -42,6 +48,7 @@
     label!(htasc("GO"))
 }
 .data screened: .byte screen(htasc("AB"))
+.data whole:    .byte identity("AB")
 .data parts:    .byte .select(1, .strsub("ABCDEF", 2, 3), "?"), .strcat('X', "YZ", 0)
 
 .segment CODE
