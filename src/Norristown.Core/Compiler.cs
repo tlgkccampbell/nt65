@@ -171,10 +171,18 @@ public static class Compiler
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength,
         ProgramAnalysis? previous)
     {
-        var reason = WholeProgramReason.NoPreviousAnalysis;
-        if (previous is not null && Reanalyze(previous, files, project, binaryLength, out reason) is { } reused)
+        var reason = previous is null
+            ? WholeProgramReason.NoPreviousAnalysis
+            : ReasonForWholeProgram(previous, files, project, binaryLength);
+        if (reason is null && Reanalyze(previous!, files, project, binaryLength) is { } reused)
             return reused;
-        return AnalyzeAll(files, project, binaryLength) with { WholeProgram = reason };
+
+        // An analysis of the changed files that finds a diagnostic in text an edit replaced
+        // cannot tell where that diagnostic belongs now.
+        return AnalyzeAll(files, project, binaryLength) with
+        {
+            WholeProgram = reason ?? WholeProgramReason.DiagnosticInEditedText,
+        };
     }
 
     /// <summary>
@@ -267,93 +275,78 @@ public static class Compiler
         // Every file is read before any is resolved, because a name one file uses may be one
         // another file exports.
         var program = ProgramModel.Create(trees, segments, configuration, defines, Length, target);
-
-        var layouts = new List<CodeLayout>();
-        var flows = new List<Flow.ControlFlow>();
-        var states = new List<Flow.StateAnalysis>();
         var analyzed = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
-        foreach (var model in program.Files)
-        {
-            var (layout, flow, state, found) = AnalyzeFile(model, target, project);
-            layouts.Add(layout);
-            flows.Add(flow);
-            if (state is not null)
-                states.Add(state);
-            analyzed[model.Tree.Path] = found;
-        }
-
-        // What a routine costs including its calls, and which registers it preserves for its
-        // caller, are questions about the program rather than about one file, so they are
-        // worked out once every file has been analyzed on its own.
-        Flow.CallCosts.Compose(flows);
-        var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
-
-        // Which modules place which others follows from the files alone. Which routine a routine
-        // falls through into across a `.place` follows from the layouts of every file in its
-        // translation unit.
-        var placements = Placements.Of(trees, defines);
+        var (layouts, flows, states) = AnalyzeFiles(program, target, project, analyzed, previous: null, dirty: null);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
-        return new ProgramAnalysis(
-            program, target, layouts, flows, states, defines, configuration,
-            Collected(project, target, cpu, program, reuse, [
-                .. registers, .. placements.Diagnostics,
-                .. Flow.RunningOnChecks.Check(program, layouts, flows, placements)]))
-        {
-            Reused = reuse,
-            Reanalyzed = program.Files.Count,
-            Placements = placements,
-        };
+        return Composed(
+            new ProgramAnalysis(program, target, layouts, flows, states, defines, configuration, [])
+            {
+                Reanalyzed = program.Files.Count,
+            },
+            project, cpu, reuse);
     }
 
     /// <summary>
-    /// Reanalyzes the program that <paramref name="previous"/> analyzed after some of its files
-    /// changed, analyzing only those files and the files the changes affect. Returns null, and
-    /// sets <paramref name="reason"/>, when the whole program has to be analyzed again. That
-    /// happens when anything decided for the program as a whole changes, such as the files in it,
-    /// the project, the CPU or the segments.
+    /// Returns the reason the program that <paramref name="previous"/> analyzed must be analyzed
+    /// again as a whole, now that its files are <paramref name="files"/>, or null when the files
+    /// that changed can be analyzed on their own. The whole program is analyzed again when
+    /// anything decided for it as a whole changes, such as the files in it, the project, the CPU
+    /// or the segments.
     /// </summary>
-    private static ProgramAnalysis? Reanalyze(
+    private static WholeProgramReason? ReasonForWholeProgram(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
-        Func<string, long?> binaryLength, out WholeProgramReason reason)
+        Func<string, long?> binaryLength)
     {
-        reason = WholeProgramReason.ProjectChanged;
         if (previous.Reused is not { } reuse || reuse.Project != project)
-            return null;
-        reason = WholeProgramReason.FilesAddedOrRemoved;
-        var sources = files.Where(tree => !StandardModules.IsStandard(tree.Path))
-            .ToDictionary(tree => tree.Path, StringComparer.Ordinal);
-        var earlier = reuse.Trees.Where(tree => tree != previous.Defines && !StandardModules.IsStandard(tree.Path)).ToList();
+            return WholeProgramReason.ProjectChanged;
+        var sources = Sources(files);
+        var earlier = Earlier(previous, reuse);
         if (sources.Count != earlier.Count || earlier.Any(tree => !sources.ContainsKey(tree.Path)))
-            return null;
+            return WholeProgramReason.FilesAddedOrRemoved;
 
         // An edit that first mentions nt65's own modules, or takes away the last mention, adds
         // them to the program or takes them out.
         if (StandardModules.Wanted(sources.Values) != reuse.Trees.Any(tree => StandardModules.IsStandard(tree.Path)))
-            return null;
+            return WholeProgramReason.FilesAddedOrRemoved;
 
         // An `.incbin` file that changed on disk changes every file that includes it, whether or
         // not any source changed with it.
-        reason = WholeProgramReason.BinaryFileChanged;
         if (reuse.Lengths.Any(pair => binaryLength(pair.Key) != pair.Value))
-            return null;
+            return WholeProgramReason.BinaryFileChanged;
         var changed = earlier.Where(tree => sources[tree.Path] != tree).ToList();
+        if (changed.Count == 0)
+            return null;
+        if (changed.Any(tree => SegmentTable.Declares(tree) || SegmentTable.Declares(sources[tree.Path])))
+            return WholeProgramReason.SegmentsDeclared;
+        if (changed.Any(tree => Configuration.DeclaresSettings(tree) || Configuration.DeclaresSettings(sources[tree.Path])))
+            return WholeProgramReason.SettingsDeclared;
+        if (ProgramCpu.Resolve(Current(reuse, sources), project.Cpu, []) != previous.Cpu)
+            return WholeProgramReason.CpuChanged;
+        return null;
+    }
+
+    /// <summary>
+    /// Reanalyzes the program that <paramref name="previous"/> analyzed after some of its files
+    /// changed, analyzing only those files and the files the changes affect. Returns null when a
+    /// diagnostic from before points at text an edit replaced, and the whole program has to be
+    /// analyzed again. <see cref="ReasonForWholeProgram"/> must already have found no reason to
+    /// analyze the whole program.
+    /// </summary>
+    private static ProgramAnalysis? Reanalyze(
+        ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
+        Func<string, long?> binaryLength)
+    {
+        var reuse = previous.Reused!;
+        var sources = Sources(files);
+        var changed = Earlier(previous, reuse).Where(tree => sources[tree.Path] != tree).ToList();
         if (changed.Count == 0)
             return previous;
         var lengths = new ConcurrentDictionary<string, long?>(reuse.Lengths, StringComparer.Ordinal);
         long? Length(string path) => lengths.GetOrAdd(path, binaryLength);
-
-        reason = WholeProgramReason.SegmentsDeclared;
-        if (changed.Any(tree => SegmentTable.Declares(tree) || SegmentTable.Declares(sources[tree.Path])))
-            return null;
-        reason = WholeProgramReason.SettingsDeclared;
-        if (changed.Any(tree => Configuration.DeclaresSettings(tree) || Configuration.DeclaresSettings(sources[tree.Path])))
-            return null;
-        List<SyntaxTree> trees = [.. reuse.Trees.Select(tree => sources.GetValueOrDefault(tree.Path) ?? tree)];
+        var trees = Current(reuse, sources);
         var cpu = new List<Diagnostic>();
-        reason = WholeProgramReason.CpuChanged;
-        if (ProgramCpu.Resolve(trees, project.Cpu, cpu) != previous.Cpu)
-            return null;
+        ProgramCpu.Resolve(trees, project.Cpu, cpu);
 
         // A condition depends on nothing but its own file and the build.
         var configuration = previous.Configuration;
@@ -377,10 +370,7 @@ public static class Compiler
             program = previous.Program.Reanalyzing(
                 current, dirty, configuration, previous.Defines, moved, Length, out var affected);
             if (program is null && affected.Count == 0)
-            {
-                reason = WholeProgramReason.DiagnosticInEditedText;
                 return null;
-            }
 
             // The diagnostics from laying out every other file still hold, moved to follow the
             // edit; a file whose diagnostics cannot be moved is analyzed again.
@@ -397,7 +387,6 @@ public static class Compiler
             dirty.UnionWith(affected);
         }
 
-        reason = WholeProgramReason.DiagnosticInEditedText;
         foreach (var (path, found) in reuse.Conditions.Where(pair => !conditions.ContainsKey(pair.Key)))
         {
             if (EditMap.Moved(found, moved) is not { } kept)
@@ -407,40 +396,102 @@ public static class Compiler
         if (EditMap.Moved(reuse.SegmentTable, moved) is not { } segmentTable)
             return null;
 
-        List<CodeLayout> layouts = [.. previous.Layouts];
-        List<Flow.ControlFlow> flows = [.. previous.Flows];
-        List<Flow.StateAnalysis> states = [.. previous.States];
+        var (layouts, flows, states) = AnalyzeFiles(program, previous.Cpu, project, analyzed, previous, dirty);
+        return Composed(
+            new ProgramAnalysis(program, previous.Cpu, layouts, flows, states, previous.Defines, configuration, [])
+            {
+                Reanalyzed = dirty.Count,
+            },
+            project, cpu, new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths));
+    }
+
+    /// <summary>
+    /// Returns the files of a program as the caller gives them, by path, without the modules
+    /// that come with nt65.
+    /// </summary>
+    private static Dictionary<string, SyntaxTree> Sources(IReadOnlyCollection<SyntaxTree> files) =>
+        files.Where(tree => !StandardModules.IsStandard(tree.Path)).ToDictionary(tree => tree.Path, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Returns the files that <paramref name="previous"/> analyzed as the caller gave them,
+    /// without the defines file and the modules that come with nt65.
+    /// </summary>
+    private static List<SyntaxTree> Earlier(ProgramAnalysis previous, ProgramAnalysis.Reuse reuse) =>
+        [.. reuse.Trees.Where(tree => tree != previous.Defines && !StandardModules.IsStandard(tree.Path))];
+
+    /// <summary>
+    /// Returns every file of the program that <paramref name="reuse"/> kept, with each file the
+    /// caller gives replaced by its current version.
+    /// </summary>
+    private static List<SyntaxTree> Current(ProgramAnalysis.Reuse reuse, Dictionary<string, SyntaxTree> sources) =>
+        [.. reuse.Trees.Select(tree => sources.GetValueOrDefault(tree.Path) ?? tree)];
+
+    /// <summary>
+    /// Analyzes each file of <paramref name="program"/> on its own, and returns every file's
+    /// layout, control flow and, on the 65816, processor state, in the program's order. When
+    /// <paramref name="previous"/> is given, only the files at <paramref name="dirty"/> are
+    /// analyzed, and every other file keeps what <paramref name="previous"/> found for it.
+    /// <paramref name="analyzed"/> receives the diagnostics of each file analyzed.
+    /// </summary>
+    private static (List<CodeLayout> Layouts, List<Flow.ControlFlow> Flows, List<Flow.StateAnalysis> States) AnalyzeFiles(
+        ProgramModel program, Cpu target, ProjectSettings project, Dictionary<string, IReadOnlyList<Diagnostic>> analyzed,
+        ProgramAnalysis? previous, IReadOnlySet<string>? dirty)
+    {
+        var layouts = new List<CodeLayout>();
+        var flows = new List<Flow.ControlFlow>();
+        var states = new List<Flow.StateAnalysis>();
         for (var i = 0; i < program.Files.Count; i++)
         {
             var model = program.Files[i];
-            if (!dirty.Contains(model.Tree.Path))
+            if (previous is not null && dirty?.Contains(model.Tree.Path) != true)
+            {
+                layouts.Add(previous.Layouts[i]);
+                flows.Add(previous.Flows[i]);
+                if (i < previous.States.Count)
+                    states.Add(previous.States[i]);
                 continue;
-            var (layout, flow, state, found) = AnalyzeFile(model, previous.Cpu, project);
-            layouts[i] = layout;
-            flows[i] = flow;
+            }
+            var (layout, flow, state, found) = AnalyzeFile(model, target, project);
+            layouts.Add(layout);
+            flows.Add(flow);
             if (state is not null)
-                states[i] = state;
+                states.Add(state);
             analyzed[model.Tree.Path] = found;
         }
+        return (layouts, flows, states);
+    }
 
-        // A file kept from before the edit keeps its own costs, but its routines' costs
-        // including their calls, and the registers they preserve, may still have changed,
-        // because a routine they call may be in a file that changed.
+    /// <summary>
+    /// Returns <paramref name="analysis"/>, whose files have each been analyzed on their own,
+    /// completed with what only the whole program can answer, and with every diagnostic
+    /// collected. Both a whole program and a program in which some files changed are completed
+    /// by this method, so the two report the same diagnostics.
+    /// </summary>
+    private static ProgramAnalysis Composed(
+        ProgramAnalysis analysis, ProjectSettings project, IReadOnlyList<Diagnostic> cpu, ProgramAnalysis.Reuse reuse)
+    {
+        var (program, layouts, flows) = (analysis.Program, analysis.Layouts, analysis.Flows);
+
+        // What a routine costs including its calls, and which registers it preserves for its
+        // caller, are questions about the program rather than about one file, so they are
+        // worked out once every file has been analyzed on its own. A file kept from before an
+        // edit keeps its own costs, but its routines' costs including their calls, and the
+        // registers they preserve, may still have changed, because a routine they call may be in
+        // a file that changed.
         Flow.CallCosts.Compose(flows);
-        var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
+        var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, analysis.States);
 
-        // An edit to any module of a translation unit can change which routine the others fall
-        // through into, so the placements are worked out again after any change.
-        var placements = Placements.Of(trees, previous.Defines);
-        var reused = new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths);
-        return new ProgramAnalysis(
-            program, previous.Cpu, layouts, flows, states, previous.Defines, configuration,
-            Collected(project, previous.Cpu, cpu, program, reused, [
-                .. registers, .. placements.Diagnostics,
-                .. Flow.RunningOnChecks.Check(program, layouts, flows, placements)]))
+        // Which modules place which others follows from the files alone. Which routine a routine
+        // falls through into across a `.place` follows from the layouts of every file in its
+        // translation unit, so an edit to any module of a translation unit can change it for the
+        // others, and the placements are worked out again after any change.
+        var placements = Placements.Of(reuse.Trees, analysis.Defines);
+        return analysis with
         {
-            Reused = reused,
-            Reanalyzed = dirty.Count,
+            Diagnostics = Collected(project, analysis.Cpu, cpu, program, reuse, [
+                .. registers, .. placements.Diagnostics,
+                .. Flow.RunningOnChecks.Check(program, layouts, flows, placements)]),
+            Reused = reuse,
             Placements = placements,
         };
     }

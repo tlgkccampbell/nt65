@@ -98,105 +98,46 @@ public sealed class ProgramModel
     {
         configuration ??= Configuration.Everything;
         var target = cpu ?? ProgramCpu.Resolve(trees, null, []);
-        // These are the diagnostics for the program rather than for one file, such as two files
-        // that declare one module, two exports under one linker name, or a file shadowing a
-        // define.
-        var tables = new List<Diagnostic>();
         var binders = trees.Select(tree => Binder.Collect(tree, segments, configuration, target, tree == defines)).ToList();
-
-        // Every define is visible in every file, as if every file had brought it in.
         var modules = binders.Select(binder => binder.Module).ToList();
-        var defined = binders.FirstOrDefault(binder => binder.Tree == defines)?.FileScope.Symbols ?? [];
-        foreach (var symbol in defined)
-            symbol.IsDefine = true;
 
-        // A family declares one name per member of the enum it iterates over, and the enum may
-        // belong to another module. The instances are therefore declared once every file has
-        // been read, and before the modules' exports, because what a file exports includes them.
-        if (binders.Any(binder => binder.HasFamilies))
-        {
-            var provisional = ProgramSymbols.Build(modules, defined, []);
-            foreach (var binder in binders)
-                binder.DeclareFamilies(provisional);
-        }
-        foreach (var binder in binders)
-            binder.Export();
-
-        var symbols = ProgramSymbols.Build(modules, defined, tables);
-        var bound = binders.Select(binder => binder.Resolve(symbols)).ToList();
-        var byFile = new Dictionary<string, List<Diagnostic>>(StringComparer.Ordinal);
-        foreach (var tree in trees)
-            byFile.TryAdd(tree.Path, []);
-        for (var i = 0; i < trees.Count; i++)
-            byFile[trees[i].Path].AddRange(bound[i].Diagnostics);
-
-        // Whether a macro can reach itself is a question about the whole program. A body in one
-        // file may call a macro in another, and a cycle between the two is still one cycle. Each
-        // diagnostic belongs to the file of the macro it is reported for.
-        var declaredMacros = binders.SelectMany(binder => binder.DeclaredMacros()).ToList();
-        Macros.CheckRecursion(declaredMacros, symbol => symbol, (macro, found) => byFile[macro.Tree.Path].Add(found));
-        var macros = new List<Diagnostic>();
-        Macros.CheckExportedUses(declaredMacros, symbol => symbol.IsExported, macros);
-        foreach (var diagnostic in macros)
-            byFile[diagnostic.Span.File].Add(diagnostic);
-
-        // The program has one map, keyed by file as well as position. Evaluating a constant in
-        // one file may follow a name into another, where the same offsets mean something else
-        // entirely.
-        var resolvedNames = new Dictionary<SyntaxTree, Dictionary<int, Symbol>>();
-        var declaredNames = new Dictionary<SyntaxTree, Dictionary<int, Symbol>>();
-        for (var i = 0; i < trees.Count; i++)
-            (resolvedNames[trees[i]], declaredNames[trees[i]]) = Names(bound[i]);
-        var resolved = new SymbolMap(resolvedNames);
-        var declared = new SymbolMap(declaredNames);
-
-        var evaluation = new List<Diagnostic>();
-        var owners = new List<string>();
-        Evaluator.EvaluateSymbols(
-            segments, [.. bound.SelectMany(result => result.Symbols)], resolved, evaluation, owners, null, binaryLength,
-            configuration);
-        for (var i = 0; i < evaluation.Count; i++)
-            byFile[owners[i]].Add(evaluation[i]);
-
-        // A segment's `dp` and `bank`, and a signature's `dp = e` and `dbr = e`, are expressions
-        // that nothing before the analysis reads, so they are evaluated after the constants.
         var segmentValues = new List<Diagnostic>();
-        segments.Evaluate(expression => Evaluator.ValueOf(expression, segments, resolved).AsNumber(), segmentValues);
-        foreach (var result in bound)
-            Value(result.Symbols, segments, resolved, byFile);
-        foreach (var result in bound)
-        {
-            CheckAliases(result.Symbols, resolved, byFile);
-            CheckExportSizes(result.Symbols, byFile);
-        }
-
-        // This check runs after the alias check, because by then an alias that declares no
-        // signature has taken the routine's.
-        foreach (var result in bound)
-            CheckDeclaredSignatures(result.Symbols, byFile, target);
-        CheckDefineNames(modules, defines, tables);
+        var read = AnalyzeFiles(
+            binders, modules, defines, segments, configuration, target, binaryLength, unchanged: null, segmentValues,
+            bound =>
+            {
+                // The program has one map, keyed by file as well as position. Evaluating a
+                // constant in one file may follow a name into another, where the same offsets
+                // mean something else entirely.
+                var resolvedNames = new Dictionary<SyntaxTree, Dictionary<int, Symbol>>();
+                var declaredNames = new Dictionary<SyntaxTree, Dictionary<int, Symbol>>();
+                for (var i = 0; i < binders.Count; i++)
+                    (resolvedNames[binders[i].Tree], declaredNames[binders[i].Tree]) = Names(bound[i]);
+                return (Forwarding.None, new SymbolMap(resolvedNames), new SymbolMap(declaredNames));
+            });
 
         var unexported = new Dictionary<string, IReadOnlySet<UnexportedName>>(StringComparer.Ordinal);
         foreach (var binder in binders)
             unexported.TryAdd(binder.Tree.Path, Unexported(binder));
         var named = NamedElsewhere(unexported);
 
-        var all = byFile.Values.SelectMany(file => file).Concat(tables).Concat(segmentValues).ToList();
+        var all = read.ByFile.Values.SelectMany(file => file).Concat(read.Tables).Concat(segmentValues).ToList();
         var files = new List<SemanticModel>();
         for (var i = 0; i < trees.Count; i++)
         {
             var path = trees[i].Path;
-            files.Add(new SemanticModel(trees[i], segments, configuration, symbols, bound[i], resolved, declared,
-                Expanded(binders[i], symbol => symbol), all.Where(d => d.Span.File == path), Names(named, path),
-                binaryLength));
+            files.Add(new SemanticModel(trees[i], segments, configuration, read.Symbols, read.Bound[i], read.Resolved,
+                read.Declared, Expanded(binders[i], read.Forwarding.Current), all.Where(d => d.Span.File == path),
+                Names(named, path), binaryLength));
         }
         var lookedUp = new Dictionary<string, IReadOnlySet<LookedUpName>>(StringComparer.Ordinal);
         foreach (var binder in binders)
             lookedUp.TryAdd(binder.Tree.Path, binder.LookedUp);
         return new ProgramModel(
-            files, segments, symbols, target, modules, resolved, declared, Forwarding.None, lookedUp, unexported,
-            byFile.ToDictionary(pair => pair.Key, IReadOnlyList<Diagnostic> (pair) => pair.Value, StringComparer.Ordinal),
-            tables, segmentValues);
+            files, segments, read.Symbols, target, modules, read.Resolved, read.Declared, read.Forwarding, lookedUp,
+            unexported,
+            read.ByFile.ToDictionary(pair => pair.Key, IReadOnlyList<Diagnostic> (pair) => pair.Value, StringComparer.Ordinal),
+            read.Tables, segmentValues);
     }
 
     /// <summary>
@@ -260,81 +201,54 @@ public sealed class ProgramModel
             byPath.TryAdd(file.Tree.Path, file);
         var others = Files.Where(file => !dirty.Contains(file.Tree.Path)).ToList();
 
-        var binders = dirty.ToDictionary(
+        // The files are read in path order, so that their constants are evaluated in the same
+        // order each time.
+        var binders = dirty.Order(StringComparer.Ordinal).ToDictionary(
             path => path, path => Binder.Collect(trees[path], Segments, configuration, cpu, trees[path] == defines), StringComparer.Ordinal);
         List<ProgramSymbols.Module> replaced = [.. modules.Select(module =>
             binders.TryGetValue(module.Tree.Path, out var binder) ? binder.Module : module)];
 
-        // A family declares one name per member of the enum it iterates over, which may belong to
-        // another module, so the instances are declared before each module's exports are read.
-        if (binders.Values.Any(binder => binder.HasFamilies))
+        // Every other file's symbols keep their values, and are read as they stand rather than
+        // evaluated again.
+        var read = AnalyzeFiles(
+            [.. binders.Values], replaced, defines, Segments, configuration, cpu, binaryLength,
+            unchanged: symbol => !dirty.Contains(symbol.Tree.Path), segmentValues: null,
+            results =>
+            {
+                // Another file's symbol may hold a reference to one of these files' symbols
+                // directly, rather than through a name in the source. Examples are a type, and a
+                // macro called or used. It keeps holding the old symbol. Where that matters, as in
+                // a macro's expansion, the recursion check and the cycle check, the forwarding
+                // finds the new symbol by name.
+                var reread = binders.Keys.Zip(results)
+                    .ToDictionary(pair => pair.First, pair => pair.Second, StringComparer.Ordinal);
+                var forwarding = new Forwarding(path =>
+                    reread.TryGetValue(path, out var result) ? result.Symbols : byPath.GetValueOrDefault(path)?.Symbols);
+                var names = reread.ToDictionary(pair => pair.Key, pair => Names(pair.Value), StringComparer.Ordinal);
+                return (
+                    forwarding,
+                    new SymbolMap(
+                        this.resolved.Replacing(dirty.Select(path => (byPath[path].Tree, trees[path], names[path].Resolved))),
+                        forwarding.Current),
+                    new SymbolMap(
+                        this.declared.Replacing(dirty.Select(path => (byPath[path].Tree, trees[path], names[path].Declared))),
+                        forwarding.Current));
+            });
+
+        // A symbol of another file whose value changed because of these files is in a file that
+        // looked up a name whose meaning changed, and that file is read again below. A file with a
+        // symbol that could close a cycle with these files is read again with them now.
+        foreach (var symbol in read.Reads)
         {
-            var provisional = ProgramSymbols.Build(
-                replaced, replaced.FirstOrDefault(module => module.Tree == defines)?.FileScope.Symbols ?? [], []);
-            foreach (var binder in binders.Values)
-                binder.DeclareFamilies(provisional);
-        }
-        foreach (var binder in binders.Values)
-            binder.Export();
-
-        var tables = new List<Diagnostic>();
-        var symbols = ProgramSymbols.Build(
-            replaced, replaced.FirstOrDefault(module => module.Tree == defines)?.FileScope.Symbols ?? [], tables);
-        var bound = binders.ToDictionary(pair => pair.Key, pair => pair.Value.Resolve(symbols), StringComparer.Ordinal);
-
-        // Another file's symbol may hold a reference to one of these files' symbols directly,
-        // rather than through a name in the source. Examples are a type, and a macro called or
-        // used. It keeps holding the old symbol. Where that matters, as in a macro's expansion,
-        // the recursion check and the cycle check, the forwarding finds the new symbol by name.
-        var forwarding = new Forwarding(path =>
-            bound.TryGetValue(path, out var result) ? result.Symbols : byPath.GetValueOrDefault(path)?.Symbols);
-        var names = bound.ToDictionary(pair => pair.Key, pair => Names(pair.Value), StringComparer.Ordinal);
-        var resolved = new SymbolMap(
-            this.resolved.Replacing(dirty.Select(path => (byPath[path].Tree, trees[path], names[path].Resolved))),
-            forwarding.Current);
-        var declared = new SymbolMap(
-            this.declared.Replacing(dirty.Select(path => (byPath[path].Tree, trees[path], names[path].Declared))),
-            forwarding.Current);
-
-        // Every other file's symbols keep their values. A symbol whose value changed because of
-        // these files is in a file that looked up a name whose meaning changed, and that file is
-        // read again below. A file with a symbol that could close a cycle with these files is read
-        // again with them now.
-        var found = dirty.ToDictionary(path => path, path => new List<Diagnostic>(bound[path].Diagnostics), StringComparer.Ordinal);
-        var evaluation = new List<Diagnostic>();
-        var owners = new List<string>();
-        var reads = Evaluator.EvaluateSymbols(
-            Segments, [.. dirty.Order(StringComparer.Ordinal).SelectMany(path => bound[path].Symbols)], resolved, evaluation, owners,
-            symbol => !dirty.Contains(symbol.Tree.Path), binaryLength, configuration);
-        for (var i = 0; i < evaluation.Count; i++)
-            found[owners[i]].Add(evaluation[i]);
-        foreach (var read in reads)
-        {
-            if (MayCloseACycle(read, dirty, resolved))
-                affected.Add(read.Tree.Path);
+            if (MayCloseACycle(symbol, dirty, read.Resolved))
+                affected.Add(symbol.Tree.Path);
         }
         if (affected.Count > 0)
             return null;
 
-        var declaredMacros = binders.Values.SelectMany(binder => binder.DeclaredMacros()).ToList();
-        Macros.CheckRecursion(declaredMacros, forwarding.Current, (macro, diagnostic) => found[macro.Tree.Path].Add(diagnostic));
-        var macros = new List<Diagnostic>();
-        Macros.CheckExportedUses(declaredMacros, symbol => symbol.IsExported, macros);
-        foreach (var diagnostic in macros)
-            found[diagnostic.Span.File].Add(diagnostic);
-        foreach (var result in bound.Values)
-            Value(result.Symbols, Segments, resolved, found);
-        foreach (var result in bound.Values)
-        {
-            CheckAliases(result.Symbols, resolved, found);
-            CheckExportSizes(result.Symbols, found);
-        }
-
-        // This check runs after the alias check, because by then an alias that declares no
-        // signature has taken the routine's.
-        foreach (var result in bound.Values)
-            CheckDeclaredSignatures(result.Symbols, found, cpu);
-        CheckDefineNames(replaced, defines, tables);
+        var bound = binders.Keys.Zip(read.Bound).ToDictionary(pair => pair.First, pair => pair.Second, StringComparer.Ordinal);
+        var (symbols, tables, found) = (read.Symbols, read.Tables, read.ByFile);
+        var (forwarding, resolved, declared) = (read.Forwarding, read.Resolved, read.Declared);
 
         // A name whose meaning changed affects every file that looked it up in its module. A
         // macro, a function or a list that names it in its body has changed too, and in turn
@@ -426,6 +340,113 @@ public sealed class ProgramModel
         return new ProgramModel(
             files, Segments, symbols, cpu, replaced, resolved, declared, forwarding, lookups, unexportedNow, byFile, tables,
             segmentValuesNow);
+    }
+
+    /// <summary>
+    /// Reads the files of <paramref name="binders"/>, once each has collected its declarations,
+    /// and runs every step of the analysis that follows, in order. Both a whole program and a
+    /// program in which some files changed are read by this method, so the two report the same
+    /// diagnostics.
+    /// </summary>
+    /// <param name="binders">The files to read, in the order their constants are evaluated.</param>
+    /// <param name="modules">Every module of the program, including those of the files not read.</param>
+    /// <param name="defines">The file the build configuration was read as, or null.</param>
+    /// <param name="segments">The program's segments.</param>
+    /// <param name="configuration">Which <c>.if</c> branches the build takes.</param>
+    /// <param name="cpu">The processor the program is built for.</param>
+    /// <param name="binaryLength">Returns the length of each file an <c>.incbin</c> names.</param>
+    /// <param name="unchanged">
+    /// Returns a value indicating whether a symbol belongs to a file that is not read, whose value
+    /// is read as it stands, or is null when every file is read.
+    /// </param>
+    /// <param name="segmentValues">
+    /// Receives the diagnostics from evaluating the segments' values, or is null when those were
+    /// evaluated before and are kept.
+    /// </param>
+    /// <param name="link">
+    /// Returns the forwarding and the maps of names for the program, given what each file of
+    /// <paramref name="binders"/> resolved, in the same order.
+    /// </param>
+    private static Reading AnalyzeFiles(
+        IReadOnlyList<Binder> binders,
+        IReadOnlyList<ProgramSymbols.Module> modules,
+        SyntaxTree? defines,
+        SegmentTable segments,
+        Configuration configuration,
+        Cpu cpu,
+        Func<string, long?>? binaryLength,
+        Func<Symbol, bool>? unchanged,
+        List<Diagnostic>? segmentValues,
+        Func<IReadOnlyList<Binder.Result>, (Forwarding Forwarding, SymbolMap Resolved, SymbolMap Declared)> link)
+    {
+        // These are the diagnostics for the program rather than for one file, such as two files
+        // that declare one module, two exports under one linker name, or a file shadowing a
+        // define.
+        var tables = new List<Diagnostic>();
+
+        // Every define is visible in every file, as if every file had brought it in.
+        var defined = modules.FirstOrDefault(module => module.Tree == defines)?.FileScope.Symbols ?? [];
+        foreach (var symbol in defined)
+            symbol.IsDefine = true;
+
+        // A family declares one name per member of the enum it iterates over, and the enum may
+        // belong to another module. The instances are therefore declared once every file has
+        // been read, and before the modules' exports, because what a file exports includes them.
+        if (binders.Any(binder => binder.HasFamilies))
+        {
+            var provisional = ProgramSymbols.Build(modules, defined, []);
+            foreach (var binder in binders)
+                binder.DeclareFamilies(provisional);
+        }
+        foreach (var binder in binders)
+            binder.Export();
+
+        var symbols = ProgramSymbols.Build(modules, defined, tables);
+        var bound = binders.Select(binder => binder.Resolve(symbols)).ToList();
+        var byFile = new Dictionary<string, List<Diagnostic>>(StringComparer.Ordinal);
+        for (var i = 0; i < binders.Count; i++)
+        {
+            byFile.TryAdd(binders[i].Tree.Path, []);
+            byFile[binders[i].Tree.Path].AddRange(bound[i].Diagnostics);
+        }
+        var (forwarding, resolved, declared) = link(bound);
+
+        // Whether a macro can reach itself is a question about the whole program. A body in one
+        // file may call a macro in another, and a cycle between the two is still one cycle. Each
+        // diagnostic belongs to the file of the macro it is reported for.
+        var declaredMacros = binders.SelectMany(binder => binder.DeclaredMacros()).ToList();
+        Macros.CheckRecursion(declaredMacros, forwarding.Current, (macro, found) => byFile[macro.Tree.Path].Add(found));
+        var macros = new List<Diagnostic>();
+        Macros.CheckExportedUses(declaredMacros, symbol => symbol.IsExported, macros);
+        foreach (var diagnostic in macros)
+            byFile[diagnostic.Span.File].Add(diagnostic);
+
+        var evaluation = new List<Diagnostic>();
+        var owners = new List<string>();
+        var reads = Evaluator.EvaluateSymbols(
+            segments, [.. bound.SelectMany(result => result.Symbols)], resolved, evaluation, owners, unchanged,
+            binaryLength, configuration);
+        for (var i = 0; i < evaluation.Count; i++)
+            byFile[owners[i]].Add(evaluation[i]);
+
+        // A segment's `dp` and `bank`, and a signature's `dp = e` and `dbr = e`, are expressions
+        // that nothing before the analysis reads, so they are evaluated after the constants.
+        if (segmentValues is not null)
+            segments.Evaluate(expression => Evaluator.ValueOf(expression, segments, resolved).AsNumber(), segmentValues);
+        foreach (var result in bound)
+            Value(result.Symbols, segments, resolved, byFile);
+        foreach (var result in bound)
+        {
+            CheckAliases(result.Symbols, resolved, byFile);
+            CheckExportSizes(result.Symbols, byFile);
+        }
+
+        // This check runs after the alias check, because by then an alias that declares no
+        // signature has taken the routine's.
+        foreach (var result in bound)
+            CheckDeclaredSignatures(result.Symbols, byFile, cpu);
+        CheckDefineNames(modules, defines, tables);
+        return new Reading(symbols, bound, byFile, tables, forwarding, resolved, declared, reads);
     }
 
     /// <summary>
@@ -726,4 +747,23 @@ public sealed class ProgramModel
             }
         }
     }
+
+    /// <summary>Represents what reading a set of files found.</summary>
+    /// <param name="Symbols">The table of what each file may name in the others.</param>
+    /// <param name="Bound">What each file resolved, in the order the files were read.</param>
+    /// <param name="ByFile">The diagnostics each file's own analysis found, by file.</param>
+    /// <param name="Tables">The diagnostics that only the whole program can report.</param>
+    /// <param name="Forwarding">The forwarding from earlier versions of the files to the current ones.</param>
+    /// <param name="Resolved">The symbols the program's names resolve to.</param>
+    /// <param name="Declared">The symbols the program's names declare.</param>
+    /// <param name="Reads">The symbols of files not read whose values were read as they stand.</param>
+    private sealed record Reading(
+        ProgramSymbols Symbols,
+        IReadOnlyList<Binder.Result> Bound,
+        Dictionary<string, List<Diagnostic>> ByFile,
+        List<Diagnostic> Tables,
+        Forwarding Forwarding,
+        SymbolMap Resolved,
+        SymbolMap Declared,
+        IReadOnlySet<Symbol> Reads);
 }
