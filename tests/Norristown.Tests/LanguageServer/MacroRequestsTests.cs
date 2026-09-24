@@ -17,7 +17,7 @@ public sealed class MacroRequestsTests
     /// </summary>
     private const string Source = """
         .module main
-        SCREEN = $0400
+        .const SCREEN = $0400
 
         .macro set16(dest: operand, value) {
             lda #<value
@@ -43,7 +43,7 @@ public sealed class MacroRequestsTests
             rts
         }
 
-        ptr = $10
+        .const ptr = $10
         """;
 
     /// <summary>

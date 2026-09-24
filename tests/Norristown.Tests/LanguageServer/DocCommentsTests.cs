@@ -26,7 +26,7 @@ public sealed class DocCommentsTests
 
         ; Not this one's.
 
-        ROWS = 25       ; how many rows there are
+        .const ROWS = 25       ; how many rows there are
         .proc scroll {
             jsr clear
             rts

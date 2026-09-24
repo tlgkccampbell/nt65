@@ -10,7 +10,7 @@ namespace Norristown.Tests.LanguageServer;
 /// </summary>
 public sealed class LongLineTests
 {
-    private const string Long = "X = .select(1, 2, 3) + .select(4, 5, 6) + .select(7, 8, 9)\n";
+    private const string Long = ".const X = .select(1, 2, 3) + .select(4, 5, 6) + .select(7, 8, 9)\n";
 
     [Fact]
     public void ALongLineIsSuggestedOverItsExpression()
@@ -22,14 +22,14 @@ public sealed class LongLineTests
         Assert.Equal("long-line", hint.Code);
         Assert.Equal(Norristown.LanguageServer.Protocol.DiagnosticSeverity.Hint, hint.Severity);
         Assert.Equal(1, hint.Range.Start.Line);
-        Assert.Equal(Long.IndexOf('.', StringComparison.Ordinal), hint.Range.Start.Character);
+        Assert.Equal(Long.IndexOf(".select", StringComparison.Ordinal), hint.Range.Start.Character);
     }
 
     [Theory]
     [InlineData(Long, 0)]
     [InlineData(Long, 100)]
-    [InlineData("X = 1                                            ; a long comment, and nothing to break\n", 40)]
-    [InlineData("X = .select(\n    1111111111 + 2222222222 + 3333333333 + 4444444444,\n    5)\n", 40)]
+    [InlineData(".const X = 1                                            ; a long comment, and nothing to break\n", 40)]
+    [InlineData(".const X = .select(\n    1111111111 + 2222222222 + 3333333333 + 4444444444,\n    5)\n", 40)]
     public void NothingIsSuggestedWhereThereIsNothingToBreak(string line, int limit)
     {
         var tree = SyntaxTree.Parse("main.nt65", ".module main\n" + line);

@@ -142,10 +142,10 @@ public static class ImportIncCommand
                 body.Add(bare);
                 continue;
             }
-            if (Constant(bare) is var (name, value, comment) && Reads($"{name} = {value}"))
+            if (Constant(bare) is var (name, value, comment) && Reads($".const {name} = {value}"))
             {
                 names.Add(name);
-                body.Add(comment is null ? $"{name} = {value}" : $"{name} = {value}{comment}");
+                body.Add(comment is null ? $".const {name} = {value}" : $".const {name} = {value}{comment}");
                 continue;
             }
             refused.Add((i + 1, Why(bare)));

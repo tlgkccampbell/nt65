@@ -11,7 +11,7 @@ namespace Norristown.Tests.Cli;
 public sealed class BuildCommandTests : IDisposable
 {
     private const string Main = ".module main\n.use hw::BORDER\n.segment CODE\n.export .proc main {\n    lda #DEBUG\n    sta BORDER\n    rts\n}\n.const DEBUG ?= 0\n";
-    private const string Hw = ".module hw::vic\n.export BORDER = $d020\n";
+    private const string Hw = ".module hw::vic\n.export .const BORDER = $d020\n";
 
     private readonly TempFolder root = new("nt65-build-");
 
@@ -56,7 +56,7 @@ public sealed class BuildCommandTests : IDisposable
               "configurations": { "debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" } }
             }
             """);
-        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", ".const BORDER = $d020", StringComparison.Ordinal));
         var app = Path.Combine(root.FullName, "app");
 
         Assert.Equal(ExitCode.Success, Run(app, "build").Code);
@@ -84,7 +84,7 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Equal(ExitCode.Success, Run(app, "build").Code);
         Assert.True(Exists("app/build/hw/vic.s"));
 
-        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", ".const BORDER = $d020", StringComparison.Ordinal));
         System.IO.File.Delete(Path.Combine(app, "vic.nt65"));
         var (code, printed) = Run(app, "build");
 
@@ -184,7 +184,7 @@ public sealed class BuildCommandTests : IDisposable
     public void WithoutAProjectWhatIsMissingIsReported()
     {
         root.Write("alone/main.nt65", Main.Replace("#DEBUG", "#1", StringComparison.Ordinal));
-        root.Write("alone/other.nt65", ".module other\n.export N = 1\n");
+        root.Write("alone/other.nt65", ".module other\n.export .const N = 1\n");
         var alone = Path.Combine(root.FullName, "alone");
 
         var (code, printed) = Run(alone, "build", "main.nt65");
@@ -205,13 +205,13 @@ public sealed class BuildCommandTests : IDisposable
     public void CheckReportsAndWritesNothing()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build", "settings": { "DEBUG": 0 } }""");
-        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020\nUNUSED = 1", StringComparison.Ordinal));
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", ".const BORDER = $d020\n.const UNUSED = 1", StringComparison.Ordinal));
         var app = Path.Combine(root.FullName, "app");
 
         var (code, printed) = Run(app, "build", "--check", "--depfile", "nt65.d", "--c-header", "nt65.h");
 
         Assert.Equal(ExitCode.Success, code);
-        Assert.Contains("main.nt65:3:1: warning: `UNUSED` is never used", printed);
+        Assert.Contains("main.nt65:3:8: warning: `UNUSED` is never used", printed);
         Assert.False(Directory.Exists(Path.Combine(app, "build")));
         Assert.False(System.IO.File.Exists(Path.Combine(app, "nt65.d")));
         Assert.False(System.IO.File.Exists(Path.Combine(app, "nt65.h")));
@@ -229,7 +229,7 @@ public sealed class BuildCommandTests : IDisposable
     public void JsonWritesOneObjectPerDiagnostic()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
-        root.Write("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nBORDER = $d021\n");
+        root.Write("app/main.nt65", ".module main\n.export BORDER\n.const BORDER = $d020\n.const BORDER = $d021\n");
         var app = Path.Combine(root.FullName, "app");
 
         var (code, output, error) = Apart(app, false, "build", "--json");
@@ -238,8 +238,8 @@ public sealed class BuildCommandTests : IDisposable
         var diagnostic = JsonDocument.Parse(Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries))).RootElement;
         Assert.Equal("main.nt65", diagnostic.GetProperty("file").GetString());
         Assert.Equal(4, diagnostic.GetProperty("line").GetInt32());
-        Assert.Equal(1, diagnostic.GetProperty("column").GetInt32());
-        Assert.Equal(7, diagnostic.GetProperty("endColumn").GetInt32());
+        Assert.Equal(8, diagnostic.GetProperty("column").GetInt32());
+        Assert.Equal(14, diagnostic.GetProperty("endColumn").GetInt32());
         Assert.Equal("error", diagnostic.GetProperty("severity").GetString());
         Assert.Equal("`BORDER` is already declared in this scope", diagnostic.GetProperty("message").GetString());
 
@@ -248,7 +248,7 @@ public sealed class BuildCommandTests : IDisposable
             (related.GetProperty("line").GetInt32(), related.GetProperty("message").GetString()));
 
         // A diagnostic with nothing else to point at has no related spans field at all.
-        root.Write("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
+        root.Write("app/main.nt65", ".module main\n.export BORDER\n.const BORDER = $d020\n.const UNUSED = 1\n");
         Assert.DoesNotContain("related", Apart(app, false, "build", "--json").Output);
     }
 
@@ -261,21 +261,21 @@ public sealed class BuildCommandTests : IDisposable
     public void ColourMarksWhatADiagnosticIs()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
-        root.Write("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
+        root.Write("app/main.nt65", ".module main\n.export BORDER\n.const BORDER = $d020\n.const UNUSED = 1\n");
         var app = Path.Combine(root.FullName, "app");
 
         Assert.Equal(
-            "main.nt65:4:1: [33mwarning:[0m `UNUSED` is never used: nothing names it, and it is not "
+            "main.nt65:4:8: [33mwarning:[0m `UNUSED` is never used: nothing names it, and it is not "
                 + "exported [unused-symbol]\n",
             Apart(app, true, "build").Error);
         Assert.Equal(
-            "main.nt65:4:1: warning: `UNUSED` is never used: nothing names it, and it is not exported "
+            "main.nt65:4:8: warning: `UNUSED` is never used: nothing names it, and it is not exported "
                 + "[unused-symbol]\n",
             Apart(app, false, "build").Error);
 
-        root.Write("app/main.nt65", ".module main\n.export BORDER\nBORDER = nowhere\n");
+        root.Write("app/main.nt65", ".module main\n.export BORDER\n.const BORDER = nowhere\n");
         Assert.Equal(
-            "main.nt65:3:10: [31merror:[0m `nowhere` is not declared [not-declared]\n",
+            "main.nt65:3:17: [31merror:[0m `nowhere` is not declared [not-declared]\n",
             Apart(app, true, "build").Error);
     }
 

@@ -30,7 +30,7 @@ internal sealed class ProgramReplay
             .cpu 65816
             .use main::BASE
 
-            ENTRY = BASE
+            .const ENTRY = BASE
 
             """,
         ["defs.nt65"] = """
@@ -42,18 +42,18 @@ internal sealed class ProgramReplay
             .export SCREEN, WIDTH, HEIGHT, Point, set16, rgb, LIMIT, scaled, fill_screen, FILL, ping, std
             .export DEBUG, WIDE
 
-            SCREEN = $2000
-            WIDTH  = 32
-            HEIGHT = WIDTH - 4
-            LIMIT  = BASE + 1
-            PRIVATE_K = 7
-            SCALE  = 3
-            FILL   = $20
+            .const SCREEN = $2000
+            .const WIDTH  = 32
+            .const HEIGHT = WIDTH - 4
+            .const LIMIT  = BASE + 1
+            .const PRIVATE_K = 7
+            .const SCALE  = 3
+            .const FILL   = $20
 
             ; A setting the build gives, and one main.nt65 tests through a constant built from it.
             .const DEBUG ?= 0
             .const COLUMNS ?= 40
-            WIDE   = COLUMNS > 40
+            .const WIDE   = COLUMNS > 40
 
             ; The state gfx.nt65's routines take.
             .signature std = a8, i8
@@ -98,8 +98,8 @@ internal sealed class ProgramReplay
 
             .export main, BASE
 
-            BASE = 3
-            MAIN_PRIVATE = 9
+            .const BASE = 3
+            .const MAIN_PRIVATE = 9
 
             .segment BSS
             .data cursor: .word
@@ -109,11 +109,11 @@ internal sealed class ProgramReplay
             .data route:  .type Line { from = { x = 1 } }
 
             .if DEBUG {
-            TRACE = 1
+            .const TRACE = 1
             }
 
             .if WIDE {
-            WIDE_TRACE = 1
+            .const WIDE_TRACE = 1
             }
 
             .segment CODE
@@ -140,8 +140,8 @@ internal sealed class ProgramReplay
 
             .export draw, clear, COLORS, relay
 
-            COLORS = rgb(31, 0, 0)
-            STEP   = scaled(2)
+            .const COLORS = rgb(31, 0, 0)
+            .const STEP   = scaled(2)
 
             .segment RODATA
             .data sprites:    .incbin "sprites.bin"
@@ -220,7 +220,7 @@ internal sealed class ProgramReplay
 
             ; Nothing names it, so this file is always warned about it — until something goes
             ; wrong here, when a file's warnings give way to what is actually wrong with it.
-            HUD_SPARE = 3
+            .const HUD_SPARE = 3
 
             .segment HUD: zp
 

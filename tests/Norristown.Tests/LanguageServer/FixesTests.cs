@@ -76,13 +76,13 @@ public sealed class FixesTests
         },
         {
             "Change to `(1 & 2) == 0`",
-            "MASK = 1 & 2 == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
-            "MASK = (1 & 2) == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
+            ".const MASK = 1 & 2 == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
+            ".const MASK = (1 & 2) == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
         },
         {
             "Change to `1 & (2 == 0)`",
-            "MASK = 1 & 2 == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
-            "MASK = 1 & (2 == 0)\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
+            ".const MASK = 1 & 2 == 0\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n",
+            ".const MASK = 1 & (2 == 0)\n.export .proc main: a8, i8 {\n    lda #MASK\n    rts\n}\n"
         },
         {
             "Declare it `a8`, which is what the routine assumes",
@@ -91,7 +91,7 @@ public sealed class FixesTests
         },
         {
             "Remove `SPARE`",
-            "SPARE = 1\n",
+            ".const SPARE = 1\n",
             ""
         },
     };
@@ -121,14 +121,14 @@ public sealed class FixesTests
     [Fact]
     public void ExportingWhatNothingNamesInsertsTheExportUnderTheModule()
     {
-        var (analysis, model) = Analyzed(Header + "SPARE = 1\n");
+        var (analysis, model) = Analyzed(Header + ".const SPARE = 1\n");
 
         var action = Assert.Single(CodeActions.In(analysis, model, Whole),
             action => action.Title == "Export `SPARE` from `main`");
 
         Assert.Equal(
-            ".module main\n.export SPARE\n.cpu 65816\n.segment CODE\nSPARE = 1\n",
-            Editing.Apply(Header + "SPARE = 1\n", action.Edit.Changes[Uri]));
+            ".module main\n.export SPARE\n.cpu 65816\n.segment CODE\n.const SPARE = 1\n",
+            Editing.Apply(Header + ".const SPARE = 1\n", action.Edit.Changes[Uri]));
     }
 
     /// <summary>
@@ -189,7 +189,7 @@ public sealed class FixesTests
     [Theory]
     [InlineData(".export .proc main: a8, i8\n    rts\n}\n", "Insert the missing `{`", ".export .proc main: a8, i8 {\n    rts\n}\n")]
     [InlineData(".export .proc main   ; note\n}\n", "Insert the missing `{`", ".export .proc main {   ; note\n}\n")]
-    [InlineData("MASK = (1 + 2\n", "Insert the missing `)`", "MASK = (1 + 2)\n")]
+    [InlineData(".const MASK = (1 + 2\n", "Insert the missing `)`", ".const MASK = (1 + 2)\n")]
     [InlineData(".export .proc main: a8, i8 {\n    lda [dp\n    rts\n}\n", "Insert the missing `]`",
         ".export .proc main: a8, i8 {\n    lda [dp]\n    rts\n}\n")]
     [InlineData(".use gfx::{clear\n", "Insert the missing `}`", ".use gfx::{clear}\n")]

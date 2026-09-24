@@ -171,6 +171,11 @@ internal static class Fixes
                     yield return Fix(diagnostic, $"Remove the `.use` of `{brought}`", without);
                 break;
 
+            case FixKind.Const:
+                yield return Fix(diagnostic, "Declare it with `.const`",
+                    [new Edit(tree, new TextSpan(Edits.SpanOf(tree, diagnostic.Span).Start, 0), ".const ")]);
+                break;
+
             case FixKind.MissingPiece when fix.Text is { } piece:
                 if (Piece(tree, diagnostic, piece) is { } inserted)
                     yield return Fix(diagnostic, $"Insert the missing `{piece}`", [inserted]);

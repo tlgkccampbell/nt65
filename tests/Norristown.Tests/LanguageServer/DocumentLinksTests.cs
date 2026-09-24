@@ -46,7 +46,7 @@ public sealed class DocumentLinksTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync("""
             .module main
-            ART = "art/tiles.bin"
+            .const ART = "art/tiles.bin"
             .segment RODATA
             .data tiles: .incbin ART
             .export tiles

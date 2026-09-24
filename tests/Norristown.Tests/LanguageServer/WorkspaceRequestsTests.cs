@@ -20,8 +20,8 @@ public sealed class WorkspaceRequestsTests
         .module gfx
         .export clear, SCREEN
 
-        SCREEN = $0400
-        rows   = 25
+        .const SCREEN = $0400
+        .const rows   = 25
         .segment CODE
         .proc clear {
             rts
@@ -136,7 +136,7 @@ public sealed class WorkspaceRequestsTests
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (GfxUri, Gfx));
-        await client.OpenAsync(MainUri, ".module main\nn = gfx::rows\n");
+        await client.OpenAsync(MainUri, ".module main\n.const n = gfx::rows\n");
 
         var published = await NextForAsync(client, MainUri, timeout);
         Assert.Equal("`gfx::rows` is not exported by module `gfx`",

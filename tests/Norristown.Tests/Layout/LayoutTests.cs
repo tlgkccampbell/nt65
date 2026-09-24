@@ -203,7 +203,7 @@ public sealed class LayoutTests
     {
         var source = $$"""
             .module main
-            SIXTEEN = 16
+            .const SIXTEEN = 16
             .segment ZEROPAGE
             .data ptr:    .byte[2]
             .segment BSS

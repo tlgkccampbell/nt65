@@ -90,6 +90,9 @@ public enum FixKind
     /// <summary>The declaration of the module a <c>.place</c> names, marked <c>placed</c>.</summary>
     Placed,
 
+    /// <summary>The <c>.const</c> a constant is declared with, inserted before its name.</summary>
+    Const,
+
     /// <summary>
     /// A <c>.fallthrough</c> naming the routine that comes next, as the last line of the body the
     /// fix's <see cref="DiagnosticFix.At"/> closes.

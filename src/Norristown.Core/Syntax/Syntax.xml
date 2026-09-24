@@ -447,11 +447,11 @@
         <c>.const NAME ?= expr</c>, whose value the build may set.
       </summary>
     </TypeComment>
-    <Field Name="Keyword" Type="SyntaxToken" Optional="true">
+    <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
         <summary>
-          Gets the <c>.const</c> keyword that starts the line, or null for a line written without
-          it, which the parser reports.
+          Gets the <c>.const</c> keyword that starts the line, which is a missing token on a line
+          written without it.
         </summary>
       </PropertyComment>
       <Kind Name="Directive"/>

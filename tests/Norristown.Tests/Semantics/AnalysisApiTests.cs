@@ -16,7 +16,7 @@ public sealed class AnalysisApiTests
     private const string Vic = """
         .module hw::vic
         .export BORDER
-        BORDER = $d020
+        .const BORDER = $d020
 
         """;
 
@@ -85,7 +85,7 @@ public sealed class AnalysisApiTests
 
         // A model made for one file on its own sees no other file, which is how a scratch buffer
         // is analyzed.
-        var alone = SemanticModel.Create(SyntaxTree.Parse("alone.nt65", ".module alone\nK = 1\n"), SegmentTable.Standard);
+        var alone = SemanticModel.Create(SyntaxTree.Parse("alone.nt65", ".module alone\n.const K = 1\n"), SegmentTable.Standard);
         Assert.Equal(["K"], alone.Symbols.Select(symbol => symbol.Name));
     }
 

@@ -32,8 +32,8 @@ public sealed class MacroExpansionTests
                 sta dest+1
             }
 
-            SCREEN = $0400
-            ptr = $10
+            .const SCREEN = $0400
+            .const ptr = $10
 
             .proc main {
                 set16!(ptr, SCREEN)
@@ -51,7 +51,7 @@ public sealed class MacroExpansionTests
                 sta dest
             }
 
-            buf = $0200
+            .const buf = $0200
 
             .proc main {
                 store!({buf,x})
@@ -134,7 +134,7 @@ public sealed class MacroExpansionTests
                 bne @loop
             }
 
-            ptr = $10
+            .const ptr = $10
 
             .proc main {
                 ldy #0
@@ -163,9 +163,9 @@ public sealed class MacroExpansionTests
                 sta dest+1
             }
 
-            ptr = $10
-            other = $12
-            SCREEN = $0400
+            .const ptr = $10
+            .const other = $12
+            .const SCREEN = $0400
 
             .proc main {
                 mov16!(ptr, {#SCREEN})
@@ -252,7 +252,7 @@ public sealed class MacroExpansionTests
     public void ADefaultFillsInWhatACallLeavesOut()
     {
         Assert.Contains(".byte C4, 1", Body("""
-            C4 = 60
+            .const C4 = 60
 
             .macro note(pitch: const, frames: const = 1) {
                 .byte pitch, frames

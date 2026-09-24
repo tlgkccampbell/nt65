@@ -13,7 +13,7 @@ public sealed class CHeaderTests
         .export Sprite, Kind, Pair, MAX as "_MAX", sprites as "_sprites", count as "_count", wide as "_wide"
         .export draw as "_draw", text as "_text"
 
-        MAX = 300
+        .const MAX = 300
 
         .struct Sprite {
         x:      .byte

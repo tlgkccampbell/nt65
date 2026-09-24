@@ -11,7 +11,7 @@ public sealed class AddressSizeTests
     [InlineData("$7e0000", AddressSize.Far)]
     public void AConstantIsSizedByItsValue(string value, AddressSize expected)
     {
-        var model = Analysis.Model($".module main\nVALUE = {value}\n");
+        var model = Analysis.Model($".module main\n.const VALUE = {value}\n");
 
         Assert.Equal(expected, model.Symbol("VALUE").AddressSize);
     }
@@ -44,7 +44,7 @@ public sealed class AddressSizeTests
     [Fact]
     public void ARegionPutsWhatFollowsItInItsSegment()
     {
-        var model = Analysis.Model(".module main\nSIZE = 1\n.segment ZEROPAGE\n.data ptr: .word\n.proc early {\nrts\n}\n"
+        var model = Analysis.Model(".module main\n.const SIZE = 1\n.segment ZEROPAGE\n.data ptr: .word\n.proc early {\nrts\n}\n"
             + ".segment CODE\n.proc main {\nrts\n}\n");
 
         Assert.Null(model.Symbol("SIZE").Segment);
@@ -58,7 +58,7 @@ public sealed class AddressSizeTests
     [Fact]
     public void BytesOutsideEverySegmentAreAnError()
     {
-        var program = Analysis.Program(("main.nt65", ".module main\nSIZE = 1\n.proc main {\n    rts\n}\n.data table: .byte SIZE\n"));
+        var program = Analysis.Program(("main.nt65", ".module main\n.const SIZE = 1\n.proc main {\n    rts\n}\n.data table: .byte SIZE\n"));
 
         Assert.Equal(
             [
@@ -83,8 +83,8 @@ public sealed class AddressSizeTests
             .data ptr:    .word
             .segment LONG
             .data away:   .byte 0
-            NEXT    = ptr + 1
-            MIXED   = ptr + away
+            .data NEXT: .byte = ptr + 1
+            .const MIXED   = ptr + away
             """);
 
         Assert.Empty(model.Problems());
@@ -100,9 +100,9 @@ public sealed class AddressSizeTests
             .module main
             .segment ZEROPAGE
             .data ptr:    .word
-            SCREEN  = $0400
-            NARROW  = .addrsize(ptr)
-            WIDE    = .addrsize(SCREEN)
+            .const SCREEN  = $0400
+            .const NARROW  = .addrsize(ptr)
+            .const WIDE    = .addrsize(SCREEN)
             """);
 
         Assert.Empty(model.Problems());

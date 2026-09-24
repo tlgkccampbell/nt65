@@ -221,7 +221,7 @@ public sealed class DirectivePlacesTests
         var (text, line) = Host(place, snippet);
         var analysis = Analysis.Program(
             (Analysis.Path, text),
-            ("other.nt65", ".module other\n.export OUTSIDE = 1\n"));
+            ("other.nt65", ".module other\n.export .const OUTSIDE = 1\n"));
         var last = line + snippet.Split('\n').Length;
         return
         [

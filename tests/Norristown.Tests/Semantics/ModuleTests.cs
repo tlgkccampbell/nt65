@@ -17,8 +17,8 @@ public sealed class ModuleTests
         .segment ZEROPAGE
         .data ptr:    .word
 
-        SCREEN = $0400
-        rows   = 25
+        .const SCREEN = $0400
+        .const rows   = 25
 
         .segment CODE
         .proc clear {
@@ -91,7 +91,7 @@ public sealed class ModuleTests
     {
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".module main\n.use gfx::*\nSCREEN = 1\n.export SCREEN\nN = SCREEN\n.export N\n"));
+            ("main.nt65", ".module main\n.use gfx::*\n.const SCREEN = 1\n.export SCREEN\n.const N = SCREEN\n.export N\n"));
 
         Assert.Empty(program.Problems());
         Assert.Equal(1, program.File("main.nt65").Symbol("N").Value.Number);
@@ -103,7 +103,7 @@ public sealed class ModuleTests
     {
         var program = Analysis.Program(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".module main\nn = gfx::rows\n"));
+            ("main.nt65", ".module main\n.const n = gfx::rows\n"));
 
         Assert.Equal(["main.nt65:2: `gfx::rows` is not exported by module `gfx`"], program.Problems());
     }
@@ -223,7 +223,7 @@ public sealed class ModuleTests
     {
         var outputs = Analysis.Outputs(
             ("text.nt65", ".module text\n.export .charmap screen {\n    'A'..'Z' = $01\n}\n.export .func twice(n) = n * 2\n"),
-            ("hw.nt65", ".module hw\n.export BORDER\nBORDER = $d020\n"),
+            ("hw.nt65", ".module hw\n.export BORDER\n.const BORDER = $d020\n"),
             ("main.nt65", ".module main\n.use text::{screen, twice}\n.segment RODATA\n.data title: .byte screen(\"HI\"), twice(2)\n"));
 
         Assert.False(outputs.ContainsKey("text.s"));
@@ -274,8 +274,8 @@ public sealed class ModuleTests
     public void TwoLinkerNamesThatCollideAreReported()
     {
         var program = Analysis.Program(
-            ("a.nt65", ".module first\n.export thing as \"_thing\"\nthing = 1\n"),
-            ("b.nt65", ".module second\n.export other as \"_thing\"\nother = 2\n"));
+            ("a.nt65", ".module first\n.export thing as \"_thing\"\n.const thing = 1\n"),
+            ("b.nt65", ".module second\n.export other as \"_thing\"\n.const other = 2\n"));
 
         Assert.Equal(["b.nt65:2: `second::other` and `first::thing` are both exported to the linker as `_thing`"],
             program.Problems());
@@ -290,15 +290,15 @@ public sealed class ModuleTests
     public void ConstantsAndTheirCyclesCrossModules()
     {
         var program = Analysis.Program(
-            ("a.nt65", ".module first\n.export WIDTH\nWIDTH = 40\n"),
-            ("b.nt65", ".module second\n.export AREA\nAREA = first::WIDTH * 25\n"));
+            ("a.nt65", ".module first\n.export WIDTH\n.const WIDTH = 40\n"),
+            ("b.nt65", ".module second\n.export AREA\n.const AREA = first::WIDTH * 25\n"));
 
         Assert.Empty(program.Problems());
         Assert.Equal(1000, program.File("b.nt65").Symbol("AREA").Value.Number);
 
         var ring = Analysis.Program(
-            ("a.nt65", ".module first\n.export HERE\nHERE = second::THERE + 1\n"),
-            ("b.nt65", ".module second\n.export THERE\nTHERE = first::HERE + 1\n"));
+            ("a.nt65", ".module first\n.export HERE\n.const HERE = second::THERE + 1\n"),
+            ("b.nt65", ".module second\n.export THERE\n.const THERE = first::HERE + 1\n"));
 
         Assert.Equal(["a.nt65:3: `HERE` is defined in terms of itself"], ring.Problems());
     }
@@ -346,7 +346,7 @@ public sealed class ModuleTests
     public void AMnemonicIsANameWithTheSameWarningOnEveryCpu()
     {
         var program = Analysis.Program(
-            ("main.nt65", ".module main\n.cpu 6502\nREP = 1\n.export REP\n.segment ZEROPAGE\n.export .data per: .byte\n"));
+            ("main.nt65", ".module main\n.cpu 6502\n.const REP = 1\n.export REP\n.segment ZEROPAGE\n.export .data per: .byte\n"));
 
         Assert.Equal(
             [
@@ -356,7 +356,7 @@ public sealed class ModuleTests
             program.Problems());
         Assert.Equal(
             ["main.nt65:3: `REP` is an instruction on the 65816; as a name it is legal and easy to misread"],
-            Analysis.Program(("main.nt65", ".module main\n.cpu 65816\nREP = 1\n.export REP\n")).Problems());
+            Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.const REP = 1\n.export REP\n")).Problems());
     }
 
     /// <summary>
@@ -368,7 +368,7 @@ public sealed class ModuleTests
     [Fact]
     public void ANameAnotherModuleUsesWithoutTheExportIsNotAlsoReportedUnused()
     {
-        const string Lib = ".module lib\nhidden = 2\n";
+        const string Lib = ".module lib\n.const hidden = 2\n";
         const string Uses = ".module main\n.segment CODE\n.export .proc main {\n    lda #lib::hidden\n    rts\n}\n";
         const string Leaves = ".module main\n.segment CODE\n.export .proc main {\n    lda #1\n    rts\n}\n";
 

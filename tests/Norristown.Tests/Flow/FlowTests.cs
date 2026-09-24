@@ -226,8 +226,8 @@ public sealed class FlowTests
     /// is reported.
     /// </summary>
     [Theory]
-    [InlineData(".proc p {\n    jmp (ptr)\n    .next N\n}\n\nN = 5\n\n.data ptr: .addr 0\n", ".next")]
-    [InlineData(".proc p {\n    sta $0400\n    .patch N\n    rts\n}\n\nN = 5\n", ".patch")]
+    [InlineData(".proc p {\n    jmp (ptr)\n    .next N\n}\n\n.const N = 5\n\n.data ptr: .addr 0\n", ".next")]
+    [InlineData(".proc p {\n    sta $0400\n    .patch N\n    rts\n}\n\n.const N = 5\n", ".patch")]
     public void AnAnnotationThatNamesSomethingThatIsNotCodeIsReported(string text, string directive)
     {
         Assert.Contains($"`N` is a constant, and `{directive}` must name a code label, a routine, or a table of them",

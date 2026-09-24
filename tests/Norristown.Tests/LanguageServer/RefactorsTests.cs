@@ -61,12 +61,12 @@ public sealed class RefactorsTests
     [Fact]
     public void TheWholeExpressionIsLaidOut()
     {
-        const string Main = ".module main\n.export X\nX = .select(1, 2, 3) + .select(4, 5, 6)\n";
+        const string Main = ".module main\n.export X\n.const X = .select(1, 2, 3) + .select(4, 5, 6)\n";
 
         var action = Single(Main, "+", "Lay out the expression across lines");
 
         Assert.Equal(
-            ".module main\n.export X\nX = .select(\n    1,\n    2,\n    3) + .select(\n        4,\n        5,\n        6)\n",
+            ".module main\n.export X\n.const X = .select(\n    1,\n    2,\n    3) + .select(\n        4,\n        5,\n        6)\n",
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
@@ -111,18 +111,18 @@ public sealed class RefactorsTests
     [Fact]
     public void AnExpressionJoinsBackUnlessACommentWouldBeLost()
     {
-        const string Broken = ".module main\n.export X\nX = .switch(2,\n    [1, 4], 10,\n    [2, 3], 20,\n    30) + 1\n";
+        const string Broken = ".module main\n.export X\n.const X = .switch(2,\n    [1, 4], 10,\n    [2, 3], 20,\n    30) + 1\n";
         var joined = Single(Broken, "3]", "Join the expression onto one line");
-        Assert.Equal(".module main\n.export X\nX = .switch(2, [1, 4], 10, [2, 3], 20, 30) + 1\n",
+        Assert.Equal(".module main\n.export X\n.const X = .switch(2, [1, 4], 10, [2, 3], 20, 30) + 1\n",
             Editing.Apply(Broken, joined.Edit.Changes[Uri]));
 
-        const string Commented = ".module main\n.export X\nX = .select(\n    1,  ; one\n    2, 3)\n";
+        const string Commented = ".module main\n.export X\n.const X = .select(\n    1,  ; one\n    2, 3)\n";
         Assert.DoesNotContain(Actions(Commented, At(Commented, "2,")), action => action.Title.EndsWith("line", StringComparison.Ordinal)
             || action.Title.EndsWith("lines", StringComparison.Ordinal));
 
-        const string Set = ".module main\n.export X\nX = 2 .in [1, 2]\n";
+        const string Set = ".module main\n.export X\n.const X = 2 .in [1, 2]\n";
         var values = Single(Set, "1,", "Lay out the expression across lines");
-        Assert.Equal(".module main\n.export X\nX = 2 .in [\n    1,\n    2]\n", Editing.Apply(Set, values.Edit.Changes[Uri]));
+        Assert.Equal(".module main\n.export X\n.const X = 2 .in [\n    1,\n    2]\n", Editing.Apply(Set, values.Edit.Changes[Uri]));
     }
 
     /// <summary>Organizing sorts the <c>.use</c> items and removes any that nothing names.</summary>
@@ -196,7 +196,7 @@ public sealed class RefactorsTests
     [Fact]
     public void OnlyAnImmediateRepIsConvertedToAnEnsure()
     {
-        const string Main = ".module main\n.cpu 65816\nFLAGS = $20\n.segment CODE\n"
+        const string Main = ".module main\n.cpu 65816\n.const FLAGS = $20\n.segment CODE\n"
             + ".proc widen: a8, i8 -> a16 {\n    rep FLAGS\n    rts\n}\n";
 
         var caret = Locate.At(Main, "rep FLAGS");
@@ -215,7 +215,7 @@ public sealed class RefactorsTests
 
         Assert.Equal("refactor.extract", action.Kind);
         Assert.Equal(
-            ".module main\nVALUE = $d020\n.segment CODE\n.proc main {\n    lda VALUE\n    rts\n}\n",
+            ".module main\n.const VALUE = $d020\n.segment CODE\n.proc main {\n    lda VALUE\n    rts\n}\n",
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
@@ -393,8 +393,8 @@ public sealed class RefactorsTests
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    rts\n}\n"
                 + ".macro mov(dest, src) {\n    lda src\n    sta dest\n}\n"
-                + "LINES = 25\n.func rgb(r, g) = (r | g)\n"
-                + ".if .defined(DEBUG) {\nTRACE = 1 & 3\n}\n"
+                + ".const LINES = 25\n.func rgb(r, g) = (r | g)\n"
+                + ".if DEBUG {\n.const TRACE = 1 & 3\n}\n"
                 + ":   bne :-\n",
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }

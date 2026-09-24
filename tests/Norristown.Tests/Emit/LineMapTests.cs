@@ -59,7 +59,7 @@ public sealed class LineMapTests
     [Fact]
     public void AModuleThatMakesNoBytesHasNoMap()
     {
-        var compilation = Compiler.Compile([new SourceFile("main.nt65", ".module main\n.export VALUE = 7\n")]);
+        var compilation = Compiler.Compile([new SourceFile("main.nt65", ".module main\n.export .const VALUE = 7\n")]);
 
         Assert.Empty(compilation.Diagnostics);
         Assert.Equal(OutputKind.Ca65, Assert.Single(compilation.Outputs).Kind);

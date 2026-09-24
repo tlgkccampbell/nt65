@@ -1264,8 +1264,7 @@ public sealed class Emitter
             if (reference.Value.IsString)
                 return;
             var rewriter = new TokenRewriter();
-            if (statement.Keyword is { } keyword)
-                rewriter.Replacements[keyword.Position] = "";
+            rewriter.Replacements[statement.Keyword.Position] = "";
             rewriter.Replacements[statement.Name.Position] = NameOf(reference);
             Substitute(statement.Value, rewriter, nested: false);
             var text = rewriter.Render(statement);

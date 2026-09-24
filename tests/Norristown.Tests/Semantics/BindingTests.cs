@@ -10,9 +10,9 @@ public sealed class BindingTests
     {
         var model = Analysis.Model("""
             .module main
-            COUNT = 4
+            .const COUNT = 4
             .scope gfx {
-                COUNT = 8
+                .const COUNT = 8
                 .proc init {
                     lda #COUNT
                     rts
@@ -148,8 +148,8 @@ public sealed class BindingTests
     {
         var model = Analysis.Model("""
             .module main
-            SIZE = 1
-            SIZE = 2
+            .const SIZE = 1
+            .const SIZE = 2
             .proc p {
             @a:
             @a:
@@ -166,7 +166,7 @@ public sealed class BindingTests
     [Fact]
     public void ADuplicateNamesTheFirstDeclaration()
     {
-        var model = Analysis.Model(".module main\nSIZE = 1\nSIZE = 2\n");
+        var model = Analysis.Model(".module main\n.const SIZE = 1\n.const SIZE = 2\n");
 
         var related = Assert.Single(Assert.Single(model.Diagnostics).Related);
         Assert.Equal(2, related.Span.Line);
@@ -181,7 +181,7 @@ public sealed class BindingTests
     [Fact]
     public void ARegisterIsTheOneWordANameMayNotBe()
     {
-        var model = Analysis.Model(".module main\nlda = 5\n.data X: .byte 0\njeq = 1\n");
+        var model = Analysis.Model(".module main\n.const lda = 5\n.data X: .byte 0\n.const jeq = 1\n");
 
         Assert.Equal(
             [
@@ -229,7 +229,7 @@ public sealed class BindingTests
     [Fact]
     public void APathIntoSomethingThatIsNotAScopeIsReported()
     {
-        var model = Analysis.Model(".module main\nSIZE = 1\n.proc p {\n    lda SIZE::inner\n}\n");
+        var model = Analysis.Model(".module main\n.const SIZE = 1\n.proc p {\n    lda SIZE::inner\n}\n");
 
         Assert.Equal(["4: `SIZE` is a constant, not a scope"], model.Problems());
     }
@@ -334,8 +334,8 @@ public sealed class BindingTests
     {
         var model = Analysis.Model("""
             .module main
-            FIRST  = $00
-            MIRROR = $80
+            .const FIRST  = $00
+            .const MIRROR = $80
             .segment LORAM: abs, bank = $7e, mirrors = [FIRST..$3f, MIRROR..$bf]
             """);
 

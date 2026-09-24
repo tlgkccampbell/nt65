@@ -33,9 +33,9 @@ public sealed class InlayHintsTests
         y:  .word
         }
 
-        .export WIDE  = 8 * 4
-        .export PLAIN = 7
-        count = 3
+        .export .const WIDE  = 8 * 4
+        .export .const PLAIN = 7
+        .const count = 3
 
         .macro fill(count: expr, with: expr) {
             ldx #count
@@ -126,7 +126,7 @@ public sealed class InlayHintsTests
                 "5: fast = 2",
                 "9: x:  .word +0",
                 "10: y:  .word +2",
-                "13: .export WIDE  = 8 * 4 = $20",
+                "13: .export .const WIDE  = 8 * 4 = $20",
                 "29: sep #$20 a8",
                 "36: xce native",
                 "37: rep #$30 a16 i16",

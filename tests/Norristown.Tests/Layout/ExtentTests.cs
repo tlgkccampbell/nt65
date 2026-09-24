@@ -145,7 +145,7 @@ public sealed class ExtentTests
     [Fact]
     public void MeasuringSomethingWithNoBytesIsAnError()
     {
-        var program = Analysis.Program(("main.nt65", ".module main\nN = 5\n\nM = .spanof(N)\n"));
+        var program = Analysis.Program(("main.nt65", ".module main\n.const N = 5\n\n.const M = .spanof(N)\n"));
 
         Assert.Contains(program.Problems(), problem => problem.StartsWith(
             "main.nt65:4: `N` is a constant and takes no bytes of its own", StringComparison.Ordinal));

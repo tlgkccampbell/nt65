@@ -10,7 +10,7 @@ public sealed class MacroModuleTests
         .module lib
         .export set16, SCREEN, table
 
-        SCREEN = $0400
+        .const SCREEN = $0400
 
         .segment RODATA
         .data table:  .byte 1, 2
@@ -32,7 +32,7 @@ public sealed class MacroModuleTests
             ("main.nt65", """
             .module main
             .use lib::set16
-            ptr = $10
+            .const ptr = $10
 
             .segment CODE
             .export .proc main {
@@ -70,7 +70,7 @@ public sealed class MacroModuleTests
             .module lib
             .export show
 
-            PRIVATE = $10
+            .const PRIVATE = $10
 
             .macro show() {
                 lda PRIVATE

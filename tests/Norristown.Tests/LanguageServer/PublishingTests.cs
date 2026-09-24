@@ -22,8 +22,8 @@ public sealed class PublishingTests
         .module gfx
         .export clear, SCREEN
 
-        SCREEN = $0400
-        rows   = 25
+        .const SCREEN = $0400
+        .const rows   = 25
         .segment CODE
         .proc clear {
             rts

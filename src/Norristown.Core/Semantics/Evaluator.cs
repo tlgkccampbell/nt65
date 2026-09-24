@@ -532,7 +532,7 @@ internal sealed partial class Evaluator
             // A `.const` is never an address, though it may be a distance only the linker knows.
             // The name is an alias from here on either way, so that what uses it is not reported
             // again.
-            if (expression.Parent is ConstantDeclarationSyntax { Keyword: not null } && IsAddressValued(expression))
+            if (expression.Parent is ConstantDeclarationSyntax { Keyword.IsMissing: false } && IsAddressValued(expression))
                 Report(symbol.DeclarationSpan, Catalogue.ConstantNamesAnAddress.Message(symbol.Name), []);
             symbol.Kind = SymbolKind.AddressAlias;
         }

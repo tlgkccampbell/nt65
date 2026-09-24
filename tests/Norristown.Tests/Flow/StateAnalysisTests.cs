@@ -409,7 +409,7 @@ public sealed class StateAnalysisTests
     [Fact]
     public void AnUnbracedOperandArgumentIsTheWholeExpression()
     {
-        var state = StateAt("BASE = $2000\n.macro pushed(slot: operand) {\n    pea slot\n}\n"
+        var state = StateAt(".const BASE = $2000\n.macro pushed(slot: operand) {\n    pea slot\n}\n"
             + ".proc main: a8, i8 {\n    pushed!(BASE + 2)\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "nop");
 
         Assert.Equal("a8, i8, native, dp = $2002", state.Processor.ToString());

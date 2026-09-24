@@ -360,6 +360,12 @@ public static class Compiler
         var conditions = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
         foreach (var before in changed)
             conditions[before.Path] = byFile[before.Path];
+
+        // What is wrong with the values the build gives its settings is in no source file, and an
+        // edit to any file can change it, so it is always taken from this pass.
+        var sourcePaths = trees.Select(tree => tree.Path).ToHashSet(StringComparer.Ordinal);
+        foreach (var (path, found) in byFile.Where(pair => !sourcePaths.Contains(pair.Key)))
+            conditions[path] = found;
         var moved = EditMap.Composed([.. changed.Select(before => new EditMap(before, sources[before.Path]))]);
 
         // The set of files to analyze again starts as the ones that changed, and grows by every
@@ -391,7 +397,7 @@ public static class Compiler
             dirty.UnionWith(affected);
         }
 
-        foreach (var (path, found) in reuse.Conditions.Where(pair => !conditions.ContainsKey(pair.Key)))
+        foreach (var (path, found) in reuse.Conditions.Where(pair => sourcePaths.Contains(pair.Key) && !conditions.ContainsKey(pair.Key)))
         {
             if (EditMap.Moved(found, moved) is not { } kept)
                 return null;
@@ -560,15 +566,19 @@ public static class Compiler
         return Diagnostics.Ordered(Diagnostics.WithSeverities(diagnostics, project.Severities));
     }
 
-    /// <summary>Groups diagnostics by the file they are in.</summary>
+    /// <summary>
+    /// Groups diagnostics by the file they are in. A diagnostic about something the build gave,
+    /// which is in no file, is grouped under an empty path.
+    /// </summary>
     private static Dictionary<string, IReadOnlyList<Diagnostic>> ByFile(
         IEnumerable<SyntaxTree> trees, IEnumerable<Diagnostic> diagnostics)
     {
         var found = trees.ToDictionary(tree => tree.Path, _ => new List<Diagnostic>(), StringComparer.Ordinal);
         foreach (var diagnostic in diagnostics)
         {
-            if (!found.TryGetValue(diagnostic.Span.File, out var list))
-                found[diagnostic.Span.File] = list = [];
+            var file = diagnostic.Span.File ?? "";
+            if (!found.TryGetValue(file, out var list))
+                found[file] = list = [];
             list.Add(diagnostic);
         }
         return found.ToDictionary(

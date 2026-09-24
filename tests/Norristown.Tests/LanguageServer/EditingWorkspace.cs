@@ -27,7 +27,7 @@ internal static class EditingWorkspace
             x: .byte
             y: .byte
         }
-        SCREEN = $0400
+        .const SCREEN = $0400
         .segment CODE
         .proc clear {
             rts
@@ -38,7 +38,7 @@ internal static class EditingWorkspace
         """;
 
     /// <summary>The text of the file at <see cref="VicUri"/>.</summary>
-    public const string Vic = ".module hw::vic\n.export BORDER = $d020\n";
+    public const string Vic = ".module hw::vic\n.export .const BORDER = $d020\n";
 
     /// <summary>
     /// The file in which completion is requested. Each <c>|name</c> marks a place where a test may

@@ -40,8 +40,8 @@ public sealed class TypeSyntaxTests
 
         .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
 
-        first  = 1
-        second = 2
+        .const first  = 1
+        .const second = 2
         """;
 
     /// <summary>Each construct declares a symbol of its own kind, with its members inside it.</summary>

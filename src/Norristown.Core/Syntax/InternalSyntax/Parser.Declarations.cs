@@ -40,14 +40,23 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Parses <c>NAME = expr</c> or <c>NAME ?= expr</c>, a constant or a setting written without the
-    /// <c>.const</c> that starts it.
+    /// <c>.const</c> that starts it, which is reported. The rest of the line is read as the
+    /// declaration it would be, so that what uses the name is not reported as well.
     /// </summary>
     private GreenNode ParseConstantDeclaration()
     {
+        var keyword = ConstMissing();
         var name = Advance();
         var equals = Advance();
-        return Finish(new ConstantDeclarationSyntax(null, name, equals, ParseExpression()));
+        return Finish(new ConstantDeclarationSyntax(keyword, name, equals, ParseExpression()));
     }
+
+    /// <summary>
+    /// Returns a missing <c>.const</c> at the name the current token is, which reports that it is
+    /// missing and offers to insert it.
+    /// </summary>
+    private GreenToken ConstMissing() =>
+        Missing(SyntaxKind.Directive, Catalogue.ConstMissing.Message(Current.Text), new DiagnosticFix(FixKind.Const, ".const"));
 
     /// <summary>
     /// Parses the opener of an <c>.enum</c>, <c>.struct</c>, <c>.union</c>, <c>.charmap</c> or
@@ -371,9 +380,10 @@ internal sealed partial class Parser
         if (AtName && Next is SyntaxKind.Equals or SyntaxKind.QuestionEquals)
         {
             exportKeyword = export;
+            var keyword = ConstMissing();
             var name = Advance();
             var equals = Advance();
-            return new ConstantDeclarationSyntax(null, name, equals, ParseExpression());
+            return new ConstantDeclarationSyntax(keyword, name, equals, ParseExpression());
         }
 
         return new ExportDirectiveSyntax(export, ParseSeparatedList(ParseExportItem));

@@ -22,8 +22,8 @@ public sealed class MacroCallTests
     public void ACallNamesTheMacroItExpands()
     {
         var model = Analysis.Model(Set16 + """
-            ptr = $10
-            SCREEN = $0400
+            .const ptr = $10
+            .const SCREEN = $0400
 
             .proc main {
                 set16!(ptr, SCREEN)
@@ -41,7 +41,7 @@ public sealed class MacroCallTests
     public void ABracedArgumentIsAWholeOperand()
     {
         var model = Analysis.Model(Set16 + """
-            buf = $0200
+            .const buf = $0200
 
             .proc main {
                 set16!({buf,x}, $1234)
@@ -60,7 +60,7 @@ public sealed class MacroCallTests
     [Fact]
     public void AnUnbracedParenthesizedArgumentIsNotAnOperand()
     {
-        var model = Analysis.Model(Set16 + "ptr = $10\n\n    set16!((ptr), 0)\n");
+        var model = Analysis.Model(Set16 + ".const ptr = $10\n\n    set16!((ptr), 0)\n");
 
         Assert.Equal(
             ["10: `dest` takes an operand, and `(ptr)` is read as an expression in parentheses: "
@@ -73,7 +73,7 @@ public sealed class MacroCallTests
     {
         var model = Analysis.Model("""
             .module main
-            C4 = 60
+            .const C4 = 60
 
             .macro note(pitch: const, frames: const = 1) {
                 .byte pitch, frames
@@ -99,7 +99,7 @@ public sealed class MacroCallTests
     {
         var model = Analysis.Model("""
             .module main
-            C4 = 60
+            .const C4 = 60
 
             .macro note(pitch: const, frames: const = 1) {
                 .byte pitch, frames
@@ -154,7 +154,7 @@ public sealed class MacroCallTests
     [Fact]
     public void OnlyAMacroIsCalledWithABang()
     {
-        var model = Analysis.Model(".module main\nSIZE = 1\n\n.proc main {\n    SIZE!(1)\n    rts\n}\n");
+        var model = Analysis.Model(".module main\n.const SIZE = 1\n\n.proc main {\n    SIZE!(1)\n    rts\n}\n");
 
         Assert.Equal(["5: `SIZE` is a constant, not a macro: only a macro is called with `!`"], model.Problems());
     }
@@ -164,7 +164,7 @@ public sealed class MacroCallTests
     {
         var model = Analysis.Model("""
             .module main
-            ptr = $10
+            .const ptr = $10
 
             .macro times_x(count, body: block) {
                 ldx #count
@@ -251,7 +251,7 @@ public sealed class MacroCallTests
 
             .proc main {
                 wrap!() {
-            HERE = 1
+            .const HERE = 1
             @spin:
                     bne @spin
                 }

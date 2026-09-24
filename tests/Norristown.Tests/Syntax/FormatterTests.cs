@@ -45,7 +45,7 @@ public sealed class FormatterTests
         Assert.Equal("""
             .module main
             .export X
-            X = .select(1,
+            .const X = .select(1,
                 2 + .select(3,
                     4,
                     5),
@@ -54,7 +54,7 @@ public sealed class FormatterTests
             """, Formatted("""
             .module main
             .export X
-            X = .select(1,
+            .const X = .select(1,
             2 + .select(3,
                         4,
               5),

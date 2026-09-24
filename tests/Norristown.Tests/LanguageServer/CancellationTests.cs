@@ -39,8 +39,8 @@ public sealed class CancellationTests
         using var given = new CancellationTokenSource();
         SyntaxTree[] files =
         [
-            SyntaxTree.Parse("a.nt65", ".module a\nCOUNT = 1\n"),
-            SyntaxTree.Parse("b.nt65", ".module b\nCOUNT = 2\n"),
+            SyntaxTree.Parse("a.nt65", ".module a\n.const COUNT = 1\n"),
+            SyntaxTree.Parse("b.nt65", ".module b\n.const COUNT = 2\n"),
         ];
         Assert.Equal(2, WorkspaceSymbols.Matching(files, "count", TestTimeout.Token()).Count);
 

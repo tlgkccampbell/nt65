@@ -120,6 +120,11 @@ internal static partial class Ca65Conversion
     private static string Renamed(string code, string first)
     {
         var rest = Rest(code, first);
+
+        // An assignment is a constant, which nt65 declares with `.const`. One that turns out to
+        // be an address is reported where it stands, for a decision about what is there.
+        if (!first.StartsWith('.') && rest.StartsWith('=') && !rest.StartsWith("==", StringComparison.Ordinal))
+            return ".const " + code;
         switch (first.ToLowerInvariant())
         {
             case ".segment" when rest.StartsWith('"'):
@@ -134,15 +139,17 @@ internal static partial class Ca65Conversion
                 // constant; nt65 has both, though neither substitutes text as ca65's does.
                 var after = rest[name.Length..];
                 if (!after.StartsWith('('))
-                    return $"{name} = {after.Trim()}";
+                    return $".const {name} = {after.Trim()}";
                 var close = after.IndexOf(')');
                 return close < 0 ? code : $".func {name}{after[..(close + 1)]} = {after[(close + 1)..].Trim()}";
 
+            // nt65 has no names that only some builds define. A name tested this way is a
+            // setting the program declares, which the build may set.
             case ".ifdef":
-                return $".if .defined({rest.Trim()})";
+                return $".if {rest.Trim()}";
 
             case ".ifndef":
-                return $".if !.defined({rest.Trim()})";
+                return $".if !{rest.Trim()}";
 
             case ".else":
                 return "} .else";

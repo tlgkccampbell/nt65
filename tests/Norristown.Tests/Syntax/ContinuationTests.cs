@@ -11,7 +11,7 @@ public sealed class ContinuationTests
     [Fact]
     public void ALineWithAnOpenBracketContinuesOntoTheNext()
     {
-        var tree = SyntaxTree.Parse("main.nt65", "X = (1 +\n    2)\n.word X\n");
+        var tree = SyntaxTree.Parse("main.nt65", ".const X = (1 +\n    2)\n.word X\n");
 
         Assert.Same(tree.GetLine(0), tree.GetLine(1));
         Assert.NotSame(tree.GetLine(1), tree.GetLine(2));
@@ -23,19 +23,19 @@ public sealed class ContinuationTests
     [Fact]
     public void ALineOfOnlyACommentStaysInTheExpression()
     {
-        var tree = SyntaxTree.Parse("main.nt65", "X = .select(1,   ; which\n    ; the first\n    2, 3)\n");
+        var tree = SyntaxTree.Parse("main.nt65", ".const X = .select(1,   ; which\n    ; the first\n    2, 3)\n");
 
         Assert.Same(tree.GetLine(0), tree.GetLine(2));
         Assert.Empty(tree.Diagnostics);
     }
 
     [Theory]
-    [InlineData("X = (1\n\n    2)\n")]
-    [InlineData("X = (1\n    lda #2\n")]
-    [InlineData("X = (1\n.byte 2\n")]
-    [InlineData("X = (1\n}\n")]
-    [InlineData("X = (1\nY = 2\n")]
-    [InlineData("X = (1\nthere:\n")]
+    [InlineData(".const X = (1\n\n    2)\n")]
+    [InlineData(".const X = (1\n    lda #2\n")]
+    [InlineData(".const X = (1\n.byte 2\n")]
+    [InlineData(".const X = (1\n}\n")]
+    [InlineData(".const X = (1\n.const Y = 2\n")]
+    [InlineData(".const X = (1\nthere:\n")]
     public void ALineThatStartsAStatementIsNotJoined(string text)
     {
         var tree = SyntaxTree.Parse("main.nt65", text);
@@ -59,8 +59,8 @@ public sealed class ContinuationTests
     [Fact]
     public void ClosingTheBracketSplitsTheLinesAgain()
     {
-        var tree = SyntaxTree.Parse("main.nt65", "X = (1 +\n    2)\n");
-        var edited = tree.WithChange(new TextChange(4, 1, ""));
+        var tree = SyntaxTree.Parse("main.nt65", ".const X = (1 +\n    2)\n");
+        var edited = tree.WithChange(new TextChange(11, 1, ""));
 
         Assert.NotSame(edited.GetLine(0), edited.GetLine(1));
         Assert.Equal(SyntaxDump.Full(SyntaxTree.Parse("main.nt65", edited.Text)), SyntaxDump.Full(edited));
@@ -69,8 +69,8 @@ public sealed class ContinuationTests
     [Fact]
     public void OpeningABracketJoinsTheLinesAfterIt()
     {
-        var tree = SyntaxTree.Parse("main.nt65", "X = 1 +\n    2)\n");
-        var edited = tree.WithChange(new TextChange(4, 0, "("));
+        var tree = SyntaxTree.Parse("main.nt65", ".const X = 1 +\n    2)\n");
+        var edited = tree.WithChange(new TextChange(11, 0, "("));
 
         Assert.Same(edited.GetLine(0), edited.GetLine(1));
         Assert.Empty(edited.Diagnostics);
@@ -79,7 +79,7 @@ public sealed class ContinuationTests
     [Fact]
     public void AnEditElsewhereKeepsAJoinedLine()
     {
-        var tree = SyntaxTree.Parse("main.nt65", "X = (1 +\n    2)\nY = 3\n");
+        var tree = SyntaxTree.Parse("main.nt65", ".const X = (1 +\n    2)\n.const Y = 3\n");
         var edited = tree.WithChange(new TextChange(tree.Text.IndexOf('3'), 1, "4"));
 
         Assert.Same(tree.Parsed(0).Node, edited.Parsed(0).Node);
@@ -88,7 +88,7 @@ public sealed class ContinuationTests
     [Fact]
     public void ADiagnosticOnAContinuedLineIsOnThatLine()
     {
-        var tree = SyntaxTree.Parse("main.nt65", "X = (1 +\n    2 $)\n");
+        var tree = SyntaxTree.Parse("main.nt65", ".const X = (1 +\n    2 $)\n");
 
         Assert.NotEmpty(tree.Diagnostics);
         Assert.All(tree.Diagnostics, diagnostic =>

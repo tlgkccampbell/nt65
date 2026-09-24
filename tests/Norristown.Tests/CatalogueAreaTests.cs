@@ -13,7 +13,7 @@ public sealed class CatalogueAreaTests
         ("Reading a line",
         [
             "assert-level", "block-brace-ends-the-line", "block-not-closed", "byte-operator-needs-parentheses",
-            "ca65-block-end", "ca65-spelling", "ca65-tag", "character-empty", "character-too-long",
+            "ca65-block-end", "ca65-spelling", "ca65-tag", "character-empty", "character-too-long", "const-missing",
             "continuation-outside-expression",
             "data-body-holds-values", "data-body-needs-a-count", "data-needs-a-name", "data-values-need-braces",
             "digits-missing", "directive-after-label", "directive-unknown", "elseif-misplaced",

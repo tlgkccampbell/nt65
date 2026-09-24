@@ -87,7 +87,7 @@ public sealed class FamilyTests
     public void AModuleThatDeclaresAFamilyStillReexports()
     {
         var program = Analysis.Program(
-            ("vic.nt65", ".module vic\n.export BORDER\nBORDER = $d020\n"),
+            ("vic.nt65", ".module vic\n.export BORDER\n.const BORDER = $d020\n"),
             ("hw.nt65", ".module hw\n.export .use vic::BORDER\n.enum Channel {\n    a\n    b\n}\n.segment CODE\n.export .multiproc Channel, ch {\n    rts\n}\n"),
             ("main.nt65", ".module main\n.use hw::BORDER\n.segment CODE\n.export .proc main {\n    sta BORDER\n    rts\n}\n"));
 
@@ -104,7 +104,7 @@ public sealed class FamilyTests
     public void AFamilyOverAnEnumBroughtInReportsEachUseOnce()
     {
         var program = Analysis.Program(Analysis.Fragment,
-            ("sound.nt65", ".module sound\n.export .enum Channel {\n    a\n    b\n}\nhidden = 1\n"),
+            ("sound.nt65", ".module sound\n.export .enum Channel {\n    a\n    b\n}\n.const hidden = 1\n"),
             ("main.nt65", ".module main\n.use sound::Channel\n.use sound::hidden\n.use sound::missing\n.segment CODE\n.export .multiproc Channel, ch {\n    rts\n}\n"));
         var model = program.File("main.nt65");
 

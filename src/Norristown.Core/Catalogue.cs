@@ -277,6 +277,15 @@ public static class Catalogue
         "expected {0}",
         "A range gives its lower end first and its higher end second, with `..` between them.");
 
+    internal static DiagnosticDescriptor ConstMissing { get; } = Entry(
+        Area.ReadingALine,
+        "const-missing",
+        Severity.Error,
+        "`.const` is missing before `{0}`",
+        "Every declaration starts with its keyword, so a constant is `.const NAME = value` and a setting is "
+            + "`.const NAME ?= value`. A bare `name = value` sets a record member or names an argument, and declares "
+            + "nothing.");
+
     internal static DiagnosticDescriptor ExpectedEquals { get; } = Entry(
         Area.ReadingALine,
         "expected-equals",

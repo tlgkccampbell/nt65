@@ -21,7 +21,7 @@ public sealed class CompletionStructureTests
         .module main
         .cpu 65816
         .signature std = a8, i16
-        .export SCREEN = $0400
+        .export .const SCREEN = $0400
         .segment CODE
 
         .export .proc reset: std {

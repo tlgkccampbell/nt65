@@ -6,7 +6,7 @@ public sealed class OutlineTests
 {
     /// <summary>Every declaration the outline names, nested three deep and with a broken line in it.</summary>
     private const string Sample = """
-        PPU_CTRL = $2000
+        .const PPU_CTRL = $2000
 
         .segment ZP2: zp
         .segment ZEROPAGE {

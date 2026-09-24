@@ -22,7 +22,7 @@ public sealed class ViewRequestsTests
         .segment ZEROPAGE
         .data ptr: .word
 
-        SCREEN = $0400
+        .const SCREEN = $0400
 
         .macro set16(dest: operand, value) {
             lda #<value

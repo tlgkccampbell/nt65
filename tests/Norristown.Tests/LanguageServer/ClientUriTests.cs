@@ -19,7 +19,7 @@ public sealed class ClientUriTests
         .module gfx
         .export clear
 
-        rows = 25
+        .const rows = 25
         .segment CODE
         .proc clear {
             rts

@@ -40,7 +40,7 @@ public sealed class ConstantTests
     [InlineData(".strat(\"hello\", 1)", 'e')]
     public void ExpressionsEvaluate(string expression, long expected)
     {
-        var model = Analysis.Model($".module main\nVALUE = {expression}\n");
+        var model = Analysis.Model($".module main\n.const VALUE = {expression}\n");
 
         Assert.Empty(model.Problems());
         Assert.Equal(expected, model.Symbol("VALUE").Value.Number);
@@ -49,7 +49,7 @@ public sealed class ConstantTests
     [Fact]
     public void AStringIsAValue()
     {
-        var model = Analysis.Model(".module main\nGREETING = \"hi\\n\"\n");
+        var model = Analysis.Model(".module main\n.const GREETING = \"hi\\n\"\n");
 
         Assert.Equal("hi\n", model.Symbol("GREETING").Value.Text);
     }
@@ -58,7 +58,7 @@ public sealed class ConstantTests
     [Fact]
     public void ForwardReferencesResolve()
     {
-        var model = Analysis.Model(".module main\nFIRST = SECOND + 1\nSECOND = THIRD * 2\nTHIRD = 3\n");
+        var model = Analysis.Model(".module main\n.const FIRST = SECOND + 1\n.const SECOND = THIRD * 2\n.const THIRD = 3\n");
 
         Assert.Empty(model.Problems());
         Assert.Equal([7, 6, 3], model.Symbols.Select(symbol => symbol.Value.Number));
@@ -67,7 +67,7 @@ public sealed class ConstantTests
     [Fact]
     public void ANameThatNeedsItselfIsReportedOnce()
     {
-        var model = Analysis.Model(".module main\nSELF = SELF + 1\n");
+        var model = Analysis.Model(".module main\n.const SELF = SELF + 1\n");
 
         Assert.Equal(["2: `SELF` is defined in terms of itself"], model.Problems());
         Assert.False(model.Symbol("SELF").Value.IsKnown);
@@ -80,7 +80,7 @@ public sealed class ConstantTests
     [Fact]
     public void ACycleIsReportedOnceAndNamesTheRest()
     {
-        var model = Analysis.Model(".module main\nONE = TWO\nTWO = THREE\nTHREE = ONE\n");
+        var model = Analysis.Model(".module main\n.const ONE = TWO\n.const TWO = THREE\n.const THREE = ONE\n");
 
         var diagnostic = Assert.Single(model.Diagnostics);
         Assert.Equal("`ONE` is defined in terms of itself", diagnostic.Message);
@@ -91,7 +91,7 @@ public sealed class ConstantTests
     [Fact]
     public void DivisionByZeroIsReported()
     {
-        var model = Analysis.Model(".module main\nQUOTIENT = 1 / 0\nREMAINDER = 1 .mod 0\n");
+        var model = Analysis.Model(".module main\n.const QUOTIENT = 1 / 0\n.const REMAINDER = 1 .mod 0\n");
 
         Assert.Equal(["2: division by zero", "3: division by zero"], model.Problems());
     }
@@ -106,8 +106,8 @@ public sealed class ConstantTests
     public void TheDivisionWithNoAnswerDoesNotEndTheProcess()
     {
         var model = Analysis.Model(
-            ".module main\nQUOTIENT = (0 - $7fffffffffffffff - 1) / (0 - 1)\n"
-            + "REMAINDER = (0 - $7fffffffffffffff - 1) .mod (0 - 1)\n");
+            ".module main\n.const QUOTIENT = (0 - $7fffffffffffffff - 1) / (0 - 1)\n"
+            + ".const REMAINDER = (0 - $7fffffffffffffff - 1) .mod (0 - 1)\n");
 
         Assert.False(model.Symbol("QUOTIENT").Value.IsKnown);
         Assert.Equal(0, model.Symbol("REMAINDER").Value.AsNumber());
@@ -116,30 +116,34 @@ public sealed class ConstantTests
     [Fact]
     public void ArithmeticOnAStringIsReported()
     {
-        var model = Analysis.Model(".module main\nTEXT = \"hi\"\nJOIN = TEXT + 1\n");
+        var model = Analysis.Model(".module main\n.const TEXT = \"hi\"\n.const JOIN = TEXT + 1\n");
 
         Assert.Equal(["3: `+` cannot be used on a string"], model.Problems());
     }
 
     /// <summary>
-    /// A <c>NAME = expr</c> is a constant when the expression names no address, and an
-    /// address alias when it does.
+    /// A <c>.const</c> is a number, and an address under a name is data found elsewhere. The
+    /// distance between two addresses is a number, so a <c>.const</c> may hold it, and a
+    /// <c>.const</c> whose value is an address is reported.
     /// </summary>
     [Fact]
-    public void AnExpressionNamingAnAddressIsAnAlias()
+    public void AnAddressUnderANameIsDataFoundElsewhere()
     {
         var model = Analysis.Model("""
             .module main
             .segment ZEROPAGE
             .data ptr:    .byte[2]
-            SCREEN  = $0400
-            NEXT    = ptr + 1
-            HERE    = *
-            TWICE   = SCREEN * 2
-            ALIAS   = NEXT
+            .const SCREEN  = $0400
+            .data NEXT: .byte = ptr + 1
+            .data HERE: .byte = *
+            .const TWICE   = SCREEN * 2
+            .data ALIAS = NEXT
+            .const APART   = HERE - ptr
+            .const WRONG   = ptr + 1
             """);
 
-        Assert.Empty(model.Problems());
+        Assert.Equal(["10: `WRONG` is an address, so it cannot be a `.const`; declare it with `.data`, or with `.proc` for a routine"],
+            model.Problems());
         Assert.Equal(SymbolKind.Constant, model.Symbol("SCREEN").Kind);
         Assert.Equal(SymbolKind.Constant, model.Symbol("TWICE").Kind);
         Assert.Equal(SymbolKind.AddressAlias, model.Symbol("NEXT").Kind);

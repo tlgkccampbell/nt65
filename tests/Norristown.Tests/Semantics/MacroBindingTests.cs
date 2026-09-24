@@ -62,7 +62,7 @@ public sealed class MacroBindingTests
     {
         var model = Analysis.Model("""
             .module main
-            ONE = 1
+            .const ONE = 1
 
             .macro note(pitch: const, frames: const = ONE) {
                 .byte pitch, frames
@@ -82,7 +82,7 @@ public sealed class MacroBindingTests
     {
         var model = Analysis.Model("""
             .module main
-            SCREEN = $0400
+            .const SCREEN = $0400
 
             .macro times_x(count) {
                 ldx #count
@@ -118,7 +118,7 @@ public sealed class MacroBindingTests
         var model = Analysis.Model("""
             .module main
             .macro m() {
-            LOCAL = 1
+            .const LOCAL = 1
             }
 
                 .res m::LOCAL

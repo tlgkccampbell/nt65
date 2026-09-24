@@ -331,7 +331,7 @@ public sealed class AnnotationTests
     [Fact]
     public void ANodeOnAContinuedLineKeepsItsTag()
     {
-        const string text = "SIZE = .select(1,\n    $10,\n    $20)\n.byte SIZE\n";
+        const string text = ".const SIZE = .select(1,\n    $10,\n    $20)\n.byte SIZE\n";
         var tree = SyntaxTree.Parse("main.nt65", text);
         var numbers = tree.Root.DescendantNodes().OfType<NumberExpressionSyntax>().ToList();
         Assert.Equal(["1", "$10", "$20"], numbers.Select(number => number.GetText()));

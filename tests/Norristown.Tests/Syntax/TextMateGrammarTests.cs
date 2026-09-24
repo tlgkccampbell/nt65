@@ -16,7 +16,7 @@ public sealed class TextMateGrammarTests
         .byte 'A'..'Z', ';', "a\"b;c", $1F, %1010, 65c02, 6502
         lda #a->b
         lda #a - >b
-        v = 10 .mod 3 .modx
+        .const v = 10 .mod 3 .modx
         set16!(ptr, SCREEN)
         lda !flag
         x != y
@@ -66,7 +66,7 @@ public sealed class TextMateGrammarTests
         .list L {
         }
         .frame f: Point
-        .export K = Joy::A
+        .export .const K = Joy::A
         .const C ?= 2
         K == 1
         """;

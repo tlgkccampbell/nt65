@@ -109,8 +109,8 @@ public sealed class ParserTests
     [InlineData(".data sprites: .type Sprite[] { { x = 1 }, { x = 2 } }", SyntaxKind.DataDeclaration)]
     [InlineData(".data tiles: .incbin \"tiles.bin\"", SyntaxKind.DataDeclaration)]
     [InlineData(".data vectors {", SyntaxKind.DataDeclaration)]
-    [InlineData("SCREEN = $0400", SyntaxKind.ConstantDeclaration)]
-    [InlineData("@n = 1", SyntaxKind.ConstantDeclaration)]
+    [InlineData(".const SCREEN = $0400", SyntaxKind.ConstantDeclaration)]
+    [InlineData(".const @n = 1", SyntaxKind.ConstantDeclaration)]
     [InlineData(".byte 1, 2, $ff, 'A', \"text\"", SyntaxKind.DataDirective)]
     [InlineData(".strz \"hello\"", SyntaxKind.DataDirective)]
     [InlineData(".cpu 65816", SyntaxKind.CpuDirective)]
@@ -291,7 +291,7 @@ public sealed class ParserTests
     [Fact]
     public void TheEnclosingBlockDecidesHowALineReads()
     {
-        var tree = SyntaxTree.Parse("main.nt65", ".enum Color {\ngreen = 5\n}\ngreen = 5\n");
+        var tree = SyntaxTree.Parse("main.nt65", ".enum Color {\ngreen = 5\n}\n.const green = 5\n");
         Assert.Equal(SyntaxKind.EnumMember, Statement(tree, 1).Kind);
         Assert.Equal(SyntaxKind.ConstantDeclaration, Statement(tree, 3).Kind);
         Assert.Empty(tree.Diagnostics);

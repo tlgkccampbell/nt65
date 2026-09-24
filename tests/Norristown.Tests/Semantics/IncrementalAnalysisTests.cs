@@ -24,22 +24,22 @@ public sealed class IncrementalAnalysisTests
         [
             ("main.nt65", "lda #HEIGHT", "lda #HEIGHT + 1", null, 1),                                // a routine body
             ("main.nt65", ".proc main", "\n\n.proc main", null, 1),                                  // lines move below the edit
-            ("main.nt65", "MAIN_PRIVATE = 9", "MAIN_PRIVATE  = 9", null, 1),                         // errors.nt65 names it, but its value is still 9
-            ("main.nt65", "BASE = 3", "BASE = 4", null, 3),                                          // app and defs look it up
+            ("main.nt65", ".const MAIN_PRIVATE = 9", ".const MAIN_PRIVATE  = 9", null, 1),                         // errors.nt65 names it, but its value is still 9
+            ("main.nt65", ".const BASE = 3", ".const BASE = 4", null, 3),                                          // app and defs look it up
             ("gfx.nt65", "    iny\n", "    iny\n    iny\n", null, 3),                                // `relay` moves down: defs calls it, main calls defs' `ping`
             ("gfx.nt65", "rgb(31, 0, 0)", "rgb(31, 1, 0)", null, 3),                                 // main and defs look it up
             ("errors.nt65", "lda undeclared", "lda #1", null, 1),
             ("segs.nt65", "lda hud_value", "ldx hud_value", WholeProgramReason.SegmentsDeclared, 7), // the file declares a segment
-            ("defs.nt65", "WIDTH  = 32", "WIDTH  = 30", null, 3),                                    // main and gfx look it up
-            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 7 ; seven", null, 1),                        // a comment only; `origin` holds a `Point`, which is unchanged
+            ("defs.nt65", ".const WIDTH  = 32", ".const WIDTH  = 30", null, 3),                                    // main and gfx look it up
+            ("defs.nt65", ".const PRIVATE_K = 7", ".const PRIVATE_K = 7 ; seven", null, 1),                        // a comment only; `origin` holds a `Point`, which is unchanged
             ("types.nt65", "Point::y", "Point::x", null, 1),
-            ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 8", null, 2),                                // errors.nt65 looks it up
+            ("defs.nt65", ".const PRIVATE_K = 7", ".const PRIVATE_K = 8", null, 2),                                // errors.nt65 looks it up
             ("main.nt65", "    rts\n}", "extra:\n    rts\n}", null, 1),                              // a new name, which nobody looks up
-            ("main.nt65", "BASE = 4", "BASE = LIMIT", null, 3),                                      // a cycle through two files
+            ("main.nt65", ".const BASE = 4", ".const BASE = LIMIT", null, 3),                                      // a cycle through two files
             ("main.nt65", "sta cursor", "sta cursor+1", null, 2),                                    // still in the cycle, and app.nt65 sees no change
-            ("main.nt65", "BASE = LIMIT", "BASE = 4", null, 3),
+            ("main.nt65", ".const BASE = LIMIT", ".const BASE = 4", null, 3),
             ("main.nt65", "dex", "dex\n    dex", null, 1),
-            ("main.nt65", "MAIN_PRIVATE  = 9", "MAIN_PRIVATE = 10", null, 2),                        // errors.nt65 looks it up
+            ("main.nt65", ".const MAIN_PRIVATE  = 9", ".const MAIN_PRIVATE = 10", null, 2),                        // errors.nt65 looks it up
             ("errors.nt65", "jsr gfx::draw", "jsr gfx::clear", null, 1),
             // Naming `HUD_SPARE`, which segs.nt65 does not export, is still a use of it, so
             // segs.nt65 stops being warned that nothing uses it, and removing the name brings the
@@ -47,9 +47,9 @@ public sealed class IncrementalAnalysisTests
             ("errors.nt65", "lda #1\n", "lda #1\n    lda #segs::HUD_SPARE\n", null, 2),
             ("errors.nt65", "    lda #segs::HUD_SPARE\n", "", null, 2),
             ("main.nt65", ".if DEBUG {", ".if !DEBUG {", null, 1),                                   // `TRACE` is gone, and nobody looked it up
-            ("main.nt65", "BASE = 4", "BASE = 4 ; four", null, 1),                                   // what it means is the same
-            ("defs.nt65", "SCALE  = 3", "SCALE  = 4", null, 2),                                      // gfx calls `scaled`, whose body names it
-            ("defs.nt65", "FILL   = $20", "FILL   = $2e", null, 2),                                  // main expands `fill_screen`, whose body names it
+            ("main.nt65", ".const BASE = 4", ".const BASE = 4 ; four", null, 1),                                   // what it means is the same
+            ("defs.nt65", ".const SCALE  = 3", ".const SCALE  = 4", null, 2),                                      // gfx calls `scaled`, whose body names it
+            ("defs.nt65", ".const FILL   = $20", ".const FILL   = $2e", null, 2),                                  // main expands `fill_screen`, whose body names it
             ("gfx.nt65", "    lda #0\n", "    lda #0 ; clear\n", null, 1),                           // a comment only; defs' `ping` keeps the `COLORS` from before the edit
             ("main.nt65", "sta cursor+1", "sta cursor", null, 1),                                    // main is analyzed again, and its expansion of `ping` reaches that older `COLORS`
             ("defs.nt65", "y:      .word\n", "y:      .word\nz:      .word\n", null, 4),             // types lays `Line` out from it, main uses `Line`, and gfx brings in `ping`, which moves
@@ -63,11 +63,11 @@ public sealed class IncrementalAnalysisTests
             ("defs.nt65", "std = a16, i8", "std = a8, i8", null, 3),
             // Two names that collide under one linker name are reported on the file that sorts
             // later, which is not the file that changed. That file is analyzed again all the same.
-            ("app.nt65", "ENTRY = BASE", "ENTRY = BASE\n.export ENTRY as \"segs__hud_value\"", null, 2),
+            ("app.nt65", ".const ENTRY = BASE", ".const ENTRY = BASE\n.export ENTRY as \"segs__hud_value\"", null, 2),
             ("app.nt65", "\n.export ENTRY as \"segs__hud_value\"", "", null, 2),
-            ("main.nt65", "MAIN_PRIVATE = 10", "MAIN_PRIVATE = 10\n.const TRIAL ?= 1", null, 1),                     // no condition tests it
-            ("main.nt65", "TRIAL ?= 1", "TRIAL ?= 2", null, 1),
-            ("defs.nt65", "COLUMNS ?= 40", "COLUMNS ?= 80", WholeProgramReason.ConditionsChanged, 7),               // main's condition tests it through `WIDE`
+            ("main.nt65", ".const MAIN_PRIVATE = 10", ".const MAIN_PRIVATE = 10\n.const TRIAL ?= 1", null, 1),                     // no condition tests it
+            ("main.nt65", ".const TRIAL ?= 1", ".const TRIAL ?= 2", null, 1),
+            ("defs.nt65", ".const COLUMNS ?= 40", ".const COLUMNS ?= 80", WholeProgramReason.ConditionsChanged, 7),               // main's condition tests it through `WIDE`
         ];
 
         var replay = new ProgramReplay();
@@ -89,7 +89,7 @@ public sealed class IncrementalAnalysisTests
     public void WhatIsDecidedForTheWholeProgramIsAnalyzedAgainWithAReason()
     {
         var main = SyntaxTree.Parse("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n.proc main {\n    rts\n}\n");
-        var other = SyntaxTree.Parse("other.nt65", ".module other\nSPARE = 1\n");
+        var other = SyntaxTree.Parse("other.nt65", ".module other\n.const SPARE = 1\n");
         var project = ProjectSettings.None;
 
         var first = Compiler.Analyze([main], project, Nothing);
@@ -172,7 +172,7 @@ public sealed class IncrementalAnalysisTests
     [Fact]
     public void ACompletedModelsSymbolsAreFrozen()
     {
-        var lib = SyntaxTree.Parse("lib.nt65", ".module lib\n.export SIZE = 4\n");
+        var lib = SyntaxTree.Parse("lib.nt65", ".module lib\n.export .const SIZE = 4\n");
         var main = SyntaxTree.Parse("main.nt65",
             ".module main\n.use lib::SIZE\n.segment CODE\n.export .proc main {\n    lda #SIZE\n    rts\n}\n");
         var project = ProjectSettings.None;
@@ -232,7 +232,7 @@ public sealed class IncrementalAnalysisTests
     [Fact]
     public void ARingThroughAFileNotReadAgainLeavesItsFunctionAlone()
     {
-        var a = SyntaxTree.Parse("a.nt65", ".module a\n.use b::g\n.export .func f(n) = g(n)\n.export K = f(1)\n");
+        var a = SyntaxTree.Parse("a.nt65", ".module a\n.use b::g\n.export .func f(n) = g(n)\n.export .const K = f(1)\n");
         var b = SyntaxTree.Parse("b.nt65", ".module b\n.use a::f\n.export .func g(n) = f(n)\n");
         var project = ProjectSettings.None;
 

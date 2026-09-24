@@ -323,7 +323,7 @@ internal static class Refactors
         yield return new Change($"Give `{text}` a name", CodeActionKinds.Extract,
             [
                 new Edit(tree, number.Span, name),
-                Edits.InsertAfter(tree, after, $"{name} = {text}"),
+                Edits.InsertAfter(tree, after, $".const {name} = {text}"),
             ]);
     }
 

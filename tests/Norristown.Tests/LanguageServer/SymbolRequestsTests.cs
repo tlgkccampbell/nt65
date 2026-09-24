@@ -21,7 +21,7 @@ public sealed class SymbolRequestsTests
         .data ptr:    .word
         }
 
-        SCREEN = $0400
+        .const SCREEN = $0400
         .segment CODE
         .scope gfx {
             .proc init {
@@ -69,7 +69,7 @@ public sealed class SymbolRequestsTests
 
         var constant = await client.HoverAsync(Uri, Locate.At(Source, "SCREEN ="), timeout);
         Assert.NotNull(constant);
-        Assert.Contains("```nt65\nSCREEN = $0400\n```", constant.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("```nt65\n.const SCREEN = $0400\n```", constant.Contents.Value, StringComparison.Ordinal);
 
         // A constant's value is what a reader hovers it for, so it comes above the rule. How
         // wide an address it would make is supporting detail, so it comes below the rule.
@@ -87,12 +87,12 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestTimeout.Token();
         const string Text =
-            ".module main\nSEMI = ';' ; the separator\n.segment RODATA\n.data text: .byte \"a\\\";b\" ; escaped\n";
+            ".module main\n.const SEMI = ';' ; the separator\n.segment RODATA\n.data text: .byte \"a\\\";b\" ; escaped\n";
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Text));
 
         var character = await client.HoverAsync(Uri, Locate.At(Text, "SEMI ="), timeout);
         Assert.NotNull(character);
-        Assert.Contains("```nt65\nSEMI = ';'\n```", character.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("```nt65\n.const SEMI = ';'\n```", character.Contents.Value, StringComparison.Ordinal);
 
         var text = await client.HoverAsync(Uri, Locate.At(Text, ".data t|ext:"), timeout);
         Assert.NotNull(text);
@@ -131,7 +131,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestTimeout.Token();
         const string Text =
             ".module main\n.cpu 6502\n.segment RODATA\n.data messages {\n    .data first: .byte 1, 2, 3\n"
-                + "    .data second: .byte 4\n}\nERR_SECOND = messages::second - messages\n";
+                + "    .data second: .byte 4\n}\n.const ERR_SECOND = messages::second - messages\n";
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Text));
 
         var hover = await client.HoverAsync(Uri, Locate.At(Text, "ERR_SECOND ="), timeout);
@@ -152,7 +152,7 @@ public sealed class SymbolRequestsTests
         const string Text =
             ".module main\n.cpu 6502\n"
                 + ".func htasc(text) = .strcat(.strsub(text, 0, .strlen(text) - 1), .strat(text, .strlen(text) - 1) | $80)\n"
-                + "GREETING = htasc(\"HI\")\n.segment RODATA\n.data t: .byte htasc(\"OK\")\n";
+                + ".const GREETING = htasc(\"HI\")\n.segment RODATA\n.data t: .byte htasc(\"OK\")\n";
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Text));
 
         var call = await client.HoverAsync(Uri, Locate.At(Text, ".byte h|tasc(\"OK\")"), timeout);
@@ -171,7 +171,7 @@ public sealed class SymbolRequestsTests
     public async Task HoverPutsTheDecimalBesideAHexadecimalValue()
     {
         var timeout = TestTimeout.Token();
-        const string Text = ".module main\nWIDE = $0400\nSMALL = 4\n";
+        const string Text = ".module main\n.const WIDE = $0400\n.const SMALL = 4\n";
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Text));
 
         var wide = await client.HoverAsync(Uri, Locate.At(Text, "WIDE ="), timeout);
@@ -281,7 +281,7 @@ public sealed class SymbolRequestsTests
             .segment CODE
 
             ; How many tiles a row holds.
-            WIDTH = 8 * 4
+            .const WIDTH = 8 * 4
 
             .proc clear {
                 rts
@@ -295,7 +295,7 @@ public sealed class SymbolRequestsTests
         var constant = await client.HoverAsync(Uri, Locate.At(Text, "WIDTH ="), timeout);
         Assert.Equal("""
             ```nt65
-            WIDTH = 8 * 4
+            .const WIDTH = 8 * 4
             ```
 
             How many tiles a row holds.
@@ -646,7 +646,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestTimeout.Token();
         const string Text =
-            ".module main\nCOUNT = 1\n.segment CODE\n.export .proc main {\n    lda #COUNT\n    rts\n}\n";
+            ".module main\n.const COUNT = 1\n.segment CODE\n.export .proc main {\n    lda #COUNT\n    rts\n}\n";
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Text);
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
@@ -660,9 +660,9 @@ public sealed class SymbolRequestsTests
         Assert.Equal("`COUNT` is not declared", diagnostic.Message);
         Assert.Equal(4, diagnostic.Range.Start.Line);
 
-        var edited = Text.Replace("COUNT = 1", "TOTAL = 1", StringComparison.Ordinal);
+        var edited = Text.Replace(".const COUNT = 1", ".const TOTAL = 1", StringComparison.Ordinal);
         var hover = await client.HoverAsync(Uri, Locate.At(edited, "TOTAL ="), timeout);
-        Assert.Contains("TOTAL = 1", hover?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains(".const TOTAL = 1", hover?.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -674,7 +674,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\n.if 0 {\nBROKEN = nowhere\n}\nON = 1\n.export ON\n");
+        await client.OpenAsync(Uri, ".module main\n.if 0 {\n.const BROKEN = nowhere\n}\n.const ON = 1\n.export ON\n");
 
         var dimmed = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         Assert.Equal(DiagnosticSeverity.Hint, dimmed.Severity);
@@ -690,7 +690,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, ".module main\nSIZE = 1\nSIZE = 2\n");
+        await client.OpenAsync(Uri, ".module main\n.const SIZE = 1\n.const SIZE = 2\n");
 
         var diagnostic = Assert.Single((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
         Assert.Equal("`SIZE` is already declared in this scope", diagnostic.Message);

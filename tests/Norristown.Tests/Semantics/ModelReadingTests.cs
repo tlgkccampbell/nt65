@@ -23,7 +23,7 @@ public sealed class ModelReadingTests
             .module defs
             .export Point, Colour, SCREEN, plot
 
-            SCREEN = $0400
+            .const SCREEN = $0400
 
             .struct Point {
             x:      .word

@@ -18,7 +18,7 @@ public sealed class SemanticTokensTests
         .module main
         .cpu 6502
 
-        SCREEN = $0400
+        .const SCREEN = $0400
         .func twice(n) = n * 2
 
         .enum Joy {

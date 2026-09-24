@@ -77,8 +77,8 @@ public sealed class PlacementTests
     public void APlacedModulesNamesAreItsOwnInTheOutputItShares()
     {
         var outputs = Compiler.Compile(
-            [new SourceFile("main.nt65", Main.Replace("rts\n}", "rts\n}\nloop = 1", StringComparison.Ordinal)),
-                new SourceFile("platform.nt65", ".module platform: placed\nloop = 2\n")],
+            [new SourceFile("main.nt65", Main.Replace("rts\n}", "rts\n}\n.const loop = 1", StringComparison.Ordinal)),
+                new SourceFile("platform.nt65", ".module platform: placed\n.const loop = 2\n")],
             Project).Ca65.ToList();
 
         var output = Assert.Single(outputs);

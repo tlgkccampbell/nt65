@@ -361,7 +361,7 @@ public sealed partial class OracleTests
                 .data NOFOR: .byte htasc("NEXT WITHOUT FOR")
                 .data SYNTAX: .byte htasc("SYNTAX")
             }
-            ERR_SYNTAX = messages::SYNTAX - messages
+            .const ERR_SYNTAX = messages::SYNTAX - messages
             .data prompt: .strz .strcat(13, ">>", .strsub("?!", 0, 1), 10)
             .segment CODE
             .export .proc start {

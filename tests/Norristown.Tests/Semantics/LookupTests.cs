@@ -17,8 +17,8 @@ public sealed class LookupTests
     public void AModulePathBeatsWhatAGlobBringsIn()
     {
         var analysis = Analysis.Program(
-            ("hw.nt65", ".module hw\n.export BORDER\nBORDER = $d020\n"),
-            ("other.nt65", ".module other\n.export hw\nhw = 5\n"),
+            ("hw.nt65", ".module hw\n.export BORDER\n.const BORDER = $d020\n"),
+            ("other.nt65", ".module other\n.export hw\n.const hw = 5\n"),
             ("main.nt65", ".module main\n.use other::*\n.segment CODE\n.proc main {\n    lda hw::BORDER\n    rts\n}\n"));
         var model = analysis.File("main.nt65");
         var position = model.Offset("hw::BORDER");
@@ -41,10 +41,10 @@ public sealed class LookupTests
     {
         var model = Analysis.Model("""
             .module main
-            COUNT = 1
+            .const COUNT = 1
             .segment CODE
             .proc main {
-            COUNT = 2
+            .const COUNT = 2
             @loop:
                 lda #COUNT
                 bne @loop
@@ -52,7 +52,7 @@ public sealed class LookupTests
             }
             """);
         var inside = model.Offset("lda #COUNT") + 5;
-        var outside = model.Offset("COUNT = 1");
+        var outside = model.Offset(".const COUNT = 1");
 
         Assert.Equal(model.SymbolAt("COUNT", 3), model.LookupSymbols(inside, "COUNT")[0]);
         Assert.Equal(2, model.LookupSymbols(inside, "COUNT").Count);
@@ -72,7 +72,7 @@ public sealed class LookupTests
     public void AUseAsNameStandsForWhatItBroughtIn()
     {
         var analysis = Analysis.Program(
-            ("other.nt65", ".module other\n.export SCREEN\nSCREEN = $0400\n"),
+            ("other.nt65", ".module other\n.export SCREEN\n.const SCREEN = $0400\n"),
             ("main.nt65", ".module main\n.use other::SCREEN as VRAM\n.segment CODE\n.proc main {\n    lda VRAM\n    rts\n}\n"));
         var model = analysis.File("main.nt65");
         var position = model.Offset("lda VRAM") + 4;
@@ -112,7 +112,7 @@ public sealed class LookupTests
     public void AMisspelledNameInAnotherModuleIsGivenTheNearestName()
     {
         var analysis = Analysis.Program(
-            ("other.nt65", ".module other\n.export SCREEN\nSCREEN = $0400\n"),
+            ("other.nt65", ".module other\n.export SCREEN\n.const SCREEN = $0400\n"),
             ("main.nt65", ".module main\n.segment CODE\n.proc main {\n    lda other::SCREN\n    rts\n}\n"));
 
         var problem = Assert.Single(analysis.File("main.nt65").Diagnostics);
@@ -147,7 +147,7 @@ public sealed class LookupTests
     public void ReferencesToANameSpanTheProgram()
     {
         var analysis = Analysis.Program(
-            ("other.nt65", ".module other\n.export SCREEN\nSCREEN = $0400\n"),
+            ("other.nt65", ".module other\n.export SCREEN\n.const SCREEN = $0400\n"),
             ("main.nt65", ".module main\n.use other::SCREEN\n.segment CODE\n.proc main {\n    lda SCREEN\n    sta SCREEN\n    rts\n}\n"));
         var screen = analysis.File("other.nt65").Symbol("SCREEN");
 
