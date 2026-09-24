@@ -215,8 +215,8 @@ of its own in a folder of its own, whose `nt65.json` names its files and the lib
 The Super NES and the NES also name `../joypad/*.nt65`, the parts of a platform that the two
 share.
 
-So each platform chooses its own processor, segments and linker configuration, which is what a
-platform differs by, and the library is analyzed as part of every program that uses it. In the
+So each platform chooses its own processor and linker configuration, which declares its
+segments, and that is what a platform differs by, and the library is analyzed as part of every program that uses it. In the
 editor a library file shows as part of the first platform's program.
 
 ### The library
@@ -318,7 +318,7 @@ Each machine supplies what differs: `platform::video`, which shows the screen, a
 ### Adding a platform
 
 1. A folder with an `nt65.json` whose `files` are its own and `../lib/*.nt65`, giving its
-   `cpu` and the segments its linker configuration places.
+   `cpu` and linking its linker configuration under `links`, which declares its segments.
 2. A module named `platform` that exports `running`, `text`, `NEWLINE`, `COLUMNS`,
    `LINE_LENGTH`, `putc`, `read_line` and `exit`, as the comment at the top of
    `lib/monitor.nt65` describes them. The module also starts the monitor. It gets the machine

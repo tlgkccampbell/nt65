@@ -3,17 +3,18 @@
   "files": ["src/*.nt65"],
   "out": "build",
   "defines": { "DEBUG": 1 },
+  "links": {
+    "rom": {
+      "config": "snes.cfg",
+      "memory": {
+        "LORAM": { "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
+        "ROM0":  { "mirrors": ["$00-$3f"] }
+      }
+    }
+  },
   "segments": {
-    "DIRECT":   { "size": "zp",  "dp": 0 },
-    "LORAM":    { "size": "abs", "bank": 0, "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
-    "WRAM":     { "size": "abs", "bank": "$7e" },
-    "STUBS":    { "size": "abs", "bank": 0 },
-    "CODE0":    { "size": "abs", "bank": "$80", "mirrors": ["$00-$3f"] },
-    "RODATA0":  { "size": "abs", "bank": "$80", "mirrors": ["$00-$3f"] },
-    "HEADER":   { "size": "abs", "bank": 0 },
-    "VECTORS":  { "size": "abs", "bank": 0 },
-    "BANK1":    { "size": "abs", "bank": "$81" },
-    "GFXDATA":  { "size": "far" }
+    "DIRECT":  { "dp": 0 },
+    "GFXDATA": { "size": "far" }
   },
   "ranges": {
     "$2100-$21ff": ["$00-$3f", "$80-$bf"],

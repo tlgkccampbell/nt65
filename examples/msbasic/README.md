@@ -29,8 +29,8 @@ With `nt65`, `ca65` and `ld65` on the path, in PowerShell:
 ./build.ps1 -Target cbmbasic2
 ```
 
-Each target is an `nt65.json` configuration, so `nt65 build --config cbmbasic2` builds one by
-hand, and the editor's active configuration chooses the one it analyzes. From a build of this
+Each target is an `nt65.json` configuration that links the target's linker configuration from
+`cfg/`, which declares its segments. So `nt65 build --config cbmbasic2` builds one by hand, and the editor's active configuration chooses the one it analyzes. From a build of this
 repository, with the pinned cc65 in `.cache/cc65`, run from the repository's root:
 
 ```text

@@ -65,6 +65,31 @@ public sealed class LinkTests
         Assert.True(project.Segments.Single(segment => segment.Name == "SPCIMAGE").IsDefined);
     }
 
+    /// <summary>
+    /// A segment that runs wholly in page zero is <c>zp</c> whatever its type, as BASIC's
+    /// <c>CHRGET</c> is: it loads in ROM with <c>type = rw</c> and is copied to page zero to run.
+    /// </summary>
+    [Fact]
+    public void ASegmentThatRunsInPageZeroIsZp()
+    {
+        var project = Read("""
+            { "links": { "rom": { "config": "rom.cfg" } } }
+            """, ("rom.cfg", """
+            MEMORY {
+                ZP4:    start = $55, size = $AB;
+                BASROM: start = $0800, size = $3F00;
+            }
+            SEGMENTS {
+                CHRGET: load = BASROM, run = ZP4, type = rw, define = yes;
+                INIT:   load = BASROM, type = ro;
+            }
+            """));
+
+        Assert.Empty(project.Diagnostics);
+        Assert.Equal(AddressSize.ZeroPage, Find(project, "CHRGET").Size);
+        Assert.Equal(AddressSize.Absolute, Find(project, "INIT").Size);
+    }
+
     [Fact]
     public void AMemoryAreaGivesTheSegmentsInItTheirSpaceAndMirrors()
     {

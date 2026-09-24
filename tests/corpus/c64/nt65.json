@@ -3,9 +3,7 @@
   "files": ["src/*.nt65"],
   "out": "build",
   "defines": { "DEBUG": 1 },
-  "segments": {
-    "LOADADDR": { "size": "abs" },
-    "EXEHDR":   { "size": "abs" },
-    "STARTUP":  { "size": "abs" }
+  "links": {
+    "prg": { "config": "c64.cfg" }
   }
 }

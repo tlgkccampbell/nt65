@@ -2,29 +2,16 @@
   "cpu": "6502",
   "files": ["src/**/*.nt65"],
   "out": "build",
-  "segments": {
-    "ZP1":      { "size": "zp" },
-    "ZP2":      { "size": "zp" },
-    "ZP3":      { "size": "zp" },
-    "ZP4":      { "size": "zp" },
-    "HEADER":   { "size": "abs" },
-    "VECTORS":  { "size": "abs" },
-    "KEYWORDS": { "size": "abs" },
-    "ERROR":    { "size": "abs" },
-    "CHRGET":   { "size": "zp" },
-    "INIT":     { "size": "abs" },
-    "EXTRA":    { "size": "abs" }
-  },
   "configurations": {
-    "cbmbasic1":  { "defines": { "defines::CBM1": 1 },       "out": "build/cbmbasic1" },
-    "osi":        { "defines": { "defines::OSI": 1 },        "out": "build/osi" },
-    "applesoft":  { "defines": { "defines::APPLE": 1 },      "out": "build/applesoft" },
-    "kb9":        { "defines": { "defines::KIM": 1 },        "out": "build/kb9" },
-    "cbmbasic2":  { "defines": { "defines::CBM2": 1 },       "out": "build/cbmbasic2" },
-    "kbdbasic":   { "defines": { "defines::KBD": 1 },        "out": "build/kbdbasic" },
-    "microtan":   { "defines": { "defines::MICROTAN": 1 },   "out": "build/microtan" },
-    "aim65":      { "defines": { "defines::AIM65": 1 },      "out": "build/aim65" },
-    "sym1":       { "defines": { "defines::SYM1": 1 },       "out": "build/sym1" },
-    "w65c816sxb": { "defines": { "defines::W65C816SXB": 1 }, "out": "build/w65c816sxb" }
+    "cbmbasic1":  { "defines": { "defines::CBM1": 1 },       "links": { "rom": { "config": "cfg/cbmbasic1.cfg" } },  "out": "build/cbmbasic1" },
+    "osi":        { "defines": { "defines::OSI": 1 },        "links": { "rom": { "config": "cfg/osi.cfg" } },        "out": "build/osi" },
+    "applesoft":  { "defines": { "defines::APPLE": 1 },      "links": { "rom": { "config": "cfg/applesoft.cfg" } },  "out": "build/applesoft" },
+    "kb9":        { "defines": { "defines::KIM": 1 },        "links": { "rom": { "config": "cfg/kb9.cfg" } },        "out": "build/kb9" },
+    "cbmbasic2":  { "defines": { "defines::CBM2": 1 },       "links": { "rom": { "config": "cfg/cbmbasic2.cfg" } },  "out": "build/cbmbasic2" },
+    "kbdbasic":   { "defines": { "defines::KBD": 1 },        "links": { "rom": { "config": "cfg/kbdbasic.cfg" } },   "out": "build/kbdbasic" },
+    "microtan":   { "defines": { "defines::MICROTAN": 1 },   "links": { "rom": { "config": "cfg/microtan.cfg" } },   "out": "build/microtan" },
+    "aim65":      { "defines": { "defines::AIM65": 1 },      "links": { "rom": { "config": "cfg/aim65.cfg" } },      "out": "build/aim65" },
+    "sym1":       { "defines": { "defines::SYM1": 1 },       "links": { "rom": { "config": "cfg/sym1.cfg" } },       "out": "build/sym1" },
+    "w65c816sxb": { "defines": { "defines::W65C816SXB": 1 }, "links": { "rom": { "config": "cfg/w65c816sxb.cfg" } }, "out": "build/w65c816sxb" }
   }
 }

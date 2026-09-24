@@ -8,9 +8,10 @@ namespace Norristown.Project;
 /// links, each entry of <c>segments</c> declares a segment. With them, the linked configurations
 /// declare the segments, and <c>segments</c> adds only what a configuration has no word for.
 /// <para>
-/// A configuration gives a segment's size, from <c>type = zp</c>, and its home bank, from the bank
-/// of the address it runs at. A segment that several links place must agree on every fact nt65
-/// uses, because nt65 analyzes each module once, whichever links it goes into.
+/// A configuration gives a segment's size and its home bank. The segment is <c>zp</c> when its
+/// <c>type</c> is <c>zp</c> or it runs wholly in page zero, and its home bank is the bank of the
+/// address it runs at. A segment that several links place must agree on every fact nt65 uses,
+/// because nt65 analyzes each module once, whichever links it goes into.
 /// </para>
 /// </summary>
 public static class SegmentLinks
@@ -117,7 +118,7 @@ public static class SegmentLinks
         var runsIn = placed.RunsIn;
         var area = runsIn is null ? null : config.Area(runsIn);
         var note = runsIn is null ? null : areas.GetValueOrDefault(runsIn);
-        var size = placed.Type == "zp" ? AddressSize.ZeroPage : AddressSize.Absolute;
+        var size = placed.Type == "zp" || RunsInPageZero(placed, area) ? AddressSize.ZeroPage : AddressSize.Absolute;
         var segment = new Segment(placed.Name, size, placed.Declaration, Bank: Bank(placed, area))
         {
             Space = note?.Space ?? link.Space,
@@ -142,6 +143,15 @@ public static class SegmentLinks
         var bank = first >> 16;
         return (first + size - 1) >> 16 == bank ? bank : null;
     }
+
+    /// <summary>
+    /// Returns a value indicating whether a segment runs wholly within $0000-$00FF, where every
+    /// address is a zero-page address, whatever its <c>type</c>. Code that the program copies into
+    /// page zero and runs there, such as BASIC's <c>CHRGET</c>, loads with <c>type = rw</c>.
+    /// </summary>
+    private static bool RunsInPageZero(LinkerConfig.PlacedSegment placed, LinkerConfig.MemoryArea? area) =>
+        placed.Start is null && placed.Offset is null
+        && area is { Start: >= 0 and < 0x100, Size: > 0 } && area.Start + area.Size <= 0x100;
 
     /// <summary>
     /// Adds a segment one link places to those the other links place. When another link already

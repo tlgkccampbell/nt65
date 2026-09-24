@@ -70,16 +70,18 @@ last.
 - `src/player.nt65`: player sprite graphics setup and movement.
 - `src/ppuclear.nt65`: useful subroutines for interacting with the S-PPU.
 - `src/blarggapu.nt65`: sends the sound driver to the S-SMP.
-- `nt65.json` declares the segments with their banks and the mirrored hardware ranges, which
-  is what lets nt65 check every direct-page operand, every absolute operand and every call
-  against D, B and the bank the code runs in. `lorom256k.cfg` places the segments for ld65.
+- `nt65.json` links `lorom256k.cfg` and `spcfile/spc.cfg`, which declare the segments: each
+  segment's bank is the bank it runs in there. The project adds what a linker configuration has
+  no word for: the banks each memory area is mirrored in, the direct page, and the mirrored
+  hardware ranges. That is what lets nt65 check every direct-page operand, every absolute
+  operand and every call against D, B and the bank the code runs in.
 
 ### The SPC700 side, in nt65 data
 
 nt65 has no SPC700 and needs none. The sound driver is data: each routine is a `.data` block of
 calls to macros that emit SPC700 instructions, as upstream's was ca65 with no CPU and blargg's
-macro pack. `nt65.json` puts its segments, `SPCIMAGE` and `SPCZEROPAGE`, in the sound CPU's
-address space, which holds data and no 65816 instructions. `spc_boot_apu` names where ld65
+macro pack. `nt65.json` puts the memory its segments run in, `SPCRAM` and `SPCZEROPAGE`, in the sound
+CPU's address space, which holds data and no 65816 instructions. `spc_boot_apu` names where ld65
 loaded the image, where it runs and how big it is with `.loadof`, `.runof` and `.spanof`, and
 passes the driver's entry point on as a value, which nt65 refuses as a call target.
 

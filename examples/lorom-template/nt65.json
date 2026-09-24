@@ -3,30 +3,28 @@
   "files": ["src/*.nt65"],
   "out": "build",
   "spaces": { "spc": "data" },
+  "links": {
+    "sfc": {
+      "config": "lorom256k.cfg",
+      "memory": {
+        "ZEROPAGE":    { "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
+        "BSS":         { "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
+        "ROM0":        { "mirrors": ["$00"] },
+        "ROM1":        { "mirrors": ["$01"] },
+        "ROM2":        { "mirrors": ["$02"] },
+        "ROM3":        { "mirrors": ["$03"] },
+        "ROM4":        { "mirrors": ["$04"] },
+        "ROM5":        { "mirrors": ["$05"] },
+        "ROM6":        { "mirrors": ["$06"] },
+        "ROM7":        { "mirrors": ["$07"] },
+        "SPCZEROPAGE": { "space": "spc" },
+        "SPCRAM":      { "space": "spc" }
+      }
+    },
+    "spc": { "config": "spcfile/spc.cfg", "space": "spc" }
+  },
   "segments": {
-    "SPCIMAGE":    { "size": "abs", "space": "spc" },
-    "SPCZEROPAGE": { "size": "zp",  "space": "spc" },
-    "ZEROPAGE":    { "size": "zp",  "dp": 0 },
-    "BSS":         { "size": "abs", "bank": 0, "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
-    "BSS7E":       { "size": "abs", "bank": "$7e" },
-    "BSS7F":       { "size": "abs", "bank": "$7f" },
-    "CODE":        { "size": "abs", "bank": "$80", "mirrors": ["$00"] },
-    "RODATA":      { "size": "abs", "bank": "$80", "mirrors": ["$00"] },
-    "SNESHEADER":  { "size": "abs", "bank": "$80", "mirrors": ["$00"] },
-    "CODE1":       { "size": "abs", "bank": "$81", "mirrors": ["$01"] },
-    "RODATA1":     { "size": "abs", "bank": "$81", "mirrors": ["$01"] },
-    "CODE2":       { "size": "abs", "bank": "$82", "mirrors": ["$02"] },
-    "RODATA2":     { "size": "abs", "bank": "$82", "mirrors": ["$02"] },
-    "CODE3":       { "size": "abs", "bank": "$83", "mirrors": ["$03"] },
-    "RODATA3":     { "size": "abs", "bank": "$83", "mirrors": ["$03"] },
-    "CODE4":       { "size": "abs", "bank": "$84", "mirrors": ["$04"] },
-    "RODATA4":     { "size": "abs", "bank": "$84", "mirrors": ["$04"] },
-    "CODE5":       { "size": "abs", "bank": "$85", "mirrors": ["$05"] },
-    "RODATA5":     { "size": "abs", "bank": "$85", "mirrors": ["$05"] },
-    "CODE6":       { "size": "abs", "bank": "$86", "mirrors": ["$06"] },
-    "RODATA6":     { "size": "abs", "bank": "$86", "mirrors": ["$06"] },
-    "CODE7":       { "size": "abs", "bank": "$87", "mirrors": ["$07"] },
-    "RODATA7":     { "size": "abs", "bank": "$87", "mirrors": ["$07"] }
+    "ZEROPAGE": { "dp": 0 }
   },
   "ranges": {
     "$2100-$21ff": ["$00-$3f", "$80-$bf"],
