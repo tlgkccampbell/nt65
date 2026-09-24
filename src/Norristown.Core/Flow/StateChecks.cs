@@ -11,9 +11,9 @@ namespace Norristown.Flow;
 /// reports what is wrong with the state it found at a call, a return, a jump into another
 /// routine, a width-dependent immediate, and an operand that reaches memory through D or B.
 /// <para>
-/// Nothing is reported until the states have reached a fixed point. A walk that is not the
-/// final one runs the same checks and discards their messages, so a state on its way to a fixed
-/// point is never reported on.
+/// Nothing is reported until the states have reached a fixed point. Only the final walk, over
+/// the converged states, is given the checks, so a state on its way to a fixed point is never
+/// checked or reported on.
 /// </para>
 /// </summary>
 internal sealed class StateChecks
@@ -35,12 +35,6 @@ internal sealed class StateChecks
 
     /// <summary>Gets what the checks have found, in the order they were reported.</summary>
     public IReadOnlyList<Diagnostic> Found => diagnostics;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the walk is the last one, over converged states.
-    /// Only the last walk reports.
-    /// </summary>
-    public bool Final { get; set; }
 
     /// <summary>Returns a known width in the words a message uses.</summary>
     public static string Format(Width width) => width == Width.Sixteen ? "16-bit" : "8-bit";
@@ -564,9 +558,8 @@ internal sealed class StateChecks
     /// </summary>
     public void Report(Step step, DiagnosticMessage message, DiagnosticFix? fix)
     {
-        var count = diagnostics.Count;
         Report(step, message);
-        if (fix is not null && diagnostics.Count > count)
+        if (fix is not null)
             diagnostics[^1] = diagnostics[^1] with { Fix = fix };
     }
 
@@ -579,9 +572,6 @@ internal sealed class StateChecks
     /// </summary>
     public void ReportAt(SyntaxNode node, Step step, DiagnosticMessage message)
     {
-        if (!Final)
-            return;
-
         var inBody = node.Tree != model.Tree;
         MacroCallSyntax? call = null;
         for (var level = step.On; level is not null; level = level.Outer)
