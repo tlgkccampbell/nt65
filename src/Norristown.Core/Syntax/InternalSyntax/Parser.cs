@@ -99,11 +99,10 @@ internal sealed partial class Parser
     private bool AtOperandEnd => AtEnd || (braced && Kind == SyntaxKind.CloseBrace);
 
     /// <summary>
-    /// Gets a value indicating whether a declaration's name could appear here. Register names and
-    /// mnemonics are reserved, but that rule belongs to name binding rather than to reading a
-    /// line, so <c>.proc a</c> parses, and is reported where every other reserved-word use is.
+    /// Gets a value indicating whether a declaration's name could appear here, as
+    /// <see cref="Lines.IsName"/> decides.
     /// </summary>
-    private bool AtName => Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic;
+    private bool AtName => Lines.IsName(Kind);
 
     /// <summary>
     /// Returns a value indicating whether the current token is the contextual word
@@ -369,7 +368,7 @@ internal sealed partial class Parser
 
         // `} .elseif expr {` and `} .else {` close one branch and open the next; a macro
         // call's `} name {` closes one block argument and opens the next.
-        if (AtName && Next == SyntaxKind.OpenBrace)
+        if (Lines.IsNextBlockArgument(tokens, index))
             return Finish(new BlockContinuationSyntax(brace, Advance(), Advance()));
 
         return SyntaxFacts.LineDirectiveKind(Current.DirectiveKind) switch

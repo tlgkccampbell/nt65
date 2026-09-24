@@ -186,6 +186,56 @@ public sealed class BlockTests
         Assert.DoesNotContain(model.Diagnostics, d => d.Id == "segment-region-misplaced");
     }
 
+    /// <summary>
+    /// Checks that a broken line opens the block the parser reads it as opening, and what is then
+    /// reported on the lines inside that block.
+    /// </summary>
+    [Theory]
+    // `.segment` declares nothing to export, so the parser reads no segment block, and neither
+    // does the line pass.
+    [InlineData(
+        new[] { ".segment CODE: abs", ".export .segment CODE {", ".proc f {", "    rts", "}", "}" },
+        "Unknown 3-7\n  Proc 4-6\n",
+        new[] { "3: `.export` goes before a declaration, and `.segment` declares nothing to export" })]
+    // A block argument may have a reserved word for its name, which the binder reports.
+    [InlineData(
+        new[]
+        {
+            ".macro two(then: block, a: block = {}) {", "    then", "}",
+            ".proc f {", "    two!() {", "        nop", "    } a {", "        nop", "    }", "    rts", "}",
+        },
+        "Macro 2-4\nProc 5-12\n  MacroBlock 6-7 no closer\n  MacroBlock 8-10\n",
+        new[] { "2: `a` is a register name and cannot be used as a name" })]
+    // An element type with no count before `{` opens a body of values, which the parser reports
+    // needs a count.
+    [InlineData(
+        new[] { ".data table: .word {", "    1, 2", "    3, 4", "}" },
+        "DataBody 2-5\n",
+        new[] { "2: values in a body need a count: `.word[] {` counts them" })]
+    [InlineData(
+        new[] { ".proc f {", "    .word {", "        1, 2", "    }", "    rts", "}" },
+        "Proc 2-7\n  DataBody 3-5\n",
+        new[] { "3: values in a body need a count: `.word[] {` counts them" })]
+    // The parser reads `.data` as far as the first token out of place, so a data line with
+    // something before its `:` opens mixed data.
+    [InlineData(
+        new[] { ".data table extra: .byte[2] {", "    1, 2", "}" },
+        "Data 2-4\n",
+        new[]
+        {
+            "2: expected `:` and what the data is, or `{` for mixed data",
+            "3: expected a label, a constant, an instruction or a directive",
+        })]
+    public void ABrokenLineOpensTheBlockItParsesAs(string[] lines, string blocks, string[] problems)
+    {
+        var tree = Parse([".module m", .. lines]);
+        Assert.Equal(blocks, SyntaxDump.Blocks(tree));
+        var model = SemanticModel.Create(tree, SegmentTable.Build([tree], []));
+        Assert.Equal(
+            problems,
+            tree.Diagnostics.Concat(model.Diagnostics).Select(d => $"{d.Span.Line}: {d.Message}").Distinct().Order());
+    }
+
     [Fact]
     public void LexicalDiagnosticsHaveLineAndColumns()
     {

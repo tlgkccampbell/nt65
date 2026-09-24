@@ -16,9 +16,15 @@ internal sealed class GreenLine : GreenNode
         Tokens = tokens;
         LineKind = Lines.Classify(tokens);
         (Opens, Closes) = Lines.Braces(tokens);
-        OpensBlockKind = Opens ? Lines.BlockKindOf(tokens, LineKind)
+        OpensBlockKind = Opens ? Lines.BlockKindOf(this)
             : Lines.IsRegion(tokens) ? BlockKind.Region
             : BlockKind.None;
+
+        // Finding the kind of a data block parses the line. The parser reads a line that opens a
+        // block the same way in any context, so that parse is kept as the one in the block's own
+        // kind, which is the context the block layer asks for.
+        if (parsed is not null)
+            parsed = parsed with { Context = OpensBlockKind };
 
         // A green line holds only its tokens, so its flags cover just the lexer's errors on them.
         // Diagnostics from parsing are held by the statement the parser returns.

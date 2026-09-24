@@ -128,8 +128,40 @@ internal static class Lines
         };
     }
 
-    public static BlockKind BlockKindOf(ImmutableArray<GreenToken> tokens, LineKind kind)
+    /// <summary>
+    /// Returns a value indicating whether a token of <paramref name="kind"/> may be a declared
+    /// name. Register names and mnemonics are reserved, but that rule belongs to name binding
+    /// rather than to reading a line, so <c>.proc a</c> parses, and is reported where every other
+    /// reserved-word use is.
+    /// </summary>
+    public static bool IsName(SyntaxKind kind) =>
+        kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic;
+
+    /// <summary>
+    /// Returns a value indicating whether the token at <paramref name="at"/>, just after
+    /// <c>.export</c>, starts a declaration that <c>.export</c> exports, such as the
+    /// <c>.proc</c> of <c>.export .proc init {</c>.
+    /// </summary>
+    public static bool IsExportedDeclaration(ImmutableArray<GreenToken> tokens, int at) =>
+        tokens[at].Kind == SyntaxKind.Directive && SyntaxFacts.IsExportable(tokens[at].DirectiveKind);
+
+    /// <summary>
+    /// Returns a value indicating whether the tokens at <paramref name="at"/>, just after the
+    /// <c>}</c> that starts a line, name the next block argument of a macro call, as the
+    /// <c>else {</c> of <c>} else {</c> does.
+    /// </summary>
+    public static bool IsNextBlockArgument(ImmutableArray<GreenToken> tokens, int at) =>
+        IsName(tokens[at].Kind) && at + 1 < tokens.Length && tokens[at + 1].Kind == SyntaxKind.OpenBrace;
+
+    /// <summary>
+    /// Returns the kind of block <paramref name="line"/> opens. The line must end in a <c>{</c>
+    /// that opens a block. The kind of a data block is read from the line's parse, so the block
+    /// holds what the parser read the brace as opening.
+    /// </summary>
+    public static BlockKind BlockKindOf(GreenLine line)
     {
+        var tokens = line.Tokens;
+        var kind = line.LineKind;
         // The statement that opens the block: after a label, or after the } of a continuation.
         var start = kind switch
         {
@@ -140,55 +172,43 @@ internal static class Lines
 
         // `.export .proc init {` opens the same kind of block as the declaration after `.export`.
         if (kind == LineKind.Directive && tokens[0].DirectiveKind == DirectiveKind.Export
-            && tokens[1].Kind == SyntaxKind.Directive)
+            && IsExportedDeclaration(tokens, 1))
         {
             start = 1;
         }
         var token = tokens[start];
         if (token.Kind == SyntaxKind.Directive)
-            return DataBlockKind(tokens, start) ?? SyntaxFacts.BlockKindOf(token.DirectiveKind);
+        {
+            var data = token.DirectiveKind == DirectiveKind.Data || SyntaxFacts.IsElementType(token.DirectiveKind);
+            return (data ? DataBlockKind(line.Parse(BlockKind.None)) : null) ?? SyntaxFacts.BlockKindOf(token.DirectiveKind);
+        }
         if (IsMacroCall(tokens, start))
             return BlockKind.MacroBlock;
-
-        // `} else {` closes one block argument of a macro call and opens the next.
-        if (kind == LineKind.BlockClose && token.Kind == SyntaxKind.Identifier
-            && tokens[start + 1].Kind == SyntaxKind.OpenBrace)
-        {
+        if (kind == LineKind.BlockClose && IsNextBlockArgument(tokens, start))
             return BlockKind.MacroBlock;
-        }
         return BlockKind.Unknown;
     }
 
     /// <summary>
-    /// Returns the kind of block a data line opens, which decides how the block's lines are
-    /// parsed, or null for a line that opens no data block. <c>.data name {</c> is mixed data. An
-    /// element type with a count, such as <c>.byte[] {</c>, holds an array's values, and
-    /// <c>.type T {</c> with no count holds one record's <c>member = value</c> lines.
+    /// Returns the kind of block a data line opens, as its parse shows, or null when the parser
+    /// did not read the line's <c>{</c> as opening data. <c>.data name {</c> is mixed data. An
+    /// element type followed by <c>{</c> opens a body, whose kind
+    /// <see cref="SyntaxFacts.DataBodyKind"/> gives.
     /// </summary>
-    private static BlockKind? DataBlockKind(ImmutableArray<GreenToken> tokens, int start)
+    private static BlockKind? DataBlockKind(Parser.Result parsed)
     {
-        var element = start;
-        if (tokens[start].DirectiveKind == DirectiveKind.Data)
+        var statement = parsed.Node is LabeledLineSyntax labeled ? labeled.Statement : parsed.Node;
+        return statement switch
         {
-            element = -1;
-            for (var i = start + 1; i < tokens.Length; i++)
-            {
-                if (tokens[i].Kind == SyntaxKind.Colon)
-                {
-                    element = i + 1;
-                    break;
-                }
-            }
-            if (element < 0 || element >= tokens.Length)
-                return BlockKind.Data;
-        }
+            DataDeclarationSyntax { OpenBraceToken: not null } => BlockKind.Data,
+            DataDeclarationSyntax { Directive: { } element } => BodyKind(element),
+            DataDirectiveSyntax directive => BodyKind(directive),
+            _ => null,
+        };
 
-        var directive = tokens[element].DirectiveKind;
-        if (!SyntaxFacts.IsElementType(directive))
-            return null;
-        var counted = false;
-        for (var i = element + 1; i < tokens.Length && !counted; i++)
-            counted = tokens[i].Kind == SyntaxKind.OpenBracket;
-        return SyntaxFacts.DataBodyKind(directive, counted);
+        static BlockKind? BodyKind(DataDirectiveSyntax directive) =>
+            directive.Tail is DataBodySyntax
+                ? SyntaxFacts.DataBodyKind(directive.Directive.DirectiveKind, directive.Count is not null)
+                : null;
     }
 }

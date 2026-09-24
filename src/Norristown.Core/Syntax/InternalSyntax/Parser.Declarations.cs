@@ -348,7 +348,8 @@ internal sealed partial class Parser
     private GreenNode ParseExport()
     {
         var export = Advance();
-        if (Kind == SyntaxKind.Directive && ParseExportable() is { } declaration)
+        if (Lines.IsExportedDeclaration(tokens, index)
+            && ParseDirective(SyntaxFacts.LineDirectiveKind(Current.DirectiveKind)) is { } declaration)
         {
             exportKeyword = export;
             return declaration;
@@ -368,16 +369,6 @@ internal sealed partial class Parser
 
         return new ExportDirectiveSyntax(export, ParseSeparatedList(ParseExportItem));
     }
-
-    /// <summary>
-    /// Parses the declaration after <c>.export</c> exactly as the same line without the
-    /// <c>.export</c> is parsed, or returns null if the directive declares nothing that can be
-    /// exported.
-    /// </summary>
-    private GreenNode? ParseExportable() =>
-        SyntaxFacts.IsExportable(Current.DirectiveKind)
-            ? ParseDirective(SyntaxFacts.LineDirectiveKind(Current.DirectiveKind))
-            : null;
 
     /// <summary>
     /// Parses <c>name</c> or <c>outer::inner</c>, followed by <c>: size</c> or

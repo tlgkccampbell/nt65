@@ -330,16 +330,15 @@ public static class SyntaxFacts
     /// <param name="element">The directive that gives the element type.</param>
     /// <param name="counted">Whether the element type has a count, such as <c>[16]</c> or <c>[]</c>.</param>
     /// <returns>
-    /// <see cref="BlockKind.DataBody"/>, which holds an array's values, for an element type with a
-    /// count. <see cref="BlockKind.RecordInitializer"/>, which holds one record's
-    /// <c>member = value</c> lines, for <c>.type T</c> with no count. Null for any other element
-    /// type without a count, and for a directive that is not an element type.
+    /// <see cref="BlockKind.RecordInitializer"/>, which holds one record's <c>member = value</c>
+    /// lines, for <c>.type T</c> with no count. <see cref="BlockKind.DataBody"/>, which holds
+    /// values, for any other element type. A body of values needs a count, and the parser reports
+    /// one that has none. Null for a directive that is not an element type.
     /// </returns>
     public static BlockKind? DataBodyKind(DirectiveKind element, bool counted) =>
         !IsElementType(element) ? null
-        : counted ? BlockKind.DataBody
-        : element == DirectiveKind.Type ? BlockKind.RecordInitializer
-        : null;
+        : !counted && element == DirectiveKind.Type ? BlockKind.RecordInitializer
+        : BlockKind.DataBody;
 
     /// <summary>
     /// Returns where <paramref name="directive"/> may begin a line. A directive with no row, and

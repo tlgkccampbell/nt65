@@ -27,7 +27,7 @@ internal sealed partial class Parser
             // A body holds an array's values, or one record's `member = value` lines.
             if (Next == SyntaxKind.EndOfLine)
             {
-                if (SyntaxFacts.DataBodyKind(directive.DirectiveKind, count is not null) is null)
+                if (count is null && !record)
                     ReportOnce(Catalogue.DataBodyNeedsACount.Message(directive.Text));
                 tail = new DataBodySyntax(Advance());
             }
