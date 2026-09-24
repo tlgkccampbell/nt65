@@ -918,6 +918,44 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
+    /// A scope that something branches into past its start shows no registers it preserves,
+    /// neither in a lens nor on hover. A pass from the top restores A, but a path that enters at
+    /// <c>mid</c> pulls a byte the scope never pushed, so no one answer holds for the scope.
+    /// </summary>
+    [Fact]
+    public async Task AScopeBranchedIntoPastItsStartShowsNoRegisters()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc main {
+                beq body::mid
+                .scope body {
+                    pha
+                    ldx #2
+                mid:
+                    pla
+                    bne @out
+                }
+            @out:
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var scope = await client.HoverAsync(MainUri, Locate.At(Source, ".s|cope"), timeout);
+
+        Assert.Equal(
+            [2],
+            lenses.Where(lens => lens.Command.Title.Contains("preserves", StringComparison.Ordinal))
+                .Select(lens => lens.Range.Start.Line));
+        Assert.DoesNotContain("preserves", scope?.Contents.Value ?? "", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Hover on a line shows what each register holds there, beside what the line costs. A
     /// register may hold the value another register had on entry, which is how a 6502 saves X
     /// (by copying it to A), and naming that register makes the save readable.

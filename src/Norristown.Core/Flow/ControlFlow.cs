@@ -170,14 +170,7 @@ public sealed class ControlFlow
         if (shape.IsStraight)
             return Straight(blocks[shape.Entry], whole);
 
-        // A branch into the middle of it means entering at the top is not the only way through,
-        // so there is no single cost to give.
         var (entry, inside) = (shape.Entry, shape.Inside);
-        for (var i = 0; i < blocks.Count; i++)
-        {
-            if (inside[i] && i != entry && blocks[i].Predecessors.Any(from => !inside[from]))
-                return null;
-        }
         var (minimum, maximum, ends) = Paths.Through(blocks, entry, at => inside[at], Paths.Costing);
         return minimum is null ? null : new RoutineCost(minimum, maximum, Calls(blocks, inside), ends);
     }

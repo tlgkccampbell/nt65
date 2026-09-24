@@ -271,6 +271,23 @@ public sealed class RegisterKeepsTests
             Wide(".proc p: a8, keeps a -> a16 {\n    pha\n    rep #$20\n    pla\n    rts\n}\n"));
     }
 
+    /// <summary>
+    /// A scope that something branches into past its start has no single pass through it, so it
+    /// gets neither a cost nor a register answer. Here a pass from the top restores A, but a path
+    /// that enters at <c>mid</c> pulls a byte the scope never pushed.
+    /// </summary>
+    [Fact]
+    public void AScopeBranchedIntoPastItsStartGetsNoRegisterAnswer()
+    {
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 6502\n.segment CODE\n"
+            + ".proc p {\n    beq body::mid\n    .scope body {\n        pha\n        ldx #2\n    mid:\n        pla\n"
+            + "        bne @out\n    }\n@out:\n    rts\n}\n"));
+        Assert.Empty(analysis.Problems());
+        var region = analysis.FlowFor("main.nt65")!.Regions.Single();
+        Assert.Empty(region.Scopes);
+        Assert.Empty(region.ScopeRegisters);
+    }
+
     private static Registers Kept(string text, string routine) => Found(text, routine).Kept;
 
     private static RoutineRegisters Found(string text, string routine)

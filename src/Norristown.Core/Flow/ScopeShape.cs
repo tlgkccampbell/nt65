@@ -20,7 +20,7 @@ internal sealed record ScopeShape(int Entry, bool[] Inside, bool IsStraight)
     /// <paramref name="blocks"/>. It returns null where there is no single pass through that
     /// part, such as when a basic block holds part of it and part of something else, and where
     /// nothing reaches the block it starts in. It also returns null for a scope of whole blocks
-    /// that takes in every block of the routine.
+    /// that takes in every block of the routine, or that something branches into past its start.
     /// </summary>
     public static ScopeShape? Of(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
     {
@@ -46,6 +46,14 @@ internal sealed record ScopeShape(int Entry, bool[] Inside, bool IsStraight)
             return null;
         if (!blocks[entry].IsReached || inside.All(held => held))
             return null;
+
+        // A branch into the middle of the scope means entering at the top is not the only way
+        // through, so a pass from the top describes only some of the paths through it.
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            if (inside[i] && i != entry && blocks[i].Predecessors.Any(from => !inside[from]))
+                return null;
+        }
         return new ScopeShape(entry, inside, false);
     }
 
