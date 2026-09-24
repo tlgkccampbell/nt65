@@ -5,6 +5,7 @@ using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
+using static Norristown.Emit.Ca65Directives;
 using static Norristown.Emit.Ca65Numbers;
 
 namespace Norristown.Emit;
@@ -49,6 +50,10 @@ public sealed class Emitter
 
     // The visitor that writing a line dispatches through, with one method per kind of statement.
     private readonly Statements statements;
+
+    // What a record writer can reach of this emitter.
+    private readonly RecordOutput recordOutput;
+
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly FlatNames names;
@@ -110,6 +115,7 @@ public sealed class Emitter
         string source, string output, IReadOnlySet<Symbol> measuredElsewhere, int file = 0)
     {
         statements = new Statements(this);
+        recordOutput = new RecordOutput(this);
         this.measuredElsewhere = measuredElsewhere;
         this.model = model;
         this.layout = layout;
@@ -963,7 +969,7 @@ public sealed class Emitter
         if (directive.Type is { } named)
         {
             if (model.SymbolOf(named) is { IsLayout: true } type)
-                Records(line, directive, symbol, type);
+                new RecordWriter(model, context.Expansion, recordOutput).Records(line, directive, symbol, type);
             else
                 NotTranspiled(directive);
             return;
@@ -1009,22 +1015,6 @@ public sealed class Emitter
         Padding(line, directive);
     }
 
-    /// <summary>
-    /// Returns how a run of reserved bytes is split across <c>.res</c> directives. ca65 reserves at
-    /// most <c>$ffff</c> bytes in one of them, and that limit should not restrict what a
-    /// program may declare, so a bigger reservation is written as several.
-    /// </summary>
-    private static IEnumerable<long> Reservations(long bytes)
-    {
-        if (bytes <= 0xffff)
-        {
-            yield return bytes;
-            yield break;
-        }
-        for (var left = bytes; left > 0; left -= 0xffff)
-            yield return Math.Min(left, 0xffff);
-    }
-
     /// <summary>Writes the zeros a padded text is filled out with, where a declaration has any.</summary>
     private void Padding(LineSyntax line, DataDirectiveSyntax directive)
     {
@@ -1041,10 +1031,8 @@ public sealed class Emitter
             return;
         if (directive.Type is { } named)
         {
-            if (model.SymbolOf(named) is not { IsLayout: true } type)
-                return;
-            foreach (var record in values.Values)
-                Fields(line, type, ValuesIn(record), path: "");
+            if (model.SymbolOf(named) is { IsLayout: true } type)
+                new RecordWriter(model, context.Expansion, recordOutput).Values(line, type, values);
             return;
         }
         if (layout.Of(values, context.Expansion) is not { } laid)
@@ -1079,68 +1067,6 @@ public sealed class Emitter
         }
         WriteNamedData(line, label, text, bytes, comment);
     }
-
-    /// <summary>
-    /// Writes records. A record with values may be on its line or in the block its line opens, or
-    /// there may be an array of records in braces. Each record is written as one directive per
-    /// member in the type's order, regardless of the order of the values in the source. Room with
-    /// no values is zeros, which one <c>.res</c> expresses, unless a member pads with something
-    /// else.
-    /// </summary>
-    private void Records(LineSyntax line, DataDirectiveSyntax directive, Symbol? symbol, Symbol type)
-    {
-        if (model.RoomFor(directive, context.Expansion) is not { } room)
-        {
-            NotTranspiled(directive);
-            return;
-        }
-        IReadOnlyList<IReadOnlyDictionary<string, MemberValueSyntax>> records;
-        if (directive.Tail is BracedDataSyntax { Value: { } braced })
-        {
-            records = braced is ValueListSyntax list ? [.. list.Values.Select(ValuesIn)] : [ValuesIn(braced)];
-        }
-        else if (DataSyntax.BodyOf(directive) is { } block)
-        {
-            records = [ValuesIn(block.Members.Skip(1).OfType<LineSyntax>().Select(member => member.Statement))];
-        }
-        else if (!Pads(type))
-        {
-            var reserved = Reservations(room.Bytes).ToList();
-            WithName(line, symbol, $".res {reserved[0]}", (int)reserved[0], type.QualifiedName);
-            foreach (var rest in reserved.Skip(1))
-                Code(line, $"{Body}.res {rest}", (int)rest, type.QualifiedName);
-            return;
-        }
-        else
-        {
-            records = [.. Enumerable.Repeat(ValuesIn([]), (int)room.Elements)];
-        }
-
-        if (symbol is not null)
-            Code(line, LabelText(NameOf(symbol)), 0);
-        long bytes = 0;
-        foreach (var record in records)
-            bytes += Fields(line, type, record, path: "");
-        if (bytes != room.Bytes)
-            NotTranspiled(directive);
-    }
-
-    /// <summary>
-    /// Returns whether a type, or a record inside it, has a member that pads with something other
-    /// than zero. A type that contains itself has no layout at all, which the analysis has
-    /// already reported, so there is nothing here to walk into.
-    /// </summary>
-    private bool Pads(Symbol type) => !type.IsCyclic && (type.Body?.Symbols ?? []).Any(member =>
-        member.Kind == SymbolKind.Member
-        && (member.Type is { IsLayout: true } inner ? Pads(inner) : Fill(member) != 0));
-
-    /// <summary>Returns the byte a <c>.res n, fill</c> member pads with, which is zero when it names none.</summary>
-    private long Fill(Symbol member) =>
-        member.Data is DataDirectiveSyntax { Directive.DirectiveKind: DirectiveKind.Res } data
-        && data.Tail is InlineDataSyntax { Values: [_, var padding, ..] }
-        && model.ValueOf(padding, context.Expansion).AsNumber() is { } fill
-            ? fill & 0xff
-            : 0;
 
     /// <summary>Writes the label of a line whose statement is written separately.</summary>
     private void LabelOnly(LineSyntax line, LabelSyntax label)
@@ -1177,129 +1103,6 @@ public sealed class Emitter
             return;
         }
         Definition($"{NameOf(reference)} = {Constant(value)}");
-    }
-
-    /// <summary>
-    /// Writes the members of a type, one directive each, in the order the type declares them, and
-    /// returns the number of bytes written. A member that is itself a record, or an array of
-    /// them, is written out the same way, so a nested value reaches the fields inside it.
-    /// </summary>
-    private long Fields(
-        LineSyntax line, Symbol type, IReadOnlyDictionary<string, MemberValueSyntax> givenValues, string path)
-    {
-        // A type that contains itself has no layout to write out, and the analysis has reported it.
-        if (type.IsCyclic)
-            return 0;
-        long bytes = 0;
-        var members = (type.Body?.Symbols ?? []).Where(member => member.Kind == SymbolKind.Member).ToList();
-
-        // A union is written as the one member it is given, or its first, and zeros to its size.
-        if (type.Kind == SymbolKind.Union && members.Count > 0)
-            members = [members.FirstOrDefault(member => givenValues.ContainsKey(member.Name)) ?? members[0]];
-
-        foreach (var member in members)
-        {
-            if (member.Size is not { } size)
-                continue;
-            var given = givenValues.GetValueOrDefault(member.Name)?.Value;
-            var named = path.Length == 0 ? member.Name : $"{path}::{member.Name}";
-            var element = member.Data as DataDirectiveSyntax;
-
-            // An array member takes a braced list, and an array member no value names is zeros.
-            if (element is { Count: not null })
-            {
-                SeparatedSyntaxList<SyntaxNode> items = given is ValueListSyntax list ? list.Values : default;
-                if (member.Type is { IsLayout: true } records)
-                {
-                    for (var i = 0; i < member.Count; i++)
-                        bytes += Fields(line, records, ValuesIn(i < items.Count ? items[i] : null), $"{named}[{i}]");
-                    continue;
-                }
-                if (items.Count == 0)
-                {
-                    foreach (var reserved in Reservations(size))
-                        Field(line, $".res {reserved}", named, reserved);
-                    bytes += size;
-                    continue;
-                }
-                var (width, bigEndian) = ElementFormat(element);
-                Field(line,
-                    $"{ForCa65(element.Directive.DirectiveKind, DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
-                    named, size);
-                bytes += size;
-                continue;
-            }
-
-            // A nested record takes a braced list of its own members; anything else is a value.
-            if (member.Type is { IsLayout: true } inner)
-            {
-                bytes += Fields(line, inner, ValuesIn(given), named);
-                continue;
-            }
-            foreach (var (text, part) in Member(member, element, given))
-                Field(line, text, named, part);
-            bytes += size;
-        }
-
-        if (type.Kind == SymbolKind.Union && type.Size is { } whole && whole > bytes)
-        {
-            foreach (var reserved in Reservations(whole - bytes))
-                Field(line, $".res {reserved}, $00", path.Length == 0 ? type.Name : path, reserved);
-            bytes = whole;
-        }
-        return bytes;
-    }
-
-    /// <summary>Writes one member's directive, with the path it fills in a comment.</summary>
-    private void Field(LineSyntax line, string directive, string path, long size) =>
-        Code(line, Body + directive, (int)size, path);
-
-    /// <summary>
-    /// Returns the <c>member = value</c> pairs of a record by member name, from a braced record or
-    /// from the lines of one.
-    /// </summary>
-    private static IReadOnlyDictionary<string, MemberValueSyntax> ValuesIn(SyntaxNode? record) =>
-        ValuesIn(record is RecordValuesSyntax values ? values.Members : []);
-
-    private static IReadOnlyDictionary<string, MemberValueSyntax> ValuesIn(IEnumerable<StatementSyntax> values)
-    {
-        var named = new Dictionary<string, MemberValueSyntax>(StringComparer.Ordinal);
-        foreach (var value in values)
-        {
-            if (value is MemberValueSyntax member)
-                named[member.Name.Text] = member;
-        }
-        return named;
-    }
-
-    /// <summary>
-    /// Returns the directives for one member of a record, written with the directive its type
-    /// gave it. A member that no value names is zero, and a member reserved by <c>.res</c> takes
-    /// text, padded to the room it has with the byte it pads with.
-    /// </summary>
-    private IEnumerable<(string Text, long Size)> Member(Symbol member, DataDirectiveSyntax? element, SyntaxNode? given)
-    {
-        var size = member.Size ?? 0;
-        var directive = element?.Directive.DirectiveKind ?? DirectiveKind.Res;
-
-        // Room with a fill is what `.res n, fill` says in both languages, so the room a value
-        // does not reach is written as the one directive rather than as a row of equal bytes.
-        if (directive == DirectiveKind.Res)
-        {
-            var values = given is null ? [] : model.BytesOf(given, context.Expansion)?.ToList() ?? [];
-            var used = Math.Min(values.Count, size);
-            if (used > 0)
-                yield return ($".byte {string.Join(", ", values.Take((int)used).Select(b => Hex(b & 0xff, 2)))}", used);
-            if (size > used)
-            {
-                foreach (var reserved in Reservations(size - used))
-                    yield return ($".res {reserved}, {Hex(Fill(member), 2)}", reserved);
-            }
-            yield break;
-        }
-        var (width, bigEndian) = ElementFormat(element!);
-        var value = given is null ? Constant(0) : Datum(given, width, bigEndian, []) ?? Rendered(given);
-        yield return ($"{ForCa65(directive, SyntaxFacts.TextOf(directive))} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}", size);
     }
 
     /// <summary>
@@ -1767,30 +1570,6 @@ public sealed class Emitter
 
         foreach (var child in node.ChildNodes)
             Substitute(child, rewriter, nested: false);
-    }
-
-    /// <summary>
-    /// Returns the ca65 directive for one of nt65's element types. ca65's 24-bit directive is
-    /// <c>.faraddr</c> and its one big-endian directive <c>.dbyt</c>; a wider big-endian value
-    /// is written as its bytes. Every other element type keeps <paramref name="spelled"/>, the
-    /// text it is written with.
-    /// </summary>
-    private static string ForCa65(DirectiveKind directive, string spelled) => directive switch
-    {
-        DirectiveKind.Long => ".faraddr",
-        DirectiveKind.BeWord => ".dbyt",
-        DirectiveKind.BeLong or DirectiveKind.BeDword => ".byte",
-        _ => spelled,
-    };
-
-    /// <summary>
-    /// Returns how wide one element of an element type is, and whether its bytes are written high
-    /// first.
-    /// </summary>
-    private static (int Width, bool BigEndian) ElementFormat(DataDirectiveSyntax directive)
-    {
-        var kind = directive.Directive.DirectiveKind;
-        return (SyntaxFacts.ElementSize(kind) ?? 1, kind is DirectiveKind.BeWord or DirectiveKind.BeLong or DirectiveKind.BeDword);
     }
 
     /// <summary>
@@ -2350,6 +2129,41 @@ public sealed class Emitter
 
         /// <inheritdoc/>
         public override void VisitPlaceDirective(PlaceDirectiveSyntax node) => emitter.Place(node);
+    }
+
+    /// <summary>
+    /// Gives a <see cref="RecordWriter"/> the few things it needs from an emitter, and nothing
+    /// else of the emitter's state.
+    /// </summary>
+    /// <param name="emitter">The emitter whose file is being written.</param>
+    private sealed class RecordOutput(Emitter emitter) : IRecordOutput
+    {
+        /// <inheritdoc/>
+        public void Code(LineSyntax line, string text, int bytes, string? comment) =>
+            emitter.Code(line, text, bytes, comment);
+
+        /// <inheritdoc/>
+        public void Label(LineSyntax line, Symbol symbol) =>
+            emitter.Code(line, LabelText(emitter.NameOf(symbol)), 0);
+
+        /// <inheritdoc/>
+        public void Named(LineSyntax line, Symbol? symbol, string text, int bytes, string? comment) =>
+            emitter.WithName(line, symbol, text, bytes, comment);
+
+        /// <inheritdoc/>
+        public void NotTranspiled(SyntaxNode node) => emitter.NotTranspiled(node);
+
+        /// <summary>
+        /// Returns one value of a slot as <see cref="Datum"/> returns it when it returns anything,
+        /// and as <see cref="Rendered"/> writes it otherwise. Any comment either produces is
+        /// dropped.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="width">The width of the slot, in bytes.</param>
+        /// <param name="bigEndian">Whether the slot's bytes are written high first.</param>
+        /// <returns>The value as the output writes it.</returns>
+        public string ValueText(SyntaxNode value, int width, bool bigEndian) =>
+            emitter.Datum(value, width, bigEndian, []) ?? emitter.Rendered(value);
     }
 
     /// <summary>
