@@ -114,24 +114,6 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// A condition that tests a constant at file level is fixed by declaring the constant with
-    /// <c>.config</c>, after which the condition may test it.
-    /// </summary>
-    [Fact]
-    public void AConstantAConditionTestsBecomesASetting()
-    {
-        const string before = ".module main\n.export ROWS\nWIDE = 1\n.if WIDE {\n    ROWS = 2\n}\n";
-        var (analysis, model) = Analyzed(before);
-
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole),
-            action => action.Title == "Declare it with `.config`, as a setting");
-        var after = Editing.Apply(before, action.Edit.Changes[Uri]);
-
-        Assert.Equal(".module main\n.export ROWS\n.config WIDE = 1\n.if WIDE {\n    ROWS = 2\n}\n", after);
-        Assert.Empty(Analyzed(after).Analysis.Diagnostics.Select(diagnostic => diagnostic.Message));
-    }
-
-    /// <summary>
     /// The fix that exports an unused name inserts the <c>.export</c> directly under the file's
     /// <c>.module</c>, which is also where the fix for a name another module cannot see inserts
     /// one.

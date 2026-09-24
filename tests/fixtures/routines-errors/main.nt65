@@ -7,7 +7,7 @@
 .export late, wrong, stop, crowded, late_never, doubly, handler, closed, calls, tail, takes, short, pointed
 .export near_std, far_jump, wrong_mirror, far_near, reads
 
-LIMIT = 3
+.const LIMIT = 3
 
 ; A routine with no body declares what calls through it are checked against, and has nothing
 ; else to say it.

@@ -5,25 +5,30 @@
 ; The same name under two conditions. Only the branch the build takes declares anything.
 .module main
 
+; The settings the build gives.
+.const PLATFORM ?= 1
+.const DEBUG    ?= 0
+.const VERBOSE  ?= 0
+
 .if PLATFORM == 1 {
-    LINES = 262
+    .const LINES = 262
 }
 .if PLATFORM == 2 {
-    LINES = 312
+    .const LINES = 312
 }
 
 ; A chain takes the first branch that holds.
 .if DEBUG {
-    TRACE = 1
-} .elseif .defined(VERBOSE) {
-    TRACE = 2
+    .const TRACE = 1
+} .elseif VERBOSE {
+    .const TRACE = 2
 } .else {
-    TRACE = 0
+    .const TRACE = 0
 }
 
-; The right operand is neither evaluated nor looked up once the left decides the result,
-; so `VERBOSE` is a question rather than a name that is not declared.
-.if .defined(VERBOSE) && VERBOSE > 3 {
+; The right operand is neither evaluated nor looked up once the left decides the result, so
+; `NOWHERE` is not reported although nothing declares it.
+.if 0 && NOWHERE > 3 {
     .error "this configuration is not supported"
 }
 
@@ -45,7 +50,7 @@
     rts
 }
 
-; The CPU is configuration, like a define.
+; The CPU is configuration, like a setting.
 .proc trace {
     .if .target(65c02) {
         phx
@@ -120,9 +125,9 @@
 ; A chain at file level and a chain inside a proc are read the same way, and indentation
 ; means nothing in either.
 .if PLATFORM == 1 {
-    COLUMNS = 40
+    .const COLUMNS = 40
 } .else {
-    COLUMNS = 80
+    .const COLUMNS = 80
 }
 
 .segment CODE

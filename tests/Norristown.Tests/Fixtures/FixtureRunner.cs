@@ -161,7 +161,6 @@ internal static class FixtureRunner
                 var edited = source.Text[..edit.Span.Start] + edit.Text + source.Text[edit.Span.End..];
                 var after = Compiler.Analyze(
                     [.. analysis.Program.Files.Select(file => file.Tree)
-                        .Where(tree => tree != analysis.Defines)
                         .Select(tree => tree.Path == source.Path
                             ? SyntaxTree.Parse(tree.Path, edited)
                             : tree)],

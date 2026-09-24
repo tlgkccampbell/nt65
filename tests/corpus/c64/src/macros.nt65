@@ -4,6 +4,8 @@
 
 .cpu 6502
 
+.use hw::DEBUG
+
 .export add16, sub16, cmp16, mov16, inc16, if, while_ne, poke, trace, save_regs, restore_regs
 
 ; dest += value (16-bit, little-endian), carry out in C.

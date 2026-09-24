@@ -1257,12 +1257,15 @@ public sealed class Emitter
     private void WriteConstant(LineSyntax line, ConstantDeclarationSyntax statement)
     {
         // A string cannot be expressed as a ca65 constant. It is used through `.strlen` and
-        // `.strat`, which are numbers by the time anything is written.
-        if (model.SymbolAt(statement.Name) is { } reference)
+        // `.strat`, which are numbers by the time anything is written. A setting is written as
+        // its value wherever it is used, and is not written here.
+        if (!statement.IsSetting && model.SymbolAt(statement.Name) is { } reference)
         {
             if (reference.Value.IsString)
                 return;
             var rewriter = new TokenRewriter();
+            if (statement.Keyword is { } keyword)
+                rewriter.Replacements[keyword.Position] = "";
             rewriter.Replacements[statement.Name.Position] = NameOf(reference);
             Substitute(statement.Value, rewriter, nested: false);
             var text = rewriter.Render(statement);
@@ -1271,6 +1274,24 @@ public sealed class Emitter
             else
                 Definition(text);
         }
+    }
+
+    /// <summary>
+    /// Writes data found elsewhere as a ca65 assignment of its address under its flat name, where
+    /// it stands when the address uses the current address and as a <see cref="Definition"/>
+    /// otherwise.
+    /// </summary>
+    private void Elsewhere(LineSyntax line, DataDeclarationSyntax declaration)
+    {
+        if (declaration.Address is not { } address || model.SymbolAt(declaration.Name) is not { } reference)
+            return;
+        var rewriter = new TokenRewriter();
+        Substitute(address, rewriter, nested: false);
+        var text = $"{NameOf(reference)} = {rewriter.Render(address)}";
+        if (address is CurrentAddressExpressionSyntax || address.DescendantNodes().OfType<CurrentAddressExpressionSyntax>().Any())
+            Declare(line, text);
+        else
+            Definition(text);
     }
 
     /// <summary>Writes an extern proc, which is a routine at a constant address and so a constant.</summary>
@@ -1874,10 +1895,10 @@ public sealed class Emitter
             return;
         }
 
-        // A define and a checked import are written as their value, never by name. That way a
-        // `-D` given to ca65 cannot collide with a define, and a checked import is a value nt65
+        // A setting and a checked import are written as their value, never by name. That way a
+        // `-D` given to ca65 cannot collide with a setting, and a checked import is a value nt65
         // has already used in its own arithmetic.
-        var byValue = (symbol.IsDefine || symbol.IsConfig || symbol.Kind == SymbolKind.ImportedConstant)
+        var byValue = (symbol.IsSetting || symbol.Kind == SymbolKind.ImportedConstant)
             && symbol.Value.AsNumber() is not null;
         rewriter.ReplaceName(name, byValue ? Constant(symbol.Value.Number) : NameOf(symbol));
         if (byValue)
@@ -2196,6 +2217,11 @@ public sealed class Emitter
         /// <param name="node">The declaration.</param>
         public override void VisitDataDeclaration(DataDeclarationSyntax node)
         {
+            if (node.Address is not null)
+            {
+                emitter.Elsewhere(Line, node);
+                return;
+            }
             emitter.Declared(Line, node);
             if (Line.OpensBlockKind is not (BlockKind.Data or BlockKind.DataBody))
                 emitter.End(node);

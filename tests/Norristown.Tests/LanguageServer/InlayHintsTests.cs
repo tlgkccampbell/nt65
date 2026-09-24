@@ -259,7 +259,7 @@ public sealed class InlayHintsTests
         // laid out, and every branch reaches its target.
         Assert.Equal(
             [
-                "23: PPURES_BITS = .select(USE_PSEUDOHIRES, SUB_HIRES, 0) | .select(USE_INTERLACE, INTERLACE, 0) = 0",
+                "23: .const PPURES_BITS = .select(USE_PSEUDOHIRES, SUB_HIRES, 0) | .select(USE_INTERLACE, INTERLACE, 0) = 0",
                 "50: plb dbr = $80",
                 "52: sep #$20 a8",
                 "57: plb dbr?",

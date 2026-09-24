@@ -70,7 +70,7 @@ public sealed class SemanticModel
             .Concat(Namesakes(References))
             .Distinct()];
         ExternalSymbols = [.. Used
-            .Where(symbol => symbol.Tree != tree && !symbol.IsDefine && !symbol.IsConfig
+            .Where(symbol => symbol.Tree != tree && !symbol.IsSetting
                 && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter))];
     }
 
@@ -99,7 +99,7 @@ public sealed class SemanticModel
 
     /// <summary>
     /// Gets the symbols this file names but another file declares, in the order it first names
-    /// them. These are what its output imports. Defines are not included, because a define is
+    /// them. These are what its output imports. Settings are not included, because a setting is
     /// emitted as its value and is not a symbol to the linker.
     /// </summary>
     public IReadOnlyList<Symbol> ExternalSymbols { get; }
@@ -221,8 +221,8 @@ public sealed class SemanticModel
     /// <summary>
     /// Returns every name that may appear alone at <paramref name="position"/>, each with what it
     /// means there, in the order a lookup tries them. The order is what the scopes out to the
-    /// file declare, nearest first, then what <c>.use</c> brought in, then the defines, and then
-    /// what a <c>.use module::*</c> brings in. Where two entries share a name, the first is what
+    /// file declare, nearest first, then what <c>.use</c> brought in, and then what a
+    /// <c>.use module::*</c> brings in. Where two entries share a name, the first is what
     /// the name means, which is the rule the binder resolves the file by.
     /// <para>
     /// Modules are not included, because a module is the start of a path, not a name that refers

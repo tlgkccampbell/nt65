@@ -57,10 +57,10 @@ public sealed class CorpusTests
         var program = CorpusProgram.All().SingleOrDefault(p => p.Name == "c64");
         if (program is null)
             return;
-        var release = program.Compile(new Define("DEBUG", 0, default));
+        var release = program.Compile(new SettingValue("DEBUG", 0, default));
         var failures = Check(program, release).ToList();
         Assert.True(failures.Count == 0, string.Join("\n", failures));
-        var debug = program.Compile(new Define("DEBUG", 1, default));
+        var debug = program.Compile(new SettingValue("DEBUG", 1, default));
 
         Assert.DoesNotContain("brk", Main(release).Text);
         Assert.Contains("brk", Main(debug).Text);

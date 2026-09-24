@@ -1,4 +1,4 @@
 {
   "cpu": "65816",
-  "defines": { "DEBUG": 1, "LEVEL": 3, "SOUND": 1, "PLATFORM": 1 }
+  "settings": { "DEBUG": 1, "LEVEL": 3, "SOUND": 1, "PLATFORM": 1 }
 }

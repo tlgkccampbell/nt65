@@ -16,4 +16,4 @@
 .data accent: .byte .strcat("é")              ;! error[text-not-ascii]: text is ASCII outside a charmap; use `\xHH` for a byte above $7f
 
 ; There is still no arithmetic on text: `.strcat` joins it.
-JOINED = "A" + "B"                              ;! error[operator-on-text]: `+` cannot be used on a string
+.const JOINED = "A" + "B"                              ;! error[operator-on-text]: `+` cannot be used on a string

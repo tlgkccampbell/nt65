@@ -8,8 +8,8 @@
 .segment ZEROPAGE
 .export .data ptr: .word
 
-.export SCREEN = $0400
-rows   = 25
+.export .const SCREEN = $0400
+.const rows   = 25
 
 ; An exported type is not a symbol to the linker: each of its members crosses instead, as
 ; the flat constant it becomes.
@@ -37,8 +37,8 @@ rows   = 25
 
 ; Exporting a scope exports what it declares.
 .export .scope palette {
-    border = $0f
-    ink    = rows - 24
+    .const border = $0f
+    .const ink    = rows - 24
 }
 
 ; Exporting mixed data exports its address and its named members; its positions stay its own.

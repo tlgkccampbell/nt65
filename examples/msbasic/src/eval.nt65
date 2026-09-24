@@ -508,7 +508,7 @@
 }
 ; ----------------------------------------------------------------------------
 ; The address the `jsr PTRGET` at the start of FRM_VARIABLE pushes, which PTRGET looks for
-.export FRM_VARIABLE_CALL = FRM_VARIABLE + 2
+.export .data FRM_VARIABLE_CALL: .byte = FRM_VARIABLE + 2
 
 .export .proc FRM_VARIABLE {
     jsr PTRGET

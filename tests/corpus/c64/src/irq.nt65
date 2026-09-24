@@ -9,7 +9,7 @@
 
 .export install, remove
 
-SPLITS = 3
+.const SPLITS = 3
 
 .segment RODATA
 ; raster line, border colour, background colour for each split

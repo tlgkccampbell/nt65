@@ -25,23 +25,18 @@ public sealed class ProgramSymbols
 {
     private readonly Dictionary<string, Module> modules;
     private readonly HashSet<string> prefixes;
-    private readonly Dictionary<string, Symbol> defines;
 
-    private ProgramSymbols(Dictionary<string, Module> modules, HashSet<string> prefixes, Dictionary<string, Symbol> defines)
+    private ProgramSymbols(Dictionary<string, Module> modules, HashSet<string> prefixes)
     {
         this.modules = modules;
         this.prefixes = prefixes;
-        this.defines = defines;
     }
 
     /// <summary>Gets the table for a program of one file, which can see nothing beyond itself.</summary>
-    public static ProgramSymbols Empty { get; } = new([], [], []);
+    public static ProgramSymbols Empty { get; } = new([], []);
 
     /// <summary>Gets every module of the program.</summary>
     public IEnumerable<Module> Modules => modules.Values;
-
-    /// <summary>Gets every define, which every file sees.</summary>
-    public IEnumerable<Symbol> Defines => defines.Values;
 
     /// <summary>
     /// Returns the module named <paramref name="name"/>, or null when no file declares that
@@ -54,12 +49,6 @@ public sealed class ProgramSymbols
     /// module's name.
     /// </summary>
     public bool IsModulePath(string path) => modules.ContainsKey(path) || prefixes.Contains(path);
-
-    /// <summary>
-    /// Returns the define named <paramref name="name"/>, which every file sees, or null if there
-    /// is none.
-    /// </summary>
-    public Symbol? Define(string name) => defines.GetValueOrDefault(name);
 
     /// <summary>
     /// Returns what <paramref name="name"/> means in <paramref name="module"/>, which is either a
@@ -88,7 +77,7 @@ public sealed class ProgramSymbols
     /// exports under one linker name.
     /// </summary>
     internal static ProgramSymbols Build(
-        IReadOnlyList<Module> modules, IEnumerable<Symbol> defines, List<Diagnostic> diagnostics)
+        IReadOnlyList<Module> modules, List<Diagnostic> diagnostics)
     {
         var byName = new Dictionary<string, Module>(StringComparer.Ordinal);
         var prefixes = new HashSet<string>(StringComparer.Ordinal);
@@ -154,10 +143,7 @@ public sealed class ProgramSymbols
             }
         }
 
-        var defined = new Dictionary<string, Symbol>(StringComparer.Ordinal);
-        foreach (var define in defines)
-            defined.TryAdd(define.Name, define);
-        return new ProgramSymbols(byName, prefixes, defined);
+        return new ProgramSymbols(byName, prefixes);
     }
 
     /// <summary>
@@ -168,8 +154,8 @@ public sealed class ProgramSymbols
     internal static bool IsLinked(Symbol symbol) => symbol.Kind is not (SymbolKind.Macro or SymbolKind.Charmap
         or SymbolKind.Func or SymbolKind.List or SymbolKind.Scope or SymbolKind.Enum or SymbolKind.Struct
         or SymbolKind.Union or SymbolKind.ImportedAddress or SymbolKind.ImportedConstant or SymbolKind.Frame
-        or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet) && !symbol.IsDefine
-        && !symbol.IsConfig && !symbol.Value.IsString;
+        or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet)
+        && !symbol.IsSetting && !symbol.Value.IsString;
 
     private static string FileName(SyntaxTree tree) => tree.Path[(tree.Path.LastIndexOf('/') + 1)..];
 

@@ -60,7 +60,7 @@
 .assert .mincycles(calling::after, calling::before) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count the cycles between these positions: `before` comes before `after`
 
 ; Neither end is a position in code.
-LIMIT = 4
+.const LIMIT = 4
 .assert .mincycles(LIMIT, calling::after) == 0             ;! error[cycles-needs-a-position]: `LIMIT` is a constant, not a position in code: a cycle count runs from one label or routine name to another
 
 ; A cycle count is known only once code is laid out, so it cannot size a declaration.

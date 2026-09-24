@@ -184,9 +184,10 @@ internal static class TextMateGrammar
             TextMateRule.Scoped($@"(?i)(\.scope)\s+({Word})", Directive, Namespace),
             TextMateRule.Scoped($@"(?i)(\.(?:charmap|signature))\s+({Word})", Directive, Type),
             TextMateRule.Scoped($@"(?i)(\.(?:data|list|frame))\s+({Word})", Directive, Variable),
-            TextMateRule.Scoped($@"(?i)(\.(?:config|export))\s+({Word})(?=\s*=(?!=))", Directive, Constant),
+            TextMateRule.Scoped($@"(?i)(\.const)\s+({Word})", Directive, Constant),
+            TextMateRule.Scoped($@"(?i)(\.export)\s+({Word})(?=\s*\??=(?!=))", Directive, Constant),
             new TextMateRule(Match: @"\.[A-Za-z_][A-Za-z0-9_]*", Name: Directive),
-            TextMateRule.Scoped($@"^\s*({Word})(?=\s*=(?!=))", Constant),
+            TextMateRule.Scoped($@"^\s*({Word})(?=\s*\??=(?!=))", Constant),
 
             // A label sits at the start of a line. `name::` is a scoped name, not a label.
             TextMateRule.Scoped($@"^\s*(@?{Word})(?=\s*:(?!:))", Label),

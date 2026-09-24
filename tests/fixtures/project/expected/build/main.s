@@ -17,7 +17,7 @@ scratch: .res 2
 tiles: .res 64
 
 .segment "CODE": absolute
-; .proc start  main.nt65:13
+; .proc start  main.nt65:16
 main__start:
     stz z:scratch
     lda #$01                        ; DEBUG

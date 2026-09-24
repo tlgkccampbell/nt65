@@ -39,13 +39,10 @@ public sealed class Placements
     /// <summary>Gets the diagnostics for the program's placements.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; }
 
-    /// <summary>
-    /// Computes the placements of <paramref name="trees"/>, leaving out
-    /// <paramref name="defines"/>, which is not a module anyone wrote.
-    /// </summary>
-    public static Placements Of(IEnumerable<SyntaxTree> trees, SyntaxTree? defines)
+    /// <summary>Computes the placements of <paramref name="trees"/>.</summary>
+    public static Placements Of(IEnumerable<SyntaxTree> trees)
     {
-        var files = trees.Where(tree => tree != defines).OrderBy(tree => tree.Path, StringComparer.Ordinal).ToList();
+        var files = trees.OrderBy(tree => tree.Path, StringComparer.Ordinal).ToList();
         var diagnostics = new List<Diagnostic>();
         var modules = new Dictionary<string, SyntaxTree>(StringComparer.Ordinal);
         var declared = new Dictionary<string, ModulePlacement>(StringComparer.Ordinal);

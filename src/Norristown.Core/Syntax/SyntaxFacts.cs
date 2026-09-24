@@ -69,7 +69,6 @@ public static class SyntaxFacts
         new(BuiltinKind.Max, 2, 2, "two numbers", Arithmetic: true),
         new(BuiltinKind.Addrsize, 1, 1, "one expression"),
         new(BuiltinKind.Target, 1, 1, null),
-        new(BuiltinKind.Defined, 1, 1, "one name"),
         new(BuiltinKind.Has, 1, 1, null),
         new(BuiltinKind.Select, 3, 3, null),
         new(BuiltinKind.Switch, 3, null, null),
@@ -178,8 +177,7 @@ public static class SyntaxFacts
         [DirectiveKind.List] = new(SyntaxKind.ListDeclaration, new(Declarations), BlockKind.List, Exportable: true),
         [DirectiveKind.Func] = new(SyntaxKind.FuncDeclaration, new(Declarations, Expanded), Exportable: true),
         [DirectiveKind.Signature] = new(SyntaxKind.SignatureDeclaration, new(Declarations, Expanded), Exportable: true),
-        [DirectiveKind.Config] = new(
-            SyntaxKind.ConfigDeclaration, new(DirectiveContexts.Items, DirectiveNesting.Block), Exportable: true),
+        [DirectiveKind.Const] = new(SyntaxKind.ConstantDeclaration, new(Bodies & ~DirectiveContexts.Values), Exportable: true),
         [DirectiveKind.If] = new(SyntaxKind.IfDirective, new(Bodies | DirectiveContexts.EnumMembers), BlockKind.If),
         [DirectiveKind.ElseIf] = new(SyntaxKind.ElseIfDirective, new(DirectiveContexts.None), BlockKind.If),
         [DirectiveKind.Else] = new(SyntaxKind.ElseDirective, new(DirectiveContexts.None), BlockKind.If),
@@ -347,6 +345,17 @@ public static class SyntaxFacts
     /// </summary>
     public static DirectivePlacement PlacementOf(DirectiveKind directive) =>
         directiveRows.TryGetValue(directive, out var row) ? row.Placement : default;
+
+    /// <summary>
+    /// Gets where a setting, <c>.const NAME ?= value</c>, may be declared, which is at file level,
+    /// under no condition and in no block that opens a scope of names. A <c>.segment</c> region or
+    /// block leaves names in the scope around it, so a setting may be in one. The build names a
+    /// setting from outside the program, so it must be one declaration that exists in every build.
+    /// </summary>
+    public static DirectivePlacement SettingPlacement { get; } = new(
+        DirectiveContexts.Items,
+        DirectiveNesting.Condition | DirectiveNesting.Routine | DirectiveNesting.MacroBody | DirectiveNesting.Repetition
+            | DirectiveNesting.NameScope);
 
     /// <summary>
     /// Returns what surrounds a line inside <paramref name="block"/>, combining that block and
@@ -544,6 +553,7 @@ public static class SyntaxFacts
         SyntaxKind.CaretCaret => "^^",
         SyntaxKind.Tilde => "~",
         SyntaxKind.Question => "?",
+        SyntaxKind.QuestionEquals => "?=",
         _ => null,
     };
 

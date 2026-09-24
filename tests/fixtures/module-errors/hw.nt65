@@ -2,5 +2,5 @@
 .module hw
 
 .export .scope vic {        ;! error[name-is-a-module-path]: `hw::vic` is the path of a module, and module `hw` may not declare `vic` as well
-    BORDER = $d020
+    .const BORDER = $d020
 }

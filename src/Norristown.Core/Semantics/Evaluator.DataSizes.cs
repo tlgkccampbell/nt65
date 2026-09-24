@@ -196,7 +196,7 @@ internal sealed partial class Evaluator
         var directive = statement switch
         {
             DataDirectiveSyntax data => data,
-            DataDeclarationSyntax declaration => declaration.Directive,
+            DataDeclarationSyntax { Address: null } declaration => declaration.Directive,
             LabeledLineSyntax labeled => labeled.Statement as DataDirectiveSyntax,
             _ => null,
         };

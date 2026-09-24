@@ -4,8 +4,8 @@
 
 .cpu 6502
 
-LOAD = $0801                        ; where BASIC programs start
-ENTRY = LOAD + 12                   ; where `platform::start` is, after the 12 bytes of `basic`
+.const LOAD = $0801                        ; where BASIC programs start
+.const ENTRY = LOAD + 12                   ; where `platform::start` is, after the 12 bytes of `basic`
 
 ; The digit of n in the given place, in decimal.
 .func digit(n, place) = '0' + (n / place) .mod 10

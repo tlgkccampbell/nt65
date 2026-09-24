@@ -1,7 +1,10 @@
 ; The project file says what this program is built for, where its output goes, what its
-; defines are worth and which segments it has. Nothing here repeats any of it.
+; settings are worth and which segments it has. Nothing here repeats any of it.
 
 .module main
+
+.const DEBUG   ?= 0
+.const VERSION ?= 0
 
 .segment FAST
 .data scratch: .word
@@ -12,7 +15,7 @@
 .segment CODE
 .export .proc start {
     stz scratch             ; a 65C02 instruction, from the project's `cpu`
-    lda #DEBUG              ; a define, written out as its value
+    lda #DEBUG              ; a setting, written out as its value
     ldx #<VERSION
     ldy #>VERSION
     lda tiles

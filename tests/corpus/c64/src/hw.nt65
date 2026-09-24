@@ -4,36 +4,39 @@
 
 .cpu 6502
 
+; Built with the state checks and the border flashes that help find a bug.
+.export .const DEBUG ?= 0
+
 .export .scope vic {
-    BASE         = $D000
-    SPR0_X       = BASE + $00
-    SPR0_Y       = BASE + $01
-    SPR_MSB      = BASE + $10
-    CTRL1        = BASE + $11
-    RASTER       = BASE + $12
-    SPR_ENA      = BASE + $15
-    MEMSETUP     = BASE + $18
-    IRQ_FLAG     = BASE + $19
-    IRQ_MASK     = BASE + $1A
-    SPR_SPR_COLL = BASE + $1E
-    BORDER       = BASE + $20
-    BG0          = BASE + $21
-    SPR0_COL     = BASE + $27
+    .const BASE         = $D000
+    .const SPR0_X       = BASE + $00
+    .const SPR0_Y       = BASE + $01
+    .const SPR_MSB      = BASE + $10
+    .const CTRL1        = BASE + $11
+    .const RASTER       = BASE + $12
+    .const SPR_ENA      = BASE + $15
+    .const MEMSETUP     = BASE + $18
+    .const IRQ_FLAG     = BASE + $19
+    .const IRQ_MASK     = BASE + $1A
+    .const SPR_SPR_COLL = BASE + $1E
+    .const BORDER       = BASE + $20
+    .const BG0          = BASE + $21
+    .const SPR0_COL     = BASE + $27
 }
 
 .export .scope cia1 {
-    PRA = $DC00                 ; joystick port 2
-    ICR = $DC0D
+    .const PRA = $DC00                 ; joystick port 2
+    .const ICR = $DC0D
 }
 
 .export .scope cia2 {
-    ICR = $DD0D
+    .const ICR = $DD0D
 }
 
 .export .scope kernal {
-    IRQ_VECTOR = $0314          ; CINV
-    IRQ        = $EA31          ; full KERNAL IRQ (keyboard scan, cursor blink)
-    IRQ_EXIT   = $EA81          ; restore registers and RTI
+    .const IRQ_VECTOR = $0314          ; CINV
+    .const IRQ        = $EA31          ; full KERNAL IRQ (keyboard scan, cursor blink)
+    .const IRQ_EXIT   = $EA81          ; restore registers and RTI
 
     ; CHROUT is documented as using A alone, so X and Y come back; the rest use all three
     ; and promise nothing.
@@ -43,9 +46,9 @@
     .proc CLRSCR = $E544
 }
 
-.export SCREEN_RAM  = $0400
-.export COLOR_RAM   = $D800
-.export SPRITE_PTRS = SCREEN_RAM + $03F8
+.export .const SCREEN_RAM  = $0400
+.export .const COLOR_RAM   = $D800
+.export .const SPRITE_PTRS = SCREEN_RAM + $03F8
 
 .export .enum Color {
     black

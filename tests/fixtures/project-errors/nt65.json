@@ -4,9 +4,9 @@
   "cpu": "6809",          // ;! error[project-cpu-unknown]: `6809` is not a supported `cpu`: use `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`
   "files": "*.nt65",      // ;! error[project-not-a-list]: `files` must be a list of strings
   "outputs": "build",     // ;! error[project-key-unknown]: `outputs` is not a key of nt65.json
-  "define": {},           // ;! error[project-key-unknown]: `define` is not a key of nt65.json; did you mean `defines`?
-  "defines": {
-    "SIZE": "twelve"      // ;! error[define-not-a-number]: `SIZE`: a define's value must be a number
+  "setting": {},          // ;! error[project-key-unknown]: `setting` is not a key of nt65.json; did you mean `settings`?
+  "settings": {
+    "SIZE": "twelve"      // ;! error[setting-not-a-number]: `SIZE`: a setting's value must be a number
   },
   "diagnostics": {
     "unused-symbols": "off",   // ;! error[diagnostic-name-unknown]: `unused-symbols` is not a diagnostic nt65 reports; did you mean `unused-symbol`?
@@ -31,7 +31,7 @@
     "$4200": ["$00-$1ff"] // ;! error[bank-invalid]: `$4200`: "$00-$1ff" is not a bank or a range of banks
   },
   "configurations": {
-    "fast": { "cpu": "65816" },   // ;! error[configuration-key-unknown]: configuration `fast` cannot set `cpu`: a configuration may set only `defines`, `diagnostics`, `links` and `out`
+    "fast": { "cpu": "65816" },   // ;! error[configuration-key-unknown]: configuration `fast` cannot set `cpu`: a configuration may set only `settings`, `diagnostics`, `links` and `out`
     "slow down": {}               // ;! error[configuration-name-invalid]: `slow down` is not a valid configuration name: use only letters, digits, `_` and `-`
   }
 }

@@ -1,5 +1,5 @@
 {
   "cpu": "65c02",
   "files": ["*.nt65"],
-  "defines": { "PLATFORM": 2, "DEBUG": 1 }
+  "settings": { "PLATFORM": 2, "DEBUG": 1 }
 }

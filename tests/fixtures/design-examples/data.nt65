@@ -6,7 +6,7 @@
 .export player_x, buffer, gradient, row_lo, handlers, header, sprites, tiles, msg, lo, id
 .export basic_stub
 
-SCREEN = $0400
+.const SCREEN = $0400
 
 .struct RomHeader {
     title: .res 21, ' '

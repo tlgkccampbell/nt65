@@ -12,17 +12,17 @@
 .export .signature running = a8, i8 ; the 6502's registers, which are all it has
 .export .use nt65::cbm::petscii as text  ; the KERNAL reads and writes PETSCII
 
-.config COLUMNS = 40                ; a setting, so that the monitor's conditions may test it
-LINE_LENGTH = 80                    ; the screen editor's logical line: two rows of the screen
-NEWLINE = $0D                       ; RETURN
+.const COLUMNS ?= 40                ; a setting, so that the monitor's conditions may test it
+.const LINE_LENGTH = 80                    ; the screen editor's logical line: two rows of the screen
+.const NEWLINE = $0D                       ; RETURN
 
 .proc putc = $FFD2: running, keeps x, y  ; CHROUT
 .proc CHRIN = $FFCF: running        ; reads the line the cursor is on, a character at a time
 .proc READY = $E37B: running, noreturn ; BASIC's warm start
 
-CBINV = $0316                       ; where the KERNAL's interrupt entry goes on a BRK
-CLEAR = $93                         ; PETSCII's clear screen
-UPPERCASE = $8E                     ; PETSCII's switch to the uppercase and graphics characters
+.const CBINV = $0316                       ; where the KERNAL's interrupt entry goes on a BRK
+.const CLEAR = $93                         ; PETSCII's clear screen
+.const UPPERCASE = $8E                     ; PETSCII's switch to the uppercase and graphics characters
 
 .segment BSS
 .data old_brk: .addr

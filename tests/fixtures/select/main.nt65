@@ -4,14 +4,14 @@
 
 .cpu 6502
 
-.config WIDE = 1
+.const WIDE ?= 1
 
 .if .select(WIDE, 1, 0) {
-    ROWS = 25
+    .const ROWS = 25
 }
 
-COLUMNS = .select(WIDE, 80, 40)
-BORDER = .select(WIDE, 0, NOT_IN_THIS_BUILD)
+.const COLUMNS = .select(WIDE, 80, 40)
+.const BORDER = .select(WIDE, 0, NOT_IN_THIS_BUILD)
 .func clamp(value) = .select(value > 255, 255, value)
 
 .segment ZEROPAGE
@@ -21,7 +21,7 @@ BORDER = .select(WIDE, 0, NOT_IN_THIS_BUILD)
 .data wide: .word
 
 ; An address expression: the chosen address, with its own width.
-BUFFER = .select(WIDE, wide, narrow)
+.data BUFFER: .word = .select(WIDE, wide, narrow)
 
 .segment RODATA
 .data sizes: .byte COLUMNS, ROWS, BORDER, clamp(300), clamp(7)

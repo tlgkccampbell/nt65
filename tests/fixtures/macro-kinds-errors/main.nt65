@@ -61,7 +61,7 @@
     }
 }
 
-SPEED = 3
+.const SPEED = 3
 
 .segment ZEROPAGE
 .data ptr: .word

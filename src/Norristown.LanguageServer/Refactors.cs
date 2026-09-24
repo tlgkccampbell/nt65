@@ -71,7 +71,7 @@ internal static class Refactors
         var tree = model.Tree;
         if (PathAt(model, caret) is not { } reference)
             yield break;
-        if (reference.Symbol is not { IsDefine: false, IsConfig: false } symbol || symbol.Tree == tree)
+        if (reference.Symbol is not { IsSetting: false } symbol || symbol.Tree == tree)
             yield break;
         if (symbol.PathName is not { } path || !path.Contains("::", StringComparison.Ordinal))
             yield break;

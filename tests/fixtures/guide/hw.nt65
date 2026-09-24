@@ -1,7 +1,7 @@
 ; The modules the guide's `.use` forms name.
 .module hw
 
-.export BORDER = $D020
+.export .const BORDER = $D020
 
 .segment CODE
 .export .proc init {

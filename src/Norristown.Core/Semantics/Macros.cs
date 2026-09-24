@@ -202,7 +202,7 @@ public static class Macros
                 continue;
             foreach (var (used, at) in macro.Uses)
             {
-                if (used.Tree != macro.Tree || used.IsDefine || isExported(used))
+                if (used.Tree != macro.Tree || isExported(used))
                     continue;
                 diagnostics.Add(new Diagnostic(macro.DeclarationSpan,
                     Catalogue.MacroNamesUnexported.Message(macro.Name, used.DisplayName),

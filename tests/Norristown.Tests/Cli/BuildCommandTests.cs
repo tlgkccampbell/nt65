@@ -10,7 +10,7 @@ namespace Norristown.Tests.Cli;
 /// </summary>
 public sealed class BuildCommandTests : IDisposable
 {
-    private const string Main = ".module main\n.use hw::BORDER\n.segment CODE\n.export .proc main {\n    lda #DEBUG\n    sta BORDER\n    rts\n}\n";
+    private const string Main = ".module main\n.use hw::BORDER\n.segment CODE\n.export .proc main {\n    lda #DEBUG\n    sta BORDER\n    rts\n}\n.const DEBUG ?= 0\n";
     private const string Hw = ".module hw::vic\n.export BORDER = $d020\n";
 
     private readonly TempFolder root = new("nt65-build-");
@@ -24,7 +24,7 @@ public sealed class BuildCommandTests : IDisposable
     [Fact]
     public void OutputIsNamedByModuleUnderTheProjectsOut()
     {
-        Project("""{ "cpu": "6502", "files": ["src/*.nt65", "../lib/*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
+        Project("""{ "cpu": "6502", "files": ["src/*.nt65", "../lib/*.nt65"], "out": "build", "settings": { "DEBUG": 0 } }""");
         root.Write("app/src/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
         root.Write("lib/vic.nt65", Hw);
 
@@ -52,8 +52,8 @@ public sealed class BuildCommandTests : IDisposable
               "cpu": "6502",
               "files": ["*.nt65"],
               "out": "build/release",
-              "defines": { "DEBUG": 0 },
-              "configurations": { "debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" } }
+              "settings": { "DEBUG": 0 },
+              "configurations": { "debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" } }
             }
             """);
         root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020", StringComparison.Ordinal));
@@ -76,7 +76,7 @@ public sealed class BuildCommandTests : IDisposable
     [Fact]
     public void AnOutputWhoseModuleIsGoneIsDeleted()
     {
-        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build", "settings": { "DEBUG": 0 } }""");
         root.Write("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
         root.Write("app/vic.nt65", Hw);
         root.Write("app/build/notes.txt", "mine");
@@ -103,7 +103,7 @@ public sealed class BuildCommandTests : IDisposable
     [Fact]
     public void TheDependencyFileNamesWhatEachOutputDependsOn()
     {
-        Project("""{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
+        Project("""{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build", "settings": { "DEBUG": 0 } }""");
         root.Write("app/src/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal)
             + ".segment RODATA\n.data font: .incbin \"../data/font.bin\"\n.export font\n");
         root.Write("app/src/vic.nt65", Hw);
@@ -124,6 +124,7 @@ public sealed class BuildCommandTests : IDisposable
               src/vic.nt65 \
               nt65.json
             build/hw/vic.s: \
+              src/main.nt65 \
               src/vic.nt65 \
               nt65.json
 
@@ -145,7 +146,7 @@ public sealed class BuildCommandTests : IDisposable
     [Fact]
     public void ANamedFileIsBuiltWithinItsProject()
     {
-        Project("""{ "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 } }""");
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "settings": { "DEBUG": 0 } }""");
         root.Write("app/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
         root.Write("app/vic.nt65", Hw);
 
@@ -203,7 +204,7 @@ public sealed class BuildCommandTests : IDisposable
     [Fact]
     public void CheckReportsAndWritesNothing()
     {
-        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build", "defines": { "DEBUG": 0 } }""");
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build", "settings": { "DEBUG": 0 } }""");
         root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", "BORDER = $d020\nUNUSED = 1", StringComparison.Ordinal));
         var app = Path.Combine(root.FullName, "app");
 

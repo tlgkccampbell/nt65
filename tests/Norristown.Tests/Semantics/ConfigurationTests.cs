@@ -19,10 +19,10 @@ public sealed class ConfigurationTests
         const string Source = """
             .module main
             .if PLATFORM == 1 {
-            LINES = 262
+            .const LINES = 262
             }
             .if PLATFORM == 2 {
-            LINES = 312
+            .const LINES = 312
             }
             """;
 
@@ -36,9 +36,9 @@ public sealed class ConfigurationTests
     {
         var program = Built("""
             .if PLATFORM == 1 {
-            LINES = 262
+            .const LINES = 262
             }
-            TOTAL = LINES
+            .const TOTAL = LINES
             """, ("PLATFORM", 2));
 
         Assert.Equal(["main.nt65:5: `LINES` is not declared"], program.Problems());
@@ -56,11 +56,11 @@ public sealed class ConfigurationTests
     {
         var program = Built("""
             .if DEBUG {
-            PICKED = 1
+            .const PICKED = 1
             } .elseif LEVEL > 2 {
-            PICKED = 2
+            .const PICKED = 2
             } .else {
-            PICKED = 3
+            .const PICKED = 3
             }
             """, ("DEBUG", debug), ("LEVEL", level));
 
@@ -71,34 +71,18 @@ public sealed class ConfigurationTests
 
     /// <summary>
     /// The right operand of <c>&amp;&amp;</c> and <c>||</c> is neither evaluated nor looked up
-    /// once the left decides the result, so a name may be tested for before it is used.
+    /// once the left decides the result.
     /// </summary>
     [Fact]
     public void ALogicalOperatorLeavesTheRightOperandAloneOnceTheLeftDecides()
     {
-        var program = Built(".if .defined(TRACE) && TRACE {\nON = 1\n}\n");
+        var program = Built(".if 0 && NOWHERE {\n.const ON = 1\n}\n");
 
         Assert.Empty(program.Problems());
         Assert.Empty(program.File("main.nt65").Symbols);
     }
 
-    /// <summary>
-    /// <c>.defined</c> asks whether a name is a define without using it, so an unknown name is a
-    /// false answer, not an error.
-    /// </summary>
-    [Theory]
-    [InlineData(".if .defined(DEBUG) {", true)]
-    [InlineData(".if .defined(NOWHERE) {", false)]
-    [InlineData(".if !.defined(NOWHERE) {", true)]
-    public void DefinedAsksWhetherANameIsADefine(string opener, bool taken)
-    {
-        var program = Built(opener + "\nON = 1\n.export ON\n}\n", ("DEBUG", 0));
-
-        Assert.Empty(program.Problems());
-        Assert.Equal(taken, program.File("main.nt65").Symbols.Count == 1);
-    }
-
-    /// <summary>The CPU is configuration, like a define, so a condition may test it.</summary>
+    /// <summary>The CPU is configuration, like a setting, so a condition may test it.</summary>
     [Fact]
     public void TargetTestsTheProcessor()
     {
@@ -139,7 +123,7 @@ public sealed class ConfigurationTests
         var program = Analysis.Program(project, ("main.nt65", $$"""
             .module main
             .if {{condition}} {
-            AT_FILE = 1
+            .const AT_FILE = 1
             .export AT_FILE
             }
             """));
@@ -185,41 +169,100 @@ public sealed class ConfigurationTests
     [InlineData(".if .target(z80) {", "`.target` takes `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`")]
     public void WhatTheCpuQuestionsTakeIsChecked(string opener, string message)
     {
-        var program = Built(opener + "\nON = 1\n}\n");
+        var program = Built(opener + "\n.const ON = 1\n}\n");
 
         Assert.Equal([$"main.nt65:2: {message}"], program.Problems());
     }
 
-    /// <summary>A condition tests the configuration. A check on the program is an assertion.</summary>
+    /// <summary>
+    /// A condition may test a constant, a function or an enum member at file level that the
+    /// configuration alone decides, in its own file or in a module that exports it, with no
+    /// marker on the declaration.
+    /// </summary>
     [Theory]
-    [InlineData(".if here > 2 {", "`here` is not a define or a `.config` setting: an `.if` condition can "
-        + "only test the build configuration; use `.assert` to check the program")]
-    [InlineData(".if .sizeof(Point) > 2 {", "`.sizeof` asks about the program, which an `.if` "
-        + "condition cannot do: use `.assert` to check the program")]
-    public void AConditionThatNamesTheProgramSuggestsAnAssert(string opener, string message)
+    [InlineData(".const SIZE = WIDTH * 2\n.if SIZE > 2 {\n.const ON = 1\n}\n", null)]
+    [InlineData(".use sizes::SIZE\n.if SIZE > 2 {\n.const ON = 1\n}\n", ".module sizes\n.export SIZE\n.const SIZE = 4\n")]
+    [InlineData(".func twice(v) = v * 2\n.if twice(WIDTH) == 6 {\n.const ON = 1\n}\n", null)]
+    [InlineData(".enum Mode {\nfast\nslow\n}\n.if WIDTH == Mode::slow + 2 {\n.const ON = 1\n}\n", null)]
+    [InlineData(".const PICK = .select(.target(6502), WIDTH, 0)\n.if PICK {\n.const ON = 1\n}\n", null)]
+    public void AConditionTestsWhatTheConfigurationDecides(string text, string? other)
     {
-        var program = Built("SIZE = 4\n.export SIZE\n" + opener + "\nON = 1\n}\n");
+        (string, string)[] files = other is null
+            ? [("main.nt65", ".module main\n" + text + ".const WIDTH ?= 3\n")]
+            : [("main.nt65", ".module main\n" + text + ".const WIDTH ?= 3\n"), ("sizes.nt65", other)];
+        var program = Analysis.Program(ProjectSettings.None with { Cpu = Cpu.Mos6502 }, files);
 
-        Assert.Equal([$"main.nt65:4: {message}"], program.Problems());
+        Assert.DoesNotContain(program.Diagnostics, diagnostic => diagnostic.Severity == Severity.Error);
+        Assert.Contains(program.File("main.nt65").Symbols, symbol => symbol.Name == "ON");
     }
 
     /// <summary>
-    /// A condition that names a constant at file level is told to make it a setting, with a fix
-    /// that does, whether the constant is in the same file or another module exports it.
+    /// A condition that uses a measurement, directly or through the constants built from one, is
+    /// told that the configuration does not decide it, with a note for each step to the
+    /// measurement.
+    /// </summary>
+    [Fact]
+    public void AConditionThatUsesAMeasurementFollowsTheChain()
+    {
+        var program = Built("""
+            .struct Voice {
+                pitch: .byte
+            }
+            .const per_voice = .sizeof(Voice)
+            .const VOICES = per_voice * 2
+            .if VOICES > 2 {
+            .const ON = 1
+            }
+            .if .sizeof(Voice) > 2 {
+            .const OFF = 1
+            }
+            """);
+
+        Assert.Equal([
+            "main.nt65:7: an `.if` cannot test `VOICES`, which uses a measurement of a declaration; check it with `.assert`",
+            "main.nt65:10: an `.if` cannot test `.sizeof(Voice)`, which uses a measurement of a declaration; check it "
+                + "with `.assert`",
+        ], program.Problems());
+        var chain = program.Diagnostics.First(diagnostic => diagnostic.Id == "condition-uses-a-measurement");
+        Assert.Equal([
+            "6: `VOICES` uses `per_voice`",
+            "5: `per_voice` measures `Voice` with `.sizeof`",
+        ], chain.Related.Select(note => $"{note.Span.Line}: {note.Message}"));
+    }
+
+    /// <summary>
+    /// A condition that tests a constant another condition declares is told to declare it once,
+    /// with <c>.select</c>.
+    /// </summary>
+    [Fact]
+    public void AConditionThatUsesAConditionalDeclarationSuggestsSelect()
+    {
+        var program = Built("""
+            .if PLATFORM == 1 {
+            .const LINES = 262
+            }
+            .if LINES > 200 {
+            .const ON = 1
+            }
+            """, ("PLATFORM", 1));
+
+        var diagnostic = Assert.Single(program.Diagnostics, d => d.Id == "condition-uses-a-conditional-declaration");
+        Assert.Equal("an `.if` cannot test `LINES`, which is declared under another `.if`; declare `LINES` once, with "
+            + "`.select`", diagnostic.Message);
+        Assert.Equal(["`LINES` is declared under an `.if`"], diagnostic.Related.Select(note => note.Message));
+    }
+
+    /// <summary>
+    /// A condition that names what is not a value, or a name nothing declares, says so.
     /// </summary>
     [Theory]
-    [InlineData("SIZE = 4\n.if SIZE > 2 {\nON = 1\n}\n", null)]
-    [InlineData(".use sizes::SIZE\n.if SIZE > 2 {\nON = 1\n}\n", ".module sizes\n.export SIZE\nSIZE = 4\n")]
-    public void AConditionThatNamesAConstantSuggestsASetting(string text, string? other)
+    [InlineData(".if here > 2 {", "`here` is not declared")]
+    [InlineData(".if main > 2 {", "an `.if` cannot test `main`, which is part of the program; check it with `.assert`")]
+    public void AConditionThatNamesTheProgramSuggestsAnAssert(string opener, string message)
     {
-        (string, string)[] files = other is null
-            ? [("main.nt65", ".module main\n" + text)]
-            : [("main.nt65", ".module main\n" + text), ("sizes.nt65", other)];
-        var program = Analysis.Program(ProjectSettings.None, files);
+        var program = Built(".segment CODE\n.export .proc main {\nrts\n}\n" + opener + "\n.const ON = 1\n}\n");
 
-        var diagnostic = Assert.Single(program.Diagnostics, d => d.Id == "condition-names-a-constant");
-        Assert.Equal(FixKind.Setting, diagnostic.Fix?.Kind);
-        Assert.EndsWith(other is null ? "main.nt65" : "sizes.nt65", diagnostic.Fix?.At?.File);
+        Assert.Equal([$"main.nt65:6: {message}"], program.Problems());
     }
 
     /// <summary>
@@ -231,7 +274,7 @@ public sealed class ConfigurationTests
     {
         var program = Built("""
             .if 0 {
-            BROKEN = nowhere::at::all
+            .const BROKEN = nowhere::at::all
             }
             """);
 
@@ -301,7 +344,7 @@ public sealed class ConfigurationTests
                     .byte 3
                 }
             }
-            SIZE = .sizeof(table)
+            .const SIZE = .sizeof(table)
             .export SIZE
 
             """);
@@ -314,20 +357,73 @@ public sealed class ConfigurationTests
 
     /// <summary>
     /// The names a condition uses are resolved like any others, so an editor can follow a
-    /// define used in one to the configuration that gives it a value.
+    /// setting used in one to its declaration and the value the build gives it.
     /// </summary>
     [Fact]
-    public void ADefineNamedInAConditionResolvesToIt()
+    public void ASettingNamedInAConditionResolvesToIt()
     {
-        var program = Built(".if PLATFORM == 2 {\nON = 1\n.export ON\n}\n", ("PLATFORM", 2));
+        var program = Built(".if PLATFORM == 2 {\n.const ON = 1\n.export ON\n}\n", ("PLATFORM", 2));
 
         Assert.Empty(program.Problems());
-        var define = program.File("main.nt65").SymbolAt("PLATFORM");
-        Assert.True(define.IsDefine);
-        Assert.Equal(2, define.Value.Number);
+        var setting = program.File("main.nt65").SymbolAt("PLATFORM");
+        Assert.True(setting.IsSetting);
+        Assert.Equal(2, setting.Value.Number);
     }
 
-    /// <summary>Two builds of one file differ only in what the configuration defines.</summary>
+    /// <summary>
+    /// The build names a setting by its path, or by its name alone where only one module
+    /// declares a setting of that name. A name no module declares, and a name alone that two do,
+    /// are reported.
+    /// </summary>
+    [Theory]
+    [InlineData("hw::PAL", 1, null)]
+    [InlineData("PAL", 1, null)]
+    [InlineData("NTSC", 1, "`NTSC` is not a setting of any module")]
+    [InlineData("LINES", 1, "more than one module has a setting `LINES`; name it by its path, as `hw::LINES` or `video::LINES`")]
+    [InlineData("hw::WIDE", 1, "`hw::WIDE` is not a setting of any module")]
+    public void TheBuildNamesASettingByItsPathOrItsName(string name, long value, string? problem)
+    {
+        var project = ProjectSettings.None with
+        {
+            SettingValues = [new SettingValue(name, value, new Span("nt65.json", 1, 1, 2))],
+        };
+        var program = Analysis.Program(project,
+            ("hw.nt65", ".module hw\n.const PAL ?= 0\n.const LINES ?= 1\n.const WIDE = 2\n.export PAL, WIDE\n"),
+            ("video.nt65", ".module video\n.const LINES ?= 2\n"));
+
+        if (problem is null)
+        {
+            Assert.Empty(program.Problems());
+            Assert.Equal(value, program.File("hw.nt65").Symbol("PAL").Value.Number);
+        }
+        else
+        {
+            Assert.Equal([$"nt65.json:1: {problem}"], program.Problems());
+        }
+    }
+
+    /// <summary>
+    /// A setting's default may use a constant the configuration decides, and one that uses a
+    /// measurement is reported with the chain.
+    /// </summary>
+    [Fact]
+    public void ASettingsDefaultMustBeDecidedByTheConfiguration()
+    {
+        var program = Built("""
+            .const BASE = 4
+            .const GOOD ?= BASE * 2
+            .segment RODATA
+            .data table: .byte[4]
+            .const BAD ?= .sizeof(table)
+            """);
+
+        Assert.Equal(
+            ["main.nt65:6: the default of `BAD` uses a value the configuration does not decide"],
+            program.Problems());
+        Assert.Equal(8, program.File("main.nt65").Symbol("GOOD").Value.Number);
+    }
+
+    /// <summary>Two builds of one file differ only in what the configuration decides.</summary>
     [Fact]
     public void OneFileBuiltTwoWaysGivesTwoOutputs()
     {
@@ -356,15 +452,22 @@ public sealed class ConfigurationTests
         Assert.DoesNotContain(".if", off);
     }
 
-    private static ProgramAnalysis Built(string text, params (string Name, long Value)[] defines) =>
-        Analysis.Program(Project(defines), ("main.nt65", ".module main\n" + text));
+    /// <summary>
+    /// Builds <paramref name="text"/> as module <c>main</c>, with a setting declared at its end for
+    /// each of <paramref name="settings"/>, which the build gives that value.
+    /// </summary>
+    private static ProgramAnalysis Built(string text, params (string Name, long Value)[] settings) =>
+        Analysis.Program(Project(settings), ("main.nt65", ".module main\n" + text + Declared(settings)));
 
-    private static string Output(string text, params (string Name, long Value)[] defines) =>
-        Analysis.Outputs(Project(defines), ("main.nt65", ".module main\n" + text))["main.s"];
+    private static string Output(string text, params (string Name, long Value)[] settings) =>
+        Analysis.Outputs(Project(settings), ("main.nt65", ".module main\n" + text + Declared(settings)))["main.s"];
 
-    private static ProjectSettings Project((string Name, long Value)[] defines) =>
+    private static string Declared((string Name, long Value)[] settings) =>
+        string.Concat(settings.Select(setting => $"\n.const {setting.Name} ?= 0\n"));
+
+    private static ProjectSettings Project((string Name, long Value)[] settings) =>
         ProjectSettings.None with
         {
-            Defines = [.. defines.Select(d => new Define(d.Name, d.Value, new Span("nt65.json", 1, 1, 2)))],
+            SettingValues = [.. settings.Select(s => new SettingValue(s.Name, s.Value, new Span("nt65.json", 1, 1, 2)))],
         };
 }

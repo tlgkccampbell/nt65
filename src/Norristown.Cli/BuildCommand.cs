@@ -125,8 +125,8 @@ public static class BuildCommand
             project = project.Configured(configuration, new Span("--config", 1, 1, configuration.Length + 1));
         if (command.Cpu is not null)
             project = project with { Cpu = command.Cpu };
-        var defines = command.Defines.Select(define => ProjectFile.Definition(define, arguments)).OfType<Define>().ToList();
-        project = project.With(defines) with { Diagnostics = [.. project.Diagnostics, .. arguments] };
+        var values = command.Settings.Select(setting => ProjectFile.SettingValue(setting, arguments)).OfType<SettingValue>().ToList();
+        project = project.With(values) with { Diagnostics = [.. project.Diagnostics, .. arguments] };
         if (command.Out is { } chosen)
             project = project with { Out = ProjectRoot.Logical(run.Root, Path.GetFullPath(chosen, run.Directory)) };
         return project;

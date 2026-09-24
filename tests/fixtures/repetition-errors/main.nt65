@@ -5,7 +5,7 @@
 .segment RODATA
 .data here: .byte 0
 
-SIZE = -1
+.const SIZE = -1
 .data turns: .byte[] {
     .repeat here, i {           ;! error[repeat-count-not-constant]: a `.repeat` count must be a constant
         i

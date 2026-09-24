@@ -96,7 +96,7 @@ public sealed class CHeader
 
         // A member of a named enum is emitted inside its enum rather than as a #define, and a
         // field of typed data is reached through the data rather than on its own.
-        var constants = exported.Where(symbol => symbol is { Kind: SymbolKind.Constant, IsDefine: false, IsConfig: false }
+        var constants = exported.Where(symbol => symbol is { Kind: SymbolKind.Constant, IsSetting: false }
             && symbol.Value.AsNumber() is not null && ProgramSymbols.IsLinked(symbol)
             && symbol.Scope.Owner is not { Kind: SymbolKind.Enum }).ToList();
         if (constants.Count > 0)

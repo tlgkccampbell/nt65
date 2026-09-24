@@ -17,7 +17,7 @@ internal sealed class ProgramReplay
 {
     public static readonly ProjectSettings Project = ProjectSettings.None with
     {
-        Defines = [new Define("DEBUG", 1, default)],
+        SettingValues = [new SettingValue("DEBUG", 1, default)],
     };
 
     public static readonly Dictionary<string, string> Sources = new(StringComparer.Ordinal)
@@ -40,6 +40,7 @@ internal sealed class ProgramReplay
             .use gfx::{relay, COLORS}
 
             .export SCREEN, WIDTH, HEIGHT, Point, set16, rgb, LIMIT, scaled, fill_screen, FILL, ping, std
+            .export DEBUG, WIDE
 
             SCREEN = $2000
             WIDTH  = 32
@@ -48,6 +49,11 @@ internal sealed class ProgramReplay
             PRIVATE_K = 7
             SCALE  = 3
             FILL   = $20
+
+            ; A setting the build gives, and one main.nt65 tests through a constant built from it.
+            .const DEBUG ?= 0
+            .const COLUMNS ?= 40
+            WIDE   = COLUMNS > 40
 
             ; The state gfx.nt65's routines take.
             .signature std = a8, i8
@@ -86,7 +92,7 @@ internal sealed class ProgramReplay
         ["main.nt65"] = """
             .module main
             .cpu 65816
-            .use defs::{WIDTH, HEIGHT, SCREEN, LIMIT, set16, fill_screen, ping}
+            .use defs::{WIDTH, HEIGHT, SCREEN, LIMIT, set16, fill_screen, ping, DEBUG, WIDE}
             .use gfx::{draw, COLORS}
             .use types::Line
 
@@ -104,6 +110,10 @@ internal sealed class ProgramReplay
 
             .if DEBUG {
             TRACE = 1
+            }
+
+            .if WIDE {
+            WIDE_TRACE = 1
             }
 
             .segment CODE
@@ -276,12 +286,9 @@ internal sealed class ProgramReplay
         foreach (var file in analysis.Files)
         {
             var model = file.Model;
-            if (model.Tree != analysis.Defines)
-            {
-                var output = Emitter.Emit(
-                    model, file.Layout, FlatNames.Create(model, analysis.Cpu, emitted), emitted, Project.Out);
-                text.Append($"== {output.Path}\n{output.Text}");
-            }
+            var output = Emitter.Emit(
+                model, file.Layout, FlatNames.Create(model, analysis.Cpu, emitted), emitted, Project.Out);
+            text.Append($"== {output.Path}\n{output.Text}");
         }
         foreach (var d in Diagnostics.Ordered(emitted))
             text.Append($"emit {Format(d)}\n");

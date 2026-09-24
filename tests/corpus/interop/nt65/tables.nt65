@@ -68,9 +68,12 @@
     }
 }
 
+; The size of the buffer C shares, which the build may change.
+.const BUF_SIZE ?= 64
+
 .segment BSS
 .data buffer: .byte[BUF_SIZE]
-buffer_size = BUF_SIZE
+.const buffer_size = BUF_SIZE
 
 ; Run once at start-up (registered as a constructor by asm/ctor.s).
 .segment ONCE

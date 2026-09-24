@@ -18,8 +18,8 @@
 .proc CHROUT = $FFD2: a8, i8
 .proc alias = fill_page
 
-SCREEN       = $0400
-SCREEN_PAGES = 4
+.const SCREEN       = $0400
+.const SCREEN_PAGES = 4
 
 .segment ZEROPAGE
 .data ptr:   .word

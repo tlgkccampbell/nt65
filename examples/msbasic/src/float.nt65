@@ -17,7 +17,7 @@
 
 .segment CODE
 
-TEMP1X = TEMP1+(5-BYTES_FP)
+.data TEMP1X: .byte = TEMP1+(5-BYTES_FP)
 
 ; ----------------------------------------------------------------------------
 ; ADD 0.5 TO FAC
@@ -1828,7 +1828,7 @@ TEMP1X = TEMP1+(5-BYTES_FP)
     }
 }
 .if CONFIG_2 {
-    .export C_ZERO = CON_HALF + 2
+    .export .data C_ZERO: .byte = CON_HALF + 2
 }
 
 ; ----------------------------------------------------------------------------

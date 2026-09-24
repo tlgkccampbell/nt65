@@ -1,24 +1,25 @@
-; What a `.config`, `.select` and `.has` refuse.
+; What a setting, `.select` and `.has` refuse.
 .module hw
 
-.config HIDDEN = 1
-.config LOOP = LOOP_TOO             ;! error[defined-in-terms-of-itself]: `LOOP` is defined in terms of itself
-.config LOOP_TOO = LOOP
-.config WORDS = "text"              ;! error[config-is-text]: a `.config` value must be a number, not text
-.config SIZE = LIMIT                ;! error[condition-names-a-constant]: `LIMIT` is a constant, and a condition or a setting may use only defines and settings: declare it with `.config` to make it a setting
-LIMIT = 4
+.const HIDDEN ?= 1
+.const LOOP ?= LOOP_TOO             ;! error[defined-in-terms-of-itself]: `LOOP` is defined in terms of itself
+.const LOOP_TOO ?= LOOP
+.const WORDS ?= "text"              ;! error[setting-is-text]: a setting must be a number, not text
+.const SIZE ?= LIMIT
+.const LIMIT = 4
+.const MEASURED ?= .sizeof(here)    ;! error[setting-default-undecided]: the default of `MEASURED` uses a value the configuration does not decide
 
 .if HIDDEN {
-    .config NESTED = 1              ;! error[config-misplaced]: `.config` must be at file level, outside every block
+    .const NESTED ?= 1              ;! error[setting-misplaced]: a setting must be at file level, outside every block
 }
 
 .if .has(LIMIT) {                   ;! error[has-argument]: `.has` takes a mnemonic, such as `.has(phx)`
 }
 
-TWO = .select(1, 2)                 ;! error[select-arguments]: `.select` takes a condition and the two values it chooses between: `.select(c, a, b)`
-UNKNOWN = .select(1, MISSING_NAME, 0) ;! error[not-declared]: `MISSING_NAME` is not declared
-ADDRESS = .select(here, 1, 0)       ;! error[select-condition-not-constant]: a `.select` condition must be a constant
-.export TWO, UNKNOWN, ADDRESS, WORDS, SIZE, LOOP
+.const TWO = .select(1, 2)                 ;! error[select-arguments]: `.select` takes a condition and the two values it chooses between: `.select(c, a, b)`
+.const UNKNOWN = .select(1, MISSING_NAME, 0) ;! error[not-declared]: `MISSING_NAME` is not declared
+.const ADDRESS = .select(here, 1, 0)       ;! error[select-condition-not-constant]: a `.select` condition must be a constant
+.export TWO, UNKNOWN, ADDRESS, WORDS, SIZE, LOOP, MEASURED
 
 .segment CODE
 .proc here {

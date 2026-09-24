@@ -23,9 +23,9 @@
       "type": "string",
       "description": "Where the output goes; the project root when there is none. A module's output is named after it, so `.module gfx::sprite` is written to `out/gfx/sprite.s` wherever its source is."
     },
-    "defines": {
-      "description": "The build configuration: constants visible in every file, and the only symbols an `.if` condition may test. A name with a module's path, \"hw::SOUND\", sets that module's `.config` instead.",
-      "allOf": [{ "$ref": "#/definitions/defines" }]
+    "settings": {
+      "description": "The values the build gives settings, which modules declare with `.const NAME ?= value`. A setting is named by its path, \"hw::SOUND\", or by its name alone where only one module declares a setting of that name.",
+      "allOf": [{ "$ref": "#/definitions/settings" }]
     },
     "diagnostics": {
       "description": "How much each diagnostic matters to this project, by name, over what nt65 reports it as. `nt65 explain <name>` describes one.",
@@ -67,7 +67,7 @@
       "additionalProperties": { "$ref": "#/definitions/configuration" },
       "propertyNames": { "pattern": "^[A-Za-z0-9_-]+$" },
       "description": "Named builds of the program, chosen with `--config name`. A name is letters, digits, `_` and `-`; with none chosen the project's own settings build.",
-      "examples": [{ "debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" } }]
+      "examples": [{ "debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" } }]
     }
   },
   "definitions": {
@@ -144,13 +144,10 @@
         "code-unreachable",
         "comparison-never-holds",
         "computed-jump-unchecked",
-        "condition-asks-about-the-program",
-        "condition-calls-a-function",
         "condition-is-text",
-        "condition-names-a-constant",
         "condition-names-the-program",
-        "config-is-text",
-        "config-misplaced",
+        "condition-uses-a-conditional-declaration",
+        "condition-uses-a-measurement",
         "config-refused",
         "config-warned",
         "configuration-key-unknown",
@@ -158,6 +155,7 @@
         "configuration-not-an-object",
         "configuration-unknown",
         "const-argument-out-of-range",
+        "constant-names-an-address",
         "continuation-outside-expression",
         "countof-has-no-elements",
         "cpu-disagrees",
@@ -166,16 +164,14 @@
         "cycles-span-has-no-bound",
         "data-body-holds-values",
         "data-body-needs-a-count",
+        "data-elsewhere-element-differs",
+        "data-elsewhere-needs-an-element",
         "data-needs-a-name",
         "data-values-need-braces",
         "declaration-in-a-block-argument",
         "declaration-in-a-macro-body",
         "declaration-in-a-repetition",
         "declared-in-another-module",
-        "define-name-invalid",
-        "define-not-a-number",
-        "define-redeclared",
-        "defined-asks-about-defines",
         "defined-in-terms-of-itself",
         "diagnostic-name-unknown",
         "diagnostic-not-turned-down",
@@ -432,7 +428,12 @@
         "set-expected",
         "set-item-is-text",
         "set-out-of-place",
-        "setting-not-exported",
+        "setting-ambiguous",
+        "setting-default-undecided",
+        "setting-is-text",
+        "setting-misplaced",
+        "setting-name-invalid",
+        "setting-not-a-number",
         "setting-unknown",
         "shift-count-out-of-range",
         "signature-item-needs-65816",
@@ -498,7 +499,7 @@
         ]
       }
     },
-    "defines": {
+    "settings": {
       "type": "object",
       "additionalProperties": { "$ref": "#/definitions/number" },
       "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$" }
@@ -543,9 +544,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "defines": {
-          "description": "Defines over the project's, by name.",
-          "allOf": [{ "$ref": "#/definitions/defines" }]
+        "settings": {
+          "description": "Setting values over the project's, by name.",
+          "allOf": [{ "$ref": "#/definitions/settings" }]
         },
         "diagnostics": {
           "description": "How much each diagnostic matters in this configuration, over the project's own answers.",

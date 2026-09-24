@@ -734,7 +734,7 @@ marker file.
 | form | declares |
 |---|---|
 | `name:` | a position in code, inside a proc: an address and nothing else. It may be followed by an instruction, data directive or macro call on the same line, and has no size whatever follows it. |
-| `.const NAME = expr` | a **constant**: a number or a text, never an address. Single assignment; forward references allowed; cycles are errors. A constant that holds text is usable wherever a string literal is (§8). Whether a condition may test it follows from what it is built from (§10). |
+| `.const NAME = expr` | a **constant**: a number or a text, never an address, though it may be a distance between two addresses that only the linker knows. Single assignment; forward references allowed; cycles are errors. A constant that holds text is usable wherever a string literal is (§8). Whether a condition may test it follows from what it is built from (§10). |
 | `.const NAME ?= expr` | a **setting**: a constant whose value the build may set (§5.3, §10). |
 | `@name:`, `.const @name = expr` | a cheap local: a label or constant private to its proc or scope, or a position private to a `.data` block (§6.2). |
 | `.proc name [: signature] { ... }` | a label **and** a scope, with a processor-state signature (§7.3). At file level or in a `.scope` outside any proc: procs do not nest. |
@@ -2531,9 +2531,9 @@ inside data, is not one either, because a measurement is known only once the dec
 are read. A condition that uses such a value is an error that follows the chain to its cause:
 
 ```text
-sound.nt65:40:5: error: the configuration alone does not decide `VOICES`, so an `.if` cannot test it: use `.assert` to check it, or `.select` to choose with it [condition-uses-a-measurement]
+sound.nt65:40:5: error: an `.if` cannot test `VOICES`, which uses a measurement of a declaration; check it with `.assert` [condition-uses-a-measurement]
 sound.nt65:12:1: note: `VOICES` uses `per_voice`
-sound.nt65:9:1: note: `per_voice` measures `Voice` with `.sizeof`, which is known only once the declarations are read
+sound.nt65:9:1: note: `per_voice` measures `Voice` with `.sizeof`
 ```
 
 Inside a macro body a condition may also use the macro's `const` and `one(...)` parameters,
@@ -2566,7 +2566,8 @@ may set. The `?=` is GNU Make's: the value is a default, used unless the build g
 
 A setting is a number. It is declared at file level, outside every block, so that which
 settings a program has depends on no condition, and its default must be one the configuration
-decides. The build sets it by its path, `hw::PAL`, or by its name alone where no other module
+decides. A `.segment` region or block leaves names in the scope around it, so it counts as file
+level here, as it does for the constants a condition may test. The build sets it by its path, `hw::PAL`, or by its name alone where no other module
 declares a setting of that name (§5.3). It may set a setting the module does not export,
 because the build is not a module: `.export` says which modules may read a setting, and `?=`
 says that the build may change it. Everything else true of a constant is true of a setting,

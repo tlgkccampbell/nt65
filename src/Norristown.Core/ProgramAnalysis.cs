@@ -17,14 +17,12 @@ namespace Norristown;
 /// <param name="Files">
 /// What analyzing each file of <see cref="Program"/> on its own found, in the same order.
 /// </param>
-/// <param name="Defines">The file the build configuration was read as, or null.</param>
 /// <param name="Configuration">Which <c>.if</c> branches this build takes.</param>
 /// <param name="Diagnostics">Everything wrong with the program, ordered by file, line and column.</param>
 public sealed record ProgramAnalysis(
     ProgramModel Program,
     Cpu Cpu,
     IReadOnlyList<FileAnalysis> Files,
-    SyntaxTree? Defines,
     Configuration Configuration,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
@@ -115,7 +113,7 @@ public sealed record ProgramAnalysis(
     /// <param name="Project">
     /// The project it analyzed. The next analysis can reuse this one only for the same project.
     /// </param>
-    /// <param name="Trees">Every file analyzed, including the defines file.</param>
+    /// <param name="Trees">Every file analyzed.</param>
     /// <param name="Conditions">The diagnostics from evaluating each file's conditions, by file.</param>
     /// <param name="Analyzed">
     /// The diagnostics from laying out each file and following its control flow, by file.

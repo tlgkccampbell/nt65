@@ -2,7 +2,7 @@
 ; is an error here, so the label ca65 would read as an instruction stops the build.
 .module main
 
-QUIET = 1
+.const QUIET = 1
 
 .segment CODE
 .proc start {

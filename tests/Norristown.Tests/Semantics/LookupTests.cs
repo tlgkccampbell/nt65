@@ -1,6 +1,3 @@
-using Norristown.Processor;
-using Norristown.Project;
-
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
@@ -12,38 +9,6 @@ namespace Norristown.Tests.Semantics;
 /// </summary>
 public sealed class LookupTests
 {
-    /// <summary>
-    /// Gets a build that gives every file the define <c>LIMIT</c>, which a name brought in by a
-    /// glob must lose to.
-    /// </summary>
-    private static ProjectSettings WithDefine => ProjectSettings.None with
-    {
-        Defines = [new Define("LIMIT", 7, default)],
-    };
-
-    /// <summary>
-    /// A define and a <c>.use module::*</c> under one name: the define wins, because a module
-    /// adding an export may not change what a name already means.
-    /// </summary>
-    [Fact]
-    public void ADefineBeatsWhatAGlobBringsIn()
-    {
-        var analysis = Analysis.Program(
-            WithDefine,
-            ("other.nt65", ".module other\n.export LIMIT\nLIMIT = 1\n"),
-            ("main.nt65", ".module main\n.use other::*\n.segment CODE\n.proc main {\n    lda #LIMIT\n    rts\n}\n"));
-        var model = analysis.File("main.nt65");
-        var position = model.Offset("LIMIT");
-
-        var bound = model.SymbolAt("LIMIT");
-        Assert.True(bound.IsDefine);
-        Assert.Equal(bound, model.GetSymbolInfo(position, ["LIMIT"]).Symbol);
-
-        // The glob's name is a candidate the lookup passed over, and the define is the answer.
-        Assert.Equal(bound, model.LookupSymbols(position, "LIMIT")[0]);
-        Assert.Contains(model.LookupSymbols(position, "LIMIT"), symbol => symbol.Module == "other");
-    }
-
     /// <summary>
     /// When a module and a name that a <c>.use module::*</c> brings in are spelled the same, a
     /// path through that name is the module's, because a module is what a path starts at.

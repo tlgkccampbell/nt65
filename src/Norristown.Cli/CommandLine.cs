@@ -8,7 +8,7 @@ namespace Norristown.Cli;
 /// The named configuration <c>--config</c> chooses, or null for the project's own settings.
 /// </param>
 /// <param name="Cpu">The processor <c>--cpu</c> names, or null.</param>
-/// <param name="Defines">The defines that <c>-D</c> adds or overrides, as given.</param>
+/// <param name="Settings">The setting values that <c>-D</c> adds or overrides, as given.</param>
 /// <param name="Out">The output directory <c>--out</c> names, or null for the project's.</param>
 /// <param name="DependencyFile">Where <c>--depfile</c> writes make-style dependencies, or null.</param>
 /// <param name="Header">Where <c>--c-header</c> writes a C header, or null.</param>
@@ -21,7 +21,7 @@ public sealed record CommandLine(
     string? Project,
     string? Configuration,
     Cpu? Cpu,
-    IReadOnlyList<string> Defines,
+    IReadOnlyList<string> Settings,
     string? Out,
     string? DependencyFile,
     string? Header,
@@ -73,7 +73,7 @@ public sealed record CommandLine(
           --project <file>      the project file, or the directory that holds nt65.json
           --config <name>       a named configuration from the project's `configurations`
           --cpu <cpu>           6502, 6502x, 65sc02, r65c02, 65c02 or 65816
-          -D NAME[=value]       adds a define, or overrides one; NAME may be a module's `.config`
+          -D NAME[=value]       sets a setting, by its path or its name alone
           --out <dir>           where output goes, instead of the project's `out`
           --depfile <file>      writes make-style dependencies of every output
           --c-header <file>     writes a C header of what the program exports
@@ -99,7 +99,7 @@ public sealed record CommandLine(
         string? project = null, configuration = null, output = null, dependencies = null, header = null;
         Cpu? cpu = null;
         bool check = false, watch = false, json = false, stdout = false;
-        var defines = new List<string>();
+        var settings = new List<string>();
         var files = new List<string>();
         for (var i = 0; i < arguments.Count; i++)
         {
@@ -126,7 +126,7 @@ public sealed record CommandLine(
                     header = value;
                     break;
                 case "-D":
-                    defines.Add(value!);
+                    settings.Add(value!);
                     break;
 
                 // A flag takes no value, so `continue` skips the `i++` below that steps over a value.
@@ -163,7 +163,7 @@ public sealed record CommandLine(
             }
             i++;
         }
-        return new CommandLine(project, configuration, cpu, defines, output, dependencies, header, files,
+        return new CommandLine(project, configuration, cpu, settings, output, dependencies, header, files,
             check, watch, json, stdout);
     }
 }

@@ -2,6 +2,8 @@
 ; `.if` of their own: built without KIM, it places nothing at all.
 .module iscntc: placed
 
+.const KIM ?= 0
+
 .segment CODE
 
 .if KIM {

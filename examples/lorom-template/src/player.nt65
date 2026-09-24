@@ -76,12 +76,12 @@
 ; PAL frames are about 20% longer than NTSC frames.  So if you make dual NTSC and PAL
 ; versions, or you auto-adapt to the TV system, you'll want PAL velocity values to be 1.2
 ; times the corresponding NTSC values, and PAL accelerations should be 1.44 times NTSC.
-WALK_SPD   = 105                ; speed limit in 1/256 px/frame
-WALK_ACCEL = 4                  ; movement acceleration in 1/256 px/frame^2
-WALK_BRAKE = 8                  ; stopping acceleration in 1/256 px/frame^2
+.const WALK_SPD   = 105                ; speed limit in 1/256 px/frame
+.const WALK_ACCEL = 4                  ; movement acceleration in 1/256 px/frame^2
+.const WALK_BRAKE = 8                  ; stopping acceleration in 1/256 px/frame^2
 
-LEFT_WALL  = 32
-RIGHT_WALL = 224
+.const LEFT_WALL  = 32
+.const RIGHT_WALL = 224
 
 ; Moves the player based on controller 1.  Entered with either width; leaves both 8-bit.
 .proc move_player: io, far, dp = 0 -> a8, i8 {

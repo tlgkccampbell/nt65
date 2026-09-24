@@ -10,7 +10,7 @@
 
 .segment CODE
 .scope gfx {
-    COUNT = 32
+    .const COUNT = 32
 
     .proc init {
         ldx #COUNT          ; declared in the scope around this one

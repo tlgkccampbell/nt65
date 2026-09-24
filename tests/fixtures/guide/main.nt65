@@ -3,8 +3,8 @@
 
 .cpu 6502
 
-SCREEN       = $0400
-SCREEN_PAGES = 4
+.const SCREEN       = $0400
+.const SCREEN_PAGES = 4
 
 .segment ZEROPAGE
 .data ptr: .word                ; destination pointer

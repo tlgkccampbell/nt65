@@ -20,10 +20,10 @@
     .data END: .byte htasc("END")
     .data FOR: .byte htasc("FOR")
 }
-TOKEN_FOR = keywords::FOR - keywords        ; 3
+.const TOKEN_FOR = keywords::FOR - keywords        ; 3
 
-TURN  = 256
-SCALE = 127
+.const TURN  = 256
+.const SCALE = 127
 
 .segment RODATA
 .data sine: .byte[TURN] {

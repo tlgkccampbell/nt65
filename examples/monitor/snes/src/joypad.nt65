@@ -16,7 +16,7 @@
 .assert (>Button::start) == Key::enter && (>Button::up) == Key::up, "START and the d-pad stay"
 .assert (<Button::a) == Key::type, "A stays"
 
-KEPT = >(Button::start | Button::up | Button::down | Button::left | Button::right)
+.const KEPT = >(Button::start | Button::up | Button::down | Button::left | Button::right)
 
 .segment BSS
 .data keys: .byte

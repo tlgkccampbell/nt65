@@ -60,7 +60,7 @@ internal static class Completion
         DirectiveKind.Module, DirectiveKind.Proc, DirectiveKind.Scope, DirectiveKind.Data, DirectiveKind.Enum,
         DirectiveKind.Struct, DirectiveKind.Union, DirectiveKind.Macro, DirectiveKind.Func, DirectiveKind.List,
         DirectiveKind.Charmap, DirectiveKind.Signature, DirectiveKind.Segment, DirectiveKind.Frame,
-        DirectiveKind.Config, DirectiveKind.Import,
+        DirectiveKind.Const, DirectiveKind.Import,
     ];
 
     /// <summary>
@@ -880,7 +880,7 @@ internal static class Completion
             SourceOf(symbol), KindOf(symbol), Detail(symbol), symbol.DisplayName, DocComments.Of(symbol), Suggestion.InScope));
 
     private static string Detail(Symbol symbol) =>
-        symbol.IsDefine ? "define" : symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;
+        symbol.IsSetting ? $"setting = {symbol.Value}" : symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;
 
     /// <summary>
     /// Checks whether an item's text leaves the caret where something else must be typed, so that

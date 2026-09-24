@@ -5,7 +5,7 @@
 
 .cpu 65816
 
-DELTA = -2
+.const DELTA = -2
 
 .struct Motion {
     dx: .byte

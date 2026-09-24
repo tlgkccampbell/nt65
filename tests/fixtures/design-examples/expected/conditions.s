@@ -19,12 +19,12 @@
 conditions__table: .res 32
 
 .segment "CODE": absolute
-; .proc trace: a8, i8  conditions.nt65:12
+; .proc trace: a8, i8  conditions.nt65:18
 trace:
     rts
 ; end of trace
 
-; .proc run: a8, i8  conditions.nt65:16
+; .proc run: a8, i8  conditions.nt65:22
 conditions__run:
     jsr trace
     rts
@@ -39,12 +39,12 @@ conditions__bits:
 conditions__LINES = 262
 
 .segment "CODE": absolute
-; .proc move: a8, i8  conditions.nt65:50
+; .proc move: a8, i8  conditions.nt65:56
 move:
     rts
 ; end of move
 
-; .proc fire: a8, i8  conditions.nt65:54
+; .proc fire: a8, i8  conditions.nt65:60
 fire:
     rts
 ; end of fire
@@ -52,11 +52,11 @@ fire:
 Cmd__move = $00
 Cmd__fire = $01
 
-; .proc move: a8, i8  conditions.nt65:68
+; .proc move: a8, i8  conditions.nt65:74
 actions__move:
     rts
 ; end of move
-; .proc fire: a8, i8  conditions.nt65:71
+; .proc fire: a8, i8  conditions.nt65:77
 actions__fire:
     rts
 ; end of fire

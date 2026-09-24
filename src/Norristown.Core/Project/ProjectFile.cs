@@ -25,7 +25,7 @@ public static class ProjectFile
     private const string CpuKey = "cpu";
     private const string FilesKey = "files";
     private const string OutKey = "out";
-    private const string DefinesKey = "defines";
+    private const string SettingsKey = "settings";
     private const string DiagnosticsKey = "diagnostics";
     private const string SpacesKey = "spaces";
     private const string SegmentsKey = "segments";
@@ -44,7 +44,7 @@ public static class ProjectFile
     private const string Data = "data";
 
     private static readonly string[] known =
-        [CpuKey, FilesKey, OutKey, DefinesKey, DiagnosticsKey, SpacesKey, SegmentsKey, RangesKey, LinksKey, ConfigurationsKey];
+        [CpuKey, FilesKey, OutKey, SettingsKey, DiagnosticsKey, SpacesKey, SegmentsKey, RangesKey, LinksKey, ConfigurationsKey];
 
     /// <summary>
     /// Keys nt65 accepts and reads nothing from. <c>$schema</c> names the schema an editor
@@ -66,7 +66,7 @@ public static class ProjectFile
     public static IReadOnlyList<string> Keys { get; } = [.. known, .. ignored];
 
     /// <summary>Gets the keys one named configuration may hold.</summary>
-    public static IReadOnlyList<string> ConfigurationKeys { get; } = [DefinesKey, DiagnosticsKey, LinksKey, OutKey];
+    public static IReadOnlyList<string> ConfigurationKeys { get; } = [SettingsKey, DiagnosticsKey, LinksKey, OutKey];
 
     /// <summary>
     /// Gets the values a <c>diagnostics</c> entry may give, which are the severity at which to
@@ -150,7 +150,7 @@ public static class ProjectFile
                 reader.Cpu(root, keys),
                 reader.Strings(root, keys, FilesKey),
                 reader.String(root, keys, OutKey),
-                reader.Defines(root, keys),
+                reader.SettingValues(root, keys),
                 [],
                 diagnostics)
             {
@@ -167,27 +167,27 @@ public static class ProjectFile
 
     /// <summary>
     /// Reads one <c>-D NAME=value</c> from the command line, or reports what is wrong with it.
-    /// <c>-D NAME</c> with no value defines the name as 1, as a flag.
+    /// <c>-D NAME</c> with no value gives the setting 1, as a flag.
     /// </summary>
-    public static Define? Definition(string argument, List<Diagnostic> diagnostics)
+    public static SettingValue? SettingValue(string argument, List<Diagnostic> diagnostics)
     {
         var at = argument.IndexOf('=');
         var name = at < 0 ? argument : argument[..at];
         var span = new Span("-D", 1, 1, argument.Length + 1);
         if (!IsName(name))
         {
-            diagnostics.Add(new Diagnostic(span, Catalogue.DefineNameInvalid.Message(name)));
+            diagnostics.Add(new Diagnostic(span, Catalogue.SettingNameInvalid.Message(name)));
             return null;
         }
         if (at < 0)
-            return new Define(name, 1, span);
+            return new SettingValue(name, 1, span);
         if (Number(argument[(at + 1)..]) is not { } value)
         {
             diagnostics.Add(new Diagnostic(span,
-                Catalogue.DefineNotANumber.Message(argument[(at + 1)..])));
+                Catalogue.SettingNotANumber.Message(argument[(at + 1)..])));
             return null;
         }
-        return new Define(name, value, span);
+        return new Processor.SettingValue(name, value, span);
     }
 
     /// <summary>
@@ -246,8 +246,8 @@ public static class ProjectFile
     };
 
     /// <summary>
-    /// Returns a value indicating whether <paramref name="text"/> is a define's name, or a
-    /// <c>.config</c>'s name qualified by its module's path, as in <c>hw::SOUND</c>.
+    /// Returns a value indicating whether <paramref name="text"/> is a setting's name, alone or
+    /// qualified by its module's path, as in <c>hw::SOUND</c>.
     /// </summary>
     private static bool IsName(string text) => text.Split("::").All(part =>
         part.Length > 0 && (char.IsAsciiLetter(part[0]) || part[0] == '_')
@@ -345,33 +345,33 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// Reads the <c>defines</c> of <paramref name="owner"/>, which is the project or one of
+        /// Reads the <c>settings</c> of <paramref name="owner"/>, which is the project or one of
         /// its configurations. <paramref name="keys"/> is where the owner's keys are written, so
-        /// that a define both of them give is reported in the object being read.
+        /// that a problem with a value is reported in the object being read.
         /// </summary>
-        public IReadOnlyList<Define> Defines(JsonElement owner, Key? keys)
+        public IReadOnlyList<SettingValue> SettingValues(JsonElement owner, Key? keys)
         {
-            if (!Object(owner, keys, DefinesKey, out var defines))
+            if (!Object(owner, keys, SettingsKey, out var settings))
                 return [];
 
-            var within = keys?[DefinesKey];
-            var read = new List<Define>();
-            foreach (var property in defines.EnumerateObject())
+            var within = keys?[SettingsKey];
+            var read = new List<SettingValue>();
+            foreach (var property in settings.EnumerateObject())
             {
                 var key = within?[property.Name];
                 if (!IsName(property.Name))
                 {
-                    Report(key, Catalogue.DefineNameInvalid.Message(property.Name));
+                    Report(key, Catalogue.SettingNameInvalid.Message(property.Name));
                     continue;
                 }
                 if (Number(property.Value) is not { } value)
                 {
-                    Report(key, Catalogue.DefineNotANumber.Message(property.Name));
+                    Report(key, Catalogue.SettingNotANumber.Message(property.Name));
                     continue;
                 }
-                read.Add(new Define(property.Name, value, At(key)));
+                read.Add(new SettingValue(property.Name, value, At(key)));
             }
-            return [.. read.OrderBy(define => define.Name, StringComparer.Ordinal)];
+            return [.. read.OrderBy(value => value.Name, StringComparer.Ordinal)];
         }
 
         /// <summary>
@@ -417,9 +417,9 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// Reads the named configurations, each of which gives defines over the project's and an
-        /// output directory, as in
-        /// <c>"debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" }</c>.
+        /// Reads the named configurations, each of which gives setting values over the project's
+        /// and an output directory, as in
+        /// <c>"debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" }</c>.
         /// </summary>
         public IReadOnlyList<BuildConfiguration> Configurations(JsonElement root, Key keys)
         {
@@ -448,7 +448,7 @@ public static class ProjectFile
                 }
                 read.Add(new BuildConfiguration(
                     property.Name,
-                    Defines(property.Value, key),
+                    SettingValues(property.Value, key),
                     String(property.Value, key, OutKey),
                     At(key))
                 {

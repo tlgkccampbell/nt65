@@ -62,9 +62,10 @@ public sealed class WorkspaceTests
     {
         using var root = new TempFolder("nt65-workspace-");
         root.Write("nt65.json",
-            """{ "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 }, "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }""");
+            """{ "cpu": "6502", "files": ["*.nt65"], "settings": { "DEBUG": 0 }, "configurations": { "debug": { "settings": { "DEBUG": 1 } } } }""");
         root.Write("main.nt65", """
             .module main
+            .const DEBUG ?= 0
             .if DEBUG {
                 .error "built for debugging"
             }

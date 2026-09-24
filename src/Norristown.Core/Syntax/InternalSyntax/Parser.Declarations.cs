@@ -38,11 +38,15 @@ internal sealed partial class Parser
         }
     }
 
+    /// <summary>
+    /// Parses <c>NAME = expr</c> or <c>NAME ?= expr</c>, a constant or a setting written without the
+    /// <c>.const</c> that starts it.
+    /// </summary>
     private GreenNode ParseConstantDeclaration()
     {
         var name = Advance();
         var equals = Advance();
-        return Finish(new ConstantDeclarationSyntax(name, equals, ParseExpression()));
+        return Finish(new ConstantDeclarationSyntax(null, name, equals, ParseExpression()));
     }
 
     /// <summary>
@@ -107,30 +111,33 @@ internal sealed partial class Parser
             keyword, name, equals, equals.IsMissing ? null : ParseStateList());
     }
 
-    /// <summary>Parses <c>.config NAME = value</c>, a setting whose value the build may override.</summary>
-    private GreenNode ParseConfig()
+    /// <summary>
+    /// Parses <c>.const NAME = value</c>, a constant, or <c>.const NAME ?= value</c>, a setting
+    /// whose value the build may set.
+    /// </summary>
+    private GreenNode ParseConst()
     {
         var keyword = Advance();
-        if (Kind != SyntaxKind.Identifier)
+        if (!AtName && Kind != SyntaxKind.CheapLocal)
         {
             return Incomplete(
                 Missing(SyntaxKind.Identifier, Catalogue.ExpectedName.Message(
-                    "the setting's name: `.config NAME = value`")),
+                    "the constant's name: `.const NAME = value`")),
                 GreenToken.Missing(SyntaxKind.Equals));
         }
         var name = Advance();
-        if (Kind != SyntaxKind.Equals)
+        if (Kind is not (SyntaxKind.Equals or SyntaxKind.QuestionEquals))
         {
             return Incomplete(
                 name, Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
-                    "`=` and the setting's value: `.config NAME = value`")));
+                    "`=` and the constant's value: `.const NAME = value`")));
         }
-        return new ConfigDeclarationSyntax(keyword, name, Advance(), ParseExpression());
+        return new ConstantDeclarationSyntax(keyword, name, Advance(), ParseExpression());
 
         // A line that stops short still gets slots for the `=` and the value, filled with
         // missing pieces. The diagnostic on the piece where it stopped is enough for one line.
-        GreenNode Incomplete(GreenToken setting, GreenToken equals) =>
-            new ConfigDeclarationSyntax(keyword, setting, equals, new ErrorExpressionSyntax(null));
+        GreenNode Incomplete(GreenToken constant, GreenToken equals) =>
+            new ConstantDeclarationSyntax(keyword, constant, equals, new ErrorExpressionSyntax(null));
     }
 
     private ParameterListSyntax ParseParameterList()
@@ -361,12 +368,12 @@ internal sealed partial class Parser
             Report(Catalogue.ExportDeclaresNothing.Message(Current.Text));
             return new ExportDirectiveSyntax(export, null);
         }
-        if (AtName && Next == SyntaxKind.Equals)
+        if (AtName && Next is SyntaxKind.Equals or SyntaxKind.QuestionEquals)
         {
             exportKeyword = export;
             var name = Advance();
             var equals = Advance();
-            return new ConstantDeclarationSyntax(name, equals, ParseExpression());
+            return new ConstantDeclarationSyntax(null, name, equals, ParseExpression());
         }
 
         return new ExportDirectiveSyntax(export, ParseSeparatedList(ParseExportItem));

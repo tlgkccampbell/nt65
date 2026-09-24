@@ -389,63 +389,40 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Returns the value of a name in a build's condition, which can only be a define or a
-    /// <c>.config</c> setting. Anything else the program declares is rejected here rather than
-    /// looked up, because a check about the program is an <c>.assert</c>, which is evaluated once
-    /// the program is known.
+    /// Returns the value of a name in a build's condition, where the configuration alone decides
+    /// it. A name it does not decide is passed on with the reason, rather than looked up among the
+    /// declarations, because a check about the program is an <c>.assert</c>, which is evaluated
+    /// once the program is known.
     /// </summary>
-    private Value InCondition(NameExpressionSyntax name, Conditions asked)
+    private static Value InCondition(NameExpressionSyntax name, Conditions asked)
     {
-        // The setting lookup follows the binder's order, in which a define comes after what the
-        // file declares and what a `.use` brings in by name, so it is asked first.
-        if (asked.Setting(name, Report) is { } setting)
-            return setting;
-        if (name.SimpleName is { } only && asked.Defines.TryGetValue(only.Text, out var value))
-            return Value.Of(value);
-
-        // A constant at file level is most likely meant as a setting, which `.config` makes it.
-        if (asked.Constant?.Invoke(name) is { } declared)
-        {
-            Add(new Diagnostic(name.Tree.GetSpan(name.Span), Severity.Error,
-                Catalogue.ConditionNamesAConstant.Message(name.GetText().Trim()), [])
-            {
-                Fix = new DiagnosticFix(FixKind.Setting, null, declared),
-            });
+        if (asked.Name(name) is not { } decided)
             return Value.Unknown;
-        }
-        Report(name, Catalogue.ConditionNamesTheProgram.Message(name.GetText().Trim()));
-        return Value.Unknown;
+        if (decided.Why is { } why)
+            asked.Undecided(name, name.GetText().Trim(), why);
+        return decided.Value;
     }
 
     /// <summary>
-    /// Returns the value of a call in a build's condition. Only the built-ins that the
-    /// configuration alone can evaluate have a value there. The value of a function the program
-    /// declares, and the result of a built-in that measures the program, are not known until
-    /// there is a program.
+    /// Returns the value of a call in a build's condition. The built-ins that the configuration
+    /// alone can evaluate have a value there, and so does a function the configuration decides,
+    /// called with arguments it decides. A built-in that measures the program has no answer yet.
     /// </summary>
     private Value InCondition(CallExpressionSyntax call, IReadOnlyList<SyntaxNode> given, Conditions asked)
     {
         if (call.Function is not { Kind: SyntaxKind.Directive } function)
         {
-            // A charmap or a `.func` called by name. Both are declarations, and reaching
-            // them means resolving a name before the declarations exist.
-            Report(call, Catalogue.ConditionCallsAFunction);
-            return Value.Unknown;
+            // A `.func` or a charmap called by name. Its arguments are evaluated here, so that
+            // what they use is checked as the rest of the condition is.
+            var values = given.Select(Evaluate).ToArray();
+            if (asked.Call(call, values) is not { } decided)
+                return Value.Unknown;
+            if (decided.Why is { } why)
+                asked.Undecided(call, call.Callee?.GetText().Trim(), why);
+            return decided.Value;
         }
 
         var kind = call.BuiltinKind;
-
-        // `.defined` asks whether a name is a define, so the name is not looked up at all, and
-        // a name that is not a define is the answer rather than a mistake.
-        if (kind == BuiltinKind.Defined)
-        {
-            if (!Fits(kind, function, given))
-                return Value.Unknown;
-            return given is [NameExpressionSyntax { SimpleName: { } about }]
-                ? Value.Of(asked.Defines.ContainsKey(about.Text))
-                : Value.Unknown;
-        }
-
         if (kind is BuiltinKind.Target or BuiltinKind.Has)
         {
             return Fits(kind, function, given)
@@ -453,7 +430,7 @@ internal sealed partial class Evaluator
                 : Value.Unknown;
         }
 
-        // Only the value the condition chooses is read, so it alone has to be a define.
+        // Only the value the condition chooses is read, so it alone has to be decided.
         if (kind == BuiltinKind.Select)
         {
             if (!Fits(kind, function, given))
@@ -464,10 +441,10 @@ internal sealed partial class Evaluator
             return Fits(kind, function, given) ? Switch(given) : Value.Unknown;
 
         // What the function asks about is checked before its arguments are read, so a
-        // `.sizeof(Point)` is one mistake, not that plus a `Point` that is not a define.
+        // `.sizeof(Point)` is one reason, not that and a `Point` the configuration does not decide.
         if (!Answerable(kind))
         {
-            Report(function, Catalogue.ConditionAsksAboutTheProgram.Message(function.Text));
+            asked.Undecided(call, null, Undecided.Measured);
             return Value.Unknown;
         }
         return Fits(kind, function, given) ? Plain(kind, function, given) : Value.Unknown;

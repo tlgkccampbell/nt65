@@ -53,7 +53,7 @@ flow1__RESTORE:
 ; end of RESTORE
 
 ; .place iscntc  flow1.nt65:11
-; .proc ISCNTC  iscntc.nt65:8
+; .proc ISCNTC  iscntc.nt65:10
 iscntc__ISCNTC:
     lda a:$1742
     cmp #$03

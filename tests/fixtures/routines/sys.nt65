@@ -6,7 +6,7 @@
 
 .export CODE_BANK
 
-CODE_BANK = $80
+.const CODE_BANK = $80
 
 ; The state most of the program runs in.
 .export .signature std = a8, i16, dp = 0, dbr = CODE_BANK

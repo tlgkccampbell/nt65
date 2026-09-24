@@ -8,7 +8,7 @@
 .export keywords, first, greeting, entry, padded, labels, screened, parts, length
 
 ; A text constant defined by a call is text, as one defined by a literal is.
-GREETING = htasc("HELLO")
+.const GREETING = htasc("HELLO")
 
 .assert .sizeof(ERROR_MESSAGES) == 22, "the table is as long as its two messages"
 .assert ERR_SYNTAX == 16, "a distance past built text is a constant"
@@ -33,7 +33,7 @@ GREETING = htasc("HELLO")
     .data FOR:  .byte htasc("FOR")
     .data NEXT: .byte htasc("NEXT")
 }
-TOKEN_NEXT = keywords::NEXT - keywords
+.const TOKEN_NEXT = keywords::NEXT - keywords
 .data first:    .byte .strat(GREETING, 4), .strlen(GREETING), TOKEN_NEXT
 .data greeting: .strz GREETING
 .data entry:    .type Entry { name = htasc("NT65"), score = 1 }

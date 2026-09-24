@@ -10,12 +10,12 @@
 
 .export list
 
-INSTRUCTIONS = 16                   ; what D shows when it is not told where to stop
-LONGEST = .select(.target(65816), 4, 3) ; the bytes of the longest instruction
-M_FLAG = $20                        ; the 65816's flag for an 8-bit A
-X_FLAG = $10                        ; the 65816's flag for 8-bit X and Y
-REP_OPCODE = $C2
-SEP_OPCODE = $E2
+.const INSTRUCTIONS = 16                   ; what D shows when it is not told where to stop
+.const LONGEST = .select(.target(65816), 4, 3) ; the bytes of the longest instruction
+.const M_FLAG = $20                        ; the 65816's flag for an 8-bit A
+.const X_FLAG = $10                        ; the 65816's flag for 8-bit X and Y
+.const REP_OPCODE = $C2
+.const SEP_OPCODE = $E2
 
 ; Returns the width of the widest line of D, whose bytes are `gap` columns apart. The line holds a
 ; comma and the address, then a space and the bytes, then a space and the name, and then a space
@@ -26,7 +26,7 @@ SEP_OPCODE = $E2
 
 ; The bytes are a space apart where the screen has room, and run together otherwise. A line stays
 ; narrower than the screen, so that the cursor does not wrap onto the next row.
-GAP = .select(line_width(1) < COLUMNS, 1, 0)
+.const GAP = .select(line_width(1) < COLUMNS, 1, 0)
 
 .assert line_width(GAP) < COLUMNS, "a line of D must fit on the screen"
 

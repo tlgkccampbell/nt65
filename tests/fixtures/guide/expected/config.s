@@ -14,6 +14,6 @@
 
 config__LINES = 25
 
-config__TRACE_LEVEL = 2
+config__TRACE_LEVEL = $02
 
 config__COLUMNS = $28

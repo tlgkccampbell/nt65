@@ -18,7 +18,7 @@ public sealed class JsonTests
         const string Text = """
             {
               "out": "files",
-              "defines": { "files": 1 },
+              "settings": { "files": 1 },
               // "files": ["a.nt65"]
               "files" : ["b.nt65", "a.nt65"]
             }
@@ -34,5 +34,5 @@ public sealed class JsonTests
     /// <summary>A file with no top-level <c>files</c> property has no entry to rewrite.</summary>
     [Fact]
     public void ANestedKeyAloneIsNoEntry() =>
-        Assert.Null(Json.Entry("""{ "defines": { "files": ["a.nt65"] } }""", "files", "a.nt65"));
+        Assert.Null(Json.Entry("""{ "settings": { "files": ["a.nt65"] } }""", "files", "a.nt65"));
 }

@@ -46,10 +46,6 @@
     rts
 }
 
-.if .defined() {                                ;! error[builtin-arguments]: `.defined` takes one name
-    NOPE = 1
-}
-
 .if .lobyte(1, 2) {                             ;! error[builtin-arguments]: `.lobyte` takes one value
-    NOPE = 2
+    .const NOPE = 2
 }

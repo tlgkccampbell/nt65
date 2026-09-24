@@ -86,9 +86,9 @@ internal sealed record CorpusProgram(
                 .Select(f => (f.Relative, File.ReadAllBytes(f.Path)))]);
     }
 
-    /// <summary>Compiles the program, with <paramref name="defines"/> overriding its own.</summary>
-    public Compilation Compile(params Define[] defines) =>
-        Compiler.Compile(Sources, Project.With(defines), BinaryLength);
+    /// <summary>Compiles the program, with <paramref name="values"/> overriding its own settings.</summary>
+    public Compilation Compile(params SettingValue[] values) =>
+        Compiler.Compile(Sources, Project.With(values), BinaryLength);
 
     private long? BinaryLength(string path)
     {

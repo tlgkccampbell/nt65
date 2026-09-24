@@ -90,6 +90,8 @@ internal sealed partial class Evaluator
             {
                 switch (line.Statement)
                 {
+                    case DataDeclarationSyntax { Address: not null }:
+                        break;
                     case DataDeclarationSyntax or DataDirectiveSyntax:
                         writes.Add(new Write(segment, line.Span, BytesOnLine(line.Statement), false));
                         break;

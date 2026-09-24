@@ -5,7 +5,7 @@
 
 .cpu 6502
 
-SCREEN = $0400
+.const SCREEN = $0400
 
 .segment RODATA
 .data table:    .byte 1, 2, $ff, 'A', "text"

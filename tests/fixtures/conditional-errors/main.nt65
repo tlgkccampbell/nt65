@@ -2,22 +2,32 @@
 
 .module main
 
-SIZE = 4
+.segment BSS
+.data table: .byte[4]
 
-.if SIZE > 2 {                  ;! error[condition-names-a-constant]: `SIZE` is a constant, and a condition or a setting may use only defines and settings: declare it with `.config` to make it a setting
-    NOPE = 1
+.const SIZE = .sizeof(table)
+
+.if SIZE > 2 {                  ;! error[condition-uses-a-measurement]: an `.if` cannot test `SIZE`, which uses a measurement of a declaration; check it with `.assert`
+    .const NOPE = 1
 }
 
-.if .sizeof(SIZE) == 1 {        ;! error[condition-asks-about-the-program]: `.sizeof` asks about the program, which an `.if` condition cannot do: use `.assert` to check the program
-    NOPE = 2
+.if .sizeof(table) == 1 {       ;! error[condition-uses-a-measurement]: an `.if` cannot test `.sizeof(table)`, which uses a measurement of a declaration; check it with `.assert`
+    .const NOPE = 2
 }
 
-.if .defined(SIZE) {            ;! error[defined-asks-about-defines]: `.defined` tests only build defines, and `SIZE` is declared by the program: to check the program, use `.assert`
-    NOPE = 4
+.if table {                     ;! error[condition-names-the-program]: an `.if` cannot test `table`, which is part of the program; check it with `.assert`
+    .const NOPE = 4
+}
+
+.if 1 {
+    .const LINES = 262
+}
+.if LINES > 200 {               ;! error[condition-uses-a-conditional-declaration]: an `.if` cannot test `LINES`, which is declared under another `.if`; declare `LINES` once, with `.select`
+    .const NOPE = 5
 }
 
 .if "yes" {                     ;! error[condition-is-text]: an `.if` condition must be a number, not text
-    NOPE = 3
+    .const NOPE = 3
 }
 
 .if 1 {

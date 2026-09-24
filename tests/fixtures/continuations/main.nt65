@@ -18,7 +18,7 @@
     [Mode::zpy, Mode::absy], ",Y",      ; indexed by Y
     "")
 
-WIDTH = (1 +
+.const WIDTH = (1 +
     2 +
     3)
 

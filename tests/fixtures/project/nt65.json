@@ -3,7 +3,7 @@
   "cpu": "65c02",
   "files": ["*.nt65"],
   "out": "build",
-  "defines": { "DEBUG": 1, "VERSION": "$0102" },
+  "settings": { "DEBUG": 1, "VERSION": "$0102" },
   "segments": {
     "VRAM": { "size": "abs" },
     "FAST": { "size": "zp" }

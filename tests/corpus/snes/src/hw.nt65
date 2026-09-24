@@ -15,8 +15,8 @@
 .export oam_shadow, Sprite, GameState, WRAM_BANK, CODE_BANK
 .export ppu_off, ppu_on, critical, mov16, dma_channel0, rgb15
 
-CODE_BANK = $80
-WRAM_BANK = $7e
+.const CODE_BANK = $80
+.const WRAM_BANK = $7e
 
 ; The state nearly every routine is called in and returns in. A signature names this set and
 ; adds only what differs.

@@ -15,9 +15,9 @@
 .data other: .word
 .data pair:  .type Pair
 
-SCREEN = $0400
-C4     = 60
-E4     = 64
+.const SCREEN = $0400
+.const C4     = 60
+.const E4     = 64
 
 ; An `operand` parameter stands as a whole operand, so one macro serves a plain address and
 ; an indexed one alike, and `dest+1` applies to the argument's expression.

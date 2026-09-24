@@ -33,7 +33,7 @@
     .data SYNTAX: .byte "SYNTA", 'X' | $80
 }
 
-ERR_SYNTAX = messages::SYNTAX - messages    ; 16
+.const ERR_SYNTAX = messages::SYNTAX - messages    ; 16
 
 .enum Color {
     red                             ; 0

@@ -119,6 +119,32 @@ internal sealed partial class Evaluator
     /// Determines whether an expression names an address, which makes it an alias rather than a
     /// constant.
     /// </summary>
+    /// <summary>
+    /// Determines whether the value of <paramref name="node"/> is an address rather than a
+    /// number. An address plus or minus a number is an address, and so is what <c>.endof</c>,
+    /// <c>.loadof</c> and <c>.runof</c> give. The distance between two addresses is a number,
+    /// even where only the linker knows it, and so is a byte of an address.
+    /// </summary>
+    private bool IsAddressValued(SyntaxNode node)
+    {
+        switch (node)
+        {
+            case CurrentAddressExpressionSyntax:
+                return true;
+            case NameExpressionSyntax name:
+                return SymbolOf(name) is { IsAddress: true };
+            case ParenthesizedExpressionSyntax parenthesized:
+                return IsAddressValued(parenthesized.Expression);
+            case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus } sum:
+                return IsAddressValued(sum.Left) != IsAddressValued(sum.Right);
+            case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Minus } difference:
+                return IsAddressValued(difference.Left) && !IsAddressValued(difference.Right);
+            case CallExpressionSyntax { BuiltinKind: BuiltinKind.Endof or BuiltinKind.Loadof or BuiltinKind.Runof }:
+                return true;
+        }
+        return ChoiceArguments(node) is not null && ChosenBy(node) is { } chosen && IsAddressValued(chosen);
+    }
+
     private bool NamesAnAddress(SyntaxNode node)
     {
         if (node is CurrentAddressExpressionSyntax)

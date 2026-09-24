@@ -700,6 +700,9 @@ public sealed partial class CodeLayout
             /// <param name="node">The declaration.</param>
             public override void VisitDataDeclaration(DataDeclarationSyntax node)
             {
+                // Data found elsewhere has no bytes here and no position of its own.
+                if (node.Address is not null)
+                    return;
                 walker.Mark(node);
                 if (node.Directive is { } element)
                 {

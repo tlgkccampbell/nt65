@@ -74,11 +74,6 @@ internal static class Fixes
                     [Exported(declaring, name)]);
                 break;
 
-            case FixKind.Setting when fix.At is { } at && analysis.ModelFor(at.File) is { } declaring:
-                yield return Fix(diagnostic, "Declare it with `.config`, as a setting",
-                    [new Edit(declaring.Tree, new TextSpan(Edits.SpanOf(declaring.Tree, at).Start, 0), ".config ")]);
-                break;
-
             case FixKind.Placed when fix.At is { } at && analysis.ModelFor(at.File) is { } declaring:
                 yield return Fix(diagnostic, $"Declare `{declaring.FileScope.Module}` as placed",
                     [new Edit(declaring.Tree, new TextSpan(Edits.SpanOf(declaring.Tree, at).End, 0), ": placed")]);

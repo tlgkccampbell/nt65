@@ -4,7 +4,7 @@
 
 .cpu 6502
 
-.export BORDER = $d020
+.export .const BORDER = $d020
 
 .segment CODE
 .export .proc set_border {

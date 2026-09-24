@@ -4,7 +4,7 @@
 
 .export row_lo, dispatch, Channel, level, play
 
-SCREEN = $0400
+.const SCREEN = $0400
 
 .segment RODATA
 .data row_lo: .byte[] {

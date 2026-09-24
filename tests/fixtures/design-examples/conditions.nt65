@@ -5,6 +5,12 @@
 
 .export run, bits, table, LINES, dispatch, actions_table
 
+; The settings the examples test, which the project gives values.
+.const DEBUG    ?= 0
+.const LEVEL    ?= 0
+.const SOUND    ?= 0
+.const PLATFORM ?= 1
+
 .segment RODATA
 .data table: .byte[32]
 
@@ -40,10 +46,10 @@
 }
 
 .if PLATFORM == 1 {
-    LINES = 262
+    .const LINES = 262
 }
 .if PLATFORM == 2 {
-    LINES = 312
+    .const LINES = 312
 }
 
 .segment CODE

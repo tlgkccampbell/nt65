@@ -11,8 +11,8 @@
 
 .export setup, refresh
 
-MAP = $0000                         ; the word address in VRAM of BG1's tilemap
-TILES = $1000                       ; the word address in VRAM of BG1's tile 0
+.const MAP = $0000                         ; the word address in VRAM of BG1's tilemap
+.const TILES = $1000                       ; the word address in VRAM of BG1's tile 0
 
 ; Returns a color, from five bits each of red, green and blue.
 .func rgb(r, g, b) = r | (g << 5) | (b << 10)

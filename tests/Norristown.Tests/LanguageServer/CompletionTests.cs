@@ -93,12 +93,12 @@ public sealed class CompletionTests
         // Only the statements the place accepts are offered: a file's top level holds declarations,
         // and only code holds instructions and the directives that go with them.
         { "top", "|", [".proc", ".data", ".export", ".cpu"], ["lda", "rts", "poke", ".state"] },
-        { "body", "|", [".data", ".scope", ".state", ".ensure", ".byte", "lda", "poke"], [".proc", ".macro", ".cpu", ".config", ".module"] },
+        { "body", "|", [".data", ".scope", ".state", ".ensure", ".byte", "lda", "poke"], [".proc", ".macro", ".cpu", ".module"] },
         { "macro", "|", ["lda", ".state", ".if"], [".proc", ".macro", ".export", ".import", ".segment"] },
         { "struct", "|", [".struct", ".union"], ["lda", ".proc", ".byte", "clear"] },
         { "values", "|", ["clear", "twice", ".sizeof"], ["lda", ".proc", ".byte"] },
         { "scope", "|", [".proc", ".macro", ".data"], ["lda", "rts", ".state"] },
-        { "body", ".|", [".data", ".state", ".byte"], [".proc", ".config", "clear"] },
+        { "body", ".|", [".data", ".state", ".byte"], [".proc", "clear"] },
 
         // After a `:`, the storage a member or data declaration takes, and the address size of an
         // imported name; after `.cpu`, the processors.

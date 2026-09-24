@@ -9,6 +9,9 @@
 
 .export main
 
+; Built with the checks that help find a bug.
+.const DEBUG ?= 0
+
 .segment RODATA0
 .data state_table: .addr state_title, state_play, state_pause
 

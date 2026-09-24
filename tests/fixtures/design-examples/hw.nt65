@@ -1,21 +1,21 @@
 ; The design's examples of a setting a module exports, of exports, and the module the
 ; example of `.use` brings names in from.
 .module hw
-.export .config SOUND_CHANNELS = 3
-.config PAL = 0 ;! warning[unused-symbol]: `PAL` is never used: nothing names it, and it is not exported
+.export .const SOUND_CHANNELS ?= 3
+.const PAL ?= 0
 
 .if SOUND_CHANNELS > 2 {
-    VOICES = 3
+    .const VOICES = 3
 }
 
 .cpu 65816
 
 .export VOICES, set_border
 
-K = $1234
+.const K = $1234
 
 .segment CODE
-.export BORDER = $D020
+.export .const BORDER = $D020
 .export .proc init {
     rts
 }

@@ -2,7 +2,7 @@
 ; another name. In the output they are `tables__count` and `tables__rest`.
 .module tables: placed
 
-count = 2
+.const count = 2
 
 .segment RODATA
 .export .data first: .byte $11, $22

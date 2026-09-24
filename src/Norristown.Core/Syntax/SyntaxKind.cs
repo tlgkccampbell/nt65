@@ -159,6 +159,9 @@ public enum SyntaxKind : byte
     /// <summary><c>?</c>.</summary>
     Question,
 
+    /// <summary><c>?=</c>, which declares a setting.</summary>
+    QuestionEquals,
+
     /// <summary>One source line and its tokens.</summary>
     Line,
 
@@ -190,7 +193,7 @@ public enum SyntaxKind : byte
     /// <summary><c>name :</c> or <c>@name :</c>.</summary>
     Label,
 
-    /// <summary><c>name = expr</c>.</summary>
+    /// <summary><c>.const name = expr</c>, or <c>.const name ?= expr</c> for a setting.</summary>
     ConstantDeclaration,
 
     /// <summary>A mnemonic and its operand.</summary>
@@ -325,9 +328,6 @@ public enum SyntaxKind : byte
 
     /// <summary><c>.signature std = a8, i16, dp = 0</c>, a named set of signature items.</summary>
     SignatureDeclaration,
-
-    /// <summary><c>.config NAME = value</c>, a define a module declares, which the build may set.</summary>
-    ConfigDeclaration,
 
     /// <summary>One member of an <c>.enum</c>, either <c>name</c> or <c>name = expr</c>.</summary>
     EnumMember,

@@ -1,0 +1,23 @@
+; The design's examples of data found elsewhere, and of a value that follows from settings.
+.module elsewhere
+
+.cpu 65816
+
+.export PPUCTRL, TXTPTR, TEMP3
+
+.segment ZEROPAGE
+.data FNCNAM: .word
+
+.segment CODE
+.proc CHRGOT: a8, i8 {
+    lda $1234
+    rts
+}
+
+.data PPUCTRL: .byte = $2000                     ; a port
+.data TXTPTR:  .addr = CHRGOT + 1                 ; the operand of an instruction in CHRGOT
+.data TEMP3 = FNCNAM                             ; FNCNAM, under another name
+
+.export .const APPLE    ?= 0
+.export .const KIM      ?= 0
+.export .const CONFIG_11 = APPLE || KIM

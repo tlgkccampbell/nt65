@@ -3,7 +3,7 @@
 .module main
 .use text::{TITLE, screen}
 
-PROMPT = "PRESS START"
+.const PROMPT = "PRESS START"
 
 .struct Entry {
     name:  .res 8

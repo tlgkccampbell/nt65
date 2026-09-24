@@ -6,7 +6,7 @@
 
 .export reloc, irq, module, mixed, greeting, letter, COLUMNS, clamp, red, closing, FAST
 
-WIDE = 1
+.const WIDE = 1
 
 .struct Player {
     hp: .byte
@@ -80,7 +80,7 @@ WIDE = 1
 .data greeting: .byte screen("HELLO WORLD")
 .data letter:   .byte screen('A')
 
-COLUMNS = .select(WIDE, 80, 40)
+.const COLUMNS = .select(WIDE, 80, 40)
 .func clamp(v) = .select(v > 255, 255, v)
 
 .enum Mode {
@@ -89,13 +89,13 @@ COLUMNS = .select(WIDE, 80, 40)
     zpy
     absy
 }
-SPEED = 5
+.const SPEED = 5
 
 .func closing(m) = .switch(m,
     [Mode::zpx, Mode::absx], ",X",
     [Mode::zpy, Mode::absy], ",Y",
     "")
-FAST = SPEED .in [2, 4..8]
+.const FAST = SPEED .in [2, 4..8]
 
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
 

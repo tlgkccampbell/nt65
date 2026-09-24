@@ -44,5 +44,5 @@
 .align 2
 .data far_apart: .byte 0
 
-PROMPTS_AT = prompts - table        ; 3 + 5 + 2
-FAR_APART_AT = far_apart - table    ; an `.align` between: an address
+.const PROMPTS_AT = prompts - table        ; 3 + 5 + 2
+.const FAR_APART_AT = far_apart - table    ; an `.align` between: an address

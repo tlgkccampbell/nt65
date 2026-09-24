@@ -36,4 +36,4 @@
     rts
 }
 
-.export TXTPTR = CHRGOT + 1
+.export .data TXTPTR: .addr = CHRGOT + 1

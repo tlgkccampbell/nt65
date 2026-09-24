@@ -154,7 +154,7 @@
 }
 
 ; The statements are the tokens below TAB.
-.export NUM_TOKENS = Token::TAB - $80
+.export .const NUM_TOKENS = Token::TAB - $80
 
 ; ----------------------------------------------------------------------------
 ; Where each statement's routine starts, less one, for the RTS that jumps to it.

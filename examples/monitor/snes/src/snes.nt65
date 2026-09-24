@@ -5,39 +5,39 @@
 .cpu 65816
 
 ; The S-PPU's ports, which are written in the page at $2100.
-.export INIDISP = $2100             ; brightness, and forced blank
-.export BGMODE  = $2105
-.export BG1SC   = $2107             ; where BG1's tilemap is, and its size
-.export BG12NBA = $210B             ; where BG1's and BG2's tiles are
-.export BG1HOFS = $210D             ; written twice, low byte first
-.export BG1VOFS = $210E             ; written twice, low byte first
-.export VMAIN   = $2115             ; how the VRAM address steps
-.export VMADDL  = $2116             ; the VRAM address, in words
-.export VMDATAL = $2118             ; the low byte of a VRAM word
-.export VMDATAH = $2119             ; the high byte of a VRAM word
-.export CGADD   = $2121             ; the palette entry CGDATA writes next
-.export CGDATA  = $2122             ; written twice, low byte first
-.export TM      = $212C             ; the layers the main screen shows
-.export PPU     = $2100             ; the page of the S-PPU's ports
+.export .const INIDISP = $2100             ; brightness, and forced blank
+.export .const BGMODE  = $2105
+.export .const BG1SC   = $2107             ; where BG1's tilemap is, and its size
+.export .const BG12NBA = $210B             ; where BG1's and BG2's tiles are
+.export .const BG1HOFS = $210D             ; written twice, low byte first
+.export .const BG1VOFS = $210E             ; written twice, low byte first
+.export .const VMAIN   = $2115             ; how the VRAM address steps
+.export .const VMADDL  = $2116             ; the VRAM address, in words
+.export .const VMDATAL = $2118             ; the low byte of a VRAM word
+.export .const VMDATAH = $2119             ; the high byte of a VRAM word
+.export .const CGADD   = $2121             ; the palette entry CGDATA writes next
+.export .const CGDATA  = $2122             ; written twice, low byte first
+.export .const TM      = $212C             ; the layers the main screen shows
+.export .const PPU     = $2100             ; the page of the S-PPU's ports
 
 ; The S-CPU's ports.
-.export NMITIMEN = $4200            ; which interrupts are on, and reading the joypads
-.export MDMAEN   = $420B            ; starts a DMA on each channel whose bit is set
-.export HDMAEN   = $420C
-.export RDNMI    = $4210            ; read to acknowledge an NMI
-.export HVBJOY   = $4212            ; whether vblank is on, and joypads are being read
-.export JOY1L    = $4218            ; joypad 1, as `Button` says
-.export JOY1H    = $4219
-.export DMA0     = $4300            ; DMA channel 0, laid out as `Dma`
+.export .const NMITIMEN = $4200            ; which interrupts are on, and reading the joypads
+.export .const MDMAEN   = $420B            ; starts a DMA on each channel whose bit is set
+.export .const HDMAEN   = $420C
+.export .const RDNMI    = $4210            ; read to acknowledge an NMI
+.export .const HVBJOY   = $4212            ; whether vblank is on, and joypads are being read
+.export .const JOY1L    = $4218            ; joypad 1, as `Button` says
+.export .const JOY1H    = $4219
+.export .const DMA0     = $4300            ; DMA channel 0, laid out as `Dma`
 
-.export FORCED_BLANK = $80          ; INIDISP: the screen shows nothing, and VRAM may be written
-.export FULL_BRIGHT  = $0F          ; INIDISP: the screen shows, at full brightness
-.export BG1          = $01          ; TM: the layer the monitor uses
-.export VBLANK_NMI   = $80          ; NMITIMEN: an NMI at the start of each vblank
-.export AUTO_JOYPAD  = $01          ; NMITIMEN: the joypads are read at the start of each vblank
-.export JOYPAD_BUSY  = $01          ; HVBJOY: the joypads are being read
-.export STEP_LOW     = $00          ; VMAIN: the address steps after each write of VMDATAL
-.export STEP_HIGH    = $80          ; VMAIN: the address steps after each write of VMDATAH
+.export .const FORCED_BLANK = $80          ; INIDISP: the screen shows nothing, and VRAM may be written
+.export .const FULL_BRIGHT  = $0F          ; INIDISP: the screen shows, at full brightness
+.export .const BG1          = $01          ; TM: the layer the monitor uses
+.export .const VBLANK_NMI   = $80          ; NMITIMEN: an NMI at the start of each vblank
+.export .const AUTO_JOYPAD  = $01          ; NMITIMEN: the joypads are read at the start of each vblank
+.export .const JOYPAD_BUSY  = $01          ; HVBJOY: the joypads are being read
+.export .const STEP_LOW     = $00          ; VMAIN: the address steps after each write of VMDATAL
+.export .const STEP_HIGH    = $80          ; VMAIN: the address steps after each write of VMDATAH
 
 ; The buttons of a joypad, as JOY1L and JOY1H read them together, JOY1H being the high byte.
 .export .enum Button {
@@ -63,6 +63,6 @@
     length: .word                   ; in bytes, where 0 is 65,536
 }
 
-.export DMA_ONE_PORT  = $00         ; each byte to the port
-.export DMA_TWO_PORTS = $01         ; the bytes to the port and the one after it, in turn
-.export DMA_FIXED     = $08         ; the same byte, over and over
+.export .const DMA_ONE_PORT  = $00         ; each byte to the port
+.export .const DMA_TWO_PORTS = $01         ; the bytes to the port and the one after it, in turn
+.export .const DMA_FIXED     = $08         ; the same byte, over and over

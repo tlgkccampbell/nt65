@@ -10,7 +10,7 @@
 .if !SYM1 {
     ; Where the trigonometric functions start, which a RAM version of BASIC frees
     ; when it is asked to leave them out
-    .export SIN_COS_TAN_ATN = COS
+    .export .proc SIN_COS_TAN_ATN = COS
 
     ; ----------------------------------------------------------------------------
     ; "COS" FUNCTION

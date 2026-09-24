@@ -2,7 +2,7 @@
   "cpu": "65816",
   "files": ["src/*.nt65"],
   "out": "build",
-  "defines": { "DEBUG": 1 },
+  "settings": { "DEBUG": 1 },
   "links": {
     "rom": {
       "config": "snes.cfg",

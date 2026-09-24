@@ -213,7 +213,7 @@ exports them. Export a declaration by writing `.export` in front of it, or list 
 
 .cpu 6502
 
-.export BORDER = $D020
+.export .const BORDER = $D020
 
 .segment CODE
 .export .proc clear {

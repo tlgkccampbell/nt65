@@ -15,7 +15,7 @@ namespace Norristown.Project;
 /// module name, regardless of where its source is. When null, output is written under the
 /// project root.
 /// </param>
-/// <param name="Defines">The build configuration's defines, together with any that <c>-D</c> added or overrode.</param>
+/// <param name="SettingValues">The values the build gives settings, together with any that <c>-D</c> added or overrode.</param>
 /// <param name="Segments">Segments declared by the project rather than by a file.</param>
 /// <param name="Diagnostics">
 /// The problems found while reading the project and the command line that added to it. A
@@ -27,7 +27,7 @@ public sealed record ProjectSettings(
     Cpu? Cpu,
     IReadOnlyList<string> Files,
     string? Out,
-    IReadOnlyList<Define> Defines,
+    IReadOnlyList<SettingValue> SettingValues,
     IReadOnlyList<Segment> Segments,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
@@ -83,7 +83,7 @@ public sealed record ProjectSettings(
 
     /// <summary>
     /// Returns the settings that the configuration named <paramref name="name"/> builds with,
-    /// which are its defines over the project's, and its <c>out</c> if it gives one. If the
+    /// which are its setting values over the project's, and its <c>out</c> if it gives one. If the
     /// project has no configuration with that name, reports an error at <paramref name="given"/>
     /// and uses the project's own settings.
     /// </summary>
@@ -91,7 +91,7 @@ public sealed record ProjectSettings(
     {
         if (Configurations.FirstOrDefault(configuration => configuration.Name == name) is { } chosen)
         {
-            var configured = With(chosen.Defines) with
+            var configured = With(chosen.SettingValues) with
             {
                 Out = chosen.Out ?? Out,
                 Severities = Reported(chosen.Severities),
@@ -114,17 +114,17 @@ public sealed record ProjectSettings(
     }
 
     /// <summary>
-    /// Returns these settings with <paramref name="defines"/> added, each replacing any existing
-    /// define with the same name.
+    /// Returns these settings with <paramref name="values"/> added, each replacing any existing
+    /// value given under the same name.
     /// </summary>
-    public ProjectSettings With(IReadOnlyList<Define> defines)
+    public ProjectSettings With(IReadOnlyList<SettingValue> values)
     {
-        if (defines.Count == 0)
+        if (values.Count == 0)
             return this;
-        var byName = Defines.ToDictionary(define => define.Name, StringComparer.Ordinal);
-        foreach (var define in defines)
-            byName[define.Name] = define;
-        return this with { Defines = [.. byName.Values.OrderBy(define => define.Name, StringComparer.Ordinal)] };
+        var byName = SettingValues.ToDictionary(value => value.Name, StringComparer.Ordinal);
+        foreach (var value in values)
+            byName[value.Name] = value;
+        return this with { SettingValues = [.. byName.Values.OrderBy(value => value.Name, StringComparer.Ordinal)] };
     }
 
     /// <summary>

@@ -4,7 +4,7 @@
 
 .export set16, delay, SCREEN, tiles
 
-SCREEN = $0400
+.const SCREEN = $0400
 
 .segment RODATA
 .data tiles: .byte 0, 1, 2, 3

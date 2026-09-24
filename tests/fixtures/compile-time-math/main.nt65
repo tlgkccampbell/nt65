@@ -6,8 +6,8 @@
 .cpu 6502
 
 ; The number of table steps in a whole turn, and the wave's amplitude either side of zero.
-TURN  = 256
-SCALE = 127
+.const TURN  = 256
+.const SCALE = 127
 
 .segment RODATA
 
@@ -28,7 +28,7 @@ SCALE = 127
 
 ; A quarter of a circle, as a bitmap or a plotter wants it: for each step across, the height
 ; that keeps the point on the circle.
-RADIUS = 64
+.const RADIUS = 64
 .data circle: .byte[RADIUS] {
     .repeat RADIUS, across {
         .sqrt((RADIUS * RADIUS) - (across * across))

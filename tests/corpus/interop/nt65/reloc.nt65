@@ -3,7 +3,7 @@
 
 .export install_blob as "_install_blob", call_blob as "_call_blob"
 
-BLOB_ADDR = $0300
+.const BLOB_ADDR = $0300
 
 .proc run_blob = BLOB_ADDR
 

@@ -82,28 +82,25 @@ public sealed class ProgramModel
     public IReadOnlyList<Diagnostic> Diagnostics { get; }
 
     /// <summary>
-    /// Builds the program from <paramref name="trees"/>. <paramref name="defines"/>, if given,
-    /// is the file the build configuration was read as, and everything it declares is a define
-    /// that is visible everywhere. <paramref name="cpu"/> is the processor the program is built
-    /// for, which decides the mnemonics no name may take. Without it, the files' <c>.cpu</c>
-    /// items decide.
+    /// Builds the program from <paramref name="trees"/>. <paramref name="cpu"/> is the processor
+    /// the program is built for, which decides the mnemonics no name may take. Without it, the
+    /// files' <c>.cpu</c> items decide.
     /// </summary>
     public static ProgramModel Create(
         IReadOnlyList<SyntaxTree> trees,
         SegmentTable segments,
         Configuration? configuration = null,
-        SyntaxTree? defines = null,
         Func<string, long?>? binaryLength = null,
         Cpu? cpu = null)
     {
         configuration ??= Configuration.Everything;
         var target = cpu ?? ProgramCpu.Resolve(trees, null, []);
-        var binders = trees.Select(tree => Binder.Collect(tree, segments, configuration, target, tree == defines)).ToList();
+        var binders = trees.Select(tree => Binder.Collect(tree, segments, configuration, target)).ToList();
         var modules = binders.Select(binder => binder.Module).ToList();
 
         var segmentValues = new List<Diagnostic>();
         var read = AnalyzeFiles(
-            binders, modules, defines, segments, configuration, target, binaryLength, unchanged: null, segmentValues,
+            binders, modules, segments, configuration, target, binaryLength, unchanged: null, segmentValues,
             bound =>
             {
                 // The program has one map, keyed by file as well as position. Evaluating a
@@ -191,7 +188,6 @@ public sealed class ProgramModel
         IReadOnlyDictionary<string, SyntaxTree> trees,
         IReadOnlySet<string> dirty,
         Configuration configuration,
-        SyntaxTree? defines,
         Func<Diagnostic, Diagnostic?> moved,
         Func<string, long?>? binaryLength,
         out HashSet<string> affected)
@@ -205,14 +201,14 @@ public sealed class ProgramModel
         // The files are read in path order, so that their constants are evaluated in the same
         // order each time.
         var binders = dirty.Order(StringComparer.Ordinal).ToDictionary(
-            path => path, path => Binder.Collect(trees[path], Segments, configuration, cpu, trees[path] == defines), StringComparer.Ordinal);
+            path => path, path => Binder.Collect(trees[path], Segments, configuration, cpu), StringComparer.Ordinal);
         List<ProgramSymbols.Module> replaced = [.. modules.Select(module =>
             binders.TryGetValue(module.Tree.Path, out var binder) ? binder.Module : module)];
 
         // Every other file's symbols keep their values, and are read as they stand rather than
         // evaluated again.
         var read = AnalyzeFiles(
-            [.. binders.Values], replaced, defines, Segments, configuration, cpu, binaryLength,
+            [.. binders.Values], replaced, Segments, configuration, cpu, binaryLength,
             unchanged: symbol => !dirty.Contains(symbol.Tree.Path), segmentValues: null,
             results =>
             {
@@ -274,8 +270,6 @@ public sealed class ProgramModel
                 .ToHashSet();
             foreach (var other in others)
             {
-                if (other.Tree == defines)
-                    continue;
                 if (everything || lookedUp.GetValueOrDefault(other.Tree.Path) is { } looked && looked.Overlaps(heads))
                     affected.Add(other.Tree.Path);
             }
@@ -352,7 +346,6 @@ public sealed class ProgramModel
     /// </summary>
     /// <param name="binders">The files to read, in the order their constants are evaluated.</param>
     /// <param name="modules">Every module of the program, including those of the files not read.</param>
-    /// <param name="defines">The file the build configuration was read as, or null.</param>
     /// <param name="segments">The program's segments.</param>
     /// <param name="configuration">Which <c>.if</c> branches the build takes.</param>
     /// <param name="cpu">The processor the program is built for.</param>
@@ -372,7 +365,6 @@ public sealed class ProgramModel
     private static Reading AnalyzeFiles(
         IReadOnlyList<Binder> binders,
         IReadOnlyList<ProgramSymbols.Module> modules,
-        SyntaxTree? defines,
         SegmentTable segments,
         Configuration configuration,
         Cpu cpu,
@@ -382,26 +374,22 @@ public sealed class ProgramModel
         Func<IReadOnlyList<Binder.Result>, (Forwarding Forwarding, SymbolMap Resolved, SymbolMap Declared)> link)
     {
         // These are the diagnostics for the program rather than for one file, such as two files
-        // that declare one module, two exports under one linker name, or a file shadowing a
-        // define.
+        // that declare one module, or two exports under one linker name.
         var tables = new List<Diagnostic>();
-
-        // Every define is visible in every file, as if every file had brought it in.
-        var defined = modules.FirstOrDefault(module => module.Tree == defines)?.FileScope.Symbols ?? [];
 
         // A family declares one name per member of the enum it iterates over, and the enum may
         // belong to another module. The instances are therefore declared once every file has
         // been read, and before the modules' exports, because what a file exports includes them.
         if (binders.Any(binder => binder.HasFamilies))
         {
-            var provisional = ProgramSymbols.Build(modules, defined, []);
+            var provisional = ProgramSymbols.Build(modules, []);
             foreach (var binder in binders)
                 binder.DeclareFamilies(provisional);
         }
         foreach (var binder in binders)
             binder.Export();
 
-        var symbols = ProgramSymbols.Build(modules, defined, tables);
+        var symbols = ProgramSymbols.Build(modules, tables);
         var bound = binders.Select(binder => binder.Resolve(symbols)).ToList();
         var byFile = new Dictionary<string, List<Diagnostic>>(StringComparer.Ordinal);
         for (var i = 0; i < binders.Count; i++)
@@ -446,7 +434,6 @@ public sealed class ProgramModel
         // signature has taken the routine's.
         foreach (var result in bound)
             CheckDeclaredSignatures(result.Symbols, byFile, cpu);
-        CheckDefineNames(modules, defines, tables);
         return new Reading(symbols, bound, byFile, tables, forwarding, resolved, declared, reads);
     }
 
@@ -739,33 +726,6 @@ public sealed class ProgramModel
         AddressSize.Absolute => "abs",
         _ => "far",
     };
-
-    /// <summary>
-    /// Reports a diagnostic for each file-level name a file declares that the build configuration
-    /// already defines.
-    /// </summary>
-    private static void CheckDefineNames(
-        IReadOnlyList<ProgramSymbols.Module> modules, SyntaxTree? defines, List<Diagnostic> diagnostics)
-    {
-        if (defines is null)
-            return;
-        var configured = modules
-            .First(module => module.Tree == defines)
-            .FileScope.Symbols
-            .ToDictionary(symbol => symbol.Name, StringComparer.Ordinal);
-
-        foreach (var module in modules.Where(module => module.Tree != defines))
-        {
-            foreach (var symbol in module.FileScope.Symbols)
-            {
-                if (!symbol.IsCheapLocal && configured.ContainsKey(symbol.Name))
-                {
-                    diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
-                        Catalogue.DefineRedeclared.Message(symbol.Name)));
-                }
-            }
-        }
-    }
 
     /// <summary>Represents what reading a set of files found.</summary>
     /// <param name="Symbols">The table of what each file may name in the others.</param>

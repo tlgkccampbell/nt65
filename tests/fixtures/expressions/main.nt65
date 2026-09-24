@@ -1,32 +1,32 @@
 ; C's precedence, and the three places where the language asks for parentheses.
 .module main
 
-P = 1
-Q = 2
-R = 4
-SCREEN = $0400
+.const P = 1
+.const Q = 2
+.const R = 4
+.const SCREEN = $0400
 
-SUM     = P + Q * R
-MODULO  = P + Q .mod R
-MASK    = P | Q | R
-SHIFTED = 1 << (P + 1)
-CLEAR   = (P & $0f) == 0
-BOTH    = (P == 1) && (Q == 2)
-EITHER  = P < Q || Q >= R
-LOW     = <(SCREEN + 1)
-HIGH    = >SCREEN
-BANK    = ^SCREEN
-NESTED  = .max(.min(P, Q), R)
-WIDTH   = .addrsize(SCREEN)
-HERE    = *
-SCOPED  = ::main::SCREEN
+.const SUM     = P + Q * R
+.const MODULO  = P + Q .mod R
+.const MASK    = P | Q | R
+.const SHIFTED = 1 << (P + 1)
+.const CLEAR   = (P & $0f) == 0
+.const BOTH    = (P == 1) && (Q == 2)
+.const EITHER  = P < Q || Q >= R
+.const LOW     = <(SCREEN + 1)
+.const HIGH    = >SCREEN
+.const BANK    = ^SCREEN
+.const NESTED  = .max(.min(P, Q), R)
+.const WIDTH   = .addrsize(SCREEN)
+.data HERE: .byte = *
+.const SCOPED  = ::main::SCREEN
 
 ; An operand of a shift or a bitwise operator may not be a different binary operator.
-BAD_SHIFT = 1 << P + 1      ;! error[operators-need-parentheses]: `<<` and `+` need parentheses to show which applies first
-BAD_MASK  = P & $0f == 0    ;! error[operators-need-parentheses]: `&` and `==` need parentheses to show which applies first
+.const BAD_SHIFT = 1 << P + 1      ;! error[operators-need-parentheses]: `<<` and `+` need parentheses to show which applies first
+.const BAD_MASK  = P & $0f == 0    ;! error[operators-need-parentheses]: `&` and `==` need parentheses to show which applies first
 
 ; The logical operators may not be mixed.
-BAD_LOGIC = P || Q && R     ;! error[operators-need-parentheses]: `||` and `&&` need parentheses to show which applies first
+.const BAD_LOGIC = P || Q && R     ;! error[operators-need-parentheses]: `||` and `&&` need parentheses to show which applies first
 
 ; A byte operator reads as if it applied to the whole expression.
-BAD_BYTE  = <SCREEN + 1     ;! error[byte-operator-needs-parentheses]: unary `<` binds tighter than `+`: use `(<x) + y` or `<(x + y)` to show which is meant
+.const BAD_BYTE  = <SCREEN + 1     ;! error[byte-operator-needs-parentheses]: unary `<` binds tighter than `+`: use `(<x) + y` or `<(x + y)` to show which is meant

@@ -3,7 +3,7 @@
 
 .cpu 65816
 
-TEXT = "AB"
+.const TEXT = "AB"
 
 .charmap screen {
     'A'..'Z' = $01

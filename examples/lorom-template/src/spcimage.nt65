@@ -13,11 +13,11 @@
 .export spc_entry as "spc_entry"
 
 ; MMIO at $00F0-$00FF
-TIMEREN     = $00F1     ; 0-2: enable timer; 7: enable ROM in $FFC0-$FFFF
-DSPADDR     = $00F2
-DSPDATA     = $00F3
-TIMERPERIOD = $00FA     ; Divisors for timers (0, 1: 8 kHz base; 2: 64 kHz base)
-TIMERVAL    = $00FD     ; Number of times timer incremented (bits 3-0; cleared on read)
+.const TIMEREN     = $00F1     ; 0-2: enable timer; 7: enable ROM in $FFC0-$FFFF
+.const DSPADDR     = $00F2
+.const DSPDATA     = $00F3
+.const TIMERPERIOD = $00FA     ; Divisors for timers (0, 1: 8 kHz base; 2: 64 kHz base)
+.const TIMERVAL    = $00FD     ; Number of times timer incremented (bits 3-0; cleared on read)
 
 ; A voice's registers are at its number times 16 plus these.
 .enum Voice {
@@ -46,7 +46,7 @@ TIMERVAL    = $00FD     ; Number of times timer incremented (bits 3-0; cleared o
     sampdir  = $5D              ; High byte of base address of sample table
 }
 
-TIMER_HZ = 125
+.const TIMER_HZ = 125
 
 .segment SPCZEROPAGE
 ; Writing to KON or KOFF twice within a 64-cycle (2 sample) window
@@ -412,7 +412,7 @@ TIMER_HZ = 125
 }
 
 .data processTrackPattern {
-    patternptr = $00
+    .const patternptr = $00
 
     lda!({noteRowsLeft,x})
     beq!(@notWaitingRows)
@@ -576,7 +576,7 @@ TIMER_HZ = 125
 ; @param Y semitone number
 ; @return A, Y, $00 trashed; X preserved
 .data ch_set_pitch {
-    pitchhi = $00
+    .const pitchhi = $00
 
     sta!({pitchhi})
     txa!()
@@ -610,7 +610,7 @@ TIMER_HZ = 125
 ; @return $02: pointer to instrument; $04: channel volume;
 ; A: instrument's pitch scale; Y trashed; X preserved
 .data ch_set_inst {
-    instptr = $02
+    .const instptr = $02
 
     ldy!({#8})
     mul!()
@@ -671,7 +671,7 @@ TIMER_HZ = 125
 ; starts a fade-out process that takes up to 256 samples (8 ms).
 ; So find which voices are ready for key off and on, and do so.
 .data keyoff_ready_notes {
-    unready_chs = $07
+    .const unready_chs = $07
 
     ldx!({#NUM_CHANNELS - 1})
 @loop:
@@ -690,7 +690,7 @@ TIMER_HZ = 125
 }
 
 .data keyon_ready_notes {
-    unready_chs = $07
+    .const unready_chs = $07
 
     ldx!({#NUM_CHANNELS - 1})
 @loop:
@@ -751,10 +751,10 @@ TIMER_HZ = 125
     .byte $C3,$88,$99,$AA,$BB,$CC,$DD,$EE,$FF
 }
 .data karplusbassloop_brr: .incbin "../build/assets/karplusbassloop.brr"
-karplusbass_loop = .endof(karplusbassloop_brr) - 36     ; period 64 samples (36 bytes)
-.data hat_brr:   .incbin "../build/assets/hat.brr"
-.data kick_brr:  .incbin "../build/assets/kickgen.brr"
-.data snare_brr: .incbin "../build/assets/decentsnare.brr"
+.data karplusbass_loop:    .byte = .endof(karplusbassloop_brr) - 36     ; period 64 samples (36 bytes)
+.data hat_brr:             .incbin "../build/assets/hat.brr"
+.data kick_brr:            .incbin "../build/assets/kickgen.brr"
+.data snare_brr:           .incbin "../build/assets/decentsnare.brr"
 
 ; $ python3
 ; [round(261.625 * 8 / 7.8125 * 2**(i / 12)) - 256 for i in range(12)]

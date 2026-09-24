@@ -279,8 +279,6 @@ public sealed class AnalysisApiTests
         Assert.Equal("hw::vic", program.Symbols.ModuleNamed("hw::vic")!.Name);
         Assert.True(program.Symbols.IsModulePath("hw"));
         Assert.Contains(program.Symbols.Modules, module => module.Name == "main");
-        Assert.Empty(program.Symbols.Defines);
-        Assert.Null(program.Symbols.Define("DEBUG"));
         Assert.Equal(["hw::vic"], program.Symbols.ModulesExporting("BORDER"));
         Assert.Equal(border, program.Symbols.Member(program.Symbols.ModuleNamed("hw::vic")!, "BORDER"));
         Assert.Equal("BSS", program.Segments.Find("BSS")!.Name);

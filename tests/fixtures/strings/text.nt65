@@ -3,7 +3,7 @@
 .module text
 .export TITLE, screen
 
-TITLE = "NT65"
+.const TITLE = "NT65"
 
 .charmap screen {
     'A'..'Z' = $01

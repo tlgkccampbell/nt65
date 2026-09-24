@@ -21,21 +21,14 @@ public enum WholeProgramReason
     /// <summary>The changed file declares a segment, before or after the edit.</summary>
     SegmentsDeclared,
 
-    /// <summary>
-    /// The changed file declares a <c>.config</c>, before or after the edit, which any file's
-    /// conditions may read.
-    /// </summary>
-    SettingsDeclared,
-
-    /// <summary>
-    /// The changed file names a different module or re-exports different names, in a program
-    /// that declares a <c>.config</c>. Another file's condition may reach a setting through that
-    /// module.
-    /// </summary>
-    SettingPathsChanged,
-
     /// <summary>The program's CPU changed.</summary>
     CpuChanged,
+
+    /// <summary>
+    /// The edit changed which branches another file's conditions take, or what is wrong with
+    /// them, through a value the configuration decides that a condition there tests.
+    /// </summary>
+    ConditionsChanged,
 
     /// <summary>
     /// A diagnostic from analyzing the program as a whole points at text the edit changed. Such a

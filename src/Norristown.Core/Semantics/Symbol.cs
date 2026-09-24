@@ -77,19 +77,11 @@ public sealed class Symbol
     public bool IsCheapLocal { get; internal init; }
 
     /// <summary>
-    /// Gets a value indicating whether the symbol is a build-configuration define rather than
-    /// something a source file declared. A define is an ordinary constant everywhere except in
-    /// the output, which always emits it as its value so that a <c>-D</c> given to ca65 cannot
-    /// collide with it.
+    /// Gets a value indicating whether the symbol is a setting, a constant declared with
+    /// <c>?=</c> whose value the build may set. The output emits it as its value rather than by
+    /// name.
     /// </summary>
-    public bool IsDefine { get; internal set => field = Unfrozen(value); }
-
-    /// <summary>
-    /// Gets a value indicating whether the symbol is a <c>.config</c> setting, which is a constant
-    /// whose value the build may set. As with a define, the output emits it as its value rather
-    /// than by name.
-    /// </summary>
-    public bool IsConfig { get; internal set => field = Unfrozen(value); }
+    public bool IsSetting { get; internal set => field = Unfrozen(value); }
 
     /// <summary>Gets the segment the declaration is in, for an address; null for a constant.</summary>
     public string? Segment { get; internal set => field = Unfrozen(value); }
@@ -182,7 +174,7 @@ public sealed class Symbol
     /// Gets the element directive of a data declaration or a struct member, which gives it a size
     /// and a count. Null for mixed data, whose block is its <see cref="Definition"/>.
     /// </summary>
-    public StatementSyntax? Data { get; internal init; }
+    public StatementSyntax? Data { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
     /// Gets the enum member declared before this one, or null for the first. A member with no
@@ -237,10 +229,11 @@ public sealed class Symbol
 
     /// <summary>
     /// Gets a value indicating whether the symbol declares what its bytes are. This is true of a
-    /// data declaration and of an import that gives an element type. Both are sized and counted
-    /// from what they declare, and both reach the fields of the type they name.
+    /// data declaration, of data found elsewhere, and of an import that gives an element type. Each
+    /// is sized and counted from what it declares, and each reaches the fields of the type it names.
     /// </summary>
-    public bool IsTypedStorage => Kind == SymbolKind.Data || (Kind == SymbolKind.ImportedAddress && Data is not null);
+    public bool IsTypedStorage =>
+        Kind == SymbolKind.Data || (Kind is SymbolKind.ImportedAddress or SymbolKind.AddressAlias && Data is not null);
 
     /// <summary>Gets a value indicating whether the symbol is a layout whose members are offsets.</summary>
     public bool IsLayout => Kind is SymbolKind.Struct or SymbolKind.Union;

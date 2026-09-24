@@ -15,8 +15,8 @@ internal static class Lookup
 {
     /// <summary>
     /// Returns what a name means when the scopes around it do not declare it. The name can be
-    /// something a <c>.use</c> brought in, a define, the first part of a module's path, or
-    /// something a <c>.use module::*</c> brought in. <paramref name="last"/> indicates that the
+    /// something a <c>.use</c> brought in, the first part of a module's path, or something a
+    /// <c>.use module::*</c> brought in. <paramref name="last"/> indicates that the
     /// name is the whole reference, not a step on a path, because a module is the start of a path
     /// and never a value.
     /// </summary>
@@ -31,8 +31,6 @@ internal static class Lookup
     {
         if (brought.TryGetValue(name, out var found))
             return found with { IsAlias = found.Symbol is { } target && target.Name != name };
-        if (program.Define(name) is { } define)
-            return new Resolution(define);
         if (!last && program.IsModulePath(name))
             return new Resolution(null, name);
 
@@ -184,8 +182,7 @@ internal static class Lookup
     /// <summary>
     /// Returns every name that may appear alone in <paramref name="at"/>, in the order a lookup
     /// tries them. The order is what the scopes from here out to the file declare, nearest
-    /// first, then what <c>.use</c> brought in, then the defines, and then what a
-    /// <c>.use module::*</c> brings in. Where two entries share a name, the first is what the
+    /// first, then what <c>.use</c> brought in, and then what a <c>.use module::*</c> brings in. Where two entries share a name, the first is what the
     /// name means, which is the same rule <see cref="Outside"/> follows.
     /// <para>
     /// Modules are not included. A module is the start of a path, not a name that refers to
@@ -205,8 +202,6 @@ internal static class Lookup
         }
         foreach (var (name, place) in brought)
             yield return (name, place with { IsAlias = place.Symbol is { } target && target.Name != name });
-        foreach (var define in program.Defines)
-            yield return (define.Name, new Resolution(define));
         foreach (var module in globs)
         {
             foreach (var symbol in module.FileScope.Symbols)

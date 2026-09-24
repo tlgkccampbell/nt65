@@ -7,17 +7,17 @@
 ; A segment the project file already declares.
 .segment VRAM: abs    ;! error[segment-declared-twice]: segment "VRAM" is already declared
 
-shared = 1
-SMALL  = $1234
-WIDE   = $12
+.const shared = 1
+.const SMALL  = $1234
+.const WIDE   = $12
 
-hidden = 2
+.const hidden = 2
 
 ; `pal::ink` and `pal__ink` both become `first__pal__ink` for the linker.
 .export .scope pal {
-    ink = 1
+    .const ink = 1
 }
-pal__ink = 2
+.const pal__ink = 2
 .export pal__ink        ;! error[export-name-taken]: `first::pal__ink` and `first::pal::ink` are both exported to the linker as `first__pal__ink`
 
 ; A file names its module first, and names it only once.

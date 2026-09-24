@@ -109,13 +109,13 @@ public sealed class ProjectsTests : IDisposable
     public async Task WhatIsWrongWithTheProjectFileIsPublishedForIt()
     {
         var timeout = TestTimeout.Token();
-        root.Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "define": {} }""");
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "setting": {} }""");
         root.Write("main.nt65", ".module main\n");
         await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
 
         var published = await NextForAsync(client, "nt65.json", timeout);
 
-        Assert.Equal("`define` is not a key of nt65.json; did you mean `defines`?",
+        Assert.Equal("`setting` is not a key of nt65.json; did you mean `settings`?",
             Assert.Single(published.Diagnostics).Message);
         Assert.Null(published.Version);
     }
@@ -130,10 +130,10 @@ public sealed class ProjectsTests : IDisposable
     {
         var timeout = TestTimeout.Token();
         root.Write("app/nt65.json", """
-            { "cpu": "6502", "files": ["*.nt65"], "defines": { "DEBUG": 0 },
-              "configurations": { "debug": { "defines": { "DEBUG": 1 } } } }
+            { "cpu": "6502", "files": ["*.nt65"], "settings": { "DEBUG": 0 },
+              "configurations": { "debug": { "settings": { "DEBUG": 1 } } } }
             """);
-        root.Write("app/main.nt65", ".module main\n.if DEBUG {\n    X = 1\n} .else {\n    X = 2\n}\n.assert X > 0\n");
+        root.Write("app/main.nt65", ".module main\n.if DEBUG {\n    X = 1\n} .else {\n    X = 2\n}\n.assert X > 0\n.const DEBUG ?= 0\n");
         root.Write("lib/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
         root.Write("lib/main.nt65", ".module lib\n");
         await using var client = await TestClient.StartAsync(Uri(""), "debug", timeout);

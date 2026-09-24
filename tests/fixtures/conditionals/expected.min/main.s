@@ -22,7 +22,7 @@ LINES = 262
 TRACE = 0
 
 .segment "CODE": absolute
-; .proc main  main.nt65:35
+; .proc main  main.nt65:40
 main:
 
     ldy #$03
@@ -31,7 +31,7 @@ main:
     rts
 ; end of main
 
-; .proc trace  main.nt65:49
+; .proc trace  main.nt65:54
 trace:
     txa
     pha
@@ -78,26 +78,26 @@ main__grid:
 COLUMNS = 40
 
 .segment "CODE": absolute
-; .proc indented  main.nt65:129
+; .proc indented  main.nt65:134
 main__indented:
     lda #1
     rts
 ; end of indented
 
-; .proc move  main.nt65:141
+; .proc move  main.nt65:146
 actions__move:
     rts
 ; end of move
-; .proc fire  main.nt65:144
+; .proc fire  main.nt65:149
 actions__fire:
     jmp actions__move
 ; end of fire
-; .proc wait  main.nt65:152
+; .proc wait  main.nt65:157
 actions__wait:
     rts
 ; end of wait
 
-; .proc slow  main.nt65:159
+; .proc slow  main.nt65:164
 main__slow:
     ldx #$00 + 1
 slow__delay:
@@ -123,7 +123,7 @@ slow__skip_3:
     rts
 ; end of slow
 
-; .proc run_all  main.nt65:173
+; .proc run_all  main.nt65:178
 main__run_all:
     jsr actions__move
     jsr actions__fire

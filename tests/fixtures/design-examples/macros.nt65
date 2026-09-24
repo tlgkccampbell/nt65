@@ -6,9 +6,9 @@
 
 .export clear, tune, pointers, saves, skip, loop, choose, sum
 
-SCREEN = $0400
-C4 = 60
-E4 = 64
+.const SCREEN = $0400
+.const C4 = 60
+.const E4 = 64
 
 .segment ZEROPAGE
 .data ptr:       .word

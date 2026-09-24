@@ -58,7 +58,6 @@ public sealed class PlacementTests
         Assert.DoesNotContain(before.Diagnostics, d => d.Severity == Severity.Error);
 
         var trees = before.Program.Files
-            .Where(file => file.Tree != before.Defines)
             .Select(file => file.Tree.Path == "platform.nt65" ? SyntaxTree.Parse("platform.nt65", Platform(1)) : file.Tree)
             .ToList();
         var after = Compiler.Analyze(trees, Project, binaryLength: null, before, TestContext.Current.CancellationToken);

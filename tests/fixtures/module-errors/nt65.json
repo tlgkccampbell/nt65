@@ -1,6 +1,5 @@
 {
   "files": ["*.nt65"],
-  "defines": { "DEBUG": 1 },
   "segments": {
     "VRAM": { "size": "abs" }
   }

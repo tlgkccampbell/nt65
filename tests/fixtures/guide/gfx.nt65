@@ -2,7 +2,7 @@
 
 .cpu 6502
 
-.export BORDER = $D020
+.export .const BORDER = $D020
 
 .segment CODE
 .export .proc clear {

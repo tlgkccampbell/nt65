@@ -11,7 +11,7 @@ internal sealed partial class Parser
     /// on the line, or fill the body the line opens. Any other directive takes its operands as
     /// ca65's does.
     /// </summary>
-    private DataDirectiveSyntax ParseDataDirective()
+    private DataDirectiveSyntax ParseDataDirective(bool elsewhere = false)
     {
         var directive = Advance();
         if (!SyntaxFacts.IsElementType(directive.DirectiveKind))
@@ -36,7 +36,7 @@ internal sealed partial class Parser
                 tail = new BracedDataSyntax(ParseBracedValue());
             }
         }
-        else if (!AtEnd)
+        else if (!AtEnd && !(elsewhere && Kind == SyntaxKind.Equals))
         {
             if (count is not null || record)
             {
@@ -98,6 +98,10 @@ internal sealed partial class Parser
             ? Catalogue.DataNeedsAName.Message()
             : Catalogue.ExpectedName.Message("a name: `.data name: .byte 1, 2` or `.data name { }`"));
 
+        // Data found elsewhere gives only its address, and takes its element from the data there.
+        if (Kind == SyntaxKind.Equals)
+            return new DataDeclarationSyntax(keyword, name, null, null, null, Advance(), ParseExpression(), null);
+
         // Tokens between the name and a `:` later on the line are reported once and skipped, and
         // the line is read on from the `:`, so the element type and the body it opens still count.
         SkippedTokensSyntax? skipped = null;
@@ -116,7 +120,9 @@ internal sealed partial class Parser
             colon = Advance();
             if (SyntaxFacts.LineDirectiveKind(Current.DirectiveKind) == SyntaxKind.DataDirective)
             {
-                element = ParseDataDirective();
+                element = ParseDataDirective(elsewhere: true);
+                if (Kind == SyntaxKind.Equals && SyntaxFacts.IsElementType(element.Directive.DirectiveKind))
+                    return new DataDeclarationSyntax(keyword, name, skipped, colon, element, Advance(), ParseExpression(), null);
             }
             else
             {
@@ -142,7 +148,7 @@ internal sealed partial class Parser
         {
             ReportOnce(Catalogue.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
         }
-        return new DataDeclarationSyntax(keyword, name, skipped, colon, element, brace);
+        return new DataDeclarationSyntax(keyword, name, skipped, colon, element, null, null, brace);
     }
 
     /// <summary>Returns a value indicating whether a <c>:</c> appears from the current token on.</summary>

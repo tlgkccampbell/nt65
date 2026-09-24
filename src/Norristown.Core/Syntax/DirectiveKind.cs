@@ -121,8 +121,8 @@ public enum DirectiveKind
     /// <summary><c>.signature</c>: declares a named set of processor-state items.</summary>
     Signature,
 
-    /// <summary><c>.config</c>: declares a setting the build supplies.</summary>
-    Config,
+    /// <summary><c>.const</c>: declares a constant, or with <c>?=</c> a setting the build may set.</summary>
+    Const,
 
     /// <summary><c>.if</c>: assembles a block when a condition holds.</summary>
     If,

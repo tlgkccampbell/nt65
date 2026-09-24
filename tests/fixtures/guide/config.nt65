@@ -4,14 +4,12 @@
 
 .export LINES, rgb15, VOICES, TRACE_LEVEL, COLUMNS
 
-LINES = 25                          ; a constant
+.const LINES = 25                   ; a constant
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
-.config VOICES = 3                  ; a setting the build may change
+.const VOICES ?= 3                  ; a setting: 3 unless the build says otherwise
+.const DEBUG  ?= 0
 
-.if .defined(DEBUG) && DEBUG {
-    TRACE_LEVEL = 2
-} .else {
-    TRACE_LEVEL = 0
-}
+.const TRACE_LEVEL = .select(DEBUG, 2, 0)
 
-COLUMNS = .select(WIDE, 80, 40)
+.const WIDE ?= 0
+.const COLUMNS = .select(WIDE, 80, 40)

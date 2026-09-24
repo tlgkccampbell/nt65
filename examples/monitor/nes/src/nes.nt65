@@ -5,22 +5,22 @@
 .cpu 6502
 
 ; The PPU's ports.
-.export PPUCTRL   = $2000           ; the NMI, and which nametable and pattern tables show
-.export PPUMASK   = $2001           ; what the PPU draws
-.export PPUSTATUS = $2002           ; whether vblank has started; reading it resets PPUADDR's latch
-.export PPUSCROLL = $2005           ; written twice, across and then down
-.export PPUADDR   = $2006           ; the VRAM address, written twice, high byte first
-.export PPUDATA   = $2007           ; a byte of VRAM, after which the address steps
+.export .const PPUCTRL   = $2000           ; the NMI, and which nametable and pattern tables show
+.export .const PPUMASK   = $2001           ; what the PPU draws
+.export .const PPUSTATUS = $2002           ; whether vblank has started; reading it resets PPUADDR's latch
+.export .const PPUSCROLL = $2005           ; written twice, across and then down
+.export .const PPUADDR   = $2006           ; the VRAM address, written twice, high byte first
+.export .const PPUDATA   = $2007           ; a byte of VRAM, after which the address steps
 
 ; The APU's and the joypads' ports.
-.export DMC_FREQ      = $4010       ; the sample channel's rate, and its IRQ
-.export JOY1          = $4016       ; written to latch the joypads, and read for joypad 1's buttons
-.export FRAME_COUNTER = $4017       ; the APU's frame counter, and its IRQ
+.export .const DMC_FREQ      = $4010       ; the sample channel's rate, and its IRQ
+.export .const JOY1          = $4016       ; written to latch the joypads, and read for joypad 1's buttons
+.export .const FRAME_COUNTER = $4017       ; the APU's frame counter, and its IRQ
 
-.export NMI_ON    = $80             ; PPUCTRL: an NMI at the start of each vblank
-.export SHOW_BG   = $08             ; PPUMASK: the background shows
-.export BG_LEFT   = $02             ; PPUMASK: the background shows in the leftmost eight dots too
-.export VBLANK    = $80             ; PPUSTATUS: vblank has started
-.export IRQ_OFF   = $40             ; FRAME_COUNTER: the frame counter never raises an IRQ
+.export .const NMI_ON    = $80             ; PPUCTRL: an NMI at the start of each vblank
+.export .const SHOW_BG   = $08             ; PPUMASK: the background shows
+.export .const BG_LEFT   = $02             ; PPUMASK: the background shows in the leftmost eight dots too
+.export .const VBLANK    = $80             ; PPUSTATUS: vblank has started
+.export .const IRQ_OFF   = $40             ; FRAME_COUNTER: the frame counter never raises an IRQ
 
-.export PALETTE = $3F00             ; the VRAM address of the background's palettes
+.export .const PALETTE = $3F00             ; the VRAM address of the background's palettes

@@ -12,8 +12,8 @@
 .segment BSS
 .data buf: .byte[256]
 
-hi = $12
-lo = $34
+.const hi = $12
+.const lo = $34
 
 ; A routine at a fixed address, which the output writes as the constant it is.
 .proc CHROUT = $ffd2

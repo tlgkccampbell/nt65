@@ -19,9 +19,8 @@ namespace Norristown.Semantics;
 /// <para>
 /// A file is a module, and a name that another module declares is reached only by its path,
 /// such as <c>hw::init</c>, or by bringing it in with <c>.use</c>. A name is looked for in the
-/// scopes around it, then among the names the file's <c>.use</c> items bring in, then among the
-/// defines, then as the start of a module's path, and last among what a
-/// <c>.use module::*</c> brings in. This order ensures that a module adding an export can never
+/// scopes around it, then among the names the file's <c>.use</c> items bring in, then as the
+/// start of a module's path, and last among what a <c>.use module::*</c> brings in. This order ensures that a module adding an export can never
 /// change what a name in another module already means.
 /// </para>
 /// <para>
@@ -48,7 +47,6 @@ internal sealed partial class Binder
     private readonly SegmentTable segments;
     private readonly Configuration configuration;
     private readonly Cpu cpu;
-    private readonly bool isDefines;
 
     // Where the binder reports its diagnostics. Resolving a name whose diagnostics are dropped
     // points this at a list of its own for as long as that takes.
@@ -61,8 +59,6 @@ internal sealed partial class Binder
     private readonly List<SymbolReference> references = [];
     private readonly List<Use> uses = [];
 
-    // Where a condition asks `.defined` about a name, which may only be a define.
-    private readonly List<(SyntaxToken Name, Scope Scope)> definedAsked = [];
     private readonly List<Invocation> calls = [];
     private readonly List<Symbol> called = [];
     private readonly HashSet<Symbol> resolving = [];
@@ -128,14 +124,13 @@ internal sealed partial class Binder
     private Repeated? repeated;
 
     private Binder(
-        SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines, Scope fileScope)
+        SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, Scope fileScope)
     {
         statements = new Statements(this);
         this.tree = tree;
         this.segments = segments;
         this.configuration = configuration;
         this.cpu = cpu;
-        this.isDefines = isDefines;
         this.fileScope = fileScope;
         scope = fileScope;
         report = (span, message) => Report(span, message);
@@ -233,24 +228,14 @@ internal sealed partial class Binder
     /// <summary>
     /// Reads the declarations of <paramref name="tree"/>, leaving the names it uses to be
     /// resolved once every file of the program has been read. What the file exports is known
-    /// from here on, because a file exports only what it declares. <paramref name="isDefines"/>
-    /// indicates that the file holds the build configuration's defines, which is not a module.
+    /// from here on, because a file exports only what it declares.
     /// </summary>
-    public static Binder Collect(
-        SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu, bool isDefines = false)
+    public static Binder Collect(SyntaxTree tree, SegmentTable segments, Configuration configuration, Cpu cpu)
     {
-        var binder = new Binder(tree, segments, configuration, cpu, isDefines, new Scope(ScopeKind.File, null, null, null));
+        var binder = new Binder(tree, segments, configuration, cpu, new Scope(ScopeKind.File, null, null, null));
         binder.WalkContainer(tree.Root);
         binder.EndCodeRun();
 
-        // Everything the build configuration declares at its top level is a define. It is marked
-        // here, with the rest of what the file declares, so that a program built again after an
-        // edit elsewhere never has to change a define it kept.
-        if (isDefines)
-        {
-            foreach (var symbol in binder.fileScope.Symbols)
-                symbol.IsDefine = true;
-        }
         return binder;
     }
 
@@ -264,16 +249,6 @@ internal sealed partial class Binder
         foreach (var directive in useDirectives)
             ResolveUse(directive);
         ResolveUses(uses);
-
-        // Conditions are evaluated before the program is read, so `.defined` of a name the
-        // program declares would be false regardless of the program.
-        foreach (var (name, at) in definedAsked)
-        {
-            if (at.Lookup(name.Text) is { IsDefine: false, Kind: not (SymbolKind.MacroParameter or SymbolKind.Binding) })
-            {
-                Report(name.Span, Catalogue.DefinedAsksAboutDefines.Message(name.Text));
-            }
-        }
 
         // A module exports what it declares. A name brought in from another module belongs to
         // that module, and making it part of this one is a re-export, which states where it came
@@ -337,7 +312,7 @@ internal sealed partial class Binder
         // them, and what it reports and records is dropped with it. `Resolve` reads them again
         // against the complete program. What it looked for is kept, because the enum each
         // family walks depends on it.
-        var brought = new Binder(tree, segments, configuration, cpu, isDefines, fileScope) { program = provisional };
+        var brought = new Binder(tree, segments, configuration, cpu, fileScope) { program = provisional };
         foreach (var directive in useDirectives)
             brought.ResolveUse(directive);
 
@@ -359,7 +334,7 @@ internal sealed partial class Binder
     /// </summary>
     public void Export()
     {
-        if (moduleName is null && !isDefines)
+        if (moduleName is null)
         {
             Report(new TextSpan(0, 0), Catalogue.ModuleMissing);
         }
@@ -414,10 +389,6 @@ internal sealed partial class Binder
                 Export(member, at, linkerName: null, size: null);
         }
     }
-
-    /// <summary>Determines whether <paramref name="node"/> is a call of <c>.defined</c>.</summary>
-    private static bool IsDefinedCall(SyntaxNode node) =>
-        node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Defined };
 
     /// <summary>Returns the first token of a statement that could be a declared name.</summary>
     private static SyntaxToken? NameToken(StatementSyntax statement)
@@ -590,17 +561,8 @@ internal sealed partial class Binder
                 return;
             case BlockKind.If:
                 // Anything an included branch declares belongs to the scope around it. The
-                // condition is read for its names so that an editor can follow a define to
-                // the configuration that gives it a value. A `.defined` is recorded regardless
-                // of its result, and a false result leaves the branch out.
-                foreach (var call in opener.DescendantNodes().Where(IsDefinedCall))
-                {
-                    foreach (var argument in call.DescendantNodes().OfType<NameExpressionSyntax>())
-                    {
-                        if (argument.SimpleName is { Kind: SyntaxKind.Identifier } name)
-                            definedAsked.Add((name, scope));
-                    }
-                }
+                // condition is read for its names so that an editor can follow a setting or a
+                // constant to its declaration, and a false result leaves the branch out.
                 if (!configuration.Includes(block))
                     return;
                 // A condition may compare a `one` parameter or a repetition binding with a
@@ -1403,6 +1365,16 @@ internal sealed partial class Binder
     private void BindData(DataDeclarationSyntax statement)
     {
         var element = statement.Directive;
+
+        // Data found elsewhere is a name for an address, sized and typed by its element, or by
+        // the data the address names. Whether it names data is known once the name resolves.
+        if (statement.Address is { } address)
+        {
+            Declare(statement.Name, SymbolKind.AddressAlias, address, data: element, type: element?.Type);
+            CollectUses(address);
+            CollectUses(element);
+            return;
+        }
         if (NamedByBinding(statement, repeated) is { } each && element is not null)
         {
             AddFamily(each, statement, scope, SymbolKind.Data, null, element, element.Type);
@@ -1619,10 +1591,6 @@ internal sealed partial class Binder
     private void CollectUses(SyntaxNode? node, List<Use> into, bool words = false, bool chosen = false)
     {
         if (node is null)
-            return;
-        // `.defined(NAME)` asks whether a name is a define. The name is not a use of
-        // anything, because a name that is not declared is what the question is for.
-        if (IsDefinedCall(node))
             return;
 
         // `.loadof(S)` and `.runof(S)` name a segment, which is in a table of its own.
@@ -1986,28 +1954,27 @@ internal sealed partial class Binder
         }
 
         /// <summary>
-        /// Declares a setting, which is a constant whose value the build decided before anything
-        /// was declared. A setting anywhere but at file level has already been reported, and
-        /// declares nothing.
+        /// Declares a constant, or a setting, which is a constant whose value the build decided
+        /// before anything was declared. A setting anywhere but at file level has already been
+        /// reported, and declares nothing.
         /// </summary>
         /// <param name="node">The declaration.</param>
-        public override void VisitConfigDeclaration(ConfigDeclarationSyntax node)
-        {
-            var setting = node.Value;
-            if (Configuration.IsWellPlaced(node)
-                && binder.Declare(node.Name, SymbolKind.Constant) is { } config)
-            {
-                config.IsConfig = true;
-                config.Value = binder.configuration.SettingOf(binder.tree, node.Name.Text) is { } given
-                    ? Value.Of(given)
-                    : Value.Unknown;
-            }
-            binder.CollectUses(setting, binder.uses, words: true);
-        }
-
-        /// <inheritdoc/>
         public override void VisitConstantDeclaration(ConstantDeclarationSyntax node)
         {
+            if (node.IsSetting)
+            {
+                if (Configuration.IsWellPlaced(node)
+                    && binder.Declare(node.Name, SymbolKind.Constant) is { } setting)
+                {
+                    setting.IsSetting = true;
+                    setting.Value = binder.configuration.SettingOf(binder.tree, node.Name.Text) is { } given
+                        ? Value.Of(given)
+                        : Value.Unknown;
+                }
+                binder.CollectUses(node.Value, binder.uses, words: true);
+                return;
+            }
+
             // The declaration is a constant or an address alias. Which one it is depends on the
             // expression, so the kind is decided once the names in it resolve.
             binder.Declare(node.Name, SymbolKind.Constant, node.Value);

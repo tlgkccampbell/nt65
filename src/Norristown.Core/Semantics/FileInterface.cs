@@ -84,7 +84,7 @@ internal static class FileInterface
         if (!described.Add(symbol))
             return;
 
-        text.Append($"{indent}= {symbol.Value} {symbol.AddressSize} {symbol.Segment} {symbol.Size} {symbol.Count} {symbol.IsDefine}\n");
+        text.Append($"{indent}= {symbol.Value} {symbol.AddressSize} {symbol.Segment} {symbol.Size} {symbol.Count}\n");
         if (symbol.Type is { } type)
             text.Append($"{indent}type {type.Tree.Path} {type.QualifiedName}\n");
         if (symbol.IsLayout || symbol.Kind == SymbolKind.Enum)

@@ -163,35 +163,21 @@ public sealed class ModuleTests
         Assert.Contains("lda a:vars__count", outputs["main.s"]);
     }
 
-    /// <summary>A define is visible everywhere and is never written by name.</summary>
+    /// <summary>A setting is a constant to every module that reads it, and is never written by name.</summary>
     [Fact]
-    public void ADefineIsAConstantInEveryFileAndAValueInTheOutput()
+    public void ASettingIsAValueInTheOutput()
     {
         var project = ProjectSettings.None with
         {
-            Defines = [new Define("DEBUG", 2, new Span("nt65.json", 1, 1, 2))],
+            SettingValues = [new SettingValue("DEBUG", 2, new Span("nt65.json", 1, 1, 2))],
         };
         var outputs = Analysis.Outputs(project,
-            ("one.nt65", ".module one\n.segment CODE\n.proc first {\n    lda #DEBUG\n}\n"),
-            ("two.nt65", ".module two\nSIZE = DEBUG * 8\n"));
+            ("cfg.nt65", ".module cfg\n.export .const DEBUG ?= 0\n"),
+            ("one.nt65", ".module one\n.use cfg::DEBUG\n.segment CODE\n.proc first {\n    lda #DEBUG\n}\n"),
+            ("two.nt65", ".module two\n.const SIZE = cfg::DEBUG * 8\n"));
 
         Assert.Contains("lda #$02", outputs["one.s"]);
         Assert.Contains("SIZE = $02 * 8", outputs["two.s"]);
-    }
-
-    /// <summary>A file may not declare a name the build configuration already gives it.</summary>
-    [Fact]
-    public void AFileMayNotDeclareADefine()
-    {
-        var project = ProjectSettings.None with
-        {
-            Defines = [new Define("DEBUG", 1, new Span("nt65.json", 1, 1, 2))],
-        };
-        var program = Analysis.Program(project, ("main.nt65", ".module main\nDEBUG = 2\n"));
-
-        Assert.Equal(
-            ["main.nt65:2: `DEBUG` is already a define, visible in every file: a file may not declare it again"],
-            program.Problems());
     }
 
     /// <summary>

@@ -1,8 +1,8 @@
 {
-  // The build sets a `.config` a module exports, by its qualified name, and nothing else.
+  // The build sets a setting a module declares, by its path, whether or not the module exports it.
   "files": ["*.nt65"],
-  "defines": {
-    "hw::HIDDEN": 1,      // ;! error[setting-not-exported]: `hw::HIDDEN` is not exported by module `hw`, so the build cannot set it
-    "hw::MISSING": 1      // ;! error[setting-unknown]: `hw::MISSING` is not a `.config` setting of that module: the build can only set a setting a module declares and exports
+  "settings": {
+    "hw::HIDDEN": 1,
+    "hw::MISSING": 1      // ;! error[setting-unknown]: `hw::MISSING` is not a setting of any module
   }
 }

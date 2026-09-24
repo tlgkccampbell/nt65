@@ -7,7 +7,7 @@
 
 .cpu 65816
 
-.config FAST = 1
+.const FAST ?= 1
 
 .export set_one, set_two, store, prepare, draw, after_call, after_else, after_label, labelled
 .export skips, skipped, landing, wide

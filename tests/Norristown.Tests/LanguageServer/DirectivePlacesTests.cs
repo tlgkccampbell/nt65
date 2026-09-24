@@ -35,14 +35,14 @@ public sealed class DirectivePlacesTests
         [".beword"] = ".beword 0",
         [".byte"] = ".byte 0",
         [".charmap"] = ".charmap chars# {\n'a' = 1\n}",
-        [".config"] = ".config SETTING# = 1",
+        [".const"] = ".const VALUE# = 1",
         [".cpu"] = ".cpu 65816",
         [".data"] = ".data room#: .byte 0",
         [".dword"] = ".dword 0",
         [".each"] = ".each Kind, kind# {\n}",
         [".ensure"] = ".ensure a8",
         [".enum"] = ".enum Sort# {\nfirst#\n}",
-        [".export"] = ".export SHARED# = 1",
+        [".export"] = ".export .const SHARED# = 1",
         [".faraddr"] = ".faraddr 0",
         [".func"] = ".func twice#(v) = v * 2",
         [".hibytes"] = ".hibytes 0",
@@ -179,24 +179,6 @@ public sealed class DirectivePlacesTests
 
         // And everything the binder accepts is offered, except the few the server is stricter about.
         Assert.Equal(Stricter[place], allowed.Where(name => !offered.Contains(name)));
-    }
-
-    /// <summary>
-    /// <c>.config</c> is offered only where a setting is allowed, which is before anything has
-    /// been opened. The places tested above all sit under the preamble's <c>.segment CODE</c>, which
-    /// the binder counts as opened, so this test covers the other case, a file that has opened
-    /// nothing yet.
-    /// </summary>
-    [Fact]
-    public void ASettingIsOfferedWhileNothingIsOpenAndNotAfterwards()
-    {
-        var text = ".module main\n\n.segment CODE\n\n.proc host {\n\n}\n";
-        var tree = SyntaxTree.Parse(Analysis.Path, text);
-        string[] Offers(int line) => [.. Directives.At(LineContext.At(tree, tree.LineStarts[line])).Select(item => item.Name)];
-
-        Assert.Contains(".config", Offers(1));
-        Assert.DoesNotContain(".config", Offers(3));
-        Assert.DoesNotContain(".config", Offers(5));
     }
 
     /// <summary>

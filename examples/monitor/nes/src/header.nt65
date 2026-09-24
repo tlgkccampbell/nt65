@@ -6,7 +6,7 @@
 
 .use platform::{start, nmi, on_brk}
 
-NROM = 0                            ; the mapper of a cartridge that holds only ROM, unbanked
+.const NROM = 0                            ; the mapper of a cartridge that holds only ROM, unbanked
 
 ; The iNES header.
 .struct Header {

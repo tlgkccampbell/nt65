@@ -43,7 +43,7 @@ internal static class Directives
         [DirectiveKind.BeWord] = "big-endian two-byte values",
         [DirectiveKind.Byte] = "one-byte values",
         [DirectiveKind.Charmap] = "what each character assembles to",
-        [DirectiveKind.Config] = "a setting this build reads",
+        [DirectiveKind.Const] = "a constant, or with ?= a setting the build may set",
         [DirectiveKind.Cpu] = "the processor the program is built for",
         [DirectiveKind.Data] = "a data declaration",
         [DirectiveKind.Dword] = "four-byte values",

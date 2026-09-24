@@ -2,4 +2,4 @@
 
 .cpu 65816
 
-.export thing = $10
+.export .const thing = $10

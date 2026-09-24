@@ -11,12 +11,12 @@
 .use other
 
 ; A constant, which the output writes where it stands.
-swa = $12
-per = $34                       ;! warning[mnemonic-name]: `per` is an instruction on the 65816; as a name it is legal and easy to misread
+.const swa = $12
+.const per = $34                       ;! warning[mnemonic-name]: `per` is an instruction on the 65816; as a name it is legal and easy to misread
 
 ; A word only the 6502x has an instruction by. The rule is the same in every project, so the
 ; warning is here whichever of these CPUs the build is for.
-arr = $56                       ;! warning[mnemonic-name]: `arr` is an instruction on the 6502x; as a name it is legal and easy to misread
+.const arr = $56                       ;! warning[mnemonic-name]: `arr` is an instruction on the 6502x; as a name it is legal and easy to misread
 
 .segment ZEROPAGE
 .data tad: .byte                ; data named for an alias ca65 has on the 65816

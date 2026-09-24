@@ -3,7 +3,7 @@
 
 .cpu 6502
 
-COUNT = 4
+.const COUNT = 4
 
 .import outside: abs
 

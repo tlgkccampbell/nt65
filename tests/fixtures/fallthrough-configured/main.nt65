@@ -6,7 +6,7 @@
 .module main
 .cpu 6502
 
-.export .config CONFIG_CBM_ALL = 0
+.export .const CONFIG_CBM_ALL ?= 0
 
 .export FRM_VARIABLE, LOAD_FAC_FROM_YA, STROUT, PUTSTR, LC92B, NESTED, OUTDO
 

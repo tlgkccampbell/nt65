@@ -6,9 +6,9 @@
 
 .use platform::{start, nmi_native, nmi_emulation, brk_native, brk_emulation, ignore}
 
-LOROM = $20                         ; the map mode of a LoROM cartridge, at slow ROM speed
-ROM_32K = 5                         ; the size of the ROM, as log2 of its kilobytes
-NORTH_AMERICA = 1
+.const LOROM = $20                         ; the map mode of a LoROM cartridge, at slow ROM speed
+.const ROM_32K = 5                         ; the size of the ROM, as log2 of its kilobytes
+.const NORTH_AMERICA = 1
 
 ; The header, from $FFC0.
 .struct Header {

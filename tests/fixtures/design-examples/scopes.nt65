@@ -6,7 +6,7 @@
 
 .export init, Color, Point, Player, Value, player, actors, boss, hero, wave, lo, hi
 
-MAX_ACTORS = 8
+.const MAX_ACTORS = 8
 
 .segment BSS
 .data palette: .byte[32]

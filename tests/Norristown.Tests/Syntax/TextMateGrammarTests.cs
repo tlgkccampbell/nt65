@@ -67,7 +67,7 @@ public sealed class TextMateGrammarTests
         }
         .frame f: Point
         .export K = Joy::A
-        .config C = 2
+        .const C ?= 2
         K == 1
         """;
 
@@ -203,7 +203,7 @@ public sealed class TextMateGrammarTests
             ScopeDeclarationSyntax when first => TextMateGrammar.Namespace,
             CharmapDeclarationSyntax or SignatureDeclarationSyntax when first => TextMateGrammar.Type,
             DataDeclarationSyntax or ListDeclarationSyntax or FrameDirectiveSyntax when first => TextMateGrammar.Variable,
-            ConstantDeclarationSyntax or ConfigDeclarationSyntax when first => TextMateGrammar.Constant,
+            ConstantDeclarationSyntax when first => TextMateGrammar.Constant,
             EnumMemberSyntax when first => TextMateGrammar.EnumMember,
             MemberValueSyntax when first => TextMateGrammar.Property,
             NamedArgumentSyntax when first => TextMateGrammar.Parameter,

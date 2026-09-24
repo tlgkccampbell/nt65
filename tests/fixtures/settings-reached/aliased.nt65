@@ -1,12 +1,17 @@
-; A name a `.use` brings in comes before a define of the same name, and a define comes before
-; what a `.use module::*` brings in.
+; A name a `.use` brings in comes before what a `.use module::*` brings in, and a constant the
+; configuration decides reaches a condition as a setting does.
 .module aliased
 .use hw::cfg::{SPEED as TURBO}
 .use hub::*
 
+.const DOUBLED = TURBO * 2
+
 .if TURBO != 3 {
-    .error "a setting brought in by `.use` should come before a define"
+    .error "a setting brought in by `.use` has the wrong value"
 }
-.if DELAY != 1 {
-    .error "a define should come before a setting brought in by `*`"
+.if DELAY != 7 {
+    .error "a setting brought in by `*` has the wrong value"
+}
+.if DOUBLED != 6 {
+    .error "a constant built from a setting has the wrong value"
 }

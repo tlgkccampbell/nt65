@@ -4,14 +4,14 @@
 
 .segment EXTRA
 .if W65C816SXB {
-    VIA_USB_REG_DDRB = $7FE2
-    VIA_USB_REG_DDRA = $7FE3
-    VIA_USB_REG_PORTB = $7FE0
-    VIA_USB_REG_PORTA = $7FE1
-    VIA_USB_NRD = %00001000  ; make RD# high to not output data from FTDI
-    VIA_USB_WR = %00000100  ; make WR  high to output data from FTDI
-    VIA_USB_nRXF = %00000010
-    VIA_USB_DDRB_INIT = (VIA_USB_NRD+VIA_USB_WR)
+    .const VIA_USB_REG_DDRB = $7FE2
+    .const VIA_USB_REG_DDRA = $7FE3
+    .const VIA_USB_REG_PORTB = $7FE0
+    .const VIA_USB_REG_PORTA = $7FE1
+    .const VIA_USB_NRD = %00001000  ; make RD# high to not output data from FTDI
+    .const VIA_USB_WR = %00000100  ; make WR  high to output data from FTDI
+    .const VIA_USB_nRXF = %00000010
+    .const VIA_USB_DDRB_INIT = (VIA_USB_NRD+VIA_USB_WR)
 
     ; INIT: Set up outputs and block reading characters from FTDI
     .export .proc INITUSBSERIAL {

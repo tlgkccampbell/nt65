@@ -283,7 +283,7 @@ public static class Catalogue
         Severity.Error,
         "expected {0}",
         "This construct gives its value after an `=`: a record member's value, a `.charmap` entry, a segment "
-            + "attribute, a `.config` setting, a signature set's items or a `.func` body. The `=` is missing here; "
+            + "attribute, a `.const`, a signature set's items or a `.func` body. The `=` is missing here; "
             + "the message shows the expected form.");
 
     internal static DiagnosticDescriptor ExpectedColon { get; } = Entry(
@@ -956,24 +956,6 @@ public static class Catalogue
             + "routine would then branch into them, out of sight of the flow analysis. Declare macros at file "
             + "level or in a `.scope`.");
 
-    internal static DiagnosticDescriptor DefinedAsksAboutDefines { get; } = Entry(
-        Area.Names,
-        "defined-asks-about-defines",
-        Severity.Error,
-        "`.defined` tests only build defines, and `{0}` is declared by the program: to check the program, use "
-            + "`.assert`",
-        "Conditions are decided before the program is read, from the build configuration alone, so `.defined` of a "
-            + "name the program declares would be false whatever the program declares. `.defined` therefore takes only "
-            + "defines. To check something about the program, use `.assert`, which the analysis can answer.");
-
-    internal static DiagnosticDescriptor DefineRedeclared { get; } = Entry(
-        Area.Names,
-        "define-redeclared",
-        Severity.Error,
-        "`{0}` is already a define, visible in every file: a file may not declare it again",
-        "A define is visible in every file as if every module had brought it in, so a declaration of the same name "
-            + "would shadow it in one file and not in another.");
-
     internal static DiagnosticDescriptor SignatureMissing { get; } = Entry(
         Area.Names,
         "signature-missing",
@@ -1245,48 +1227,61 @@ public static class Catalogue
         "an `.if` condition must be a number, not text",
         "An `.if` or `.elseif` condition is true when its value is nonzero, so it must evaluate to a number.");
 
-    internal static DiagnosticDescriptor ConditionNamesAConstant { get; } = Entry(
+    internal static DiagnosticDescriptor ConstantNamesAnAddress { get; } = Entry(
         Area.Values,
-        "condition-names-a-constant",
+        "constant-names-an-address",
         Severity.Error,
-        "`{0}` is a constant, and a condition or a setting may use only defines and settings: declare it with "
-            + "`.config` to make it a setting",
-        "Conditions are evaluated first, to decide which parts of the source are assembled, so they can only use "
-            + "defines and `.config` settings. A constant is part of the program, which is not known at that point. "
-            + "A setting is a constant the build configuration owns: its value may use only literals, built-ins, "
-            + "defines and other settings, the build may set it, and conditions anywhere may test it. The fix "
-            + "declares the constant with `.config`.");
+        "`{0}` is an address, so it cannot be a `.const`; declare it with `.data`, or with `.proc` for a routine",
+        "A `.const` is a number or a text. A name for an address is declared as what is at the address: "
+            + "`.data name: element = expr` for data, and `.proc name = expr` for a routine. The distance between two "
+            + "addresses is a number, so a `.const` may hold it.");
+
+    internal static DiagnosticDescriptor DataElsewhereNeedsAnElement { get; } = Entry(
+        Area.Values,
+        "data-elsewhere-needs-an-element",
+        Severity.Error,
+        "`{0}` has no element, and its address is not the name of data; give it one, as in `.data {0}: .byte = address`",
+        "Data found elsewhere without an element is another name for the data its address names, with that data's "
+            + "element, count and members. Any other address, such as an offset or a number, needs an element.");
+
+    internal static DiagnosticDescriptor DataElsewhereElementDiffers { get; } = Entry(
+        Area.Values,
+        "data-elsewhere-element-differs",
+        Severity.Error,
+        "`{0}` gives the element `{1}`, but `{2}` is `{3}`; leave the element out to use the data's",
+        "Data found elsewhere whose address is the name of data is that data under another name, so any element it "
+            + "gives must be the data's. Leave the element out to use the data's, or add an offset to describe part "
+            + "of it.");
+
+    internal static DiagnosticDescriptor ConditionUsesAMeasurement { get; } = Entry(
+        Area.Values,
+        "condition-uses-a-measurement",
+        Severity.Error,
+        "an `.if` cannot test {0}, which uses a measurement of a declaration; check it with `.assert`",
+        "An `.if` decides which declarations exist, so nt65 answers it before it reads any declaration. It can test "
+            + "only what the configuration decides: literals, settings, built-ins such as `.target`, and the constants, "
+            + "functions and enum members declared at file level from those. A size, an offset, a count or a distance "
+            + "inside data is known only once the declarations are read. The notes lead from the value tested to the "
+            + "measurement. Check such a value with `.assert`, or choose with it using `.select` or `.switch`.");
+
+    internal static DiagnosticDescriptor ConditionUsesAConditionalDeclaration { get; } = Entry(
+        Area.Values,
+        "condition-uses-a-conditional-declaration",
+        Severity.Error,
+        "an `.if` cannot test {0}, which is declared {1}",
+        "An `.if` can test a constant only when the constant is declared once, at file level and outside every "
+            + "block, from values the configuration decides. A constant under an `.if` exists only in the builds that "
+            + "take that branch, so testing it would make one condition depend on another. Declare the value once at "
+            + "file level, and choose between its values with `.select` where they differ between builds.");
 
     internal static DiagnosticDescriptor ConditionNamesTheProgram { get; } = Entry(
         Area.Values,
         "condition-names-the-program",
         Severity.Error,
-        "`{0}` is not a define or a `.config` setting: an `.if` condition can only test the build configuration; "
-            + "use `.assert` to check the program",
-        "Conditions are evaluated first, to decide which parts of the source are assembled, so they can only use "
-            + "defines (from the project file or the command line) and `.config` settings. Labels, constants and "
-            + "other names the program declares are not known at that point, since which of them exist depends on "
-            + "the conditions. To check something about the program, use `.assert`, which is evaluated once the "
-            + "program is complete.");
-
-    internal static DiagnosticDescriptor ConditionAsksAboutTheProgram { get; } = Entry(
-        Area.Values,
-        "condition-asks-about-the-program",
-        Severity.Error,
-        "`{0}` asks about the program, which an `.if` condition cannot do: use `.assert` to check the program",
-        "Conditions decide which parts of the source are assembled, so they are evaluated before the program "
-            + "exists and can only test the build configuration. Functions that measure or inspect the program, "
-            + "such as `.sizeof`, have no answer yet. Use `.assert`, which is evaluated once the program is "
-            + "complete.");
-
-    internal static DiagnosticDescriptor ConditionCallsAFunction { get; } = Entry(
-        Area.Values,
-        "condition-calls-a-function",
-        Severity.Error,
-        "an `.if` condition cannot call a `.func`",
-        "Conditions decide which declarations exist, and a `.func` is one of those declarations, so a condition "
-            + "cannot depend on it. Use a define or a `.config` setting, or put the expression in the "
-            + "condition itself.");
+        "an `.if` cannot test {0}, which is part of the program; check it with `.assert`",
+        "An `.if` decides which declarations exist, so nt65 answers it before it reads any declaration. An address "
+            + "is known only once the linker places the program, and a routine, data, a macro and a type are not values. "
+            + "Check something about the program with `.assert`, which is evaluated once the program is complete.");
 
     internal static DiagnosticDescriptor SelectArguments { get; } = Entry(
         Area.Values,
@@ -1391,39 +1386,49 @@ public static class Catalogue
         "An `.elseif` or an `.else` follows the block of an `.if` or `.elseif`, and there is none open here. Check "
             + "for a missing `.if` or a misplaced closing brace.");
 
-    internal static DiagnosticDescriptor ConfigMisplaced { get; } = Entry(
+    internal static DiagnosticDescriptor SettingMisplaced { get; } = Entry(
         Area.Values,
-        "config-misplaced",
+        "setting-misplaced",
         Severity.Error,
-        "`.config` must be at file level, outside every block",
-        "A `.config` declares a setting that the build can give a value. Which settings a module has cannot depend "
-            + "on a condition or be nested inside another declaration, so `.config` goes at the top level of "
-            + "the file.");
+        "a setting must be at file level, outside every block",
+        "The build names a setting from outside the program, by its module's path, so a setting must be one "
+            + "declaration that exists in every build. Which settings a module has cannot depend on a condition or "
+            + "on another declaration around it, so a setting goes at the top level of the file. A value the build "
+            + "is not meant to set is declared with `=`.");
 
-    internal static DiagnosticDescriptor ConfigIsText { get; } = Entry(
+    internal static DiagnosticDescriptor SettingIsText { get; } = Entry(
         Area.Values,
-        "config-is-text",
+        "setting-is-text",
         Severity.Error,
-        "a `.config` value must be a number, not text",
-        "A setting is a number, so that the project file or the command line can override it.");
+        "a setting must be a number, not text",
+        "A setting is a number, so that the project file or the command line can set it.");
+
+    internal static DiagnosticDescriptor SettingDefaultUndecided { get; } = Entry(
+        Area.Values,
+        "setting-default-undecided",
+        Severity.Error,
+        "the default of `{0}` uses a value the configuration does not decide",
+        "Any condition may test a setting, and conditions are answered before any declaration is read. So a "
+            + "setting's default may use only literals, built-ins, other settings, and the constants and functions "
+            + "declared at file level from those. The notes lead to the value the configuration does not decide.");
 
     internal static DiagnosticDescriptor SettingUnknown { get; } = Entry(
         Area.Values,
         "setting-unknown",
         Severity.Error,
-        "`{0}` is not a `.config` setting of that module: the build can only set a setting a module declares and "
-            + "exports",
-        "A define whose name has a module path, in the project file or on the command line, sets that module's "
-            + "`.config`. The module declares no `.config` by that name; check the spelling and the module path.");
+        "`{0}` is not a setting of any module",
+        "A name under `settings` in the project file, or after `-D` on the command line, sets a setting a module "
+            + "declares with `.const NAME ?= value`. It is the setting's path, as in `hw::SOUND`, or its name alone "
+            + "where only one module declares a setting of that name. No module declares a setting by this name; "
+            + "check the spelling and the module path.");
 
-    internal static DiagnosticDescriptor SettingNotExported { get; } = Entry(
+    internal static DiagnosticDescriptor SettingAmbiguous { get; } = Entry(
         Area.Values,
-        "setting-not-exported",
+        "setting-ambiguous",
         Severity.Error,
-        "`{0}` is not exported by module `{1}`, so the build cannot set it",
-        "Only a `.config` that its module exports can be set from the project file or the command line; one the "
-            + "module keeps private always has the value it declares. Export the setting to let the build change "
-            + "it.");
+        "more than one module has a setting `{0}`; name it by its path, as {1}",
+        "A setting given by its name alone must be the only setting of that name in the program. Where two modules "
+            + "declare one, the build names the one it means by the module's path, as in `hw::PAL`.");
 
     internal static DiagnosticDescriptor DeclarationInARepetition { get; } = Entry(
         Area.Values,
@@ -3165,26 +3170,26 @@ public static class Catalogue
         "project-value-not-an-object",
         Severity.Error,
         "`{0}` must be an object",
-        "This key takes a JSON object whose own keys are its entries: define names, diagnostic names, "
+        "This key takes a JSON object whose own keys are its entries: setting names, diagnostic names, "
             + "configuration names, segment names, space names or address ranges.");
 
-    internal static DiagnosticDescriptor DefineNameInvalid { get; } = Entry(
+    internal static DiagnosticDescriptor SettingNameInvalid { get; } = Entry(
         Area.TheProjectFile,
-        "define-name-invalid",
+        "setting-name-invalid",
         Severity.Error,
-        "`{0}` is not a valid define name: use letters, digits and `_`, optionally after a module path such as "
+        "`{0}` is not a valid setting name: use letters, digits and `_`, optionally after a module path such as "
             + "`hw::`",
-        "A define is named as a constant is: a letter or `_` followed by letters, digits and `_`. It may have a "
-            + "module's path in front of it, as in `hw::SOUND`, to set that module's `.config`.");
+        "A setting is named as a constant is: a letter or `_` followed by letters, digits and `_`. It may have a "
+            + "module's path in front of it, as in `hw::SOUND`, to name the module that declares it.");
 
-    internal static DiagnosticDescriptor DefineNotANumber { get; } = Entry(
+    internal static DiagnosticDescriptor SettingNotANumber { get; } = Entry(
         Area.TheProjectFile,
-        "define-not-a-number",
+        "setting-not-a-number",
         Severity.Error,
-        "`{0}`: a define's value must be a number",
-        "A define is a constant visible in every file, and constants are numbers. In the project file give a JSON "
-            + "number or a string in nt65 number syntax, such as \"$20\"; on the command line, `-D NAME=value` "
-            + "takes the same syntax, and `-D NAME` alone sets it to 1.");
+        "`{0}`: a setting's value must be a number",
+        "A setting is a number. In the project file give a JSON number or a string in nt65 number syntax, such as "
+            + "\"$20\"; on the command line, `-D NAME=value` takes the same syntax, and `-D NAME` alone sets it to "
+            + "1.");
 
     internal static DiagnosticDescriptor ConfigurationNameInvalid { get; } = Entry(
         Area.TheProjectFile,
@@ -3207,9 +3212,9 @@ public static class Catalogue
         Area.TheProjectFile,
         "configuration-key-unknown",
         Severity.Error,
-        "configuration `{0}` cannot set `{1}`: a configuration may set only `defines`, `diagnostics`, `links` and "
+        "configuration `{0}` cannot set `{1}`: a configuration may set only `settings`, `diagnostics`, `links` and "
             + "`out`",
-        "A named configuration changes only a few things about a build: its defines, its diagnostic severities, "
+        "A named configuration changes only a few things about a build: its settings, its diagnostic severities, "
             + "its links and its output directory. Everything else, such as `cpu`, `files` and `segments`, is set "
             + "once for the whole project.");
 

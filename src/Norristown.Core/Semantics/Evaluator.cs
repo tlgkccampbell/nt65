@@ -467,6 +467,11 @@ internal sealed partial class Evaluator
                 break;
         }
 
+        // Data found elsewhere with no element of its own takes the element of the data its
+        // address names, before it is sized from that element.
+        if (symbol is { Kind: SymbolKind.AddressAlias, ValueExpression: { Parent: DataDeclarationSyntax elsewhere } address })
+            TakeElement(symbol, elsewhere, address);
+
         // A data declaration takes its size and element count from what it declares, and these
         // are what `.sizeof` and `.countof` return for it. Mixed data has bytes and no elements.
         // An import that declares an element type is sized from it in exactly the same way,
@@ -523,10 +528,46 @@ internal sealed partial class Evaluator
                 symbol.Value = Value.Unknown;
                 return;
             }
+
+            // A `.const` is never an address, though it may be a distance only the linker knows.
+            // The name is an alias from here on either way, so that what uses it is not reported
+            // again.
+            if (expression.Parent is ConstantDeclarationSyntax { Keyword: not null } && IsAddressValued(expression))
+                Report(symbol.DeclarationSpan, Catalogue.ConstantNamesAnAddress.Message(symbol.Name), []);
             symbol.Kind = SymbolKind.AddressAlias;
         }
         if (symbol.Kind != SymbolKind.ImportedAddress)
             symbol.AddressSize = SizeOf(expression, symbol.Segment, symbol.Value);
+    }
+
+    /// <summary>
+    /// Gives data found elsewhere the element of the data its address names, when it writes none,
+    /// and checks that an element it writes is that data's. An address that is not the name of
+    /// data needs an element of its own.
+    /// </summary>
+    private void TakeElement(Symbol symbol, DataDeclarationSyntax declaration, ExpressionSyntax address)
+    {
+        var target = address is NameExpressionSyntax name ? SymbolOf(name) : null;
+        if (target is not null && target != symbol)
+            EnsureEvaluated(target);
+        if (target is not { IsTypedStorage: true, Data: DataDirectiveSyntax element } || target == symbol)
+        {
+            if (declaration.Directive is null)
+                Report(symbol.DeclarationSpan, Catalogue.DataElsewhereNeedsAnElement.Message(symbol.Name), []);
+            return;
+        }
+        if (declaration.Directive is not { } written)
+        {
+            symbol.Data = element;
+            symbol.Type = target.Type;
+            return;
+        }
+        if (!string.Equals(written.Directive.Text, element.Directive.Text, StringComparison.OrdinalIgnoreCase)
+            || symbol.Type is { } type && target.Type is { } other && type != other)
+        {
+            Report(symbol.DeclarationSpan, Catalogue.DataElsewhereElementDiffers.Message(
+                symbol.Name, written.GetText().Trim(), target.Name, element.GetText().Trim()), []);
+        }
     }
 
     /// <summary>

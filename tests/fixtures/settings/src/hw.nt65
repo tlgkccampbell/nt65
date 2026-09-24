@@ -1,14 +1,15 @@
-; In-file defines: a `.config` is its module's own, and a condition may test it. The build
-; sets one the module exports by its qualified name, which makes the value written here a
-; default.
+; Settings: a setting is its module's own, and a condition anywhere may test it. The build sets
+; one by its path, or by its name alone where no other module has a setting of that name, which
+; makes the value written here a default.
 .module hw
 
-.export .config PAL = 0
-.export .config CHANNELS = .min(VOICES + EXTRA, 3)
-.config EXTRA = 1
+.export .const PAL ?= 0
+.const VOICES ?= 1
+.export .const CHANNELS ?= .min(VOICES + EXTRA, 3)
+.const EXTRA ?= 1
 
 .if PAL {
-    .export LINES = 312
+    .export .const LINES = 312
 } .else {
-    .export LINES = 262
+    .export .const LINES = 262
 }

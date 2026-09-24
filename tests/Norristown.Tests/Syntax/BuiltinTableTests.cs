@@ -41,7 +41,7 @@ public sealed class BuiltinTableTests
             [
                 ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof", ".endof", ".spanof",
                 ".loadof", ".runof", ".strlen", ".strat", ".strsub", ".strcat", ".min", ".max", ".addrsize", ".target",
-                ".defined", ".has", ".select", ".switch", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles",
+                ".has", ".select", ".switch", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles",
                 ".maxcycles", ".mode", ".byteof", ".exprof", ".empty",
             ],
             SyntaxFacts.Builtins.Select(builtin => builtin.Name));

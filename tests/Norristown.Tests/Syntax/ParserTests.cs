@@ -152,7 +152,6 @@ public sealed class ParserTests
     [InlineData("body", SyntaxKind.BlockSplice)]
     [InlineData("tune: note!(C4)", SyntaxKind.LabeledLine)]
     // Conditions, repetitions, annotations and the declarative constructs.
-    [InlineData(".if .defined(DEBUG) {", SyntaxKind.IfDirective)]
     [InlineData(".repeat 8, i {", SyntaxKind.RepeatDirective)]
     [InlineData(".each handlers, h {", SyntaxKind.EachDirective)]
     [InlineData("    .assert .sizeof(table) == 32, \"table must be 32 bytes\"", SyntaxKind.AssertDirective)]

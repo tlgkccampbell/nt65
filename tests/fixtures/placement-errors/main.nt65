@@ -1,6 +1,8 @@
 ; What placement refuses, and a `.fallthrough` into another module that placement does not make true.
 .module main
 
+.const FAST ?= 0
+
 .segment CODE
 .export .proc first {
     lda #1

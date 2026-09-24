@@ -5,7 +5,10 @@
 
 .export beep as "_beep"
 
-BEEP_CYCLES = 32
+; Built with a mark on the screen at each beep.
+.const DEBUG ?= 0
+
+.const BEEP_CYCLES = 32
 
 .segment CODE
 .proc beep {

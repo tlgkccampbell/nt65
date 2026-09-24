@@ -3,7 +3,7 @@
 
 .cpu 65816
 
-SPARE = 1
+.const SPARE = 1
 .export SPARE
 
 .segment CODE

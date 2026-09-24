@@ -1,6 +1,6 @@
 .module tokens: placed
 
-.export ENTRY = 4
+.export .const ENTRY = 4
 
 .segment RODATA
 .export .data words: .byte "END", 0, "FOR", 0

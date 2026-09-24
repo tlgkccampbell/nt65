@@ -142,6 +142,7 @@ internal static class Lexer
             ('&', '&') => (SyntaxKind.AmpersandAmpersand, 2),
             ('|', '|') => (SyntaxKind.BarBar, 2),
             ('^', '^') => (SyntaxKind.CaretCaret, 2),
+            ('?', '=') => (SyntaxKind.QuestionEquals, 2),
             (':', _) => (SyntaxKind.Colon, 1),
             (',', _) => (SyntaxKind.Comma, 1),
             ('(', _) => (SyntaxKind.OpenParen, 1),

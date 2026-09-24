@@ -6,7 +6,7 @@
 .cpu 6502
 
 ; `tables` has a private `count` too: each placed module writes its own with its module in front.
-count = 3
+.const count = 3
 
 .segment CODE
 .export .proc start {

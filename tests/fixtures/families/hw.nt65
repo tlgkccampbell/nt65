@@ -3,6 +3,8 @@
 .module hw
 .export Bank
 
+.const EXTRA ?= 0
+
 .enum Bank {
     lo
     hi

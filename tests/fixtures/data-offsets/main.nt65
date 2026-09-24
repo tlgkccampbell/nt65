@@ -17,9 +17,9 @@
     }
 }
 
-ERR_NOFOR = messages::NOFOR - messages
-ERR_SYNTAX = messages::SYNTAX - messages
-MESSAGES_END = .endof(messages) - messages
+.const ERR_NOFOR = messages::NOFOR - messages
+.const ERR_SYNTAX = messages::SYNTAX - messages
+.const MESSAGES_END = .endof(messages) - messages
 
 .assert ERR_SYNTAX == .sizeof(messages::NOFOR), "SYNTAX follows NOFOR"
 .assert MESSAGES_END == .sizeof(messages), "the end is as far in as the table is long"
@@ -31,11 +31,11 @@ MESSAGES_END = .endof(messages) - messages
         .data LAST: .byte "OVERFLO", 'W' | $80
     }
 }
-ERR_LAST = more::LAST - more
+.const ERR_LAST = more::LAST - more
 
 ; An element is as far in as the elements before it.
 .data table: .word[8]
-TABLE_THIRD = table[3] - table
+.const TABLE_THIRD = table[3] - table
 
 ; A position in mixed data is named from inside the declaration, and is a place in it too.
 .data header {

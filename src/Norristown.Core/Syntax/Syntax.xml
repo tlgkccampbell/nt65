@@ -439,44 +439,23 @@
     </Field>
   </AbstractNode>
 
-  <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax">
-    <Kind Name="ConfigDeclaration"/>
+  <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax" Partial="true">
+    <Kind Name="ConstantDeclaration"/>
     <TypeComment>
       <summary>
-        Represents a <c>.config NAME = value</c> line, which declares a setting whose value the
-        build may override.
+        Represents a constant declaration, <c>.const NAME = expr</c>, or a setting,
+        <c>.const NAME ?= expr</c>, whose value the build may set.
       </summary>
     </TypeComment>
-    <Field Name="Keyword" Type="SyntaxToken">
+    <Field Name="Keyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>Gets the <c>.config</c> keyword that starts the line.</summary>
+        <summary>
+          Gets the <c>.const</c> keyword that starts the line, or null for a line written without
+          it, which the parser reports.
+        </summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
-    <Field Name="Name" Type="SyntaxToken">
-      <PropertyComment>
-        <summary>Gets the setting's name.</summary>
-      </PropertyComment>
-      <Kind Name="Identifier"/>
-    </Field>
-    <Field Name="EqualsToken" Type="SyntaxToken">
-      <PropertyComment>
-        <summary>Gets the <c>=</c> token.</summary>
-      </PropertyComment>
-      <Kind Name="Equals"/>
-    </Field>
-    <Field Name="Value" Type="ExpressionSyntax">
-      <PropertyComment>
-        <summary>Gets the setting's value.</summary>
-      </PropertyComment>
-    </Field>
-  </Node>
-
-  <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax">
-    <Kind Name="ConstantDeclaration"/>
-    <TypeComment>
-      <summary>Represents a constant declaration, <c>name = expr</c>.</summary>
-    </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
         <summary>Gets the constant's name.</summary>
@@ -488,13 +467,14 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>Gets the <c>=</c> token.</summary>
+        <summary>Gets the <c>=</c> token, or the <c>?=</c> token of a setting.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
+      <Kind Name="QuestionEquals"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>Gets the constant's value.</summary>
+        <summary>Gets the constant's value, which for a setting is its default.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -559,7 +539,8 @@
     <Kind Name="DataDeclaration"/>
     <TypeComment>
       <summary>
-        Represents a <c>.data name: element</c> line, or a <c>.data name {</c> line for mixed data.
+        Represents a <c>.data name: element</c> line, a <c>.data name {</c> line for mixed data, or a
+        <c>.data name: element = expr</c> line for data found elsewhere, at the address it gives.
       </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
@@ -593,6 +574,17 @@
     <Field Name="Directive" Type="DataDirectiveSyntax" Optional="true">
       <PropertyComment>
         <summary>Gets the data directive that describes the data, or null.</summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>=</c> token of data found elsewhere, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Equals"/>
+    </Field>
+    <Field Name="Address" Type="ExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>Gets the address of data found elsewhere, or null for data declared here.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">

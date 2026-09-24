@@ -66,7 +66,7 @@ internal sealed partial class Parser
         SyntaxKind.ListDeclaration => ParseTypeBlock(SyntaxKind.ListDeclaration, named: true),
         SyntaxKind.FuncDeclaration => ParseFunc(),
         SyntaxKind.SignatureDeclaration => ParseSignatureDeclaration(),
-        SyntaxKind.ConfigDeclaration => ParseConfig(),
+        SyntaxKind.ConstantDeclaration => ParseConst(),
         SyntaxKind.MacroDeclaration => ParseMacro(),
         SyntaxKind.IfDirective => ParseIf(),
         SyntaxKind.RepeatDirective => ParseRepetition(SyntaxKind.RepeatDirective),

@@ -34,10 +34,10 @@
 
 ; Before the `.align`, and before the first macro call, the distance is known; past them the
 ; difference is an address, as wide as the addresses it names.
-BEFORE_ALIGN = aligned::first - aligned
-AFTER_ALIGN = aligned::second - aligned
-ERR_NOFOR = expanded::NOFOR - expanded
-ERR_SYNTAX = expanded::SYNTAX - expanded
+.const BEFORE_ALIGN = aligned::first - aligned
+.const AFTER_ALIGN = aligned::second - aligned
+.const ERR_NOFOR = expanded::NOFOR - expanded
+.const ERR_SYNTAX = expanded::SYNTAX - expanded
 
 .segment CODE
 .proc report {

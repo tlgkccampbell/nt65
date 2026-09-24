@@ -295,7 +295,18 @@
           }
         },
         {
-          "match": "(?i)(\\.(?:config|export))\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*=(?!=))",
+          "match": "(?i)(\\.const)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            },
+            "2": {
+              "name": "variable.other.constant.nt65"
+            }
+          }
+        },
+        {
+          "match": "(?i)(\\.export)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\??=(?!=))",
           "captures": {
             "1": {
               "name": "keyword.control.directive.nt65"
@@ -310,7 +321,7 @@
           "name": "keyword.control.directive.nt65"
         },
         {
-          "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*=(?!=))",
+          "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*\\??=(?!=))",
           "captures": {
             "1": {
               "name": "variable.other.constant.nt65"

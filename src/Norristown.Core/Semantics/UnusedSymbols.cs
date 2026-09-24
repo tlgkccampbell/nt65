@@ -168,9 +168,10 @@ public static class UnusedSymbols
 
     /// <summary>
     /// Returns a value indicating whether an unused symbol like <paramref name="symbol"/> is worth
-    /// reporting. A member of a named enum is one of a set, so it is not. Data that holds values
-    /// may exist for where it lands, such as a header, the vectors or a load address, so only
-    /// storage that holds nothing is reported.
+    /// reporting. A member of a named enum is one of a set, so it is not, and a setting is there
+    /// for the build to set, so it is not either. Data that holds values may exist for where it
+    /// lands, such as a header, the vectors or a load address, so only storage that holds nothing
+    /// is reported.
     /// <para>
     /// A routine is reported like anything else a file declares. An unexported <c>.proc</c> that
     /// nothing calls, jumps to, or names in data, a <c>.next</c> or a <c>.fallthrough</c> is a
@@ -180,11 +181,11 @@ public static class UnusedSymbols
     /// <c>interrupt</c> signature counts as naming it.
     /// </para>
     /// </summary>
-    private static bool IsChecked(Symbol symbol) => !symbol.IsDefine && symbol.Kind switch
+    private static bool IsChecked(Symbol symbol) => symbol.Kind switch
     {
         SymbolKind.Label or SymbolKind.Macro or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union => true,
         SymbolKind.Proc => symbol.Signature is not { IsInterrupt: true },
-        SymbolKind.Constant => symbol.Scope.Kind != ScopeKind.Type,
+        SymbolKind.Constant => symbol.Scope.Kind != ScopeKind.Type && !symbol.IsSetting,
         SymbolKind.Data => symbol.Data is DataDirectiveSyntax element && DataSyntax.IsElementType(element)
             && element.Tail is not (InlineDataSyntax or BracedDataSyntax)
             && DataSyntax.BodyOf(element) is null,

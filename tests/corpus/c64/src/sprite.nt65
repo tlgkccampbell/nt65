@@ -9,13 +9,13 @@
 
 .export init, player_update, player_reset
 
-SPRITE_BLOCK = 13               ; sprite data at 13 * 64 = $0340 (cassette buffer)
-SPRITE_ADDR  = SPRITE_BLOCK * 64
-MIN_X        = 24
-MAX_X        = 320
-MIN_Y        = 50
-MAX_Y        = 229
-SPEED        = 2
+.const SPRITE_BLOCK = 13               ; sprite data at 13 * 64 = $0340 (cassette buffer)
+.const SPRITE_ADDR  = SPRITE_BLOCK * 64
+.const MIN_X        = 24
+.const MAX_X        = 320
+.const MIN_Y        = 50
+.const MAX_Y        = 229
+.const SPEED        = 2
 
 .segment RODATA
 .data ship_shape: .byte[64] {

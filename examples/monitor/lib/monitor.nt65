@@ -37,7 +37,7 @@
 
 .export main, broke, error, Registers, registers, addr, ADDRESS_SIZE
 
-ADDRESS_SIZE = .select(.target(65816), 3, 2)    ; the bytes of an address
+.const ADDRESS_SIZE = .select(.target(65816), 3, 2)    ; the bytes of an address
 
 ; The registers of the program being debugged, as a BRK left them or `G` will start them.
 .if .target(65816) {

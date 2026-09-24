@@ -29,7 +29,7 @@ public sealed class IncrementalAnalysisTests
             ("gfx.nt65", "    iny\n", "    iny\n    iny\n", null, 3),                                // `relay` moves down: defs calls it, main calls defs' `ping`
             ("gfx.nt65", "rgb(31, 0, 0)", "rgb(31, 1, 0)", null, 3),                                 // main and defs look it up
             ("errors.nt65", "lda undeclared", "lda #1", null, 1),
-            ("segs.nt65", "lda hud_value", "ldx hud_value", WholeProgramReason.SegmentsDeclared, 8), // the file declares a segment
+            ("segs.nt65", "lda hud_value", "ldx hud_value", WholeProgramReason.SegmentsDeclared, 7), // the file declares a segment
             ("defs.nt65", "WIDTH  = 32", "WIDTH  = 30", null, 3),                                    // main and gfx look it up
             ("defs.nt65", "PRIVATE_K = 7", "PRIVATE_K = 7 ; seven", null, 1),                        // a comment only; `origin` holds a `Point`, which is unchanged
             ("types.nt65", "Point::y", "Point::x", null, 1),
@@ -65,8 +65,9 @@ public sealed class IncrementalAnalysisTests
             // later, which is not the file that changed. That file is analyzed again all the same.
             ("app.nt65", "ENTRY = BASE", "ENTRY = BASE\n.export ENTRY as \"segs__hud_value\"", null, 2),
             ("app.nt65", "\n.export ENTRY as \"segs__hud_value\"", "", null, 2),
-            ("main.nt65", "MAIN_PRIVATE = 10", "MAIN_PRIVATE = 10\n.config TRIAL = 1", WholeProgramReason.SettingsDeclared, 8),
-            ("main.nt65", "TRIAL = 1", "TRIAL = 2", WholeProgramReason.SettingsDeclared, 8),                // any file's conditions may read it
+            ("main.nt65", "MAIN_PRIVATE = 10", "MAIN_PRIVATE = 10\n.const TRIAL ?= 1", null, 1),                     // no condition tests it
+            ("main.nt65", "TRIAL ?= 1", "TRIAL ?= 2", null, 1),
+            ("defs.nt65", "COLUMNS ?= 40", "COLUMNS ?= 80", WholeProgramReason.ConditionsChanged, 7),               // main's condition tests it through `WIDE`
         ];
 
         var replay = new ProgramReplay();
@@ -112,13 +113,13 @@ public sealed class IncrementalAnalysisTests
 
     /// <summary>
     /// A condition may reach a setting through a module that re-exports it. Changing what that
-    /// module re-exports, or its name, changes what the condition means in a file that did not
+    /// module re-exports, or its name, changes how a condition is answered in a file that did not
     /// change, so the whole program is analyzed again.
     /// </summary>
     [Fact]
     public void ChangingAReexportOfASettingReachesConditionsElsewhere()
     {
-        var cfg = SyntaxTree.Parse("cfg.nt65", ".module cfg\n.export .config SPEED = 3\n");
+        var cfg = SyntaxTree.Parse("cfg.nt65", ".module cfg\n.export .const SPEED ?= 3\n");
         var hub = SyntaxTree.Parse("hub.nt65", ".module hub\n.export .use cfg::SPEED\n");
         var main = SyntaxTree.Parse("main.nt65",
             ".module main\n.if hub::SPEED != 3 {\n    .error \"wrong speed\"\n}\n");
@@ -133,7 +134,7 @@ public sealed class IncrementalAnalysisTests
             var incremental = Compiler.Analyze([cfg, edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
             var scratch = Compiler.Analyze([cfg, edited, main], project, Nothing);
 
-            Assert.Equal(WholeProgramReason.SettingPathsChanged, incremental.WholeProgram);
+            Assert.Equal(WholeProgramReason.ConditionsChanged, incremental.WholeProgram);
             Assert.Contains(scratch.Diagnostics, found => found.Span.File == "main.nt65");
             Assert.Equal(scratch.Problems(), incremental.Problems());
         }

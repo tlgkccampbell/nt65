@@ -6,7 +6,7 @@ namespace Norristown.Semantics;
 /// Resolves every name in a file. This half of the binder runs once the whole program has been
 /// read. The walk over the file has finished, so nothing here depends on how far it had
 /// progressed. A name is resolved from the scopes around it, the names the file's <c>.use</c>
-/// items brought in, the defines and the other modules.
+/// items brought in and the other modules.
 /// </summary>
 internal sealed partial class Binder
 {
@@ -299,7 +299,7 @@ internal sealed partial class Binder
     {
         // Reported once, where the file first names the symbol, because every other use is the
         // same mistake.
-        if (!last || symbol.Tree == tree || symbol.IsExported || symbol.IsDefine || !unexported.Add(symbol))
+        if (!last || symbol.Tree == tree || symbol.IsExported || !unexported.Add(symbol))
             return symbol;
         Report(token.Span, Catalogue.NotExported.Message(symbol.PathName, symbol.Module),
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));

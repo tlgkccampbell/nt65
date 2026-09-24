@@ -7,7 +7,7 @@
 .export hud, setup, pushed, keep, registers, ppu, from_k, caller, move, relay, fast, tail, standard, anywhere, from_one
 
 ; A segment declared in a file may give its direct page by a constant.
-HUD_PAGE = $0300
+.const HUD_PAGE = $0300
 .segment HUD: zp, dp = HUD_PAGE
 
 ; A standard segment keeps its size and may be declared once to say where it is: this file

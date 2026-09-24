@@ -2,5 +2,5 @@
 
 .cpu 6502
 
-.export VOLUME = $0f
-.export volume = $d418
+.export .const VOLUME = $0f
+.export .const volume = $d418

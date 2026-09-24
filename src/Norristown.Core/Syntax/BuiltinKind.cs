@@ -68,9 +68,6 @@ public enum BuiltinKind
     /// <summary><c>.target(cpu)</c>: whether the build is for a CPU.</summary>
     Target,
 
-    /// <summary><c>.defined(name)</c>: whether a name is a define.</summary>
-    Defined,
-
     /// <summary><c>.has(mnemonic)</c>: whether the build's CPU has an instruction.</summary>
     Has,
 

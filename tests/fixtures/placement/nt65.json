@@ -1,8 +1,8 @@
 {
   "cpu": "6502",
   "files": ["*.nt65"],
-  "defines": { "KIM": 1 },
+  "settings": { "KIM": 1 },
   "configurations": {
-    "other": { "defines": { "KIM": 0 } }
+    "other": { "settings": { "KIM": 0 } }
   }
 }

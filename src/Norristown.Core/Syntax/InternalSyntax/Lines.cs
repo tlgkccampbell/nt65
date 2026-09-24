@@ -25,7 +25,7 @@ internal static class Lines
         {
             if (second == SyntaxKind.Colon)
                 return LineKind.Label;
-            if (second == SyntaxKind.Equals)
+            if (second is SyntaxKind.Equals or SyntaxKind.QuestionEquals)
                 return LineKind.Constant;
         }
         return first switch

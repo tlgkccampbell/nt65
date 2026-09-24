@@ -58,10 +58,10 @@ public static class Compiler
         {
             var model = file.Model;
 
-            // The defines and the modules that come with nt65 are not files anyone wrote, and
-            // nothing is written for them. A module that another module places has no output of
-            // its own: it is written into the output of its translation unit.
-            if (model.Tree == analysis.Defines || StandardModules.IsStandard(model.Tree.Path)
+            // The modules that come with nt65 are not files anyone wrote, and nothing is written
+            // for them. A module that another module places has no output of its own: it is
+            // written into the output of its translation unit.
+            if (StandardModules.IsStandard(model.Tree.Path)
                 || analysis.Placements.PlacerOf(model.Tree) is not null)
                 continue;
             var members = analysis.Placements.UnitOf(model.Tree)?.Members ?? [model.Tree];
@@ -113,8 +113,7 @@ public static class Compiler
     /// <param name="path">The logical path of the source file to emit.</param>
     public static OutputFile? EmitFile(ProgramAnalysis analysis, ProjectSettings project, string path)
     {
-        if (analysis.ModelFor(path) is not { } model || model.Tree == analysis.Defines
-            || StandardModules.IsStandard(path))
+        if (analysis.ModelFor(path) is not { } model || StandardModules.IsStandard(path))
             return null;
         var root = analysis.Placements.UnitOf(model.Tree)?.Root.Path ?? path;
         return analysis.FileFor(root) is { } file ? EmitFile(analysis, project, file, Measured(analysis), []) : null;
@@ -246,14 +245,6 @@ public static class Compiler
         var lengths = new ConcurrentDictionary<string, long?>(StringComparer.Ordinal);
         long? Length(string path) => lengths.GetOrAdd(path, binaryLength);
 
-        // The build configuration is read as a file of constants, so that defines are ordinary
-        // symbols to scoping and evaluation; only emission treats them differently.
-        var defines = Defines.Source([.. project.Defines.Where(define => !define.IsSetting)]) is { } source
-            ? SyntaxTree.Parse(source)
-            : null;
-        if (defines is not null)
-            trees.Add(defines);
-
         // The segment table and the CPU are the program's: a segment is declared exactly once
         // across it, and it is built for one processor.
         var cpu = new List<Diagnostic>();
@@ -263,7 +254,7 @@ public static class Compiler
         // configuration and nothing else, and which segments and declarations a program has
         // follows from the answers.
         var conditions = new List<Diagnostic>();
-        var configuration = Configuration.Resolve(trees, target, project.Defines, conditions);
+        var configuration = Configuration.Resolve(trees, target, project.SettingValues, conditions);
         var segmentTable = new List<Diagnostic>();
         var segments = SegmentTable.Build(
             trees, project.Segments, project.Spaces, project.Links.Count > 0, configuration, segmentTable);
@@ -271,14 +262,14 @@ public static class Compiler
 
         // Every file is read before any is resolved, because a name one file uses may be one
         // another file exports.
-        var program = ProgramModel.Create(trees, segments, configuration, defines, Length, target);
+        var program = ProgramModel.Create(trees, segments, configuration, Length, target);
         cancellation.ThrowIfCancellationRequested();
         var analyzed = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
         var analyses = AnalyzeFiles(program, target, project, analyzed, previous: null, dirty: null, cancellation);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
         return Composed(
-            new ProgramAnalysis(program, target, analyses, defines, configuration, [])
+            new ProgramAnalysis(program, target, analyses, configuration, [])
             {
                 Reanalyzed = program.Files.Count,
             },
@@ -317,16 +308,26 @@ public static class Compiler
             return null;
         if (changed.Any(tree => SegmentTable.Declares(tree) || SegmentTable.Declares(sources[tree.Path])))
             return WholeProgramReason.SegmentsDeclared;
-        if (changed.Any(tree => Configuration.DeclaresSettings(tree) || Configuration.DeclaresSettings(sources[tree.Path])))
-            return WholeProgramReason.SettingsDeclared;
-        if (previous.Configuration.HasSettings
-            && changed.Any(tree => !Configuration.LeadsAlike(tree, sources[tree.Path])))
-        {
-            return WholeProgramReason.SettingPathsChanged;
-        }
         if (ProgramCpu.Resolve(Current(reuse, sources), project.Cpu, []) != previous.Cpu)
             return WholeProgramReason.CpuChanged;
+
+        // A condition in one file may test a value another file declares, so an edit can change
+        // which branches a file it does not touch takes, or what is wrong with its conditions.
+        var found = new List<Diagnostic>();
+        var trees = Current(reuse, sources);
+        var fresh = Configuration.Resolve(trees, previous.Cpu, project.SettingValues, found);
+        var byFile = ByFile(trees, found);
+        foreach (var tree in earlier.Where(tree => sources[tree.Path] == tree))
+        {
+            if (!fresh.AnswersAlike(previous.Configuration, tree)
+                || !byFile[tree.Path].Select(Spelled).SequenceEqual(reuse.Conditions[tree.Path].Select(Spelled)))
+            {
+                return WholeProgramReason.ConditionsChanged;
+            }
+        }
         return null;
+
+        static string Spelled(Diagnostic diagnostic) => $"{diagnostic.Id} {diagnostic.Message}";
     }
 
     /// <summary>
@@ -351,15 +352,14 @@ public static class Compiler
         var cpu = new List<Diagnostic>();
         ProgramCpu.Resolve(trees, project.Cpu, cpu);
 
-        // A condition depends on nothing but its own file and the build.
-        var configuration = previous.Configuration;
+        // The conditions of every other file are answered as they were, which is why only the
+        // changed files are analyzed again, so only theirs are kept from this pass.
+        var reported = new List<Diagnostic>();
+        var configuration = Configuration.Resolve(trees, previous.Cpu, project.SettingValues, reported);
+        var byFile = ByFile(trees, reported);
         var conditions = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
         foreach (var before in changed)
-        {
-            var found = new List<Diagnostic>();
-            configuration = configuration.Replacing(before, sources[before.Path], previous.Cpu, project.Defines, found);
-            conditions[before.Path] = found;
-        }
+            conditions[before.Path] = byFile[before.Path];
         var moved = EditMap.Composed([.. changed.Select(before => new EditMap(before, sources[before.Path]))]);
 
         // The set of files to analyze again starts as the ones that changed, and grows by every
@@ -372,7 +372,7 @@ public static class Compiler
         {
             cancellation.ThrowIfCancellationRequested();
             program = previous.Program.Reanalyzing(
-                current, dirty, configuration, previous.Defines, moved, Length, out var affected);
+                current, dirty, configuration, moved, Length, out var affected);
             if (program is null && affected.Count == 0)
                 return null;
 
@@ -402,7 +402,7 @@ public static class Compiler
 
         var analyses = AnalyzeFiles(program, previous.Cpu, project, analyzed, previous, dirty, cancellation);
         return Composed(
-            new ProgramAnalysis(program, previous.Cpu, analyses, previous.Defines, configuration, [])
+            new ProgramAnalysis(program, previous.Cpu, analyses, configuration, [])
             {
                 Reanalyzed = dirty.Count,
             },
@@ -418,10 +418,10 @@ public static class Compiler
 
     /// <summary>
     /// Returns the files that <paramref name="previous"/> analyzed as the caller gave them,
-    /// without the defines file and the modules that come with nt65.
+    /// without the modules that come with nt65.
     /// </summary>
     private static List<SyntaxTree> Earlier(ProgramAnalysis previous, ProgramAnalysis.Reuse reuse) =>
-        [.. reuse.Trees.Where(tree => tree != previous.Defines && !StandardModules.IsStandard(tree.Path))];
+        [.. reuse.Trees.Where(tree => !StandardModules.IsStandard(tree.Path))];
 
     /// <summary>
     /// Returns every file of the program that <paramref name="reuse"/> kept, with each file the
@@ -489,7 +489,7 @@ public static class Compiler
         // falls through into across a `.place` follows from the layouts of every file in its
         // translation unit, so an edit to any module of a translation unit can change it for the
         // others, and the placements are worked out again after any change.
-        var placements = Placements.Of(reuse.Trees, analysis.Defines);
+        var placements = Placements.Of(reuse.Trees);
         return analysis with
         {
             Diagnostics = Collected(project, analysis.Cpu, cpu, program, reuse, [
@@ -583,7 +583,8 @@ public static class Compiler
     /// The sources of the modules whose interfaces it uses, and of the modules those use in turn.
     /// </description></item>
     /// <item><description>
-    /// The files that declare segments or settings, because any file's meaning may follow from them.
+    /// The files that declare segments, and those whose values the configuration decides, because
+    /// any file's meaning may follow from them.
     /// </description></item>
     /// <item><description>
     /// The files an <c>.incbin</c> in any of those sources names, because their lengths determine
@@ -612,10 +613,9 @@ public static class Compiler
         }
         foreach (var file in program.Files)
         {
-            if (SegmentTable.Declares(file.Tree) || Configuration.DeclaresSettings(file.Tree))
+            if (SegmentTable.Declares(file.Tree) || model.Configuration.Decides(file.Tree))
                 found.Add(file.Tree.Path);
         }
-        found.Remove(Defines.Path);
         found.RemoveWhere(StandardModules.IsStandard);
         return [.. found];
 

@@ -47,7 +47,7 @@
     Color::green, Color::blue
 }
 
-MAX_ACTORS = 3
+.const MAX_ACTORS = 3
 
 .segment BSS
 .data player: .type Player
