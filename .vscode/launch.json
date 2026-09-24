@@ -4,7 +4,8 @@
     {
       // Opens this repository in an Extension Development Host with the nt65 client
       // loaded. The client starts the Debug build of the server, which the pre-launch
-      // task has just rebuilt.
+      // task has just rebuilt. That task also installs the client's npm packages if they
+      // are missing.
       //
       // --new-window is required, not a preference. This repository is already open in
       // the window you press F5 in, and asking VS Code to open a folder it already has
@@ -19,7 +20,7 @@
         "--extensionDevelopmentPath=${workspaceFolder}/editors/vscode",
         "${workspaceFolder}"
       ],
-      "preLaunchTask": "build",
+      "preLaunchTask": "prepare extension",
       // The client is plain JavaScript beside its package.json. Without these, the debugger
       // looks for scripts and source maps across the whole repository, which holds the
       // extension's node_modules, the published server and the packages.

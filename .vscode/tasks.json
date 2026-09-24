@@ -12,6 +12,27 @@
       "group": { "kind": "build", "isDefault": true }
     },
     {
+      // Installs the client's npm packages when node_modules is missing, as it is after a
+      // fresh clone or a git clean. It does nothing otherwise, so it costs nothing on F5.
+      "label": "extension dependencies",
+      "type": "process",
+      "command": "pwsh",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "if (-not (Test-Path node_modules)) { npm ci --no-audit --no-fund; exit $LASTEXITCODE }"
+      ],
+      "options": { "cwd": "${workspaceFolder}/editors/vscode" },
+      "problemMatcher": []
+    },
+    {
+      // Readies everything the Extension Development Host loads: the server and the
+      // client's npm packages.
+      "label": "prepare extension",
+      "dependsOn": ["build", "extension dependencies"],
+      "problemMatcher": []
+    },
+    {
       // The same development host without a debugger attached, for when you want to look
       // at the editor rather than step through the client.
       "label": "run extension",
@@ -23,7 +44,7 @@
         "${workspaceFolder}"
       ],
       "windows": { "command": "code.cmd" },
-      "dependsOn": "build",
+      "dependsOn": "prepare extension",
       "problemMatcher": []
     },
     {
