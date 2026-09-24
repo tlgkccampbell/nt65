@@ -75,6 +75,22 @@ public sealed class ProjectFileTests
     }
 
     /// <summary>
+    /// Invalid JSON is reported at the character where it goes wrong. The JSON reader counts
+    /// bytes, so text that takes more than one byte earlier on the line must not move the column.
+    /// </summary>
+    [Theory]
+    [InlineData("{\n  \"out\": \"b\" x\n}", 2, 14)]
+    [InlineData("{\n  \"out\": \"é\" x\n}", 2, 14)]
+    [InlineData("{\n  \"out\": \"日本\" x\n}", 2, 15)]
+    [InlineData("{\n  \"out\": \"😀\" x\n}", 2, 15)]
+    public void InvalidJsonIsReportedAtItsCharacter(string text, int line, int column)
+    {
+        var diagnostic = Assert.Single(Read(text).Diagnostics);
+
+        Assert.Equal((line, column), (diagnostic.Span.Line, diagnostic.Span.StartColumn));
+    }
+
+    /// <summary>
     /// A diagnostic sits on the key where the JSON puts it. The same text earlier in the file, as
     /// a value, as a key at another level or inside a comment, is passed over.
     /// </summary>

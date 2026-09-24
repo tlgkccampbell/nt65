@@ -99,9 +99,10 @@ public static class ProjectFile
         }
         catch (JsonException exception)
         {
+            var line = (int)(exception.LineNumber ?? 0);
+            var column = Column(text, line, (int)(exception.BytePositionInLine ?? 0));
             diagnostics.Add(new Diagnostic(
-                new Span(path, (int)(exception.LineNumber ?? 0) + 1, (int)(exception.BytePositionInLine ?? 0) + 1,
-                    (int)(exception.BytePositionInLine ?? 0) + 2),
+                new Span(path, line + 1, column + 1, column + 2),
                 Catalogue.ProjectJsonInvalid.Message(exception.Message.TrimEnd('.').Split(" LineNumber")[0])));
             return ProjectSettings.None with { Diagnostics = diagnostics };
         }
@@ -166,6 +167,31 @@ public static class ProjectFile
             return null;
         }
         return new Define(name, value, span);
+    }
+
+    /// <summary>
+    /// Returns the character column of a position that the JSON reader gives in bytes. The
+    /// reader counts UTF-8 bytes from the start of line <paramref name="line"/>, but a span counts
+    /// characters, so text that takes more than one byte earlier on the line would move it.
+    /// </summary>
+    private static int Column(string text, int line, int bytes)
+    {
+        var start = 0;
+        for (var i = 0; i < line; i++)
+        {
+            var end = text.IndexOf('\n', start);
+            if (end < 0)
+                return bytes;
+            start = end + 1;
+        }
+        var at = start;
+        while (bytes > 0 && at < text.Length && text[at] != '\n')
+        {
+            Rune.DecodeFromUtf16(text.AsSpan(at), out var rune, out var used);
+            bytes -= rune.Utf8SequenceLength;
+            at += used;
+        }
+        return at - start;
     }
 
     /// <summary>
