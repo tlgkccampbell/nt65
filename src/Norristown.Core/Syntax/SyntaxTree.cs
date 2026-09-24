@@ -373,6 +373,13 @@ public sealed class SyntaxTree
     internal Parser.Result Parsed(int line) => statements[joinedOf[line]];
 
     /// <summary>
+    /// Returns the 0-based line of the file on which the statement holding the 0-based line
+    /// <paramref name="line"/> starts. That is the line itself, unless the line continues an
+    /// expression begun on a line before it.
+    /// </summary>
+    internal int StatementStart(int line) => firsts.IsDefaultOrEmpty ? line : firsts[joinedOf[line]];
+
+    /// <summary>
     /// Adds the diagnostics of <paramref name="green"/> and everything under it to
     /// <paramref name="result"/>, as spans in the file. <paramref name="position"/> is the offset
     /// where the node starts. Only subtrees whose flags show they hold a diagnostic are walked.

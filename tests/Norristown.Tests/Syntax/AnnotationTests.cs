@@ -325,6 +325,27 @@ public sealed class AnnotationTests
     }
 
     /// <summary>
+    /// A node on a line that continues an expression keeps its tag. The lines of a continued
+    /// statement are parsed as one, and the tag is found again on whichever of them it was put.
+    /// </summary>
+    [Fact]
+    public void ANodeOnAContinuedLineKeepsItsTag()
+    {
+        const string text = "SIZE = .select(1,\n    $10,\n    $20)\n.byte SIZE\n";
+        var tree = SyntaxTree.Parse("main.nt65", text);
+        var numbers = tree.Root.DescendantNodes().OfType<NumberExpressionSyntax>().ToList();
+        Assert.Equal(["1", "$10", "$20"], numbers.Select(number => number.GetText()));
+        foreach (var number in numbers)
+        {
+            var tag = new SyntaxAnnotation("probe", number.GetText());
+            var root = tree.Root.ReplaceNode(number, number.WithAdditionalAnnotations(tag));
+            Assert.True(root.ContainsAnnotations);
+            Assert.Equal([number.GetText()], root.GetAnnotatedNodes(tag).Select(found => found.GetText()));
+            Assert.Equal(text, root.ToFullString());
+        }
+    }
+
+    /// <summary>
     /// Over every source in the repository, a node is tagged, an identity rewrite is run over it,
     /// and a token is replaced elsewhere on its line and on another line. The tagged node is found
     /// again each time, with the same kind and the same text, and the file's text is unchanged.

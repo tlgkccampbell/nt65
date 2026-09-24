@@ -94,20 +94,24 @@ internal sealed class AnnotationCarrier
         foreach (var mark in tagged)
         {
             var at = Math.Clamp(mark.Change < 0 ? mark.At : offsets[mark.Change] + mark.At, 0, tree.Text.Length);
-            var line = tree.GetLineIndex(at);
-            if (line >= tree.LineCount)
+            if (tree.GetLineIndex(at) >= tree.LineCount)
                 continue;
+
+            // A statement continued over several lines of the file is parsed as one line, and its
+            // kept parse belongs to the first of them, wherever on it the mark lands.
+            var line = tree.StatementStart(tree.GetLineIndex(at));
             if (!byLine.TryGetValue(line, out var wanted))
                 byLine[line] = wanted = [];
             wanted.Add(mark with { At = at });
         }
 
         // Lines that already have annotations keep the parse that holds them. Lines just parsed
-        // again get their annotations back on the nodes and tokens the reparse produced.
+        // again get their annotations back on the nodes and tokens the reparse produced. Each
+        // parse is kept at the first line of the file that its statement starts on.
         var kept = new Parser.Result?[tree.LineCount];
         for (var i = 0; i < kept.Length; i++)
         {
-            if (tree.LinesContainAnnotations(i, i))
+            if (tree.StatementStart(i) == i && tree.LinesContainAnnotations(i, i))
                 kept[i] = tree.Parsed(i);
         }
         var any = false;
