@@ -1,50 +1,61 @@
+using System.Text;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Provides the refactorings that lay out an expression's brackets across lines, or join them
-/// back onto one. The formatter keeps the line breaks a file has and adds none, so where a long
-/// call or set breaks is the programmer's choice, and these make it in one step.
-/// <list type="bullet">
-/// <item>Put each argument of a call, or each value of a set, on its own line.</item>
-/// <item>Put each arm of a <c>.switch</c> on its own line, its set beside its result.</item>
-/// <item>Join the brackets' contents onto one line.</item>
-/// </list>
+/// Provides the refactorings that lay out a whole expression across lines, or join it back onto
+/// one. The formatter keeps the line breaks a file has and adds none, so where a long expression
+/// breaks is the programmer's choice, and these make it in one step.
 /// <para>
-/// Only an expression's brackets may hold a line break, so these are offered on a call's
-/// arguments and on a set, and not on a macro call's arguments. A line the refactoring breaks is
-/// indented one step past the line the expression starts on, as the formatter lays it out. A
-/// join is not offered where the brackets hold a comment, which it would have to drop.
+/// Laying out breaks every outermost call's arguments and every outermost set in the expression,
+/// one item to a line. A call or set inside those is broken too where it does not fit on its line
+/// within the line length, so a long expression gets as many levels as it needs. A
+/// <c>.switch</c> keeps its value beside its opening bracket and each set beside its result. A
+/// line is indented one step past the line its innermost open bracket opened on, as the
+/// formatter lays it out.
+/// </para>
+/// <para>
+/// Only an expression's brackets may hold a line break, so the brackets laid out are those of a
+/// call's arguments and of a set; a macro call's arguments are not an expression's. Neither
+/// refactoring is offered where the expression holds a comment, which it would have to drop.
 /// </para>
 /// </summary>
 internal static class LineBreaks
 {
+    /// <summary>The line length that the layout fits lines within, unless the editor's settings give another.</summary>
+    public const int DefaultLength = 100;
+
     /// <summary>
-    /// Returns the changes offered where the caret is in an expression. They are for the whole
-    /// expression, which is laid out at its outermost call or set around the caret that has
-    /// something to lay out, so that the caret anywhere in a <c>.switch</c>, one of its sets
-    /// included, offers the <c>.switch</c>. Where no brackets hold the caret, the expression's
-    /// first that have something to lay out are offered.
+    /// Returns the changes offered where the caret is in an expression: laying the whole
+    /// expression out across lines, and joining it onto one where it spans several.
     /// </summary>
-    public static IEnumerable<Change> In(SemanticModel model, int caret)
+    /// <param name="model">The file the caret is in.</param>
+    /// <param name="caret">The caret's position in that file's text.</param>
+    /// <param name="lineLength">The length the layout fits lines within, or 0 for no limit.</param>
+    public static IEnumerable<Change> In(SemanticModel model, int caret, int lineLength = DefaultLength)
     {
-        foreach (var (open, items, close, what) in Around(model.Tree, caret))
+        var tree = model.Tree;
+        if (WholeAt(tree, caret) is not { } whole || !CanLayOut(whole))
+            yield break;
+        var source = tree.Text[whole.Span.Start..whole.Span.End];
+        var laid = Laid(tree, whole, lineLength, broken: true);
+        if (laid != source && laid.Contains('\n', StringComparison.Ordinal))
+            yield return new Change("Lay out the expression across lines", CodeActionKinds.Rewrite, [new Edit(tree, whole.Span, laid)]);
+        if (source.AsSpan().ContainsAny('\r', '\n'))
         {
-            if (For(model.Tree, open, items, close, what) is { } change)
-                return [change];
+            var joined = Laid(tree, whole, 0, broken: false);
+            yield return new Change("Join the expression onto one line", CodeActionKinds.Rewrite, [new Edit(tree, whole.Span, joined)]);
         }
-        return [];
     }
 
     /// <summary>
-    /// Returns the contents of the outermost call's arguments or set that opens on the 0-based line
-    /// <paramref name="line"/> of the file and could be laid out one item to a line, or null when
-    /// there is none. A long line gets a suggestion over those contents, where the refactoring
-    /// that breaks them is offered.
+    /// Returns the span of the first expression on the 0-based line <paramref name="line"/> of the
+    /// file that laying out would break across lines, or null when there is none. A long line gets
+    /// a suggestion over that expression, where the refactoring that lays it out is offered.
     /// </summary>
-    public static TextSpan? Breakable(SyntaxTree tree, int line)
+    public static TextSpan? Breakable(SyntaxTree tree, int line, int lineLength)
     {
         var start = tree.LineStarts[line];
         var end = tree.GetLineEnd(line);
@@ -52,81 +63,44 @@ internal static class LineBreaks
         {
             if (token.Span.Start < start || token.Span.Start >= end
                 || token.Kind is not (SyntaxKind.OpenParen or SyntaxKind.OpenBracket)
-                || Brackets(token.Parent) is not var (open, items, close, what))
+                || Brackets(token.Parent) is not { Items.Count: > 1 }
+                || WholeAt(tree, token.Span.Start) is not { } whole
+                || !CanLayOut(whole))
             {
                 continue;
             }
-            if (For(tree, open, items, close, what) is { Title: not "Join onto one line" })
-                return new TextSpan(open.Span.End, close.Span.Start - open.Span.End);
+            var source = tree.Text[whole.Span.Start..whole.Span.End];
+            if (Laid(tree, whole, lineLength, broken: true) is var laid && laid != source && laid.Contains('\n', StringComparison.Ordinal))
+                return whole.Span;
         }
         return null;
     }
 
     /// <summary>
-    /// Returns the change that lays out the contents of one pair of brackets, or null when there
-    /// is nothing to lay out: one item on one line, or a comment a join would drop.
+    /// Returns the text of <paramref name="whole"/> laid out within <paramref name="lineLength"/>,
+    /// or 0 for no limit. With <paramref name="broken"/>, its outermost calls and sets are broken
+    /// whether or not they fit, as laying out asks; without it, only what does not fit is broken,
+    /// which with no limit is nothing, as joining asks.
     /// </summary>
-    private static Change? For(
-        SyntaxTree tree, SyntaxToken open, IReadOnlyList<SyntaxNode> items, SyntaxToken close, Contents what)
+    private static string Laid(SyntaxTree tree, ExpressionSyntax whole, int lineLength, bool broken)
     {
-        var inside = new TextSpan(open.Span.End, close.Span.Start - open.Span.End);
-        var pieces = items.Select(item => tree.Text[item.Span.Start..item.Span.End]).ToList();
-        if (pieces.Count == 0 || pieces.Any(piece => piece.Length == 0))
-            return null;
-
-        if (!tree.Text.AsSpan(inside.Start, inside.Length).ContainsAny('\r', '\n'))
-        {
-            if (pieces.Count < 2)
-                return null;
-            var indent = Edits.IndentOf(tree, tree.GetLine(tree.GetLineIndex(open.Span.Start)).LineIndex) + Edits.Indent;
-            var arms = what == Contents.Arms ? Arms(pieces) : null;
-            var laid = arms is null
-                ? "\n" + indent + string.Join(",\n" + indent, pieces)
-                : pieces[0] + ",\n" + indent + string.Join(",\n" + indent, arms);
-            var title = what switch
-            {
-                Contents.Arms when arms is not null => "Put each arm of the `.switch` on its own line",
-                Contents.Values => "Put each value of the set on its own line",
-                _ => "Put each argument on its own line",
-            };
-            return new Change(title, CodeActionKinds.Rewrite, [new Edit(tree, inside, laid)]);
-        }
-
-        return HoldsAComment(open, close, items)
-            ? null
-            : new Change("Join onto one line", CodeActionKinds.Rewrite, [new Edit(tree, inside, string.Join(", ", pieces))]);
+        var line = tree.GetLineIndex(whole.Span.Start);
+        var writer = new Writer(
+            lineLength <= 0 ? int.MaxValue : lineLength,
+            whole.Span.Start - tree.LineStarts[line],
+            Edits.IndentOf(tree, tree.GetLine(line).LineIndex).Length);
+        writer.Write([.. whole.DescendantTokens().Where(token => !token.IsMissing)], broken);
+        return writer.ToString();
     }
 
     /// <summary>
-    /// Returns the arms of a <c>.switch</c> after its value, each a set and its result on one
-    /// line, and a last result for otherwise on a line of its own. Returns null when there are no
-    /// arms to lay out.
+    /// Returns the whole expression the caret is in, which is the outermost expression of its
+    /// statement that holds it, or null when the caret is in none.
     /// </summary>
-    private static List<string>? Arms(List<string> pieces)
-    {
-        if (pieces.Count < 3)
-            return null;
-        var arms = new List<string>();
-        var i = 1;
-        for (; i + 1 < pieces.Count; i += 2)
-            arms.Add(pieces[i] + ", " + pieces[i + 1]);
-        if (i < pieces.Count)
-            arms.Add(pieces[i]);
-        return arms;
-    }
-
-    /// <summary>
-    /// Returns the brackets of each call's arguments and each set that holds the caret, outermost
-    /// first, and then those of the whole expression the caret is in, in source order, each with
-    /// its items and what the items are. The brackets are the whole expression's alone: those of
-    /// another expression on the same line are never offered.
-    /// </summary>
-    private static IEnumerable<(SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)> Around(
-        SyntaxTree tree, int caret)
+    private static ExpressionSyntax? WholeAt(SyntaxTree tree, int caret)
     {
         if (tree.Text.Length == 0)
-            yield break;
-        var holding = new List<(SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)>();
+            return null;
         ExpressionSyntax? whole = null;
         for (var node = tree.Root.FindToken(Math.Min(caret, tree.Text.Length - 1)).Parent;
             node is not null and not StatementSyntax;
@@ -134,56 +108,187 @@ internal static class LineBreaks
         {
             if (node is ExpressionSyntax expression)
                 whole = expression;
-            if (Brackets(node) is var (open, items, close, what) && caret >= open.Span.End && caret <= close.Span.Start)
-                holding.Add((open, items, close, what));
         }
-        for (var i = holding.Count - 1; i >= 0; i--)
-            yield return holding[i];
-        if (whole is null)
-            yield break;
-        foreach (var node in (IEnumerable<SyntaxNode>)[whole, .. whole.DescendantNodes()])
-        {
-            if (Brackets(node) is { } brackets)
-                yield return brackets;
-        }
+        return whole;
     }
 
     /// <summary>
-    /// Returns the brackets, the items and what the items are, where <paramref name="node"/> is a
-    /// call's arguments or a set whose brackets are both in the source, or null otherwise.
+    /// Checks whether <paramref name="whole"/> has a call or a set with something to lay out, and
+    /// no comment inside it that laying it out would drop.
     /// </summary>
-    private static (SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)? Brackets(
-        SyntaxNode? node)
+    private static bool CanLayOut(ExpressionSyntax whole)
+    {
+        if (!((IEnumerable<SyntaxNode>)[whole, .. whole.DescendantNodes()]).Any(node => Brackets(node) is { Items.Count: > 1 }))
+            return false;
+        var tokens = whole.DescendantTokens().ToList();
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            var trivia = i == tokens.Count - 1 ? tokens[i].LeadingTrivia : tokens[i].LeadingTrivia.Concat(tokens[i].TrailingTrivia);
+            if (trivia.Any(piece => piece.Kind == SyntaxKind.CommentTrivia))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Returns the brackets and the items of <paramref name="node"/>, where it is a call's
+    /// arguments or a set whose brackets are both in the source, or null otherwise.
+    /// </summary>
+    private static Group? Brackets(SyntaxNode? node)
     {
         var found = node switch
         {
-            ArgumentListSyntax { Parent: CallExpressionSyntax call } arguments =>
-                ((SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, Contents What)?)(
-                    arguments.OpenParenToken, [.. arguments.Arguments], arguments.CloseParenToken,
-                    call.BuiltinKind == BuiltinKind.Switch ? Contents.Arms : Contents.Arguments),
-            SetExpressionSyntax set => (set.OpenBracketToken, [.. set.Items], set.CloseBracketToken, Contents.Values),
+            ArgumentListSyntax { Parent: CallExpressionSyntax call } arguments => new Group(
+                arguments.OpenParenToken, [.. arguments.Arguments], arguments.CloseParenToken,
+                call.BuiltinKind == BuiltinKind.Switch),
+            SetExpressionSyntax set => new Group(set.OpenBracketToken, [.. set.Items], set.CloseBracketToken, false),
             _ => null,
         };
-        return found is var (open, _, close, _) && !open.IsMissing && !close.IsMissing ? found : null;
+        return found is { Open.IsMissing: false, Close.IsMissing: false } ? found : null;
     }
 
-    /// <summary>Checks whether a comment stands between two brackets.</summary>
-    private static bool HoldsAComment(SyntaxToken open, SyntaxToken close, IReadOnlyList<SyntaxNode> items) =>
-        open.TrailingTrivia.Any(trivia => trivia.Kind == SyntaxKind.CommentTrivia)
-        || items.SelectMany(item => item.Parent!.DescendantTokens())
-            .Where(token => token.Span.Start >= open.Span.End && token.Span.End <= close.Span.Start)
-            .Any(token => token.LeadingTrivia.Concat(token.TrailingTrivia).Any(trivia => trivia.Kind == SyntaxKind.CommentTrivia));
+    /// <summary>
+    /// Represents the brackets of a call's arguments or of a set, and the items between them.
+    /// </summary>
+    /// <param name="Open">The opening bracket.</param>
+    /// <param name="Items">The arguments or values.</param>
+    /// <param name="Close">The closing bracket.</param>
+    /// <param name="IsSwitch">Whether the brackets are a <c>.switch</c>'s, whose items are its value and its arms.</param>
+    private sealed record Group(SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, bool IsSwitch);
 
-    /// <summary>Specifies what the brackets hold, which decides how they are laid out.</summary>
-    private enum Contents
+    /// <summary>
+    /// Writes an expression's tokens, fitting each call and set on its line or breaking it one item
+    /// to a line. Between two tokens the source had space around, it writes one space.
+    /// </summary>
+    /// <param name="limit">The column no line should pass.</param>
+    /// <param name="startColumn">The column the expression starts at in its first line.</param>
+    /// <param name="indent">The indentation of the line the expression starts on.</param>
+    private sealed class Writer(int limit, int startColumn, int indent)
     {
-        /// <summary>A call's arguments, one to a line.</summary>
-        Arguments,
+        private readonly StringBuilder text = new();
 
-        /// <summary>A <c>.switch</c>'s arms, a set and its result to a line.</summary>
-        Arms,
+        // Where the line being written starts in the text, and how far it is indented. The first
+        // line starts before the text, at the expression's own column.
+        private int lineStart = -startColumn;
+        private int lineIndent = indent;
 
-        /// <summary>A set's values, one to a line.</summary>
-        Values,
+        private int Column => text.Length - lineStart;
+
+        public override string ToString() => text.ToString();
+
+        /// <summary>
+        /// Writes <paramref name="tokens"/>. The calls and sets among them that no other among
+        /// them holds are broken where <paramref name="broken"/> says to, and any call or set is
+        /// broken where it does not fit.
+        /// </summary>
+        public void Write(List<SyntaxToken> tokens, bool broken)
+        {
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                var token = tokens[i];
+                if (token.Kind is SyntaxKind.OpenParen or SyntaxKind.OpenBracket
+                    && Brackets(token.Parent) is { } group && group.Open == token
+                    && tokens.IndexOf(group.Close, i) is var close and >= 0)
+                {
+                    WriteGroup(group, broken);
+                    i = close;
+                    token = tokens[i];
+                }
+                else
+                {
+                    text.Append(token.Text);
+                }
+                if (i + 1 < tokens.Count && (token.TrailingTrivia.Count > 0 || tokens[i + 1].LeadingTrivia.Count > 0))
+                    text.Append(' ');
+            }
+        }
+
+        /// <summary>
+        /// Writes one call's arguments or one set, on its line where it fits and need not be
+        /// broken, and otherwise one item to a line, a step in from the line its bracket opens on.
+        /// A group of one item is never broken, since that gains nothing, but what it holds is
+        /// broken as it would be in its place.
+        /// </summary>
+        private void WriteGroup(Group group, bool broken)
+        {
+            var items = group.Items;
+            if (items.Count < 2)
+            {
+                text.Append(group.Open.Text);
+                if (items.Count == 1)
+                    Write(TokensOf(items[0]), broken);
+                text.Append(group.Close.Text);
+                return;
+            }
+            var flat = Flat(group);
+            if (!broken && Column + flat.Length <= limit)
+            {
+                text.Append(flat);
+                return;
+            }
+
+            text.Append(group.Open.Text);
+            var inner = lineIndent + Edits.Indent.Length;
+            if (!group.IsSwitch)
+            {
+                for (var i = 0; i < items.Count; i++)
+                {
+                    NewLine(inner);
+                    Write(TokensOf(items[i]), broken: false);
+                    if (i + 1 < items.Count)
+                        text.Append(',');
+                }
+            }
+            else
+            {
+                // The value stays beside the bracket, each arm is a set and its result on a line,
+                // and a result left over is the one for otherwise.
+                Write(TokensOf(items[0]), broken: false);
+                text.Append(',');
+                var arms = (items.Count - 1) / 2;
+                for (var arm = 0; arm < arms; arm++)
+                {
+                    NewLine(inner);
+                    Write(TokensOf(items[1 + (2 * arm)]), broken: false);
+                    text.Append(", ");
+                    Write(TokensOf(items[2 + (2 * arm)]), broken: false);
+                    if (3 + (2 * arm) < items.Count)
+                        text.Append(',');
+                }
+                if ((items.Count - 1) % 2 == 1)
+                {
+                    NewLine(inner);
+                    Write(TokensOf(items[^1]), broken: false);
+                }
+            }
+            text.Append(group.Close.Text);
+        }
+
+        /// <summary>Returns a call's arguments or a set as it is written on one line.</summary>
+        private static string Flat(Group group)
+        {
+            var writer = new Writer(int.MaxValue, 0, 0);
+            writer.text.Append(group.Open.Text);
+            for (var i = 0; i < group.Items.Count; i++)
+            {
+                if (i > 0)
+                    writer.text.Append(", ");
+                writer.Write(TokensOf(group.Items[i]), broken: false);
+            }
+            writer.text.Append(group.Close.Text);
+            return writer.ToString();
+        }
+
+        /// <summary>Returns the tokens of a node that the source holds.</summary>
+        private static List<SyntaxToken> TokensOf(SyntaxNode node) =>
+            [.. node.DescendantTokens().Where(token => !token.IsMissing)];
+
+        /// <summary>Starts a new line indented by <paramref name="indent"/>.</summary>
+        private void NewLine(int indent)
+        {
+            text.Append('\n').Append(' ', indent);
+            lineStart = text.Length - indent;
+            lineIndent = indent;
+        }
     }
 }

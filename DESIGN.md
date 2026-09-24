@@ -200,8 +200,9 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   a line that starts a statement of its own is never joined to the one before it: a blank line,
   or one that starts with `}`, a directive, an instruction, a macro call, a label or a constant.
   A line holding only a comment is joined. The layout indents a continuing line one step past
-  the line the expression starts on, and a line that starts with the closing bracket at that
-  line's margin; it keeps the line breaks a file has, and adds none.
+  the line its innermost open bracket opened on, so each line that leaves a bracket open adds a
+  level, and a line that starts with a closing bracket goes back to the margin of the line that
+  bracket opened on; it keeps the line breaks a file has, and adds none.
 - **Leading whitespace is insignificant.** Labels may be indented. Because it means nothing
   there is nothing to argue about, so nt65 has one layout and writes it (§5.3): names at the
   margin of whatever holds them, what a block holds indented four columns further than the

@@ -54,73 +54,58 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
-    /// A call's arguments go one to a line, one step in from the line the expression starts on,
-    /// and the result reads back as the same statement.
+    /// Laying out works on the whole expression: every call at its outer level is broken, one
+    /// argument to a line, and each line that leaves a bracket open indents the next a step
+    /// further, as the formatter does. The caret may be anywhere in the expression.
     /// </summary>
     [Fact]
-    public void ACallsArgumentsGoOneToALine()
+    public void TheWholeExpressionIsLaidOut()
     {
-        const string Main = ".module main\n.export X\nX = .select(1, 2, 3)\n";
+        const string Main = ".module main\n.export X\nX = .select(1, 2, 3) + .select(4, 5, 6)\n";
 
-        var action = Single(Main, "2,", "Put each argument on its own line");
+        var action = Single(Main, "+", "Lay out the expression across lines");
 
-        Assert.Equal(".module main\n.export X\nX = .select(\n    1,\n    2,\n    3)\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
-    }
-
-    /// <summary>A <c>.switch</c> keeps its value on the first line and each set beside its result.</summary>
-    [Fact]
-    public void ASwitchsArmsGoOneToALine()
-    {
-        const string Main = ".module main\n.export X\nX = .switch(2, [1], 10, [2, 3], 20, 30)\n";
-
-        var action = Single(Main, "[1]", "Put each arm of the `.switch` on its own line", 1);
-
-        Assert.Equal(".module main\n.export X\nX = .switch(2,\n    [1], 10,\n    [2, 3], 20,\n    30)\n",
+        Assert.Equal(
+            ".module main\n.export X\nX = .select(\n    1,\n    2,\n    3) + .select(\n        4,\n        5,\n        6)\n",
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
     /// <summary>
-    /// The actions work on the whole expression. The caret in a set that is one of a
-    /// <c>.switch</c>'s arms lays out the <c>.switch</c>, not the set, and the caret between the
-    /// brackets of an expression lays out its first call. A <c>.switch</c> laid across lines
-    /// joins back as a whole from anywhere inside it.
+    /// A <c>.switch</c> keeps its value beside its bracket and each set beside its result, and what
+    /// the outer level holds is broken only where it does not fit within the line length, which
+    /// gives it a level of its own. The caret in one of the sets lays out the whole expression.
     /// </summary>
     [Fact]
-    public void TheActionsWorkOnTheWholeExpression()
+    public void WhatDoesNotFitIsBrokenAtALevelOfItsOwn()
     {
-        const string Switch = ".module main\n.export X\nX = .switch(2, [1, 4], 10, [2, 3], 20, 30)\n";
-        var arms = Single(Switch, "4]", "Put each arm of the `.switch` on its own line");
-        Assert.Equal(".module main\n.export X\nX = .switch(2,\n    [1, 4], 10,\n    [2, 3], 20,\n    30)\n",
-            Editing.Apply(Switch, arms.Edit.Changes[Uri]));
+        const string Main = ".module main\n.export f\n.func f(m) = .switch(m, [1], 2, .select(1, .switch(m, [3], 4, [5], 6, 7), 8))\n";
 
-        const string Sum = ".module main\n.export X\nX = .select(1, 2, 3) + 4\n";
-        var arguments = Single(Sum, "+ 4", "Put each argument on its own line");
-        Assert.Equal(".module main\n.export X\nX = .select(\n    1,\n    2,\n    3) + 4\n",
-            Editing.Apply(Sum, arguments.Edit.Changes[Uri]));
+        var action = Single(Main, "[1]", "Lay out the expression across lines", 1, lineLength: 40);
 
-        const string Broken = ".module main\n.export X\nX = .switch(2,\n    [1, 4], 10,\n    [2, 3], 20,\n    30)\n";
-        var joined = Single(Broken, "3]", "Join onto one line");
-        Assert.Equal(".module main\n.export X\nX = .switch(2, [1, 4], 10, [2, 3], 20, 30)\n",
+        Assert.Equal(
+            ".module main\n.export f\n.func f(m) = .switch(m,\n    [1], 2,\n    .select(\n        1,\n"
+                + "        .switch(m, [3], 4, [5], 6, 7),\n        8))\n",
+            Editing.Apply(Main, action.Edit.Changes[Uri]));
+    }
+
+    /// <summary>
+    /// An expression across lines joins back onto one from anywhere inside it, and neither action is
+    /// offered where a comment would be lost. A set on its own is laid out as a call is.
+    /// </summary>
+    [Fact]
+    public void AnExpressionJoinsBackUnlessACommentWouldBeLost()
+    {
+        const string Broken = ".module main\n.export X\nX = .switch(2,\n    [1, 4], 10,\n    [2, 3], 20,\n    30) + 1\n";
+        var joined = Single(Broken, "3]", "Join the expression onto one line");
+        Assert.Equal(".module main\n.export X\nX = .switch(2, [1, 4], 10, [2, 3], 20, 30) + 1\n",
             Editing.Apply(Broken, joined.Edit.Changes[Uri]));
-    }
-
-    /// <summary>
-    /// Brackets laid across lines join back onto one, and not where a comment would be lost. A
-    /// set's values go one to a line as a call's arguments do.
-    /// </summary>
-    [Fact]
-    public void LinesJoinBackUnlessACommentWouldBeLost()
-    {
-        const string Broken = ".module main\n.export X\nX = .select(\n    1,\n    2, 3)\n";
-        var joined = Single(Broken, "2,", "Join onto one line");
-        Assert.Equal(".module main\n.export X\nX = .select(1, 2, 3)\n", Editing.Apply(Broken, joined.Edit.Changes[Uri]));
 
         const string Commented = ".module main\n.export X\nX = .select(\n    1,  ; one\n    2, 3)\n";
-        Assert.DoesNotContain(Actions(Commented, At(Commented, "2,")), action => action.Title == "Join onto one line");
+        Assert.DoesNotContain(Actions(Commented, At(Commented, "2,")), action => action.Title.EndsWith("line", StringComparison.Ordinal)
+            || action.Title.EndsWith("lines", StringComparison.Ordinal));
 
         const string Set = ".module main\n.export X\nX = 2 .in [1, 2]\n";
-        var values = Single(Set, "1,", "Put each value of the set on its own line");
+        var values = Single(Set, "1,", "Lay out the expression across lines");
         Assert.Equal(".module main\n.export X\nX = 2 .in [\n    1,\n    2]\n", Editing.Apply(Set, values.Edit.Changes[Uri]));
     }
 
@@ -403,8 +388,9 @@ public sealed class RefactorsTests
     /// <paramref name="at"/> first appears in <paramref name="text"/>, moved by
     /// <paramref name="offset"/> characters.
     /// </summary>
-    private static CodeAction Single(string text, string at, string title, int offset = 0) =>
-        Assert.Single(Actions(text, At(text, at, offset)), action => action.Title == title);
+    private static CodeAction Single(
+        string text, string at, string title, int offset = 0, int lineLength = LineBreaks.DefaultLength) =>
+        Assert.Single(Actions(text, At(text, at, offset), lineLength), action => action.Title == title);
 
     /// <summary>Returns an empty range at <paramref name="at"/> in the text, plus the offset.</summary>
     private static Range At(string text, string at, int offset = 0)
@@ -423,12 +409,12 @@ public sealed class RefactorsTests
     private static CodeAction Single(string text, Range range, string title) =>
         Assert.Single(Actions(text, range), action => action.Title == title);
 
-    private static IReadOnlyList<CodeAction> Actions(string text, Range range)
+    private static IReadOnlyList<CodeAction> Actions(string text, Range range, int lineLength = LineBreaks.DefaultLength)
     {
         var workspace = new Workspace();
         workspace.Open(new TextDocumentItem(GfxUri, "nt65", 1, Gfx));
         var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, text));
         var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return CodeActions.In(analysis, analysis.ModelFor(document.Tree.Path)!, range, ["refactor"]);
+        return CodeActions.In(analysis, analysis.ModelFor(document.Tree.Path)!, range, ["refactor"], lineLength);
     }
 }

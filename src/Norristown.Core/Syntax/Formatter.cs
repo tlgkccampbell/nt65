@@ -23,8 +23,9 @@ namespace Norristown.Syntax;
 /// </description></item>
 /// <item><description>
 /// A line that continues an expression from the line before it is indented one step further
-/// than the line the expression starts on, and a line that starts with a closing bracket goes
-/// back to that line's margin.
+/// than the line its innermost open bracket opened on, so an expression nested across lines gets
+/// a level for each line that leaves a bracket open. A line that starts with a closing bracket
+/// goes back to the margin of the line that bracket opened on.
 /// </description></item>
 /// </list>
 /// The generated ca65 already uses this layout.
@@ -89,6 +90,13 @@ public static class Formatter
         // data line gets a separate name, so that it can be aligned; every other line is kept
         // as one piece after its indent.
         var indents = new int[tree.LineCount];
+        var continued = new Dictionary<int, int>();
+        for (var i = 0; i < tree.LineCount; i++)
+        {
+            var line = tree.GetLine(i);
+            if (line.LineIndex == i && line.LastLineIndex > i)
+                Continued(tree, line, Math.Max(depths[i] - (IsCheapLocal(line) ? 1 : 0), 0) * IndentWidth, continued);
+        }
         var names = new string?[tree.LineCount];
         var rest = new string[tree.LineCount];
         var comments = new bool[tree.LineCount];
@@ -102,15 +110,12 @@ public static class Formatter
                 continue;
             }
 
-            // A line that continues an expression is part of the line it starts on, one step in,
-            // except that a line starting with the bracket that closes it goes back to that line's
-            // margin, below where it opened.
+            // A line that continues an expression is indented by the brackets still open at its
+            // start, which were worked out with the line the expression starts on.
             if (line.LineIndex != i)
             {
-                var trimmed = content.TrimStart(Blank);
-                var closes = trimmed[0] is ')' or ']';
-                indents[i] = (depths[line.LineIndex] + (closes ? 0 : 1)) * IndentWidth;
-                rest[i] = trimmed.ToString();
+                indents[i] = continued.GetValueOrDefault(i, (depths[line.LineIndex] + 1) * IndentWidth);
+                rest[i] = content.TrimStart(Blank).ToString();
                 continue;
             }
 
@@ -164,6 +169,41 @@ public static class Formatter
             i--;
         }
         return formatted;
+    }
+
+    /// <summary>
+    /// Records in <paramref name="indents"/> how far each line after the first of a joined line is
+    /// indented, given <paramref name="first"/>, the first line's. A line is one step in from the
+    /// line its innermost open bracket opened on, and a line that starts by closing a bracket is
+    /// at the margin of the line that bracket opened on. A line holding only a comment is indented
+    /// as the next line of code would be at that point.
+    /// </summary>
+    private static void Continued(SyntaxTree tree, LineSyntax line, int first, Dictionary<int, int> indents)
+    {
+        var opened = new Stack<int>();
+        var margins = new Dictionary<int, int> { [line.LineIndex] = first };
+        var current = line.LineIndex;
+        int Inside() => margins[opened.Count > 0 ? opened.Peek() : line.LineIndex] + IndentWidth;
+        foreach (var token in line.Tokens)
+        {
+            if (token.Kind == SyntaxKind.EndOfLine)
+                break;
+            var at = tree.GetLineIndex(token.Span.Start);
+            if (at != current)
+            {
+                for (var comment = current + 1; comment < at; comment++)
+                    indents[comment] = margins[comment] = Inside();
+                var closes = token.Kind is SyntaxKind.CloseParen or SyntaxKind.CloseBracket && opened.Count > 0;
+                indents[at] = margins[at] = closes ? margins[opened.Peek()] : Inside();
+                current = at;
+            }
+            if (token.Kind is SyntaxKind.OpenParen or SyntaxKind.OpenBracket)
+                opened.Push(at);
+            else if (token.Kind is SyntaxKind.CloseParen or SyntaxKind.CloseBracket && opened.Count > 0)
+                opened.Pop();
+        }
+        for (var comment = current + 1; comment <= line.LastLineIndex; comment++)
+            indents[comment] = Inside();
     }
 
     /// <summary>

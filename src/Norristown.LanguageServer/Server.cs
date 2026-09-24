@@ -16,12 +16,6 @@ namespace Norristown.LanguageServer;
 internal sealed class Server : IDisposable
 {
     /// <summary>
-    /// The longest a line may be before the editor suggests breaking it, unless the editor's
-    /// settings give another length.
-    /// </summary>
-    private const int DefaultLineLength = 100;
-
-    /// <summary>
     /// The time to wait after the last edit before publishing the rest of the program's diagnostics.
     /// </summary>
     private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(200);
@@ -68,7 +62,7 @@ internal sealed class Server : IDisposable
     private HintSettings hints = HintSettings.Default;
 
     // The longest a line may be before the editor suggests breaking it, or 0 for no limit.
-    private int lineLength = DefaultLineLength;
+    private int lineLength = LineBreaks.DefaultLength;
     private bool? cyclesThisSession;
 
     // The documentation of each item in the last completion list, kept until the next list
@@ -696,7 +690,7 @@ internal sealed class Server : IDisposable
         if (await AtAsync(start, cancellation).ConfigureAwait(false) is not { } asked)
             return [];
         return outgoing.ToClient(
-            LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, request.Context.Only));
+            LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, request.Context.Only, lineLength));
     }
 
     [JsonRpcMethod("textDocument/semanticTokens/full")]
@@ -792,7 +786,7 @@ internal sealed class Server : IDisposable
             && options.TryGetProperty("lineLength", out var given)
             && given.ValueKind == JsonValueKind.Number && given.TryGetInt32(out var length) && length >= 0
             ? length
-            : DefaultLineLength;
+            : LineBreaks.DefaultLength;
 
     /// <summary>
     /// Returns the named configuration the client's <c>nt65</c> settings choose, or null for the

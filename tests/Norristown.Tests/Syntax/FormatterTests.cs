@@ -35,6 +35,35 @@ public sealed class FormatterTests
     }
 
     /// <summary>
+    /// A line that continues an expression is one step in from the line its innermost open
+    /// bracket opened on, so each line that leaves a bracket open adds a level, and a line that
+    /// starts with a closing bracket goes back to the margin of the line that bracket opened on.
+    /// </summary>
+    [Fact]
+    public void AContinuedExpressionIsIndentedByTheBracketsOpenAtEachLine()
+    {
+        Assert.Equal("""
+            .module main
+            .export X
+            X = .select(1,
+                2 + .select(3,
+                    4,
+                    5),
+                6
+            )
+            """, Formatted("""
+            .module main
+            .export X
+            X = .select(1,
+            2 + .select(3,
+                        4,
+              5),
+                     6
+                  )
+            """));
+    }
+
+    /// <summary>
     /// A <c>.segment NAME</c> region opens a block with no brace, holding the rest of the file,
     /// so what follows one is laid out at the region line's margin.
     /// </summary>

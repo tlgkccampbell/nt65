@@ -12,16 +12,17 @@ internal static class CodeActions
     /// <summary>
     /// Returns the changes offered over <paramref name="range"/> of <paramref name="model"/>'s
     /// file. <paramref name="only"/> lists the kinds the client will show, or is null for all of
-    /// them.
+    /// them, and <paramref name="lineLength"/> is the length a layout fits lines within.
     /// </summary>
     public static IReadOnlyList<Protocol.CodeAction> In(
-        ProgramAnalysis analysis, SemanticModel model, Protocol.Range range, IReadOnlyList<string>? only = null)
+        ProgramAnalysis analysis, SemanticModel model, Protocol.Range range, IReadOnlyList<string>? only = null,
+        int lineLength = LineBreaks.DefaultLength)
     {
         var changes = new List<Change>();
         if (Wanted(only, CodeActionKinds.QuickFix))
             changes.AddRange(Fixes.In(analysis, model, range));
         if (Wanted(only, CodeActionKinds.Rewrite) || Wanted(only, CodeActionKinds.Extract))
-            changes.AddRange(Refactors.In(analysis, model, range));
+            changes.AddRange(Refactors.In(analysis, model, range, lineLength));
         return [.. changes
             .Where(change => Wanted(only, change.Kind)
                 && (change.Edits.Count > 0 || change.Renames is not null || change.Refused is not null))

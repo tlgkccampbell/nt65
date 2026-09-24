@@ -19,7 +19,7 @@ namespace Norristown.LanguageServer;
 /// <item>Inline a macro call.</item>
 /// <item>Extract code into a routine.</item>
 /// <item>Convert ca65 to nt65.</item>
-/// <item>Lay out a call's arguments or a set across lines, or join them onto one.</item>
+/// <item>Lay out an expression across lines, or join it onto one.</item>
 /// </list>
 /// <para>
 /// Each is offered only where it would change something, and each is computed from the analysis
@@ -30,9 +30,10 @@ internal static class Refactors
 {
     /// <summary>
     /// Returns the refactorings offered over <paramref name="range"/> of <paramref name="model"/>'s
-    /// file.
+    /// file. A layout fits lines within <paramref name="lineLength"/>.
     /// </summary>
-    public static IReadOnlyList<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
+    public static IReadOnlyList<Change> In(
+        ProgramAnalysis analysis, SemanticModel model, Protocol.Range range, int lineLength = LineBreaks.DefaultLength)
     {
         var tree = model.Tree;
         if (tree.LineStarts.Length == 0)
@@ -55,7 +56,7 @@ internal static class Refactors
             .. InlineMacro.In(analysis, model, caret),
             .. ExtractProc.In(analysis, model, range),
             .. Ca65Conversion.In(model, range),
-            .. LineBreaks.In(model, caret),
+            .. LineBreaks.In(model, caret, lineLength),
         ];
     }
 
