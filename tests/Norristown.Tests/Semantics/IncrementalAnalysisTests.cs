@@ -95,19 +95,19 @@ public sealed class IncrementalAnalysisTests
         Assert.Equal(WholeProgramReason.NoPreviousAnalysis, first.WholeProgram);
 
         // Nothing changed at all, so the analysis before it is the answer.
-        Assert.Same(first, Compiler.Analyze([main], project, Nothing, first));
+        Assert.Same(first, Compiler.Analyze([main], project, Nothing, first, TestContext.Current.CancellationToken));
 
         Assert.Equal(
             WholeProgramReason.ProjectChanged,
-            Compiler.Analyze([main], project with { Out = "elsewhere" }, Nothing, first).WholeProgram);
+            Compiler.Analyze([main], project with { Out = "elsewhere" }, Nothing, first, TestContext.Current.CancellationToken).WholeProgram);
         Assert.Equal(
             WholeProgramReason.FilesAddedOrRemoved,
-            Compiler.Analyze([main, other], project, Nothing, first).WholeProgram);
+            Compiler.Analyze([main, other], project, Nothing, first, TestContext.Current.CancellationToken).WholeProgram);
 
         var native = main.WithChange(new TextChange(main.Text.IndexOf("6502", StringComparison.Ordinal), 4, "65816"));
         Assert.Equal(
             WholeProgramReason.CpuChanged,
-            Compiler.Analyze([native], project, Nothing, first).WholeProgram);
+            Compiler.Analyze([native], project, Nothing, first, TestContext.Current.CancellationToken).WholeProgram);
     }
 
     /// <summary>
@@ -127,7 +127,7 @@ public sealed class IncrementalAnalysisTests
         Assert.Empty(first.Diagnostics);
 
         var edited = lib.WithChange(new TextChange(lib.Text.IndexOf("keeps x", StringComparison.Ordinal), 7, "keeps a"));
-        var incremental = Compiler.Analyze([edited, main], project, Nothing, first);
+        var incremental = Compiler.Analyze([edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
         var scratch = Compiler.Analyze([edited, main], project, Nothing);
 
         Assert.NotEmpty(scratch.Diagnostics);

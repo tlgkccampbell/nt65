@@ -21,14 +21,14 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
 
     [Fact]
     [Trait("Category", "Benchmark")]
-    public void EditsInAProgramOfManyFiles()
+    public async Task EditsInAProgramOfManyFiles()
     {
         var workspace = new Workspace();
         for (var i = 0; i < Files; i++)
             workspace.Open(new TextDocumentItem(GeneratedProject.Uri(i), "nt65", 1, GeneratedProject.Text(i, Files)));
 
         var watch = Stopwatch.StartNew();
-        var first = workspace.AnalysisFor(Uris.ToPath(GeneratedProject.Uri(0)));
+        var first = await workspace.AnalysisForAsync(Uris.ToPath(GeneratedProject.Uri(0)), TestTimeout.Token());
         output.WriteLine($"{Files} files, first analysis: {watch.Elapsed.TotalMilliseconds:0} ms");
         Assert.Empty(first.Diagnostics);
 
@@ -52,7 +52,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
     /// </summary>
     [Fact]
     [Trait("Category", "Benchmark")]
-    public void AKeystrokeInALargeFile()
+    public async Task AKeystrokeInALargeFile()
     {
         // Each routine is exported, as a real module's routines are. A routine that nothing calls
         // or exports gets a warning, and this benchmark measures the cost of the file's size, not
@@ -76,7 +76,7 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         var uri = GeneratedProject.Uri(0);
         workspace.Open(new TextDocumentItem(uri, "nt65", 1, text));
         output.WriteLine($"{text.Count(c => c == '\n')} lines in one file");
-        Assert.Empty(workspace.AnalysisFor(Uris.ToPath(uri)).Diagnostics);
+        Assert.Empty((await workspace.AnalysisForAsync(Uris.ToPath(uri), TestTimeout.Token())).Diagnostics);
 
         var version = 1;
         Time(workspace, uri, ref version, "keystroke in a routine body", Line(workspace, uri, "cpx #8"), 9, 10, "9", "8");
@@ -115,12 +115,12 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
 
             // The typist waits for the edited file's own diagnostics, from the analysis the edit
             // requested.
-            var own = workspace.ToPublish(uri)!.Value;
+            var own = workspace.ToPublishAsync(uri, TestTimeout.Token()).GetAwaiter().GetResult()!.Value;
             _ = Lsp.ToDiagnostics(own.Diagnostics, own.Tree, own.Configuration);
             atOnce.Add(watch.Elapsed.TotalMilliseconds);
 
-            var analysis = workspace.AnalysisFor(Uris.ToPath(uri));
-            foreach (var file in workspace.ToPublish())
+            var analysis = workspace.AnalysisForAsync(Uris.ToPath(uri), TestTimeout.Token()).GetAwaiter().GetResult();
+            foreach (var file in workspace.ToPublishAsync(TestTimeout.Token()).GetAwaiter().GetResult())
                 _ = Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration);
             wholeProgram.Add(watch.Elapsed.TotalMilliseconds);
             analyzed.Add(analysis.WholeProgram is { } reason ? $"all ({reason})" : $"{analysis.Reanalyzed} file(s)");

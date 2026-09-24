@@ -23,7 +23,7 @@ internal sealed class TestClient : IAsyncDisposable
     private readonly Task server;
     private readonly Notifications notifications = new();
 
-    private TestClient(Delay? delay)
+    private TestClient(Delay? delay, Analyzer? analyzer)
     {
         var (clientStream, serverStream) = FullDuplexStream.CreatePair();
         log = new ServerLog(logText);
@@ -31,7 +31,7 @@ internal sealed class TestClient : IAsyncDisposable
         // The server decides when to wait between an edit and publishing the rest of the
         // program's diagnostics, but the test supplies the wait. By default the wait takes no
         // real time. A test about the wait itself passes a wait that it releases when it is ready.
-        server = Server.RunAsync(serverStream, serverStream, log, delay ?? Yield);
+        server = Server.RunAsync(serverStream, serverStream, log, delay ?? Yield, analyzer);
         rpc = new JsonRpc(new HeaderDelimitedMessageHandler(clientStream, clientStream, Server.CreateFormatter()));
         rpc.AddLocalRpcTarget(notifications);
         rpc.StartListening();
@@ -131,9 +131,10 @@ internal sealed class TestClient : IAsyncDisposable
     /// </summary>
     public static async Task<TestClient> StartAsync(
         object capabilities, CancellationToken cancellation, string? rootUri = null, string? configuration = null,
-        string name = "test-client", Delay? delay = null, int? processId = null, object? inlayHints = null)
+        string name = "test-client", Delay? delay = null, int? processId = null, object? inlayHints = null,
+        Analyzer? analyzer = null)
     {
-        var client = new TestClient(delay);
+        var client = new TestClient(delay, analyzer);
         client.Initialized = await client.rpc.InvokeWithParameterObjectAsync<InitializeResult>("initialize",
             new
             {

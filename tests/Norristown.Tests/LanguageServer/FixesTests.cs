@@ -154,14 +154,14 @@ public sealed class FixesTests
     /// the <c>.use</c>.
     /// </summary>
     [Fact]
-    public void AUseItemNothingNamesIsOfferedForRemoval()
+    public async Task AUseItemNothingNamesIsOfferedForRemoval()
     {
         const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
         const string Main = ".module main\n.use gfx::{clear, fill}\n.segment CODE\n.export .proc main {\n    jsr clear\n    rts\n}\n";
         var workspace = new Workspace();
         workspace.Open(new TextDocumentItem("file:///c:/work/gfx.nt65", "nt65", 1, Gfx));
         var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Main));
-        var analysis = workspace.AnalysisFor(document.Tree.Path);
+        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token());
         var model = analysis.ModelFor(document.Tree.Path)!;
 
         var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
@@ -253,7 +253,7 @@ public sealed class FixesTests
     {
         var workspace = new Workspace();
         var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, text));
-        var analysis = workspace.AnalysisFor(document.Tree.Path);
+        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
         return (analysis, analysis.ModelFor(document.Tree.Path)!);
     }
 }

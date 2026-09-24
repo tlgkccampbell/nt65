@@ -25,18 +25,19 @@ internal static class MovedFiles
     /// programmer about changes that cannot be made automatically.
     /// </summary>
     /// <param name="workspace">The workspace the editor is working on.</param>
+    /// <param name="programs">The analysis of every program the workspace holds.</param>
     /// <param name="renames">
     /// Each file's current path and new path, as logical paths.
     /// </param>
     public static (Protocol.WorkspaceEdit? Edit, IReadOnlyList<string> Messages) For(
-        Workspace workspace, IReadOnlyList<(string From, string To)> renames)
+        Workspace workspace, IReadOnlyList<ProgramAnalysis> programs, IReadOnlyList<(string From, string To)> renames)
     {
         var edits = new Dictionary<string, List<Protocol.TextEdit>>(StringComparer.Ordinal);
         var messages = new List<string>();
         foreach (var (from, to) in renames)
         {
             Named(workspace, from, to, edits, messages);
-            Included(workspace, from, to, edits);
+            Included(programs, from, to, edits);
         }
         if (edits.Count == 0)
             return (null, messages);
@@ -86,11 +87,11 @@ internal static class MovedFiles
     /// binary that moved.
     /// </summary>
     private static void Included(
-        Workspace workspace, string from, string to, Dictionary<string, List<Protocol.TextEdit>> edits)
+        IReadOnlyList<ProgramAnalysis> programs, string from, string to, Dictionary<string, List<Protocol.TextEdit>> edits)
     {
         var moved = Paths.Directory(from) != Paths.Directory(to);
         var renamedInPlace = !moved && from != to;
-        foreach (var analysis in workspace.Programs())
+        foreach (var analysis in programs)
         {
             foreach (var model in analysis.Program.Files)
             {

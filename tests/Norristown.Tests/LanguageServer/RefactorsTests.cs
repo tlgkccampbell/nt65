@@ -335,7 +335,7 @@ public sealed class RefactorsTests
         var workspace = new Workspace();
         workspace.Open(new TextDocumentItem(GfxUri, "nt65", 1, Gfx));
         var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, text));
-        var analysis = workspace.AnalysisFor(document.Tree.Path);
+        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
         return CodeActions.In(analysis, analysis.ModelFor(document.Tree.Path)!, range, ["refactor"]);
     }
 }

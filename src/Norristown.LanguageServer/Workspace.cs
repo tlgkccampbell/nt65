@@ -18,9 +18,16 @@ namespace Norristown.LanguageServer;
 /// and again after a change, starting from the previous analysis. An edit that does not change
 /// what other files can see of a file re-analyzes only that file.
 /// </para>
+/// <para>
+/// The lock is held only to read and change what the workspace holds. An analysis runs outside
+/// it, on the files as they stood when it was asked for, so a request that needs no analysis, or
+/// the analysis of another program, does not wait for one. Requests that ask about the same files
+/// share one analysis.
+/// </para>
 /// </summary>
 internal sealed class Workspace
 {
+    private readonly Analyzer analyzer;
     private readonly Lock gate = new();
     private readonly Dictionary<string, Document> open = new(StringComparer.Ordinal);
 
@@ -33,10 +40,19 @@ internal sealed class Workspace
     private IReadOnlyList<string> roots = [];
     private string? configuration;
 
-    // The analysis of the program formed by the open documents no project names, and the
-    // previous one, which the next analysis starts from.
-    private ProgramAnalysis? loose;
-    private ProgramAnalysis? loosePrevious;
+    // The analysis of the program formed by the open documents no project names.
+    private readonly LiveAnalysis loose;
+
+    /// <summary>Creates an empty workspace.</summary>
+    /// <param name="analyzer">
+    /// The function that analyzes a program. A test supplies its own so that it can hold an
+    /// analysis back. <see cref="Compiler"/> analyzes when none is given.
+    /// </param>
+    public Workspace(Analyzer? analyzer = null)
+    {
+        this.analyzer = analyzer ?? Compiler.Analyze;
+        loose = new LiveAnalysis(this.analyzer);
+    }
 
     /// <summary>Returns a file's text, or null when it cannot be read.</summary>
     public static string? Read(string path)
@@ -67,7 +83,7 @@ internal sealed class Workspace
             configuration = active;
             projects.Clear();
             foreach (var root in roots)
-                projects.AddRange(ProjectFiles(root).Select(file => new WorkspaceProject(file)));
+                projects.AddRange(ProjectFiles(root).Select(file => new WorkspaceProject(file, analyzer)));
             projects.Sort((a, b) => string.CompareOrdinal(a.File, b.File));
             ConfigureAll();
         }
@@ -195,14 +211,14 @@ internal sealed class Workspace
                     changed |= projects.RemoveAll(project => SamePath(project.File, path)) > 0;
                     if (File.Exists(path) && roots.Any(root => Within(root, path)))
                     {
-                        var added = new WorkspaceProject(path);
+                        var added = new WorkspaceProject(path, analyzer);
                         added.Configure(Named(added, configuration, AnyNames()));
                         projects.Add(added);
                         projects.Sort((a, b) => string.CompareOrdinal(a.File, b.File));
                         changed = true;
                     }
                     ConfigureAll();
-                    loose = null;
+                    loose.Invalidate();
                     continue;
                 }
 
@@ -216,9 +232,9 @@ internal sealed class Workspace
                     project.Invalidate();
                     changed = true;
                 }
-                if (loose?.Binaries.Contains(path) == true)
+                if (loose.Finished?.Binaries.Contains(path) == true)
                 {
-                    loose = null;
+                    loose.Invalidate();
                     changed = true;
                 }
             }
@@ -228,13 +244,19 @@ internal sealed class Workspace
 
     /// <summary>
     /// Returns the analysis of the program that <paramref name="path"/> belongs to, built once and
-    /// kept until something changes. Documents the client has open replace the files on disk.
+    /// kept until something changes. Documents the client has open replace the files on disk. The
+    /// files are taken as they stand when this method is called, and the analysis runs outside the
+    /// lock.
     /// </summary>
-    public ProgramAnalysis AnalysisFor(string path)
+    /// <param name="path">The logical path of a file of the program.</param>
+    /// <param name="cancellation">
+    /// Stops this request waiting. The analysis stops too when no other request is waiting for it.
+    /// </param>
+    public Task<ProgramAnalysis> AnalysisForAsync(string path, CancellationToken cancellation)
     {
         lock (gate)
         {
-            return Owner(path) is { } project ? project.Analysis(open.Values) : Loose();
+            return Owner(path) is { } project ? project.AnalysisAsync(open.Values, cancellation) : LooseAsync(cancellation);
         }
     }
 
@@ -244,16 +266,20 @@ internal sealed class Workspace
     /// The editor has to be asked to watch these in addition to the sources and project files,
     /// because only the program says which files it includes.
     /// </summary>
-    public IReadOnlyList<string> Binaries()
+    public async Task<IReadOnlyList<string>> BinariesAsync(CancellationToken cancellation)
     {
+        List<Task<ProgramAnalysis>> analyses;
+        ProgramAnalysis? looseAnalysis;
         lock (gate)
         {
-            return [.. projects.Select(project => project.Analysis(open.Values))
-                .Concat(loose is null ? [] : [loose])
-                .SelectMany(analysis => analysis.Binaries)
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal)];
+            analyses = [.. projects.Select(project => project.AnalysisAsync(open.Values, cancellation))];
+            looseAnalysis = loose.Finished;
         }
+        return [.. (await Task.WhenAll(analyses).ConfigureAwait(false))
+            .Concat(looseAnalysis is null ? [] : [looseAnalysis])
+            .SelectMany(analysis => analysis.Binaries)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)];
     }
 
     /// <summary>Returns the projects the workspace holds, as they currently stand.</summary>
@@ -270,16 +296,16 @@ internal sealed class Workspace
     /// open documents that no project names. Each is built once and kept, so this normally reuses
     /// the analyses that publishing already built.
     /// </summary>
-    public IReadOnlyList<ProgramAnalysis> Programs()
+    public async Task<IReadOnlyList<ProgramAnalysis>> ProgramsAsync(CancellationToken cancellation)
     {
+        List<Task<ProgramAnalysis>> analyses;
         lock (gate)
         {
-            return
-            [
-                .. projects.Select(project => project.Analysis(open.Values)),
-                .. open.Values.Any(document => Owner(document.Tree.Path) is null) ? (ProgramAnalysis[])[Loose()] : [],
-            ];
+            analyses = [.. projects.Select(project => project.AnalysisAsync(open.Values, cancellation))];
+            if (open.Values.Any(document => Owner(document.Tree.Path) is null))
+                analyses.Add(LooseAsync(cancellation));
         }
+        return await Task.WhenAll(analyses).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -293,22 +319,6 @@ internal sealed class Workspace
             return Owner(path) is { } project ? project.Settings : ProjectSettings.None;
         }
     }
-
-    /// <summary>
-    /// Returns the analysis of the open documents that no project names. Each open document supplies its own
-    /// tree in place of the file on disk, and an edit re-parsed only the lines it touched.
-    /// </summary>
-    private ProgramAnalysis Loose()
-    {
-        if (loose is not null)
-            return loose;
-        var sources = open.Values.Where(document => Owner(document.Tree.Path) is null).Select(document => document.Tree);
-        return loose = loosePrevious = Compiler.Analyze([.. sources], ProjectSettings.None, loosePrevious);
-    }
-
-    /// <summary>Returns the open document for a logical path, or null when it is not open.</summary>
-    private Document? Opened(string path) =>
-        open.Values.FirstOrDefault(document => document.Tree.Path == path);
 
     /// <summary>
     /// Returns the URI the client uses for a file, which is the client's own form when it has given
@@ -341,18 +351,20 @@ internal sealed class Workspace
     /// analysis, so they include problems another file causes in this one; the other files'
     /// diagnostics are published separately.
     /// </summary>
-    public Published? ToPublish(string uri)
+    public async Task<Published?> ToPublishAsync(string uri, CancellationToken cancellation)
     {
+        Document? document;
+        Task<ProgramAnalysis> analyzing;
         lock (gate)
         {
-            if (!open.TryGetValue(uri, out var document))
+            if (!open.TryGetValue(uri, out document))
                 return null;
-            var path = document.Tree.Path;
-            var analysis = Owner(path) is { } project ? project.Analysis(open.Values) : Loose();
-            return new Published(
-                UriOf(path), document.Version, document.Tree,
-                analysis.DiagnosticsFor(path), analysis.Configuration);
+            analyzing = AnalysisForAsync(document.Tree.Path, cancellation);
         }
+        var analysis = await analyzing.ConfigureAwait(false);
+        var path = document.Tree.Path;
+        return new Published(
+            UriOf(path), document.Version, document.Tree, analysis.DiagnosticsFor(path), analysis.Configuration);
     }
 
     /// <summary>
@@ -360,9 +372,9 @@ internal sealed class Workspace
     /// to re-analyze more than that one file. That is exactly when what names in other files refer
     /// to can have changed, and with it those files' semantic colouring and lenses.
     /// </summary>
-    public bool ReachedOtherFiles(string path)
+    public async Task<bool> ReachedOtherFilesAsync(string path, CancellationToken cancellation)
     {
-        var analysis = AnalysisFor(path);
+        var analysis = await AnalysisForAsync(path, cancellation).ConfigureAwait(false);
         return analysis.WholeProgram is not null || analysis.Reanalyzed > 1;
     }
 
@@ -371,40 +383,60 @@ internal sealed class Workspace
     /// each file of each project, each project file, and each open document that belongs to no
     /// project. A file two projects share is reported by the nearer project, which is the one
     /// every other answer about the file comes from.
+    /// <para>
+    /// Which project each file belongs to, and the version of each open document, are taken
+    /// together with the files the analyses are of, so that nothing published mixes an analysis
+    /// with a later edit.
+    /// </para>
     /// </summary>
-    public IReadOnlyList<Published> ToPublish()
+    public async Task<IReadOnlyList<Published>> ToPublishAsync(CancellationToken cancellation)
     {
+        var programs = new List<(WorkspaceProject? Project, Task<ProgramAnalysis> Analysis)>();
+        Dictionary<string, WorkspaceProject?> owners;
+        var versions = new Dictionary<string, int>(StringComparer.Ordinal);
         lock (gate)
         {
-            var found = new Dictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree)>(StringComparer.Ordinal);
             foreach (var project in projects)
-            {
-                var analysis = project.Analysis(open.Values);
-
-                // The project file is not one of the program's sources, but its errors can stop
-                // the program being read at all, so they are published like any other file's.
-                found[project.File] = (analysis, null);
-                foreach (var file in analysis.Program.Files)
-                {
-                    if (Owner(file.Tree.Path) == project && !StandardModules.IsStandard(file.Tree.Path))
-                        found[file.Tree.Path] = (analysis, file.Tree);
-                }
-            }
+                programs.Add((project, project.AnalysisAsync(open.Values, cancellation)));
             if (open.Values.Any(document => Owner(document.Tree.Path) is null))
+                programs.Add((null, LooseAsync(cancellation)));
+            owners = projects.SelectMany(project => project.OnDisk().Select(tree => tree.Path))
+                .Concat(open.Values.Select(document => document.Tree.Path))
+                .Distinct(StringComparer.Ordinal)
+                .ToDictionary(path => path, Owner, StringComparer.Ordinal);
+            foreach (var document in open.Values)
+                versions.TryAdd(document.Tree.Path, document.Version);
+        }
+        await Task.WhenAll(programs.Select(program => program.Analysis)).ConfigureAwait(false);
+
+        var found = new Dictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree)>(StringComparer.Ordinal);
+        foreach (var (project, analyzing) in programs)
+        {
+            var analysis = await analyzing.ConfigureAwait(false);
+            if (project is null)
             {
-                var analysis = Loose();
                 foreach (var file in analysis.Program.Files.Where(file => !StandardModules.IsStandard(file.Tree.Path)))
                     found[file.Tree.Path] = (analysis, file.Tree);
+                continue;
             }
-            return [.. found
-                .OrderBy(file => file.Key, StringComparer.Ordinal)
-                .Select(file => new Published(
-                    UriOf(file.Key),
-                    Opened(file.Key)?.Version,
-                    file.Value.Tree,
-                    file.Value.Analysis.DiagnosticsFor(file.Key),
-                    file.Value.Analysis.Configuration))];
+
+            // The project file is not one of the program's sources, but its errors can stop the
+            // program being read at all, so they are published like any other file's.
+            found[project.File] = (analysis, null);
+            foreach (var file in analysis.Program.Files)
+            {
+                if (owners.GetValueOrDefault(file.Tree.Path) == project && !StandardModules.IsStandard(file.Tree.Path))
+                    found[file.Tree.Path] = (analysis, file.Tree);
+            }
         }
+        return [.. found
+            .OrderBy(file => file.Key, StringComparer.Ordinal)
+            .Select(file => new Published(
+                UriOf(file.Key),
+                versions.TryGetValue(file.Key, out var version) ? version : null,
+                file.Value.Tree,
+                file.Value.Analysis.DiagnosticsFor(file.Key),
+                file.Value.Analysis.Configuration))];
     }
 
     /// <summary>
@@ -423,6 +455,17 @@ internal sealed class Workspace
             return [.. trees.Values.OrderBy(tree => tree.Path, StringComparer.Ordinal)];
         }
     }
+
+    /// <summary>
+    /// Returns the analysis of the open documents that no project names. Each open document
+    /// supplies its own tree in place of the file on disk, and an edit re-parsed only the lines it
+    /// touched. The caller holds the lock.
+    /// </summary>
+    private Task<ProgramAnalysis> LooseAsync(CancellationToken cancellation) =>
+        loose.AnalysisAsync(
+            () => ([.. open.Values.Where(document => Owner(document.Tree.Path) is null).Select(document => document.Tree)],
+                ProjectSettings.None),
+            cancellation);
 
     /// <summary>
     /// Returns the project a file belongs to, or null for none. A library two projects share is part of
@@ -444,7 +487,7 @@ internal sealed class Workspace
             owned = true;
         }
         if (!owned)
-            loose = null;
+            loose.Invalidate();
     }
 
     /// <summary>
@@ -457,7 +500,7 @@ internal sealed class Workspace
         var anyNames = AnyNames();
         foreach (var project in projects)
             project.Configure(Named(project, configuration, anyNames));
-        loose = null;
+        loose.Invalidate();
     }
 
     private bool AnyNames() =>

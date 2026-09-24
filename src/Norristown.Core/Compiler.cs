@@ -150,30 +150,35 @@ public static class Compiler
     /// Analyzes already-parsed files as one program, reusing <paramref name="previous"/>, the
     /// analysis from before an edit. When a file changed and what the other files can see of it
     /// did not, only that file is analyzed again and everything else is kept. Otherwise the whole
-    /// program is analyzed again.
+    /// program is analyzed again. <paramref name="cancellation"/> is checked between files and
+    /// between the stages of the analysis.
     /// </summary>
     public static ProgramAnalysis Analyze(
-        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, ProgramAnalysis? previous) =>
-        Analyze(files, project, BinaryLengthOnDisk, previous);
+        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, ProgramAnalysis? previous,
+        CancellationToken cancellation = default) =>
+        Analyze(files, project, BinaryLengthOnDisk, previous, cancellation);
 
     /// <summary>
     /// Analyzes already-parsed files as one program, reusing <paramref name="previous"/> when it
     /// is not null, and calling <paramref name="binaryLength"/> to get the length of each file an
-    /// <c>.incbin</c> names.
+    /// <c>.incbin</c> names. <paramref name="cancellation"/> is checked between files and between
+    /// the stages of the analysis, and a cancelled analysis throws
+    /// <see cref="OperationCanceledException"/>.
     /// </summary>
     public static ProgramAnalysis Analyze(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength,
-        ProgramAnalysis? previous)
+        ProgramAnalysis? previous, CancellationToken cancellation = default)
     {
+        cancellation.ThrowIfCancellationRequested();
         var reason = previous is null
             ? WholeProgramReason.NoPreviousAnalysis
             : ReasonForWholeProgram(previous, files, project, binaryLength);
-        if (reason is null && Reanalyze(previous!, files, project, binaryLength) is { } reused)
+        if (reason is null && Reanalyze(previous!, files, project, binaryLength, cancellation) is { } reused)
             return reused;
 
         // An analysis of the changed files that finds a diagnostic in text an edit replaced
         // cannot tell where that diagnostic belongs now.
-        return AnalyzeAll(files, project, binaryLength) with
+        return AnalyzeAll(files, project, binaryLength, cancellation) with
         {
             WholeProgram = reason ?? WholeProgramReason.DiagnosticInEditedText,
         };
@@ -222,7 +227,8 @@ public static class Compiler
     }
 
     private static ProgramAnalysis AnalyzeAll(
-        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength)
+        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength,
+        CancellationToken cancellation)
     {
         // The modules that come with nt65 are added to a program that could name them. A caller
         // that passes back the files of an earlier analysis passes those modules too, so they are
@@ -257,12 +263,14 @@ public static class Compiler
         var configuration = Configuration.Resolve(trees, target, project.Defines, conditions);
         var segmentTable = new List<Diagnostic>();
         var segments = SegmentTable.Build(trees, project.Segments, project.Spaces, configuration, segmentTable);
+        cancellation.ThrowIfCancellationRequested();
 
         // Every file is read before any is resolved, because a name one file uses may be one
         // another file exports.
         var program = ProgramModel.Create(trees, segments, configuration, defines, Length, target);
+        cancellation.ThrowIfCancellationRequested();
         var analyzed = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
-        var analyses = AnalyzeFiles(program, target, project, analyzed, previous: null, dirty: null);
+        var analyses = AnalyzeFiles(program, target, project, analyzed, previous: null, dirty: null, cancellation);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
         return Composed(
@@ -321,7 +329,7 @@ public static class Compiler
     /// </summary>
     private static ProgramAnalysis? Reanalyze(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
-        Func<string, long?> binaryLength)
+        Func<string, long?> binaryLength, CancellationToken cancellation)
     {
         var reuse = previous.Reused!;
         var sources = Sources(files);
@@ -353,6 +361,7 @@ public static class Compiler
         ProgramModel? program;
         while (true)
         {
+            cancellation.ThrowIfCancellationRequested();
             program = previous.Program.Reanalyzing(
                 current, dirty, configuration, previous.Defines, moved, Length, out var affected);
             if (program is null && affected.Count == 0)
@@ -382,7 +391,7 @@ public static class Compiler
         if (EditMap.Moved(reuse.SegmentTable, moved) is not { } segmentTable)
             return null;
 
-        var analyses = AnalyzeFiles(program, previous.Cpu, project, analyzed, previous, dirty);
+        var analyses = AnalyzeFiles(program, previous.Cpu, project, analyzed, previous, dirty, cancellation);
         return Composed(
             new ProgramAnalysis(program, previous.Cpu, analyses, previous.Defines, configuration, [])
             {
@@ -417,15 +426,17 @@ public static class Compiler
     /// analysis found, in the program's order. When <paramref name="previous"/> is given, only the
     /// files at <paramref name="dirty"/> are analyzed, and every other file keeps what
     /// <paramref name="previous"/> found for it. <paramref name="analyzed"/> receives the
-    /// diagnostics of each file analyzed.
+    /// diagnostics of each file analyzed. <paramref name="cancellation"/> is checked before each
+    /// file, and after the last, so that a cancelled analysis stops before the program is composed.
     /// </summary>
     private static List<FileAnalysis> AnalyzeFiles(
         ProgramModel program, Cpu target, ProjectSettings project, Dictionary<string, IReadOnlyList<Diagnostic>> analyzed,
-        ProgramAnalysis? previous, IReadOnlySet<string>? dirty)
+        ProgramAnalysis? previous, IReadOnlySet<string>? dirty, CancellationToken cancellation)
     {
         var files = new List<FileAnalysis>();
         foreach (var model in program.Files)
         {
+            cancellation.ThrowIfCancellationRequested();
             // A file kept from before keeps what was found for it then, under the program's
             // current model of the file.
             if (dirty?.Contains(model.Tree.Path) != true && previous?.FileFor(model.Tree.Path) is { } kept)
@@ -437,6 +448,10 @@ public static class Compiler
             files.Add(new FileAnalysis(model, layout, flow, state));
             analyzed[model.Tree.Path] = found;
         }
+
+        // Composing the program updates the routines of the files kept from before, which the
+        // previous analysis shares, so a cancelled analysis stops here rather than partway through.
+        cancellation.ThrowIfCancellationRequested();
         return files;
     }
 

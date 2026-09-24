@@ -78,12 +78,12 @@ public sealed class StandardModulesTests
         var first = Compiler.Analyze([plain], project, Nothing);
 
         var naming = SyntaxTree.Parse("main.nt65", ".module main\n.use nt65::cbm::screen\nA_ = 1\n");
-        var second = Compiler.Analyze([naming], project, Nothing, first);
+        var second = Compiler.Analyze([naming], project, Nothing, first, TestContext.Current.CancellationToken);
         Assert.Equal(WholeProgramReason.FilesAddedOrRemoved, second.WholeProgram);
         Assert.Contains(second.Program.Files, file => StandardModules.IsStandard(file.Tree.Path));
 
         var still = SyntaxTree.Parse("main.nt65", ".module main\n.use nt65::cbm::screen\nA_ = 2\n");
-        var third = Compiler.Analyze([still], project, Nothing, second);
+        var third = Compiler.Analyze([still], project, Nothing, second, TestContext.Current.CancellationToken);
         Assert.Contains(third.Program.Files, file => StandardModules.IsStandard(file.Tree.Path));
         Assert.DoesNotContain(third.Diagnostics, d => d.Severity == Severity.Error);
     }

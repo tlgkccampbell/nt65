@@ -22,7 +22,7 @@ internal sealed class Server : IDisposable
 
     private readonly ServerLog log;
     private readonly Framing framing;
-    private readonly Workspace workspace = new();
+    private readonly Workspace workspace;
 
     // Publishing diagnostics for every file except the edited one waits for typing to stop. A
     // feature that follows the whole program rather than the caret, such as the output view
@@ -41,6 +41,11 @@ internal sealed class Server : IDisposable
     // the debounce can run at the same time.
     private readonly ConcurrentDictionary<string, string> published = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> newest = new(StringComparer.Ordinal);
+
+    // The publish of each open document's own diagnostics that may still be waiting for its
+    // analysis. The document's next edit cancels it, because what it would send is about text
+    // that is gone.
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> owning = new(StringComparer.Ordinal);
 
     // Held while every file is published, so that one publish of the whole program finishes
     // before the next starts.
@@ -86,10 +91,11 @@ internal sealed class Server : IDisposable
     // program and is not known until it has been read.
     private IReadOnlyList<string> watchedBinaries = [];
 
-    private Server(ServerLog log, Framing framing, Delay delay)
+    private Server(ServerLog log, Framing framing, Delay delay, Analyzer? analyzer)
     {
         this.log = log;
         this.framing = framing;
+        workspace = new Workspace(analyzer);
         settling = new Debounce(Quiet, delay);
         outgoing = new Outgoing(workspace, client);
     }
@@ -112,16 +118,21 @@ internal sealed class Server : IDisposable
     /// The wait between an edit and publishing the rest of the program. A test supplies its own
     /// so that it can drive the wait itself; a real delay is used when none is given.
     /// </param>
+    /// <param name="analyzer">
+    /// The function that analyzes a program. A test supplies its own so that it can hold an
+    /// analysis back; <see cref="Compiler"/> analyzes when none is given.
+    /// </param>
     /// <returns>
     /// The process's exit code. It is 0 when the client sent <c>shutdown</c> before <c>exit</c>
     /// or the connection was lost, and 1 when the client sent <c>exit</c> without
     /// <c>shutdown</c> or the editor went away. It is 70 when nt65 itself failed, which makes the
     /// editor's client start a new server.
     /// </returns>
-    public static async Task<int> RunAsync(Stream input, Stream output, ServerLog log, Delay? delay = null)
+    public static async Task<int> RunAsync(
+        Stream input, Stream output, ServerLog log, Delay? delay = null, Analyzer? analyzer = null)
     {
         using var framing = new Framing(input, output, CreateFormatter());
-        using var server = new Server(log, framing, delay ?? Task.Delay);
+        using var server = new Server(log, framing, delay ?? Task.Delay, analyzer);
         using var rpc = new JsonRpc(framing);
         server.rpc = rpc;
         rpc.AddLocalRpcTarget(server, new JsonRpcTargetOptions { UseSingleObjectParameterDeserialization = true });
@@ -285,12 +296,12 @@ internal sealed class Server : IDisposable
     /// pay for lines nobody is looking at.
     /// </summary>
     [JsonRpcMethod("textDocument/inlayHint")]
-    public IReadOnlyList<InlayHint> InlayHints(InlayHintParams request, CancellationToken cancellation)
+    public async Task<IReadOnlyList<InlayHint>> InlayHintsAsync(InlayHintParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         if (workspace.Find(request.TextDocument.Uri) is not { } document)
             return [];
-        var analysis = workspace.AnalysisFor(document.Tree.Path);
+        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, cancellation).ConfigureAwait(false);
         return analysis.ModelFor(document.Tree.Path) is not { } model
             ? []
             : LanguageServer.InlayHints.In(
@@ -340,8 +351,9 @@ internal sealed class Server : IDisposable
         RenameFilesParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
+        var programs = await workspace.ProgramsAsync(cancellation).ConfigureAwait(false);
         var (edit, messages) = MovedFiles.For(
-            workspace,
+            workspace, programs,
             [.. request.Files.Select(file => (Uris.ToPath(file.OldUri), Uris.ToPath(file.NewUri)))]);
         foreach (var message in messages)
             await ShowAsync(MessageType.Warning, message).ConfigureAwait(false);
@@ -378,16 +390,19 @@ internal sealed class Server : IDisposable
     /// </para>
     /// </summary>
     [JsonRpcMethod("nt65/output")]
-    public OutputResult? Output(OutputParams request, CancellationToken cancellation)
+    public async Task<OutputResult?> OutputAsync(OutputParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         watchingOutput = true;
         var uri = request.TextDocument.Uri;
         var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
-        cancellation.ThrowIfCancellationRequested();
-        return LanguageServer.Output.Of(
-            workspace.AnalysisFor(path), workspace.SettingsFor(path), path,
-            outgoing.ToClient(uri), workspace.VersionOf(uri));
+
+        // The settings and the version are taken with the files the analysis is of, so that the
+        // answer does not mix an analysis with a later edit.
+        var settings = workspace.SettingsFor(path);
+        var version = workspace.VersionOf(uri);
+        var analysis = await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false);
+        return LanguageServer.Output.Of(analysis, settings, path, outgoing.ToClient(uri), version);
     }
 
     /// <summary>
@@ -397,10 +412,13 @@ internal sealed class Server : IDisposable
     /// as well.
     /// </summary>
     [JsonRpcMethod("nt65/expansion")]
-    public ExpansionResult? Expansion(ExpansionParams request, CancellationToken cancellation)
+    public async Task<ExpansionResult?> ExpansionAsync(ExpansionParams request, CancellationToken cancellation)
     {
-        if (At(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation) is not { } asked)
+        if (await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation)
+            .ConfigureAwait(false) is not { } asked)
+        {
             return null;
+        }
         var expansion = MacroExpansion.At(
             asked.Analysis, asked.Model, asked.Position, request.Into, request.All);
         return expansion is null
@@ -475,40 +493,47 @@ internal sealed class Server : IDisposable
     }
 
     [JsonRpcMethod("textDocument/hover")]
-    public Hover? Hover(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked ? Hovers.At(asked.Analysis, asked.Model, asked.Position) : null;
+    public async Task<Hover?> HoverAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
+        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
+            ? Hovers.At(asked.Analysis, asked.Model, asked.Position)
+            : null;
 
     [JsonRpcMethod("textDocument/definition")]
-    public Location? Definition(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked
+    public async Task<Location?> DefinitionAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
+        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
             && (Lsp.ToDefinition(asked.Program, asked.Model, asked.Position)
                 ?? Lsp.ToPlacedDefinition(asked.Analysis, asked.Model, asked.Position)) is { } where
             ? outgoing.ToClient(where)
             : null;
 
     [JsonRpcMethod("textDocument/references")]
-    public IReadOnlyList<Location> References(ReferenceParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked
+    public async Task<IReadOnlyList<Location>> ReferencesAsync(ReferenceParams request, CancellationToken cancellation) =>
+        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
             ? outgoing.ToClient(
                 Lsp.ToReferences(asked.Program, asked.Model, asked.Position, request.Context.IncludeDeclaration))
             : [];
 
     [JsonRpcMethod("textDocument/documentHighlight")]
-    public IReadOnlyList<DocumentHighlight> DocumentHighlights(
+    public async Task<IReadOnlyList<DocumentHighlight>> DocumentHighlightsAsync(
         TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked ? Lsp.ToHighlights(asked.Model, asked.Position) : [];
+        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
+            ? Lsp.ToHighlights(asked.Model, asked.Position)
+            : [];
 
     /// <summary>
     /// Returns the range a rename would replace, which a client requests before offering a rename.
     /// </summary>
     [JsonRpcMethod("textDocument/prepareRename")]
-    public Protocol.Range? PrepareRename(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked ? LanguageServer.Rename.RangeAt(asked.Model, asked.Position) : null;
+    public async Task<Protocol.Range?> PrepareRenameAsync(
+        TextDocumentPositionParams request, CancellationToken cancellation) =>
+        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
+            ? LanguageServer.Rename.RangeAt(asked.Model, asked.Position)
+            : null;
 
     [JsonRpcMethod("textDocument/rename")]
-    public WorkspaceEdit? Rename(RenameParams request, CancellationToken cancellation)
+    public async Task<WorkspaceEdit?> RenameAsync(RenameParams request, CancellationToken cancellation)
     {
-        if (At(request, cancellation) is not { } asked)
+        if (await AtAsync(request, cancellation).ConfigureAwait(false) is not { } asked)
             return null;
 
         // A new name the language will not accept is returned as a failed request, which the
@@ -518,9 +543,10 @@ internal sealed class Server : IDisposable
     }
 
     [JsonRpcMethod("textDocument/completion")]
-    public IReadOnlyList<CompletionItem> Completion(TextDocumentPositionParams request, CancellationToken cancellation)
+    public async Task<IReadOnlyList<CompletionItem>> CompletionAsync(
+        TextDocumentPositionParams request, CancellationToken cancellation)
     {
-        if (At(request, cancellation) is not { } asked)
+        if (await AtAsync(request, cancellation).ConfigureAwait(false) is not { } asked)
             return [];
         var (items, about) = LanguageServer.Completion.At(
             asked.Program, asked.Model, asked.Analysis.Cpu, asked.Position, client.Snippets);
@@ -543,25 +569,29 @@ internal sealed class Server : IDisposable
     }
 
     [JsonRpcMethod("textDocument/signatureHelp")]
-    public SignatureHelp? SignatureHelp(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        At(request, cancellation) is { } asked ? CallHelp.At(asked.Program, asked.Model, asked.Position) : null;
+    public async Task<SignatureHelp?> SignatureHelpAsync(
+        TextDocumentPositionParams request, CancellationToken cancellation) =>
+        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
+            ? CallHelp.At(asked.Program, asked.Model, asked.Position)
+            : null;
 
     [JsonRpcMethod("textDocument/codeLens")]
-    public IReadOnlyList<CodeLens> CodeLenses(CodeLensParams request, CancellationToken cancellation)
+    public async Task<IReadOnlyList<CodeLens>> CodeLensesAsync(CodeLensParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         if (workspace.Find(request.TextDocument.Uri) is not { } document)
             return [];
         var path = document.Tree.Path;
-        var analysis = workspace.AnalysisFor(path);
+        var analysis = await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false);
         return LanguageServer.CodeLenses.In(document.Tree, analysis.ModelFor(path)?.Families ?? [], analysis.FlowFor(path));
     }
 
     [JsonRpcMethod("textDocument/documentLink")]
-    public IReadOnlyList<DocumentLink> DocumentLinks(DocumentLinkParams request, CancellationToken cancellation)
+    public async Task<IReadOnlyList<DocumentLink>> DocumentLinksAsync(
+        DocumentLinkParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return Model(request.TextDocument.Uri) is { } model
+        return await ModelAsync(request.TextDocument.Uri, cancellation).ConfigureAwait(false) is { } model
             ? outgoing.ToClient(LanguageServer.DocumentLinks.In(model))
             : [];
     }
@@ -596,50 +626,51 @@ internal sealed class Server : IDisposable
     }
 
     [JsonRpcMethod("textDocument/prepareCallHierarchy")]
-    public IReadOnlyList<CallHierarchyItem> PrepareCallHierarchy(
+    public async Task<IReadOnlyList<CallHierarchyItem>> PrepareCallHierarchyAsync(
         CallHierarchyPrepareParams request, CancellationToken cancellation) =>
-        At(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation) is { } asked
+        await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation)
+            .ConfigureAwait(false) is { } asked
             ? outgoing.ToClient(LanguageServer.CallHierarchy.Prepare(asked.Analysis, asked.Model, asked.Position))
             : [];
 
     /// <summary>
-    /// Returns the routines that call a routine; <see cref="OutgoingCalls"/> returns the routines
+    /// Returns the routines that call a routine; <see cref="OutgoingCallsAsync"/> returns the routines
     /// it calls. The client sends the item back as the server gave it, so the program it belongs
     /// to is found from the file it names.
     /// </summary>
     [JsonRpcMethod("callHierarchy/incomingCalls")]
-    public IReadOnlyList<CallHierarchyIncomingCall> IncomingCalls(
+    public async Task<IReadOnlyList<CallHierarchyIncomingCall>> IncomingCallsAsync(
         CallHierarchyIncomingCallsParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return outgoing.ToClient(LanguageServer.CallHierarchy.Incoming(
-            workspace.AnalysisFor(Uris.ToPath(request.Item.Uri)), request.Item, cancellation));
+        var analysis = await workspace.AnalysisForAsync(Uris.ToPath(request.Item.Uri), cancellation).ConfigureAwait(false);
+        return outgoing.ToClient(LanguageServer.CallHierarchy.Incoming(analysis, request.Item, cancellation));
     }
 
     [JsonRpcMethod("callHierarchy/outgoingCalls")]
-    public IReadOnlyList<CallHierarchyOutgoingCall> OutgoingCalls(
+    public async Task<IReadOnlyList<CallHierarchyOutgoingCall>> OutgoingCallsAsync(
         CallHierarchyOutgoingCallsParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return outgoing.ToClient(LanguageServer.CallHierarchy.Outgoing(
-            workspace.AnalysisFor(Uris.ToPath(request.Item.Uri)), request.Item, cancellation));
+        var analysis = await workspace.AnalysisForAsync(Uris.ToPath(request.Item.Uri), cancellation).ConfigureAwait(false);
+        return outgoing.ToClient(LanguageServer.CallHierarchy.Outgoing(analysis, request.Item, cancellation));
     }
 
     [JsonRpcMethod("textDocument/codeAction")]
-    public IReadOnlyList<CodeAction> CodeActions(CodeActionParams request, CancellationToken cancellation)
+    public async Task<IReadOnlyList<CodeAction>> CodeActionsAsync(CodeActionParams request, CancellationToken cancellation)
     {
         var start = new TextDocumentPositionParams(request.TextDocument, request.Range.Start);
-        if (At(start, cancellation) is not { } asked)
+        if (await AtAsync(start, cancellation).ConfigureAwait(false) is not { } asked)
             return [];
         return outgoing.ToClient(
             LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, request.Context.Only));
     }
 
     [JsonRpcMethod("textDocument/semanticTokens/full")]
-    public Protocol.SemanticTokens SemanticTokens(SemanticTokensParams request, CancellationToken cancellation)
+    public Task<Protocol.SemanticTokens> SemanticTokensAsync(SemanticTokensParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return Classified(request.TextDocument.Uri);
+        return ClassifiedAsync(request.TextDocument.Uri, cancellation);
     }
 
     /// <summary>
@@ -648,11 +679,11 @@ internal sealed class Server : IDisposable
     /// file is computed.
     /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/range")]
-    public Protocol.SemanticTokens SemanticTokensRange(
+    public async Task<Protocol.SemanticTokens> SemanticTokensRangeAsync(
         SemanticTokensRangeParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return Model(request.TextDocument.Uri) is { } model
+        return await ModelAsync(request.TextDocument.Uri, cancellation).ConfigureAwait(false) is { } model
             ? NameHighlighting.In(model, request.Range.Start.Line, request.Range.End.Line)
             : new Protocol.SemanticTokens([]);
     }
@@ -663,13 +694,13 @@ internal sealed class Server : IDisposable
     /// longer has gets the full tokens instead.
     /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/full/delta")]
-    public object SemanticTokensDelta(SemanticTokensDeltaParams request, CancellationToken cancellation)
+    public async Task<object> SemanticTokensDeltaAsync(SemanticTokensDeltaParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         var holding = classified.TryGetValue(request.TextDocument.Uri, out var before)
             && before.Id == request.PreviousResultId;
         var held = before.Data;
-        var answer = Classified(request.TextDocument.Uri);
+        var answer = await ClassifiedAsync(request.TextDocument.Uri, cancellation).ConfigureAwait(false);
         return holding ? NameHighlighting.Changed(answer.ResultId!, held, answer.Data) : answer;
     }
 
@@ -783,8 +814,39 @@ internal sealed class Server : IDisposable
     /// </summary>
     private async Task PublishOwnAsync(string uri, CancellationToken cancellation)
     {
-        if (workspace.ToPublish(uri) is { } file)
-            _ = await SendAsync(file, always: true, cancellation).ConfigureAwait(false);
+        // Handlers start in the order the client's messages arrive, so the publish replaced here
+        // is always one for an earlier version of the document.
+        var mine = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        if (owning.TryGetValue(uri, out var before))
+            Cancel(before);
+        owning[uri] = mine;
+        try
+        {
+            if (await workspace.ToPublishAsync(uri, mine.Token).ConfigureAwait(false) is { } file)
+                _ = await SendAsync(file, always: true, mine.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (mine.IsCancellationRequested && !cancellation.IsCancellationRequested)
+        {
+            // A later edit to the document replaced this publish. The client already holds a newer
+            // version, so these diagnostics would not have been sent.
+        }
+        finally
+        {
+            owning.TryRemove(new KeyValuePair<string, CancellationTokenSource>(uri, mine));
+            mine.Dispose();
+        }
+
+        static void Cancel(CancellationTokenSource source)
+        {
+            try
+            {
+                source.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // That publish finished while this one was starting, and there is nothing to stop.
+            }
+        }
     }
 
     /// <summary>
@@ -845,7 +907,7 @@ internal sealed class Server : IDisposable
     private async Task PublishEverythingLockedAsync(string? changed, bool refresh, CancellationToken cancellation)
     {
         var current = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var file in workspace.ToPublish())
+        foreach (var file in await workspace.ToPublishAsync(cancellation).ConfigureAwait(false))
         {
             cancellation.ThrowIfCancellationRequested();
             current.Add(file.Uri);
@@ -866,7 +928,8 @@ internal sealed class Server : IDisposable
 
         // The set of binaries the programs include may have changed, and the editor watches
         // only what it can know about without reading the program.
-        await WatchBinariesAsync().ConfigureAwait(false);
+        if (client.WatchesWhatItIsAsked)
+            await WatchBinariesAsync(await workspace.BinariesAsync(cancellation).ConfigureAwait(false)).ConfigureAwait(false);
 
         // The output view follows the whole program rather than the caret, so it is notified
         // once typing has stopped, after the same wait as the rest of the diagnostics.
@@ -880,8 +943,12 @@ internal sealed class Server : IDisposable
         // can only have changed if the edit reached past the file it was made in. An edit that
         // did not needs no refresh, because the client re-fetches for the document it is
         // showing by itself.
-        if (!refresh || (changed is not null && !workspace.ReachedOtherFiles(Uris.ToPath(changed))))
+        if (!refresh
+            || (changed is not null
+                && !await workspace.ReachedOtherFilesAsync(Uris.ToPath(changed), cancellation).ConfigureAwait(false)))
+        {
             return;
+        }
         if (client.RefreshesTokens)
             _ = RefreshAsync("workspace/semanticTokens/refresh", "semantic tokens");
         if (client.RefreshesLenses)
@@ -930,16 +997,14 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// Asks the client to watch the binaries this workspace's programs include, where it
-    /// supports that. The editor watches the sources and the project files by itself; which
+    /// Asks the client to watch the binaries this workspace's programs include. The caller checks
+    /// that the client supports that. The editor watches the sources and the project files by itself; which
     /// files <c>.incbin</c> directives include is known only from reading the program, so the
     /// watch is registered here and registered again whenever that set changes.
     /// </summary>
-    private async Task WatchBinariesAsync()
+    /// <param name="binaries">The binaries the programs include, as logical paths.</param>
+    private async Task WatchBinariesAsync(IReadOnlyList<string> binaries)
     {
-        if (!client.WatchesWhatItIsAsked)
-            return;
-        var binaries = workspace.Binaries();
         if (binaries.SequenceEqual(watchedBinaries, StringComparer.Ordinal))
             return;
         const string id = "nt65-binaries";
@@ -1006,9 +1071,9 @@ internal sealed class Server : IDisposable
     /// Returns the semantic tokens of a whole file, and stores them under a new result id so that
     /// the client can request a delta against them next time.
     /// </summary>
-    private Protocol.SemanticTokens Classified(string uri)
+    private async Task<Protocol.SemanticTokens> ClassifiedAsync(string uri, CancellationToken cancellation)
     {
-        if (Model(uri) is not { } model)
+        if (await ModelAsync(uri, cancellation).ConfigureAwait(false) is not { } model)
             return new Protocol.SemanticTokens([]);
         var data = NameHighlighting.In(model).Data;
         var id = Interlocked.Increment(ref classifiedId)
@@ -1020,23 +1085,25 @@ internal sealed class Server : IDisposable
     /// <summary>
     /// Returns the semantic model of the file a URI names, or null when no program holds it.
     /// </summary>
-    private SemanticModel? Model(string uri)
+    private async Task<SemanticModel?> ModelAsync(string uri, CancellationToken cancellation)
     {
         var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
-        return workspace.AnalysisFor(path).ModelFor(path);
+        return (await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false)).ModelFor(path);
     }
 
     /// <summary>
     /// Returns what a request points at, which is the program, the file the position is in and
     /// the offset in that file. Returns null when the client never opened the document or when
-    /// the program does not hold it.
+    /// the program does not hold it. The document and the files the analysis is of are taken
+    /// before the method first waits, so that a later edit does not change what the request is
+    /// about.
     /// </summary>
-    private Asked? At(TextDocumentPositionParams request, CancellationToken cancellation)
+    private async Task<Asked?> AtAsync(TextDocumentPositionParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         if (workspace.Find(request.TextDocument.Uri) is not { } document)
             return null;
-        var analysis = workspace.AnalysisFor(document.Tree.Path);
+        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, cancellation).ConfigureAwait(false);
         cancellation.ThrowIfCancellationRequested();
         if (analysis.ModelFor(document.Tree.Path) is not { } model)
             return null;

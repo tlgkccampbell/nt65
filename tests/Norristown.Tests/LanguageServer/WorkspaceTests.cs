@@ -65,7 +65,7 @@ public sealed class WorkspaceTests
     /// project's, and a configuration name the project does not have is reported.
     /// </summary>
     [Fact]
-    public void TheActiveConfigurationIsWhatTheProgramIsAnalyzedAs()
+    public async Task TheActiveConfigurationIsWhatTheProgramIsAnalyzedAs()
     {
         var root = Directory.CreateTempSubdirectory("nt65-workspace-");
         try
@@ -78,13 +78,13 @@ public sealed class WorkspaceTests
             var workspace = new Workspace();
 
             workspace.Load(uri);
-            Assert.Empty(workspace.AnalysisFor(main).Diagnostics);
+            Assert.Empty((await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics);
 
             workspace.Load(uri, "debug");
-            Assert.Equal(["built for debugging"], workspace.AnalysisFor(main).Diagnostics.Select(d => d.Message));
+            Assert.Equal(["built for debugging"], (await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics.Select(d => d.Message));
 
             workspace.Load(uri, "ntsc");
-            Assert.Equal(["`ntsc` is not a configuration: nt65.json names `debug`"], workspace.AnalysisFor(main).Diagnostics.Select(d => d.Message));
+            Assert.Equal(["`ntsc` is not a configuration: nt65.json names `debug`"], (await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics.Select(d => d.Message));
         }
         finally
         {

@@ -85,7 +85,7 @@ public sealed class PlacementRequestsTests
         var workspace = new Workspace();
         workspace.Open(new TextDocumentItem(PartUri, "nt65", 1, part));
         var document = workspace.Open(new TextDocumentItem(MainUri, "nt65", 1, main));
-        var analysis = workspace.AnalysisFor(document.Tree.Path);
+        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
         return (analysis, analysis.ModelFor(document.Tree.Path)!);
     }
 }
