@@ -37,7 +37,8 @@
 }
 
 ; A text as long as its count is the array, with nothing to pad.
-.data exact: .byte[2] { "hi" }
+.data exact:  .byte[2] { "hi" }
+.data scaled: .word actors[1]::hp * 2, >actors[1]::hp
 
 .segment CODE
 .export .proc main {
@@ -47,6 +48,11 @@
     ldy actors[2]::pos::y
     lda actors[0]::tiles[3]
     lda hw::slots[2]::id
+
+    ; A path that is an address plus an offset is one value inside a larger expression.
+    lda #>actors[1]::hp
+    lda #(<actors[1]::hp) + 1
+    lda actors[1]::hp * 2
 
     lda actors[1]::hp
     .repeat 8, i {

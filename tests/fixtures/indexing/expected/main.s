@@ -37,9 +37,10 @@ main__banner:
     .res 4, $00                     ; padded to 6
 
 main__exact: .byte $68, $69         ; "hi"
+scaled:      .word (main__actors+13) * 2, >(main__actors+13)  ; actors[1]::hp, actors[1]::hp
 
 .segment "CODE": absolute
-; .proc main  main.nt65:43
+; .proc main  main.nt65:44
 main__main:
 
     lda a:main__buffer+3            ; buffer[3]
@@ -47,6 +48,10 @@ main__main:
     ldy a:main__actors+20           ; actors[2]::pos::y
     lda a:main__actors+8            ; actors[0]::tiles[3]
     lda a:hw__slots+6               ; hw::slots[2]::id
+
+    lda #>(main__actors+13)         ; actors[1]::hp
+    lda #(<(main__actors+13)) + 1   ; actors[1]::hp
+    lda a:+(main__actors+13) * 2    ; actors[1]::hp
 
     lda a:main__actors+13           ; actors[1]::hp
     lda a:main__actors+4            ; actors[i]::hp

@@ -186,6 +186,15 @@ internal sealed class ExpressionWriter(
     private static string BytesText(IReadOnlyList<long> bytes) =>
         bytes.Count == 0 ? "\"\"" : string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
 
+    /// <summary>
+    /// Writes <paramref name="text"/>, an operation, in place of a node that stands for a single
+    /// value. Where the node is an operand of another operation, the text is parenthesized, so
+    /// that <c>#&gt;player::hp</c> is <c>#&gt;(player+255)</c> rather than the high byte of
+    /// <c>player</c> plus 255.
+    /// </summary>
+    private static void ReplaceOperation(SyntaxNode node, string text, TokenRewriter rewriter) =>
+        rewriter.Replace(node, node.Parent is BinaryExpressionSyntax or UnaryExpressionSyntax ? $"({text})" : text);
+
     /// <summary>Returns the name a symbol has in the output, in the expansion being written.</summary>
     private string NameOf(Symbol symbol) => names.Of(symbol, Expansion);
 
@@ -557,9 +566,12 @@ internal sealed class ExpressionWriter(
             }
         }
 
-        rewriter.Replace(name, start is null
-            ? Constant(offset)
-            : offset == 0 ? NameOf(start) : $"{NameOf(start)}+{offset}");
+        if (start is null)
+            rewriter.Replace(name, Constant(offset));
+        else if (offset == 0)
+            rewriter.Replace(name, NameOf(start));
+        else
+            ReplaceOperation(name, $"{NameOf(start)}+{offset}", rewriter);
         rewriter.Comments.Add(name.GetText().Trim());
     }
 
@@ -749,9 +761,11 @@ internal sealed class ExpressionWriter(
         // addressing. An expression that starts with one therefore gets a unary `+` in front of
         // it. Examples are `lda (hi + lo) * 2`, which the language allows,
         // `jml (bank << 16) | .loword(f)`, and an expression written out with parentheses around
-        // its first operation. The `+` changes nothing and keeps the operand an expression.
-        var opens = tokens is [{ Kind: SyntaxKind.OpenParen }, ..]
-            || (tokens.Count > 0 && rewriter.Before.GetValueOrDefault(tokens[0].Position, "").StartsWith('('));
+        // its first operation. The `+` changes nothing and keeps the operand an expression. The
+        // `(` can also come from an edit, such as a member path written as a parenthesized sum.
+        var opens = tokens.Count > 0
+            && (rewriter.Before.GetValueOrDefault(tokens[0].Position, "")
+                + rewriter.Replacements.GetValueOrDefault(tokens[0].Position, tokens[0].Text)).StartsWith('(');
         var text = opens ? prefix + "+" : prefix;
 
         if (sourcePrefix is not null)
