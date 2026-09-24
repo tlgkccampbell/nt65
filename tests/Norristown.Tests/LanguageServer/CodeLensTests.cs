@@ -382,6 +382,44 @@ public sealed class CodeLensTests
     }
 
     /// <summary>
+    /// Which registers a routine uses as its caller left them, in a lens between its cost and what
+    /// it preserves. A routine that reads nothing says so, and one whose calls nt65 cannot follow
+    /// ends the list with <c>?</c>.
+    /// </summary>
+    [Fact]
+    public async Task ALensShowsWhichRegistersARoutineReads()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc quiet {
+                rts
+            }
+            .proc add {
+                adc $10
+                sta $10
+                rts
+            }
+            .proc rom = $FFD2
+            .proc asks {
+                stx $10
+                jsr rom
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [(2, "reads none"), (5, "reads A, C"), (11, "reads X, ?")],
+            lenses.Where(lens => lens.Command.Title.StartsWith("reads ", StringComparison.Ordinal))
+                .Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+    }
+
+    /// <summary>
     /// A loop that counts a register down from an immediate value has a known number of iterations,
     /// so its cost is a range with an upper bound rather than a minimum with <c>+</c>. A loop of
     /// any other shape still shows only the minimum, because a loop counted wrongly is worse
@@ -577,9 +615,11 @@ public sealed class CodeLensTests
     }
 
     /// <summary>
-    /// Returns the lenses that give what a pass costs, which are what these tests check. The lens
-    /// that says which registers are preserved is left out, because it has tests of its own.
+    /// Returns the lenses that give what a pass costs, which are what these tests check. The lenses
+    /// that say which registers are read and preserved are left out, because they have tests of
+    /// their own.
     /// </summary>
     private static IEnumerable<CodeLens> Costs(IEnumerable<CodeLens> lenses) =>
-        lenses.Where(lens => !lens.Command.Title.Contains("preserves", StringComparison.Ordinal));
+        lenses.Where(lens => !lens.Command.Title.Contains("preserves", StringComparison.Ordinal)
+            && !lens.Command.Title.StartsWith("reads ", StringComparison.Ordinal));
 }

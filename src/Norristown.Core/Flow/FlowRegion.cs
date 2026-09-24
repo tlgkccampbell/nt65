@@ -42,6 +42,11 @@ public sealed class FlowRegion
     /// </summary>
     public RoutineRegisters Registers { get; internal set; } = RoutineRegisters.Everything;
 
+    /// <summary>
+    /// Gets which registers the routine uses the entry values of, worked out across the program.
+    /// </summary>
+    public RoutineReads Reads { get; internal set; } = RoutineReads.Nothing;
+
     /// <summary>Gets the cost of one pass through each inline <c>.scope</c> block of the routine.</summary>
     public IReadOnlyList<ScopeCost> Scopes { get; }
 
@@ -72,6 +77,7 @@ public sealed class FlowRegion
     {
         Total = Total,
         Registers = Registers,
+        Reads = Reads,
         ScopeRegisters = ScopeRegisters,
     };
 }

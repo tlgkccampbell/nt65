@@ -52,6 +52,13 @@ public sealed record InstructionFacts
     public Registers Writes { get; init; }
 
     /// <summary>
+    /// Gets the registers the mnemonic uses the value of, for any operand and mode, not counting
+    /// an index register its addressing mode adds. A push is not counted, because what it saves
+    /// is only used where something takes it back off the stack.
+    /// </summary>
+    public Registers Reads { get; init; }
+
+    /// <summary>
     /// Gets the register the mnemonic copies and the register it copies to, for the transfers
     /// among the three registers that hold values, or null for every other mnemonic. The stack
     /// pointer and the 65816's D are not among the three, so <c>tsx</c> and <c>tdc</c> are plain

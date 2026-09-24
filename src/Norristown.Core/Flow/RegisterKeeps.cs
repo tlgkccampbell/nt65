@@ -27,10 +27,15 @@ namespace Norristown.Flow;
 public static class RegisterKeeps
 {
     /// <summary>
-    /// Works out what every routine of <paramref name="files"/> keeps, stores it on each region,
-    /// and reports the routines that break what they promise.
+    /// Works out what every routine of <paramref name="files"/> keeps and reads, stores both on
+    /// each region, and reports the routines that break what they promise.
     /// </summary>
-    public static IReadOnlyList<Diagnostic> Compose(IReadOnlyList<FileAnalysis> files)
+    /// <returns>
+    /// The diagnostics, and the routines that depend on the depth of the stack they were entered
+    /// with, which what a routine reads is worked out from.
+    /// </returns>
+    internal static (IReadOnlyList<Diagnostic> Diagnostics, IReadOnlySet<RoutineKey> CallerStackReaders) Compose(
+        IReadOnlyList<FileAnalysis> files)
     {
         var regions = new Dictionary<RoutineKey, FlowRegion>();
         var walks = new Dictionary<RoutineKey, Walk>();
@@ -76,7 +81,31 @@ public static class RegisterKeeps
         }
         foreach (var (flow, walk) in byFile)
             flow.Registers = walk.Held;
-        return Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
+
+        // What a routine reads is worked out once what every routine keeps is settled, because a
+        // call passes on the entry values of the registers it keeps to whatever uses them next.
+        // Every routine starts out reading nothing, and each round adds what the round before it
+        // found. Nothing is taken away, so the rounds stop.
+        var readers = CallerStack.Readers(files);
+        var reads = regions.Keys.ToDictionary(name => name, _ => RoutineReads.Nothing);
+        do
+        {
+            moved = false;
+            foreach (var (name, region) in regions)
+            {
+                var computed = walks[name].Reads(region, Of, ReadsOf, readers);
+                var widened = new RoutineReads(
+                    reads[name].Read | computed.Read, reads[name].Complete && computed.Complete);
+                if (widened == reads[name])
+                    continue;
+                reads[name] = widened;
+                moved = true;
+            }
+        }
+        while (moved);
+        foreach (var (name, region) in regions)
+            region.Reads = reads[name];
+        return (Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message))), readers);
 
         // Returns what a routine keeps. That is what the walk found or, for a routine whose body
         // is not in the program, what it declares. A routine that declares more than its body
@@ -98,6 +127,17 @@ public static class RegisterKeeps
                 : routine.Signature?.Keeps is { } keeps && keeps != Registers.None ? new RoutineRegisters(keeps, true)
                 : RoutineRegisters.Nothing;
         }
+
+        // Returns what a routine reads. A routine whose body is not in the program may read
+        // anything. So may a jump into a label inside a routine, because the entry values that
+        // routine reads may be ones its own code wrote before the label.
+        RoutineReads ReadsOf(Symbol target)
+        {
+            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            if (!reads.TryGetValue(RoutineKey.Of(routine), out var known))
+                return RoutineReads.Unknown;
+            return routine == target ? known : known with { Complete = false };
+        }
     }
 
     /// <summary>Returns what a routine keeps, with what it declares taken as kept too.</summary>
@@ -115,6 +155,10 @@ public static class RegisterKeeps
         private readonly ControlFlow flow;
         private readonly StateAnalysis? states;
         private readonly OutsideEntries outside;
+
+        // What reaches each block of a routine, kept from the first time what the routine reads
+        // is asked. It depends only on what every routine keeps, which is settled by then.
+        private readonly Dictionary<FlowRegion, RegisterState?[]> solved = [];
 
         public Walk(SemanticModel model, CodeLayout layout, ControlFlow flow, StateAnalysis? states)
         {
@@ -196,6 +240,102 @@ public static class RegisterKeeps
             // A routine no path leaves never returns anything to a caller, so there is nothing
             // it can fail to keep. What it does to the registers matters to no one else.
             return leaves ? new RoutineRegisters(kept, complete) : RoutineRegisters.Everything;
+        }
+
+        /// <summary>
+        /// Returns which registers <paramref name="region"/>'s routine uses the entry values of.
+        /// <paramref name="of"/> gives what each routine it passes control to keeps, which must be
+        /// settled, and <paramref name="reads"/> what each reads. <paramref name="readers"/> are the
+        /// routines that reach below their own entry on the stack, which use what their caller
+        /// pushed.
+        /// </summary>
+        public RoutineReads Reads(
+            FlowRegion region, Func<Symbol, RoutineRegisters> of, Func<Symbol, RoutineReads> reads,
+            IReadOnlySet<RoutineKey> readers)
+        {
+            var blocks = region.Blocks;
+            if (!region.IsEntered || blocks.Count == 0)
+                return RoutineReads.Nothing;
+            if (!solved.TryGetValue(region, out var reached))
+            {
+                var solver = Solver(blocks, of, block => flow.Onward(blocks, block));
+                solver.Enter(0, RegisterState.Entered);
+                solver.EnterDeclared(
+                    outside, RegisterState.Outside, (block, state) => Entered(state, block, region.Routine));
+                solved[region] = reached = solver.Reached;
+            }
+
+            var read = Registers.None;
+            var complete = true;
+            var left = new RegisterState?[blocks.Count];
+            foreach (var block in blocks)
+            {
+                if (reached[block.Index] is not { } state)
+                    continue;
+                var ends = Ends(block);
+                for (var i = 0; i < block.Steps.Count; i++)
+                {
+                    state = Step(block.Steps[i], state, null, Use);
+                    if (i == block.Steps.Count - 1 && (ends.Calls || ends.Tail))
+                    {
+                        Called(block, state, ends.Tail);
+                        state = Calls(block, state, of);
+                    }
+                }
+
+                // Returning with something still pushed returns through it, and a routine this one
+                // passes control to may pull it.
+                foreach (var into in Leaves(block, region.Routine))
+                {
+                    Given(reads(into), state);
+                    Use(state.Stack?.Entries ?? Registers.None);
+                }
+                if (ends.Returns)
+                    Use(state.Stack?.Entries ?? Registers.None);
+                left[block.Index] = state;
+            }
+
+            // Where two paths that pushed different things meet, nothing is known about the stack
+            // after it, and a later pull may take any of those pushes back.
+            foreach (var block in blocks)
+            {
+                if (left[block.Index] is not { Stack: { } stack })
+                    continue;
+                if (flow.Onward(blocks, block).Any(to => reached[to] is { Stack: null }))
+                    Use(stack.Entries);
+            }
+            return new RoutineReads(read, complete);
+
+            void Use(Registers entries) => read |= entries;
+
+            // Adds what a routine uses of the values the registers hold where control passes to it.
+            void Given(RoutineReads callee, RegisterState state)
+            {
+                complete &= callee.Complete;
+                foreach (var register in RegisterEffects.Each(callee.Read))
+                    Use(state.Whole(register).Entry);
+            }
+
+            // Adds what the routines a block ends by calling use. A call nt65 cannot follow may use
+            // anything, which only an incomplete answer can say, as for a routine whose body is
+            // not in the program. A routine that takes arguments, or that reaches below its own
+            // entry on the stack, uses what is pushed, and so may the routine a tail call hands the
+            // stack to.
+            void Called(BasicBlock block, RegisterState state, bool tail)
+            {
+                var pushed = state.Stack?.Entries ?? Registers.None;
+                if (block.CallsUnknown || block.Calls.Count == 0)
+                {
+                    complete = false;
+                    return;
+                }
+                foreach (var callee in block.Calls)
+                {
+                    Given(reads(callee), state);
+                    if (tail || callee.Signature is { Arguments: > 0 } || readers.Contains(RoutineKey.Of(callee)))
+                        Use(pushed);
+                }
+            }
         }
 
         /// <summary>
@@ -467,8 +607,12 @@ public static class RegisterKeeps
             return state;
         }
 
-        /// <summary>Returns what one statement does to the registers.</summary>
-        private RegisterState Step(Step step, RegisterState state, List<Diagnostic>? report)
+        /// <summary>
+        /// Returns what one statement does to the registers. <paramref name="use"/>, where it is
+        /// given, is told the entry values the statement uses.
+        /// </summary>
+        private RegisterState Step(
+            Step step, RegisterState state, List<Diagnostic>? report, Action<Registers>? use = null)
         {
             if (step.Statement is StateDirectiveSyntax)
                 return Asserted(step, state, report);
@@ -478,6 +622,8 @@ public static class RegisterKeeps
             var mnemonic = statement.MnemonicKind;
             var mode = layout.Of(statement, step.On)?.Mode;
             var facts = Instructions.Facts(mnemonic);
+            if (use is not null)
+                Used(step, mnemonic, mode, state, use);
 
             // A software interrupt runs a handler that may not even be in this program.
             if (mnemonic is MnemonicKind.Brk or MnemonicKind.Cop)
@@ -497,17 +643,113 @@ public static class RegisterKeeps
             if (facts.Pushes is { } push)
                 return Saved(step, state, facts, push);
             if (facts.Pulls is { } pull)
-                return Restored(step, state, facts, pull);
+                return Restored(step, state, facts, pull, use);
 
             // Moving the stack pointer leaves nothing known about the saves on the stack.
             if (mnemonic is MnemonicKind.Txs or MnemonicKind.Tcs)
                 state = state with { Stack = null };
 
             if (RegisterEffects.Moved(mnemonic) is { } moved)
-                return state.With(moved.To, state.Of(moved.From));
-            return state.WithEach(
-                RegisterEffects.Written(mnemonic, mode, mode == AddressingMode.Immediate ? Constant(step) : null),
-                RegisterValue.Written);
+            {
+                return moved.To == Registers.A ? Accumulator(step, state, state.Of(moved.From))
+                    : state.With(moved.To, moved.From == Registers.A ? Taken(step, mnemonic, state) : state.Of(moved.From));
+            }
+            var written = RegisterEffects.Written(
+                mnemonic, mode, mode == AddressingMode.Immediate ? Constant(step) : null);
+            var after = state.WithEach(written & ~Registers.A, RegisterValue.Written);
+            if (!written.HasFlag(Registers.A))
+                return after;
+
+            // `xba` swaps the two halves of the accumulator. Each half still holds part of the
+            // accumulator's entry value, but not the part that belongs there. `tdc` and `tsc`
+            // write all 16 bits whatever the width.
+            return mnemonic switch
+            {
+                MnemonicKind.Xba => after with
+                {
+                    A = RegisterValue.Merge(state.AHigh, RegisterValue.Written),
+                    AHigh = RegisterValue.Merge(state.A, RegisterValue.Written),
+                },
+                MnemonicKind.Tdc or MnemonicKind.Tsc => after.With(Registers.A, RegisterValue.Written),
+                _ => Accumulator(step, after, RegisterValue.Written),
+            };
+        }
+
+        /// <summary>
+        /// Tells <paramref name="use"/> the entry values an instruction uses. That includes those in
+        /// the registers it reads, and those in the pushes it reaches other than by pulling them.
+        /// A pull that does not match the push on top is followed in <see cref="Restored"/>.
+        /// </summary>
+        private void Used(Step step, MnemonicKind mnemonic, AddressingMode? mode, RegisterState state, Action<Registers> use)
+        {
+            // What a software interrupt's handler uses is not known, so every value is used.
+            var everything = mnemonic is MnemonicKind.Brk or MnemonicKind.Cop;
+            var read = everything ? Registers.All : RegisterEffects.Read(mnemonic, mode);
+            foreach (var register in RegisterEffects.Each(read))
+            {
+                use((everything ? state.Whole(register)
+                    : register == Registers.A ? Taken(step, mnemonic, state)
+                    : state.Of(register)).Entry);
+            }
+
+            // Reading the stack pointer, moving it, or addressing the stack by offset reaches the
+            // pushes in some way other than pulling them back in order.
+            if (read == Registers.All
+                || mnemonic is MnemonicKind.Tsx or MnemonicKind.Tsc or MnemonicKind.Txs or MnemonicKind.Tcs
+                || mode is AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
+            {
+                use(state.Stack?.Entries ?? Registers.None);
+            }
+        }
+
+        /// <summary>
+        /// Returns the state after an instruction puts <paramref name="value"/> in the accumulator.
+        /// On the 65816 an 8-bit accumulator's high byte is left alone. Where the width is not
+        /// known, the high byte may hold either what it held or the new value.
+        /// </summary>
+        private RegisterState Accumulator(Step step, RegisterState state, RegisterValue value) =>
+            Wide(step, index: false) switch
+            {
+                true => state.With(Registers.A, value),
+                false => state with { A = value },
+                null => state with { A = value, AHigh = RegisterValue.Merge(state.AHigh, value) },
+            };
+
+        /// <summary>
+        /// Returns what an instruction takes from the accumulator. An 8-bit accumulator gives only
+        /// its low byte, except to <c>xba</c>, <c>tcd</c> and <c>tcs</c>, which take all 16 bits.
+        /// <c>tax</c> and <c>tay</c> take as much as the index registers hold.
+        /// </summary>
+        private RegisterValue Taken(Step step, MnemonicKind mnemonic, RegisterState state)
+        {
+            var wide = mnemonic switch
+            {
+                MnemonicKind.Xba or MnemonicKind.Tcd or MnemonicKind.Tcs => true,
+                MnemonicKind.Tax or MnemonicKind.Tay => Wide(step, index: true),
+                _ => Wide(step, index: false),
+            };
+            return wide == false ? state.A : state.Whole(Registers.A);
+        }
+
+        /// <summary>
+        /// Returns whether the accumulator, or the index registers where <paramref name="index"/>
+        /// is true, are 16 bits wide before a step, or null where that is not known. Every CPU but
+        /// the 65816 has no high byte to speak of, and there the answer is true, so that a write
+        /// covers the whole register.
+        /// </summary>
+        private bool? Wide(Step step, bool index)
+        {
+            if (states is null)
+                return true;
+            var width = states.Before(step.Statement, step.On)?.Processor is { } processor
+                ? index ? processor.Index : processor.A
+                : Semantics.Width.Unknown;
+            return width switch
+            {
+                Semantics.Width.Sixteen => true,
+                Semantics.Width.Eight => false,
+                _ => null,
+            };
         }
 
         /// <summary>
@@ -516,7 +758,12 @@ public static class RegisterKeeps
         /// </summary>
         private RegisterState Saved(Step step, RegisterState state, InstructionFacts facts, PushSize size)
         {
-            var value = facts.Held == Registers.None ? RegisterValue.Unknown : state.Of(facts.Held);
+            var value = facts.Held switch
+            {
+                Registers.None => RegisterValue.Unknown,
+                Registers.A => Taken(step, MnemonicKind.Pha, state),
+                _ => state.Of(facts.Held),
+            };
             return state with { Stack = state.Stack?.Push(new SavedPush(value, size, Width(step, size))) };
         }
 
@@ -524,12 +771,23 @@ public static class RegisterKeeps
         /// Returns the state after a pull, in which the register it fills gets back what the
         /// matching push held.
         /// </summary>
-        private RegisterState Restored(Step step, RegisterState state, InstructionFacts facts, PushSize size)
+        private RegisterState Restored(
+            Step step, RegisterState state, InstructionFacts facts, PushSize size, Action<Registers>? use)
         {
             var width = Width(step, size);
             var value = state.Stack?.Pulled(size, width) ?? RegisterValue.Unknown;
             var pulled = state with { Stack = state.Stack?.Pull(size, width) };
-            return facts.Held == Registers.None ? pulled : pulled.With(facts.Held, value);
+
+            // A pull that does not match the push on top takes bytes of pushes other than the one
+            // it restores, so what they hold is used.
+            if (use is not null && state.Stack is { } stack && pulled.Stack is null)
+                use(stack.Entries);
+            return facts.Held switch
+            {
+                Registers.None => pulled,
+                Registers.A => Accumulator(step, pulled, value),
+                _ => pulled.With(facts.Held, value),
+            };
         }
 
         /// <summary>

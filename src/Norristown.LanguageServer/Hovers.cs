@@ -101,14 +101,13 @@ internal static class Hovers
     }
 
     /// <summary>
-    /// Formats the registers a routine or a block preserves as both the lens and the hover show
-    /// them, such as <c>A, X, Y, C</c>, <c>X, Y</c> or <c>none</c>. It is a bare list rather than
-    /// a sentence, because it is read at a glance. A lens puts <c>preserves</c> in front of it,
-    /// and a hover has a key beside it that says as much.
+    /// Formats the registers a routine or a block preserves or reads as both the lens and the hover
+    /// show them, such as <c>A, X, Y, C</c>, <c>X, Y</c> or <c>none</c>. It is a bare list rather
+    /// than a sentence, because it is read at a glance. A lens puts <c>preserves</c> or
+    /// <c>reads</c> in front of it, and a hover has a key beside it that says as much.
     /// <para>
-    /// What nt65 computes is a lower bound, so where a call could not be followed the list ends
-    /// with <c>?</c>. That means those registers and perhaps more, which is what <c>?</c> means
-    /// everywhere else.
+    /// Where a call could not be followed, the list ends with <c>?</c>. That means those registers
+    /// and perhaps more, which is what <c>?</c> means everywhere else.
     /// </para>
     /// </summary>
     internal static string Format(Registers kept, bool complete)
@@ -331,7 +330,7 @@ internal static class Hovers
         var kind = symbol.Kind switch
         {
             SymbolKind.Member => new[] { "offset" },
-            SymbolKind.Proc or SymbolKind.ExternProc => ["cost", "excluding", "preserves"],
+            SymbolKind.Proc or SymbolKind.ExternProc => ["cost", "excluding", "reads", "preserves"],
 
             // At a call, a reader hovers a function to see the value of the call.
             SymbolKind.Func => ["value"],
@@ -339,7 +338,7 @@ internal static class Hovers
             // is listed even where the row is absent, as at the declaration.
             SymbolKind.Macro => ["expands to"],
             // A family's binding is where its routines' costs are shown, since they get no lens.
-            SymbolKind.Binding => ["declares", "cost", "excluding", "preserves"],
+            SymbolKind.Binding => ["declares", "cost", "excluding", "reads", "preserves"],
             SymbolKind.MacroParameter => ["mode", "takes"],
             SymbolKind.Data or SymbolKind.List or SymbolKind.Charmap or SymbolKind.Frame
                 or SymbolKind.Label or SymbolKind.ImportedAddress => ["address", "size"],
@@ -462,6 +461,7 @@ internal static class Hovers
                 region.Routine.Name,
                 Cost: CodeLenses.Format(region.Cost, region.Total, "never returns", false),
                 Excluded: region.Cost.IsKnown ? region.Total.Excluded ?? [] : [],
+                Read: Format(region.Reads.Read, region.Reads.Complete),
                 Kept: region.Total.Ends ? Format(region.Registers.Kept, region.Registers.Complete) : null))
             .ToList();
         Rows(card, "cost", found.Select(region => (region.Name, region.Cost)));
@@ -471,6 +471,7 @@ internal static class Hovers
         var excluded = found.SelectMany(region => region.Excluded).DistinctBy(exclusion => exclusion.What).ToList();
         for (var i = 0; i < excluded.Count; i++)
             card.Row(i == 0 ? "excluding" : "", $"{excluded[i].What}: {excluded[i].Why}");
+        Rows(card, "reads", found.Select(region => (region.Name, (string?)region.Read)));
         Rows(card, "preserves", found.Select(region => (region.Name, region.Kept)));
     }
 

@@ -70,7 +70,7 @@ public sealed class WorkspaceRequestsTests
         // declares the routine rather than the file that contains the call. It is what a caller
         // hovers to find out, so it comes above the rule, and the routine's address comes below it.
         Assert.Contains(
-            "from       gfx.nt65\ncost       6 cycles\npreserves  A, X, Y, C\n```\n---\n",
+            "from       gfx.nt65\ncost       6 cycles\nreads      none\npreserves  A, X, Y, C\n```\n---\n",
             hover.Contents.Value,
             StringComparison.Ordinal);
         Assert.Contains("address", hover.Contents.Value, StringComparison.Ordinal);

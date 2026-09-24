@@ -1968,8 +1968,17 @@ editor can be told not to show.
   `.scope` that saves a register and gives it back preserves it even where the routine around
   it does not. What nt65 works out is a floor, so where a call could not be followed the list
   ends with `?` — those registers and perhaps more, which is what `?` means everywhere else.
-- **On hover over the line that declares a routine or opens a block**, the same list, because
-  the lens above it may not be there.
+- **A second lens** above each routine, between the cost and what it preserves: which registers
+  it reads, as `reads A, C` or `reads none`. A register is read where some path through the
+  routine, or through a routine it passes control to, uses the value the caller left in it. A
+  value is followed through transfers and through pushes and their pulls, and on the 65816 the
+  two bytes of the accumulator are followed apart, since an 8-bit write leaves the high byte
+  alone. Whatever nt65 cannot follow counts as read: a push reached other than by its pull, and
+  a register stored to memory even to be restored. The list is an
+  upper bound on what nt65 follows, and a call it cannot follow ends it with `?`, which means
+  any register may be read. A block gets no such lens.
+- **On hover over the line that declares a routine or opens a block**, the same lists, because
+  the lenses above it may not be there.
 - **On hover over an instruction**, beside what the line costs, what each register holds there,
   one to a line and always all four, and under them what the routine has pushed, top of the
   stack first:

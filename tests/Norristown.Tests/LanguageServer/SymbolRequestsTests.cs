@@ -238,7 +238,8 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// What a routine costs and which registers it preserves are shown wherever its name appears.
+    /// What a routine costs, and which registers it reads and preserves, are shown wherever its name
+    /// appears.
     /// A reader asks what a call costs at the call, not at the declaration, and the lens that
     /// shows the cost above the declaration may be far from the call.
     /// </summary>
@@ -252,7 +253,7 @@ public sealed class SymbolRequestsTests
 
         Assert.NotNull(hover);
         Assert.Contains("```nt65\n.proc gfx::init\n```", hover.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("cost       13+ cycles, loops\npreserves  X, Y, C", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("cost       13+ cycles, loops\nreads      none\npreserves  X, Y, C", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -362,6 +363,7 @@ public sealed class SymbolRequestsTests
 
             ```nt65-hover
             cost       6 cycles
+            reads      none
             preserves  A, X, Y, C
             ```
             ---

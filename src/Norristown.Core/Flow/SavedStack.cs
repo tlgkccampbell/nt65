@@ -34,6 +34,18 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// </summary>
     public IReadOnlyList<SavedPush> Pushes => pushes;
 
+    /// <summary>Gets the registers whose entry values any push on the stack may hold.</summary>
+    public Registers Entries
+    {
+        get
+        {
+            var entries = Registers.None;
+            foreach (var push in pushes)
+                entries |= push.Value.Entry;
+            return entries;
+        }
+    }
+
     /// <summary>
     /// Returns what two paths arriving at one place agree the stack holds, or null when they do
     /// not agree on what is on it. A push they disagree about holds what either of them left.

@@ -15,8 +15,8 @@ set of structural rules, and in return it can check far more than an assembler c
   missing export or a wrong module is reported as you type.
 - Address sizes are never guessed. nt65 knows whether `ptr` is in zero page from where `ptr`
   is declared, and writes `z:`, `a:` or `f:` on every operand of the output.
-- Branch range, cycle counts and which registers a routine preserves are worked out as you
-  edit, not discovered after a build.
+- Branch range, cycle counts, and which registers a routine reads and preserves are worked out
+  as you edit, not discovered after a build.
 - On the 65816, register widths, emulation mode, the direct page and the data bank are
   tracked through every routine. `lda #$1234` with an 8-bit accumulator is an error in the
   editor, not a crash on hardware.
@@ -1122,6 +1122,19 @@ ROM routine somewhere to live.
 When a routine saves a register to memory and reloads it, nt65 cannot see that the value came
 back unchanged. `.state keeps x` at the point where it has says so.
 
+nt65 also works out which registers a routine reads: those whose values, as its caller left
+them, it uses on some path, directly or through a routine it calls. The lens above each routine
+shows it, as `reads A, C` for instance. A value moved to another register or pushed and pulled
+back is followed, so `txa` … `sta` reads X, and a save and its restore read nothing. Anything
+nt65 cannot follow counts as read. A pushed value reached by `tsx` is read, and a call to a
+routine whose body is not in the program ends the list with `?`, since that routine may read
+anything. A register stored to memory counts as read, even where it is only being saved, because
+nt65 does not follow values through memory.
+
+On the 65816 the accumulator's two bytes are followed apart, because an 8-bit instruction leaves
+the high byte alone. A routine that writes an 8-bit A and then uses it at 16 bits, or swaps the
+halves with `xba`, reads what its caller left in the high byte.
+
 ## The 65816
 
 On the 65816 the width of A and of X and Y, emulation mode, the direct page register D and the
@@ -1514,9 +1527,9 @@ everything below works across modules.
   name opens the line of each linked config that places it.
 - **Hover:** a symbol's declaration and the comment above it, its value or address size, its
   segment and size; an instruction's cycle count, the flags it writes and, on the 65816, the
-  processor state reaching it; what a routine costs and which registers it preserves.
+  processor state reaching it; what a routine costs and which registers it reads and preserves.
 - **Lenses** above each routine: what one pass costs, what it costs with its calls, and which
-  registers it preserves.
+  registers it reads and preserves.
 - **Inlay hints** at the end of a line, off by default for cycle counts: where a width or
   other state changes, where a long branch was written long, values a declaration implies,
   and parameter names in calls.

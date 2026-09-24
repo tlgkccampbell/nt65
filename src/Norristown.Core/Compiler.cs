@@ -483,13 +483,13 @@ public static class Compiler
         var program = analysis.Program;
 
         // What a routine costs including its calls, and which registers it preserves for its
-        // caller, are questions about the program rather than about one file, so they are
+        // caller and reads from it, are questions about the program rather than about one file, so they are
         // worked out once every file has been analyzed on its own. A file kept from before an
         // edit keeps its own costs, but its routines' costs including their calls, and the
         // registers they preserve, may still have changed, because a routine they call may be in
         // a file that changed.
         Flow.CallCosts.Compose(analysis.Files.Select(file => file.Flow));
-        var registers = Flow.RegisterKeeps.Compose(analysis.Files);
+        var (registers, readers) = Flow.RegisterKeeps.Compose(analysis.Files);
 
         // Which modules place which others follows from the files alone. Which routine a routine
         // falls through into across a `.place` follows from the layouts of every file in its
@@ -503,6 +503,7 @@ public static class Compiler
                 .. Flow.RunningOnChecks.Check(program, analysis.Files, placements)]),
             Reused = reuse,
             Placements = placements,
+            CallerStackReaders = readers,
         };
     }
 

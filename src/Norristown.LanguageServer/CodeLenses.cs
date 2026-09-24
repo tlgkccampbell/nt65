@@ -8,13 +8,14 @@ namespace Norristown.LanguageServer;
 
 /// <summary>
 /// Builds the code lenses shown above a routine and above each inline <c>.scope</c> block inside
-/// a routine. The lenses show how many cycles a pass through the code costs and which registers
-/// it preserves. A <c>.scope</c>
-/// at file level holds only declarations and no code, so it gets neither lens; a <c>.scope</c>
-/// inside a routine is part of that routine's code and gets both.
+/// a routine. The lenses show how many cycles a pass through the code costs, which registers a
+/// routine uses as its caller left them, and which registers it preserves. A <c>.scope</c>
+/// at file level holds only declarations and no code, so it gets no lens. A <c>.scope</c>
+/// inside a routine is part of that routine's code, and gets its cost and preserved registers.
 /// <para>
-/// Cost and preserved registers are separate lenses rather than one line, because they answer
-/// different questions and a reader looking for one should not have to read past the other.
+/// Cost, read registers and preserved registers are separate lenses rather than one line, because
+/// they answer different questions and a reader looking for one should not have to read past the
+/// others.
 /// </para>
 /// <para>
 /// The routines a <see cref="Family"/> declares get no lenses. Every instance is declared on the
@@ -40,15 +41,16 @@ internal static class CodeLenses
                 continue;
             if (Format(region.Cost, region.Total, "never returns", true) is { } cost)
                 Add(region.Routine.NameSpan, 0, cost);
+            Add(region.Routine.NameSpan, 1, $"reads {Hovers.Format(region.Reads.Read, region.Reads.Complete)}");
             if (Kept(region) is { } kept)
-                Add(region.Routine.NameSpan, 1, kept);
+                Add(region.Routine.NameSpan, 2, kept);
             foreach (var scope in region.Scopes)
             {
                 if (Format(scope.Cost, null, null, true) is { } inline)
                     Add(scope.Opener, 0, inline);
             }
             foreach (var scope in region.ScopeRegisters)
-                Add(scope.Opener, 1, Format(scope.Kept, scope.Complete));
+                Add(scope.Opener, 2, Format(scope.Kept, scope.Complete));
         }
 
         void Add(TextSpan at, int kind, string text) =>

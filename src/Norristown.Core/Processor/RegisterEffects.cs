@@ -34,6 +34,30 @@ public static class RegisterEffects
     };
 
     /// <summary>
+    /// Returns the registers <paramref name="mnemonic"/> uses the value of in
+    /// <paramref name="mode"/>, including the index register the mode adds to its address.
+    /// </summary>
+    public static Registers Read(MnemonicKind mnemonic, AddressingMode? mode)
+    {
+        var read = Instructions.Facts(mnemonic).Reads;
+
+        // A shift or an increment through memory leaves the accumulator alone.
+        if (mnemonic is MnemonicKind.Asl or MnemonicKind.Lsr or MnemonicKind.Rol or MnemonicKind.Ror
+            or MnemonicKind.Inc or MnemonicKind.Dec && mode != AddressingMode.Accumulator)
+        {
+            read &= ~Registers.A;
+        }
+        return read | mode switch
+        {
+            AddressingMode.DirectX or AddressingMode.AbsoluteX or AddressingMode.DirectIndirectX
+                or AddressingMode.AbsoluteIndirectX or AddressingMode.LongX => Registers.X,
+            AddressingMode.DirectY or AddressingMode.AbsoluteY or AddressingMode.DirectIndirectY
+                or AddressingMode.DirectIndirectLongY or AddressingMode.StackRelativeIndirectY => Registers.Y,
+            _ => Registers.None,
+        };
+    }
+
+    /// <summary>
     /// Returns the register a transfer copies and the register it copies to, for the transfers
     /// among the three registers that hold values, or null for every other instruction.
     /// </summary>

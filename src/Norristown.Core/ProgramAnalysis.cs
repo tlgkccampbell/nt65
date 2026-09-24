@@ -29,11 +29,6 @@ public sealed record ProgramAnalysis(
     // The files by their logical paths. Where two files share a path, the first is found.
     private readonly Dictionary<string, FileAnalysis> byPath = ByPath(Files);
 
-    // The routines that depend on the depth of the stack they are entered with, worked out the
-    // first time a suggestion needs them. Nothing that changes them can change after an analysis
-    // is made, so a copy made with `with` may keep them.
-    private IReadOnlySet<RoutineKey>? callerStackReaders;
-
     /// <summary>
     /// Gets what analyzing each file of <see cref="Program"/> on its own found, in the same order.
     /// It cannot be replaced, so that the lookups by path always agree with it.
@@ -65,6 +60,12 @@ public sealed record ProgramAnalysis(
     public IEnumerable<string> Binaries => Reused?.Lengths.Keys ?? [];
 
     /// <summary>
+    /// Gets the routines that depend on the depth of the stack they are entered with, which a tail
+    /// call to them would change.
+    /// </summary>
+    internal IReadOnlySet<RoutineKey> CallerStackReaders { get; init; } = new HashSet<RoutineKey>();
+
+    /// <summary>
     /// Gets what a later analysis of the same program, after one edit, needs in order to reuse the
     /// parts of this one that the edit did not affect.
     /// </summary>
@@ -89,11 +90,7 @@ public sealed record ProgramAnalysis(
     /// Returns whether a routine depends on the depth of the stack it was entered with, which a
     /// tail call to it would change.
     /// </summary>
-    private bool ReadsCallerStack(Symbol routine)
-    {
-        callerStackReaders ??= CallerStack.Readers(Files);
-        return callerStackReaders.Contains(RoutineKey.Of(routine));
-    }
+    private bool ReadsCallerStack(Symbol routine) => CallerStackReaders.Contains(RoutineKey.Of(routine));
 
     /// <summary>
     /// Returns what analyzing <paramref name="path"/> on its own found, or null when the program

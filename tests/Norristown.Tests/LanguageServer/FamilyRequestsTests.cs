@@ -130,6 +130,7 @@ public sealed class FamilyRequestsTests
                 ```nt65-hover
                 private to  {scope}
                 cost        6 cycles
+                reads       none
                 preserves   A, X, Y, C
                 declares    {scope}::pulse1, {scope}::pulse2, {scope}::triangle
                 ```

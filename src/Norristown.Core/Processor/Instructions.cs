@@ -196,6 +196,19 @@ public static class Instructions
         Fact(table, [Mvn, Mvp], f => f with { Writes = Registers.A | Registers.X | Registers.Y });
         Fact(table, [Xce, Brk, Cop], f => f with { Writes = Registers.All });
 
+        // What each instruction uses. A shift or an increment uses the accumulator only through
+        // it, which the mode decides, so these are again the widest answers. A branch on the
+        // carry uses it as surely as `adc` does, and `xce` swaps it into the emulation flag. A
+        // transfer among the three registers that hold values is not a use, because the value
+        // is still followed in the register it was copied to.
+        Fact(table, [Sta, Adc, Sbc, And, Ora, Eor, Cmp, Bit, Xba, Tcd, Tcs, Trb, Tsb],
+            f => f with { Reads = f.Reads | Registers.A });
+        Fact(table, [Asl, Lsr, Rol, Ror, Inc, Dec], f => f with { Reads = f.Reads | Registers.A });
+        Fact(table, [Stx, Cpx, Inx, Dex, Txs], f => f with { Reads = f.Reads | Registers.X });
+        Fact(table, [Sty, Cpy, Iny, Dey], f => f with { Reads = f.Reads | Registers.Y });
+        Fact(table, [Adc, Sbc, Rol, Ror, Bcc, Bcs, Jcc, Jcs, Xce], f => f with { Reads = f.Reads | Registers.C });
+        Fact(table, [Mvn, Mvp], f => f with { Reads = Registers.A | Registers.X | Registers.Y });
+
         Fact(table, [Tax], f => f with { Copies = (Registers.A, Registers.X) });
         Fact(table, [Tay], f => f with { Copies = (Registers.A, Registers.Y) });
         Fact(table, [Txa], f => f with { Copies = (Registers.X, Registers.A) });
@@ -240,6 +253,11 @@ public static class Instructions
         Fact(table, [Lax, Las], f => f with { Writes = Registers.A | Registers.X });
         Fact(table, [Ane], f => f with { Writes = Registers.A });
         Fact(table, [Slo, Rla, Sre, Rra, Dcp, Isc, Sax, Sha, Shx, Shy, Tas], f => f with { Stores = true });
+        Fact(table, [Slo, Rla, Sre, Rra, Dcp, Isc, Alr, Anc, Arr, Ane, Sax, Sha, Tas, Axs],
+            f => f with { Reads = f.Reads | Registers.A });
+        Fact(table, [Rla, Rra, Isc, Arr], f => f with { Reads = f.Reads | Registers.C });
+        Fact(table, [Ane, Sax, Sha, Shx, Tas, Axs], f => f with { Reads = f.Reads | Registers.X });
+        Fact(table, [Shy], f => f with { Reads = f.Reads | Registers.Y });
 
         // Nothing runs after `jam`, so what it leaves in the registers never matters; it is
         // simply marked as writing all of them.
