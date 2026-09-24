@@ -140,6 +140,23 @@ public sealed class FlatNames
     }
 
     /// <summary>
+    /// Returns the name the output gives <paramref name="name"/> in module
+    /// <paramref name="module"/> because ca65 would read the source's spelling as an instruction,
+    /// or null where the output keeps that spelling. What an editor shows about such a name comes from here,
+    /// so that it always matches what the emitter actually does.
+    /// </summary>
+    /// <param name="name">The name as it appears in the source.</param>
+    /// <param name="cpu">The processor the program is built for, whose ca65 table decides.</param>
+    /// <param name="module">The module the name is declared in, or null for a file that names none.</param>
+    public static string? Prefixed(string name, Cpu cpu, string? module) =>
+        Prefixed(name, Ca65Instructions.Of(cpu), module);
+
+    private static string? Prefixed(string name, IReadOnlySet<string> instructions, string? module) =>
+        instructions.Contains(name) && module is { } own
+            ? $"{own.Replace("::", "__", StringComparison.Ordinal)}__{name}"
+            : null;
+
+    /// <summary>
     /// Returns the name <paramref name="symbol"/> has in the output. A symbol that another file
     /// declares keeps its own file's spelling, which is what the linker sees.
     /// </summary>
@@ -172,22 +189,6 @@ public sealed class FlatNames
     }
 
     /// <summary>
-    /// Returns the basis from which a name emitted in <paramref name="owning"/> is derived. Inside
-    /// the body of a <see cref="Family"/>, the basis is the instance being emitted, so a cheap
-    /// local of <c>play::triangle</c> is <c>play__triangle__loop</c> rather than one spelling
-    /// shared by every instance.
-    /// </summary>
-    private string Basis(Symbol symbol, Expansion owning)
-    {
-        foreach (var family in families)
-        {
-            if (family.Block == owning.Body && family.InstanceFor(owning.Member) is { } instance)
-                return $"{Of(instance)}__{symbol.Name}";
-        }
-        return placedPrefix + symbol.FlatName;
-    }
-
-    /// <summary>
     /// Returns the symbol that already has <paramref name="name"/> in the output, or null when no
     /// symbol has it.
     /// </summary>
@@ -214,32 +215,6 @@ public sealed class FlatNames
     }
 
     /// <summary>
-    /// Returns <paramref name="name"/> in a form the output can safely define. ca65 reads a word
-    /// from its instruction table at the start of a line as an instruction, regardless of what the
-    /// rest of the file says that name is. A name it would misread is therefore emitted with its
-    /// module in front instead. That is the spelling an export already has, and it contains a
-    /// <c>__</c> that no ca65 instruction name contains.
-    /// </summary>
-    private string Definable(string name) => Prefixed(name, instructions, module) ?? name;
-
-    /// <summary>
-    /// Returns the name the output gives <paramref name="name"/> in module
-    /// <paramref name="module"/> because ca65 would read the source's spelling as an instruction,
-    /// or null where the output keeps that spelling. What an editor shows about such a name comes from here,
-    /// so that it always matches what the emitter actually does.
-    /// </summary>
-    /// <param name="name">The name as it appears in the source.</param>
-    /// <param name="cpu">The processor the program is built for, whose ca65 table decides.</param>
-    /// <param name="module">The module the name is declared in, or null for a file that names none.</param>
-    public static string? Prefixed(string name, Cpu cpu, string? module) =>
-        Prefixed(name, Ca65Instructions.Of(cpu), module);
-
-    private static string? Prefixed(string name, IReadOnlySet<string> instructions, string? module) =>
-        instructions.Contains(name) && module is { } own
-            ? $"{own.Replace("::", "__", StringComparison.Ordinal)}__{name}"
-            : null;
-
-    /// <summary>
     /// Returns whether the symbol is declared in a macro body or a repetition, and so gets one
     /// name per expansion or iteration rather than a single name. Nothing outside the body can
     /// refer to it, so it can be renamed freely.
@@ -253,4 +228,29 @@ public sealed class FlatNames
         }
         return false;
     }
+
+    /// <summary>
+    /// Returns the basis from which a name emitted in <paramref name="owning"/> is derived. Inside
+    /// the body of a <see cref="Family"/>, the basis is the instance being emitted, so a cheap
+    /// local of <c>play::triangle</c> is <c>play__triangle__loop</c> rather than one spelling
+    /// shared by every instance.
+    /// </summary>
+    private string Basis(Symbol symbol, Expansion owning)
+    {
+        foreach (var family in families)
+        {
+            if (family.Block == owning.Body && family.InstanceFor(owning.Member) is { } instance)
+                return $"{Of(instance)}__{symbol.Name}";
+        }
+        return placedPrefix + symbol.FlatName;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="name"/> in a form the output can safely define. ca65 reads a word
+    /// from its instruction table at the start of a line as an instruction, regardless of what the
+    /// rest of the file says that name is. A name it would misread is therefore emitted with its
+    /// module in front instead. That is the spelling an export already has, and it contains a
+    /// <c>__</c> that no ca65 instruction name contains.
+    /// </summary>
+    private string Definable(string name) => Prefixed(name, instructions, module) ?? name;
 }

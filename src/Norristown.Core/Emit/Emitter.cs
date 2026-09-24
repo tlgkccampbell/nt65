@@ -216,18 +216,6 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Returns the lines as the file holds them, each with its comment at the column where the
-    /// comments line up.
-    /// </summary>
-    private string OutputText()
-    {
-        var text = new StringBuilder();
-        foreach (var line in lines)
-            text.Append(EmittedLine.Commented(line.Text, line.Comment).TrimEnd()).Append('\n');
-        return text.ToString();
-    }
-
-    /// <summary>
     /// Returns where a file's output goes. For example, <c>.module gfx::sprite</c> is written to
     /// <c>gfx/sprite.s</c> under the project's output tree, regardless of where the source is. A
     /// source can therefore move, or live outside the project, without its output moving. A file
@@ -245,6 +233,74 @@ public sealed class Emitter
     /// <summary>Returns the size in bytes of a module's source, which the line map records.</summary>
     private static int SourceSize(SemanticModel model) => Encoding.UTF8.GetByteCount(model.Tree.Text);
 
+    /// <summary>
+    /// Returns whether <paramref name="symbol"/> is a struct or union whose size this file exports.
+    /// </summary>
+    private static bool IsSized(Symbol symbol) => symbol is { IsExported: true, IsLayout: true, Size: not null };
+
+
+    /// <summary>
+    /// Formats an <c>.export</c> or <c>.import</c> of <paramref name="name"/> with the address
+    /// size <paramref name="size"/>, as <c>.exportzp</c>, <c>.export name: far</c> or the plain
+    /// form.
+    /// </summary>
+    private static string LinkageDirective(string directive, AddressSize? size, string name) => size switch
+    {
+        AddressSize.ZeroPage => $"{directive}zp {name}",
+        AddressSize.Absolute => $"{directive} {name}: abs",
+        AddressSize.Far => $"{directive} {name}: far",
+        _ => $"{directive} {name}",
+    };
+
+    /// <summary>
+    /// Returns the size an export needs to state, or null where ca65's default already gives it.
+    /// ca65 takes an export of an address as absolute unless told otherwise. An import always
+    /// states its size, because ld65 warns about an import whose size it had to guess under a
+    /// far memory model.
+    /// </summary>
+    private static AddressSize? Implicit(AddressSize? size) => size == AddressSize.Absolute ? null : size;
+
+    /// <summary>Returns where a call appears in the source, as the comment before its expansion names it.</summary>
+    private static string Where(StatementSyntax call)
+    {
+        return $"{call.Tree.Path}:{call.LineIndex + 1}";
+    }
+
+    /// <summary>
+    /// Returns the value of the one byte a line of <paramref name="directive"/>'s values writes,
+    /// or null when the line writes anything else. A <c>.byte</c> with a single value can still
+    /// write more or fewer bytes than one, as text does, so the length decides.
+    /// </summary>
+    /// <param name="directive">The directive whose type the line's values have.</param>
+    /// <param name="single">The line's value as written, or null when it has more than one.</param>
+    /// <param name="bytes">The number of bytes the line assembles to.</param>
+    private static string? ByteValue(DataDirectiveSyntax directive, string? single, long bytes) =>
+        directive.Directive.DirectiveKind == DirectiveKind.Byte && bytes == 1 ? single : null;
+
+    /// <summary>
+    /// Returns a label definition or, for a name ca65 would misread as an address-size prefix
+    /// (<c>z</c> or <c>f</c>), the <c>:= *</c> assignment written in its place.
+    /// </summary>
+    private static string LabelText(string name) => name is "z" or "f" ? $"{name} := *" : $"{name}:";
+
+    /// <summary>
+    /// Formats text as its byte values. Empty text is no bytes, which is written as an empty
+    /// string, as it is for an empty literal.
+    /// </summary>
+    private static string BytesText(IReadOnlyList<long> bytes) =>
+        bytes.Count == 0 ? "\"\"" : string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
+
+    /// <summary>
+    /// Returns the lines as the file holds them, each with its comment at the column where the
+    /// comments line up.
+    /// </summary>
+    private string OutputText()
+    {
+        var text = new StringBuilder();
+        foreach (var line in lines)
+            text.Append(EmittedLine.Commented(line.Text, line.Comment).TrimEnd()).Append('\n');
+        return text.ToString();
+    }
 
     /// <summary>
     /// Records the routines and data declarations this file measures, and claims their end
@@ -297,11 +353,6 @@ public sealed class Emitter
     /// spelling is fixed.
     /// </summary>
     private string SizeConstantOf(Symbol type) => NameOf(type) + "__sizeof";
-
-    /// <summary>
-    /// Returns whether <paramref name="symbol"/> is a struct or union whose size this file exports.
-    /// </summary>
-    private static bool IsSized(Symbol symbol) => symbol is { IsExported: true, IsLayout: true, Size: not null };
 
     /// <summary>
     /// Writes the end label of the symbol <paramref name="declaration"/> declares, if it has one.
@@ -468,27 +519,6 @@ public sealed class Emitter
             .OrderBy(import => import.Item1, StringComparer.Ordinal);
     }
 
-    /// <summary>
-    /// Formats an <c>.export</c> or <c>.import</c> of <paramref name="name"/> with the address
-    /// size <paramref name="size"/>, as <c>.exportzp</c>, <c>.export name: far</c> or the plain
-    /// form.
-    /// </summary>
-    private static string LinkageDirective(string directive, AddressSize? size, string name) => size switch
-    {
-        AddressSize.ZeroPage => $"{directive}zp {name}",
-        AddressSize.Absolute => $"{directive} {name}: abs",
-        AddressSize.Far => $"{directive} {name}: far",
-        _ => $"{directive} {name}",
-    };
-
-    /// <summary>
-    /// Returns the size an export needs to state, or null where ca65's default already gives it.
-    /// ca65 takes an export of an address as absolute unless told otherwise. An import always
-    /// states its size, because ld65 warns about an import whose size it had to guess under a
-    /// far memory model.
-    /// </summary>
-    private static AddressSize? Implicit(AddressSize? size) => size == AddressSize.Absolute ? null : size;
-
     /// <summary>Returns the line that brings one symbol in, or null for a symbol that needs no line at all.</summary>
     private string? Import(Symbol symbol)
     {
@@ -519,6 +549,7 @@ public sealed class Emitter
                 WalkBlock(block, block.BlockKind);
         }
     }
+
 
     private void WalkBlock(BlockSyntax block, BlockKind kind)
     {
@@ -711,7 +742,6 @@ public sealed class Emitter
         return counter;
     }
 
-
     /// <summary>
     /// Writes the members of an enum, each as the constant it is. A member may sit inside
     /// an <c>.if</c> in the body, so a chain among the lines is resolved here as it is anywhere
@@ -803,12 +833,6 @@ public sealed class Emitter
         {
             Walk(Macros.LinesOf(block), from: 0);
         }
-    }
-
-    /// <summary>Returns where a call appears in the source, as the comment before its expansion names it.</summary>
-    private static string Where(StatementSyntax call)
-    {
-        return $"{call.Tree.Path}:{call.LineIndex + 1}";
     }
 
     /// <summary>
@@ -1041,17 +1065,6 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Returns the value of the one byte a line of <paramref name="directive"/>'s values writes,
-    /// or null when the line writes anything else. A <c>.byte</c> with a single value can still
-    /// write more or fewer bytes than one, as text does, so the length decides.
-    /// </summary>
-    /// <param name="directive">The directive whose type the line's values have.</param>
-    /// <param name="single">The line's value as written, or null when it has more than one.</param>
-    /// <param name="bytes">The number of bytes the line assembles to.</param>
-    private static string? ByteValue(DataDirectiveSyntax directive, string? single, long bytes) =>
-        directive.Directive.DirectiveKind == DirectiveKind.Byte && bytes == 1 ? single : null;
-
-    /// <summary>
     /// Writes a line of data with its name in front, where it has one. The name goes on the same
     /// line, or on a line of its own where ca65 would read the name as a prefix. Where the name
     /// shares the line, the directive is lined up with those of the lines around it rather than
@@ -1164,12 +1177,6 @@ public sealed class Emitter
             ? "(" + text + ")"
             : text;
     }
-
-    /// <summary>
-    /// Returns a label definition or, for a name ca65 would misread as an address-size prefix
-    /// (<c>z</c> or <c>f</c>), the <c>:= *</c> assignment written in its place.
-    /// </summary>
-    private static string LabelText(string name) => name is "z" or "f" ? $"{name} := *" : $"{name}:";
 
     private void WriteConstant(LineSyntax line, ConstantDeclarationSyntax statement)
     {
@@ -1929,13 +1936,6 @@ public sealed class Emitter
         rewriter.Replace(call, text);
         rewriter.Comments.Add(call.GetText().Trim());
     }
-
-    /// <summary>
-    /// Formats text as its byte values. Empty text is no bytes, which is written as an empty
-    /// string, as it is for an empty literal.
-    /// </summary>
-    private static string BytesText(IReadOnlyList<long> bytes) =>
-        bytes.Count == 0 ? "\"\"" : string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
 
     /// <summary>Replaces text with its byte values, keeping the source spelling in a comment.</summary>
     private void Text(LiteralExpressionSyntax literal, TokenRewriter rewriter)

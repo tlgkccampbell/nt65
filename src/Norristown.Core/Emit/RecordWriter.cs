@@ -88,6 +88,13 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
         return named;
     }
 
+    /// <summary>Returns the value of the one byte a directive writes, or null when it writes anything else.</summary>
+    /// <param name="directive">The directive's element type.</param>
+    /// <param name="values">The directive's values, as written.</param>
+    /// <param name="size">The number of bytes the directive writes.</param>
+    private static string? ByteValue(DirectiveKind directive, IReadOnlyList<string> values, long size) =>
+        directive == DirectiveKind.Byte && size == 1 && values is [var only] ? only : null;
+
     /// <summary>
     /// Returns whether a type, or a record inside it, has a member that pads with something other
     /// than zero. A type that contains itself has no layout at all, which the analysis has
@@ -176,13 +183,6 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
         }
         return bytes;
     }
-
-    /// <summary>Returns the value of the one byte a directive writes, or null when it writes anything else.</summary>
-    /// <param name="directive">The directive's element type.</param>
-    /// <param name="values">The directive's values, as written.</param>
-    /// <param name="size">The number of bytes the directive writes.</param>
-    private static string? ByteValue(DirectiveKind directive, IReadOnlyList<string> values, long size) =>
-        directive == DirectiveKind.Byte && size == 1 && values is [var only] ? only : null;
 
     /// <summary>
     /// Writes one member's directive, with the path it fills in a comment. <paramref name="value"/>

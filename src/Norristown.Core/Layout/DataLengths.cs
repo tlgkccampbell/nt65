@@ -86,6 +86,26 @@ public static class DataLengths
         _ => null,
     };
 
+    /// <summary>
+    /// Returns why an operand that is an address, or an address plus or minus a constant, does
+    /// not fit a slot of <paramref name="bytes"/> bytes, or null when it fits or is not such an
+    /// address. ca65 refuses the fragment with a range error, so nt65 reports it first, with the
+    /// fix.
+    /// </summary>
+    public static DiagnosticMessage? TooWide(
+        SyntaxNode operand, int bytes, string slot, SemanticModel model, Expansion? on)
+    {
+        if (model.ValueOf(operand, on).AsNumber() is not null || AddressIn(operand, model, on) is not { } address
+            || model.AddressSizeOf(address, null, on) is not { } size || (int)size <= bytes)
+        {
+            return null;
+        }
+        var text = address.GetText().Trim();
+        var fix = bytes == 1 ? $"`<{text}` is its low byte" : $"`.loword({text})` is its low 16 bits";
+        return Catalogue.AddressDoesNotFit.Message(
+            text, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
+    }
+
     /// <summary>Reports what the assembler would refuse about a directive's values.</summary>
     private static void Check(
         StatementSyntax directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
@@ -424,26 +444,6 @@ public static class DataLengths
         {
             CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{SyntaxFacts.TextOf(element)}`");
         }
-    }
-
-    /// <summary>
-    /// Returns why an operand that is an address, or an address plus or minus a constant, does
-    /// not fit a slot of <paramref name="bytes"/> bytes, or null when it fits or is not such an
-    /// address. ca65 refuses the fragment with a range error, so nt65 reports it first, with the
-    /// fix.
-    /// </summary>
-    public static DiagnosticMessage? TooWide(
-        SyntaxNode operand, int bytes, string slot, SemanticModel model, Expansion? on)
-    {
-        if (model.ValueOf(operand, on).AsNumber() is not null || AddressIn(operand, model, on) is not { } address
-            || model.AddressSizeOf(address, null, on) is not { } size || (int)size <= bytes)
-        {
-            return null;
-        }
-        var text = address.GetText().Trim();
-        var fix = bytes == 1 ? $"`<{text}` is its low byte" : $"`.loword({text})` is its low 16 bits";
-        return Catalogue.AddressDoesNotFit.Message(
-            text, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
     }
 
     /// <summary>

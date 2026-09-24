@@ -128,19 +128,6 @@ public sealed partial class CodeLayout
         public void Walk() => Walk(model.Tree.Root.Members, from: 0);
 
         /// <summary>
-        /// Finishes the layout once the walks have reached a fixed point, and returns it. The
-        /// short branches that cannot reach their targets are reported here, because only the last
-        /// walk's distances are the ones emitted.
-        /// </summary>
-        public CodeLayout Finish()
-        {
-            CheckBranchRange();
-            layout.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
-            layout.ExpansionsExceeded = expanded > MaximumStatements;
-            return layout;
-        }
-
-        /// <summary>
         /// Lays out a run of sibling lines and blocks, starting at index <paramref name="from"/>.
         /// The <c>.if</c> chains among them are resolved here, because a chain is a sequence of
         /// sibling blocks and only the code walking the siblings in order can see it.
@@ -154,6 +141,19 @@ public sealed partial class CodeLayout
                 else if (child is BlockSyntax block && included)
                     WalkBlock(block, block.BlockKind);
             }
+        }
+
+        /// <summary>
+        /// Finishes the layout once the walks have reached a fixed point, and returns it. The
+        /// short branches that cannot reach their targets are reported here, because only the last
+        /// walk's distances are the ones emitted.
+        /// </summary>
+        public CodeLayout Finish()
+        {
+            CheckBranchRange();
+            layout.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
+            layout.ExpansionsExceeded = expanded > MaximumStatements;
+            return layout;
         }
 
         private void WalkBlock(BlockSyntax block, BlockKind kind)

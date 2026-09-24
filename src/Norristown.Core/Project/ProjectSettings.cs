@@ -35,6 +35,9 @@ public sealed record ProjectSettings(
     public static readonly IReadOnlyDictionary<string, Severity?> NoSeverities =
         FrozenDictionary<string, Severity?>.Empty;
 
+    /// <summary>Gets the settings for no project, which <c>nt65 build main.nt65</c> works from.</summary>
+    public static ProjectSettings None { get; } = new(null, [], null, [], [], []);
+
     /// <summary>Gets the address spaces other than the host's, ordered by name.</summary>
     public IReadOnlyList<AddressSpace> Spaces { get; init; } = [];
 
@@ -50,9 +53,6 @@ public sealed record ProjectSettings(
     /// lowered, and a project file that asks for that gets an error at the entry that asks.
     /// </summary>
     public IReadOnlyDictionary<string, Severity?> Severities { get; init; } = NoSeverities;
-
-    /// <summary>Gets the settings for no project, which <c>nt65 build main.nt65</c> works from.</summary>
-    public static ProjectSettings None { get; } = new(null, [], null, [], [], []);
 
     /// <summary>Gets the named configurations in name order. A build chooses one of them or none.</summary>
     public IReadOnlyList<BuildConfiguration> Configurations { get; init; } = [];
@@ -84,20 +84,6 @@ public sealed record ProjectSettings(
     }
 
     /// <summary>
-    /// Returns the project's severity for each diagnostic, with the entries in
-    /// <paramref name="over"/> taking precedence.
-    /// </summary>
-    private IReadOnlyDictionary<string, Severity?> Reported(IReadOnlyDictionary<string, Severity?> over)
-    {
-        if (over.Count == 0)
-            return Severities;
-        var merged = new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
-        foreach (var (id, level) in Severities.Concat(over))
-            merged[id] = level;
-        return merged;
-    }
-
-    /// <summary>
     /// Returns these settings with <paramref name="defines"/> added, each replacing any existing
     /// define with the same name.
     /// </summary>
@@ -109,5 +95,19 @@ public sealed record ProjectSettings(
         foreach (var define in defines)
             byName[define.Name] = define;
         return this with { Defines = [.. byName.Values.OrderBy(define => define.Name, StringComparer.Ordinal)] };
+    }
+
+    /// <summary>
+    /// Returns the project's severity for each diagnostic, with the entries in
+    /// <paramref name="over"/> taking precedence.
+    /// </summary>
+    private IReadOnlyDictionary<string, Severity?> Reported(IReadOnlyDictionary<string, Severity?> over)
+    {
+        if (over.Count == 0)
+            return Severities;
+        var merged = new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
+        foreach (var (id, level) in Severities.Concat(over))
+            merged[id] = level;
+        return merged;
     }
 }
