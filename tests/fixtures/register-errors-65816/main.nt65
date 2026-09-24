@@ -85,3 +85,46 @@
     bne holds
     rts
 }
+
+; Setting the index flag zeroes the high bytes of X and Y, and pulling the flags back afterwards
+; does not bring them back.
+.export .proc narrows: i16, keeps x, y {
+    php
+    sep #$10
+    plp
+    rts ;! error[keeps-broken]: `narrows` promises `keeps x, y`, but X, Y are not the same as on entry here: restore them before returning, or add `.state keeps x, y` at the point where the entry value is restored
+}
+
+; Neither does a `plp` that may pull the flag set.
+.export .proc pulls_narrow: a8, i16, keeps x, y {
+    lda #$30
+    pha
+    plp
+    rep #$10
+    sep #$20
+    rts ;! error[keeps-broken]: `pulls_narrow` promises `keeps x, y`, but X, Y are not the same as on entry here: restore them before returning, or add `.state keeps x, y` at the point where the entry value is restored
+}
+
+; A routine entered with 8-bit index registers found the high bytes zero, so a `plp` that
+; narrows them again leaves them as they were.
+.export .proc pulls_back: i8, keeps x, y {
+    php
+    rep #$10
+    plp
+    rts
+}
+
+; A routine that widens and narrows again leaves the high bytes as it found them.
+.export .proc widens_and_back: i8, keeps x, y {
+    rep #$10
+    sep #$10
+    rts
+}
+
+; So does one whose `plp` pulls the flags back to 16-bit.
+.export .proc keeps_wide: i16, keeps x, y {
+    php
+    rep #$10
+    plp
+    rts
+}

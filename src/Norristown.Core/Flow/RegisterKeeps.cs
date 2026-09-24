@@ -383,7 +383,7 @@ public static class RegisterKeeps
                 {
                     var step = block.Steps[i];
                     var saved = i + 1 < block.Steps.Count ? Saved(step, block.Steps[i + 1], state) : Registers.None;
-                    state = Step(step, state, null, entries => Use(entries, step, null), saved);
+                    state = Step(step, state, null, entries => Use(entries, step, null), saved, NextOf(block, i));
                     if (i == block.Steps.Count - 1 && (ends.Calls || ends.Tail))
                     {
                         Called(block, state, ends.Tail);
@@ -772,7 +772,7 @@ public static class RegisterKeeps
                 if (!within)
                     continue;
                 any = true;
-                state = Step(step, state, null);
+                state = Step(step, state, null, next: NextOf(block, i));
                 if (i == block.Steps.Count - 1 && Ends(block) is { Calls: true } or { Tail: true })
                     state = Calls(block, state, of);
             }
@@ -793,12 +793,16 @@ public static class RegisterKeeps
                 if (report is not null && step.Statement is StateDirectiveSyntax)
                     CheckSaves(i > 0 ? block.Steps[i - 1] : null, step, above, report);
                 above = state;
-                state = Step(step, state, report);
+                state = Step(step, state, report, next: NextOf(block, i));
                 if (i == block.Steps.Count - 1 && (ends.Calls || ends.Tail))
                     state = Calls(block, state, of);
             }
             return state;
         }
+
+        /// <summary>Returns the step after the one at <paramref name="index"/> in a block, or null after its last.</summary>
+        private static Step? NextOf(BasicBlock block, int index) =>
+            index + 1 < block.Steps.Count ? block.Steps[index + 1] : null;
 
         /// <summary>
         /// Returns the register <paramref name="store"/> saves, where a <c>.state saves</c> directly
@@ -877,11 +881,13 @@ public static class RegisterKeeps
 
         /// <summary>
         /// Returns what one statement does to the registers. <paramref name="use"/>, where it is
-        /// given, is told the entry values the statement uses.
+        /// given, is told the entry values the statement uses. <paramref name="next"/> is the step
+        /// after it in its block, where there is one, which tells what the statement left the
+        /// index width at.
         /// </summary>
         private RegisterState Step(
             Step step, RegisterState state, List<Diagnostic>? report, Action<Registers>? use = null,
-            Registers saved = Registers.None)
+            Registers saved = Registers.None, Step? next = null)
         {
             if (step.Statement is StateDirectiveSyntax)
                 return Asserted(step, state, report);
@@ -897,6 +903,11 @@ public static class RegisterKeeps
             // A software interrupt runs a handler that may not even be in this program.
             if (mnemonic is MnemonicKind.Brk or MnemonicKind.Cop)
                 return state.WithEach(Registers.All, RegisterValue.Unknown);
+
+            // Setting the index flag zeroes the high bytes of X and Y, which `plp` and `rti` do as
+            // well as `sep`, however the flag is set again later.
+            if (NarrowsIndex(step, next, mnemonic, mode))
+                state = state.WithEach(Registers.X | Registers.Y, RegisterValue.Written);
 
             // A call is handled for the block as a whole, because its effect depends on which
             // routine it reaches.
@@ -1023,6 +1034,27 @@ public static class RegisterKeeps
                 Semantics.Width.Eight => false,
                 _ => null,
             };
+        }
+
+        /// <summary>
+        /// Determines whether a statement may make the index registers 8 bits wide when they may
+        /// have been 16, which zeroes the high bytes of X and Y. A routine entered with 8-bit
+        /// index registers found those bytes zero, so zeroing them again changes nothing it was
+        /// given. Only an instruction that can set the index flag narrows it.
+        /// </summary>
+        private bool NarrowsIndex(Step step, Step? next, MnemonicKind mnemonic, AddressingMode? mode)
+        {
+            var sets = mnemonic switch
+            {
+                MnemonicKind.Sep => mode != AddressingMode.Immediate
+                    || Constant(step) is not { } flags || (flags & (long)StatusFlags.X) != 0,
+                MnemonicKind.Plp or MnemonicKind.Xce => true,
+                _ => false,
+            };
+            return sets && states is not null
+                && step.Routine?.Signature?.Entry.Index != Semantics.Width.Eight
+                && Wide(step, index: true) != false
+                && (next is not { } after || Wide(after, index: true) != true);
         }
 
         /// <summary>
