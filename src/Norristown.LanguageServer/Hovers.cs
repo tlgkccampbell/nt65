@@ -564,8 +564,8 @@ internal static class Hovers
         if (laid.Ensured is { } ensured)
         {
             var written = new[] { (Mnemonic: "rep", Flags: ensured.Reset), (Mnemonic: "sep", Flags: ensured.Set) }
-                .Where(pair => pair.Flags != 0)
-                .Select(pair => $"{pair.Mnemonic} #${pair.Flags.ToString("x2", CultureInfo.InvariantCulture)}")
+                .Where(pair => pair.Flags != StatusFlags.None)
+                .Select(pair => $"{pair.Mnemonic} #${((int)pair.Flags).ToString("x2", CultureInfo.InvariantCulture)}")
                 .ToList();
             card.Row("writes", written.Count == 0
                 ? "nothing: the widths already hold"

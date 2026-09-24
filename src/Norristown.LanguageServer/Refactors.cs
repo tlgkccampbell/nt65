@@ -281,8 +281,8 @@ internal static class Refactors
             && analysis.LayoutFor(tree.Path)?.AnyOf(statement) is { Ensured: { } ensured })
         {
             var lines = new[] { (Mnemonic: "rep", Flags: ensured.Reset), (Mnemonic: "sep", Flags: ensured.Set) }
-                .Where(pair => pair.Flags != 0)
-                .Select(pair => $"{pair.Mnemonic} #${pair.Flags:x2}")
+                .Where(pair => pair.Flags != StatusFlags.None)
+                .Select(pair => $"{pair.Mnemonic} #${(int)pair.Flags:x2}")
                 .ToList();
             if (lines.Count == 0)
                 yield break;

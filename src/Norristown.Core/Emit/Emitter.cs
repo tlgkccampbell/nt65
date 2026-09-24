@@ -1441,10 +1441,10 @@ public sealed class Emitter
     {
         if (layout.Of(directive, context.Expansion)?.Ensured is not { } ensured)
             return;
-        if (ensured.Reset != 0)
-            Code(line, $"{Body}rep #{Hex(ensured.Reset, 2)}", 2);
-        if (ensured.Set != 0)
-            Code(line, $"{Body}sep #{Hex(ensured.Set, 2)}", 2);
+        if (ensured.Reset != StatusFlags.None)
+            Code(line, $"{Body}rep #{Hex((long)ensured.Reset, 2)}", 2);
+        if (ensured.Set != StatusFlags.None)
+            Code(line, $"{Body}sep #{Hex((long)ensured.Set, 2)}", 2);
     }
 
     /// <summary>

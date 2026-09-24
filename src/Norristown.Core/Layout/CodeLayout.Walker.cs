@@ -570,7 +570,7 @@ public sealed partial class CodeLayout
             // routine be written for both CPUs.
             var ensured = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
             var cycles = new CycleCount(0);
-            foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != 0))
+            foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != StatusFlags.None))
                 cycles += Cycles.Of(cpu, MnemonicKind.Rep, AddressingMode.Immediate, state)?.Count ?? new CycleCount(3);
             Laid(directive, new LineLayout(ensured.Length, null, null, Cycles: cycles, Ensured: ensured));
             Place(directive, ensured.Length);
