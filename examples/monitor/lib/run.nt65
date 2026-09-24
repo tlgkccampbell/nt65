@@ -11,13 +11,10 @@
 
 .if .target(65816) {
     ; The 65816's registers take a line of 47 columns. A narrower screen shows them in two
-    ; lines, the second starting at D. `BREAK` is the offset from `registers::ac` where that
-    ; line starts, which a wide screen never reaches.
-    WIDE = COLUMNS > 47
-    BREAK = .select(WIDE, 0, Registers::dp - Registers::ac)
+    ; lines, the second starting at D.
     FIRST = "  PC     AC   XR   YR   SP"   ; the heading of PC to S
     SECOND = "  DP   DB NVMXDIZC E"         ; the heading of D to E
-    HEADING = .select(WIDE, .strcat(FIRST, " ", SECOND), FIRST)
+    HEADING = .select(COLUMNS > 47, .strcat(FIRST, " ", SECOND), FIRST)
 }
 
 .segment CODE
@@ -70,14 +67,17 @@
         jsr print_byte
         iny
         iny
-        cpy #BREAK
-        bne @same_line
-        jsr newline
-        jsr print
-        .strz text(SECOND)
-        jsr newline
-        jsr space
-    @same_line:
+        .if COLUMNS < 48 {
+            ; A narrow screen shows D to E on a line of their own.
+            cpy #Registers::dp - Registers::ac
+            bne @same_line
+            jsr newline
+            jsr print
+            .strz text(SECOND)
+            jsr newline
+            jsr space
+        @same_line:
+        }
         cpy #Registers::db - Registers::ac
         bne @word
         jsr space

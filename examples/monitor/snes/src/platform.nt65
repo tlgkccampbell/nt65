@@ -31,7 +31,7 @@
     ' '..'_' = ' '
 }
 
-COLUMNS = 32                        ; the 256 dots of a line, eight to a tile
+.config COLUMNS = 32                ; the 256 dots of a line, eight to a tile, as a setting
 LINE_LENGTH = COLUMNS - 2           ; a row, after the prompt and with room for the cursor
 NEWLINE = $0D                       ; RETURN, which is outside `text`
 DELETE = $7F                        ; what the keyboard's DEL key types
