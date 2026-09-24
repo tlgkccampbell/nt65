@@ -85,7 +85,7 @@ public sealed class ParserTests
     [InlineData("mvn #1, #2", "InstructionStatement(mvn ImmediateOperand(# NumberExpression(1) , # NumberExpression(2)))")]
     [InlineData("bbr0 $12, skip",
         "InstructionStatement(bbr0 AbsoluteOperand(NumberExpression($12) , NameExpression(IdentifierName(skip))))")]
-    // Parentheses around a whole operand are indirect; anything else is an expression.
+    // Parentheses around a whole operand are indirect. Anything else is an expression.
     [InlineData("lda (hi + lo) * 2", "InstructionStatement(lda AbsoluteOperand(BinaryExpression("
         + "ParenthesizedExpression(( BinaryExpression(NameExpression(IdentifierName(hi)) + "
         + "NameExpression(IdentifierName(lo))) )) * NumberExpression(2))))")]
@@ -237,7 +237,9 @@ public sealed class ParserTests
     [InlineData(".else {", "`.else` must follow the `}` that closes the previous branch, on the same line")]
     public void UnreadableLinesAreReportedOnce(string line, string message) => Assert.Equal([message], Errors(line));
 
-    /// <summary>A <c>}</c> alone, and the lines that continue a construct after it.</summary>
+    /// <summary>
+    /// A <c>}</c> alone parses, and so do the lines that continue a construct after it.
+    /// </summary>
     [Theory]
     [InlineData("}", SyntaxKind.BlockCloseLine)]
     [InlineData("} .else {", SyntaxKind.ElseDirective)]
@@ -253,8 +255,8 @@ public sealed class ParserTests
 
     /// <summary>
     /// A statement is only its own tokens. The line break that ends it, the tokens it could not
-    /// take and the <c>.export</c> that exports what it declares are the line's, so a statement
-    /// written inside another reads the same as one written on a line of its own.
+    /// take and the <c>.export</c> that exports what it declares belong to the line, so a
+    /// statement nested inside another reads the same as one on a line of its own.
     /// </summary>
     [Fact]
     public void TheLineHoldsWhatIsNoPartOfTheStatement()
@@ -338,7 +340,7 @@ public sealed class ParserTests
         Assert.Equal(line, tree.Root.ToFullString());
     }
 
-    /// <summary>Nesting within the parser's limit is read as written, with no diagnostic.</summary>
+    /// <summary>Nesting within the parser's limit is read as the source has it, with no diagnostic.</summary>
     [Fact]
     public void ANestWithinReachIsReadAsWritten()
     {
@@ -347,7 +349,10 @@ public sealed class ParserTests
         Assert.Empty(SyntaxTree.Parse("test.nt65", line).Diagnostics);
     }
 
-    /// <summary>Whitespace between tokens is trivia, so an operand written apart is still read.</summary>
+    /// <summary>
+    /// Whitespace between tokens is trivia, so an operand with spaces between its tokens is still
+    /// read.
+    /// </summary>
     [Fact]
     public void SpaceBetweenTokensDoesNotChangeWhatALineMeans()
     {
@@ -356,24 +361,26 @@ public sealed class ParserTests
     }
 
     /// <summary>
-    /// One line's tree. A line that opens a block is given the <c>}</c> it wants, so what
-    /// comes back is the parser's alone and not the block layer's.
+    /// Returns the tree of one line. A line that opens a block is given the <c>}</c> it wants, so
+    /// what comes back is the parser's alone and not the block layer's.
     /// </summary>
     private static SyntaxTree Parse(string line) =>
         SyntaxTree.Parse("test.nt65", line.TrimEnd().EndsWith('{') ? line + "\n}" : line);
 
     private static StatementSyntax Statement(string line) => Statement(Parse(line), 0);
 
-    /// <summary>What line <paramref name="line"/> of a tree parses to, 0-based.</summary>
+    /// <summary>Returns what line <paramref name="line"/> of a tree parses to, 0-based.</summary>
     private static StatementSyntax Statement(SyntaxTree tree, int line) => Line(tree, line).Statement;
 
     private static LineSyntax Line(string line) => Line(Parse(line), 0);
 
-    /// <summary>Line <paramref name="line"/> of a tree, 0-based.</summary>
+    /// <summary>Returns line <paramref name="line"/> of a tree, 0-based.</summary>
     private static LineSyntax Line(SyntaxTree tree, int line) =>
         tree.Root.DescendantNodes().OfType<LineSyntax>().ElementAt(line);
 
-    /// <summary>The operand of a <c>.word</c>, which is the shortest line an expression fits on.</summary>
+    /// <summary>
+    /// Returns the operand of a <c>.word</c>, which is the shortest line an expression fits on.
+    /// </summary>
     private static SyntaxNode Expression(string expression) =>
         Assert.Single(Assert.IsType<InlineDataSyntax>(
             Assert.IsType<DataDirectiveSyntax>(Statement(".word " + expression)).Tail).Values);

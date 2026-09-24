@@ -1,13 +1,14 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// What a call becomes: the body written out with each parameter standing for what the call
-/// gave it, the locals renamed per expansion, and a comment naming the call.
+/// Checks what a call becomes. The body is written out with each parameter standing for what the
+/// call gave it, the locals are renamed per expansion, and a comment names the call.
 /// </summary>
 public sealed class MacroExpansionTests
 {
     /// <summary>
-    /// The ca65 a one-file program becomes, without the header lines every output starts with.
+    /// Returns the ca65 a one-file program becomes, without the header lines every output starts
+    /// with.
     /// A program that names no segment is given a <c>.segment CODE</c> line before the rest, and
     /// every program is given a <c>.module main</c> line before that.
     /// </summary>
@@ -23,7 +24,7 @@ public sealed class MacroExpansionTests
         return string.Join("\n", outputs["main.s"].Split('\n').SkipWhile(IsHeader)).Trim();
     }
 
-    /// <summary>Whether a line is part of the header every output starts with.</summary>
+    /// <summary>Returns whether a line is part of the header every output starts with.</summary>
     private static bool IsHeader(string line) =>
         line.Length == 0 || line.StartsWith(';') || line.StartsWith(".setcpu", StringComparison.Ordinal)
             || line.StartsWith(".smart", StringComparison.Ordinal) || line.StartsWith(".case", StringComparison.Ordinal)
@@ -171,9 +172,9 @@ public sealed class MacroExpansionTests
     }
 
     /// <summary>
-    /// <c>.byteof</c> is byte n of an operand: a shift and a mask of an immediate's value, and
-    /// the address plus n for a mode that addresses memory. One macro then serves constants and
-    /// memory alike.
+    /// <c>.byteof</c> gives byte n of an operand. For an immediate it is a shift and a mask of the
+    /// value, and for a mode that addresses memory it is the address plus n. One macro then serves
+    /// constants and memory alike.
     /// </summary>
     [Fact]
     public void ByteofServesConstantsAndMemoryAlike()

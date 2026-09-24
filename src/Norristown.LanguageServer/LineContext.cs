@@ -3,9 +3,9 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The line at the caret as far as the caret, lexed on its own. What is being written there is
-/// read off these tokens rather than off the parsed file, because a line being typed is seldom
-/// one that parses.
+/// Represents the line at the caret, up to the caret, lexed on its own. What is being typed there
+/// is read from these tokens rather than from the parsed file, because a line being typed seldom
+/// parses.
 /// </summary>
 internal sealed class LineContext
 {
@@ -34,57 +34,81 @@ internal sealed class LineContext
         }
     }
 
-    /// <summary>The caret, as a position in the file.</summary>
+    /// <summary>Gets the caret's position in the file.</summary>
     public int Caret { get; }
 
-    /// <summary>The name the caret is at the end of, which a completion replaces, or null.</summary>
+    /// <summary>
+    /// Gets the name the caret is at the end of, which a completion replaces, or null if there is
+    /// none.
+    /// </summary>
     public (SyntaxKind Kind, string Text, int Start)? Partial { get; }
 
-    /// <summary>The tokens before that name, or before the caret when there is none.</summary>
+    /// <summary>Gets the tokens before that name, or before the caret when there is no name.</summary>
     public IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> Before { get; }
 
-    /// <summary>The kind of context the line is in, which decides what may be written there.</summary>
+    /// <summary>Gets the kind of context the line is in, which decides what may appear there.</summary>
     public Place Place { get; }
 
-    /// <summary>Whether the line is inside a routine, where a <c>.proc</c> or a <c>.macro</c> may not be declared.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the line is inside a routine, where a <c>.proc</c> or a
+    /// <c>.macro</c> may not be declared.
+    /// </summary>
     public bool InProc { get; }
 
-    /// <summary>Whether the line is inside a macro body, which may declare nothing the rest of the program shares.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the line is inside a macro body, which may declare nothing
+    /// the rest of the program shares.
+    /// </summary>
     public bool InMacro { get; }
 
-    /// <summary>Whether the line is inside a repetition, where a declaration would be made again on every iteration.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the line is inside a repetition, where a declaration would
+    /// be made again on every iteration.
+    /// </summary>
     public bool InRepetition { get; }
 
     /// <summary>
-    /// Whether any block holds the line at all, an open <c>.segment</c> region included. A
-    /// <c>.config</c> may only be written where none does: which settings a program has is
-    /// fixed by the build, and may not depend on where in a file the setting was written.
+    /// Gets a value indicating whether any block holds the line at all, including an open
+    /// <c>.segment</c> region. A <c>.config</c> may only appear where no block does, because which
+    /// settings a program has is fixed by the build and may not depend on where in a file the
+    /// setting appears.
     /// </summary>
     public bool InBlock { get; }
 
     /// <summary>
-    /// Whether the line is at file level: inside no block other than an open <c>.segment</c>
-    /// region. This is where a <c>.place</c> goes: which modules share a translation unit must
-    /// not depend on any condition, and a segment region only says where the file's own bytes
-    /// go.
+    /// Gets a value indicating whether the line is at file level, which means inside no block
+    /// other than an open <c>.segment</c> region. A <c>.place</c> goes there, because which
+    /// modules share a translation unit must not depend on any condition, and a segment region
+    /// only says where the file's own bytes go.
     /// </summary>
     public bool AtFileLevel { get; }
 
-    /// <summary>The type a <c>.type T { }</c> initializer gives values to, or null outside one.</summary>
+    /// <summary>
+    /// Gets the type a <c>.type T { }</c> initializer gives values to, or null outside one.
+    /// </summary>
     public IReadOnlyList<string>? RecordType { get; }
 
-    /// <summary>Whether the caret is inside a comment or a text literal, where nothing is completed.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the caret is inside a comment or a text literal, where
+    /// nothing is completed.
+    /// </summary>
     public bool InText { get; }
 
-    /// <summary>Whether this is the file's first line, the only place a <c>.module</c> goes.</summary>
+    /// <summary>
+    /// Gets a value indicating whether this is the file's first line, the only place a
+    /// <c>.module</c> goes.
+    /// </summary>
     public bool IsFirstLine { get; }
 
-    /// <summary>Where a completion's text goes: over the name being typed, or at the caret.</summary>
+    /// <summary>
+    /// Gets the span a completion's text replaces, which is the name being typed, or an empty span
+    /// at the caret.
+    /// </summary>
     public TextSpan Replaced => Partial is { } partial ? new TextSpan(partial.Start, Caret - partial.Start) : new TextSpan(Caret, 0);
 
     /// <summary>
-    /// The directive the statement starts with, lower case, past an <c>.export</c> or a label;
-    /// null for a statement that starts with none.
+    /// Gets the directive the statement starts with, in lower case, after any <c>.export</c> or
+    /// label, or null for a statement that starts with no directive.
     /// </summary>
     public string? Directive
     {
@@ -95,7 +119,7 @@ internal sealed class LineContext
         }
     }
 
-    /// <summary>The index of the statement's first token, past an <c>.export</c> and a label.</summary>
+    /// <summary>Gets the index of the statement's first token, after any label and <c>.export</c>.</summary>
     public int Start
     {
         get
@@ -115,7 +139,10 @@ internal sealed class LineContext
         }
     }
 
-    /// <summary>The line of <paramref name="tree"/> up to <paramref name="position"/>.</summary>
+    /// <summary>
+    /// Returns the context of the line of <paramref name="tree"/> up to
+    /// <paramref name="position"/>.
+    /// </summary>
     public static LineContext At(SyntaxTree tree, int position)
     {
         var line = tree.GetLineIndex(position);
@@ -134,8 +161,9 @@ internal sealed class LineContext
     }
 
     /// <summary>
-    /// The innermost call whose argument list holds the caret: the index of the <c>(</c> that
-    /// opens the list, and how many arguments come before the caret's. Null outside every call.
+    /// Finds the innermost call whose argument list holds the caret. Returns the index of the
+    /// <c>(</c> that opens the list and how many arguments come before the caret's argument, or
+    /// null outside every call.
     /// Passing <paramref name="end"/> searches back from before that token index instead of from
     /// the caret, which finds the call enclosing another.
     /// </summary>
@@ -168,8 +196,9 @@ internal sealed class LineContext
     }
 
     /// <summary>
-    /// The names written before the <c>::</c> the caret follows, <c>hw::vic::</c> being
-    /// <c>hw</c> and <c>vic</c>, or null when the caret follows no <c>::</c>.
+    /// Returns the names before the <c>::</c> that token index <paramref name="end"/> follows, or
+    /// null when it follows no <c>::</c>. For <c>hw::vic::</c> the names are <c>hw</c> and
+    /// <c>vic</c>.
     /// </summary>
     public IReadOnlyList<string>? PathBefore(int end)
     {
@@ -185,24 +214,30 @@ internal sealed class LineContext
         return parts.Count == 0 ? null : parts;
     }
 
-    /// <summary>All of a line's tokens except its line break, each with its start position in the file.</summary>
+    /// <summary>
+    /// Returns all of a line's tokens except its line break, each with its start position in the
+    /// file.
+    /// </summary>
     public static List<(SyntaxKind Kind, string Text, int Start)> TokensOf(SyntaxTree tree, int line) =>
         [.. tree.GetLine(line).Tokens
             .Where(token => token.Kind != SyntaxKind.EndOfLine)
             .Select(token => (token.Kind, token.Text, token.Span.Start))];
 
-    /// <summary>Where the code on a line ends, before any comment: its start, for a line with none.</summary>
+    /// <summary>
+    /// Returns the position where the code on a line ends, before any comment, or the line's
+    /// start for a line with no code.
+    /// </summary>
     public static int CodeEnd(SyntaxTree tree, int line) =>
         TokensOf(tree, line) is [.., var last] ? last.Start + last.Text.Length : tree.LineStarts[line];
 
-    /// <summary>Whether a token of this kind can be a name.</summary>
+    /// <summary>Checks whether a token of this kind can be a name.</summary>
     public static bool IsWord(SyntaxKind kind) =>
         kind is SyntaxKind.Identifier or SyntaxKind.Mnemonic or SyntaxKind.Register;
 
     /// <summary>
-    /// The line's surroundings: the innermost block holding it determines the context, and all
-    /// the enclosing blocks together determine what may be declared there. The line that opens a block is
-    /// written in the block around it, not in the one it opens.
+    /// Returns the line's surroundings. The innermost block holding the line determines the
+    /// context, and all the enclosing blocks together determine what may be declared there. The
+    /// line that opens a block belongs to the block around it, not to the one it opens.
     /// </summary>
     private static Surrounding Around(SyntaxTree tree, int line)
     {
@@ -213,7 +248,7 @@ internal sealed class LineContext
     }
 
     /// <summary>
-    /// Whether the caret is inside a comment or a text literal, which hold prose rather than
+    /// Checks whether the caret is inside a comment or a text literal, which hold prose rather than
     /// code. The line is scanned up to the caret, following the lexer's quoting rules only as
     /// far as needed to tell.
     /// </summary>
@@ -243,22 +278,23 @@ internal sealed class LineContext
     }
 
     /// <summary>
-    /// The line's text from <paramref name="start"/> to <paramref name="end"/> read on its own,
-    /// with where each token starts in the file. It is read again rather than taken off the tree
-    /// because the caret cuts the line: what the file has as <c>$10</c> is <c>$1</c> to someone
-    /// who has typed that far, and it is what they have typed that a completion is about.
+    /// Lexes the line's text from <paramref name="start"/> to <paramref name="end"/> on its own,
+    /// recording where each token starts in the file. The text is lexed again rather than taken
+    /// from the tree because the caret cuts the line. What the file has as <c>$10</c> is
+    /// <c>$1</c> to someone who has typed that far, and a completion is about what they have
+    /// typed.
     /// </summary>
     private static List<(SyntaxKind Kind, string Text, int Start)> Lexed(SyntaxTree tree, int start, int end) =>
         [.. SyntaxTree.Parse(tree.Path, tree.Text[start..end]).GetLine(0).Tokens
             .Where(token => token.Kind != SyntaxKind.EndOfLine)
             .Select(token => (token.Kind, token.Text, start + token.Span.Start))];
 
-    /// <summary>What the blocks around a line say about what may be written in it.</summary>
+    /// <summary>Represents what the blocks around a line determine about what may appear in it.</summary>
     /// <param name="Place">The kind of context the innermost block gives.</param>
     /// <param name="InProc">Whether a routine holds the line.</param>
     /// <param name="InMacro">Whether a macro body holds the line.</param>
     /// <param name="InRepetition">Whether a repetition holds the line.</param>
-    /// <param name="InBlock">Whether any block holds the line, whatever kind it is.</param>
+    /// <param name="InBlock">Whether any block of any kind holds the line.</param>
     /// <param name="RecordType">The type a record initializer gives values to.</param>
     /// <param name="PastFileLevel">Whether a block other than a <c>.segment</c> region holds the line.</param>
     private readonly record struct Surrounding(
@@ -266,9 +302,9 @@ internal sealed class LineContext
         bool PastFileLevel)
     {
         /// <summary>
-        /// The surroundings one block further in. Every kind of block sets <c>InBlock</c>,
-        /// whatever else it changes, because what may be written only at file level is ruled out
-        /// by the presence of any block, not by its kind.
+        /// Returns the surroundings one block further in. Every kind of block sets
+        /// <c>InBlock</c>, in addition to anything else it changes, because what may appear only
+        /// at file level is ruled out by the presence of any block, not by its kind.
         /// </summary>
         public Surrounding Within(BlockSyntax block)
         {
@@ -289,7 +325,7 @@ internal sealed class LineContext
             return inside with { InBlock = true, PastFileLevel = PastFileLevel || block.BlockKind != BlockKind.Region };
         }
 
-        /// <summary>The path written after the <c>.type</c> of a record initializer's opener.</summary>
+        /// <summary>Returns the path after the <c>.type</c> of a record initializer's opener.</summary>
         private static IReadOnlyList<string>? TypeOf(LineSyntax opener)
         {
             var tokens = opener.Tokens;

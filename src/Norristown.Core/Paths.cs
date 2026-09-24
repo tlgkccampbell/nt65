@@ -1,13 +1,16 @@
 namespace Norristown;
 
 /// <summary>
-/// Logical paths: relative to the project's root, with <c>/</c> separators whatever the
-/// platform. Sources, outputs and the files an <c>.incbin</c> names are all identified by a
-/// logical path, so what nt65 writes is the same on every machine.
+/// Provides operations on logical paths, which are relative to the project's root and use
+/// <c>/</c> separators on every platform. Sources, outputs and the files an <c>.incbin</c> names
+/// are all identified by a logical path, so what nt65 writes is the same on every machine.
 /// </summary>
 public static class Paths
 {
-    /// <summary>The directory part of a path, without its trailing separator, or empty for none.</summary>
+    /// <summary>
+    /// Returns the directory part of a path without its trailing separator, or an empty string
+    /// when the path has no directory part.
+    /// </summary>
     public static string Directory(string path)
     {
         var at = path.LastIndexOf('/');
@@ -15,9 +18,10 @@ public static class Paths
     }
 
     /// <summary>
-    /// <paramref name="path"/> with its <c>.</c> segments and every <c>..</c> that follows a
-    /// directory taken out: <c>nt65/../data/x.bin</c> is <c>data/x.bin</c>. A path that
-    /// starts above the root keeps the <c>..</c> that take it there.
+    /// Returns <paramref name="path"/> with its <c>.</c> segments removed, along with every
+    /// <c>..</c> that follows a directory. For example, <c>nt65/../data/x.bin</c> becomes
+    /// <c>data/x.bin</c>. A path that starts above the root keeps the <c>..</c> segments that
+    /// take it there.
     /// </summary>
     public static string Normalized(string path)
     {
@@ -36,8 +40,9 @@ public static class Paths
     }
 
     /// <summary>
-    /// The logical path that <paramref name="path"/> refers to when it is written in the file
-    /// <paramref name="file"/>: relative to that file's directory unless it is rooted.
+    /// Returns the logical path that <paramref name="path"/> refers to when it appears in the file
+    /// <paramref name="file"/>. The path is taken as relative to that file's directory unless it
+    /// is rooted.
     /// </summary>
     public static string Beside(string file, string path) =>
         IsRooted(path) || Directory(file) is not { Length: > 0 } directory
@@ -45,9 +50,10 @@ public static class Paths
             : Normalized($"{directory}/{path}");
 
     /// <summary>
-    /// <paramref name="path"/> made relative to <paramref name="directory"/>, where both are
-    /// relative to the same root. When the directory lies above the root, the route back down
-    /// from it is unknown, so the path is returned unchanged, as it is when either is rooted.
+    /// Returns <paramref name="path"/> made relative to <paramref name="directory"/>, where both
+    /// are relative to the same root. When the directory lies above the root, the route back down
+    /// from it is unknown, so the path is returned unchanged. The path is also returned unchanged
+    /// when either one is rooted.
     /// </summary>
     public static string Relative(string directory, string path)
     {
@@ -63,7 +69,10 @@ public static class Paths
         return string.Join('/', Enumerable.Repeat("..", from.Length - shared).Concat(to[shared..]));
     }
 
-    /// <summary>Whether a path starts at a drive or at the root of the file system, rather than at the project.</summary>
+    /// <summary>
+    /// Returns a value indicating whether a path starts at a drive or at the root of the file
+    /// system, rather than at the project.
+    /// </summary>
     public static bool IsRooted(string path) =>
         path.StartsWith('/') || path.StartsWith('\\') || (path.Length >= 2 && path[1] == ':');
 }

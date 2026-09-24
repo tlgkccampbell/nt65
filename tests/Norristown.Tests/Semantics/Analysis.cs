@@ -4,12 +4,15 @@ using Norristown.Syntax;
 
 namespace Norristown.Tests.Semantics;
 
-/// <summary>Builds the model for one file of nt65, the way a test wants to ask about it.</summary>
+/// <summary>
+/// Builds the model for one file of nt65, or the analysis of a program, in the form a test wants
+/// to ask about it.
+/// </summary>
 internal static class Analysis
 {
     public const string Path = "main.nt65";
 
-    /// <summary>The model for <paramref name="text"/>, with the segments the file declares.</summary>
+    /// <summary>Returns the model for <paramref name="text"/>, with the segments the file declares.</summary>
     public static SemanticModel Model(string text)
     {
         var tree = SyntaxTree.Parse(Path, text);
@@ -17,10 +20,10 @@ internal static class Analysis
     }
 
     /// <summary>
-    /// Settings for a test that writes a fragment rather than a whole program. Such a fragment is
-    /// typically an unexported routine that nothing calls, which would draw the unused-symbol
-    /// warning, and the tests that use these settings are about something else, so the warning is
-    /// turned off. A test about the warning itself writes a whole program.
+    /// Gets the settings for a test whose source is a fragment rather than a whole program. Such a
+    /// fragment is typically an unexported routine that nothing calls, which would draw the
+    /// unused-symbol warning. The tests that use these settings are about something else, so the
+    /// warning is turned off. A test about the warning itself uses a whole program.
     /// </summary>
     public static ProjectSettings Fragment { get; } =
         ProjectSettings.None with
@@ -29,17 +32,20 @@ internal static class Analysis
         };
 
     /// <summary>
-    /// The whole program for several files, the way the compiler reads it: every file sees
-    /// what the others export.
+    /// Analyzes several files as one program, the way the compiler reads them, so that every file
+    /// sees what the others export.
     /// </summary>
     public static ProgramAnalysis Program(params (string Path, string Text)[] files) =>
         Program(ProjectSettings.None, files);
 
-    /// <summary>The same, for a program the project file says something about.</summary>
+    /// <summary>
+    /// Analyzes several files as one program under the given project settings, so that every file
+    /// sees what the others export.
+    /// </summary>
     public static ProgramAnalysis Program(ProjectSettings project, params (string Path, string Text)[] files) =>
         Compiler.Analyze([.. files.Select(file => new SourceFile(file.Path, file.Text))], project);
 
-    /// <summary>One file of a program, by the path it was given.</summary>
+    /// <summary>Returns the model for one file of a program, found by the path it was given.</summary>
     public static SemanticModel File(this ProgramAnalysis analysis, string path)
     {
         var model = analysis.ModelFor(path);
@@ -47,29 +53,35 @@ internal static class Analysis
         return model;
     }
 
-    /// <summary>What the whole program says is wrong, as <c>file:line: message</c>.</summary>
+    /// <summary>Returns the whole program's diagnostics, each as <c>file:line: message</c>.</summary>
     public static IReadOnlyList<string> Problems(this ProgramAnalysis analysis) =>
         [.. analysis.Diagnostics.Select(d => $"{d.Span.File}:{d.Span.Line}: {d.Message}")];
 
-    /// <summary>The ca65 a program becomes, by output path.</summary>
+    /// <summary>Compiles several files as one program and returns the ca65 output, keyed by output path.</summary>
     public static Dictionary<string, string> Outputs(params (string Path, string Text)[] files) =>
         Outputs(ProjectSettings.None, files);
 
-    /// <summary>The same, for a program the project file says something about.</summary>
+    /// <summary>
+    /// Compiles several files as one program under the given project settings and returns the
+    /// ca65 output, keyed by output path.
+    /// </summary>
     public static Dictionary<string, string> Outputs(
         ProjectSettings project, params (string Path, string Text)[] files) =>
         Compiler.Compile([.. files.Select(file => new SourceFile(file.Path, file.Text))], project)
             .Outputs.ToDictionary(output => output.Path, output => output.Text, StringComparer.Ordinal);
 
-    /// <summary>The one symbol named <paramref name="name"/>, wherever it is declared.</summary>
+    /// <summary>Returns the single symbol named <paramref name="name"/>, in any scope of the file.</summary>
     public static Symbol Symbol(this SemanticModel model, string name) =>
         model.Symbols.Single(symbol => symbol.DisplayName == name);
 
-    /// <summary>What the file says is wrong, as <c>line: message</c>.</summary>
+    /// <summary>Returns the file's diagnostics, each as <c>line: message</c>.</summary>
     public static IReadOnlyList<string> Problems(this SemanticModel model) =>
         [.. model.Diagnostics.Select(d => $"{d.Span.Line}: {d.Message}")];
 
-    /// <summary>The offset of the <paramref name="occurrence"/>th <paramref name="find"/> in the file.</summary>
+    /// <summary>
+    /// Returns the offset of the <paramref name="occurrence"/>th <paramref name="find"/> in the
+    /// file.
+    /// </summary>
     public static int Offset(this SemanticModel model, string find, int occurrence = 1)
     {
         var offset = -1;
@@ -79,7 +91,10 @@ internal static class Analysis
         return offset;
     }
 
-    /// <summary>What the name written at the <paramref name="occurrence"/>th <paramref name="find"/> means.</summary>
+    /// <summary>
+    /// Returns the symbol that the name at the <paramref name="occurrence"/>th
+    /// <paramref name="find"/> refers to.
+    /// </summary>
     public static Symbol SymbolAt(this SemanticModel model, string find, int occurrence = 1)
     {
         var reference = model.ReferenceAt(model.Offset(find, occurrence));

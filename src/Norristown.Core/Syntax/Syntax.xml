@@ -1,76 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The node table: one description of every class in both trees, and the only place a new kind of
-  node is written down. Building Norristown.Core runs the source generator in
-  src/Norristown.SyntaxGenerator over it, which writes the red node classes, the green classes and
-  the visitors into src/Norristown.Core/Generated, where they are git-ignored and there to be read.
+  The node table. It describes every class in both trees and is the only place a new kind of node
+  is defined. Building Norristown.Core runs the source generator in src/Norristown.SyntaxGenerator
+  over it. The generator writes the red node classes, the green classes and the visitors into
+  src/Norristown.Core/Generated, where they are git-ignored but available to read.
 
-  One block per node, in alphabetical order of class name, so two people adding kinds edit two
-  different places.
-  Where a concept is one Roslyn's own Syntax.xml has, the names are the ones Roslyn uses:
+  The table has one block per node, in alphabetical order of class name, so that two people adding
+  kinds edit different places. Where a concept also appears in Roslyn's own Syntax.xml, the names
+  are the ones Roslyn uses:
 
-    <Node Name="X" Base="Y">          the class and what it derives from
-    <AbstractNode Name="X" Base="Y">  the same for an abstract class: no kind, no Accept, no
-                                      visitor method
-      <Kind Name="K"/>                the SyntaxKind (or kinds) whose nodes are of this class
-      <TypeComment><summary>          the class's summary, written as the XML it ends up as
-      <Field Name="N" Type="T">       a piece of the node, as the property that reads it
-        Optional="true"               the piece belongs to a part of the line that may be absent
-        <Kind Name="K"/>              the kinds a token field may hold
-        <PropertyComment><summary>    the property's summary, as above
+    <Node Name="X" Base="Y">          declares the class and the class it derives from
+    <AbstractNode Name="X" Base="Y">  declares an abstract class, which has no kind, no Accept and
+                                      no visitor method
+      <Kind Name="K"/>                names the SyntaxKind (or kinds) whose nodes are of this class
+      <TypeComment><summary>          holds the class's summary, as the XML it becomes
+      <Field Name="N" Type="T">       declares a child of the node, as the property that reads it
+        Optional="true"               marks a child that belongs to a part of the line that may be
+                                      absent
+        <Kind Name="K"/>              names a kind that a token field may hold
+        <PropertyComment><summary>    holds the property's summary, as the XML it becomes
 
-  and the rest is nt65's own:
+  The remaining attributes and elements are nt65's own:
 
-    ... Internal="true"               the class is internal: it gets an Accept, but no visitor method
-    ... HandWritten="true"            the class is written by hand; only its Accept is generated
-    ... Partial="true"                a hand-written partial class adds members the table cannot describe
-    ... Missing="true"                a node of this kind fills a required place the source wrote nothing in
-    ... Layout="A B C"                the field order, when it is not the base's fields followed by this
-                                      node's own
-      <Member Name="N" Type="T">      a property that is not a piece of the node
-        <Read><![CDATA[expr]]>        what that property returns
+    ... Internal="true"               makes the class internal; it gets an Accept, but no visitor
+                                      method
+    ... HandWritten="true"            marks a class written by hand; only its Accept is generated
+    ... Partial="true"                marks a class whose hand-written partial part adds members
+                                      the table cannot describe
+    ... Missing="true"                marks a kind whose node fills a required position that the
+                                      source leaves empty
+    ... Layout="A B C"                gives the field order, when it is not the base's fields
+                                      followed by this node's own
+      <Member Name="N" Type="T">      declares a property that is not a child of the node
+        <Read><![CDATA[expr]]>        gives the expression that property returns
 
-  The fields of a node are its fixed layout, written in source order, and each is read from its
-  slot; Layout says the order where a node interleaves its own fields with the ones a class above
-  it writes. Optional means the piece belongs to a part of the line that may be absent altogether:
-  a piece the line always has a place for is required, and stands in its slot as a missing token or
-  an error node when the source leaves it out. A piece inside an optional group is optional too: it
-  is null when the group is absent, and missing when the group is written but the piece is not. A
-  list field is never optional: the property is always a list, and a list with no items is stored as
-  an empty slot.
+  A node's fields are its fixed layout, in source order, and each is read from its slot. Layout
+  gives the order when a node interleaves its own fields with those a base class declares.
+  Optional means the child belongs to a part of the line that may be absent altogether. A child
+  that the line always has a place for is required: when the source omits it, its slot holds a
+  missing token or an error node. A child inside an optional group is optional too. It is null
+  when the group is absent, and missing when the group is present but the child is not. A list
+  field is never optional. Its property is always a list, and a list with no items is stored as an
+  empty slot.
 -->
 <Tree>
 
   <Node Name="AbsoluteOperandSyntax" Base="OperandSyntax">
     <Kind Name="AbsoluteOperand"/>
     <TypeComment>
-      <summary><c>expr</c>, <c>expr,x</c>, <c>z:expr</c>, or the <c>expr, expr</c> of a bit branch.</summary>
+      <summary>
+        Represents an operand that is an address, in the form <c>expr</c>, <c>expr,x</c>,
+        <c>z:expr</c>, or the <c>expr, expr</c> of a bit branch.
+      </summary>
     </TypeComment>
     <Field Name="Prefix" Type="AddressPrefixSyntax" Optional="true">
       <PropertyComment>
-        <summary>The <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c>, or null.</summary>
+        <summary>
+          Gets the <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c> prefix, or null if the operand has
+          none.
+        </summary>
       </PropertyComment>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The address.</summary>
+        <summary>Gets the address.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c>, or null.</summary>
+        <summary>Gets the <c>,</c> token, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="IndexRegister" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>x</c>, <c>y</c> or <c>s</c> after the <c>,</c>, or null.</summary>
+        <summary>Gets the <c>x</c>, <c>y</c> or <c>s</c> register after the <c>,</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
     </Field>
     <Field Name="Second" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The second expression of a bit branch, or null.</summary>
+        <summary>Gets the second expression of a bit branch, or null.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -78,11 +88,11 @@
   <Node Name="AccumulatorOperandSyntax" Base="OperandSyntax">
     <Kind Name="AccumulatorOperand"/>
     <TypeComment>
-      <summary>The <c>a</c> of <c>asl a</c>.</summary>
+      <summary>Represents the <c>a</c> operand of an instruction such as <c>asl a</c>.</summary>
     </TypeComment>
     <Field Name="Register" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>a</c>.</summary>
+        <summary>Gets the <c>a</c> register.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
     </Field>
@@ -91,18 +101,18 @@
   <Node Name="AddressPrefixSyntax" Base="SyntaxNode">
     <Kind Name="AddressPrefix"/>
     <TypeComment>
-      <summary><c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c> before an address.</summary>
+      <summary>Represents a <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c> prefix before an address.</summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The letter.</summary>
+        <summary>Gets the prefix's letter.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>:</c>.</summary>
+        <summary>Gets the <c>:</c> token.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
@@ -111,22 +121,25 @@
   <Node Name="ArgumentListSyntax" Base="SyntaxNode">
     <Kind Name="ArgumentList"/>
     <TypeComment>
-      <summary><c>(a, b)</c>: the arguments of a call or of a macro call.</summary>
+      <summary>Represents <c>(a, b)</c>, the arguments of a call or of a macro call.</summary>
     </TypeComment>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>(</c>.</summary>
+        <summary>Gets the <c>(</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Arguments" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;">
       <PropertyComment>
-        <summary>The arguments. A call's are expressions; a macro call's may also be braced operands and named arguments.</summary>
+        <summary>
+          Gets the arguments. A call's arguments are expressions; a macro call's may also be braced
+          operands and named arguments.
+        </summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>.</summary>
+        <summary>Gets the <c>)</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
     </Field>
@@ -135,28 +148,28 @@
   <Node Name="AssertDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="AssertDirective"/>
     <TypeComment>
-      <summary><c>.assert expr, "message"</c>, whose message may be left out.</summary>
+      <summary>Represents an <c>.assert expr, "message"</c> line, whose message may be omitted.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.assert</c> that starts the line.</summary>
+        <summary>Gets the <c>.assert</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Condition" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>What is asserted.</summary>
+        <summary>Gets the condition being asserted.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c> before what else is written, or null.</summary>
+        <summary>Gets the <c>,</c> token before the level or the message, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="Level" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>A ca65 assertion level, which nt65 reports as an error, or null.</summary>
+        <summary>Gets a ca65 assertion level, which nt65 reports as an error, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -164,13 +177,13 @@
     </Field>
     <Field Name="LevelCommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c> after ca65's level, or null.</summary>
+        <summary>Gets the <c>,</c> token after ca65's level, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="Message" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The quoted message, or null.</summary>
+        <summary>Gets the quoted message, or null.</summary>
       </PropertyComment>
       <Kind Name="StringLiteral"/>
     </Field>
@@ -179,22 +192,24 @@
   <Node Name="BankRangeSyntax" Base="SyntaxNode">
     <Kind Name="BankRange"/>
     <TypeComment>
-      <summary><c>$80</c> or <c>$00..$3f</c>: one bank or a range of them.</summary>
+      <summary>
+        Represents one bank, such as <c>$80</c>, or a range of banks, such as <c>$00..$3f</c>.
+      </summary>
     </TypeComment>
     <Field Name="First" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The bank, or the first of the range.</summary>
+        <summary>Gets the bank, or the first bank of the range.</summary>
       </PropertyComment>
     </Field>
     <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>..</c>, or null.</summary>
+        <summary>Gets the <c>..</c> token, or null.</summary>
       </PropertyComment>
       <Kind Name="DotDot"/>
     </Field>
     <Field Name="Last" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The last bank of the range, or null.</summary>
+        <summary>Gets the last bank of the range, or null.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -202,16 +217,16 @@
   <Node Name="BinaryExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="BinaryExpression"/>
     <TypeComment>
-      <summary><c>left op right</c>.</summary>
+      <summary>Represents a binary expression, <c>left op right</c>.</summary>
     </TypeComment>
     <Field Name="Left" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The left operand.</summary>
+        <summary>Gets the left operand.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OperatorToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The operator.</summary>
+        <summary>Gets the operator.</summary>
       </PropertyComment>
       <Kind Name="Plus"/>
       <Kind Name="Minus"/>
@@ -235,7 +250,7 @@
     </Field>
     <Field Name="Right" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The right operand.</summary>
+        <summary>Gets the right operand.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -243,18 +258,18 @@
   <Node Name="BlankLineSyntax" Base="StatementSyntax">
     <Kind Name="BlankLine"/>
     <TypeComment>
-      <summary>A line holding nothing, or nothing but a comment.</summary>
+      <summary>Represents a line that holds nothing, or nothing but a comment.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="BlockCloseLineSyntax" Base="StatementSyntax">
     <Kind Name="BlockCloseLine"/>
     <TypeComment>
-      <summary>A <c>}</c> on its own line.</summary>
+      <summary>Represents a <c>}</c> on its own line.</summary>
     </TypeComment>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>.</summary>
+        <summary>Gets the <c>}</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>
@@ -263,17 +278,20 @@
   <Node Name="BlockContinuationSyntax" Base="StatementSyntax">
     <Kind Name="BlockContinuation"/>
     <TypeComment>
-      <summary><c>} name {</c>: the line that closes one block argument of a macro call and opens the next.</summary>
+      <summary>
+        Represents a <c>} name {</c> line, which closes one block argument of a macro call and opens
+        the next.
+      </summary>
     </TypeComment>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>.</summary>
+        <summary>Gets the <c>}</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The parameter the next block is given to.</summary>
+        <summary>Gets the name of the parameter that receives the next block.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -281,7 +299,7 @@
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c>.</summary>
+        <summary>Gets the <c>{</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -290,11 +308,11 @@
   <Node Name="BlockSpliceSyntax" Base="StatementSyntax">
     <Kind Name="BlockSplice"/>
     <TypeComment>
-      <summary>A name on its own line, which splices a <c>block</c> parameter.</summary>
+      <summary>Represents a name on its own line, which splices a <c>block</c> parameter.</summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The parameter spliced.</summary>
+        <summary>Gets the name of the spliced parameter.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
@@ -307,11 +325,17 @@
   <Node Name="BracedDataSyntax" Base="DataTailSyntax">
     <Kind Name="BracedData"/>
     <TypeComment>
-      <summary>The one braced value of a counted or record data directive, written on its line.</summary>
+      <summary>
+        Represents the single braced value of a counted or record data directive, on the directive's
+        own line.
+      </summary>
     </TypeComment>
     <Field Name="Value" Type="SyntaxNode">
       <PropertyComment>
-        <summary>The value: a <see cref="ValueListSyntax"/> or a <see cref="RecordValuesSyntax"/>.</summary>
+        <summary>
+          Gets the value, which is a <see cref="ValueListSyntax"/> or a
+          <see cref="RecordValuesSyntax"/>.
+        </summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -319,22 +343,22 @@
   <Node Name="BracedOperandSyntax" Base="SyntaxNode">
     <Kind Name="BracedOperand"/>
     <TypeComment>
-      <summary><c>{buf,x}</c>: a whole operand as a macro argument.</summary>
+      <summary>Represents a whole operand passed as a macro argument, such as <c>{buf,x}</c>.</summary>
     </TypeComment>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c>.</summary>
+        <summary>Gets the <c>{</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
     <Field Name="Operand" Type="OperandSyntax">
       <PropertyComment>
-        <summary>The operand.</summary>
+        <summary>Gets the operand.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>.</summary>
+        <summary>Gets the <c>}</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>
@@ -343,22 +367,22 @@
   <Node Name="CallExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="CallExpression"/>
     <TypeComment>
-      <summary><c>name(args)</c> or <c>.function(args)</c>.</summary>
+      <summary>Represents a call, <c>name(args)</c> or <c>.function(args)</c>.</summary>
     </TypeComment>
     <Field Name="Callee" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The <c>.func</c> called, or null for a built-in function.</summary>
+        <summary>Gets the <c>.func</c> called, or null for a built-in function.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Function" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The built-in function called, or null for a <c>.func</c>.</summary>
+        <summary>Gets the built-in function called, or null for a <c>.func</c>.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Arguments" Type="ArgumentListSyntax">
       <PropertyComment>
-        <summary>The arguments.</summary>
+        <summary>Gets the arguments.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -366,69 +390,75 @@
   <Node Name="CharacterExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="CharacterExpression"/>
     <TypeComment>
-      <summary>A character in single quotes.</summary>
+      <summary>Represents a character in single quotes.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="CharmapDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="CharmapDeclaration"/>
     <TypeComment>
-      <summary><c>.charmap name {</c>.</summary>
+      <summary>Represents a <c>.charmap name {</c> line.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="CharmapEntrySyntax" Base="StatementSyntax">
     <Kind Name="CharmapEntry"/>
     <TypeComment>
-      <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
+      <summary>
+        Represents one entry of a <c>.charmap</c>, which maps a character, or a range of characters,
+        to a value.
+      </summary>
     </TypeComment>
     <Field Name="First" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The character, or the first of the range.</summary>
+        <summary>Gets the character, or the first character of the range.</summary>
       </PropertyComment>
     </Field>
     <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>..</c>, or null.</summary>
+        <summary>Gets the <c>..</c> token, or null.</summary>
       </PropertyComment>
       <Kind Name="DotDot"/>
     </Field>
     <Field Name="Last" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The last character of the range, or null.</summary>
+        <summary>Gets the last character of the range, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>.</summary>
+        <summary>Gets the <c>=</c> token.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The value the first character maps to.</summary>
+        <summary>Gets the value the first character maps to.</summary>
       </PropertyComment>
     </Field>
   </Node>
 
   <AbstractNode Name="ConditionalDirectiveSyntax" Base="StatementSyntax">
     <TypeComment>
-      <summary>A line that opens a branch with a condition: <c>.if expr {</c> or <c>} .elseif expr {</c>.</summary>
+      <summary>
+        Represents a line that opens a branch with a condition, either <c>.if expr {</c> or
+        <c>} .elseif expr {</c>.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.if</c> or <c>.elseif</c>.</summary>
+        <summary>Gets the <c>.if</c> or <c>.elseif</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Condition" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The condition the branch is taken on.</summary>
+        <summary>Gets the condition under which the branch is taken.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -437,29 +467,32 @@
   <Node Name="ConfigDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ConfigDeclaration"/>
     <TypeComment>
-      <summary><c>.config NAME = value</c>: a setting, whose value the build may override.</summary>
+      <summary>
+        Represents a <c>.config NAME = value</c> line, which declares a setting whose value the
+        build may override.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.config</c> that starts the line.</summary>
+        <summary>Gets the <c>.config</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The setting's name.</summary>
+        <summary>Gets the setting's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>.</summary>
+        <summary>Gets the <c>=</c> token.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The setting's value.</summary>
+        <summary>Gets the setting's value.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -467,11 +500,11 @@
   <Node Name="ConstantDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ConstantDeclaration"/>
     <TypeComment>
-      <summary><c>name = expr</c>.</summary>
+      <summary>Represents a constant declaration, <c>name = expr</c>.</summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The constant's name.</summary>
+        <summary>Gets the constant's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="CheapLocal"/>
@@ -480,13 +513,13 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>.</summary>
+        <summary>Gets the <c>=</c> token.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The constant's value.</summary>
+        <summary>Gets the constant's value.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -494,17 +527,17 @@
   <Node Name="CpuDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="CpuDirective"/>
     <TypeComment>
-      <summary><c>.cpu name</c>.</summary>
+      <summary>Represents a <c>.cpu name</c> line.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.cpu</c> that starts the line.</summary>
+        <summary>Gets the <c>.cpu</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Cpu" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The CPU's name.</summary>
+        <summary>Gets the CPU's name.</summary>
       </PropertyComment>
       <Kind Name="CpuName"/>
       <Kind Name="NumberLiteral"/>
@@ -515,18 +548,18 @@
   <Node Name="CpuNameExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="CpuNameExpression"/>
     <TypeComment>
-      <summary>A CPU name written where an expression is read.</summary>
+      <summary>Represents a CPU name used where an expression is expected.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="CurrentAddressExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="CurrentAddressExpression"/>
     <TypeComment>
-      <summary><c>*</c>: the address of the statement it is written in.</summary>
+      <summary>Represents <c>*</c>, the address of the statement that contains it.</summary>
     </TypeComment>
     <Field Name="StarToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>*</c>.</summary>
+        <summary>Gets the <c>*</c> token.</summary>
       </PropertyComment>
       <Kind Name="Star"/>
     </Field>
@@ -535,11 +568,13 @@
   <Node Name="DataBodySyntax" Base="DataTailSyntax">
     <Kind Name="DataBody"/>
     <TypeComment>
-      <summary>The <c>{</c> of a data directive whose values are written on the lines it opens.</summary>
+      <summary>
+        Represents the <c>{</c> of a data directive whose values are on the lines the brace opens.
+      </summary>
     </TypeComment>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c>.</summary>
+        <summary>Gets the <c>{</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -548,17 +583,19 @@
   <Node Name="DataDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="DataDeclaration"/>
     <TypeComment>
-      <summary><c>.data name: element</c>, or <c>.data name {</c> for mixed data.</summary>
+      <summary>
+        Represents a <c>.data name: element</c> line, or a <c>.data name {</c> line for mixed data.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.data</c> that starts the line.</summary>
+        <summary>Gets the <c>.data</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The declared name.</summary>
+        <summary>Gets the declared name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -566,18 +603,18 @@
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>:</c> before what the data is, or null.</summary>
+        <summary>Gets the <c>:</c> token before the data directive that describes the data, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
     <Field Name="Directive" Type="DataDirectiveSyntax" Optional="true">
       <PropertyComment>
-        <summary>What the data is, or null.</summary>
+        <summary>Gets the data directive that describes the data, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>Gets the <c>{</c> token that opens the block, or null if the source omits it.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -586,51 +623,65 @@
   <Node Name="DataDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="DataDirective"/>
     <TypeComment>
-      <summary>A data directive: <c>.byte 1, 2</c>, <c>.word[4] { … }</c>, <c>.type T { x = 1 }</c>, <c>.incbin "f"</c>.</summary>
+      <summary>
+        Represents a data directive, such as <c>.byte 1, 2</c>, <c>.word[4] { … }</c>,
+        <c>.type T { x = 1 }</c> or <c>.incbin "f"</c>.
+      </summary>
     </TypeComment>
     <Field Name="Directive" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The directive.</summary>
+        <summary>Gets the directive.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Member Name="IsRecord" Type="bool">
       <PropertyComment>
-        <summary>Whether the directive is <c>.type</c>, whose element is a named type.</summary>
+        <summary>
+          Gets a value indicating whether the directive is <c>.type</c>, whose element is a named
+          type.
+        </summary>
       </PropertyComment>
       <Read><![CDATA[Directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase)]]></Read>
     </Member>
     <Field Name="Type" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The <c>T</c> of <c>.type T</c>, or null.</summary>
+        <summary>Gets the <c>T</c> of <c>.type T</c>, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Count" Type="ElementCountSyntax" Optional="true">
       <PropertyComment>
-        <summary>The <c>[n]</c> or <c>[]</c> after the element type, or null.</summary>
+        <summary>Gets the <c>[n]</c> or <c>[]</c> after the element type, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Tail" Type="DataTailSyntax" Optional="true">
       <PropertyComment>
-        <summary>Where the values are: a body this line opens, one braced value, or values on the line.</summary>
+        <summary>
+          Gets the part that holds the values, which is a body this line opens, one braced value, or
+          values on the line.
+        </summary>
       </PropertyComment>
     </Field>
   </Node>
 
   <AbstractNode Name="DataTailSyntax" Base="SyntaxNode">
     <TypeComment>
-      <summary>Where a data directive's values are: the body it opens, one braced value, or the values on its line.</summary>
+      <summary>
+        Represents the part of a data directive that holds its values, which is the body the
+        directive opens, one braced value, or the values on its line.
+      </summary>
     </TypeComment>
   </AbstractNode>
 
   <Node Name="DataValuesSyntax" Base="StatementSyntax">
     <Kind Name="DataValues"/>
     <TypeComment>
-      <summary>One line of a data body: values separated by commas, one element each.</summary>
+      <summary>
+        Represents one line of a data body, which holds comma-separated values of one element each.
+      </summary>
     </TypeComment>
     <Field Name="Values" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;">
       <PropertyComment>
-        <summary>The values: expressions and braced lists or records.</summary>
+        <summary>Gets the values, which are expressions and braced lists or records.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -638,29 +689,32 @@
   <Node Name="EachDirectiveSyntax" Base="RepetitionDirectiveSyntax">
     <Kind Name="EachDirective"/>
     <TypeComment>
-      <summary><c>.each what, name {</c>.</summary>
+      <summary>Represents an <c>.each what, name {</c> line.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="ElementCountSyntax" Base="SyntaxNode">
     <Kind Name="ElementCount"/>
     <TypeComment>
-      <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
+      <summary>
+        Represents an element count, <c>[n]</c>, or <c>[]</c> for as many elements as there are
+        values.
+      </summary>
     </TypeComment>
     <Field Name="OpenBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>[</c>.</summary>
+        <summary>Gets the <c>[</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
     </Field>
     <Field Name="Count" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The count, or null for <c>[]</c>.</summary>
+        <summary>Gets the count, or null for <c>[]</c>.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>]</c>.</summary>
+        <summary>Gets the <c>]</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
     </Field>
@@ -669,22 +723,25 @@
   <Node Name="ElementIndexSyntax" Base="SyntaxNode">
     <Kind Name="ElementIndex"/>
     <TypeComment>
-      <summary><c>[i]</c> after a name: which element of a counted declaration the name refers to.</summary>
+      <summary>
+        Represents an <c>[i]</c> after a name, which selects the element of a counted declaration
+        that the name refers to.
+      </summary>
     </TypeComment>
     <Field Name="OpenBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>[</c>.</summary>
+        <summary>Gets the <c>[</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
     </Field>
     <Field Name="Index" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The element.</summary>
+        <summary>Gets the index of the element.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>]</c>.</summary>
+        <summary>Gets the <c>]</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
     </Field>
@@ -693,23 +750,23 @@
   <Node Name="ElseDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ElseDirective"/>
     <TypeComment>
-      <summary><c>} .else {</c>.</summary>
+      <summary>Represents a <c>} .else {</c> line.</summary>
     </TypeComment>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c> that closes the branch before.</summary>
+        <summary>Gets the <c>}</c> token that closes the previous branch.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.else</c>.</summary>
+        <summary>Gets the <c>.else</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -718,11 +775,11 @@
   <Node Name="ElseIfDirectiveSyntax" Base="ConditionalDirectiveSyntax" Layout="CloseBraceToken Keyword Condition OpenBraceToken">
     <Kind Name="ElseIfDirective"/>
     <TypeComment>
-      <summary><c>} .elseif expr {</c>.</summary>
+      <summary>Represents a <c>} .elseif expr {</c> line.</summary>
     </TypeComment>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c> that closes the branch before.</summary>
+        <summary>Gets the <c>}</c> token that closes the previous branch.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>
@@ -731,17 +788,17 @@
   <Node Name="EmptyBlockSyntax" Base="SyntaxNode">
     <Kind Name="EmptyBlock"/>
     <TypeComment>
-      <summary><c>{}</c>: the default of a block parameter a call may leave out.</summary>
+      <summary>Represents <c>{}</c>, the default of a block parameter that a call may omit.</summary>
     </TypeComment>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c>.</summary>
+        <summary>Gets the <c>{</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>.</summary>
+        <summary>Gets the <c>}</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>
@@ -750,25 +807,31 @@
   <Node Name="EnsureDirectiveSyntax" Base="StateListDirectiveSyntax">
     <Kind Name="EnsureDirective"/>
     <TypeComment>
-      <summary><c>.ensure a16, i8</c>: the widths to establish at this point.</summary>
+      <summary>
+        Represents an <c>.ensure a16, i8</c> line, which names the widths to establish at this
+        point.
+      </summary>
     </TypeComment>
   </Node>
 
   <Node Name="EnumDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="EnumDeclaration"/>
     <TypeComment>
-      <summary><c>.enum name {</c>.</summary>
+      <summary>Represents an <c>.enum name {</c> line.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="EnumMemberSyntax" Base="StatementSyntax">
     <Kind Name="EnumMember"/>
     <TypeComment>
-      <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
+      <summary>
+        Represents one member of an <c>.enum</c>, which is a name, optionally followed by the value
+        it is given.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The member's name.</summary>
+        <summary>Gets the member's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -776,13 +839,13 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>=</c>, or null.</summary>
+        <summary>Gets the <c>=</c> token, or null.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The value the member is given, or null.</summary>
+        <summary>Gets the value the member is given, or null.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -790,17 +853,17 @@
   <Node Name="ErrorDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ErrorDirective"/>
     <TypeComment>
-      <summary><c>.error "message"</c> or <c>.warning "message"</c>.</summary>
+      <summary>Represents an <c>.error "message"</c> or <c>.warning "message"</c> line.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.error</c> or <c>.warning</c> that starts the line.</summary>
+        <summary>Gets the <c>.error</c> or <c>.warning</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Message" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The quoted message.</summary>
+        <summary>Gets the quoted message.</summary>
       </PropertyComment>
       <Kind Name="StringLiteral"/>
     </Field>
@@ -809,11 +872,13 @@
   <Node Name="ErrorExpressionSyntax" Base="ExpressionSyntax" Missing="true">
     <Kind Name="ErrorExpression"/>
     <TypeComment>
-      <summary>Where an expression was expected and none could be read.</summary>
+      <summary>Represents the place where an expression was expected and none could be read.</summary>
     </TypeComment>
     <Field Name="Token" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The directive that could not be read as a call of a built-in function, or null.</summary>
+        <summary>
+          Gets the directive that could not be read as a call of a built-in function, or null.
+        </summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
@@ -822,11 +887,14 @@
   <Node Name="ErrorLineSyntax" Base="StatementSyntax">
     <Kind Name="ErrorLine"/>
     <TypeComment>
-      <summary>A line the parser could not read as any statement: its tokens, as they are.</summary>
+      <summary>
+        Represents a line that the parser could not read as any statement, holding its tokens
+        unchanged.
+      </summary>
     </TypeComment>
     <Field Name="Tokens" Type="SyntaxTokenList">
       <PropertyComment>
-        <summary>The line's tokens, as they are.</summary>
+        <summary>Gets the line's tokens, unchanged.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -834,17 +902,20 @@
   <Node Name="ExportDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ExportDirective"/>
     <TypeComment>
-      <summary><c>.export a, outer::inner, K: abs, init as "_init"</c>: a list of names to export.</summary>
+      <summary>
+        Represents an <c>.export</c> line, such as
+        <c>.export a, outer::inner, K: abs, init as "_init"</c>, which lists names to export.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.export</c> that starts the line.</summary>
+        <summary>Gets the <c>.export</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Items" Type="SeparatedSyntaxList&lt;ExportItemSyntax&gt;">
       <PropertyComment>
-        <summary>The names exported.</summary>
+        <summary>Gets the exported names.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -852,34 +923,37 @@
   <Node Name="ExportItemSyntax" Base="SyntaxNode">
     <Kind Name="ExportItem"/>
     <TypeComment>
-      <summary><c>name</c> or <c>outer::inner</c>, then <c>: size</c> or <c>as "linker_name"</c>.</summary>
+      <summary>
+        Represents one exported name, <c>name</c> or <c>outer::inner</c>, followed by an optional
+        <c>: size</c> or <c>as "linker_name"</c>.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="NameExpressionSyntax">
       <PropertyComment>
-        <summary>The name exported.</summary>
+        <summary>Gets the exported name.</summary>
       </PropertyComment>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>:</c> before the address size, or null.</summary>
+        <summary>Gets the <c>:</c> token before the address size, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
     <Field Name="AddressSize" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.</summary>
+        <summary>Gets the <c>zp</c>, <c>abs</c> or <c>far</c> keyword after the <c>:</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="AsKeyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>as</c> before the linker name, or null.</summary>
+        <summary>Gets the <c>as</c> keyword before the linker name, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="LinkerName" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The quoted name the linker sees, or null.</summary>
+        <summary>Gets the quoted name the linker sees, or null.</summary>
       </PropertyComment>
       <Kind Name="StringLiteral"/>
     </Field>
@@ -887,24 +961,27 @@
 
   <AbstractNode Name="ExpressionSyntax" Base="SyntaxNode">
     <TypeComment>
-      <summary>An expression.</summary>
+      <summary>Represents an expression.</summary>
     </TypeComment>
   </AbstractNode>
 
   <Node Name="ExternProcDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ExternProcDeclaration"/>
     <TypeComment>
-      <summary><c>.proc name = address: entry -&gt; exit</c>: a routine with no body.</summary>
+      <summary>
+        Represents a <c>.proc name = address: entry -&gt; exit</c> line, which declares a routine
+        with no body.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.proc</c> that starts the line.</summary>
+        <summary>Gets the <c>.proc</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The routine's name.</summary>
+        <summary>Gets the routine's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -912,18 +989,18 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>.</summary>
+        <summary>Gets the <c>=</c> token.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>Where the routine is.</summary>
+        <summary>Gets the routine's address.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Signature" Type="ProcSignatureSyntax" Optional="true">
       <PropertyComment>
-        <summary>The signature, or null.</summary>
+        <summary>Gets the signature, or null.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -931,17 +1008,20 @@
   <Node Name="FallthroughDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="FallthroughDirective"/>
     <TypeComment>
-      <summary><c>.fallthrough next</c>: the last line of a routine's body, naming the routine every path that reaches the end runs into.</summary>
+      <summary>
+        Represents a <c>.fallthrough next</c> line. It is the last line of a routine's body, and it
+        names the routine that every path reaching the end runs into.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.fallthrough</c> that starts the line.</summary>
+        <summary>Gets the <c>.fallthrough</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Target" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The routine execution runs into, or null when no name was written.</summary>
+        <summary>Gets the routine that execution runs into, or null if the source omits the name.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -953,29 +1033,35 @@
   <Node Name="FrameDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="FrameDirective"/>
     <TypeComment>
-      <summary><c>.frame locals: Locals</c>: a name, and the struct that gives the layout of the top of the stack.</summary>
+      <summary>
+        Represents a <c>.frame locals: Locals</c> line, which declares a name and the struct that
+        gives the layout of the top of the stack.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.frame</c> that starts the line.</summary>
+        <summary>Gets the <c>.frame</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The frame's name.</summary>
+        <summary>Gets the frame's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>:</c> before the struct.</summary>
+        <summary>Gets the <c>:</c> token before the struct.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
     <Field Name="Type" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The struct that gives the frame's layout, or null when not even the <c>:</c> was written.</summary>
+        <summary>
+          Gets the struct that gives the frame's layout, or null if the source omits even the
+          <c>:</c>.
+        </summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -983,17 +1069,19 @@
   <Node Name="FuncDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="FuncDeclaration"/>
     <TypeComment>
-      <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
+      <summary>
+        Represents a <c>.func name(a, b) = expr</c> line, which declares a pure expression function.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.func</c> that starts the line.</summary>
+        <summary>Gets the <c>.func</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The function's name.</summary>
+        <summary>Gets the function's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1001,18 +1089,18 @@
     </Field>
     <Field Name="Parameters" Type="ParameterListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The parameters, or null when not even the <c>(</c> was written.</summary>
+        <summary>Gets the parameters, or null if the source omits even the <c>(</c>.</summary>
       </PropertyComment>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c> before the body.</summary>
+        <summary>Gets the <c>=</c> token before the body.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Body" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The expression the function stands for.</summary>
+        <summary>Gets the expression the function stands for.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1020,11 +1108,14 @@
   <Node Name="IdentifierNameSyntax" Base="SyntaxNode">
     <Kind Name="IdentifierName"/>
     <TypeComment>
-      <summary>One name, and the <c>[i]</c> after it when it has one: a part of a path, a parameter's word, a register.</summary>
+      <summary>
+        Represents one name, with the <c>[i]</c> after it if it has one. It serves as a part of a
+        path, a parameter's word or a register.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The name.</summary>
+        <summary>Gets the name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="CheapLocal"/>
@@ -1033,7 +1124,7 @@
     </Field>
     <Field Name="Index" Type="ElementIndexSyntax" Optional="true">
       <PropertyComment>
-        <summary>The <c>[i]</c> after the name, or null.</summary>
+        <summary>Gets the <c>[i]</c> after the name, or null.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1041,41 +1132,43 @@
   <Node Name="IfDirectiveSyntax" Base="ConditionalDirectiveSyntax">
     <Kind Name="IfDirective"/>
     <TypeComment>
-      <summary><c>.if expr {</c>.</summary>
+      <summary>Represents an <c>.if expr {</c> line.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="ImmediateOperandSyntax" Base="OperandSyntax">
     <Kind Name="ImmediateOperand"/>
     <TypeComment>
-      <summary><c>#expr</c>, or the <c>#src, #dst</c> of a block move.</summary>
+      <summary>
+        Represents an immediate operand, <c>#expr</c>, or the <c>#src, #dst</c> of a block move.
+      </summary>
     </TypeComment>
     <Field Name="HashToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>#</c>.</summary>
+        <summary>Gets the <c>#</c> token.</summary>
       </PropertyComment>
       <Kind Name="Hash"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The value.</summary>
+        <summary>Gets the value.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c> before a second value, or null.</summary>
+        <summary>Gets the <c>,</c> token before a second value, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="SecondHashToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>#</c> of a second value, or null.</summary>
+        <summary>Gets the <c>#</c> token of a second value, or null.</summary>
       </PropertyComment>
       <Kind Name="Hash"/>
     </Field>
     <Field Name="SecondValue" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The second bank of a block move, or null.</summary>
+        <summary>Gets the second bank of a block move, or null.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1083,17 +1176,19 @@
   <Node Name="ImportDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ImportDirective"/>
     <TypeComment>
-      <summary><c>.import a, b: far, c: proc(a8 -&gt; a8)</c>.</summary>
+      <summary>
+        Represents an <c>.import</c> line, such as <c>.import a, b: far, c: proc(a8 -&gt; a8)</c>.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.import</c> that starts the line.</summary>
+        <summary>Gets the <c>.import</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Items" Type="SeparatedSyntaxList&lt;ImportItemSyntax&gt;">
       <PropertyComment>
-        <summary>The names imported.</summary>
+        <summary>Gets the imported names.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1101,11 +1196,14 @@
   <Node Name="ImportItemSyntax" Base="SyntaxNode">
     <Kind Name="ImportItem"/>
     <TypeComment>
-      <summary><c>name</c>, <c>name: size</c>, <c>name: proc(...)</c> or a checked <c>name = expr</c>.</summary>
+      <summary>
+        Represents one imported name, in the form <c>name</c>, <c>name: size</c>,
+        <c>name: proc(...)</c> or a checked <c>name = expr</c>.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The name imported.</summary>
+        <summary>Gets the imported name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1113,46 +1211,49 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>=</c> before a checked value, or null.</summary>
+        <summary>Gets the <c>=</c> token before a checked value, or null.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The value the import is checked against, or null.</summary>
+        <summary>Gets the value the import is checked against, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>:</c> before a size or a signature, or null.</summary>
+        <summary>Gets the <c>:</c> token before a size or a signature, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
     <Field Name="AddressSize" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>zp</c>, <c>abs</c> or <c>far</c> after the <c>:</c>, or null.</summary>
+        <summary>Gets the <c>zp</c>, <c>abs</c> or <c>far</c> keyword after the <c>:</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="Signature" Type="ImportSignatureSyntax" Optional="true">
       <PropertyComment>
-        <summary>The <c>proc(...)</c> after the <c>:</c>, or null.</summary>
+        <summary>Gets the <c>proc(...)</c> after the <c>:</c>, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Element" Type="DataDirectiveSyntax" Optional="true">
       <PropertyComment>
-        <summary>The element type after the <c>:</c>, <c>.byte[16]</c> or <c>.type T</c>, or null.</summary>
+        <summary>
+          Gets the element type after the <c>:</c>, such as <c>.byte[16]</c> or <c>.type T</c>, or
+          null.
+        </summary>
       </PropertyComment>
     </Field>
     <Field Name="InKeyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>in</c> before the segment the imported name is in, or null.</summary>
+        <summary>Gets the <c>in</c> keyword before the segment the imported name is in, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="Segment" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The segment the imported name is in, after <c>in</c>, or null.</summary>
+        <summary>Gets the segment the imported name is in, after <c>in</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
@@ -1161,39 +1262,39 @@
   <Node Name="ImportSignatureSyntax" Base="SyntaxNode">
     <Kind Name="ImportSignature"/>
     <TypeComment>
-      <summary><c>proc(entry -&gt; exit)</c>: the signature of an imported routine.</summary>
+      <summary>Represents <c>proc(entry -&gt; exit)</c>, the signature of an imported routine.</summary>
     </TypeComment>
     <Field Name="ProcKeyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>proc</c>.</summary>
+        <summary>Gets the <c>proc</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>(</c>.</summary>
+        <summary>Gets the <c>(</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Entry" Type="StateListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The state on entry, or null when it is left out.</summary>
+        <summary>Gets the state on entry, or null if the source omits it.</summary>
       </PropertyComment>
     </Field>
     <Field Name="ArrowToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>-&gt;</c>, or null.</summary>
+        <summary>Gets the <c>-&gt;</c> token, or null.</summary>
       </PropertyComment>
       <Kind Name="Arrow"/>
     </Field>
     <Field Name="Exit" Type="StateListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The state on exit, or null when it is left out.</summary>
+        <summary>Gets the state on exit, or null if the source omits it.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>.</summary>
+        <summary>Gets the <c>)</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
     </Field>
@@ -1202,46 +1303,46 @@
   <Node Name="IndexedIndirectOperandSyntax" Base="OperandSyntax">
     <Kind Name="IndexedIndirectOperand"/>
     <TypeComment>
-      <summary><c>(expr,x)</c> or <c>(expr,s),y</c>.</summary>
+      <summary>Represents an indexed indirect operand, <c>(expr,x)</c> or <c>(expr,s),y</c>.</summary>
     </TypeComment>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>(</c>.</summary>
+        <summary>Gets the <c>(</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The address of the pointer.</summary>
+        <summary>Gets the address of the pointer.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>,</c> inside the parentheses.</summary>
+        <summary>Gets the <c>,</c> token inside the parentheses.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="InnerRegister" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>x</c> or <c>s</c> inside the parentheses.</summary>
+        <summary>Gets the <c>x</c> or <c>s</c> register inside the parentheses.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>.</summary>
+        <summary>Gets the <c>)</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
     </Field>
     <Field Name="OuterCommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c> after the parentheses, or null.</summary>
+        <summary>Gets the <c>,</c> token after the parentheses, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="OuterRegister" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>y</c> after the parentheses, or null.</summary>
+        <summary>Gets the <c>y</c> register after the parentheses, or null.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
     </Field>
@@ -1250,34 +1351,34 @@
   <Node Name="IndirectOperandSyntax" Base="OperandSyntax">
     <Kind Name="IndirectOperand"/>
     <TypeComment>
-      <summary><c>(expr)</c> or <c>(expr),y</c>.</summary>
+      <summary>Represents an indirect operand, <c>(expr)</c> or <c>(expr),y</c>.</summary>
     </TypeComment>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>(</c>.</summary>
+        <summary>Gets the <c>(</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The address of the pointer.</summary>
+        <summary>Gets the address of the pointer.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>.</summary>
+        <summary>Gets the <c>)</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c> before the index register, or null.</summary>
+        <summary>Gets the <c>,</c> token before the index register, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="IndexRegister" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>y</c> after the parentheses, or null.</summary>
+        <summary>Gets the <c>y</c> register after the parentheses, or null.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
     </Field>
@@ -1286,11 +1387,14 @@
   <Node Name="InlineDataSyntax" Base="DataTailSyntax">
     <Kind Name="InlineData"/>
     <TypeComment>
-      <summary>The values of a data directive, written on its own line after the element type.</summary>
+      <summary>
+        Represents the values of a data directive that appear on the directive's own line, after the
+        element type.
+      </summary>
     </TypeComment>
     <Field Name="Values" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;">
       <PropertyComment>
-        <summary>The values.</summary>
+        <summary>Gets the values.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1298,17 +1402,17 @@
   <Node Name="InstructionStatementSyntax" Base="StatementSyntax" Partial="true">
     <Kind Name="InstructionStatement"/>
     <TypeComment>
-      <summary>A mnemonic and its operand, if it takes one.</summary>
+      <summary>Represents an instruction, which is a mnemonic and its operand, if it takes one.</summary>
     </TypeComment>
     <Field Name="Mnemonic" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The mnemonic.</summary>
+        <summary>Gets the mnemonic.</summary>
       </PropertyComment>
       <Kind Name="Mnemonic"/>
     </Field>
     <Field Name="Operand" Type="OperandSyntax" Optional="true">
       <PropertyComment>
-        <summary>The operand, or null for an instruction written without one.</summary>
+        <summary>Gets the operand, or null if the instruction has none.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1316,11 +1420,11 @@
   <Node Name="LabelSyntax" Base="SyntaxNode">
     <Kind Name="Label"/>
     <TypeComment>
-      <summary><c>name:</c> at the start of a line.</summary>
+      <summary>Represents a label, <c>name:</c>, at the start of a line.</summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The label's name.</summary>
+        <summary>Gets the label's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="CheapLocal"/>
@@ -1329,7 +1433,7 @@
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>:</c>.</summary>
+        <summary>Gets the <c>:</c> token.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
@@ -1338,16 +1442,19 @@
   <Node Name="LabeledLineSyntax" Base="StatementSyntax">
     <Kind Name="LabeledLine"/>
     <TypeComment>
-      <summary>A label, and the instruction, data directive or macro call written after it, if any.</summary>
+      <summary>
+        Represents a label and the instruction, data directive or macro call that follows it, if
+        any.
+      </summary>
     </TypeComment>
     <Field Name="Label" Type="LabelSyntax">
       <PropertyComment>
-        <summary>The label.</summary>
+        <summary>Gets the label.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Statement" Type="StatementSyntax" Optional="true">
       <PropertyComment>
-        <summary>What is written after the label, or null.</summary>
+        <summary>Gets the statement that follows the label, or null if there is none.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1359,29 +1466,29 @@
   <Node Name="ListDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="ListDeclaration"/>
     <TypeComment>
-      <summary><c>.list name {</c>.</summary>
+      <summary>Represents a <c>.list name {</c> line.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="ListItemsSyntax" Base="StatementSyntax">
     <Kind Name="ListItems"/>
     <TypeComment>
-      <summary>One line of a <c>.list</c>, which holds one or more comma-separated items.</summary>
+      <summary>Represents one line of a <c>.list</c>, which holds one or more comma-separated items.</summary>
     </TypeComment>
     <Field Name="Items" Type="SeparatedSyntaxList&lt;ExpressionSyntax&gt;">
       <PropertyComment>
-        <summary>The items.</summary>
+        <summary>Gets the items.</summary>
       </PropertyComment>
     </Field>
   </Node>
 
   <AbstractNode Name="LiteralExpressionSyntax" Base="ExpressionSyntax">
     <TypeComment>
-      <summary>An expression that is one token.</summary>
+      <summary>Represents an expression that consists of one token.</summary>
     </TypeComment>
     <Field Name="Token" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The expression's one token.</summary>
+        <summary>Gets the expression's single token.</summary>
       </PropertyComment>
       <Kind Name="NumberLiteral"/>
       <Kind Name="CharacterLiteral"/>
@@ -1393,34 +1500,34 @@
   <Node Name="LongIndirectOperandSyntax" Base="OperandSyntax">
     <Kind Name="LongIndirectOperand"/>
     <TypeComment>
-      <summary><c>[expr]</c> or <c>[expr],y</c>.</summary>
+      <summary>Represents a long indirect operand, <c>[expr]</c> or <c>[expr],y</c>.</summary>
     </TypeComment>
     <Field Name="OpenBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>[</c>.</summary>
+        <summary>Gets the <c>[</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
     </Field>
     <Field Name="Address" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The address of the pointer.</summary>
+        <summary>Gets the address of the pointer.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>]</c>.</summary>
+        <summary>Gets the <c>]</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c> before the index register, or null.</summary>
+        <summary>Gets the <c>,</c> token before the index register, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="IndexRegister" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>y</c> after the brackets, or null.</summary>
+        <summary>Gets the <c>y</c> register after the brackets, or null.</summary>
       </PropertyComment>
       <Kind Name="Register"/>
     </Field>
@@ -1429,29 +1536,32 @@
   <Node Name="MacroCallSyntax" Base="StatementSyntax">
     <Kind Name="MacroCall"/>
     <TypeComment>
-      <summary><c>name!(args)</c>, with the <c>{</c> of a trailing block argument when one follows.</summary>
+      <summary>
+        Represents a macro call, <c>name!(args)</c>, with the <c>{</c> of a trailing block argument
+        if one follows.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The macro's name, which may be an instruction's name.</summary>
+        <summary>Gets the macro's name, which may be an instruction's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Mnemonic"/>
     </Field>
     <Field Name="BangToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>!</c>.</summary>
+        <summary>Gets the <c>!</c> token.</summary>
       </PropertyComment>
       <Kind Name="Bang"/>
     </Field>
     <Field Name="Arguments" Type="ArgumentListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The arguments, or null when not even the <c>(</c> was written.</summary>
+        <summary>Gets the arguments, or null if the source omits even the <c>(</c>.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block, or null when it is not written.</summary>
+        <summary>Gets the <c>{</c> token that opens the block, or null if the source omits it.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -1460,17 +1570,17 @@
   <Node Name="MacroDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="MacroDeclaration"/>
     <TypeComment>
-      <summary><c>.macro name(params): entry -&gt; exit {</c>.</summary>
+      <summary>Represents a <c>.macro name(params): entry -&gt; exit {</c> line.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.macro</c> that starts the line.</summary>
+        <summary>Gets the <c>.macro</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The macro's name.</summary>
+        <summary>Gets the macro's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1478,17 +1588,17 @@
     </Field>
     <Field Name="Parameters" Type="MacroParameterListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The parameters, or null when not even the <c>(</c> was written.</summary>
+        <summary>Gets the parameters, or null if the source omits even the <c>(</c>.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Signature" Type="ProcSignatureSyntax" Optional="true">
       <PropertyComment>
-        <summary>The processor state the macro expects and leaves, or null.</summary>
+        <summary>Gets the processor state the macro expects and leaves, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -1497,22 +1607,22 @@
   <Node Name="MacroParameterListSyntax" Base="SyntaxNode">
     <Kind Name="MacroParameterList"/>
     <TypeComment>
-      <summary><c>(a, b: expr, c = 1)</c>: the parameters of a macro.</summary>
+      <summary>Represents <c>(a, b: expr, c = 1)</c>, the parameters of a macro.</summary>
     </TypeComment>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>(</c>.</summary>
+        <summary>Gets the <c>(</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Parameters" Type="SeparatedSyntaxList&lt;MacroParameterSyntax&gt;">
       <PropertyComment>
-        <summary>The parameters.</summary>
+        <summary>Gets the parameters.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>.</summary>
+        <summary>Gets the <c>)</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
     </Field>
@@ -1521,11 +1631,14 @@
   <Node Name="MacroParameterSyntax" Base="SyntaxNode">
     <Kind Name="MacroParameter"/>
     <TypeComment>
-      <summary><c>name</c>, <c>name: kind</c>, <c>name = default</c> or all three.</summary>
+      <summary>
+        Represents one macro parameter, in the form <c>name</c>, <c>name: kind</c>,
+        <c>name = default</c> or all three.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The parameter's name.</summary>
+        <summary>Gets the parameter's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1533,24 +1646,27 @@
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>:</c> before the kind, or null.</summary>
+        <summary>Gets the <c>:</c> token before the kind, or null.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
     <Field Name="ParameterKind" Type="ParameterKindSyntax" Optional="true">
       <PropertyComment>
-        <summary>What the parameter takes, or null.</summary>
+        <summary>Gets what the parameter takes, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>=</c> before the default, or null.</summary>
+        <summary>Gets the <c>=</c> token before the default, or null.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Default" Type="SyntaxNode" Optional="true">
       <PropertyComment>
-        <summary>The default: an expression, or the <c>{}</c> of a block parameter. Null when there is none.</summary>
+        <summary>
+          Gets the default, which is an expression or the <c>{}</c> of a block parameter, or null if
+          there is none.
+        </summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1558,11 +1674,14 @@
   <Node Name="MemberValueSyntax" Base="StatementSyntax">
     <Kind Name="MemberValue"/>
     <TypeComment>
-      <summary><c>member = value</c>, in a braced record or on a line of its own in a multi-line initializer.</summary>
+      <summary>
+        Represents <c>member = value</c>, either in a braced record or on its own line in a
+        multi-line initializer.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The member's name.</summary>
+        <summary>Gets the member's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1570,13 +1689,13 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>.</summary>
+        <summary>Gets the <c>=</c> token.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="SyntaxNode">
       <PropertyComment>
-        <summary>The value: an expression, or a braced list or record.</summary>
+        <summary>Gets the value, which is an expression or a braced list or record.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1584,28 +1703,31 @@
   <Node Name="ModuleDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="ModuleDirective"/>
     <TypeComment>
-      <summary><c>.module name</c> or <c>.module outer::inner</c>.</summary>
+      <summary>Represents a <c>.module name</c> or <c>.module outer::inner</c> line.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.module</c> that starts the line.</summary>
+        <summary>Gets the <c>.module</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="NameExpressionSyntax">
       <PropertyComment>
-        <summary>The module's name, which is a path from the root of the module hierarchy.</summary>
+        <summary>Gets the module's name, which is a path from the root of the module hierarchy.</summary>
       </PropertyComment>
     </Field>
     <Field Name="ColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>:</c> before whether the module may be placed, or null.</summary>
+        <summary>
+          Gets the <c>:</c> token before the marker that says whether the module may be placed, or
+          null.
+        </summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
     <Field Name="Placement" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>placed</c> or <c>placeable</c> after the <c>:</c>, or null.</summary>
+        <summary>Gets the <c>placed</c> or <c>placeable</c> keyword after the <c>:</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
@@ -1614,28 +1736,31 @@
   <Node Name="MultiProcDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="MultiProcDeclaration"/>
     <TypeComment>
-      <summary><c>.multiproc E, b: signature {</c>: one routine per member of the enum <c>E</c>.</summary>
+      <summary>
+        Represents a <c>.multiproc E, b: signature {</c> line, which declares one routine per member
+        of the enum <c>E</c>.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.multiproc</c> that starts the line.</summary>
+        <summary>Gets the <c>.multiproc</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Expression" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The enum whose members the routines are named from.</summary>
+        <summary>Gets the enum whose members the routines are named from.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>,</c> before the name.</summary>
+        <summary>Gets the <c>,</c> token before the name.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The name bound to the member.</summary>
+        <summary>Gets the name bound to the member.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1643,12 +1768,12 @@
     </Field>
     <Field Name="Signature" Type="ProcSignatureSyntax" Optional="true">
       <PropertyComment>
-        <summary>The signature, or null.</summary>
+        <summary>Gets the signature, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -1657,20 +1782,23 @@
   <Node Name="NameExpressionSyntax" Base="ExpressionSyntax" Partial="true">
     <Kind Name="NameExpression"/>
     <TypeComment>
-      <summary>A name: <c>label</c>, <c>@local</c>, <c>gfx::init</c>, <c>::top_level</c>, <c>table[2]::x</c>.</summary>
+      <summary>
+        Represents a name, such as <c>label</c>, <c>@local</c>, <c>gfx::init</c>, <c>::top_level</c>
+        or <c>table[2]::x</c>.
+      </summary>
     </TypeComment>
     <Field Name="GlobalToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The leading <c>::</c> of a name written from the top level, or null.</summary>
+        <summary>Gets the leading <c>::</c> token of a name that starts from the top level, or null.</summary>
       </PropertyComment>
       <Kind Name="ColonColon"/>
     </Field>
     <Field Name="Parts" Type="SeparatedSyntaxList&lt;IdentifierNameSyntax&gt;">
       <PropertyComment>
         <summary>
-          The names between the <c>::</c>, outermost first, each with the <c>[i]</c> after it. There
-          is always at least one: a part the source did not write stands in the list as an
-          <c>IdentifierName</c> whose name is missing.
+          Gets the names between the <c>::</c> tokens, outermost first, each with the <c>[i]</c>
+          after it. There is always at least one, because a part the source omits appears in the
+          list as an <c>IdentifierName</c> whose name is missing.
         </summary>
       </PropertyComment>
     </Field>
@@ -1679,11 +1807,11 @@
   <Node Name="NamedArgumentSyntax" Base="SyntaxNode">
     <Kind Name="NamedArgument"/>
     <TypeComment>
-      <summary><c>name = argument</c>: a macro argument given by name.</summary>
+      <summary>Represents <c>name = argument</c>, a macro argument given by name.</summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The parameter's name.</summary>
+        <summary>Gets the parameter's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1691,13 +1819,13 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>.</summary>
+        <summary>Gets the <c>=</c> token.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="SyntaxNode">
       <PropertyComment>
-        <summary>What the parameter is given.</summary>
+        <summary>Gets the argument given to the parameter.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1705,23 +1833,23 @@
   <Node Name="NextDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="NextDirective"/>
     <TypeComment>
-      <summary><c>.next @a, gfx::init</c>, or <c>.next ?</c>.</summary>
+      <summary>Represents a <c>.next @a, gfx::init</c> or <c>.next ?</c> line.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.next</c> that starts the line.</summary>
+        <summary>Gets the <c>.next</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="QuestionToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>?</c> of <c>.next ?</c>, or null.</summary>
+        <summary>Gets the <c>?</c> token of <c>.next ?</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Question"/>
     </Field>
     <Field Name="Targets" Type="SeparatedSyntaxList&lt;NameExpressionSyntax&gt;">
       <PropertyComment>
-        <summary>The labels execution continues at.</summary>
+        <summary>Gets the labels where execution continues.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1729,13 +1857,16 @@
   <Node Name="NumberExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="NumberExpression"/>
     <TypeComment>
-      <summary>A number.</summary>
+      <summary>Represents a number.</summary>
     </TypeComment>
   </Node>
 
   <AbstractNode Name="OperandSyntax" Base="SyntaxNode">
     <TypeComment>
-      <summary>An instruction's operand. Which forms an instruction and a CPU allow is decided in layout.</summary>
+      <summary>
+        Represents an instruction's operand. Layout decides which forms an instruction and a CPU
+        allow.
+      </summary>
     </TypeComment>
   </AbstractNode>
 
@@ -1743,57 +1874,64 @@
     <Kind Name="ParameterKind"/>
     <TypeComment>
       <summary>
-        What a macro parameter takes: a fixed word, a <c>one(...)</c> of listed words, a <c>list(...)</c> of one of
-        the others, a <c>const(0..15)</c> in a range, an <c>operand(imm, zp)</c> in the listed modes, or the name of
-        an enum, whose members it takes.
+        Represents what a macro parameter takes. It is a fixed word, a <c>one(...)</c> of listed
+        words, a <c>list(...)</c> of one of the other kinds, a <c>const(0..15)</c> in a range, an
+        <c>operand(imm, zp)</c> in the listed modes, or the name of an enum whose members the
+        parameter takes.
       </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The kind's word, or null where the kind is an enum's name.</summary>
+        <summary>Gets the kind's word, or null if the kind is an enum's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="Type" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The enum whose members the parameter takes, or null where the kind is a word.</summary>
+        <summary>Gets the enum whose members the parameter takes, or null if the kind is a word.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenParenToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>(</c> of a <c>one</c>, a <c>list</c>, a <c>const</c> range or an <c>operand</c>'s modes, or null.</summary>
+        <summary>
+          Gets the <c>(</c> token of a <c>one</c>, a <c>list</c>, a <c>const</c> range or an
+          <c>operand</c>'s modes, or null.
+        </summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Words" Type="SeparatedSyntaxList&lt;IdentifierNameSyntax&gt;">
       <PropertyComment>
-        <summary>The words a <c>one(...)</c> accepts, or the modes an <c>operand(...)</c> does.</summary>
+        <summary>
+          Gets the words that a <c>one(...)</c> accepts, or the modes that an <c>operand(...)</c>
+          accepts.
+        </summary>
       </PropertyComment>
     </Field>
     <Field Name="Element" Type="ParameterKindSyntax" Optional="true">
       <PropertyComment>
-        <summary>What each item of a <c>list(...)</c> is, or null.</summary>
+        <summary>Gets the kind of each item of a <c>list(...)</c>, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="Low" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The least value a <c>const(...)</c> takes, or null.</summary>
+        <summary>Gets the lowest value a <c>const(...)</c> accepts, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>..</c> of a <c>const(...)</c> range, or null.</summary>
+        <summary>Gets the <c>..</c> token of a <c>const(...)</c> range, or null.</summary>
       </PropertyComment>
       <Kind Name="DotDot"/>
     </Field>
     <Field Name="High" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The greatest value a <c>const(...)</c> takes, or null.</summary>
+        <summary>Gets the highest value a <c>const(...)</c> accepts, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>)</c>, or null.</summary>
+        <summary>Gets the <c>)</c> token, or null.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
     </Field>
@@ -1802,22 +1940,22 @@
   <Node Name="ParameterListSyntax" Base="SyntaxNode">
     <Kind Name="ParameterList"/>
     <TypeComment>
-      <summary><c>(a, b)</c>: the parameters of a <c>.func</c>.</summary>
+      <summary>Represents <c>(a, b)</c>, the parameters of a <c>.func</c>.</summary>
     </TypeComment>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>(</c>.</summary>
+        <summary>Gets the <c>(</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Parameters" Type="SeparatedSyntaxList&lt;ParameterSyntax&gt;">
       <PropertyComment>
-        <summary>The parameters.</summary>
+        <summary>Gets the parameters.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>.</summary>
+        <summary>Gets the <c>)</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
     </Field>
@@ -1826,11 +1964,11 @@
   <Node Name="ParameterSyntax" Base="SyntaxNode">
     <Kind Name="Parameter"/>
     <TypeComment>
-      <summary>One parameter of a <c>.func</c>: its name.</summary>
+      <summary>Represents one parameter of a <c>.func</c>, which is only its name.</summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The parameter's name.</summary>
+        <summary>Gets the parameter's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1841,22 +1979,22 @@
   <Node Name="ParenthesizedExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="ParenthesizedExpression"/>
     <TypeComment>
-      <summary><c>(expr)</c>.</summary>
+      <summary>Represents a parenthesized expression, <c>(expr)</c>.</summary>
     </TypeComment>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>(</c>.</summary>
+        <summary>Gets the <c>(</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenParen"/>
     </Field>
     <Field Name="Expression" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The expression in the parentheses.</summary>
+        <summary>Gets the expression in the parentheses.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseParenToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>)</c>.</summary>
+        <summary>Gets the <c>)</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseParen"/>
     </Field>
@@ -1865,17 +2003,23 @@
   <Node Name="PatchDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="PatchDirective"/>
     <TypeComment>
-      <summary><c>.patch @op</c>: the instruction whose bytes the store above overwrites.</summary>
+      <summary>
+        Represents a <c>.patch @op</c> line, which names the instruction whose bytes the store above
+        it overwrites.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.patch</c> that starts the line.</summary>
+        <summary>Gets the <c>.patch</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Target" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The label of the instruction overwritten, or null when no name was written.</summary>
+        <summary>
+          Gets the label of the instruction that is overwritten, or null if the source omits the
+          name.
+        </summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1883,17 +2027,22 @@
   <Node Name="PlaceDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="PlaceDirective"/>
     <TypeComment>
-      <summary><c>.place name</c>: another module's bytes, emitted where the line stands.</summary>
+      <summary>
+        Represents a <c>.place name</c> line, which emits another module's bytes where the line
+        stands.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.place</c> that starts the line.</summary>
+        <summary>Gets the <c>.place</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="NameExpressionSyntax">
       <PropertyComment>
-        <summary>The module placed, as a path from the root of the module hierarchy.</summary>
+        <summary>
+          Gets the name of the module to place, as a path from the root of the module hierarchy.
+        </summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1901,17 +2050,17 @@
   <Node Name="ProcDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ProcDeclaration"/>
     <TypeComment>
-      <summary><c>.proc name: entry -&gt; exit {</c>.</summary>
+      <summary>Represents a <c>.proc name: entry -&gt; exit {</c> line.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.proc</c> that starts the line.</summary>
+        <summary>Gets the <c>.proc</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The routine's name.</summary>
+        <summary>Gets the routine's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -1919,12 +2068,12 @@
     </Field>
     <Field Name="Signature" Type="ProcSignatureSyntax" Optional="true">
       <PropertyComment>
-        <summary>The signature, or null.</summary>
+        <summary>Gets the signature, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -1933,28 +2082,30 @@
   <Node Name="ProcSignatureSyntax" Base="SyntaxNode">
     <Kind Name="ProcSignature"/>
     <TypeComment>
-      <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
+      <summary>
+        Represents the <c>: entry -&gt; exit</c> signature of a proc, an extern proc or a macro.
+      </summary>
     </TypeComment>
     <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>:</c>.</summary>
+        <summary>Gets the <c>:</c> token.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
     <Field Name="Entry" Type="StateListSyntax">
       <PropertyComment>
-        <summary>The state on entry.</summary>
+        <summary>Gets the state on entry.</summary>
       </PropertyComment>
     </Field>
     <Field Name="ArrowToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>-&gt;</c>, or null.</summary>
+        <summary>Gets the <c>-&gt;</c> token, or null.</summary>
       </PropertyComment>
       <Kind Name="Arrow"/>
     </Field>
     <Field Name="Exit" Type="StateListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The state on exit, or null.</summary>
+        <summary>Gets the state on exit, or null.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -1962,22 +2113,22 @@
   <Node Name="RecordValuesSyntax" Base="SyntaxNode">
     <Kind Name="RecordValues"/>
     <TypeComment>
-      <summary><c>{ member = value, … }</c>: a record's values.</summary>
+      <summary>Represents <c>{ member = value, … }</c>, the values of a record.</summary>
     </TypeComment>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c>.</summary>
+        <summary>Gets the <c>{</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
     <Field Name="Members" Type="SeparatedSyntaxList&lt;MemberValueSyntax&gt;">
       <PropertyComment>
-        <summary>The members given a value.</summary>
+        <summary>Gets the members that are given a value.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>.</summary>
+        <summary>Gets the <c>}</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>
@@ -1986,34 +2137,37 @@
   <Node Name="RepeatDirectiveSyntax" Base="RepetitionDirectiveSyntax">
     <Kind Name="RepeatDirective"/>
     <TypeComment>
-      <summary><c>.repeat count, name {</c>.</summary>
+      <summary>Represents a <c>.repeat count, name {</c> line.</summary>
     </TypeComment>
   </Node>
 
   <AbstractNode Name="RepetitionDirectiveSyntax" Base="StatementSyntax">
     <TypeComment>
-      <summary>The line that opens a repetition: <c>.repeat count, name {</c> or <c>.each what, name {</c>.</summary>
+      <summary>
+        Represents the line that opens a repetition, either <c>.repeat count, name {</c> or
+        <c>.each what, name {</c>.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.repeat</c> or <c>.each</c> that starts the line.</summary>
+        <summary>Gets the <c>.repeat</c> or <c>.each</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Expression" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The count of a <c>.repeat</c>, or what an <c>.each</c> goes through.</summary>
+        <summary>Gets the count of a <c>.repeat</c>, or what an <c>.each</c> iterates over.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c> before the name, or null.</summary>
+        <summary>Gets the <c>,</c> token before the name, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The name bound to the index or the item, or null when it is left out.</summary>
+        <summary>Gets the name bound to the index or the item, or null if the source omits it.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -2021,7 +2175,7 @@
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -2030,17 +2184,17 @@
   <Node Name="ScopeDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="ScopeDeclaration"/>
     <TypeComment>
-      <summary><c>.scope name {</c>.</summary>
+      <summary>Represents a <c>.scope name {</c> line.</summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.scope</c> that starts the line.</summary>
+        <summary>Gets the <c>.scope</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The scope's name, or null for an anonymous scope.</summary>
+        <summary>Gets the scope's name, or null for an anonymous scope.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -2048,7 +2202,7 @@
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -2057,39 +2211,42 @@
   <Node Name="SegmentAttributeSyntax" Base="SyntaxNode">
     <Kind Name="SegmentAttribute"/>
     <TypeComment>
-      <summary><c>dp = expr</c>, <c>bank = expr</c>, <c>space = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.</summary>
+      <summary>
+        Represents a segment attribute, which is <c>dp = expr</c>, <c>bank = expr</c>,
+        <c>space = expr</c> or <c>mirrors = [$00..$3f, $80..$bf]</c>.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>dp</c>, <c>bank</c>, <c>space</c> or <c>mirrors</c>.</summary>
+        <summary>Gets the <c>dp</c>, <c>bank</c>, <c>space</c> or <c>mirrors</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>.</summary>
+        <summary>Gets the <c>=</c> token.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>The value of a <c>dp</c>, a <c>bank</c> or a <c>space</c>, or null.</summary>
+        <summary>Gets the value of a <c>dp</c>, a <c>bank</c> or a <c>space</c>, or null.</summary>
       </PropertyComment>
     </Field>
     <Field Name="OpenBracketToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>[</c> of a <c>mirrors</c>, or null.</summary>
+        <summary>Gets the <c>[</c> token of a <c>mirrors</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
     </Field>
     <Field Name="Ranges" Type="SeparatedSyntaxList&lt;BankRangeSyntax&gt;">
       <PropertyComment>
-        <summary>The banks of a <c>mirrors</c>.</summary>
+        <summary>Gets the banks of a <c>mirrors</c>.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBracketToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>]</c> of a <c>mirrors</c>, or null.</summary>
+        <summary>Gets the <c>]</c> token of a <c>mirrors</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
     </Field>
@@ -2098,11 +2255,11 @@
   <Node Name="SegmentBlockSyntax" Base="SegmentStatementSyntax">
     <Kind Name="SegmentBlock"/>
     <TypeComment>
-      <summary><c>.segment NAME {</c>: the line that opens a segment block.</summary>
+      <summary>Represents a <c>.segment NAME {</c> line, which opens a segment block.</summary>
     </TypeComment>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -2111,29 +2268,29 @@
   <Node Name="SegmentDeclarationSyntax" Base="SegmentStatementSyntax">
     <Kind Name="SegmentDeclaration"/>
     <TypeComment>
-      <summary><c>.segment NAME: size</c>, with its attributes.</summary>
+      <summary>Represents a <c>.segment NAME: size</c> line, with its attributes.</summary>
     </TypeComment>
     <Field Name="ColonToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>:</c> before the address size.</summary>
+        <summary>Gets the <c>:</c> token before the address size.</summary>
       </PropertyComment>
       <Kind Name="Colon"/>
     </Field>
     <Field Name="AddressSize" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>zp</c>, <c>abs</c> or <c>far</c>.</summary>
+        <summary>Gets the <c>zp</c>, <c>abs</c> or <c>far</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>,</c> between the address size and the attributes, or null.</summary>
+        <summary>Gets the <c>,</c> token between the address size and the attributes, or null.</summary>
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
     <Field Name="Attributes" Type="SeparatedSyntaxList&lt;SegmentAttributeSyntax&gt;">
       <PropertyComment>
-        <summary>The attributes after the address size.</summary>
+        <summary>Gets the attributes after the address size.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2141,11 +2298,14 @@
   <Node Name="SegmentRegionSyntax" Base="SegmentStatementSyntax">
     <Kind Name="SegmentRegion"/>
     <TypeComment>
-      <summary><c>.segment NAME</c>: a region line, which puts what follows it in the segment.</summary>
+      <summary>
+        Represents a <c>.segment NAME</c> region line, which puts the lines that follow it in the
+        segment.
+      </summary>
     </TypeComment>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>{</c> written after the name on a line that opens no block, or null.</summary>
+        <summary>Gets a <c>{</c> token that follows the name on a line that opens no block, or null.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -2153,17 +2313,20 @@
 
   <AbstractNode Name="SegmentStatementSyntax" Base="StatementSyntax">
     <TypeComment>
-      <summary>A line that starts with <c>.segment</c>: a declaration, a block's opener or a region line.</summary>
+      <summary>
+        Represents a line that starts with <c>.segment</c>, which is a declaration, the opening line
+        of a block, or a region line.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.segment</c> that starts the line.</summary>
+        <summary>Gets the <c>.segment</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The segment's name. A quoted name is an error, and is still the name.</summary>
+        <summary>Gets the segment's name. A quoted name is an error, but it is still the name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -2175,17 +2338,20 @@
   <Node Name="SignatureDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="SignatureDeclaration"/>
     <TypeComment>
-      <summary><c>.signature std = a8, i16, dp = 0</c>: a name for a set of items signatures can use.</summary>
+      <summary>
+        Represents a <c>.signature std = a8, i16, dp = 0</c> line, which names a set of items that
+        signatures can use.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.signature</c> that starts the line.</summary>
+        <summary>Gets the <c>.signature</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The set's name.</summary>
+        <summary>Gets the set's name.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -2193,13 +2359,13 @@
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c> before the items.</summary>
+        <summary>Gets the <c>=</c> token before the items.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Items" Type="StateListSyntax" Optional="true">
       <PropertyComment>
-        <summary>The items the name stands for, or null when not even the <c>=</c> was written.</summary>
+        <summary>Gets the items the name stands for, or null if the source omits even the <c>=</c>.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2207,11 +2373,11 @@
   <Node Name="SkippedTokensSyntax" Base="SyntaxNode">
     <Kind Name="SkippedTokens"/>
     <TypeComment>
-      <summary>What was left on a line after its statement: tokens the parser skipped.</summary>
+      <summary>Represents the tokens left on a line after its statement, which the parser skipped.</summary>
     </TypeComment>
     <Field Name="Tokens" Type="SyntaxTokenList">
       <PropertyComment>
-        <summary>The tokens the parser skipped.</summary>
+        <summary>Gets the tokens the parser skipped.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2219,25 +2385,31 @@
   <Node Name="StateDirectiveSyntax" Base="StateListDirectiveSyntax">
     <Kind Name="StateDirective"/>
     <TypeComment>
-      <summary><c>.state a16, i8</c>: signature items, asserted and set at one point in the code.</summary>
+      <summary>
+        Represents a <c>.state a16, i8</c> line, whose signature items are asserted and set at one
+        point in the code.
+      </summary>
     </TypeComment>
   </Node>
 
   <Node Name="StateFlagItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateFlagItem"/>
     <TypeComment>
-      <summary>A state word and the <c>*</c> or <c>?</c> after it: <c>a16</c>, <c>i*</c>, <c>e?</c>.</summary>
+      <summary>
+        Represents a state word and the <c>*</c> or <c>?</c> after it, such as <c>a16</c>, <c>i*</c>
+        or <c>e?</c>.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The item's word.</summary>
+        <summary>Gets the item's word.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
     </Field>
     <Field Name="SuffixToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>*</c> or <c>?</c> after the word, or null.</summary>
+        <summary>Gets the <c>*</c> or <c>?</c> token after the word, or null.</summary>
       </PropertyComment>
       <Kind Name="Star"/>
       <Kind Name="Question"/>
@@ -2247,17 +2419,20 @@
   <Node Name="StateInlineItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateInlineItem"/>
     <TypeComment>
-      <summary><c>inline .strz</c>: the data after each call is a zero-terminated string.</summary>
+      <summary>
+        Represents <c>inline .strz</c>, which states that the data after each call is a
+        zero-terminated string.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>inline</c>.</summary>
+        <summary>Gets the <c>inline</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="StrzToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.strz</c>.</summary>
+        <summary>Gets the <c>.strz</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
@@ -2266,8 +2441,9 @@
   <AbstractNode Name="StateItemSyntax" Base="SyntaxNode">
     <TypeComment>
       <summary>
-        One processor-state item: <c>a16</c>, <c>i*</c>, <c>dp = 0</c>, <c>dbr = [$00..$3f]</c>, <c>args 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>,
-        <c>?</c> on its own, or the name of a signature set.
+        Represents one processor-state item, such as <c>a16</c>, <c>i*</c>, <c>dp = 0</c>,
+        <c>dbr = [$00..$3f]</c>, <c>args 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>, <c>?</c> on
+        its own, or the name of a signature set.
       </summary>
     </TypeComment>
   </AbstractNode>
@@ -2275,34 +2451,37 @@
   <Node Name="StateBanksItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateBanksItem"/>
     <TypeComment>
-      <summary><c>dbr = [$00..$3f, $80..$bf]</c>: a state word and the set of banks its register lies in.</summary>
+      <summary>
+        Represents a state word and the set of banks its register lies in, such as
+        <c>dbr = [$00..$3f, $80..$bf]</c>.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The item's word.</summary>
+        <summary>Gets the item's word.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>=</c>.</summary>
+        <summary>Gets the <c>=</c> token.</summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="OpenBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>[</c>.</summary>
+        <summary>Gets the <c>[</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBracket"/>
     </Field>
     <Field Name="Ranges" Type="SeparatedSyntaxList&lt;BankRangeSyntax&gt;">
       <PropertyComment>
-        <summary>The banks, each one or a range of them.</summary>
+        <summary>Gets the banks, each a single bank or a range of banks.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBracketToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>]</c>.</summary>
+        <summary>Gets the <c>]</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBracket"/>
     </Field>
@@ -2311,34 +2490,39 @@
   <Node Name="StateKeepsItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateKeepsItem"/>
     <TypeComment>
-      <summary><c>keeps a, x</c>: the registers a routine leaves as it found them.</summary>
+      <summary>
+        Represents <c>keeps a, x</c>, which lists the registers a routine leaves as it found them.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>keeps</c>.</summary>
+        <summary>Gets the <c>keeps</c> keyword.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="Registers" Type="SeparatedSyntaxList&lt;IdentifierNameSyntax&gt;">
       <PropertyComment>
-        <summary>The registers it keeps.</summary>
+        <summary>Gets the registers the routine keeps.</summary>
       </PropertyComment>
     </Field>
   </Node>
 
   <AbstractNode Name="StateListDirectiveSyntax" Base="StatementSyntax">
     <TypeComment>
-      <summary>A directive that takes the items of a signature: <c>.state</c> or <c>.ensure</c>.</summary>
+      <summary>
+        Represents a directive that takes the items of a signature, either <c>.state</c> or
+        <c>.ensure</c>.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.state</c> or <c>.ensure</c> that starts the line.</summary>
+        <summary>Gets the <c>.state</c> or <c>.ensure</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Items" Type="StateListSyntax">
       <PropertyComment>
-        <summary>The items.</summary>
+        <summary>Gets the items.</summary>
       </PropertyComment>
     </Field>
   </AbstractNode>
@@ -2346,11 +2530,11 @@
   <Node Name="StateListSyntax" Base="SyntaxNode">
     <Kind Name="StateList"/>
     <TypeComment>
-      <summary>Processor-state items separated by commas.</summary>
+      <summary>Represents processor-state items separated by commas.</summary>
     </TypeComment>
     <Field Name="Items" Type="SeparatedSyntaxList&lt;StateItemSyntax&gt;">
       <PropertyComment>
-        <summary>The items.</summary>
+        <summary>Gets the items.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2358,11 +2542,14 @@
   <Node Name="StateSetItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateSetItem"/>
     <TypeComment>
-      <summary>The name of a signature set, which stands for the items it was declared with.</summary>
+      <summary>
+        Represents the name of a signature set, which stands for the items the set was declared
+        with.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="NameExpressionSyntax">
       <PropertyComment>
-        <summary>The set's name.</summary>
+        <summary>Gets the set's name.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2370,11 +2557,14 @@
   <Node Name="StateUnknownItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateUnknownItem"/>
     <TypeComment>
-      <summary><c>?</c> on its own: every tracked part of the processor state is unknown.</summary>
+      <summary>
+        Represents <c>?</c> on its own, which states that every tracked part of the processor state
+        is unknown.
+      </summary>
     </TypeComment>
     <Field Name="QuestionToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>?</c>.</summary>
+        <summary>Gets the <c>?</c> token.</summary>
       </PropertyComment>
       <Kind Name="Question"/>
     </Field>
@@ -2383,24 +2573,30 @@
   <Node Name="StateValueItemSyntax" Base="StateItemSyntax">
     <Kind Name="StateValueItem"/>
     <TypeComment>
-      <summary>A state word and the value it is given: <c>dp = $2100</c>, <c>args 2</c>, <c>inline 4</c>.</summary>
+      <summary>
+        Represents a state word and the value it is given, such as <c>dp = $2100</c>, <c>args 2</c>
+        or <c>inline 4</c>.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The item's word.</summary>
+        <summary>Gets the item's word.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
     </Field>
     <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>=</c> before the value, or null for a word that takes its value without one.</summary>
+        <summary>
+          Gets the <c>=</c> token before the value, or null for a word that takes its value without
+          one.
+        </summary>
       </PropertyComment>
       <Kind Name="Equals"/>
     </Field>
     <Field Name="Value" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>The value.</summary>
+        <summary>Gets the value.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2408,22 +2604,25 @@
   <AbstractNode Name="StatementSyntax" Base="SyntaxNode">
     <TypeComment>
       <summary>
-        What a line's tokens parse to: a declaration, a directive, an instruction, a member of a body.
-        A few of them are also written inside another statement, as an instruction is after a label
-        and a data directive after <c>.data name:</c>. A statement is only its own tokens wherever it
-        is written: the line break, whatever the statement could not take and the <c>.export</c>
-        before a declaration all belong to the line (<see cref="LineSyntax"/>).
+        Represents what a line's tokens parse to, such as a declaration, a directive, an instruction
+        or a member of a body. A few statements also appear inside another statement, as an
+        instruction does after a label and a data directive does after <c>.data name:</c>. Wherever
+        it appears, a statement holds only its own tokens. The line break, any tokens the statement
+        could not take, and the <c>.export</c> before a declaration all belong to the line
+        (<see cref="LineSyntax"/>).
       </summary>
     </TypeComment>
     <Member Name="IsExported" Type="bool">
       <PropertyComment>
-        <summary>Whether this is a declaration written after <c>.export</c>.</summary>
+        <summary>Gets a value indicating whether this is a declaration that follows <c>.export</c>.</summary>
       </PropertyComment>
       <Read><![CDATA[ExportToken is not null]]></Read>
     </Member>
     <Member Name="ExportToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>.export</c> the line writes before this declaration, or null.</summary>
+        <summary>
+          Gets the <c>.export</c> keyword that precedes this declaration on its line, or null.
+        </summary>
       </PropertyComment>
       <Read><![CDATA[(Parent as LineSyntax)?.ExportKeyword]]></Read>
     </Member>
@@ -2432,14 +2631,14 @@
   <Node Name="StringExpressionSyntax" Base="LiteralExpressionSyntax">
     <Kind Name="StringExpression"/>
     <TypeComment>
-      <summary>A string in double quotes.</summary>
+      <summary>Represents a string in double quotes.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="StructDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="StructDeclaration"/>
     <TypeComment>
-      <summary><c>.struct name {</c>.</summary>
+      <summary>Represents a <c>.struct name {</c> line.</summary>
     </TypeComment>
   </Node>
 
@@ -2450,17 +2649,20 @@
 
   <AbstractNode Name="TypeDeclarationSyntax" Base="StatementSyntax">
     <TypeComment>
-      <summary>The line that opens an <c>.enum</c>, <c>.struct</c>, <c>.union</c>, <c>.charmap</c> or <c>.list</c>.</summary>
+      <summary>
+        Represents the line that opens an <c>.enum</c>, <c>.struct</c>, <c>.union</c>,
+        <c>.charmap</c> or <c>.list</c>.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.enum</c>, <c>.struct</c> or the like that starts the line.</summary>
+        <summary>Gets the <c>.enum</c>, <c>.struct</c> or similar keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Name" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The declared name, or null for an anonymous declaration.</summary>
+        <summary>Gets the declared name, or null for an anonymous declaration.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -2468,7 +2670,7 @@
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c> that opens the block.</summary>
+        <summary>Gets the <c>{</c> token that opens the block.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
@@ -2477,11 +2679,11 @@
   <Node Name="UnaryExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="UnaryExpression"/>
     <TypeComment>
-      <summary><c>op operand</c>.</summary>
+      <summary>Represents a unary expression, <c>op operand</c>.</summary>
     </TypeComment>
     <Field Name="OperatorToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The operator.</summary>
+        <summary>Gets the operator.</summary>
       </PropertyComment>
       <Kind Name="Plus"/>
       <Kind Name="Minus"/>
@@ -2493,7 +2695,7 @@
     </Field>
     <Field Name="Operand" Type="ExpressionSyntax">
       <PropertyComment>
-        <summary>What the operator applies to.</summary>
+        <summary>Gets the operand the operator applies to.</summary>
       </PropertyComment>
     </Field>
   </Node>
@@ -2501,67 +2703,73 @@
   <Node Name="UnionDeclarationSyntax" Base="TypeDeclarationSyntax">
     <Kind Name="UnionDeclaration"/>
     <TypeComment>
-      <summary><c>.union name {</c>.</summary>
+      <summary>Represents a <c>.union name {</c> line.</summary>
     </TypeComment>
   </Node>
 
   <Node Name="UseDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="UseDirective"/>
     <TypeComment>
-      <summary><c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or <c>.use a::b as c</c>.</summary>
+      <summary>
+        Represents a <c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or
+        <c>.use a::b as c</c> line.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>.use</c> that starts the line.</summary>
+        <summary>Gets the <c>.use</c> keyword that starts the line.</summary>
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
     <Field Name="Path" Type="NameExpressionSyntax">
       <PropertyComment>
-        <summary>The path, outermost name first: everything before a <c>::*</c>, a <c>::{</c> or an <c>as</c>.</summary>
+        <summary>
+          Gets the path, outermost name first, which is everything before a <c>::*</c>, a <c>::{</c>
+          or an <c>as</c>.
+        </summary>
       </PropertyComment>
     </Field>
     <Field Name="ColonColonToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>::</c> before a <c>*</c> or a <c>{</c>, or null.</summary>
+        <summary>Gets the <c>::</c> token before a <c>*</c> or a <c>{</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="ColonColon"/>
     </Field>
     <Field Name="StarToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>*</c> of <c>a::*</c>, or null.</summary>
+        <summary>Gets the <c>*</c> token of <c>a::*</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Star"/>
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>{</c> of <c>a::{b, c}</c>, or null.</summary>
+        <summary>Gets the <c>{</c> token of <c>a::{b, c}</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
     <Field Name="Items" Type="SeparatedSyntaxList&lt;UseItemSyntax&gt;">
       <PropertyComment>
-        <summary>The names in the braces of <c>a::{b, c}</c>.</summary>
+        <summary>Gets the names in the braces of <c>a::{b, c}</c>.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>
-        The <c>}</c> of <c>a::{b, c}</c>: missing where the <c>{</c> is written and the source does
-        not reach the <c>}</c>, and null for a line that writes no braces.
+          Gets the <c>}</c> token of <c>a::{b, c}</c>. It is missing if the <c>{</c> is present and
+          the source does not reach the <c>}</c>, and it is null for a line that has no braces.
         </summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>
     <Field Name="AsKeyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>as</c> of <c>a::b as c</c>, or null.</summary>
+        <summary>Gets the <c>as</c> keyword of <c>a::b as c</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="Alias" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The name the path's last name is brought in as, or null.</summary>
+        <summary>Gets the name that the path's last name is brought in as, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -2572,11 +2780,11 @@
   <Node Name="UseItemSyntax" Base="SyntaxNode">
     <Kind Name="UseItem"/>
     <TypeComment>
-      <summary>One name in the braces of a <c>.use</c>, and the name it is brought in as.</summary>
+      <summary>Represents one name in the braces of a <c>.use</c>, and the name it is brought in as.</summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The name used.</summary>
+        <summary>Gets the name that is brought in.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -2584,13 +2792,13 @@
     </Field>
     <Field Name="AsKeyword" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The <c>as</c>, or null.</summary>
+        <summary>Gets the <c>as</c> keyword, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
     <Field Name="Alias" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>The name it is brought in as, or null.</summary>
+        <summary>Gets the name it is brought in as, or null.</summary>
       </PropertyComment>
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
@@ -2601,22 +2809,22 @@
   <Node Name="ValueListSyntax" Base="SyntaxNode">
     <Kind Name="ValueList"/>
     <TypeComment>
-      <summary><c>{ value, … }</c>: a list of elements.</summary>
+      <summary>Represents <c>{ value, … }</c>, a list of elements.</summary>
     </TypeComment>
     <Field Name="OpenBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>{</c>.</summary>
+        <summary>Gets the <c>{</c> token.</summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
     <Field Name="Values" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;">
       <PropertyComment>
-        <summary>The values: expressions and braced lists or records.</summary>
+        <summary>Gets the values, which are expressions and braced lists or records.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken">
       <PropertyComment>
-        <summary>The <c>}</c>.</summary>
+        <summary>Gets the <c>}</c> token.</summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
     </Field>

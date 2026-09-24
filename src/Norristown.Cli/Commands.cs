@@ -2,13 +2,16 @@ using System.Reflection;
 
 namespace Norristown.Cli;
 
-/// <summary>What nt65 can be asked to do, and which of them an argument list asks for.</summary>
+/// <summary>
+/// Lists what nt65 can be asked to do, and chooses which of those commands an argument list asks
+/// for.
+/// </summary>
 public static class Commands
 {
     /// <summary>
     /// Runs nt65 with <paramref name="arguments"/> from <paramref name="directory"/>, and returns
-    /// the exit code: 0 when it did what it was asked, 1 when its input (the program or a file) is
-    /// wrong, 2 when the command line is.
+    /// the exit code. The code is 0 when nt65 did what it was asked, 1 when its input (the program
+    /// or a file) is wrong, and 2 when the command line is wrong.
     /// </summary>
     public static int Run(
         string[] arguments, string directory, TextWriter output, TextWriter error,
@@ -46,7 +49,7 @@ public static class Commands
             case ["import-inc", .. var converted]:
                 return ImportIncCommand.Run(converted, Path.GetFullPath(directory), output, error);
 
-            // An unrecognised first argument: print a one-line error and a pointer to --help,
+            // An unrecognised first argument prints a one-line error and a pointer to --help,
             // rather than the whole usage text, which nobody asked for and which buries the error.
             case [var word, ..]:
                 return Wrong(error, word.StartsWith('-')
@@ -67,7 +70,7 @@ public static class Commands
         return 2;
     }
 
-    /// <summary>The version nt65 was built as.</summary>
+    /// <summary>Returns the version nt65 was built as.</summary>
     private static string Version() =>
         typeof(Commands).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             .Split('+')[0] ?? "0.0.0";

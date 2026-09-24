@@ -1,9 +1,9 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary><c>textDocument/rename</c>.</summary>
+/// <summary>Parameters of the <c>textDocument/rename</c> request.</summary>
 /// <param name="TextDocument">The document.</param>
-/// <param name="Position">The name being renamed.</param>
-/// <param name="NewName">What to call it.</param>
+/// <param name="Position">The position of the name being renamed.</param>
+/// <param name="NewName">The new name.</param>
 internal sealed record RenameParams(
     TextDocumentIdentifier TextDocument,
     Position Position,

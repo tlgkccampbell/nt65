@@ -48,8 +48,8 @@ public sealed class MacroModuleTests
         Assert.Contains("sta z:ptr", written);
         Assert.Contains("sta z:ptr+1", written);
 
-        // What the body uses and did not receive comes with it: a constant by value, as any
-        // constant from another module is, and an address as an import.
+        // What the body uses and did not receive comes with it. A constant comes by value, as any
+        // constant from another module does, and an address comes as an import.
         Assert.Contains("lib__SCREEN = $0400", written);
         Assert.Contains(".import lib__table", written);
 

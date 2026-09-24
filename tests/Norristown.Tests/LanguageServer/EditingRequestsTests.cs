@@ -3,9 +3,9 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an editor gets while code is being written: completion, signature help for a call, the
-/// code lenses and hovers that report cost and registers, and a search for a declaration across
-/// the workspace.
+/// Tests what an editor is given while code is being typed. This covers completion, signature
+/// help for a call, the code lenses and hovers that report cost and registers, and a search for
+/// a declaration across the workspace.
 /// </summary>
 public sealed class EditingRequestsTests
 {
@@ -35,9 +35,9 @@ public sealed class EditingRequestsTests
     private const string Vic = ".module hw::vic\n.export BORDER = $d020\n";
 
     /// <summary>
-    /// The file completion is requested in. Each <c>|name</c> marks a place where a test may put
-    /// a line of its own, and <c>name</c> is what the test calls that place; a test that names a
-    /// place not marked here gets its line at the file's top level.
+    /// The file in which completion is requested. Each <c>|name</c> marks a place where a test may
+    /// put a line of its own, and <c>name</c> is what the test calls that place. A test that names
+    /// the place <c>top</c> gets its line at the file's top level instead.
     /// </summary>
     private const string Main = """
         .module main
@@ -88,7 +88,7 @@ public sealed class EditingRequestsTests
         { "top", ".use gfx::{|", ["SCREEN", "Sprite", "clear"], ["hw", "helper"] },
 
         // An operand may name anything in scope, anything a `.use` brought in, or a module to
-        // write a path into.
+        // start a path from.
         { "body", "    lda |", ["@loop", "clear", "gfx", "main", "twice", "vic"], ["poke", "fast", "lda"] },
         { "macro", "    sta |", ["address", "value"], ["@loop"] },
 
@@ -180,7 +180,7 @@ public sealed class EditingRequestsTests
         { "body", "    lda #|", [".sizeof", ".lobyte", "clear"], [".mode", ".byteof", "x"] },
         { "macro", "    lda #|", [".sizeof", ".mode", ".byteof", ".empty"], ["x"] },
 
-        // Nothing is written inside a comment or a text literal.
+        // Nothing is offered inside a comment or a text literal.
         { "body", "    lda #1 ; load the |", [], ["lda", "clear", ".sizeof"] },
         { "top", ".error \"what went |", [], ["clear", ".proc"] },
     };
@@ -217,7 +217,10 @@ public sealed class EditingRequestsTests
         Assert.All(notOffered, label => Assert.DoesNotContain(label, labels));
     }
 
-    /// <summary>Completion replaces the part of a name already typed, and writes a named argument with its <c>=</c>.</summary>
+    /// <summary>
+    /// Completion replaces the part of a name already typed, and inserts a named argument with its
+    /// <c>=</c>.
+    /// </summary>
     [Fact]
     public async Task ACompletionReplacesWhatIsTypedAndWritesWhatTheItemNeeds()
     {
@@ -329,9 +332,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// Above each routine, a lens with the cycles one pass through it costs: a range where its
-    /// paths have a longest, the fewest followed by <c>+</c> where it loops, and a note of what
-    /// the count leaves out.
+    /// Above each routine, a lens shows the cycles that one pass through it costs. The cost is a
+    /// range where the routine's paths have a longest one, and a lower bound followed by <c>+</c>
+    /// where it loops. The lens also notes what the count leaves out.
     /// </summary>
     [Fact]
     public async Task ALensAboveEachRoutineSaysWhatOnePassThroughItCosts()
@@ -395,11 +398,12 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// What a routine costs including what it calls, worked out through the call graph: a call
-    /// costs the call instruction plus the callee, as does a tail jump or a <c>.fallthrough</c> into
-    /// another routine. What nt65 cannot count — a routine with no body, a call to an address
-    /// no routine is declared at, a routine calling itself — is left out and named, and the rest is still counted,
-    /// as a fewest with no most. The lens names two at most, then says how many more.
+    /// The cost of a routine includes what it calls, worked out through the call graph. A call
+    /// costs the call instruction plus the callee, as does a tail jump or a <c>.fallthrough</c>
+    /// into another routine. nt65 cannot count a routine with no body, a call to an address at
+    /// which no routine is declared, or a routine calling itself. Each of these is left out and
+    /// named, and the rest is still counted, as a lower bound with no upper bound. The lens names
+    /// two at most, then says how many more.
     /// </summary>
     [Fact]
     public async Task ALensSaysWhatARoutineCostsWithWhatItCalls()
@@ -505,15 +509,15 @@ public sealed class EditingRequestsTests
                 "2 cycles, then never returns",
                 "never returns",
 
-                // What is left out is named however many calls away it is, and once however
-                // many paths reach it.
+                // What is left out is named no matter how many calls away it is, and named once
+                // no matter how many paths reach it.
                 "12 cycles, 12+ with calls, excluding CHROUT",
                 "12 cycles, 12+ with calls, excluding jsr $1234",
                 "9 cycles, 33+ with calls, excluding CHROUT and jsr $1234",
                 "15 cycles, 51+ with calls, excluding CHROUT, recursion and 1 more",
 
-                // A routine with no body that is declared never to return ends the pass, as one
-                // with a body does, and is not something the count leaves out.
+                // A routine with no body that is declared never to return ends the pass, as a
+                // routine with a body does, and is not something the count leaves out.
                 "3 cycles, then never returns",
                 "9 cycles, 9+ with calls, excluding CHROUT, then never returns",
             ],
@@ -700,7 +704,7 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// A loop that counts a register down from an immediate value has a known number of turns,
+    /// A loop that counts a register down from an immediate value has a known number of iterations,
     /// so its cost is a range with an upper bound rather than a minimum with <c>+</c>. A loop of
     /// any other shape still shows only the minimum, because a loop counted wrongly is worse
     /// than one not counted.
@@ -789,10 +793,10 @@ public sealed class EditingRequestsTests
 
         Assert.Equal(
             [
-                // 16 turns of a 9-11 cycle block, the branch taken all but the last time.
+                // 16 iterations of a 9-11 cycle block, with the branch taken all but the last time.
                 "167-182 cycles",
 
-                // `bpl` runs one turn past zero, so `ldy #3` is four turns.
+                // `bpl` runs one iteration past zero, so `ldy #3` is four iterations.
                 "39-42 cycles",
 
                 // The loop reloads X from memory, so the count no longer follows from the immediate.
@@ -801,24 +805,29 @@ public sealed class EditingRequestsTests
                 // The count does not start at an immediate.
                 "18+ cycles, loops",
 
-                // The call splits the loop body into two blocks, and the loop is still counted;
-                // the call is made once per turn, so the callee's cost is counted four times.
+                // The call splits the loop body into two blocks, and the loop is still counted.
+                // The call is made once per iteration, so the callee's cost is counted four times.
                 "51-54 cycles, 75-78 with calls",
                 "6 cycles",
 
-                // Two `dex` a turn step through an array of words: `ldx #4` is three turns of `bpl`.
+                // Two `dex` per iteration step through an array of words, so `ldx #4` is three
+                // iterations of `bpl`.
                 "43-45 cycles",
 
-                // Stepping by two from five skips zero, so `bne` never sees it: not counted.
+                // Stepping by two from five skips zero, so `bne` never sees it and the loop is not counted.
                 "19+ cycles, loops",
 
-                // `bpl` tests the sign bit, and 200 has it set before the loop starts: not counted.
+                // `bpl` tests the sign bit, and 200 has it set before the loop starts, so the
+                // loop is not counted.
                 "17+ cycles, loops",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
     }
 
-    /// <summary>A search finds declarations in files no one has open, matching names that contain the query's letters in order.</summary>
+    /// <summary>
+    /// A search finds declarations in files no one has open, matching names that contain the
+    /// query's letters in order.
+    /// </summary>
     [Fact]
     public async Task WorkspaceSymbolsFindDeclarationsByTheirLetters()
     {
@@ -946,7 +955,7 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// What a register may hold is a set: where two paths meet, it may hold its entry value on
+    /// What a register may hold is a set. Where two paths meet, it may hold its entry value on
     /// one path and a newly loaded value on the other. Reducing that to "unknown" would hide a
     /// save that is still valid on one path, so both descriptions are shown, joined by "or".
     /// </summary>
@@ -979,7 +988,7 @@ public sealed class EditingRequestsTests
 
     /// <summary>
     /// Hover lists what the routine has pushed, top of the stack first, with what each push
-    /// saved: what a <c>pla</c> is about to get back is what a reader wants to know.
+    /// saved, because what a <c>pla</c> is about to get back is what a reader wants to know.
     /// </summary>
     [Fact]
     public async Task HoverListsWhatTheRoutineHasPushed()
@@ -1063,7 +1072,7 @@ public sealed class EditingRequestsTests
 
     /// <summary>
     /// A <c>.frame</c> declares the bytes it covers as one structure the routine has pushed, so
-    /// hover shows them as one row however many pushes built them.
+    /// hover shows them as one row no matter how many pushes built them.
     /// </summary>
     [Fact]
     public async Task HoverReadsAFrameAsOnePush()
@@ -1093,9 +1102,9 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// On the 65816 the processor-state analysis supplies what the stack tracking alone cannot
-    /// know: which status a <c>php</c> saved, and how wide each pushed register was, which
-    /// decides whether a later pull restores the value at all.
+    /// On the 65816 the processor-state analysis supplies two facts that the stack tracking alone
+    /// cannot know. These are the status that a <c>php</c> saved and the width of each pushed
+    /// register, which decides whether a later pull restores the value at all.
     /// </summary>
     [Fact]
     public async Task HoverNamesA65816PushAndSaysHowWideItWas()
@@ -1124,8 +1133,8 @@ public sealed class EditingRequestsTests
     }
 
     /// <summary>
-    /// The lenses that give what a pass costs, which is what these tests check. The lens that
-    /// says which registers are preserved is left out; it has tests of its own.
+    /// Returns the lenses that give what a pass costs, which are what these tests check. The lens
+    /// that says which registers are preserved is left out, because it has tests of its own.
     /// </summary>
     private static IEnumerable<CodeLens> Costs(IEnumerable<CodeLens> lenses) =>
         lenses.Where(lens => !lens.Command.Title.Contains("preserves", StringComparison.Ordinal));

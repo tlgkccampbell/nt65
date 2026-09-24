@@ -3,13 +3,14 @@ using Norristown.Syntax;
 
 namespace Norristown.Semantics;
 
-/// <summary>How a segment is written: its name and its size.</summary>
+/// <summary>Reads a segment's name and address size from the source.</summary>
 public static class SegmentNames
 {
     /// <summary>
-    /// The segment a token names: an identifier, or a name in quotes, which is an error that
-    /// still names the segment. Segment names hold no escapes, so the quotes come off by hand.
-    /// A missing token names nothing, and this is the one place that is checked.
+    /// Returns the segment <paramref name="token"/> names. The token is an identifier, or a name
+    /// in quotes, which is an error that still names the segment. Segment names contain no
+    /// escapes, so the quotes are simply trimmed. A missing token names nothing, and this is the
+    /// one place where that is checked.
     /// </summary>
     public static string? Of(SyntaxToken token) => token.IsMissing ? null : token.Kind switch
     {
@@ -18,7 +19,10 @@ public static class SegmentNames
         _ => null,
     };
 
-    /// <summary>The address size <c>zp</c>, <c>abs</c> or <c>far</c> names, or null.</summary>
+    /// <summary>
+    /// Returns the address size that <c>zp</c>, <c>abs</c> or <c>far</c> names, or null for any
+    /// other text.
+    /// </summary>
     public static AddressSize? ParseSize(string text) => text.ToLowerInvariant() switch
     {
         "zp" => AddressSize.ZeroPage,

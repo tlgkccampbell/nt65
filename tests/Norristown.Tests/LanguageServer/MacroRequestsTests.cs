@@ -3,17 +3,17 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an editor can do in and through a macro without expanding one. A body is
-/// ordinary nt65 and its names are resolved where they are written, so going to a
-/// definition, finding every use and renaming all work on the source as it stands.
+/// Tests what an editor can do in and through a macro without expanding it. A body is ordinary
+/// nt65 and its names are resolved where they appear, so going to a definition, finding every use
+/// and renaming all work on the source as it stands.
 /// </summary>
 public sealed class MacroRequestsTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
     /// <summary>
-    /// A macro with a parameter, a local label and a name from the file around it; a block
-    /// macro; and a proc that calls both, one of them with a block.
+    /// A source holding a macro with a parameter, a local label and a name from the file around
+    /// it, a block macro, and a proc that calls both macros, passing a block to the block macro.
     /// </summary>
     private const string Source = """
         .module main
@@ -60,7 +60,10 @@ public sealed class MacroRequestsTests
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
     }
 
-    /// <summary>Go to definition on a name in a macro body lands on the declaration the body sees, without expanding anything.</summary>
+    /// <summary>
+    /// Go to definition on a name in a macro body lands on the declaration the body sees, without
+    /// expanding anything.
+    /// </summary>
     [Fact]
     public async Task DefinitionFromInsideABodyReachesTheFile()
     {
@@ -122,7 +125,7 @@ public sealed class MacroRequestsTests
     }
 
     /// <summary>
-    /// A label declared in a macro body belongs to the macro, not to the caller: the references
+    /// A label declared in a macro body belongs to the macro, not to the caller. The references
     /// to the body's <c>@loop</c> stay inside the body and never reach a label of the caller's.
     /// </summary>
     [Fact]
@@ -175,8 +178,9 @@ public sealed class MacroRequestsTests
         """;
 
     /// <summary>
-    /// Hover on a parameter, or anywhere in the kind after its `:`, says what the parameter
-    /// accepts; hover on a mode an `operand` lists also says how an operand in that mode is written.
+    /// Hover on a parameter, or anywhere in the kind after its <c>:</c>, says what the parameter
+    /// accepts. Hover on a mode that an <c>operand</c> lists also says how an operand in that mode
+    /// is written.
     /// </summary>
     [Fact]
     public async Task HoverSaysWhatAParameterTakes()
@@ -230,7 +234,7 @@ public sealed class MacroRequestsTests
 
     /// <summary>
     /// A member passed by its bare name is a use of the member, even where the caller has a name
-    /// of its own spelled the same: it is coloured, hovered and found as the member.
+    /// of its own spelled the same. It is coloured, hovered and found as the member.
     /// </summary>
     [Fact]
     public async Task AMemberPassedByItsBareNameIsTheMember()

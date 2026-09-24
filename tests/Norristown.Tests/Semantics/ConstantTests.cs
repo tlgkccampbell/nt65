@@ -54,7 +54,7 @@ public sealed class ConstantTests
         Assert.Equal("hi\n", model.Symbol("GREETING").Value.Text);
     }
 
-    /// <summary>A constant may be written before the names it uses.</summary>
+    /// <summary>A constant may be declared before the names it uses.</summary>
     [Fact]
     public void ForwardReferencesResolve()
     {
@@ -73,7 +73,10 @@ public sealed class ConstantTests
         Assert.False(model.Symbol("SELF").Value.IsKnown);
     }
 
-    /// <summary>A cycle of names is one error, at the declaration that closes it, naming the others it runs through.</summary>
+    /// <summary>
+    /// A cycle of names is one error, at the declaration that closes it, naming the others it runs
+    /// through.
+    /// </summary>
     [Fact]
     public void ACycleIsReportedOnceAndNamesTheRest()
     {
@@ -94,9 +97,9 @@ public sealed class ConstantTests
     }
 
     /// <summary>
-    /// The one division the host processor traps on: the most negative 64-bit number divided by
-    /// −1. Its quotient is one more than the largest 64-bit number, which is an overflow like any
-    /// other and has no value; its remainder is zero, as a remainder by −1 always is. Neither
+    /// The host processor traps on one division, the most negative 64-bit number divided by −1.
+    /// Its quotient is one more than the largest 64-bit number, which is an overflow like any
+    /// other and has no value. Its remainder is zero, as a remainder by −1 always is. Neither
     /// crashes the assembler.
     /// </summary>
     [Fact]
@@ -166,7 +169,7 @@ public sealed class ConstantTests
 
     /// <summary>
     /// An extern proc that names another routine must declare that routine's signature. The
-    /// check compares what each signature declares, not the syntax it was written with, so a
+    /// check compares what each signature declares, not the syntax it uses, so a
     /// matching <c>inline</c> item is accepted and a differing <c>keeps</c> is reported.
     /// </summary>
     [Theory]
@@ -181,7 +184,10 @@ public sealed class ConstantTests
         Assert.Equal(reported, problems.Any(problem => problem.Contains("must declare the same signature", StringComparison.Ordinal)));
     }
 
-    /// <summary>An import may give its value, which nt65 then uses everywhere, or its address size; one that gives neither is absolute.</summary>
+    /// <summary>
+    /// An import may give its value, which nt65 then uses everywhere, or its address size. An
+    /// import that gives neither is absolute.
+    /// </summary>
     [Fact]
     public void ImportsCarryTheirValueOrTheirSize()
     {

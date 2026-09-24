@@ -4,11 +4,11 @@ using Norristown.Syntax;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 fmt</c>: rewrites the files it is given in nt65's single standard layout, or, with
-/// <c>--check</c>, lists the ones that are not in that layout already.
+/// Implements <c>nt65 fmt</c>, which rewrites the files it is given in nt65's single standard
+/// layout, or, with <c>--check</c>, lists the ones that are not in that layout already.
 /// <para>
-/// It needs no program: formatting depends only on one file's own lines and braces, so a file
-/// that names no module and belongs to no project can still be formatted. Given no files, it
+/// It needs no program, because formatting depends only on one file's own lines and braces, so a
+/// file that names no module and belongs to no project can still be formatted. Given no files, it
 /// formats every file the project's <c>files</c> globs match, which suits a run over a whole
 /// repository.
 /// </para>
@@ -16,9 +16,10 @@ namespace Norristown.Cli;
 public static class FormatCommand
 {
     /// <summary>
-    /// Formats what <paramref name="arguments"/> names, from <paramref name="directory"/>, and
-    /// returns the exit code: 0 when every file is formatted, 1 when <c>--check</c> found one
-    /// that is not or a file could not be read, 2 when the command is wrong.
+    /// Formats the files <paramref name="arguments"/> names, from <paramref name="directory"/>,
+    /// and returns the exit code. The code is 0 when every file is formatted, 1 when
+    /// <c>--check</c> found a file that is not or a file could not be read, and 2 when the command
+    /// is wrong.
     /// </summary>
     public static int Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
     {

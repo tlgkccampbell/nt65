@@ -1,9 +1,9 @@
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The kinds of code action the server offers, as the protocol names them. A quick fix resolves
-/// a reported diagnostic; a refactor is requested at a selection and is not tied to any
-/// diagnostic.
+/// Defines the kinds of code action the server offers, as the protocol names them. A quick fix
+/// resolves a reported diagnostic, and a refactor is requested at a selection and is not tied to
+/// any diagnostic.
 /// </summary>
 internal static class CodeActionKinds
 {
@@ -16,6 +16,6 @@ internal static class CodeActionKinds
     /// <summary>A change that lifts code out into a declaration of its own.</summary>
     public const string Extract = "refactor.extract";
 
-    /// <summary>Everything the server offers, for the capabilities it announces.</summary>
+    /// <summary>Gets every kind the server offers, for the capabilities it announces.</summary>
     public static IReadOnlyList<string> All => [QuickFix, Rewrite, Extract];
 }

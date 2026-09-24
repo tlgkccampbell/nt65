@@ -5,10 +5,10 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Flow;
 
 /// <summary>
-/// Which registers a routine returns still holding the values it was entered with: what each
-/// instruction changes, how a save and its restore cancel, what a call to another routine
-/// loses, and the diagnostic for a routine whose body does not keep what its signature
-/// promises.
+/// Checks which registers a routine returns still holding the values it was entered with. The
+/// tests cover what each instruction changes, how a save and its restore cancel, and what a call
+/// to another routine loses. They also cover the diagnostic for a routine whose body does not
+/// keep what its signature promises.
 /// </summary>
 public sealed class RegisterKeepsTests
 {
@@ -89,9 +89,9 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
-    /// The kept sets of two routines that call each other settle, because the analysis only
-    /// ever removes registers from a set. Here registers are easier than cycle counts, which
-    /// come out unknown for such routines.
+    /// The kept sets of two routines that call each other reach a fixed point, because the
+    /// analysis only ever removes registers from a set. Here registers are easier than cycle
+    /// counts, which come out unknown for such routines.
     /// </summary>
     [Fact]
     public void TwoRoutinesThatCallEachOtherSettle()
@@ -137,7 +137,10 @@ public sealed class RegisterKeepsTests
         Assert.False(registers.Complete);
     }
 
-    /// <summary>A body that breaks what its signature promises is told which register and where.</summary>
+    /// <summary>
+    /// A body that breaks what its signature promises gets a diagnostic that reports which
+    /// register and where.
+    /// </summary>
     [Fact]
     public void ABodyThatBreaksItsPromiseIsTold()
     {
@@ -147,7 +150,7 @@ public sealed class RegisterKeepsTests
             Problems(".proc p: keeps x {\n    ldx #1\n    rts\n}\n"));
     }
 
-    /// <summary>A body that keeps what it promises is told nothing.</summary>
+    /// <summary>A body that keeps what it promises draws no diagnostic.</summary>
     [Fact]
     public void ABodyThatKeepsItsPromiseIsToldNothing()
     {
@@ -283,16 +286,16 @@ public sealed class RegisterKeepsTests
             .Select(Renumbered)];
 
     /// <summary>
-    /// <see cref="Problems"/> for a 65816 program, where a push is as wide as the register it
-    /// moves.
+    /// Returns <see cref="Problems"/> for a 65816 program, where a push is as wide as the register
+    /// it moves.
     /// </summary>
     private static IReadOnlyList<string> Wide(string text) =>
         [.. Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)).Problems()
             .Select(Renumbered)];
 
     /// <summary>
-    /// The problem with its line number counted from the start of the test's own text, not
-    /// counting the three prefix lines every test is compiled after.
+    /// Returns the problem with its line number counted from the start of the test's own text,
+    /// not counting the three prefix lines every test is compiled after.
     /// </summary>
     private static string Renumbered(string problem)
     {

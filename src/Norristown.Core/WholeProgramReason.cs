@@ -1,7 +1,8 @@
 namespace Norristown;
 
 /// <summary>
-/// Why an analysis analyzed every file of the program rather than only what an edit changed.
+/// Specifies why an analysis analyzed every file of the program rather than only what an edit
+/// changed.
 /// </summary>
 public enum WholeProgramReason
 {
@@ -21,7 +22,7 @@ public enum WholeProgramReason
     SegmentsDeclared,
 
     /// <summary>
-    /// The changed file writes a <c>.config</c>, before or after the edit, which any file's
+    /// The changed file declares a <c>.config</c>, before or after the edit, which any file's
     /// conditions may read.
     /// </summary>
     SettingsDeclared,
@@ -30,8 +31,8 @@ public enum WholeProgramReason
     CpuChanged,
 
     /// <summary>
-    /// A diagnostic from analyzing the program as a whole (about a segment's <c>dp</c> or
-    /// <c>bank</c>, or about the segment table) points at text the edit rewrote.
+    /// A diagnostic from analyzing the program as a whole points at text the edit changed. Such a
+    /// diagnostic is about a segment's <c>dp</c> or <c>bank</c>, or about the segment table.
     /// </summary>
     DiagnosticInEditedText,
 }

@@ -3,77 +3,93 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The processor state a routine declares at entry and, after <c>-&gt;</c>, at exit, and
-/// whether it is called near or far. Signatures are declared, never inferred: that is what
-/// keeps the analysis inside one routine and a file's interface free of its bodies.
+/// Represents the processor state a routine declares at entry and, after <c>-&gt;</c>, at exit,
+/// and whether it is called near or far. Signatures are declared, never inferred. This keeps
+/// the analysis within one routine and keeps a file's interface independent of its bodies.
 /// </summary>
 /// <param name="Entry">The state the routine assumes when it is called.</param>
-/// <param name="Exit">The state it returns with. A part the exit does not give is the entry's.</param>
-/// <param name="IsFar">Whether it is entered by <c>jsl</c> and left by <c>rtl</c>.</param>
+/// <param name="Exit">
+/// The state the routine returns with. A part the exit does not give is taken from the entry.
+/// </param>
+/// <param name="IsFar">Whether the routine is entered by <c>jsl</c> and left by <c>rtl</c>.</param>
 /// <param name="Inline">
-/// The <c>inline n</c> or <c>inline .strz</c> item, for a routine that returns past data
-/// written after each call; null for every other.
+/// The <c>inline n</c> or <c>inline .strz</c> item, for a routine that returns past data placed
+/// after each call; null for every other routine.
 /// </param>
 public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool IsFar, StateItem? Inline = null)
 {
-    // The parts of the state a bare `?` covers, each of them made unknown.
+    // The parts of the state that a bare `?` makes unknown.
     private static readonly StatePart[] trackedParts =
         [StatePart.A, StatePart.Index, StatePart.E, StatePart.DirectPage, StatePart.DataBank];
 
-    // What the signature was read from, and whether as a macro's, so it can be read again once
-    // the signature sets it names are resolved and the values of its `dp = e`, `dbr = e` and
-    // `args n` items are known.
+    // The syntax the signature was read from, and whether it was read as a macro's. These let it
+    // be read again once the signature sets it names are resolved and the values of its
+    // `dp = e`, `dbr = e` and `args n` items are known.
     private SyntaxNode? syntax;
     private bool forMacro;
 
-    /// <summary>What a routine that writes no signature declares: <c>a*, i*, native, near</c>.</summary>
+    /// <summary>
+    /// Gets the signature of a routine that declares none, which is <c>a*, i*, native, near</c>.
+    /// </summary>
     public static Signature Default { get; } = new(ProcessorState.Default, ProcessorState.Default, false);
 
-    /// <summary>What a macro that writes no signature declares: that it assumes and changes nothing.</summary>
+    /// <summary>
+    /// Gets the signature of a macro that declares none, which states that it assumes and changes
+    /// nothing.
+    /// </summary>
     public static Signature Unchanged { get; } = new(
         new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unchanged),
         new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unchanged),
         false);
 
     /// <summary>
-    /// Whether it is an interrupt handler: entered by the processor from anywhere, knowing
-    /// nothing but perhaps its mode, and left by <c>rti</c>. It is neither near nor far.
+    /// Gets a value indicating whether the routine is an interrupt handler. A handler is entered
+    /// by the processor from anywhere, knowing nothing except perhaps its mode, and is left by
+    /// <c>rti</c>. It is neither near nor far.
     /// </summary>
     public bool IsInterrupt { get; init; }
 
-    /// <summary>Whether it never returns, <c>noreturn</c>, so a call to it is where a path ends.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the routine never returns (<c>noreturn</c>), so that a path
+    /// ends at a call to it.
+    /// </summary>
     public bool NeverReturns { get; init; }
 
-    /// <summary>How many bytes the caller pushes before a call, <c>args n</c>; 0 for a routine that says nothing.</summary>
+    /// <summary>
+    /// Gets the number of bytes the caller pushes before a call (<c>args n</c>), or 0 for a
+    /// routine that declares none.
+    /// </summary>
     public int Arguments { get; init; }
 
     /// <summary>
-    /// The registers it hands back as it was entered with them, <c>keeps a, x</c>; none for a
-    /// routine that promises nothing. A routine with a body is checked against it; one without
-    /// is trusted, since the promise is the only thing known about a body that is not here.
+    /// Gets the registers the routine returns with the values they had at entry
+    /// (<c>keeps a, x</c>), or none for a routine that promises nothing. A routine with a body is
+    /// checked against this promise. A routine without a body is trusted, because the promise is
+    /// the only thing known about a body that is not in the program.
     /// </summary>
     public Processor.Registers Keeps { get; init; }
 
-    /// <summary>How the routine is called and left, as the item that says so.</summary>
+    /// <summary>Gets how the routine is called and left, as the signature item that declares it.</summary>
     public string Distance => IsInterrupt ? "interrupt" : IsFar ? "far" : "near";
 
     /// <summary>
-    /// Whether the routine wrote a signature with at least one item in it, rather than taking the
-    /// default or writing an empty <c>proc()</c>. A routine with no body is held to this on the
-    /// 65816, because nothing else says what a caller must hold to. A signature of nothing but
-    /// <c>keeps</c> does not count: which registers come back says nothing about the widths.
+    /// Gets a value indicating whether the routine declares a signature with at least one item,
+    /// rather than taking the default or declaring an empty <c>proc()</c>. On the 65816, a routine
+    /// with no body must do so, because nothing else states what a caller must hold to. A
+    /// signature of only <c>keeps</c> does not count, because which registers are preserved says
+    /// nothing about the widths.
     /// </summary>
     public bool DeclaresState =>
         syntax is not null && StateItem.Read(syntax).Any(item => item.Part != StatePart.Keeps);
 
     /// <summary>
-    /// Whether nothing waits for the routine to return: it never does, or it returns by
-    /// <c>rti</c> to wherever the interrupt came. A jump from such a routine is checked against
-    /// the target's entry only.
+    /// Gets a value indicating whether no caller waits for the routine to return, because it never
+    /// returns or returns by <c>rti</c> to wherever the interrupt came from. A jump from such a
+    /// routine is checked only against the target's entry.
     /// </summary>
     public bool HasNoCaller => IsInterrupt || NeverReturns;
 
-    /// <summary>The signature as it would be written in full.</summary>
+    /// <summary>Returns the signature formatted in full.</summary>
     public override string ToString()
     {
         var entry = IsInterrupt ? $"interrupt, {ProcessorState.Spell(Entry.E)}" : $"{Entry}, {Distance}";
@@ -103,26 +119,26 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps);
 
     /// <summary>
-    /// What a proc, an extern proc or an import writes, as far as it can be read from its
-    /// syntax alone: the signature sets it names are ignored, and the values of its items are
-    /// unknown, until <see cref="Resolved"/> reads it again. <paramref name="syntax"/> is
-    /// the <c>: entry -&gt; exit</c> of a proc or the <c>proc(...)</c> of an import, or null
-    /// where nothing was written.
+    /// Reads the signature a proc, an extern proc or an import declares, as far as it can be read
+    /// from its syntax alone. The signature sets it names are ignored, and the values of its items
+    /// are unknown, until <see cref="Resolved"/> reads it again. <paramref name="syntax"/> is the
+    /// <c>: entry -&gt; exit</c> of a proc or the <c>proc(...)</c> of an import, or null when no
+    /// signature was given.
     /// </summary>
     public static Signature Read(SyntaxNode? syntax) => Read(syntax, forMacro: false, null, null, (_, _) => { });
 
     /// <summary>
-    /// What a macro writes. A macro's items default to <c>*</c>, because a macro assumes and
-    /// changes nothing it does not declare, and <c>near</c>, <c>far</c>, <c>inline</c>,
-    /// <c>args</c>, <c>interrupt</c> and <c>noreturn</c> describe how a routine is called,
-    /// entered or left, which a macro is not.
+    /// Reads the signature a macro declares. A macro's items default to <c>*</c>, because a macro
+    /// assumes and changes nothing it does not declare. <c>near</c>, <c>far</c>, <c>inline</c>,
+    /// <c>args</c>, <c>interrupt</c> and <c>noreturn</c> are not allowed, because they describe
+    /// how a routine is called, entered or left, and a macro is none of these.
     /// </summary>
     public static Signature ReadMacro(SyntaxNode? syntax) => Read(syntax, forMacro: true, null, null, (_, _) => { });
 
     /// <summary>
-    /// Reports what is wrong with the items a signature set declares, reading them as a proc's
-    /// entry would: once here, where the set is declared, rather than at every signature that
-    /// names it.
+    /// Reports the problems with the items a signature set declares, reading them as a proc's
+    /// entry would. They are reported once, here where the set is declared, rather than at every
+    /// signature that names the set.
     /// </summary>
     public static void CheckSet(
         Symbol set, Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, DiagnosticMessage> report)
@@ -141,16 +157,19 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     }
 
     /// <summary>
-    /// The signature with the signature sets it names read, and the values of its <c>dp = e</c>,
-    /// <c>dbr = e</c> and <c>args n</c> items, which are expressions and so can be evaluated
-    /// only once the program's constants have been. What is wrong with it is reported to
+    /// Returns the signature read again with the signature sets it names and the values of its
+    /// <c>dp = e</c>, <c>dbr = e</c> and <c>args n</c> items. Those items are expressions, so they
+    /// can be evaluated only once the program's constants have been. Problems are reported to
     /// <paramref name="report"/>.
     /// </summary>
     public Signature Resolved(
         Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, DiagnosticMessage> report) =>
         syntax is null ? this : Read(syntax, forMacro, valueOf, setOf, report);
 
-    /// <summary>Whether the sets <paramref name="from"/> names come, however indirectly, to <paramref name="to"/>.</summary>
+    /// <summary>
+    /// Returns a value indicating whether the sets <paramref name="from"/> names lead, directly or
+    /// indirectly, to <paramref name="to"/>.
+    /// </summary>
     private static bool Reaches(Symbol from, Symbol to, Func<NameExpressionSyntax, Symbol?> setOf, HashSet<Symbol> seen)
     {
         if (from == to)
@@ -178,7 +197,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             _ => ((StateListSyntax?)null, (StateListSyntax?)null),
         };
 
-        // The items that come from the signature sets this signature names; problems with them
+        // The items that come from the signature sets this signature names. Problems with them
         // are reported where each set is declared.
         var fromSets = new HashSet<(SyntaxTree Tree, int Position)>();
         var entry = Take(entryList, isExit: false);
@@ -212,8 +231,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return Made(entryState, entryState) with { NeverReturns = true };
         }
 
-        // An exit that names a 16-bit width and not the mode is in native mode, the only one
-        // that width can hold in, whatever the entry's mode.
+        // An exit that names a 16-bit width but not the mode is in native mode, the only mode in
+        // which that width can hold, whatever the entry's mode.
         var exitMode = exit.E?.Mode
             ?? (entryState.E == ProcessorMode.Emulation && (exit.A?.Width == Width.Sixteen || exit.Index?.Width == Width.Sixteen)
                 ? ProcessorMode.Native
@@ -222,8 +241,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exitMode,
             ValueOf(exit.D, 0xffff) ?? entryState.D, Handed(ValueOf(exit.B, 0xff)) ?? entryState.B);
 
-        // An exit that cannot be what it says is reported once, and read as the entry's, so
-        // what uses the signature does not report the same mistake again.
+        // An impossible exit item is reported once and read as the entry's value, so that code
+        // using the signature does not report the same mistake again.
         if (!Kept(exit.A, entryState.A == Width.Unchanged))
             exitState = exitState with { A = entryState.A };
         if (!Kept(exit.Index, entryState.Index == Width.Unchanged))
@@ -246,8 +265,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 forMacro = forMacro,
             };
 
-        // The registers the list promises. A list that writes `keeps` itself says which they
-        // are; one that writes none takes what the signature set it names gives.
+        // The registers the list promises. A list that contains its own `keeps` states which
+        // they are. A list that contains none takes what the signature set it names gives.
         static Processor.Registers Promised(Parts parts)
         {
             var own = parts.Keeps.Where(kept => !kept.FromSet).ToList();
@@ -255,8 +274,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 .Aggregate(Processor.Registers.None, (all, kept) => all | kept.Item.Registers);
         }
 
-        // An interrupt handler is entered from anywhere, so all it may say is which mode the
-        // processor is in, and it leaves by `rti`, so it says nothing after `->`.
+        // An interrupt handler is entered from anywhere, so it may only declare which mode the
+        // processor is in. It leaves by `rti`, so it declares nothing after `->`.
         Signature Interrupt()
         {
             foreach (var other in new[] { entry.A, entry.Index, entry.D, entry.B })
@@ -293,15 +312,16 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             };
         }
 
-        // Whether an item is written in the signature itself rather than given by a set it names.
+        // Whether an item appears in the signature itself rather than coming from a set it names.
         bool Here(StateItem item) => !fromSets.Contains((item.Node.Tree, item.Node.Position));
 
         // Where a mistake about an item is reported: at the item, or at the set that gave it.
         TextSpan At(Parts parts, StateItem item) =>
             Here(item) || parts.SetReference is not { } reference ? item.Node.Span : reference.Span;
 
-        // `dp = e` has the value of e once the constants are known, and is unknown before; `dp?` is
-        // unknown and `dp*` unchanged. A value a set gives is reported where the set is declared.
+        // `dp = e` has the value of e once the constants are known, and is unknown before that.
+        // `dp?` is unknown and `dp*` is unchanged. A problem with a value a set gives is reported
+        // where the set is declared.
         StateValue? ValueOf(StateItem? item, long largest)
         {
             if (item is not { } given)
@@ -341,7 +361,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         StateValue? Handed(StateValue? value) =>
             value is { Kind: StateValueKind.Unchanged } && entryState.B.Kind == StateValueKind.Within ? entryState.B : value;
 
-        // `dbr = [...]` is one of the banks it names; D is one direct page, and has no set.
+        // `dbr = [...]` means one of the banks it names. D is a single direct page and has no set
+        // form.
         StateValue BanksOf(StateItem given, long largest)
         {
             if (largest != 0xff)
@@ -359,8 +380,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return StateValue.Unknown;
         }
 
-        // The items of one list by part. A signature set comes first, and what the list writes
-        // after it takes the place of what the set gives for the same part.
+        // Collects the items of one list by part. A signature set comes first, and an item the
+        // list contains after it replaces what the set gives for the same part.
         Parts Take(StateListSyntax? list, bool isExit)
         {
             var parts = new Parts();
@@ -396,8 +417,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return parts;
         }
 
-        // The items a set gives, with the sets it names expanded in place. Before the program's
-        // names are resolved a set gives nothing.
+        // Returns the items a set gives, with the sets it names expanded in place. Before the
+        // program's names are resolved, a set gives nothing.
         List<StateItem> Expand(StateItem reference, HashSet<Symbol> seen)
         {
             var items = new List<StateItem>();
@@ -498,8 +519,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             }
         }
 
-        // Two items a list writes for one part are a mistake; an item written after a set takes
-        // the place of what the set gives.
+        // Two items in one list for the same part are a mistake. An item after a set replaces
+        // what the set gives.
         StateItem? Once(Parts parts, StateItem? earlier, StateItem item, bool fromSet)
         {
             if (fromSet)
@@ -519,7 +540,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return false;
         }
 
-        // Emulation mode pins both widths at 8 bits, so `emu` says that too, as it does in `.state`.
+        // Emulation mode pins both widths at 8 bits, so `emu` implies that too, as it does in
+        // `.state`.
         static ProcessorState Pinned(ProcessorState state) =>
             state.E == ProcessorMode.Emulation ? state with { A = Width.Eight, Index = Width.Eight } : state;
 
@@ -535,7 +557,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         }
     }
 
-    /// <summary>The items one list gives, by part, and the signature set it names, if it names one.</summary>
+    /// <summary>
+    /// Holds the items one list gives, by part, and the signature set it names, if any.
+    /// </summary>
     private sealed class Parts
     {
         public StateItem? A;
@@ -550,11 +574,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         public StateItem? NoReturn;
         public StateItemSyntax? SetReference;
 
-        // Every `keeps` the list gives, and whether a signature set gave it. A list may write
-        // more than one, and what it writes itself takes the place of what a set gives.
+        // Every `keeps` the list gives, and whether a signature set gave it. A list may contain
+        // more than one, and its own replace what a set gives.
         public readonly List<(StateItem Item, bool FromSet)> Keeps = [];
 
-        // The parts the list writes itself, rather than takes from the set.
+        // The parts the list gives itself, rather than taking from the set.
         public readonly HashSet<StatePart> Written = [];
     }
 }

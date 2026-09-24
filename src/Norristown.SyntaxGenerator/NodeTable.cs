@@ -6,16 +6,16 @@ using System.Xml.Linq;
 namespace Norristown.SyntaxGenerator;
 
 /// <summary>
-/// The node table, read from <c>src/Norristown.Core/Syntax/Syntax.xml</c>: a <c>Tree</c> of
-/// <c>Node</c> and <c>AbstractNode</c> elements, after Roslyn's own <c>Syntax.xml</c>. The table's
-/// own header says what the elements and attributes mean.
+/// Reads the node table from <c>src/Norristown.Core/Syntax/Syntax.xml</c>, which is a <c>Tree</c>
+/// of <c>Node</c> and <c>AbstractNode</c> elements modeled on Roslyn's own <c>Syntax.xml</c>. The
+/// table's own header describes what the elements and attributes mean.
 /// </summary>
 public static class NodeTable
 {
-    /// <summary>Where the table is, relative to the repository.</summary>
+    /// <summary>The path of the table, relative to the repository root.</summary>
     public const string File = "src/Norristown.Core/Syntax/Syntax.xml";
 
-    /// <summary>Reads <paramref name="text"/> as a table, in the order it writes its nodes.</summary>
+    /// <summary>Reads <paramref name="text"/> as a table, keeping the nodes in the order it lists them.</summary>
     /// <param name="text">The table's text.</param>
     public static ImmutableArray<NodeRow> Read(string text)
     {
@@ -33,8 +33,8 @@ public static class NodeTable
                 throw Bad(element, $"the node table does not understand <{element.Name.LocalName}>");
             var node = ReadNode(element, isAbstract);
 
-            // One row per class: a second row of the same name would write the same file twice,
-            // and the one the generator kept would be whichever the table listed last.
+            // Each class has one row. A second row with the same name would generate the same file
+            // twice, and the generator would keep whichever row the table listed last.
             if (named.TryGetValue(node.Name, out var first))
             {
                 throw Bad(element,
@@ -44,7 +44,7 @@ public static class NodeTable
             nodes.Add(node);
         }
 
-        // The chain of classes above a node has to end: a chain of bases that loops back on
+        // The chain of classes above a node has to end. A chain of bases that loops back on
         // itself is a hierarchy with no top, and every walk up it would run forever.
         var rows = nodes.ToDictionary(node => node.Name, StringComparer.Ordinal);
         foreach (var node in nodes)
@@ -109,7 +109,7 @@ public static class NodeTable
             }
         }
 
-        // A <Field> reads its slot from the node's layout; a <Member> has no slot, and has to say
+        // A <Field> reads its slot from the node's layout. A <Member> has no slot, and has to say
         // what it returns in a <Read>.
         if ((read.Length > 0) != (role == SlotRole.Member))
         {
@@ -127,7 +127,10 @@ public static class NodeTable
             Kinds(element));
     }
 
-    /// <summary>The kinds named by <paramref name="element"/>'s <c>Kind</c> children, which nodes and token fields both have.</summary>
+    /// <summary>
+    /// Returns the kinds named by <paramref name="element"/>'s <c>Kind</c> children, which both
+    /// nodes and token fields have.
+    /// </summary>
     private static ImmutableArray<string> Kinds(XElement element)
     {
         var kinds = ImmutableArray.CreateBuilder<string>();
@@ -140,8 +143,8 @@ public static class NodeTable
     }
 
     /// <summary>
-    /// The summary inside <paramref name="owner"/>'s <paramref name="wrapper"/> element, one
-    /// trimmed string per non-blank line, kept as XML text: markup in the summary, such as
+    /// Returns the summary inside <paramref name="owner"/>'s <paramref name="wrapper"/> element as
+    /// one trimmed string per non-blank line, kept as XML text. Markup in the summary, such as
     /// <c>&lt;c&gt;</c> or <c>&lt;see&gt;</c>, comes back out as it went in, for the generated
     /// doc comment.
     /// </summary>
@@ -204,7 +207,9 @@ public static class NodeTable
     private static string Required(XElement element, string name) =>
         element.Attribute(name)?.Value ?? throw Bad(element, $"<{element.Name.LocalName}> wants a {name}");
 
-    /// <summary>Checks that <paramref name="element"/> carries no attribute the table has no meaning for.</summary>
+    /// <summary>
+    /// Checks that <paramref name="element"/> has no attribute to which the table gives no meaning.
+    /// </summary>
     private static void Known(XElement element, params string[] names)
     {
         foreach (var attribute in element.Attributes())

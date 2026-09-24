@@ -1,13 +1,13 @@
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A file's declarations, nested the way its blocks are: what an editor shows as the
-/// document's outline. This is a reading of the syntax and nothing more — a name is
-/// whatever the line writes, and no name is resolved or checked.
+/// Builds a file's declarations, nested the way its blocks are, which an editor shows as the
+/// document's outline. The outline reads only the syntax. Each name is taken as it appears on the
+/// line, and no name is resolved or checked.
 /// </summary>
 public static class Outline
 {
-    /// <summary>The outline of <paramref name="tree"/>, in source order.</summary>
+    /// <summary>Returns the outline of <paramref name="tree"/>, in source order.</summary>
     public static IReadOnlyList<OutlineItem> Build(SyntaxTree tree)
     {
         var items = new List<OutlineItem>();
@@ -33,9 +33,10 @@ public static class Outline
         var children = new List<OutlineItem>();
         Walk(block, children);
 
-        // A block whose opener declares nothing the outline names — an `.if`, a macro body,
-        // a proc whose name is missing — gives its contents to the enclosing item instead of
-        // a level of its own, so an outline never hides a declaration behind a broken line.
+        // A block whose opener declares nothing the outline names, such as an `.if`, a macro
+        // body or a proc whose name is missing, gives its contents to the enclosing item instead
+        // of a level of its own. That way an outline never hides a declaration behind a broken
+        // line.
         var item = Describe(block.Opener.Statement, block, children);
         if (item is null)
             items.AddRange(children);
@@ -50,8 +51,8 @@ public static class Outline
             case ProcDeclarationSyntax { Name: { IsMissing: false } name } proc:
                 return new OutlineItem(OutlineKind.Proc, name.Text, proc.Signature?.GetText(), block.Span, name.Span, children);
 
-            // One item for the block, however many routines it declares. Its detail is the
-            // enum it iterates over and the signature the routines share.
+            // The block gets one item, regardless of how many routines it declares. Its detail
+            // is the enum it iterates over and the signature the routines share.
             case MultiProcDeclarationSyntax { Name: { IsMissing: false } bound } multiproc:
                 return new OutlineItem(OutlineKind.Proc, bound.Text,
                     multiproc.GetText().Trim().TrimEnd('{').TrimEnd()[".multiproc".Length..].Trim(),
@@ -63,13 +64,13 @@ public static class Outline
                     block.Span, scope.Name?.Span ?? scope.Keyword.Span, children);
 
             case MacroDeclarationSyntax { Name: { IsMissing: false } macro }:
-                // The parameters are what a reader needs beside the name, and the signature
-                // after them where there is one: together they are the whole header.
+                // Besides the name, a reader needs the parameters and, if there is one, the
+                // signature after them. Together they make up the whole header.
                 return new OutlineItem(OutlineKind.Macro, macro.Text, TextAfter(opener, macro)?.TrimEnd('{').TrimEnd(),
                     block.Span, macro.Span, children);
 
             case SegmentBlockSyntax or SegmentRegionSyntax:
-                // A segment name written in quotes is an error, but it still names the segment.
+                // A segment name in quotes is an error, but it still names the segment.
                 // It cannot contain escapes, so removing the quotes is enough.
                 var written = (SegmentStatementSyntax)opener;
                 var segment = written.Name.IsMissing ? written.Keyword : written.Name;
@@ -124,8 +125,8 @@ public static class Outline
     }
 
     /// <summary>
-    /// The declaration's text after its name, trimmed, or null if there is none: an extern
-    /// proc's address and signature, for example.
+    /// Returns the declaration's text after its name, trimmed, or null if there is none. For
+    /// example, this is an extern proc's address and signature.
     /// </summary>
     private static string? TextAfter(SyntaxNode statement, SyntaxToken name)
     {

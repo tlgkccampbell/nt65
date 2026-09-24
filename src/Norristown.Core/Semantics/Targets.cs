@@ -3,16 +3,16 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a name written as a target refers to: the operand of a branch or a jump, and the
-/// names an annotation lists.
+/// Resolves what a name used as a target refers to. Targets are the operand of a branch or a
+/// jump, and the names an annotation lists.
 /// </summary>
 public static class Targets
 {
     /// <summary>
-    /// The symbol a target names, and the writing it belongs to, or null when it names no
-    /// symbol. A macro parameter is followed to what its call gave it, and what a call gave
-    /// was written in the caller, so it belongs to the caller's level rather than to the
-    /// body's. A routine's address in a mirror bank is taken as the routine.
+    /// Returns the symbol a target names and the <see cref="Expansion"/> it belongs to, or null
+    /// when it names no symbol. A macro parameter is followed to the argument its call gave it.
+    /// That argument is part of the caller, so it belongs to the caller's level rather than to
+    /// the body's. A routine's address in a mirror bank is treated as the routine.
     /// </summary>
     public static (Symbol Symbol, Expansion? At)? Of(SemanticModel model, SyntaxNode? expression, Expansion? on)
     {
@@ -28,9 +28,10 @@ public static class Targets
     }
 
     /// <summary>
-    /// A routine's address in a bank of its choosing, <c>(bank &lt;&lt; 16) | .loword(f)</c>, which
-    /// is how a long jump or call reaches a routine in one of its segment's mirrors: the routine,
-    /// the writing it belongs to, and the bank. Null for any other expression.
+    /// Recognizes a routine's address in a chosen bank, <c>(bank &lt;&lt; 16) | .loword(f)</c>,
+    /// which is how a long jump or call reaches a routine in one of its segment's mirrors. Returns
+    /// the routine, the <see cref="Expansion"/> it belongs to, and the bank, or null for any other
+    /// expression.
     /// </summary>
     public static (Symbol Routine, Expansion? At, long Bank)? MirrorOf(SemanticModel model, SyntaxNode? expression, Expansion? on)
     {
@@ -50,7 +51,7 @@ public static class Targets
         return null;
     }
 
-    /// <summary>An expression with the parentheses around it taken off.</summary>
+    /// <summary>Returns <paramref name="expression"/> with the parentheses around it removed.</summary>
     private static SyntaxNode? Inner(SyntaxNode? expression)
     {
         while (expression is ParenthesizedExpressionSyntax parenthesized)

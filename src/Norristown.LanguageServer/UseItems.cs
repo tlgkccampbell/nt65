@@ -4,20 +4,21 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What a file's <c>.use</c> lines bring in, read from the lines themselves: which names each
-/// brings in, whether the file uses them, and how the lines read once unused items are removed
-/// and the rest sorted.
+/// Reads a file's <c>.use</c> lines from the lines themselves. It finds which names each line
+/// brings in and whether the file uses them, and rewrites the lines with unused items removed and
+/// the rest sorted.
 /// <para>
 /// A <c>.use module::*</c> is left alone, because what it brings in depends on what that module
-/// exports rather than on anything written here; it is treated like a re-export, as part of
-/// an interface rather than something this file uses.
+/// exports rather than on anything in this file. It is treated like a re-export, as part of an
+/// interface rather than something this file uses.
 /// </para>
 /// </summary>
 internal static class UseItems
 {
     /// <summary>
-    /// The change that rewrites the file's <c>.use</c> lines with unused items removed and the
-    /// rest sorted, offered where the caret is on one of them and there is something to change.
+    /// Returns the change that rewrites the file's <c>.use</c> lines with unused items removed and
+    /// the rest sorted. It is offered when the caret is on one of the lines and there is something
+    /// to change.
     /// </summary>
     public static IEnumerable<Change> Organized(SemanticModel model, int caretLine)
     {
@@ -54,8 +55,9 @@ internal static class UseItems
     }
 
     /// <summary>
-    /// The edits that stop <paramref name="name"/> being brought in: removing the whole line
-    /// where it is the line's only item, or just that item from a braced list.
+    /// Returns the edits that stop <paramref name="name"/> being brought in. The whole line is
+    /// removed when the name is the line's only item; otherwise only that item is removed from the
+    /// braced list.
     /// </summary>
     public static IReadOnlyList<Edit> Without(SemanticModel model, string name)
     {
@@ -71,8 +73,8 @@ internal static class UseItems
     }
 
     /// <summary>
-    /// The line with its unused items removed, or null where none of its items is used and the
-    /// whole line goes.
+    /// Returns the line with its unused items removed, or null when none of its items is used and
+    /// the whole line goes.
     /// </summary>
     private static string? Tidied(SemanticModel model, Line line)
     {
@@ -84,7 +86,10 @@ internal static class UseItems
         return (kept.Count == line.Items.Count ? line.Code : Code(line, kept)) + line.Comment;
     }
 
-    /// <summary>Whether the file writes <paramref name="name"/> anywhere but in the <c>.use</c> that brought it in.</summary>
+    /// <summary>
+    /// Returns whether the file refers to <paramref name="name"/> anywhere other than in the
+    /// <c>.use</c> that brought it in.
+    /// </summary>
     private static bool IsNamed(SemanticModel model, string name)
     {
         foreach (var reference in model.References)
@@ -99,20 +104,25 @@ internal static class UseItems
         return false;
     }
 
-    /// <summary>The line's code bringing in just <paramref name="items"/>, in braces when there is more than one.</summary>
+    /// <summary>
+    /// Returns the line's code rewritten to bring in only <paramref name="items"/>, in braces when
+    /// there is more than one.
+    /// </summary>
     private static string Code(Line line, IReadOnlyList<Item> items) =>
         items.Count == 1
             ? $".use {line.Path}::{items[0].Written}"
             : $".use {line.Path}::{{{string.Join(", ", items.Select(item => item.Written))}}}";
 
-    /// <summary>The line written again with <paramref name="items"/> in place of what it had.</summary>
+    /// <summary>
+    /// Returns an edit that rewrites the line to bring in <paramref name="items"/> in place of the
+    /// items it had.
+    /// </summary>
     private static Edit Rewritten(SyntaxTree tree, Line line, IReadOnlyList<Item> items) =>
         new(tree, new TextSpan(tree.LineStarts[line.Index] + line.Indent.Length, line.Code.Length), Code(line, items));
 
     /// <summary>
-    /// Every <c>.use</c> the file writes at its top level, in the order it writes them. A
-    /// <c>.export .use</c> is an export rather than something this file uses, and is not among
-    /// them.
+    /// Returns every <c>.use</c> at the file's top level, in source order. A <c>.export .use</c> is
+    /// an export rather than something this file uses, so it is not included.
     /// </summary>
     private static IReadOnlyList<Line> Written(SemanticModel model)
     {
@@ -129,9 +139,10 @@ internal static class UseItems
     }
 
     /// <summary>
-    /// What one <c>.use</c> line says, read off the directive it parsed to: the path it names,
-    /// whether it is a <c>::*</c>, and the names it brings in. The line's layout — its indent,
-    /// its code and any comment after it — is taken from the raw text.
+    /// Reads one <c>.use</c> line from the directive it parsed to, which gives the path it names,
+    /// whether it is a <c>::*</c>, and the names it brings in. The line's layout, which is its
+    /// indent, its code and any comment after it, is taken from the raw text. Returns null when
+    /// the directive names no path.
     /// </summary>
     private static Line? Read(SyntaxTree tree, int index, UseDirectiveSyntax use)
     {
@@ -166,19 +177,23 @@ internal static class UseItems
         return new Line(index, indent, code, comment, named, false, [new Item(brought, brought)]);
     }
 
-    /// <summary>One <c>.use</c> line: where it is, how it reads, and what it brings in.</summary>
-    /// <param name="Index">The 0-based line.</param>
-    /// <param name="Indent">The whitespace it starts with.</param>
+    /// <summary>
+    /// Represents one <c>.use</c> line, with its position, its text and the names it brings in.
+    /// </summary>
+    /// <param name="Index">The zero-based line index.</param>
+    /// <param name="Indent">The whitespace the line starts with.</param>
     /// <param name="Code">The line without its indent and without any comment after it.</param>
-    /// <param name="Comment">What follows the code on the line, comment and all.</param>
-    /// <param name="Path">The path it names, without the names in braces.</param>
-    /// <param name="Glob">Whether it is a <c>::*</c>, which brings in whatever a module exports.</param>
-    /// <param name="Items">The names it brings in, each as it is written.</param>
+    /// <param name="Comment">Everything that follows the code on the line, including the comment.</param>
+    /// <param name="Path">The path the line names, without the names in braces.</param>
+    /// <param name="Glob">
+    /// Whether the line is a <c>::*</c>, which brings in everything a module exports.
+    /// </param>
+    /// <param name="Items">The names the line brings in, each as the source spells it.</param>
     private sealed record Line(
         int Index, string Indent, string Code, string Comment, string Path, bool Glob, IReadOnlyList<Item> Items);
 
-    /// <summary>One name a <c>.use</c> brings in.</summary>
-    /// <param name="Name">The name this file writes for it.</param>
-    /// <param name="Written">The item as it is written, an <c>as</c> and all.</param>
+    /// <summary>Represents one name that a <c>.use</c> brings in.</summary>
+    /// <param name="Name">The name this file uses for it.</param>
+    /// <param name="Written">The item as the source spells it, including any <c>as</c> clause.</param>
     private sealed record Item(string Name, string Written);
 }

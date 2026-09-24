@@ -3,8 +3,9 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The editor's <c>Format Document</c> and <c>Format Selection</c>: the same layout the command
-/// line produces, returned as edits for the client to apply, and needing no analysis.
+/// Tests the editor's <c>Format Document</c> and <c>Format Selection</c> commands. They produce
+/// the same layout as the command line, returned as edits for the client to apply, and need no
+/// analysis.
 /// </summary>
 public sealed class FormattingTests
 {
@@ -50,7 +51,7 @@ public sealed class FormattingTests
         Assert.All(edits, edit => Assert.Equal(edit.Range.Start.Line, edit.Range.End.Line));
         Assert.All(edits, edit => Assert.Equal(0, edit.Range.Start.Character));
 
-        // The client's formatting options (tabs, here) are ignored: nt65 has one layout.
+        // The client's formatting options (tabs, here) are ignored, because nt65 has one layout.
         Assert.DoesNotContain(edits, edit => edit.NewText.Contains('\t'));
     }
 
@@ -77,8 +78,8 @@ public sealed class FormattingTests
     }
 
     /// <summary>
-    /// A file with an error in it still formats: a line's indentation comes from the braces
-    /// around it, and formatting does not wait for an analysis.
+    /// A file with an error in it still formats, because a line's indentation comes from the
+    /// braces around it and formatting does not wait for an analysis.
     /// </summary>
     [Fact]
     public async Task AFileThatDoesNotCompileStillFormats()

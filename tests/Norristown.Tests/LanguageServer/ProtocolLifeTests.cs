@@ -3,10 +3,11 @@ using System.Text.Json;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The shipped executable, driven over its own standard input and output through its whole
-/// lifecycle. Every other test drives the server in this process, which is faster but says
-/// nothing about how the executable an editor starts copes with messages an editor would not
-/// send. One process runs the whole sequence, because starting it costs more than all of it.
+/// Tests the shipped executable, driven over its own standard input and output through its whole
+/// lifecycle. Every other test drives the server in this process, which is faster but shows
+/// nothing about how the executable that an editor starts copes with messages an editor would not
+/// send. One process runs the whole sequence, because starting it costs more than the rest of the
+/// sequence does.
 /// </summary>
 public sealed class ProtocolLifeTests
 {
@@ -22,7 +23,7 @@ public sealed class ProtocolLifeTests
         var timeout = TestTimeout.Token();
         using var server = StdioServer.Start();
 
-        // Before `initialize`, a request is refused and the server is still there to say so.
+        // Before `initialize`, a request is refused and the server keeps running to report it.
         await server.SendAsync(Request(1, "textDocument/documentSymbol", """
             {"textDocument":{"uri":"file:///c%3A/work/main.nt65"}}
             """), timeout);
@@ -59,8 +60,8 @@ public sealed class ProtocolLifeTests
              "text":".module main\n.segment CODE\n.proc reset {\n    jsr step\n    rts\n}\n.proc step {\n    rts\n}\n"}}
             """), timeout);
 
-        // A cancel for a request that may already be answered: either way the server answers
-        // that id and stays up. An editor sends such a cancel every time the caret moves.
+        // A cancel can arrive for a request that is already answered. Either way, the server
+        // answers that id and stays up. An editor sends such a cancel every time the caret moves.
         await server.SendAsync(Request(5, "textDocument/documentSymbol", """
             {"textDocument":{"uri":"file:///c%3A/work/main.nt65"}}
             """), timeout);
@@ -68,7 +69,7 @@ public sealed class ProtocolLifeTests
         var cancelled = await server.AnswerToAsync(5, timeout);
         Assert.True(cancelled.TryGetProperty("result", out _) || cancelled.TryGetProperty("error", out _));
 
-        // Every answer spells the file the way the client spelled it, escape and all.
+        // Every answer names the file exactly as the client did, percent-escape included.
         await server.SendAsync(Request(6, "textDocument/definition", """
             {"textDocument":{"uri":"file:///c%3A/work/main.nt65"},"position":{"line":3,"character":9}}
             """), timeout);
@@ -124,7 +125,7 @@ public sealed class ProtocolLifeTests
     private static string Request(int id, string method, string parameters) =>
         $$"""{"jsonrpc":"2.0","id":{{id}},"method":"{{method}}","params":{{parameters}}}""";
 
-    /// <summary>The error code an answer carries, or 0 for one that carries a result.</summary>
+    /// <summary>Returns the error code an answer carries, or 0 if the answer carries a result.</summary>
     private static int ErrorIn(JsonElement answer) =>
         answer.TryGetProperty("error", out var error) ? error.GetProperty("code").GetInt32() : 0;
 }

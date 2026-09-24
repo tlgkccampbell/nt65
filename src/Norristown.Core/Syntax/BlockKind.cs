@@ -1,6 +1,9 @@
 namespace Norristown.Syntax;
 
-/// <summary>The kind of block a line opens, from the statement that ends in <c>{</c>.</summary>
+/// <summary>
+/// Specifies the kind of block a line opens, which is determined by the statement that ends in
+/// <c>{</c>.
+/// </summary>
 public enum BlockKind
 {
     /// <summary>The line opens no block.</summary>
@@ -13,8 +16,8 @@ public enum BlockKind
     Proc,
 
     /// <summary>
-    /// <c>.multiproc</c>: one routine body repeated over an enum, written out once for each
-    /// member of the enum.
+    /// <c>.multiproc</c>, a routine body repeated over an enum and emitted once for each member of
+    /// the enum.
     /// </summary>
     MultiProc,
 
@@ -43,15 +46,17 @@ public enum BlockKind
     Segment,
 
     /// <summary>
-    /// <c>.segment NAME</c> at file level, with no brace: the region runs to the next such line
-    /// or to the end of the file.
+    /// <c>.segment NAME</c> at file level, with no brace. The region runs to the next such line or
+    /// to the end of the file.
     /// </summary>
     Region,
 
-    /// <summary><c>.data name {</c>: mixed data, with members and positions of its own.</summary>
+    /// <summary><c>.data name {</c>, which declares mixed data with its own members and positions.</summary>
     Data,
 
-    /// <summary><c>.data name: .byte[] {</c>: an array's values, spread over the block's lines.</summary>
+    /// <summary>
+    /// <c>.data name: .byte[] {</c>, which lists an array's values over the block's lines.
+    /// </summary>
     DataBody,
 
     /// <summary><c>.if</c>, <c>.elseif</c> or <c>.else</c>.</summary>
@@ -66,6 +71,8 @@ public enum BlockKind
     /// <summary>A multi-line <c>.type T {</c> initializer, one <c>member = value</c> per line.</summary>
     RecordInitializer,
 
-    /// <summary>A block passed as an argument to a macro call, whether the first one or a continuation.</summary>
+    /// <summary>
+    /// A block passed as an argument to a macro call, either the first block or a continuation.
+    /// </summary>
     MacroBlock,
 }

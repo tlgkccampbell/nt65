@@ -1,25 +1,25 @@
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// Tests, by running it, the promise that nt65's output does not depend on ca65's command line:
-/// every corpus program is assembled under several option sets that would change what a
-/// hand-written file means, and the linked image has to come out byte for byte the same as the
+/// Tests, by running ca65, the promise that nt65's output does not depend on ca65's command
+/// line. Every corpus program is assembled under several option sets that would change what a
+/// hand-written file means. The linked image has to come out byte for byte the same as the
 /// baseline's, with ca65 printing nothing at <c>-W2</c>.
 /// <para>
 /// The options are passed only to the files nt65 wrote. A hand-written module in the corpus is
 /// not nt65's output and nt65 promises nothing about it, so it is assembled as its own build
-/// script assembles it. The option sets run in parallel, and the test belongs in the gate rather
-/// than the edit loop, since it starts an assembler per file per set.
+/// script assembles it. The option sets run in parallel. The test belongs in the gate, not in
+/// the edit loop, because it starts an assembler per file per set.
 /// </para>
 /// </summary>
 [Trait("Category", "Oracle")]
 public sealed class HostileOptionTests
 {
     /// <summary>
-    /// The option sets. Each is a ca65 command line that changes what a source file means —
-    /// a target that translates characters, a memory model that changes default address
-    /// sizes, smart mode, automatic imports, a define of a name a program's own configuration
-    /// uses, and every emulation feature at once — plus <c>-W2</c> throughout.
+    /// The option sets. Each is a ca65 command line that changes what a source file means, and
+    /// every set also carries <c>-W2</c>. The sets cover a target that translates characters, a
+    /// memory model that changes default address sizes, smart mode, automatic imports, a define
+    /// of a name that a program's own configuration uses, and every emulation feature at once.
     /// </summary>
     private static readonly (string Name, string[] Options, bool MaySayTheSegmentsDisagree)[] Sets =
     [

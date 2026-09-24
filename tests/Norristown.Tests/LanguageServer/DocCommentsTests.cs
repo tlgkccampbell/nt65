@@ -6,9 +6,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The comment above a declaration, shown on hover and beside a completion. The language has
-/// no special doc-comment syntax: the <c>;</c> comment lines directly above a declaration, each
-/// on a line of its own, are taken as its documentation.
+/// Tests the comment above a declaration, which is shown on hover and beside a completion. The
+/// language has no special doc-comment syntax. The <c>;</c> comment lines directly above a
+/// declaration, each on a line of its own, are taken as its documentation.
 /// </summary>
 public sealed class DocCommentsTests
 {
@@ -35,7 +35,7 @@ public sealed class DocCommentsTests
         .export clear, scroll, ROWS
         """;
 
-    /// <summary>The comment above a declaration is shown wherever the name is written.</summary>
+    /// <summary>The comment above a declaration is shown wherever the name appears.</summary>
     [Fact]
     public async Task HoverShowsTheCommentAboveTheDeclaration()
     {
@@ -66,7 +66,10 @@ public sealed class DocCommentsTests
         Assert.DoesNotContain("how many rows", hover.Contents.Value);
     }
 
-    /// <summary>Every instance of a family is declared on the family's line, so each shows the family's comment.</summary>
+    /// <summary>
+    /// Every instance of a family is declared on the family's line, so each shows the family's
+    /// comment.
+    /// </summary>
     [Fact]
     public async Task AFamilysInstancesShowTheFamilysComment()
     {
@@ -103,9 +106,9 @@ public sealed class DocCommentsTests
     }
 
     /// <summary>
-    /// A completion item carries the comment too, but only when it is resolved for the one item
-    /// the caret is on: each name can carry a paragraph, and sending them all with a list of
-    /// hundreds would be mostly prose nobody is reading.
+    /// A completion item carries the comment too, but only when the item the caret is on is
+    /// resolved. Each name can carry a paragraph, and sending them all with a list of hundreds
+    /// would be mostly prose nobody is reading.
     /// </summary>
     [Fact]
     public async Task ACompletionCarriesTheComment()
@@ -113,7 +116,7 @@ public sealed class DocCommentsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(Source, timeout);
 
-        // A fresh line inside `scroll`, where a name may be written.
+        // A fresh line inside `scroll`, where a name may go.
         var at = Locate.At(Source, "    jsr clear");
         var edited = Source.Replace("    jsr clear", "    lda cl\n    jsr clear", StringComparison.Ordinal);
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(new Range(at, at), "    lda cl\n"));

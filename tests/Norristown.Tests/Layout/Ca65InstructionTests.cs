@@ -4,8 +4,8 @@ using Norristown.Processor;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// The words ca65 reads as an instruction, checked against the instruction tables in the
-/// pinned ca65 source. Alias spellings were missed while nt65's list described the processor
+/// Checks the words ca65 reads as an instruction against the instruction tables in the pinned
+/// ca65 source. Alias spellings were missed while nt65's list described the processor
 /// rather than what the assembler accepts as input, so this test reads the assembler's own
 /// tables.
 /// <para>
@@ -17,13 +17,16 @@ namespace Norristown.Tests.Layout;
 [Trait("Category", "Oracle")]
 public sealed partial class Ca65InstructionTests
 {
-    /// <summary>A row of one of ca65's instruction tables, which begins with the mnemonic in quotes.</summary>
+    /// <summary>
+    /// Matches a row of one of ca65's instruction tables, which begins with the mnemonic in
+    /// quotes.
+    /// </summary>
     [GeneratedRegex(@"^\s*\{\s*""(?<name>[A-Za-z0-9]+)""")]
     private static partial Regex Row();
 
     /// <summary>
-    /// The line where one of the tables begins: the table's name follows the closing brace of
-    /// its struct type.
+    /// Matches the line where one of the tables begins. The table's name follows the closing
+    /// brace of its struct type.
     /// </summary>
     [GeneratedRegex(@"^\}\s*(?<table>InsTab\w+)\s*=\s*\{")]
     private static partial Regex Table();
@@ -53,7 +56,10 @@ public sealed partial class Ca65InstructionTests
         Assert.True(problems.Count == 0, string.Join("\n", problems.Order(StringComparer.Ordinal)));
     }
 
-    /// <summary>Each table of ca65's <c>instr.c</c>, by its name, holding its mnemonics in lower case.</summary>
+    /// <summary>
+    /// Returns each table of ca65's <c>instr.c</c>, keyed by its name, holding its mnemonics in
+    /// lower case.
+    /// </summary>
     private static Dictionary<string, List<string>> Tables()
     {
         var path = Repo.Path(".cache", "cc65-src", "src", "ca65", "instr.c");

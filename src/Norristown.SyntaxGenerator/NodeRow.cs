@@ -2,21 +2,24 @@ using System.Collections.Immutable;
 
 namespace Norristown.SyntaxGenerator;
 
-/// <summary>One node of the table in Syntax.xml: the class to write, what it derives from, and its properties.</summary>
+/// <summary>
+/// Represents one node of the table in Syntax.xml, which gives the class to generate, the class it
+/// derives from, and its properties.
+/// </summary>
 /// <param name="Name">The class's name.</param>
 /// <param name="Base">The class it derives from.</param>
-/// <param name="Kinds">The kinds whose nodes are of this class; empty for an abstract one.</param>
+/// <param name="Kinds">The kinds whose nodes are of this class, or empty for an abstract class.</param>
 /// <param name="Summary">The class's summary, one string per line.</param>
 /// <param name="IsAbstract">Whether the class is abstract, and so has no kind and no visitor method.</param>
 /// <param name="IsInternal">Whether the class is internal, and so has no visitor method.</param>
-/// <param name="IsHandWritten">Whether the class is written by hand and only its <c>Accept</c> generated.</param>
+/// <param name="IsHandWritten">Whether the class is written by hand, with only its <c>Accept</c> generated.</param>
 /// <param name="IsPartial">Whether a hand-written partial class adds members the table cannot describe.</param>
-/// <param name="IsMissingNode">Whether a node of this kind fills a place the source did not write anything in.</param>
+/// <param name="IsMissingNode">Whether a node of this kind fills a place where the source contains nothing.</param>
 /// <param name="Layout">
-/// The slot order, by name, when it is not the default of the base's slots followed by this node's
-/// own; empty otherwise.
+/// The slot order, by name, when it differs from the default of the base's slots followed by this
+/// node's own, or empty otherwise.
 /// </param>
-/// <param name="Slots">The class's properties, in the order they are written.</param>
+/// <param name="Slots">The class's properties, in the order the table lists them.</param>
 public sealed record NodeRow(
     string Name,
     string Base,
@@ -30,15 +33,24 @@ public sealed record NodeRow(
     ImmutableArray<string> Layout,
     ImmutableArray<NodeSlot> Slots)
 {
-    /// <summary>The name without the <c>Syntax</c> suffix, which is also the kind's and the visitor method's.</summary>
+    /// <summary>
+    /// Gets the name without the <c>Syntax</c> suffix, which is also the name of the kind and of the
+    /// visitor method.
+    /// </summary>
     public string BareName =>
         Name.EndsWith("Syntax", StringComparison.Ordinal)
             ? Name.Substring(0, Name.Length - "Syntax".Length)
             : Name;
 
-    /// <summary>Whether the class gets a <c>VisitXxx</c> of its own on the visitors.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the class gets a <c>VisitXxx</c> method of its own on the
+    /// visitors.
+    /// </summary>
     public bool HasVisitMethod => !IsAbstract && !IsInternal;
 
-    /// <summary>The pieces of the node this row declares, in the order it writes them.</summary>
+    /// <summary>
+    /// Gets the properties this row declares that are slots of the node rather than derived
+    /// properties, in the order the table lists them.
+    /// </summary>
     public IEnumerable<NodeSlot> Pieces => Slots.Where(slot => slot.IsPiece);
 }

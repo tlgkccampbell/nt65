@@ -3,16 +3,17 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Just enough of a JSON scanner to find one string in <c>nt65.json</c> and put another in its
-/// place. nt65 reads the file with comments and trailing commas allowed, and a reader that
-/// parses it gives back values and not the places they were written; an edit needs the place.
+/// Provides just enough of a JSON scanner to find one string in <c>nt65.json</c> and replace it
+/// with another. nt65 reads the file with comments and trailing commas allowed. A reader that
+/// parses the file returns values, not their positions in the text, and an edit needs the
+/// position.
 /// </summary>
 internal static class Json
 {
     /// <summary>
-    /// Where the string <paramref name="value"/> is written in the array under
-    /// <paramref name="key"/>, quotes and all, or null when it is not written there. A comment
-    /// is passed over, so text inside one is never mistaken for an entry.
+    /// Returns the span of the string <paramref name="value"/> in the array under
+    /// <paramref name="key"/>, including its quotes, or null when the array does not contain it.
+    /// Comments are skipped, so text inside one is never mistaken for an entry.
     /// </summary>
     public static TextSpan? Entry(string text, string key, string value)
     {
@@ -40,12 +41,18 @@ internal static class Json
         return null;
     }
 
-    /// <summary>A string as JSON writes it, with the two characters that have to be escaped escaped.</summary>
+    /// <summary>
+    /// Returns a string as a JSON string literal, with backslashes and double quotes, the two
+    /// characters that have to be escaped, escaped.
+    /// </summary>
     public static string Quoted(string value) =>
         "\"" + value.Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
-    /// <summary>Just past the key's own string, or -1 when the file does not write it at the top level.</summary>
+    /// <summary>
+    /// Returns the position just past the first string in the file equal to the key, or -1 when
+    /// there is none. A matching string inside a nested object counts too.
+    /// </summary>
     private static int Start(string text, string key)
     {
         var quoted = Quoted(key);
@@ -64,7 +71,10 @@ internal static class Json
         return -1;
     }
 
-    /// <summary>Just past a string that starts at <paramref name="at"/>, its closing quote included.</summary>
+    /// <summary>
+    /// Returns the position just past a string that starts at <paramref name="at"/>, including
+    /// its closing quote.
+    /// </summary>
     private static int End(string text, int at)
     {
         for (var i = at + 1; i < text.Length; i++)
@@ -77,7 +87,9 @@ internal static class Json
         return text.Length;
     }
 
-    /// <summary>Past one character, or past the whole of a comment where one starts here.</summary>
+    /// <summary>
+    /// Returns the position past one character, or past the whole of a comment that starts here.
+    /// </summary>
     private static int Past(string text, int at)
     {
         if (at + 1 < text.Length && text[at] == '/' && text[at + 1] == '/')
@@ -93,7 +105,9 @@ internal static class Json
         return at + 1;
     }
 
-    /// <summary>The value of a JSON string's contents, undoing the escapes a path may contain.</summary>
+    /// <summary>
+    /// Returns the value of a JSON string's contents, undoing the escapes a path may contain.
+    /// </summary>
     private static string Read(string written) =>
         written.Replace("\\\\", "\\", StringComparison.Ordinal)
             .Replace("\\\"", "\"", StringComparison.Ordinal)

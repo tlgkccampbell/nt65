@@ -4,7 +4,10 @@ using Norristown.Semantics;
 
 namespace Norristown.Tests.Semantics;
 
-/// <summary>Modules: what one module may name in another, and what the output does about it.</summary>
+/// <summary>
+/// Checks modules, including what one module may name in another and what the output does about
+/// it.
+/// </summary>
 public sealed class ModuleTests
 {
     private const string Gfx = """
@@ -26,7 +29,7 @@ public sealed class ModuleTests
         }
         """;
 
-    /// <summary>A name from another module is written with the module's path.</summary>
+    /// <summary>A name from another module is named through the module's path.</summary>
     [Fact]
     public void AQualifiedNameResolvesToTheModuleThatDeclaresIt()
     {
@@ -40,7 +43,10 @@ public sealed class ModuleTests
         Assert.Equal(SymbolKind.Proc, symbol.Kind);
     }
 
-    /// <summary>Nothing from another module is visible without its path or a <c>.use</c>, and the error names the module that exports it.</summary>
+    /// <summary>
+    /// Nothing from another module is visible without its path or a <c>.use</c>, and the error
+    /// names the module that exports it.
+    /// </summary>
     [Fact]
     public void AnotherModulesNameIsNotVisibleUnqualified()
     {
@@ -104,7 +110,7 @@ public sealed class ModuleTests
 
     /// <summary>
     /// An interior label is exported from inside the routine it belongs to and named through the
-    /// routine from elsewhere; the routine itself need not be exported for that. Its linker name
+    /// routine from elsewhere. The routine itself need not be exported for that. Its linker name
     /// is prefixed with its module's name.
     /// </summary>
     [Fact]
@@ -122,7 +128,7 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// An address becomes an import under its linker name, sized from its declaration; a
+    /// An address becomes an import under its linker name, sized from its declaration. A
     /// constant is written out by value, because ca65 cannot use an imported symbol where it
     /// needs a constant.
     /// </summary>
@@ -189,8 +195,8 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// A checked import gives the value nt65 uses in place of the name, and an assertion that
-    /// the symbol it is linked against has that value.
+    /// A checked import gives the value nt65 uses in place of the name, and produces an assertion
+    /// that the symbol it is linked against has that value.
     /// </summary>
     [Fact]
     public void ACheckedImportIsUsedByValueAndAsserted()
@@ -204,9 +210,9 @@ public sealed class ModuleTests
     }
 
     /// <summary>
-    /// A re-exported import is used by other modules as if they had declared it: each imports it
-    /// under its own name and asserts its value, and the module that declares it and uses it nowhere
-    /// writes nothing for it, and so no file at all.
+    /// A re-exported import is used by other modules as if they had declared it. Each imports it
+    /// under its own name and asserts its value. The module that declares it and uses it nowhere
+    /// writes nothing for it, and so writes no file at all.
     /// </summary>
     [Fact]
     public void AReexportedImportIsImportedWhereItIsUsed()
@@ -223,7 +229,8 @@ public sealed class ModuleTests
 
     /// <summary>
     /// A module whose output would be only the header writes no file: what it declares crosses
-    /// modules by value. One that exports a constant writes the export, for ca65 code to link to.
+    /// modules by value. A module that exports a constant writes the export, for ca65 code to
+    /// link to.
     /// </summary>
     [Fact]
     public void AModuleThatWritesNothingHasNoFile()
@@ -240,7 +247,7 @@ public sealed class ModuleTests
 
     /// <summary>
     /// Only what a file uses is imported, since an import pulls the module that defines it out of
-    /// a library: a path uses the symbol it ends at and not the routine it passes through, a macro
+    /// a library. A path uses the symbol it ends at and not the routine it passes through. A macro
     /// body's names are used only where the macro is called, and an import nothing uses is not
     /// written at all.
     /// </summary>
@@ -260,7 +267,10 @@ public sealed class ModuleTests
         Assert.DoesNotContain("later", outputs["main.s"]);
     }
 
-    /// <summary>Two modules may each export the same name; the linker sees each prefixed with its own module's name.</summary>
+    /// <summary>
+    /// Two modules may each export the same name. The linker sees each prefixed with its own
+    /// module's name.
+    /// </summary>
     [Fact]
     public void TwoModulesMayExportTheSameName()
     {
@@ -310,7 +320,7 @@ public sealed class ModuleTests
     /// <summary>
     /// An import keeps the spelling it was exported under, because that is the name in the
     /// object file, so a local name that would collide with it is the one that gives way.
-    /// Only a generated name can: a fixed spelling that collides is an error.
+    /// Only a generated name can give way, and a fixed spelling that collides is an error.
     /// </summary>
     [Fact]
     public void AGeneratedNameGivesWayToAnImportedOne()

@@ -5,7 +5,7 @@ namespace Norristown.Tests.Semantics;
 /// <summary>
 /// The integer arithmetic the compile-time built-ins are worked out in. Every answer is a whole
 /// number and nothing here uses floating point, so the same program gives the same bytes on
-/// every machine; what each function promises is therefore checked exactly.
+/// every machine. What each function promises is therefore checked exactly.
 /// </summary>
 public sealed class IntegerMathTests
 {
@@ -65,8 +65,9 @@ public sealed class IntegerMathTests
     [InlineData(320, 256, 127, 127)]
     [InlineData(-64, 256, 127, -127)]
 
-    // A sixth of a turn is where the sine is exactly a half: the one angle where the answer
-    // can sit halfway between two whole numbers, and the rule sends it away from zero.
+    // A twelfth of a turn is where the sine is exactly a half. That angle, with its mirror
+    // images around the circle, is the one place where the answer can sit halfway between two
+    // whole numbers, and the rule sends it away from zero.
     [InlineData(1, 12, 127, 64)]
     [InlineData(5, 12, 127, 64)]
     [InlineData(7, 12, 127, -64)]
@@ -97,7 +98,7 @@ public sealed class IntegerMathTests
         Assert.Equal(expected, IntegerMath.Cos(angle, turn, scale));
 
     /// <summary>
-    /// The identity every table rests on: at the scale a table is written in, the squares of the
+    /// Every table rests on one identity. At the scale a table is written in, the squares of the
     /// sine and the cosine of one angle add up to the square of the scale, give or take the
     /// rounding each of them took.
     /// </summary>

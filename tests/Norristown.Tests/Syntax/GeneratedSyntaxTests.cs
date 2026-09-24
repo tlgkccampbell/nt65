@@ -9,7 +9,7 @@ public sealed class GeneratedSyntaxTests
 {
     /// <summary>
     /// Every kind a node can have is in the table and has a class. The node kinds are
-    /// <see cref="SyntaxKind.Line"/> and everything after it; what comes before is trivia and
+    /// <see cref="SyntaxKind.Line"/> and everything after it. What comes before is trivia and
     /// tokens.
     /// </summary>
     [Fact]
@@ -31,9 +31,9 @@ public sealed class GeneratedSyntaxTests
     }
 
     /// <summary>
-    /// What the table records about a piece of a node: its type, whether it is required, and the
-    /// kinds a token may be. A list is always required: when nothing is written it is an empty
-    /// list, never a missing one.
+    /// The table records the type of each child element of a node, whether it is required, and
+    /// the kinds a token may be. A list is always required. When the source has nothing there, it
+    /// is an empty list, never a missing one.
     /// </summary>
     [Fact]
     public void APieceSaysItsTypeAndItsKinds()
@@ -75,8 +75,8 @@ public sealed class GeneratedSyntaxTests
     /// <summary>
     /// Each concrete node class carries both its own <c>Accept</c> overrides, and the visitors
     /// carry exactly one method per class of a node that is not internal. Together with the
-    /// overloads the compiler has to pick from — one per sealed class — that is what makes
-    /// <c>Accept</c> land on the method for the node's own class.
+    /// overloads the compiler has to pick from, one per sealed class, this makes <c>Accept</c>
+    /// land on the method for the node's own class.
     /// </summary>
     [Fact]
     public void EveryNodeClassAcceptsAndEveryClassHasAVisitMethod()

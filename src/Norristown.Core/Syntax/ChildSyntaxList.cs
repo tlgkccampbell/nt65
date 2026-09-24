@@ -5,17 +5,17 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A node's children, nodes and tokens together, in source order. The list itself is a view
-/// over the node, so asking for it costs nothing; a child node's red node is created the first
-/// time it is asked for and then cached by the parent.
+/// Represents a node's child nodes and tokens together, in source order. The list is a view over
+/// the node, so getting it costs nothing. A child node's red node is created the first time it is
+/// requested and then cached by the parent.
 /// <para>
-/// A slot holding nothing shows no child, and a slot holding a list shows the list's items and
-/// separators rather than the node over them, as Roslyn's does: an analyzer walking a node's
-/// children never meets a list node.
+/// An empty slot contributes no child. A slot that holds a list contributes the list's items and
+/// separators rather than the node over them, as in Roslyn, so an analyzer walking a node's
+/// children never sees a list node.
 /// </para>
 /// <para>
-/// A line is the exception to reading children from slots: it stores its tokens directly in its
-/// slots, but its children are the pieces the line is made of, which hold those same tokens. A
+/// A line is the exception to reading children from slots. It stores its tokens directly in its
+/// slots, but its children are the pieces the line is made of, which contain those same tokens. A
 /// walk of the children therefore reaches every token of a file once, under the node it is part of.
 /// </para>
 /// </summary>
@@ -25,7 +25,7 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
 
     internal ChildSyntaxList(SyntaxNode node) => this.node = node;
 
-    /// <summary>How many children the node has.</summary>
+    /// <summary>Gets the number of children the node has.</summary>
     public int Count
     {
         get
@@ -44,7 +44,7 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
         }
     }
 
-    /// <summary>The child at <paramref name="index"/>, from 0 to <see cref="Count"/> − 1.</summary>
+    /// <summary>Gets the child at <paramref name="index"/>, from 0 to <see cref="Count"/> − 1.</summary>
     public SyntaxNodeOrToken this[int index]
     {
         get
@@ -59,9 +59,12 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
         }
     }
 
-    /// <summary>The <paramref name="length"/> children from <paramref name="start"/>; C# slice patterns call this.</summary>
-    /// <param name="start">The first child to take.</param>
-    /// <param name="length">How many to take.</param>
+    /// <summary>
+    /// Returns the <paramref name="length"/> children starting at <paramref name="start"/>. C#
+    /// slice patterns call this method.
+    /// </summary>
+    /// <param name="start">The index of the first child to take.</param>
+    /// <param name="length">The number of children to take.</param>
     public ImmutableArray<SyntaxNodeOrToken> Slice(int start, int length)
     {
         var builder = ImmutableArray.CreateBuilder<SyntaxNodeOrToken>(length);
@@ -70,7 +73,7 @@ public readonly struct ChildSyntaxList : IEnumerable<SyntaxNodeOrToken>
         return builder.MoveToImmutable();
     }
 
-    /// <summary>Walks the children in source order.</summary>
+    /// <summary>Returns an enumerator over the children in source order.</summary>
     public IEnumerator<SyntaxNodeOrToken> GetEnumerator()
     {
         if (node is null)

@@ -4,11 +4,11 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// Placement: which modules share a translation unit, and what a routine may run into there.
-/// Within a unit nt65 lays out every byte, so a <c>.fallthrough</c> into the routine after a
-/// <c>.place</c>, or into another module's, is checked against that layout. The fixtures hold
-/// whole programs; these tests hold the cases that depend on what a build or an edit leaves
-/// in between.
+/// Checks placement, which decides which modules share a translation unit and what a routine may
+/// run into there. Within a unit nt65 lays out every byte, so a <c>.fallthrough</c> into the
+/// routine after a <c>.place</c>, or into another module's, is checked against that layout. The
+/// fixtures hold whole programs. These tests hold the cases that depend on what a build or an
+/// edit leaves in between.
 /// </summary>
 public sealed class PlacementTests
 {
@@ -32,7 +32,7 @@ public sealed class PlacementTests
 
     /// <summary>
     /// A placed module whose items are all under an <c>.if</c> the build leaves out places
-    /// nothing, so the routine before its <c>.place</c> runs into the one after it; a placed
+    /// nothing, so the routine before its <c>.place</c> runs into the one after it. A placed
     /// routine the build keeps stands between them, and the same <c>.fallthrough</c> is then wrong.
     /// </summary>
     [Theory]

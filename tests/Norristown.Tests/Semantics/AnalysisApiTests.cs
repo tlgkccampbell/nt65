@@ -58,7 +58,7 @@ public sealed class AnalysisApiTests
 
         """;
 
-    /// <summary>Analyzing a program, and what one file's model contains.</summary>
+    /// <summary>Checks analyzing a program, and what one file's model contains.</summary>
     [Fact]
     public void TheModelOfAFile()
     {
@@ -75,7 +75,8 @@ public sealed class AnalysisApiTests
         Assert.Empty(model.Families);
         Assert.Null(model.FamilyAt(model.Tree.GetLine(0).Statement));
 
-        // What the file's output brings in from elsewhere, and what it uses of its own.
+        // The model lists what the file's output brings in from elsewhere, and what it uses of
+        // its own.
         Assert.Equal(["BORDER"], model.ExternalSymbols.Select(symbol => symbol.Name));
         Assert.Contains(model.Used, symbol => symbol.Name == "cells");
         Assert.Equal(["EDGE"], model.Brought.Keys);
@@ -88,14 +89,17 @@ public sealed class AnalysisApiTests
         Assert.Equal(["K"], alone.Symbols.Select(symbol => symbol.Name));
     }
 
-    /// <summary>What a name written in the file refers to, and what a name at a caret could.</summary>
+    /// <summary>
+    /// Checks what a name in the file refers to, and what a name at a caret could refer to.
+    /// </summary>
     [Fact]
     public void WhatANameMeans()
     {
         var model = Compile().ModelFor("main.nt65")!;
         var caret = model.Tree.Text.IndexOf("lda cells,x", StringComparison.Ordinal) + 4;
 
-        // A name already written: the reference at a position, and the symbol it refers to.
+        // For a name already in the file, the model gives the reference at a position and the
+        // symbol it refers to.
         var reference = model.ReferenceAt(caret)!;
         Assert.Equal("cells", reference.Symbol.Name);
         Assert.False(reference.IsDeclaration);
@@ -104,7 +108,7 @@ public sealed class AnalysisApiTests
             model.Tree.Root.FindToken(caret).Parent.FirstAncestorOrSelf<NameExpressionSyntax>()!).Symbol);
         Assert.Contains(model.ReferencesTo(reference.Symbol), found => found.IsDeclaration);
 
-        // A name being typed, which is text rather than a node: the same lookup answers it.
+        // A name being typed is text rather than a node, and the same lookup answers it.
         Assert.Equal(ScopeKind.Proc, model.ScopeAt(caret).Kind);
         Assert.Equal(reference.Symbol, model.GetSymbolInfo(caret, ["cells"]).Symbol);
         Assert.Equal("y", model.GetSymbolInfo(caret, ["Point", "y"]).Symbol!.Name);
@@ -112,14 +116,18 @@ public sealed class AnalysisApiTests
         Assert.True(model.GetSymbolInfo(caret, ["nothing"]).IsNone);
         Assert.True(SymbolInfo.None.IsNone);
 
-        // Every name that may be written there, each under the spelling that reaches it.
+        // The model offers every name that may be used there, each under the spelling that
+        // reaches it.
         Assert.Contains(model.LookupNames(caret), found => found.Name == "EDGE");
         Assert.Contains(model.LookupSymbols(caret), symbol => symbol.Name == "main");
         Assert.Equal("@loop", Assert.Single(model.LookupSymbols(caret, "@loop")).DisplayName);
         Assert.Equal("BORDER", Assert.Single(model.LookupSymbols(caret, "EDGE")).Name);
     }
 
-    /// <summary>What one declaration is: its kind, where it is, its value and what it holds.</summary>
+    /// <summary>
+    /// Checks what the model knows of one declaration, which is its kind, its location, its value
+    /// and what it holds.
+    /// </summary>
     [Fact]
     public void WhatADeclarationIs()
     {
@@ -145,14 +153,14 @@ public sealed class AnalysisApiTests
         Assert.Equal(6, point.DeclarationSpan.Line);
         Assert.Equal(model.Tree.Text.IndexOf(".struct Point", StringComparison.Ordinal) + 8, point.NameSpan.Start);
 
-        // A member of a layout is its offset; an enum member is its number.
+        // A member of a layout is its offset. An enum member is its number.
         var y = point.Body!.FindMember("y")!;
         Assert.Equal(SymbolKind.Member, y.Kind);
         Assert.Equal(2, y.Value.AsNumber());
         Assert.Equal(1, white.Value.AsNumber());
         Assert.True(white.IsEnumMember);
 
-        // A label is an address, and a cheap local belongs to the routine it is written in.
+        // A label is an address, and a cheap local belongs to the routine it is declared in.
         Assert.True(loop.IsCheapLocal);
         Assert.True(loop.IsAddress);
         Assert.False(loop.IsReachableByPath);
@@ -174,7 +182,7 @@ public sealed class AnalysisApiTests
         Assert.Contains(body.Symbols, symbol => symbol == loop);
     }
 
-    /// <summary>What an expression's value is, and how much room a declaration takes.</summary>
+    /// <summary>Checks an expression's value, and how much room a declaration takes.</summary>
     [Fact]
     public void WhatAnExpressionIsWorth()
     {
@@ -198,7 +206,7 @@ public sealed class AnalysisApiTests
         Assert.Null(model.BytesOf(sizeof_));
     }
 
-    /// <summary>A macro call, and what one expansion of a body gives its parameters.</summary>
+    /// <summary>Checks a macro call, and what one expansion of a body gives its parameters.</summary>
     [Fact]
     public void WhatACallExpandsTo()
     {
@@ -230,7 +238,9 @@ public sealed class AnalysisApiTests
         Assert.Equal(plot, model.DeclaredBy(((BlockSyntax)plot.Definition!).Opener.Statement, null));
     }
 
-    /// <summary>What <c>.exprof(p)</c> in a macro body evaluates to at one expansion of the body.</summary>
+    /// <summary>
+    /// Checks what <c>.exprof(p)</c> in a macro body evaluates to at one expansion of the body.
+    /// </summary>
     [Fact]
     public void WhatAnOperandsExpressionIs()
     {
@@ -254,7 +264,7 @@ public sealed class AnalysisApiTests
         Assert.Null(model.ExprOf(exprOf, null));
     }
 
-    /// <summary>The program the files are part of, and what it can be asked as a whole.</summary>
+    /// <summary>Checks the program the files are part of, and what it can be asked as a whole.</summary>
     [Fact]
     public void TheProgramTheFilesArePartOf()
     {
@@ -274,7 +284,7 @@ public sealed class AnalysisApiTests
         Assert.Equal(border, program.Symbols.Member(program.Symbols.ModuleNamed("hw::vic")!, "BORDER"));
         Assert.Equal("BSS", program.Segments.Find("BSS")!.Name);
 
-        // Every place a name is written, in every file, which is what a rename writes over.
+        // These are the references to a name in every file, which are what a rename replaces.
         var everywhere = program.ReferencesTo(border);
         Assert.Equal(
             ["hw/vic.nt65", "hw/vic.nt65", "main.nt65", "main.nt65", "main.nt65"],
@@ -308,7 +318,10 @@ public sealed class AnalysisApiTests
         Assert.Equal([], missing);
     }
 
-    /// <summary>The name a member is looked for under, or null for one that is never called by name, such as a constructor or an accessor.</summary>
+    /// <summary>
+    /// Returns the name a member is looked for under, or null for a member that is never called
+    /// by name, such as a constructor or an accessor.
+    /// </summary>
     private static string? Named(MemberInfo member) => member switch
     {
         MethodInfo { IsSpecialName: true } => null,
@@ -316,7 +329,7 @@ public sealed class AnalysisApiTests
         _ => member.Name,
     };
 
-    /// <summary>The program every test here asks about.</summary>
+    /// <summary>Compiles the program every test here asks about.</summary>
     private static ProgramAnalysis Compile() =>
         Compiler.Analyze(
             [new SourceFile("hw/vic.nt65", Vic.ReplaceLineEndings("\n")), new SourceFile("main.nt65", Main.ReplaceLineEndings("\n"))],

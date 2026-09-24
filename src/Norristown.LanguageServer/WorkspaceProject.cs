@@ -4,9 +4,10 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// One <c>nt65.json</c> in the workspace, and the program it describes: the files its globs
-/// name, read from disk when the program is first asked for, and the analysis of them. The
-/// <see cref="Workspace"/> holds the lock; nothing here is safe to use without it.
+/// Represents one <c>nt65.json</c> in the workspace and the program it describes. The program is
+/// the files the project's globs name, read from disk when the program is first requested, and
+/// their analysis. The <see cref="Workspace"/> holds the lock, and nothing here is safe to use
+/// without it.
 /// </summary>
 internal sealed class WorkspaceProject
 {
@@ -18,9 +19,11 @@ internal sealed class WorkspaceProject
     private Dictionary<string, SyntaxTree>? onDisk;
     private ProgramAnalysis? analysis;
 
-    // The last analysis, kept past the change that made it stale so the next one can start from it.
+    // The last analysis, kept past the change that made it stale so that the next analysis can
+    // start from it.
     private ProgramAnalysis? previous;
 
+    /// <summary>Creates the project for a project file and reads the file's settings.</summary>
     /// <param name="file">The project file, as a logical path.</param>
     public WorkspaceProject(string file)
     {
@@ -30,19 +33,24 @@ internal sealed class WorkspaceProject
         Own = Settings;
     }
 
-    /// <summary>The project file, as a logical path.</summary>
+    /// <summary>Gets the project file, as a logical path.</summary>
     public string File { get; }
 
-    /// <summary>The directory it is in, which its globs are relative to.</summary>
+    /// <summary>Gets the directory that holds the project file, which its globs are relative to.</summary>
     public string Root { get; }
 
-    /// <summary>What the project file says, with the active configuration applied.</summary>
+    /// <summary>Gets the project's settings, with the active configuration applied.</summary>
     public ProjectSettings Settings { get; private set; }
 
-    /// <summary>What the project file says, before any configuration.</summary>
+    /// <summary>
+    /// Gets the project's settings as the project file states them, before any configuration.
+    /// </summary>
     public ProjectSettings Own { get; }
 
-    /// <summary>Whether a <c>files</c> glob names <paramref name="path"/>, whether or not it is on disk.</summary>
+    /// <summary>
+    /// Returns whether a <c>files</c> glob names <paramref name="path"/>, whether or not the file
+    /// is on disk.
+    /// </summary>
     public bool Owns(string path)
     {
         if (!owned.TryGetValue(path, out var owns))
@@ -51,7 +59,7 @@ internal sealed class WorkspaceProject
     }
 
     /// <summary>
-    /// Builds the project as the named configuration, or as its own settings for null. A name
+    /// Builds the project in the named configuration, or with its own settings for null. A name
     /// the project does not have is reported against the project file.
     /// </summary>
     public void Configure(string? configuration)
@@ -60,12 +68,16 @@ internal sealed class WorkspaceProject
         Invalidate();
     }
 
-    /// <summary>Discards the current analysis; the previous one is kept for the next analysis to start from.</summary>
+    /// <summary>
+    /// Discards the current analysis. The previous analysis is kept for the next analysis to start
+    /// from.
+    /// </summary>
     public void Invalidate() => analysis = null;
 
     /// <summary>
-    /// The file at <paramref name="path"/> changed on disk, was created or was deleted. It is
-    /// read again if the project's files on disk have been read at all.
+    /// Handles a change on disk to the file at <paramref name="path"/>, which may have changed,
+    /// been created or been deleted. The analysis is discarded, and the file is read again if the
+    /// project's files on disk have been read at all.
     /// </summary>
     public void Reread(string path)
     {
@@ -78,10 +90,15 @@ internal sealed class WorkspaceProject
             onDisk.Remove(path);
     }
 
-    /// <summary>Whether the last analysis included <paramref name="path"/> through an <c>.incbin</c>.</summary>
+    /// <summary>
+    /// Returns whether the last analysis included <paramref name="path"/> through an
+    /// <c>.incbin</c>.
+    /// </summary>
     public bool Measured(string path) => analysis?.Binaries.Contains(path) ?? previous?.Binaries.Contains(path) ?? false;
 
-    /// <summary>Every file of the program on disk, read if it has not been.</summary>
+    /// <summary>
+    /// Returns every file of the program on disk, reading the files if they have not been read.
+    /// </summary>
     public IReadOnlyCollection<SyntaxTree> OnDisk()
     {
         onDisk ??= Own.Files
@@ -95,9 +112,9 @@ internal sealed class WorkspaceProject
     }
 
     /// <summary>
-    /// The program's analysis, with the documents in <paramref name="open"/> that the project
-    /// names taking the place of their files on disk, built once and kept until something
-    /// changes.
+    /// Returns the program's analysis, in which the documents in <paramref name="open"/> that the
+    /// project names replace their files on disk. The analysis is built once and kept until
+    /// something changes.
     /// </summary>
     public ProgramAnalysis Analysis(IEnumerable<Document> open)
     {

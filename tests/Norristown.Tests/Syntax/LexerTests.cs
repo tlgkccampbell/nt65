@@ -14,14 +14,14 @@ public sealed class LexerTests
     [InlineData("z: ::foo", "Identifier:z Colon:: ColonColon::: Identifier:foo")]
     [InlineData("z:ptr+1", "Identifier:z Colon:: Identifier:ptr Plus:+ NumberLiteral:1")]
     [InlineData("@loop: @a_1", "CheapLocal:@loop Colon:: CheapLocal:@a_1")]
-    // Mnemonics of every CPU and the long branches, case-insensitive; ca65's aliases are not reserved.
+    // Mnemonics of every CPU and the long branches, case-insensitive. ca65's aliases are not reserved.
     [InlineData("LDA stz bbr7 Xce jeq JVC", "Mnemonic:LDA Mnemonic:stz Mnemonic:bbr7 Mnemonic:Xce Mnemonic:jeq Mnemonic:JVC")]
     [InlineData("ldax bbr8 tad", "Identifier:ldax Identifier:bbr8 Identifier:tad")]
     [InlineData("a X y S", "Register:a Register:X Register:y Register:S")]
     [InlineData("a8 i16 xs", "Identifier:a8 Identifier:i16 Identifier:xs")]
     [InlineData("a? a*, e?", "Register:a Question:? Register:a Star:* Comma:, Identifier:e Question:?")]
     [InlineData(".byte .PROC .mod", "Directive:.byte Directive:.PROC Directive:.mod")]
-    // Numbers; 6502 and 65816 are numbers, 65c02 is a CPU name.
+    // Numbers. 6502 and 65816 are numbers, and 65c02 is a CPU name.
     [InlineData("$1F $ffff %1010 255 0", "NumberLiteral:$1F NumberLiteral:$ffff NumberLiteral:%1010 NumberLiteral:255 NumberLiteral:0")]
     [InlineData("6502 65c02 65C02 65816", "NumberLiteral:6502 CpuName:65c02 CpuName:65C02 NumberLiteral:65816")]
     [InlineData(@"'c' '\n' '\x41' '\'' '""' ';'", @"CharacterLiteral:'c' CharacterLiteral:'\n' CharacterLiteral:'\x41' CharacterLiteral:'\'' CharacterLiteral:'""' CharacterLiteral:';'")]
@@ -63,7 +63,7 @@ public sealed class LexerTests
         Assert.Equal(kind, line.Tokens[0].Kind.ToString());
         Assert.Equal(text, line.Tokens[0].Text);
 
-        // A lexical error covers the token's text, and the line says it holds one.
+        // A lexical error covers the token's text, and the line is marked as holding one.
         Assert.True(line.ContainsDiagnostics);
         var reported = Assert.Single(line.Tokens[0].Diagnostics);
         Assert.Equal(error, reported.Message.Text);

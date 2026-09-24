@@ -9,20 +9,21 @@ using Norristown.Syntax;
 namespace Norristown.Emit;
 
 /// <summary>
-/// Writes one file's ca65. The output is readable: it keeps the source's own spacing between
+/// Writes one file's ca65. The output is readable. It keeps the source's own spacing between
 /// the tokens of a line, drops its comments, and uses two levels of indentation of its own
 /// rather than the source's, because the output is flat and has none of the blocks the source's
-/// indentation shows. It is deterministic: the same source always gives the same bytes.
+/// indentation shows. The output is also deterministic, so the same source always gives the
+/// same bytes.
 /// <para>
 /// A module that another module places has no file of its own. One emitter writes each module
 /// of a translation unit, and the one at the root writes each placed module's lines at the
 /// <c>.place</c> that places it, so that the unit is one file.
 /// </para>
 /// <para>
-/// Everything the output depends on is written into it. The header fixes the CPU and
-/// switches off every ca65 option that changes syntax; every segment carries its address
-/// size; every addressing mode that could be read two ways carries its prefix; and character
-/// and string data is written as bytes, so no ca65 command line can change what it means.
+/// Everything the output depends on is written into it. The header fixes the CPU and switches
+/// off every ca65 option that changes syntax. Every segment carries its address size, every
+/// addressing mode that could be read two ways carries its prefix, and character and string
+/// data is written as bytes, so no ca65 command line can change what the output means.
 /// </para>
 /// <para>
 /// What the output does not hold is debug information. Where each line came from is recorded
@@ -36,18 +37,19 @@ public sealed class Emitter
     private const int CommentColumn = 36;
 
     /// <summary>
-    /// What a line that is not a label, a definition or a file-level directive starts with.
+    /// The indentation that starts a line that is not a label, a definition or a file-level
+    /// directive.
     /// <para>
-    /// The output is flat: it holds no ca65 <c>.proc</c>, <c>.scope</c>, <c>.enum</c> or
+    /// The output is flat. It holds no ca65 <c>.proc</c>, <c>.scope</c>, <c>.enum</c> or
     /// <c>.struct</c>, so nothing in it opens a block that indentation could stand for. It has
-    /// two levels, as hand-written ca65 does — names at the margin and what they hold indented
-    /// once — rather than the source's own, which would indent for constructs that no longer
+    /// two levels, as hand-written ca65 does, with names at the margin and what they hold
+    /// indented once. The source's own indentation would indent for constructs that no longer
     /// exist in the output.
     /// </para>
     /// </summary>
     private const string Body = "    ";
 
-    // What writing a line dispatches through: one method per kind of statement.
+    // The visitor that writing a line dispatches through, with one method per kind of statement.
     private readonly Statements statements;
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
@@ -59,8 +61,8 @@ public sealed class Emitter
     // This module's index among the translation unit's sources, which every line it writes records.
     private readonly int file;
 
-    // The lines that open and close the part of the output each placed module wrote: the
-    // modules this one places, and the modules they place in turn.
+    // The lines that open and close the part of the output each placed module wrote. The placed
+    // modules are the ones this module places and the ones they place in turn.
     private readonly List<(string Source, EmittedLine Opens, EmittedLine Closes)> parts = [];
 
     // The output, kept as structured lines until the whole file is written, because lining up
@@ -68,27 +70,28 @@ public sealed class Emitter
     // on lines that are already text.
     private readonly List<EmittedLine> lines = [];
 
-    // The header's last line, after which a file that writes anything has more.
+    // The header's last line. A file that writes anything has more lines after it.
     private EmittedLine? headerEnd;
     private readonly List<string?> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
 
     // The counter name each folded repetition uses in the output. A repetition's body may be
-    // written out many times — inside another repetition, or in every expansion of a macro —
-    // and it uses the same counter name every time, so that the iterations of an enclosing
+    // written out many times, inside another repetition or in every expansion of a macro, and
+    // it uses the same counter name every time so that the iterations of an enclosing
     // repetition still match.
     private readonly Dictionary<Symbol, string> counters = [];
 
-    // What the file measures with `.endof` or `.spanof`, and so what needs a label just past
-    // its last byte. A use may come before the thing it measures, so they are found up front.
+    // The symbols the file measures with `.endof` or `.spanof`, each of which needs a label just
+    // past its last byte. A use may come before the thing it measures, so they are found up
+    // front.
     private readonly HashSet<Symbol> ends = [];
 
-    // The symbols of this file that other files measure: this file exports their end labels,
+    // The symbols of this file that other files measure. This file exports their end labels,
     // and those files import them.
     private readonly IReadOnlySet<Symbol> measuredElsewhere;
 
-    // The width the previous 65816 immediate of each register was written at, in output
-    // order, which is exactly what ca65's setting is when the next one is reached.
+    // The width at which the previous 65816 immediate of each register was written, in output
+    // order, which is exactly ca65's setting when the next one is reached.
     private readonly Dictionary<WidthRegister, int> widths = [];
     // The segment being written, or null before any region or block names one.
     private string? segment;
@@ -99,15 +102,15 @@ public sealed class Emitter
     private bool pendingBlank;
     private int depth;
 
-    // Which iteration of which repetitions, and which expansion of which macros, is being
-    // written. A body is written once per expansion or iteration, with every name bound at
-    // that level taking the value it has there.
+    // The expansion being written, which identifies the iteration of each enclosing repetition
+    // and the expansion of each enclosing macro. A body is written once per expansion or
+    // iteration, with every name bound at that level taking the value it has there.
     private Expansion? expansion;
 
-    // The line an expansion's output maps back to. The lines of an expansion map to the line
-    // of the call, the way a C debugger treats a preprocessor macro, and only a line of this
-    // file can be used: the line map points into this module's source, and a macro body may
-    // be defined in another file.
+    // The line an expansion's output maps back to. The lines of an expansion map to the line of
+    // the call, the way a C debugger treats a preprocessor macro. Only a line of this file can be
+    // used, because the line map points into this module's source and a macro body may be
+    // defined in another file.
     private LineSyntax? callLine;
 
     // The modules this one places, by the `.place` that places each, and the files of the
@@ -131,9 +134,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The ca65 for <paramref name="model"/>'s file. <paramref name="outRoot"/> is the
+    /// Returns the ca65 for <paramref name="model"/>'s file. <paramref name="outRoot"/> is the
     /// project's output tree, or null for the project's root. <paramref name="measuredElsewhere"/>
-    /// is what the program's other files measure with <c>.endof</c> and <c>.spanof</c>.
+    /// holds the symbols the program's other files measure with <c>.endof</c> and <c>.spanof</c>.
     /// </summary>
     public static OutputFile Emit(
         SemanticModel model, CodeLayout layout, FlatNames names, List<Diagnostic> diagnostics,
@@ -159,13 +162,13 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The ca65 for a translation unit of several modules, one <c>.s</c> named after the first of
-    /// <paramref name="members"/>, which is the module at the root; the others are the modules
-    /// placed in it, in the order they are written. Each placed module's items are written at the
-    /// <c>.place</c> that places it, between a comment naming it and its source and a comment
-    /// closing it, and what every module exports and imports is gathered at the top: each import
-    /// once however many modules make it, and no import at all of anything a module of the unit
-    /// defines.
+    /// Returns the ca65 for a translation unit of several modules, as one <c>.s</c> named after
+    /// the first of <paramref name="members"/>, which is the module at the root. The other
+    /// members are the modules placed in it, in the order they are written. Each placed module's
+    /// items are written at the <c>.place</c> that places it, between a comment naming the module
+    /// and its source and a comment closing it. What every module exports and imports is
+    /// gathered at the top. Each import appears once, regardless of how many modules make it,
+    /// and nothing that a module of the unit defines is imported.
     /// </summary>
     internal static OutputFile Emit(
         IReadOnlyList<(SemanticModel Model, CodeLayout Layout, FlatNames Names, IReadOnlySet<Symbol> MeasuredElsewhere)> members,
@@ -196,8 +199,8 @@ public sealed class Emitter
         first.Columns();
         first.Filled();
 
-        // Each placed module's part is found by the line objects that open and close it, which
-        // stay the same objects however many lines the passes above removed before them.
+        // Each placed module's part is found by the line objects that open and close it. They
+        // remain the same objects no matter how many lines the passes above removed before them.
         var lines = first.lines;
         var sources = new List<OutputSource> { new(root.Tree.Path, SizeOf(root), 0, lines.Count) };
         foreach (var member in members.Skip(1))
@@ -219,7 +222,10 @@ public sealed class Emitter
         };
     }
 
-    /// <summary>The lines as the file holds them, each with its comment at the column those line up in.</summary>
+    /// <summary>
+    /// Returns the lines as the file holds them, each with its comment at the column where the
+    /// comments line up.
+    /// </summary>
     private string Written()
     {
         var text = new StringBuilder();
@@ -229,10 +235,10 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Where a file's output goes: <c>.module gfx::sprite</c> is written to <c>gfx/sprite.s</c>
-    /// under the project's output tree, wherever the source is, so a source can move, or live
-    /// outside the project, without its output moving. A file that says no module, which is
-    /// already an error, is named after its source.
+    /// Returns where a file's output goes. For example, <c>.module gfx::sprite</c> is written to
+    /// <c>gfx/sprite.s</c> under the project's output tree, regardless of where the source is. A
+    /// source can therefore move, or live outside the project, without its output moving. A file
+    /// that names no module, which is already an error, is named after its source.
     /// </summary>
     public static string OutputPath(SemanticModel model, string? outRoot = null)
     {
@@ -243,34 +249,35 @@ public sealed class Emitter
         return string.IsNullOrEmpty(outRoot) || outRoot == "." ? path : $"{outRoot.TrimEnd('/')}/{path}";
     }
 
-    /// <summary>How many bytes a module's source is, which the line map records.</summary>
+    /// <summary>Returns the size in bytes of a module's source, which the line map records.</summary>
     private static int SizeOf(SemanticModel model) => Encoding.UTF8.GetByteCount(model.Tree.Text);
 
-    /// <summary>A number as the output writes it: hexadecimal, at the width it is used at.</summary>
+    /// <summary>Formats a number as the output writes it, in hexadecimal at the width it is used at.</summary>
     private static string Hex(long value, int digits) =>
         "$" + value.ToString($"x{digits}", CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// A known value written in place of the name that represented it, at the narrowest width
-    /// that holds it. A negative number is written in decimal: in hexadecimal it would be
-    /// sixteen digits wide, a width nt65 never intended.
+    /// Formats a known value, written in place of the name that represented it, at the narrowest
+    /// width that holds it. A negative number is written in decimal, because in hexadecimal it
+    /// would be sixteen digits wide, a width nt65 never intended.
     /// </summary>
     private static string Constant(long value) => value < 0
         ? value.ToString(CultureInfo.InvariantCulture)
         : Hex(value, value < 0x100 ? 2 : value < 0x10000 ? 4 : 8);
 
     /// <summary>
-    /// The tokens under a node, in source order. A missing token is nowhere in the text, so
-    /// there is nothing of it to write or to blank and it is left out.
+    /// Returns the tokens under a node, in source order. A missing token is nowhere in the text,
+    /// so there is nothing of it to write or to blank, and it is left out.
     /// </summary>
     private static List<SyntaxToken> Tokens(SyntaxNode node) =>
         [.. node.DescendantTokens().Where(token => !token.IsMissing)];
 
     /// <summary>
-    /// The routines and data declarations this file measures. The end of <c>f</c> is
-    /// written <c>f__end</c>, and that spelling is fixed, because other files and
-    /// hand-written ca65 refer to it once it is exported — so a name that collides with it
-    /// is an error rather than a rename.
+    /// Records the routines and data declarations this file measures, and claims their end
+    /// labels and the size constants of the types it exports. The end of <c>f</c> is written
+    /// <c>f__end</c>. That spelling is fixed, because other files and hand-written ca65 refer to
+    /// it once it is exported, so a name that collides with it is an error rather than a reason
+    /// to rename.
     /// </summary>
     private void Ends()
     {
@@ -307,19 +314,24 @@ public sealed class Emitter
         }
     }
 
-    /// <summary>The label just past a symbol's last byte, which is what <c>.endof</c> stands for.</summary>
+    /// <summary>Returns the label just past a symbol's last byte, which is what <c>.endof</c> stands for.</summary>
     private string EndOf(Symbol symbol) => Named(symbol) + "__end";
 
     /// <summary>
-    /// The constant an exported struct or union's size is exported as, so that ca65 and C code
-    /// can size what they allocate by it. Like an end, its spelling is fixed.
+    /// Returns the name of the constant that an exported struct or union's size is exported as,
+    /// so that ca65 and C code can size what they allocate by it. Like an end label, its
+    /// spelling is fixed.
     /// </summary>
     private string SizeOf(Symbol type) => Named(type) + "__sizeof";
 
-    /// <summary>Whether <paramref name="symbol"/> is a struct or union this file exports the size of.</summary>
+    /// <summary>
+    /// Returns whether <paramref name="symbol"/> is a struct or union whose size this file exports.
+    /// </summary>
     private static bool IsSized(Symbol symbol) => symbol is { IsExported: true, IsLayout: true, Size: not null };
 
-    /// <summary>Writes the end label of whatever <paramref name="declaration"/> names, if it has one.</summary>
+    /// <summary>
+    /// Writes the end label of the symbol <paramref name="declaration"/> declares, if it has one.
+    /// </summary>
     private void End(StatementSyntax declaration)
     {
         if (model.DeclaredBy(declaration, expansion) is not { } symbol || !ends.Contains(symbol))
@@ -330,9 +342,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The header: the CPU, smart mode off, case-sensitive symbols, and every
-    /// <c>.feature</c> that changes syntax switched off, so that no ca65 command line can
-    /// change what the file means.
+    /// Writes the header, which sets the CPU, turns smart mode off, makes symbols case-sensitive
+    /// and switches off every <c>.feature</c> that changes syntax, so that no ca65 command line
+    /// can change what the file means.
     /// </summary>
     private void Header()
     {
@@ -349,19 +361,20 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Whether the file holds nothing but its header: no export, import, byte, label or
-    /// assertion, which is so of a module that declares only what crosses modules by value.
+    /// Returns whether the file holds nothing but its header, with no export, import, byte, label
+    /// or assertion. That is the case for a module that declares only what crosses modules by
+    /// value.
     /// </summary>
     private bool WritesNothing() =>
         lines.SkipWhile(line => !ReferenceEquals(line, headerEnd)).Skip(1)
             .All(line => line is { Text: "", Label: null, Comment: null });
 
     /// <summary>
-    /// Every export, under its linker name and with the address size nt65 gives it, hoisted
-    /// to the top of the file in the order the file declares them.
+    /// Returns every export, under its linker name and with the address size nt65 gives it,
+    /// hoisted to the top of the file in the order the file declares them.
     /// <para>
-    /// A macro is not a symbol the linker sees: what crosses between modules is its expansion,
-    /// written into whichever module called it. A charmap, a function and a list are used by
+    /// A macro is not a symbol the linker sees. What crosses between modules is its expansion,
+    /// written into each module that calls it. A charmap, a function and a list are used by
     /// value, so what crosses is their values, written where they are used. A scope and a type
     /// are only a way to reach their members, which are exported one by one, a type's as the
     /// flat constants they become. An import is defined elsewhere, and every module that uses
@@ -392,7 +405,7 @@ public sealed class Emitter
         return written;
     }
 
-    /// <summary>A run of exports or imports, set off from what is around it by a blank line.</summary>
+    /// <summary>Writes a run of exports or imports, set off from what is around it by a blank line.</summary>
     private void Linkage(IReadOnlyList<string> written)
     {
         if (written.Count == 0)
@@ -404,15 +417,15 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Everything the file gets from outside it: what another nt65 file exports and
-    /// this one names, and what an <c>.import</c> item declares and the file uses. Each carries
-    /// the address size nt65 gives it, so ca65 sizes an operand the way nt65 did. Nothing the
-    /// file does not use is imported, because an import pulls the module that defines it out
+    /// Returns everything the file gets from outside it. That is what another nt65 file exports
+    /// and this one names, and what an <c>.import</c> item declares and the file uses. Each
+    /// carries the address size nt65 gives it, so ca65 sizes an operand the way nt65 did. Nothing
+    /// the file does not use is imported, because an import pulls the module that defines it out
     /// of a library.
     /// <para>
-    /// A constant is not imported: ca65 cannot use an imported symbol where it needs a value,
-    /// so the constant is written out here instead. A checked import is both — the value nt65
-    /// uses, and an assertion that the definition it will be linked against agrees.
+    /// A constant is not imported, because ca65 cannot use an imported symbol where it needs a
+    /// value, so the constant is written out here instead. A checked import yields both the value
+    /// nt65 uses and an assertion that the definition it will be linked against agrees.
     /// </para>
     /// </summary>
     private List<string> Imports()
@@ -453,17 +466,19 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Whether another module of the translation unit defines <paramref name="symbol"/>, in the
-    /// same output as this one: it is defined there under the same name, and importing it, or
-    /// writing a constant out by value beside its definition, would define it twice. What a module
-    /// imports from outside the program is imported however many modules of the unit use it.
+    /// Returns whether another module of the translation unit defines <paramref name="symbol"/>
+    /// in the same output as this one. The symbol is defined there under the same name, so
+    /// importing it, or writing a constant out by value beside its definition, would define it
+    /// twice. What a module imports from outside the program is still imported, even when several
+    /// modules of the unit use it.
     /// </summary>
     private bool DefinedInTheUnit(Symbol symbol) =>
         unit.Contains(symbol.Tree.Path) && symbol.Kind is not (SymbolKind.ImportedAddress or SymbolKind.ImportedConstant);
 
     /// <summary>
-    /// The names ld65 defines for the segments this file's <c>.loadof</c>, <c>.runof</c> and
-    /// <c>.spanof</c> ask about, and those of every macro it may expand, with their sizes.
+    /// Returns, with their sizes, the names ld65 defines for the segments that this file's
+    /// <c>.loadof</c>, <c>.runof</c> and <c>.spanof</c> calls ask about, including the calls in
+    /// every macro the file may expand.
     /// </summary>
     private IEnumerable<(string Name, AddressSize Size)> SegmentImports()
     {
@@ -480,8 +495,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// An <c>.export</c> or <c>.import</c> of <paramref name="name"/>, with the address size
-    /// <paramref name="size"/>: <c>.exportzp</c>, <c>.export name: far</c> or plain.
+    /// Formats an <c>.export</c> or <c>.import</c> of <paramref name="name"/> with the address
+    /// size <paramref name="size"/>, as <c>.exportzp</c>, <c>.export name: far</c> or the plain
+    /// form.
     /// </summary>
     private static string Linked(string directive, AddressSize? size, string name) => size switch
     {
@@ -492,20 +508,21 @@ public sealed class Emitter
     };
 
     /// <summary>
-    /// The size an export needs to state, or null where ca65's default already gives it: ca65
-    /// takes an export of an address as absolute unless told otherwise. An import always states
-    /// its size, because ld65 warns about one whose size it had to guess under a far memory model.
+    /// Returns the size an export needs to state, or null where ca65's default already gives it.
+    /// ca65 takes an export of an address as absolute unless told otherwise. An import always
+    /// states its size, because ld65 warns about an import whose size it had to guess under a
+    /// far memory model.
     /// </summary>
     private static AddressSize? Implicit(AddressSize? size) => size == AddressSize.Absolute ? null : size;
 
-    /// <summary>The line that brings one symbol in, or null for one that needs no line at all.</summary>
+    /// <summary>Returns the line that brings one symbol in, or null for a symbol that needs no line at all.</summary>
     private string? Import(Symbol symbol)
     {
         var name = Named(symbol);
         if (symbol.IsAddress || symbol.Kind == SymbolKind.ImportedConstant)
             return Linked(".import", symbol.AddressSizeIn(model.Tree), name);
 
-        // A constant another file declares, written out by value. One whose value nt65
+        // A constant another file declares is written out by value. A constant whose value nt65
         // does not know has already been reported, and a string is only ever used through
         // `.strlen` and `.strat`, which are numbers before anything is written.
         return symbol.Value.AsNumber() is { } value ? $"{name} = {Constant(value)}" : null;
@@ -514,8 +531,9 @@ public sealed class Emitter
     private void WalkContainer(FileSyntax file) => Walk(file.Members, from: 0);
 
     /// <summary>
-    /// A run of sibling lines and blocks. The <c>.if</c> chains among them are resolved here,
-    /// because a chain spans consecutive siblings and only the code walking them sees them together.
+    /// Writes a run of sibling lines and blocks. The <c>.if</c> chains among them are resolved
+    /// here, because a chain spans consecutive siblings and only the code walking them sees them
+    /// together.
     /// </summary>
     private void Walk(IReadOnlyList<SyntaxNode> children, int from)
     {
@@ -539,14 +557,14 @@ public sealed class Emitter
         var lines = block.Members;
         var opener = block.Opener.Statement;
 
-        // A macro body is written at every call that expands it, and nothing at all where it
-        // stands.
+        // A macro body is written at every call that expands it, and nothing is written where it
+        // is declared.
         if (kind == BlockKind.Macro)
             return;
 
-        // A block argument is the call's, not a block of its own: the line that opens it is
-        // the call, which is written out here, and its lines are written wherever the body
-        // splices them.
+        // A block argument belongs to the call rather than being a block of its own. The line
+        // that opens it is the call, which is written out here, and its lines are written where
+        // the body splices them.
         if (kind == BlockKind.MacroBlock)
         {
             if (Macros.CallIn(opener) is not null)
@@ -554,8 +572,8 @@ public sealed class Emitter
             return;
         }
 
-        // A branch the build takes is written out where it stands, with nothing said about
-        // the `.if` around it; one it leaves out is not written at all. The block adds no
+        // A branch the build takes is written out where it stands, with no trace of the `.if`
+        // around it, and a branch the build leaves out is not written at all. The block adds no
         // nesting of its own, so a segment block inside it is nested only if the `.if` was.
         if (kind == BlockKind.If)
         {
@@ -621,8 +639,8 @@ public sealed class Emitter
             return;
         }
 
-        // One record written over several lines is written where its line is, as one
-        // directive per member; the lines of values are the record's, and write nothing.
+        // One record spread over several lines is written where its line is, as one directive
+        // per member. The lines of values belong to the record and write nothing themselves.
         if (kind == BlockKind.RecordInitializer)
         {
             WalkLine(block.Opener);
@@ -655,8 +673,8 @@ public sealed class Emitter
             Flush();
             routine = ProcLabel(opener);
 
-            // An instance of a family is written under the family's line and the member it is:
-            // one routine in the output, named as the source names it.
+            // An instance of a family is written under a comment giving the family's line and the
+            // instance's name. It is one routine in the output, named as the source names it.
             var instance = model.FamilyAt(opener) is not null && routine is not null ? $"  {routine.QualifiedName}" : "";
             Line($"; {opener.GetText().Trim().TrimEnd('{').TrimEnd()}  {Where(opener)}{instance}");
             Label(block.Opener, routine);
@@ -696,20 +714,21 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A counted repetition whose iterations all came out the same, rewritten as a single ca65
+    /// Rewrites a counted repetition whose iterations all came out the same as a single ca65
     /// <c>.repeat</c> that produces the same lines. nt65 makes every per-iteration decision
-    /// itself — the address size an operand is reached at, the width an immediate is written at,
-    /// the form a branch takes, the name an iteration declares — so the iterations are written
-    /// first and compared afterwards, and ca65 is given a <c>.repeat</c> only when there is
-    /// nothing left for it to decide. <paramref name="starts"/> is where each iteration's lines begin.
+    /// itself, such as the address size an operand is reached at, the width an immediate is
+    /// written at, the form a branch takes and the name an iteration declares. The iterations
+    /// are therefore written first and compared afterwards, and ca65 is given a <c>.repeat</c>
+    /// only when there is nothing left for it to decide. <paramref name="starts"/> is where each
+    /// iteration's lines begin.
     /// <para>
     /// Where the iterations differ only in the value of the binding, the body is written once
-    /// with a ca65 repeat counter in place of that number — but only after substituting each
-    /// iteration's number back into it has reproduced that iteration's lines exactly.
+    /// with a ca65 repeat counter in place of that number. That happens only after substituting
+    /// each iteration's number back into it has reproduced that iteration's lines exactly.
     /// </para>
     /// <para>
     /// The byte count of the whole block goes on the <c>.repeat</c> line, because that is the
-    /// line ca65 counts every iteration's bytes against; the body's lines are given no bytes of
+    /// line ca65 counts every iteration's bytes against. The body's lines are given no bytes of
     /// their own, and keep only their source line.
     /// </para>
     /// </summary>
@@ -728,8 +747,8 @@ public sealed class Emitter
         }
         else if (Repeated(body[0]) is not null && body.TrueForAll(line => Same(line, body[0])))
         {
-            // A row of one repeated byte is a fill however it was written, and `.res` says a
-            // fill more plainly than a `.repeat` around one `.byte` does.
+            // A row of one repeated byte is a fill regardless of how the source expressed it, and
+            // `.res` says a fill more plainly than a `.repeat` around one `.byte` does.
             return;
         }
 
@@ -750,18 +769,18 @@ public sealed class Emitter
             Write(line with { Text = line.Text.Length == 0 ? "" : Body + line.Text, Bytes = 0 });
 
         // ca65 counts the block's bytes against the `.repeat`, and ld65 records a span for the
-        // whole of it against the `.endrepeat`, so the closing line is named as well as the
-        // opening one: the map has to cover every line the debug information refers to.
+        // whole of it against the `.endrepeat`, so the closing line is mapped as well as the
+        // opening one. The map has to cover every line the debug information refers to.
         Write(new EmittedLine($"{indent}.endrepeat", Source: At(block.Closer ?? block.Opener)));
     }
 
     /// <summary>
-    /// The lines each iteration came out as, or null when no <c>.repeat</c> could represent the
-    /// block however alike the iterations are. <paramref name="at"/> is where the
-    /// <c>.repeat</c> goes: the first iteration may begin with lines that belong before the
-    /// repetition rather than inside it — a blank the source asked for, or the <c>.segment</c>
-    /// that the following code lands in — which later iterations did not need to write again;
-    /// those lines stay where they are.
+    /// Returns the lines each iteration came out as, or null when no <c>.repeat</c> could
+    /// represent the block, no matter how alike the iterations are. <paramref name="at"/> is
+    /// where the <c>.repeat</c> goes. The first iteration may begin with lines that belong before
+    /// the repetition rather than inside it, such as a blank the source asked for or the
+    /// <c>.segment</c> that the following code lands in. Later iterations did not need to write
+    /// those lines again, and they stay where they are.
     /// </summary>
     private List<List<EmittedLine>>? Turns(IReadOnlyList<int> starts, out int at)
     {
@@ -796,7 +815,8 @@ public sealed class Emitter
             turns.Add(lines.GetRange(starts[turn], length));
 
         // A name inside a ca65 `.repeat` is declared once per iteration, which is an error on
-        // the second: such a body is written out in full however alike the iterations look.
+        // the second, so such a body is written out in full no matter how alike the iterations
+        // look.
         if (turns[0].Any(Declares))
             return null;
 
@@ -804,7 +824,7 @@ public sealed class Emitter
         return turns;
     }
 
-    /// <summary>Whether two iterations came out as exactly the same lines.</summary>
+    /// <summary>Returns whether two iterations came out as exactly the same lines.</summary>
     private static bool Written(List<EmittedLine> one, List<EmittedLine> other)
     {
         for (var i = 0; i < one.Count; i++)
@@ -816,14 +836,14 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The single body every iteration of a counted repetition shares, written in terms of a
-    /// ca65 repeat counter, together with the counter's name — or null when no such body
+    /// Returns the single body every iteration of a counted repetition shares, expressed in terms
+    /// of a ca65 repeat counter, together with the counter's name. Returns null when no such body
     /// reproduces every iteration. ca65 substitutes the iteration number wherever the counter's
-    /// name appears, so the body is the first iteration with the counter in place of its
-    /// number, and it is used only if substituting each iteration's number back reproduces that
-    /// iteration's lines exactly. ca65 then evaluates the expression the source wrote, in
-    /// arithmetic nt65 already agrees with it on, since each line is the line nt65 wrote for
-    /// that iteration with one number substituted.
+    /// name appears, so the body is the first iteration with the counter in place of its number.
+    /// It is used only if substituting each iteration's number back reproduces that iteration's
+    /// lines exactly. ca65 then evaluates the source's expression, in arithmetic nt65 already
+    /// agrees with it on, since each line is the line nt65 wrote for that iteration with one
+    /// number substituted.
     /// </summary>
     private (string Counter, List<EmittedLine> Body)? Counted(List<List<EmittedLine>> turns, Symbol binding)
     {
@@ -851,10 +871,10 @@ public sealed class Emitter
             }
         }
 
-        // The counter is an output name like any other: derived from the source, and used by
-        // nothing else in the file. A repetition has one counter however many times its body is
-        // written out; otherwise an enclosing repetition would see a different counter in each
-        // of its iterations.
+        // The counter is an output name like any other, derived from the source and used by
+        // nothing else in the file. A repetition has one counter no matter how many times its
+        // body is written out; otherwise an enclosing repetition would see a different counter in
+        // each of its iterations.
         if (!counters.TryGetValue(binding, out var counter))
             counters[binding] = counter = names.Generated(binding.Name);
         return (counter, [.. body.Select(line =>
@@ -862,10 +882,10 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The line the first two iterations wrote, with <paramref name="mark"/> wherever the first
-    /// wrote the binding's value on its iteration (0) and the second wrote its own (1); null when
-    /// they differ anywhere else, which means some decision came out differently and no counter
-    /// can represent it.
+    /// Returns the line the first two iterations wrote, with <paramref name="mark"/> wherever the
+    /// first wrote the binding's value on its iteration (0) and the second wrote its own (1).
+    /// Returns null when they differ anywhere else, which means some decision came out
+    /// differently and no counter can represent it.
     /// </summary>
     private static string? Templated(string zeroth, string first, string mark)
     {
@@ -895,9 +915,10 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// <paramref name="body"/> with <paramref name="value"/> substituted for <paramref name="mark"/>,
-    /// the way ca65 substitutes the iteration number for the counter's name: only where the
-    /// mark stands as a whole word, never inside a longer one.
+    /// Returns <paramref name="body"/> with <paramref name="value"/> substituted for
+    /// <paramref name="mark"/>, the way ca65 substitutes the iteration number for the counter's
+    /// name. The value replaces the mark only where the mark stands as a whole word, never inside
+    /// a longer one.
     /// </summary>
     private static string Instantiated(string body, string mark, string value)
     {
@@ -919,16 +940,19 @@ public sealed class Emitter
         return text.ToString();
     }
 
-    /// <summary>Whether a character can appear in a ca65 name, or is the dot that begins a ca65 directive.</summary>
+    /// <summary>
+    /// Returns whether a character can appear in a ca65 name, or is the dot that begins a ca65
+    /// directive.
+    /// </summary>
     private static bool InAName(char letter) => char.IsLetterOrDigit(letter) || letter == '_' || letter == '.';
 
-    /// <summary>Whether two lines agree in everything but their text.</summary>
+    /// <summary>Returns whether two lines agree in everything but their text.</summary>
     private static bool Alongside(EmittedLine one, EmittedLine other) =>
         one.Bytes == other.Bytes && one.Source == other.Source
             && one.Label == other.Label && one.Comment == other.Comment;
 
     /// <summary>
-    /// Whether a line declares a name. A name declared in a repetition's body is a different
+    /// Returns whether a line declares a name. A name declared in a repetition's body is a different
     /// name on every iteration, and a ca65 <c>.repeat</c> has no way to express that.
     /// </summary>
     private static bool Declares(EmittedLine line)
@@ -944,7 +968,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The members of an enum, each written out as the constant it is. A member may sit inside
+    /// Writes the members of an enum, each as the constant it is. A member may sit inside
     /// an <c>.if</c> in the body, so a chain among the lines is resolved here as it is anywhere
     /// else, and members in the branches this build takes count like the body's own lines.
     /// </summary>
@@ -968,9 +992,9 @@ public sealed class Emitter
     private void WalkLine(LineSyntax line) => statements.Walk(line);
 
     /// <summary>
-    /// A call, written out as the body it expands to, with a comment naming it. nt65 expands
-    /// macros itself and emits flat code: ca65's own <c>.macro</c> is never used, so nt65's
-    /// macro semantics never depend on ca65's.
+    /// Writes a macro call as the body it expands to, with a comment naming the call. nt65
+    /// expands macros itself and emits flat code. ca65's own <c>.macro</c> is never used, so
+    /// nt65's macro semantics never depend on ca65's.
     /// </summary>
     private void Expand(LineSyntax line, MacroCallSyntax call)
     {
@@ -993,8 +1017,9 @@ public sealed class Emitter
         Flush();
 
         // The `{` of a trailing block belongs to the block rather than to the call, and the
-        // comment names the call. The one that closes it names the macro alone, because the
-        // arguments are above it and saying them twice would only make the block harder to see.
+        // comment names the call. The comment that closes the expansion names the macro alone,
+        // because the arguments are above it and repeating them would only make the block
+        // harder to see.
         var written = call.GetText().Trim().TrimEnd('{').TrimEnd();
         var called = written.IndexOf('!') is var bang && bang > 0 ? written[..(bang + 1)] : written;
         Line($"{Body}; {written}  {Where(call)}");
@@ -1010,16 +1035,16 @@ public sealed class Emitter
         expansion = outer;
         callLine = outerCall;
 
-        // An expansion has no end of its own in the output: what follows it is the caller's
-        // own code, on the same level and under no label, so the comment is what says so.
+        // An expansion has no end of its own in the output. What follows it is the caller's own
+        // code, on the same level and under no label, so only the comment marks the end.
         Flush();
         Line($"{Body}; end of {called}");
     }
 
     /// <summary>
-    /// A line naming a <c>block</c> parameter, which writes out the lines the call gave it.
-    /// Those are the caller's own code, so where they are this file's own lines they map back
-    /// to themselves rather than to the call that spliced them.
+    /// Writes a line naming a <c>block</c> parameter, which stands for the lines the call passed
+    /// it. Those lines are the caller's own code, so where they are this file's own lines they
+    /// map back to themselves rather than to the call that spliced them.
     /// </summary>
     private void Splice(BlockSpliceSyntax statement)
     {
@@ -1039,16 +1064,19 @@ public sealed class Emitter
         callLine = outerCall;
     }
 
-    /// <summary>Where a call was written, as the comment before its expansion names it.</summary>
+    /// <summary>Returns where a call appears in the source, as the comment before its expansion names it.</summary>
     private static string Where(StatementSyntax call)
     {
         return $"{call.Tree.Path}:{call.LineIndex + 1}";
     }
 
-    /// <summary>The routine a <c>.proc</c>, or one iteration of a <c>.multiproc</c>, writes out here.</summary>
+    /// <summary>
+    /// Returns the routine that a <c>.proc</c>, or one iteration of a <c>.multiproc</c>, writes out
+    /// here.
+    /// </summary>
     private Symbol? ProcLabel(StatementSyntax opener) => model.DeclaredBy(opener, expansion);
 
-    /// <summary>The label a routine's first byte carries, where the routine has a name.</summary>
+    /// <summary>Writes the label a routine's first byte carries, where the routine has a name.</summary>
     private void Label(LineSyntax line, Symbol? routine)
     {
         if (routine is not null)
@@ -1056,7 +1084,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A long branch, written as the form nt65 chose for it: the plain short branch where
+    /// Writes a long branch in the form nt65 chose for it. That is the plain short branch where
     /// the target is in reach, and otherwise the opposite branch over a <c>jmp</c> to a
     /// generated label. ca65's own long-branch macro package always has to use the long form
     /// for a forward target, because it chooses before it knows where the target lands.
@@ -1125,9 +1153,9 @@ public sealed class Emitter
             return;
         }
 
-        // `z := *` and `f := *`: ca65 reads `z:` at the start of a line as an address-size
-        // prefix, so such a label is written as an assignment instead. An assignment
-        // takes the whole line, so whatever followed the label goes on the next one.
+        // ca65 reads `z:` at the start of a line as an address-size prefix, so such a label is
+        // written as an assignment instead, as in `z := *` and `f := *`. An assignment takes the
+        // whole line, so the rest of the line goes on the next one.
         var text = LabelText(Named(reference));
         if (rest is not null && !text.EndsWith(':'))
         {
@@ -1142,9 +1170,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A data declaration: its name, and what it holds where the line holds it. Mixed data,
-    /// and an array whose values are in a body, write the name here and their bytes a line at
-    /// a time below it.
+    /// Writes a data declaration, with its name and what it holds where the line holds it. Mixed
+    /// data, and an array whose values are in a body, write the name here and their bytes a line
+    /// at a time below it.
     /// </summary>
     private void Declared(LineSyntax line, DataDeclarationSyntax declaration)
     {
@@ -1161,7 +1189,7 @@ public sealed class Emitter
             return;
         }
 
-        // Bytes such as an `.incbin`, written as the source wrote them.
+        // Bytes such as an `.incbin` are written as the source has them.
         if (layout.Of(element, expansion) is not { } laid)
         {
             NotTranspiled(element);
@@ -1173,8 +1201,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// An element type, named or not: its values as the directive of its type, or the room it
-    /// takes as zeros. Values in a body are written a line at a time, below the name.
+    /// Writes an element type, named or not, as its values in the directive of its type, or as
+    /// the room it takes filled with zeros. Values in a body are written a line at a time, below
+    /// the name.
     /// </summary>
     private void Elements(LineSyntax line, DataDirectiveSyntax directive, Symbol? symbol)
     {
@@ -1234,7 +1263,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// How a run of reserved bytes is split across <c>.res</c> directives. ca65 reserves at
+    /// Returns how a run of reserved bytes is split across <c>.res</c> directives. ca65 reserves at
     /// most <c>$ffff</c> bytes in one of them, and that limit should not restrict what a
     /// program may declare, so a bigger reservation is written as several.
     /// </summary>
@@ -1249,7 +1278,7 @@ public sealed class Emitter
             yield return Math.Min(left, 0xffff);
     }
 
-    /// <summary>The zeros a padded text is filled out with, where a declaration writes any.</summary>
+    /// <summary>Writes the zeros a padded text is filled out with, where a declaration has any.</summary>
     private void Padding(LineSyntax line, DataDirectiveSyntax directive)
     {
         if (PaddedText.Padding(directive, model, expansion) is not var (zeros, count))
@@ -1259,9 +1288,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// <paramref name="node"/> rendered without the comments its edits collected; those are
-    /// returned in <paramref name="comment"/> instead, to go after whatever the line puts in
-    /// front of the text.
+    /// Returns <paramref name="node"/> rendered without the comments its edits collected. Those
+    /// comments are returned in <paramref name="comment"/> instead, to go after anything the
+    /// line puts in front of the text.
     /// </summary>
     private static string Bare(SyntaxNode node, Edits edits, out string? comment)
     {
@@ -1270,7 +1299,7 @@ public sealed class Emitter
         return Render(node, edits).Trim();
     }
 
-    /// <summary>One line of a body's values, written as the directive of the type the body is of.</summary>
+    /// <summary>Writes one line of a body's values as the directive of the body's type.</summary>
     private void Values(LineSyntax line, DataValuesSyntax values)
     {
         if (DataSyntax.DirectiveOfValues(values) is not { } directive)
@@ -1295,10 +1324,10 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A line of data with its name in front, where it has one: on the same line, or on a line
-    /// of its own where ca65 would read the name as a prefix. Where it shares the line, the
-    /// directive is lined up with those of the lines around it rather than where the source
-    /// wrote it, because the name in front is rarely the one the source used.
+    /// Writes a line of data with its name in front, where it has one. The name goes on the same
+    /// line, or on a line of its own where ca65 would read the name as a prefix. Where the name
+    /// shares the line, the directive is lined up with those of the lines around it rather than
+    /// where the source had it, because the name in front is rarely the one the source used.
     /// </summary>
     private void WithName(LineSyntax line, Symbol? symbol, string text, int bytes, string? comment = null)
     {
@@ -1316,7 +1345,7 @@ public sealed class Emitter
         Named(line, label, text, bytes, comment);
     }
 
-    /// <summary>The line with its generated comment at the column those line up in.</summary>
+    /// <summary>Returns the line with its generated comment at the column where comments line up.</summary>
     private static string Commented(string text, string? comment) =>
         comment is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + comment;
 
@@ -1347,10 +1376,11 @@ public sealed class Emitter
     /// <summary>
     /// Rewrites each run of lines holding one repeated byte as a single <c>.res</c> that
     /// produces the same bytes. A repetition of a single value unrolls to a row of equal lines,
-    /// which is a fill however it was written, and ca65 spells a fill <c>.res n, value</c>.
+    /// which is a fill regardless of how the source expressed it, and ca65 expresses a fill as
+    /// <c>.res n, value</c>.
     /// <para>
-    /// This is done last, because it removes lines: the line that replaces a run keeps the
-    /// source line of the run's first line and the byte count of the whole run.
+    /// This is done last, because it removes lines. The line that replaces a run keeps the source
+    /// line of the run's first line and the byte count of the whole run.
     /// </para>
     /// </summary>
     private void Filled()
@@ -1358,7 +1388,7 @@ public sealed class Emitter
         var kept = new List<EmittedLine>(lines.Count);
         for (var i = 0; i < lines.Count; i++)
         {
-            // A run longer than one `.res` reserves is left as it is: gathering it would need
+            // A run longer than one `.res` reserves is left as it is. Gathering it would need
             // several directives, and a file with that many equal lines in it is a repetition
             // nobody would have written by hand either.
             var run = 1;
@@ -1378,16 +1408,16 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Whether two lines have the same text, label and comment. Their byte counts and source
-    /// lines are ignored: a row of equal bytes is a fill however many source lines wrote it,
-    /// and the fill is mapped to the first of them.
+    /// Returns whether two lines have the same text, label and comment. Their byte counts and
+    /// source lines are ignored, because a row of equal bytes is a fill no matter how many source
+    /// lines produced it, and the fill is mapped to the first of them.
     /// </summary>
     private static bool Same(EmittedLine a, EmittedLine b) =>
         a.Text == b.Text && a.Label == b.Label && a.Comment == b.Comment;
 
     /// <summary>
-    /// The value of the single byte a line writes, or null for a line that writes anything
-    /// more: only such a line can be one byte of a fill. The line's comment is kept on the
+    /// Returns the value of the single byte a line writes, or null for a line that writes
+    /// anything more, because only such a line can be one byte of a fill. The line's comment is kept on the
     /// fill, because what it says about the byte is equally true of the fill the run becomes.
     /// </summary>
     private static string? Repeated(EmittedLine line)
@@ -1401,7 +1431,7 @@ public sealed class Emitter
         return value.Length == 0 || value.Contains(',') || value.Contains(';') ? null : value;
     }
 
-    /// <summary>The runs of lines to line up: named data lines with nothing in between.</summary>
+    /// <summary>Returns the runs of lines to line up, which are named data lines with nothing in between.</summary>
     private List<List<int>> Runs()
     {
         var runs = new List<List<int>>();
@@ -1418,10 +1448,11 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Records: one with values, on its line or in the block its line opens, or an array of
-    /// them in braces, each written as one directive per member in the type's order, whatever
-    /// order the values were written in. Room with no values is zeros, which one `.res` says,
-    /// unless a member pads with something else.
+    /// Writes records. A record with values may be on its line or in the block its line opens, or
+    /// there may be an array of records in braces. Each record is written as one directive per
+    /// member in the type's order, regardless of the order of the values in the source. Room with
+    /// no values is zeros, which one <c>.res</c> expresses, unless a member pads with something
+    /// else.
     /// </summary>
     private void Records(LineSyntax line, DataDirectiveSyntax directive, Symbol? symbol, Symbol type)
     {
@@ -1462,7 +1493,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Whether a type, or a record inside it, has a member that pads with something other
+    /// Returns whether a type, or a record inside it, has a member that pads with something other
     /// than zero. A type that contains itself has no layout at all, which the analysis has
     /// already reported, so there is nothing here to walk into.
     /// </summary>
@@ -1470,7 +1501,7 @@ public sealed class Emitter
         member.Kind == SymbolKind.Member
         && (member.Type is { IsLayout: true } inner ? Pads(inner) : Fill(member) != 0));
 
-    /// <summary>The byte a <c>.res n, fill</c> member pads with, which is zero when it names none.</summary>
+    /// <summary>Returns the byte a <c>.res n, fill</c> member pads with, which is zero when it names none.</summary>
     private long Fill(Symbol member) =>
         member.Data is DataDirectiveSyntax data && DataSyntax.NameOf(data) == ".res"
         && data.Tail is InlineDataSyntax { Values: [_, var padding, ..] }
@@ -1478,7 +1509,7 @@ public sealed class Emitter
             ? fill & 0xff
             : 0;
 
-    /// <summary>The label of a line whose statement is written separately.</summary>
+    /// <summary>Writes the label of a line whose statement is written separately.</summary>
     private void LabelOnly(LineSyntax line, LabelSyntax label)
     {
         if (model.SymbolAt(label.Name) is { } reference)
@@ -1486,8 +1517,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The members of an exported layout, each written out as the constant offset it is, and its size.
-    /// A layout nothing exports says nothing to ca65 and is left out entirely.
+    /// Writes the members of an exported layout, each as the constant offset it is, along with
+    /// the layout's size. A layout that nothing exports means nothing to ca65 and is left out
+    /// entirely.
     /// </summary>
     private void Offsets(StatementSyntax opener)
     {
@@ -1503,7 +1535,7 @@ public sealed class Emitter
             Definition($"{SizeOf(reference)} = {Constant(reference.Size!.Value)}");
     }
 
-    /// <summary>One enum member, which is a constant like any other.</summary>
+    /// <summary>Writes one enum member, which is a constant like any other.</summary>
     private void EnumMember(EnumMemberSyntax member)
     {
         if (model.SymbolAt(member.Name) is not { } reference
@@ -1515,9 +1547,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The members of a type, one directive each, in the order the type declares them. A
-    /// member that is itself a record, or an array of them, is written out the same way, so a
-    /// nested value reaches the fields inside it.
+    /// Writes the members of a type, one directive each, in the order the type declares them, and
+    /// returns the number of bytes written. A member that is itself a record, or an array of
+    /// them, is written out the same way, so a nested value reaches the fields inside it.
     /// </summary>
     private long Fields(
         LineSyntax line, Symbol type, IReadOnlyDictionary<string, MemberValueSyntax> written, string path)
@@ -1540,7 +1572,7 @@ public sealed class Emitter
             var named = path.Length == 0 ? member.Name : $"{path}::{member.Name}";
             var element = member.Data as DataDirectiveSyntax;
 
-            // An array member takes a braced list, and one no value names is zeros.
+            // An array member takes a braced list, and an array member no value names is zeros.
             if (element is { Count: not null })
             {
                 SeparatedSyntaxList<SyntaxNode> items = given is ValueListSyntax list ? list.Values : default;
@@ -1585,11 +1617,14 @@ public sealed class Emitter
         return bytes;
     }
 
-    /// <summary>One member's directive, with the path it fills in a comment.</summary>
+    /// <summary>Writes one member's directive, with the path it fills in a comment.</summary>
     private void Field(LineSyntax line, string directive, string path, long size) =>
         Code(line, Body + directive, (int)size, path);
 
-    /// <summary>The <c>member = value</c>s of a record, by member name: a braced record, or the lines of one.</summary>
+    /// <summary>
+    /// Returns the <c>member = value</c> pairs of a record by member name, from a braced record or
+    /// from the lines of one.
+    /// </summary>
     private static IReadOnlyDictionary<string, MemberValueSyntax> ValuesIn(SyntaxNode? record) =>
         ValuesIn(record is RecordValuesSyntax values ? values.Members : []);
 
@@ -1605,9 +1640,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// One member of a record, written with the directive its type gave it. A member no value
-    /// names is zero, and a member reserved by <c>.res</c> takes text, padded to the room it
-    /// has with the byte it pads with.
+    /// Returns the directives for one member of a record, written with the directive its type
+    /// gave it. A member that no value names is zero, and a member reserved by <c>.res</c> takes
+    /// text, padded to the room it has with the byte it pads with.
     /// </summary>
     private IEnumerable<(string Text, long Size)> Member(Symbol member, DataDirectiveSyntax? element, SyntaxNode? given)
     {
@@ -1635,11 +1670,11 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// An expression written out rather than edited in place: a call becomes what it stands
-    /// for, and every nested operation is parenthesized, so nothing depends on how ca65
-    /// reads precedence. Any comment it produces goes to <paramref name="comments"/>, the
-    /// comment list of the line it is written into, when there is one: otherwise text after the
-    /// expression on that line would end up inside its comment.
+    /// Returns an expression written out rather than edited in place. A call becomes what it
+    /// stands for, and every nested operation is parenthesized, so nothing depends on how ca65
+    /// reads precedence. Any comment the expression produces goes to <paramref name="comments"/>,
+    /// the comment list of the line it is written into, when there is one. Otherwise, text after
+    /// the expression on that line would end up inside its comment.
     /// </summary>
     private string Rendered(SyntaxNode node, List<string>? comments = null)
     {
@@ -1655,8 +1690,8 @@ public sealed class Emitter
                 break;
         }
 
-        // Anything with a value nt65 knows is written as that value; anything else keeps its
-        // own spelling, with names flattened.
+        // Anything with a value nt65 knows is written as that value. Anything else keeps its own
+        // spelling, with names flattened.
         if (model.ValueOf(node, expansion).AsNumber() is { } value)
             return Constant(value);
         var edits = new Edits();
@@ -1665,8 +1700,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// <paramref name="node"/> rendered to go inside another line: its comments are that
-    /// line's, given to <paramref name="comments"/>, or kept on the text when there is none.
+    /// Returns <paramref name="node"/> rendered to go inside another line. Its comments belong
+    /// to that line and go to <paramref name="comments"/>, or stay on the text when
+    /// <paramref name="comments"/> is null.
     /// </summary>
     private static string Inline(SyntaxNode node, Edits edits, List<string>? comments)
     {
@@ -1678,8 +1714,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// An operator as ca65 spells it. ca65 writes equality `=` and inequality `&lt;&gt;`, and
-    /// nt65's `^^` as `.xor`; `&amp;&amp;`, `||` and `!` are spelled the same in both.
+    /// Converts an operator to ca65's form. ca65 writes equality as `=`, inequality as
+    /// `&lt;&gt;` and nt65's `^^` as `.xor`. The operators `&amp;&amp;`, `||` and `!` are the
+    /// same in both.
     /// </summary>
     private static string Operator(SyntaxToken op) => op.Kind switch
     {
@@ -1692,17 +1729,18 @@ public sealed class Emitter
     };
 
     /// <summary>
-    /// What a symbol is called in the output, at the level being written. A name a macro body
-    /// declares is a different name at every expansion.
+    /// Returns the name a symbol has in the output, at the level being written. A name that a
+    /// macro body declares is a different name in every expansion.
     /// </summary>
     private string Named(Symbol symbol) => names.Of(symbol, expansion);
 
     /// <summary>
-    /// An argument written where the body named its parameter. It goes in as a parenthesized
-    /// whole, so `value * 2` with the argument `1 + 2` is `(1 + 2) * 2` — six, where ca65's
-    /// textual substitution would give five — and `#&lt;value` with `label+1` is
-    /// `#&lt;(label+1)`. It keeps its own spelling: an argument is an expression, not a number,
-    /// and a name in it is written the way the same name would be written anywhere else.
+    /// Returns an argument written where the body named its parameter. It goes in as a
+    /// parenthesized whole, so `value * 2` with the argument `1 + 2` is `(1 + 2) * 2`, which is
+    /// six where ca65's textual substitution would give five. Likewise, `#&lt;value` with
+    /// `label+1` is `#&lt;(label+1)`. The argument keeps its own spelling, because it is an
+    /// expression, not a number, and a name in it is written the way the same name would be
+    /// written anywhere else.
     /// </summary>
     private string Substituted(SyntaxNode argument, List<string>? comments = null)
     {
@@ -1715,14 +1753,14 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A label definition, or, for a name ca65 would misread as an address-size prefix
+    /// Returns a label definition or, for a name ca65 would misread as an address-size prefix
     /// (<c>z</c> or <c>f</c>), the <c>:= *</c> assignment written in its place.
     /// </summary>
     private static string LabelText(string name) => name is "z" or "f" ? $"{name} := *" : $"{name}:";
 
     private void Constant(LineSyntax line, ConstantDeclarationSyntax statement)
     {
-        // A string has no ca65 spelling as a constant: it is used through `.strlen` and
+        // A string cannot be expressed as a ca65 constant. It is used through `.strlen` and
         // `.strat`, which are numbers by the time anything is written.
         if (model.SymbolAt(statement.Name) is { } reference)
         {
@@ -1739,7 +1777,7 @@ public sealed class Emitter
         }
     }
 
-    /// <summary>An extern proc is a routine at a constant address, which is a constant.</summary>
+    /// <summary>Writes an extern proc, which is a routine at a constant address and so a constant.</summary>
     private void ExternProc(ExternProcDeclarationSyntax statement)
     {
         if (model.SymbolAt(statement.Name) is not { } reference)
@@ -1763,8 +1801,8 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// An immediate is a byte or a word slot, as wide as the instruction makes it, so a negative
-    /// constant in one is written as its two's complement.
+    /// Rewrites a negative constant in an immediate as its two's complement. An immediate is a
+    /// byte or a word slot, as wide as the instruction makes it.
     /// </summary>
     private void Immediate(StatementSyntax statement, int bytes, Edits edits)
     {
@@ -1775,7 +1813,10 @@ public sealed class Emitter
         }
     }
 
-    /// <summary>An assertion the linker checks: ca65's <c>.assert</c> with the level that defers it to ld65.</summary>
+    /// <summary>
+    /// Writes an assertion the linker checks, as ca65's <c>.assert</c> with the level that defers
+    /// it to ld65.
+    /// </summary>
     private void Linked(LineSyntax line, AssertDirectiveSyntax statement)
     {
         var edits = new Edits();
@@ -1789,7 +1830,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// An <c>.ensure</c>, written as the <c>rep</c> and <c>sep</c> the analysis found it needs,
+    /// Writes an <c>.ensure</c> as the <c>rep</c> and <c>sep</c> the analysis found it needs,
     /// which is nothing where the widths already hold.
     /// </summary>
     private void Ensure(LineSyntax line, EnsureDirectiveSyntax directive)
@@ -1803,8 +1844,8 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A frame's member in a stack-relative operand, written as the offset from the stack
-    /// pointer the analysis counted for it here: ca65 knows nothing of frames.
+    /// Replaces a frame's member in a stack-relative operand with the offset from the stack
+    /// pointer that the analysis counted for it here, because ca65 knows nothing of frames.
     /// </summary>
     private void Slot(StatementSyntax statement, Edits edits)
     {
@@ -1825,9 +1866,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A <c>d:</c> operand, written as the offset into the direct page the analysis found D
-    /// makes it: with D at <c>$2100</c>, <c>lda d:$2105</c> is <c>lda z:$05</c>. ca65 has no
-    /// <c>d:</c>, and knows nothing of D.
+    /// Replaces a <c>d:</c> operand with its offset into the direct page, given the D the
+    /// analysis found. For example, with D at <c>$2100</c>, <c>lda d:$2105</c> is
+    /// <c>lda z:$05</c>. ca65 has no <c>d:</c>, and knows nothing of D.
     /// </summary>
     private void Direct(StatementSyntax statement, Edits edits)
     {
@@ -1846,11 +1887,11 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The <c>.a8</c>, <c>.a16</c>, <c>.i8</c> or <c>.i16</c> a 65816 immediate needs. ca65
-    /// sizes an immediate from the last such directive in the text, whatever the control flow,
-    /// so one goes directly before each immediate whose width differs from the previous
-    /// immediate's for the same register, and nowhere else. The width itself is the
-    /// analysis's, which follows control flow.
+    /// Writes the <c>.a8</c>, <c>.a16</c>, <c>.i8</c> or <c>.i16</c> that a 65816 immediate
+    /// needs. ca65 sizes an immediate from the last such directive in the text, regardless of
+    /// control flow. One therefore goes directly before each immediate whose width differs from
+    /// the previous immediate's for the same register, and nowhere else. The width itself comes
+    /// from the analysis, which follows control flow.
     /// </summary>
     private void Width(StatementSyntax statement)
     {
@@ -1869,7 +1910,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Reports a line nothing can be written for, which analysis should already have rejected.
+    /// Reports a line for which nothing can be written, which analysis should already have rejected.
     /// The error means the file produces no output rather than wrong output.
     /// </summary>
     private void NotTranspiled(SyntaxNode statement)
@@ -1890,11 +1931,11 @@ public sealed class Emitter
     /// <summary>
     /// Writes one line that came from the source, and records where it came from. A line that
     /// generates bytes is mapped, because ld65 attaches a span of bytes to the line in effect
-    /// while they were generated. So is one that is <paramref name="located"/>: an assertion ca65
-    /// evaluates, whose failure ca65 notes as generated from the line in effect. A label or a
-    /// constant is not, and neither are imports and exports: ld65 reports problems with those
-    /// against the output's own line whatever the map says, and mapping them would only add
-    /// lines that cover no bytes.
+    /// while they were generated. A line that is <paramref name="located"/> is mapped too. Such
+    /// a line is an assertion ca65 evaluates, whose failure ca65 notes as generated from the line
+    /// in effect. A label or a constant is not mapped, and neither are imports and exports. ld65
+    /// reports problems with those against the output's own line regardless of the map, and
+    /// mapping them would only add lines that cover no bytes.
     /// </summary>
     private void Code(LineSyntax line, string text, int bytes, string? comment = null, bool located = false)
     {
@@ -1904,7 +1945,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A named data line, which shares its line with the name at its margin. The two are kept
+    /// Writes a named data line, which shares its line with the name at its margin. The two are kept
     /// apart until every line is written, because the column the directive goes in depends on
     /// the whole run of such lines, not on this one alone.
     /// </summary>
@@ -1915,20 +1956,23 @@ public sealed class Emitter
         Write(new EmittedLine(text, bytes, Mapped(line, bytes, located: false), label, comment));
     }
 
-    /// <summary>The source line a generated line is mapped to, or 0 when the map should not point it at one.</summary>
+    /// <summary>
+    /// Returns the source line a generated line is mapped to, or 0 when the map should not point
+    /// it at any source line.
+    /// </summary>
     private int Mapped(LineSyntax line, int bytes, bool located) =>
         bytes != 0 || located ? At(line) : 0;
 
     /// <summary>
-    /// The line of this file a generated line came from, counting from one. The lines of an
+    /// Returns the line of this file a generated line came from, counting from one. The lines of an
     /// expansion came from the call, which is the line of this file that asked for all of them.
     /// </summary>
     private int At(LineSyntax line) => (callLine ?? line).LineIndex + 1;
 
     /// <summary>
-    /// Writes a definition that is in no segment: a constant, or a name for an address given
-    /// by other names. It is written where it stands, before any segment or in whichever one is
-    /// open, so a program of constants needs no segment in its linker configuration.
+    /// Writes a definition that is in no segment, such as a constant or a name for an address
+    /// given by other names. It is written where it stands, before any segment or in the segment
+    /// that is open, so a program of constants needs no segment in its linker configuration.
     /// </summary>
     private void Definition(string text)
     {
@@ -1936,7 +1980,10 @@ public sealed class Emitter
         Line(text);
     }
 
-    /// <summary>The <c>.segment</c> directive, written when what follows goes in a different segment from the last one written.</summary>
+    /// <summary>
+    /// Writes the <c>.segment</c> directive when what follows goes in a different segment from
+    /// the last one written.
+    /// </summary>
     private void Segment()
     {
         if (written == segment || segment is null)
@@ -1954,7 +2001,10 @@ public sealed class Emitter
         written = segment;
     }
 
-    /// <summary>A blank line the source asked for, at most one however many it wrote.</summary>
+    /// <summary>
+    /// Writes a blank line the source asked for, writing at most one no matter how many blank
+    /// lines the source has.
+    /// </summary>
     private void Blank()
     {
         pendingBlank = true;
@@ -1971,7 +2021,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Appends one line of output that the map should not point at any source line: a
+    /// Appends one line of output that the map should not point at any source line, such as a
     /// directive, a name, or a blank between them.
     /// </summary>
     private void Line(string text) => Write(new EmittedLine(text));
@@ -1979,11 +2029,11 @@ public sealed class Emitter
     private void Write(EmittedLine line) => lines.Add(line with { Text = line.Text.TrimEnd(), File = file });
 
     /// <summary>
-    /// A <c>.place</c>: the module it places, written here in full, between a comment naming the
-    /// module and the location of the <c>.place</c> and a comment closing it. The placed
-    /// module's lines belong at this point in whichever segment each of them is in, which is
-    /// what writing them here achieves; when the placed module leaves a different segment
-    /// current, this file's segment is written again before its next line.
+    /// Writes a <c>.place</c> as the module it places, in full, between a comment naming the
+    /// module and the location of the <c>.place</c> and a comment closing it. Each of the placed
+    /// module's lines belongs at this point in its own segment, which writing them here achieves.
+    /// When the placed module leaves a different segment current, this file's segment is written
+    /// again before its next line.
     /// </summary>
     private void Place(PlaceDirectiveSyntax directive)
     {
@@ -2005,10 +2055,10 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The statement's own text with the edits applied: the source's spacing between its
-    /// tokens, its comments dropped, and names, prefixes and byte values written where the
-    /// source had something else. What the source indented it by is not kept; where the line
-    /// goes is the caller's to say (<see cref="Body"/>).
+    /// Returns the statement's own text with the edits applied. The text keeps the source's
+    /// spacing between tokens, drops its comments, and has names, prefixes and byte values
+    /// written where the source had something else. The source's indentation is not kept, and
+    /// the caller decides where the line goes (<see cref="Body"/>).
     /// </summary>
     private static string Render(SyntaxNode statement, Edits edits, string indent = "")
     {
@@ -2044,13 +2094,13 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A token as the output spells it, which for every token but a number is as the source
-    /// spelt it. Everything nt65 works out for itself is written in lower case
-    /// (<see cref="Hex"/>), so a number the source wrote in upper case is brought down to it:
-    /// one file with <c>$FFD2</c> in one line and <c>$d020</c> in the next looks as if two
-    /// people wrote it.
-    /// The <c>_</c> that separates a number's digits is nt65's own, and the header switches
-    /// ca65's <c>underline_in_numbers</c> off, so it is dropped on the way out.
+    /// Formats a token for the output. Every token but a number is kept as it appears in the
+    /// source. Everything nt65 works out for itself is written in lower case
+    /// (<see cref="Hex"/>), so a hexadecimal number in upper case in the source is lowered to
+    /// match. Otherwise one file with <c>$FFD2</c> in one line and <c>$d020</c> in the next would
+    /// look as if two people wrote it. The <c>_</c> that separates a number's digits is nt65's
+    /// own, and the header switches ca65's <c>underline_in_numbers</c> off, so it is dropped on
+    /// the way out.
     /// </summary>
     private static string Spelt(SyntaxToken token)
     {
@@ -2073,9 +2123,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// What the output writes instead of what the source did: flat names, the address-size
-    /// prefix the chosen mode needs, byte values for text, and the parentheses that keep the
-    /// output from depending on ca65's precedence.
+    /// Records the edits that make the output differ from the source. These are flat names, the
+    /// address-size prefix the chosen mode needs, byte values for text, and the parentheses that
+    /// keep the output from depending on ca65's precedence.
     /// </summary>
     private void Substitute(SyntaxNode node, Edits edits, bool nested)
     {
@@ -2103,8 +2153,9 @@ public sealed class Emitter
 
             case AbsoluteOperandSyntax operand:
                 // In a macro body an `operand` parameter takes the place of a whole operand, so
-                // the argument the call gave replaces what the body wrote, prefix, index and all. The
-                // prefix goes on last, outside whatever parentheses the expression was given.
+                // the argument the call passed replaces the body's operand, including its prefix
+                // and index. The prefix goes on last, outside any parentheses the expression was
+                // given.
                 if (Given(operand, edits))
                     return;
                 foreach (var child in operand.ChildNodes)
@@ -2116,7 +2167,7 @@ public sealed class Emitter
                 Terminated(directive, edits);
 
                 // An `.incbin` names a file rather than holding data, so its path is left a
-                // path — pointed at the file from wherever the output lands.
+                // path, pointed at the file from the output's location.
                 if (Included(directive, edits))
                     return;
 
@@ -2182,7 +2233,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The directive ca65 writes for one of nt65's element types. ca65's 24-bit directive is
+    /// Returns the ca65 directive for one of nt65's element types. ca65's 24-bit directive is
     /// <c>.faraddr</c> and its one big-endian directive <c>.dbyt</c>; a wider big-endian value
     /// is written as its bytes.
     /// </summary>
@@ -2194,7 +2245,10 @@ public sealed class Emitter
         _ => directive,
     };
 
-    /// <summary>How wide one element of an element type is, and whether its bytes are written high first.</summary>
+    /// <summary>
+    /// Returns how wide one element of an element type is, and whether its bytes are written high
+    /// first.
+    /// </summary>
     private static (int Width, bool BigEndian) Slot(DataDirectiveSyntax directive)
     {
         var name = DataSyntax.NameOf(directive);
@@ -2202,10 +2256,10 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// A count ca65 needs to know when it reaches the line — how much a <c>.res</c> reserves,
-    /// what an <c>.align</c> aligns to — which it cannot know if a name in it is defined further
-    /// down the output. A count that uses such a name is written as its value, with the source
-    /// text in a comment beside it.
+    /// Replaces a count that ca65 needs to know when it reaches the line, such as how much a
+    /// <c>.res</c> reserves or what an <c>.align</c> aligns to. ca65 cannot know the count if a
+    /// name in it is defined further down the output. A count that uses such a name is written
+    /// as its value, with the source text in a comment beside it.
     /// </summary>
     private void Counted(SyntaxNode count, Edits edits)
     {
@@ -2220,7 +2274,10 @@ public sealed class Emitter
         Substitute(count, edits, nested: false);
     }
 
-    /// <summary>One value of a slot, written as <see cref="Datum"/> returns it when it returns anything, and as the source wrote it otherwise.</summary>
+    /// <summary>
+    /// Writes one value of a slot as <see cref="Datum"/> returns it when it returns anything, and
+    /// as the source has it otherwise.
+    /// </summary>
     private void InPlace(SyntaxNode value, int width, bool bigEndian, Edits edits)
     {
         if (Datum(value, width, bigEndian, edits.Comments) is { } text)
@@ -2258,10 +2315,11 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// One value of a slot <paramref name="width"/> bytes wide where ca65 cannot take it as
-    /// written: a negative constant is its two's complement, and a big-endian value wider than
-    /// a word, which ca65 has no directive for, is its bytes, high first. Null for a value
-    /// written as it stands. The source text of a rewritten value is added to <paramref name="comments"/>.
+    /// Returns one value of a slot <paramref name="width"/> bytes wide where ca65 cannot take it
+    /// as it stands. A negative constant is its two's complement, and a big-endian value wider
+    /// than a word, which ca65 has no directive for, is its bytes, high first. Returns null for a
+    /// value written as it stands. The source text of a rewritten value is added to
+    /// <paramref name="comments"/>.
     /// </summary>
     private string? Datum(SyntaxNode value, int width, bool bigEndian, List<string> comments)
     {
@@ -2292,9 +2350,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Text reaches the output as bytes, so <c>.strz</c> becomes the bytes and
-    /// the zero that ends them: ca65's own directive takes a string, and once the text has
-    /// become bytes there is no string left to give it.
+    /// Rewrites a <c>.strz</c> as a <c>.byte</c>. Text reaches the output as bytes, so
+    /// <c>.strz</c> becomes the bytes and the zero that ends them. ca65's own directive takes a
+    /// string, and once the text has become bytes there is no string left to give it.
     /// </summary>
     private static void Terminated(DataDirectiveSyntax directive, Edits edits)
     {
@@ -2309,9 +2367,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The path of an <c>.incbin</c>, rewritten so that ca65 finds the file from the output
-    /// rather than from the source: ca65 looks beside the file it is assembling, so the output
-    /// assembles from any directory. Returns whether the directive was one.
+    /// Rewrites the path of an <c>.incbin</c> so that ca65 finds the file from the output rather
+    /// than from the source. ca65 looks beside the file it is assembling, so the output assembles
+    /// from any directory. Returns whether the directive was an <c>.incbin</c>.
     /// </summary>
     private bool Included(DataDirectiveSyntax directive, Edits edits)
     {
@@ -2330,7 +2388,7 @@ public sealed class Emitter
 
     private void Name(NameExpressionSyntax name, Edits edits)
     {
-        // A path names one symbol; the whole of it becomes that symbol's flat name. A body is
+        // A path names one symbol, and the whole of it becomes that symbol's flat name. A body is
         // written out in every file that calls its macro, so the symbol a name refers to comes
         // from resolving the whole program rather than this one file.
         if (name.Names is not [.., var last] || model.SymbolAt(last) is not { } named)
@@ -2353,7 +2411,7 @@ public sealed class Emitter
             return;
         }
 
-        // A member is an offset: the offsets along the path added up, on the address the
+        // A member is an offset. The offsets along the path are added up, on the address the
         // path starts from when it starts at an instance rather than at a type. An index along
         // the path adds whole elements to the same sum.
         if (reference.Kind == SymbolKind.Member || (name.IsIndexed && reference.IsAddress))
@@ -2362,7 +2420,7 @@ public sealed class Emitter
             return;
         }
 
-        // A macro parameter is replaced by the argument the call gave it, as a parenthesized
+        // A macro parameter is replaced by the argument the call passed it, as a parenthesized
         // whole, so `value * 2` with the argument `1 + 2` is 6 rather than 5.
         var symbol = reference;
         if (symbol.Kind == SymbolKind.MacroParameter)
@@ -2395,8 +2453,8 @@ public sealed class Emitter
             return;
         }
 
-        // A string constant has no ca65 spelling, in this module or any other: it is written
-        // as the bytes of its text, as a literal is.
+        // A string constant cannot be expressed in ca65, in this module or any other, so it is
+        // written as the bytes of its text, as a literal is.
         if (symbol.Value.IsString)
         {
             if (model.BytesOf(name, expansion) is { Count: > 0 } bytes)
@@ -2407,7 +2465,7 @@ public sealed class Emitter
             return;
         }
 
-        // A define and a checked import are written as their value, never by name: that way a
+        // A define and a checked import are written as their value, never by name. That way a
         // `-D` given to ca65 cannot collide with a define, and a checked import is a value nt65
         // has already used in its own arithmetic.
         var byValue = (symbol.IsDefine || symbol.IsConfig || symbol.Kind == SymbolKind.ImportedConstant)
@@ -2418,7 +2476,7 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Writes <paramref name="text"/> where the whole of <paramref name="name"/> stood: at the
+    /// Writes <paramref name="text"/> where the whole of <paramref name="name"/> stood, at the
     /// first token of the name itself, with the rest of its tokens blanked. An <c>[i]</c> along
     /// the path is left in place, because it selects an element of what the name refers to
     /// rather than being part of the name.
@@ -2443,8 +2501,8 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The text a macro parameter is replaced by here: the operand the call gave, the
-    /// expression it gave, or the word or number the parameter is bound to.
+    /// Returns the text a macro parameter is replaced by here, which is the operand the call
+    /// passed, the expression it passed, or the word or number the parameter is bound to.
     /// </summary>
     private string? Parameter(Symbol parameter, List<string> comments)
     {
@@ -2455,16 +2513,16 @@ public sealed class Emitter
         if (bound.Argument is { Parameter.Kind: ParameterKind.Operand } given)
             return given.Operand is { } operand ? Substituted(operand, comments) : null;
 
-        // A member of an enum is a constant, and constants are written as what they are worth.
+        // A member of an enum is a constant, and constants are written as their values.
         if (bound is { Member: not null, Item: null } && bound.Value.AsNumber() is { } member)
             return Constant(member);
         return bound.Item is { } item ? Substituted(item, comments) : null;
     }
 
     /// <summary>
-    /// A path through a type or an instance, with the elements any <c>[i]</c> along it steps
-    /// over. Through a type it is a number; through an instance it is that instance plus the
-    /// offset, which is what ca65 and ld65 resolve. Either way the path it came from is kept
+    /// Replaces a path through a type or an instance, including the elements any <c>[i]</c>
+    /// along it steps over. Through a type it is a number, and through an instance it is that
+    /// instance plus the offset, which ca65 and ld65 resolve. Either way the path it came from is kept
     /// in a comment.
     /// </summary>
     private void MemberPath(NameExpressionSyntax name, Edits edits)
@@ -2495,17 +2553,20 @@ public sealed class Emitter
         edits.Comments.Add(name.GetText().Trim());
     }
 
-    /// <summary>The value of <paramref name="node"/> in the expansion being written, with cycle counts from the layout.</summary>
+    /// <summary>
+    /// Returns the value of <paramref name="node"/> in the expansion being written, with cycle
+    /// counts from the layout.
+    /// </summary>
     private Value Worth(SyntaxNode node) => model.ValueOf(node, expansion, cycles: layout.CyclesOf);
 
-    /// <summary>Whether an expression names an address anywhere along any of its paths.</summary>
+    /// <summary>Returns whether an expression names an address anywhere along any of its paths.</summary>
     private bool NamesAnAddress(SyntaxNode node) =>
         node.DescendantNodes().OfType<NameExpressionSyntax>()
             .Any(name => name.Names.Any(part => model.SymbolAt(part) is { IsAddress: true }));
 
     /// <summary>
-    /// A call written out as what it evaluates to: a charmap applied to text becomes the bytes
-    /// it maps them to, and a function call becomes its value. A call nt65 cannot evaluate is
+    /// Writes a call out as what it evaluates to. A charmap applied to text becomes the bytes it
+    /// maps the text to, and a function call becomes its value. A call nt65 cannot evaluate is
     /// reported rather than passed to ca65, which knows neither charmaps nor functions.
     /// </summary>
     private void Applied(CallExpressionSyntax call, Edits edits)
@@ -2544,8 +2605,8 @@ public sealed class Emitter
         // analysis works out for it.
         if (call.Callee is null)
         {
-            // Text a built-in builds or chooses is written as its bytes, as a literal is: ca65
-            // never sees text.
+            // Text a built-in builds or chooses is written as its bytes, as a literal is, because
+            // ca65 never sees text.
             if (Worth(call).IsString)
             {
                 if (model.BytesOf(call, expansion) is { } built)
@@ -2595,13 +2656,13 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Text as the byte values it is. Empty text is no bytes, which ca65 writes as an empty
-    /// string, as it does for an empty literal.
+    /// Formats text as its byte values. Empty text is no bytes, which is written as an empty
+    /// string, as it is for an empty literal.
     /// </summary>
     private static string BytesText(IReadOnlyList<long> bytes) =>
         bytes.Count == 0 ? "\"\"" : string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
 
-    /// <summary>Text becomes byte values, with the source spelling kept in a comment.</summary>
+    /// <summary>Replaces text with its byte values, keeping the source spelling in a comment.</summary>
     private void Text(LiteralExpressionSyntax literal, Edits edits)
     {
         if (DataLengths.Bytes(literal, model) is not { Count: > 0 } bytes)
@@ -2612,8 +2673,8 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// An operand that names an <c>operand</c> parameter, written out as the one the call
-    /// gave. Returns whether it was one.
+    /// Writes an operand that names an <c>operand</c> parameter as the operand the call passed.
+    /// Returns whether the operand named such a parameter.
     /// </summary>
     private bool Given(AbsoluteOperandSyntax operand, Edits edits)
     {
@@ -2638,13 +2699,13 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// The text of the operand a call gave, with whatever the body asked of it: the operand
-    /// as it stands, the byte after it, or one byte of an immediate value.
+    /// Returns the text of the operand a call passed, in the form the body asked for. That is the
+    /// operand as it stands, the byte after it, or one byte of an immediate value.
     /// </summary>
     private string? Argument(OperandSubstitution given, List<string> comments)
     {
-        // `.byteof` on an immediate is a byte of the value, which is a number wherever nt65
-        // knows it and a shift and a mask wherever only the linker will.
+        // `.byteof` on an immediate is a byte of the value. It is a number where nt65 knows the
+        // value, and a shift and a mask where only the linker will.
         if (given.ByteOf && given.Operand is ImmediateOperandSyntax)
         {
             if (given.Expression is not { } value)
@@ -2657,7 +2718,7 @@ public sealed class Emitter
                 : $"#(({shifted} >> {8 * given.Offset}) & $ff)";
         }
 
-        // Anything else is the argument's own operand: as it stands when the body named it
+        // Anything else is the argument's own operand, as it stands when the body named it
         // whole, and with `+ n` on its expression when the body asked for a later byte.
         var offset = given.Offset;
         if (offset == 0)
@@ -2669,7 +2730,7 @@ public sealed class Emitter
         return offset > 0 ? $"{written}+{offset}{index}" : $"{written}{offset}{index}";
     }
 
-    /// <summary>The <c>z:</c> or <c>a:</c> that says which mode was chosen.</summary>
+    /// <summary>Writes the <c>z:</c> or <c>a:</c> that shows which mode was chosen.</summary>
     private void Prefix(AbsoluteOperandSyntax operand, Edits edits)
     {
         var instruction = operand.Parent;
@@ -2683,17 +2744,17 @@ public sealed class Emitter
         var tokens = Tokens(operand.Address);
 
         // ca65 reads a `(` at the head of an operand, or straight after a prefix, as indirect
-        // addressing, so an expression that starts with one — `lda (hi + lo) * 2`, which the
-        // language allows, `jml (bank << 16) | .loword(f)`, or one written out with parentheses
-        // around its first operation — gets a unary `+` in front of it. It changes nothing and
-        // keeps the operand an expression.
+        // addressing. An expression that starts with one therefore gets a unary `+` in front of
+        // it. Examples are `lda (hi + lo) * 2`, which the language allows,
+        // `jml (bank << 16) | .loword(f)`, and an expression written out with parentheses around
+        // its first operation. The `+` changes nothing and keeps the operand an expression.
         var opens = tokens is [{ Kind: SyntaxKind.OpenParen }, ..]
             || (tokens.Count > 0 && edits.Before.GetValueOrDefault(tokens[0].Position, "").StartsWith('('));
         var text = opens ? prefix + "+" : prefix;
 
         if (written is not null)
         {
-            // The source already wrote a prefix; replace it with the one chosen, in case an
+            // The source already has a prefix, so it is replaced with the one chosen, in case an
             // expression made the operand wider.
             foreach (var token in written.ChildTokens)
                 edits.Replace[token.Position] = "";
@@ -2704,22 +2765,28 @@ public sealed class Emitter
             edits.Before[tokens[0].Position] = text + edits.Before.GetValueOrDefault(tokens[0].Position, "");
     }
 
-    /// <summary>What the output writes in place of the source's own tokens.</summary>
+    /// <summary>Holds what the output writes in place of the source's own tokens.</summary>
     private sealed class Edits
     {
-        /// <summary>Text to write before a token, by the token's position.</summary>
+        /// <summary>Gets the text to write before a token, keyed by the token's position.</summary>
         public Dictionary<int, string> Before { get; } = [];
 
-        /// <summary>Text to write after a token, by the token's position.</summary>
+        /// <summary>Gets the text to write after a token, keyed by the token's position.</summary>
         public Dictionary<int, string> After { get; } = [];
 
-        /// <summary>Text to write instead of a token, by the token's position; empty omits it.</summary>
+        /// <summary>
+        /// Gets the text to write instead of a token, keyed by the token's position. An empty
+        /// string omits the token.
+        /// </summary>
         public Dictionary<int, string> Replace { get; } = [];
 
-        /// <summary>Source spellings to keep in a comment at the end of the line.</summary>
+        /// <summary>Gets the source spellings to keep in a comment at the end of the line.</summary>
         public List<string> Comments { get; } = [];
 
-        /// <summary>Tokens written as part of the one before them, with no whitespace between the two.</summary>
+        /// <summary>
+        /// Gets the positions of tokens written as part of the token before them, with no
+        /// whitespace between the two.
+        /// </summary>
         public HashSet<int> Joined { get; } = [];
     }
 
@@ -2728,11 +2795,11 @@ public sealed class Emitter
     /// the work; this only chooses which of its methods each kind of statement calls.
     /// <para>
     /// A kind with no method here writes nothing. A function, a signature set, an enum member,
-    /// a charmap entry, a list's items and a member's value exist for the analysis: a call is
+    /// a charmap entry, a list's items and a member's value exist for the analysis. A call is
     /// written as its body, and a type as the constants it names. An <c>.error</c> the build
     /// reached has already been reported, and never reaches ca65. A <c>.cpu</c> item, a segment
-    /// declaration, an <c>.export</c> or <c>.import</c> — both already written — and a closing
-    /// brace all say something about the file without generating anything.
+    /// declaration, an <c>.export</c> or <c>.import</c> (both already written) and a closing
+    /// brace all describe the file without generating anything.
     /// </para>
     /// </summary>
     /// <param name="emitter">The emitter whose file is being written.</param>
@@ -2742,7 +2809,7 @@ public sealed class Emitter
         // walked from inside its own method, so the line is put back when that returns.
         private LineSyntax? walked;
 
-        /// <summary>The line being written, which every method below is about.</summary>
+        /// <summary>Gets the line being written, which every method below is about.</summary>
         private LineSyntax Line => walked!;
 
         /// <summary>Writes what <paramref name="line"/> generates.</summary>
@@ -2766,8 +2833,8 @@ public sealed class Emitter
             emitter.Constant(Line, node);
 
         /// <summary>
-        /// A named data declaration: its label is written at its first byte, and its end label
-        /// just past its last byte when anything measures it.
+        /// Writes a named data declaration. Its label is written at its first byte, and its end
+        /// label just past its last byte when anything measures it.
         /// </summary>
         /// <param name="node">The declaration.</param>
         public override void VisitDataDeclaration(DataDeclarationSyntax node)
@@ -2810,9 +2877,10 @@ public sealed class Emitter
             emitter.ExternProc(node);
 
         /// <summary>
-        /// An assertion nt65 could evaluate has already been checked and writes nothing; one it
-        /// could not depends on where things land, so it is written out for ld65 to check, with
-        /// the level ca65 needs for that.
+        /// Writes an assertion that nt65 could not evaluate. An assertion nt65 could evaluate has
+        /// already been checked and writes nothing. An assertion it could not evaluate depends on
+        /// where things land, so it is written out for ld65 to check, with the level ca65 needs
+        /// for that.
         /// </summary>
         /// <param name="node">The assertion.</param>
         public override void VisitAssertDirective(AssertDirectiveSyntax node)

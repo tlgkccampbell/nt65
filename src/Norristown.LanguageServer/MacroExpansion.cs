@@ -7,15 +7,15 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// A macro call written out as nt65: the body with the arguments in place, as the programmer
-/// would have written it by hand. It is not the ca65 the emitter writes — that is what the
-/// output view answers — and it is not flattened: a call inside the body stays a call, because
-/// a fully written-out nest of macros is unreadable and nobody wrote it.
+/// Represents a macro call expanded into nt65 text, which is the body with the arguments in
+/// place, as the programmer would have written it by hand. It is not the ca65 that the emitter
+/// writes, which the output view shows. It is also not flattened. A call inside the body stays a
+/// call, because a fully expanded nest of macros is unreadable and nobody wrote it that way.
 /// <para>
 /// Choices the body makes based on its arguments are resolved here, because the expanded text
-/// has no way to leave them open: an <c>.if</c> over a <c>one</c> parameter becomes the branch it takes, and an
-/// <c>.each</c> over a <c>list</c> parameter becomes its iterations, since nt65 has no way to write
-/// a call's arguments as a list literal.
+/// has no way to leave them open. An <c>.if</c> over a <c>one</c> parameter becomes the branch it
+/// takes, and an <c>.each</c> over a <c>list</c> parameter becomes its iterations, since nt65 has
+/// no syntax for a call's arguments as a list literal.
 /// </para>
 /// </summary>
 internal sealed class MacroExpansion
@@ -39,49 +39,57 @@ internal sealed class MacroExpansion
         Call = call;
     }
 
-    /// <summary>The macro the call names.</summary>
+    /// <summary>Gets the macro the call names.</summary>
     public Symbol Macro { get; }
 
-    /// <summary>The call itself.</summary>
+    /// <summary>Gets the call itself.</summary>
     public MacroCallSyntax Call { get; }
 
-    /// <summary>The expansion, one line at a time.</summary>
+    /// <summary>Gets the expansion, one line at a time.</summary>
     public IReadOnlyList<string> Lines => lines;
 
     /// <summary>
-    /// The macro calls left unexpanded, in the order they appear, each with the index path that
-    /// asks for its expansion.
+    /// Gets the macro calls left unexpanded, in the order they appear, each with the index path
+    /// that requests its expansion.
     /// </summary>
     public IReadOnlyList<Link> Links => links;
 
-    /// <summary>How many bytes the call assembles to, taken from the same layout the build uses.</summary>
+    /// <summary>
+    /// Gets the number of bytes the call assembles to, taken from the same layout the build uses.
+    /// </summary>
     public int Bytes { get; private init; }
 
-    /// <summary>What it costs to run, or null where none of it is code.</summary>
+    /// <summary>Gets the call's cost to run, or null where none of it is code.</summary>
     public CycleCount? Cycles { get; private init; }
 
-    /// <summary>Why it cannot be written into the file where it is called, or null when it can.</summary>
+    /// <summary>
+    /// Gets the reason the expansion cannot be inserted into the file where the call is, or null
+    /// when it can.
+    /// </summary>
     public string? Refusal => refusal;
 
     /// <summary>
-    /// The call on the line <paramref name="position"/> is in, written out, or null where the
-    /// line holds no call or the program does not know what it names.
+    /// Returns the expansion of the call on the line <paramref name="position"/> is in, or null
+    /// where the line holds no call or the program does not know what the call names.
     /// </summary>
     /// <param name="analysis">The program, for what the call lays out to.</param>
     /// <param name="model">The file the call is in.</param>
-    /// <param name="position">Where in that file's text.</param>
+    /// <param name="position">The position in that file's text.</param>
     /// <param name="into">
-    /// A path of indices: at each level, which unexpanded call to expand further, by its position
-    /// among the calls left unexpanded at that level. Empty to expand only the first level, which
-    /// is what a view opens with.
+    /// A path of indices that gives, at each level, which unexpanded call to expand further, by
+    /// its position among the calls left unexpanded at that level. It is empty to expand only the
+    /// first level, which is what a view opens with.
     /// </param>
-    /// <param name="all">Whether to expand every nested call, however deep.</param>
+    /// <param name="all">Whether to expand every nested call, at any depth.</param>
     public static MacroExpansion? At(
         ProgramAnalysis analysis, SemanticModel model, int position,
         IReadOnlyList<int>? into = null, bool all = false) =>
         CallAt(model, position) is { } call ? Of(analysis, model, call, into, all) : null;
 
-    /// <summary>The same, for a caller that already has the call.</summary>
+    /// <summary>
+    /// Returns the expansion of <paramref name="call"/>, for a caller that already has the call,
+    /// or null where the program does not know what the call names.
+    /// </summary>
     public static MacroExpansion? Of(
         ProgramAnalysis analysis, SemanticModel model, MacroCallSyntax call,
         IReadOnlyList<int>? into = null, bool all = false)
@@ -95,7 +103,7 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// The call the line at <paramref name="position"/> holds, whether it stands alone or
+    /// Returns the call the line at <paramref name="position"/> holds, whether it stands alone or
     /// follows a label, or null for a line that holds none.
     /// </summary>
     public static MacroCallSyntax? CallAt(SemanticModel model, int position)
@@ -107,9 +115,9 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// A one-line summary of what the call expands to, as the hover's summary row shows it: the
-    /// number of lines, then bytes, then cycles. Cycles are left out where the expansion writes
-    /// no code.
+    /// Returns a one-line summary of what the call expands to, as the hover's summary row shows
+    /// it. The summary gives the number of lines, then bytes, then cycles. Cycles are left out
+    /// where the expansion contains no code.
     /// </summary>
     public string Becomes()
     {
@@ -121,10 +129,15 @@ internal sealed class MacroExpansion
         return $"{written} · {bytes}{cycles}";
     }
 
-    /// <summary>The same summary, as the sentence the expansion view opens with.</summary>
+    /// <summary>
+    /// Returns the summary from <see cref="Becomes"/> as the sentence the expansion view opens
+    /// with.
+    /// </summary>
     public string Summary() => $"expands to {Becomes()}";
 
-    /// <summary>The bytes and cycles the call assembles to, taken from the layout the build uses.</summary>
+    /// <summary>
+    /// Returns the bytes and cycles the call assembles to, taken from the layout the build uses.
+    /// </summary>
     private static (int Bytes, CycleCount? Cycles) Laid(
         ProgramAnalysis analysis, SemanticModel model, MacroCallSyntax call)
     {
@@ -145,8 +158,8 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// Whether a macro body declares any names of its own. Each expansion gets its own copy of
-    /// those names, so two expansions written out in the same place would declare them twice.
+    /// Checks whether a macro body declares any names of its own. Each expansion gets its own
+    /// copy of those names, so two expansions inserted in the same place would declare them twice.
     /// The line that opens the block declares the macro and its parameters and is not counted as
     /// part of the body.
     /// </summary>
@@ -157,7 +170,7 @@ internal sealed class MacroExpansion
             && symbol.NameSpan.Start < definition.FullSpan.End);
 
     /// <summary>
-    /// Whether a line emitted under expansion <paramref name="on"/> comes from inside
+    /// Checks whether a line emitted under expansion <paramref name="on"/> comes from inside
     /// <paramref name="call"/>'s expansion, at any depth of nesting.
     /// </summary>
     private static bool Within(Expansion? on, MacroCallSyntax call)
@@ -171,8 +184,8 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// Writes out the lines of one block at <paramref name="indent"/>.
-    /// <paramref name="into"/> is which call to expand further at this level and below, and
+    /// Adds the lines of one block to the expansion at <paramref name="indent"/>.
+    /// <paramref name="into"/> gives which call to expand further at this level and below, and
     /// <paramref name="reached"/> is the index path to this level, which each link records.
     /// </summary>
     private void Body(
@@ -180,8 +193,9 @@ internal sealed class MacroExpansion
         Members(Macros.LinesOf(block), at, indent, into, reached, new Counter());
 
     /// <summary>
-    /// The same, for lines that are not a whole block: a block argument's contents, or the
-    /// branch of an <c>.if</c> chain this call takes.
+    /// Adds lines that do not form a whole block to the expansion at <paramref name="indent"/>.
+    /// Such lines are a block argument's contents, or the branch of an <c>.if</c> chain that this
+    /// call takes.
     /// </summary>
     private void Members(
         IReadOnlyList<SyntaxNode> members, Expansion at, string indent,
@@ -201,13 +215,16 @@ internal sealed class MacroExpansion
         }
     }
 
-    /// <summary>One block of a body: a chain, a repetition, a call with a block, or a plain block.</summary>
+    /// <summary>
+    /// Adds one block of a body, which is a condition chain, a repetition, a call with a block, or
+    /// a plain block.
+    /// </summary>
     private void Block(
         BlockSyntax block, Expansion at, string indent,
         IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter, ConditionChain chain)
     {
-        // Resolve conditions on the arguments here: a programmer writing this call out by hand
-        // would have written only the branch it takes.
+        // Conditions on the arguments are resolved here, because a programmer expanding this
+        // call by hand would have kept only the branch it takes.
         if (block.BlockKind == BlockKind.If)
         {
             if (chain.Includes(model, block, at))
@@ -216,9 +233,9 @@ internal sealed class MacroExpansion
         }
         chain.Break();
 
-        // nt65 has no way to write a call's arguments as a list, so a repetition over one is
-        // written out iteration by iteration; so is every other repetition, since the reader
-        // asked what this call becomes rather than what the body says.
+        // nt65 has no syntax for a call's arguments as a list, so a repetition over one is
+        // expanded iteration by iteration. Every other repetition is expanded the same way, since
+        // the reader asked what this call becomes rather than what the body says.
         if (block.BlockKind is BlockKind.Repeat or BlockKind.Each or BlockKind.MultiProc)
         {
             foreach (var turn in Repetitions.Of(model, block, at, null))
@@ -229,8 +246,8 @@ internal sealed class MacroExpansion
         if (block.BlockKind == BlockKind.MacroBlock)
         {
             // A `} name {` continuation is a sibling of the block it continues, and was already
-            // written out with the call that opened the chain; only the chain's first block
-            // holds the call.
+            // expanded with the call that opened the chain. Only the chain's first block holds
+            // the call.
             if (Macros.CallIn(block.Opener.Statement) is { } call)
                 Called(block, call, at, indent, into, reached, counter);
             return;
@@ -241,7 +258,7 @@ internal sealed class MacroExpansion
         Emit(indent + "}");
     }
 
-    /// <summary>One line of a body that opens no block.</summary>
+    /// <summary>Adds one line of a body that opens no block.</summary>
     private void Statement(
         LineSyntax line, Expansion at, string indent,
         IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
@@ -251,8 +268,8 @@ internal sealed class MacroExpansion
             case BlockCloseLineSyntax or BlankLineSyntax:
                 return;
 
-            // A line naming a `block` parameter writes out the caller's own code, which needs
-            // no substitution: it was written where it stands.
+            // A line naming a `block` parameter inserts the caller's own code, which needs no
+            // substitution because the caller wrote it in the place where it stands.
             case BlockSpliceSyntax splice:
                 Spliced(splice, at, indent, into, reached, counter);
                 return;
@@ -269,7 +286,10 @@ internal sealed class MacroExpansion
         }
     }
 
-    /// <summary>The lines a <c>block</c> argument gives, written where the body names it.</summary>
+    /// <summary>
+    /// Adds the lines a <c>block</c> argument gives, at the place where the body names the
+    /// parameter.
+    /// </summary>
     private void Spliced(
         BlockSpliceSyntax splice, Expansion at, string indent,
         IReadOnlyList<int> into, IReadOnlyList<int> reached, Counter counter)
@@ -280,15 +300,15 @@ internal sealed class MacroExpansion
             return;
         }
 
-        // A block argument the call omitted writes nothing; this is the case `.empty` tests for.
+        // A block argument the call omitted adds nothing. This is the case `.empty` tests for.
         if (model.ArgumentFor(parameter.Symbol, at) is not { Block: { } block })
             return;
         Members(Macros.LinesOf(block), Expansion.Spliced(at, splice, block), indent, into, reached, counter);
     }
 
     /// <summary>
-    /// A call inside the body. It is left as a call — one level at a time — unless it is the one
-    /// the reader asked to see, or everything was asked for.
+    /// Adds a call inside the body. It is left as a call, so that expansion goes one level at a
+    /// time, unless it is the call the reader asked to see or every call was asked for.
     /// </summary>
     private void Called(
         BlockSyntax? opened, MacroCallSyntax call, Expansion at, string indent,
@@ -310,9 +330,9 @@ internal sealed class MacroExpansion
                 return;
             }
 
-            // Each expansion has its own locals, so two of them written out in one body would
-            // declare the same name twice; an anonymous scope is inline code and keeps them
-            // apart, which is what the language offers for exactly this.
+            // Each expansion has its own locals, so two of them expanded in one body would
+            // declare the same name twice. An anonymous scope is inline code and keeps them
+            // apart, which is what the language offers for exactly this case.
             var inner = Expansion.Of(at, call, definition);
             IReadOnlyList<int> next = chosen ? [.. into.Skip(1)] : [];
             if (!Declares(analysis, definition))
@@ -326,9 +346,9 @@ internal sealed class MacroExpansion
             return;
         }
 
-        // Left unexpanded: write the call line itself, then the block arguments under it, which
-        // are code of this body rather than of the called macro and are written out like any
-        // other line of it.
+        // A call left unexpanded adds the call line itself, then the block arguments under it.
+        // Those arguments are code of this body rather than of the called macro, and are
+        // expanded like any other line of the body.
         var written = Written(call, at, indent);
         links.Add(new Link(lines.Count - 1, written.TrimEnd('{').Trim(), way));
         if (opened is null)
@@ -342,7 +362,7 @@ internal sealed class MacroExpansion
         Emit(indent + "}");
     }
 
-    /// <summary>The <c>} name {</c> blocks that carry on a call's block arguments.</summary>
+    /// <summary>Returns the <c>} name {</c> blocks that continue a call's block arguments.</summary>
     private static IEnumerable<BlockSyntax> Continuations(BlockSyntax opened)
     {
         if (opened.Parent is not { } container)
@@ -355,7 +375,10 @@ internal sealed class MacroExpansion
         }
     }
 
-    /// <summary>One statement as it would have been written by hand, at <paramref name="indent"/>.</summary>
+    /// <summary>
+    /// Adds one statement as it would have been written by hand, at <paramref name="indent"/>,
+    /// and returns its text.
+    /// </summary>
     private string Written(SyntaxNode statement, Expansion at, string indent)
     {
         var text = Substituted(statement, at);
@@ -365,14 +388,14 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// One statement's text, with each parameter name replaced by the argument the call passed
-    /// for it.
+    /// Returns one statement's text, with each parameter name replaced by the argument the call
+    /// passed for it.
     /// <para>
     /// An <c>operand</c> parameter stands for a whole operand, and the <c>+ n</c> and
-    /// <c>.byteof</c> a body may write on one are worked out here rather than left as text,
-    /// because <c>dest+1</c> given <c>{buf,x}</c> is <c>buf+1,x</c> and not <c>{buf,x}+1</c>.
-    /// Every other name is written as the argument was written, in parentheses where it stands
-    /// inside a larger expression and would otherwise be read a different way.
+    /// <c>.byteof</c> that a body may apply to one are computed here rather than left as text.
+    /// That is because <c>dest+1</c> given <c>{buf,x}</c> is <c>buf+1,x</c> and not
+    /// <c>{buf,x}+1</c>. Every other name is replaced by the argument's text, in parentheses where
+    /// it stands inside a larger expression and would otherwise be read differently.
     /// </para>
     /// </summary>
     private string Substituted(SyntaxNode statement, Expansion at)
@@ -416,13 +439,16 @@ internal sealed class MacroExpansion
         return built.Append(text, was, span.End - was).ToString().Trim();
     }
 
-    /// <summary>A statement and all the nodes under it: everywhere a parameter name may appear.</summary>
+    /// <summary>
+    /// Returns a statement and all the nodes under it, which covers everywhere a parameter name
+    /// may appear.
+    /// </summary>
     private static IEnumerable<SyntaxNode> Under(SyntaxNode statement) =>
         [statement, .. statement.DescendantNodes()];
 
     /// <summary>
-    /// The text that replaces one use of a parameter name: the argument as it was written, in
-    /// parentheses where it sits inside a larger expression, since <c>#&lt;value</c> given
+    /// Returns the text that replaces one use of a parameter name. That is the argument's text,
+    /// in parentheses where it sits inside a larger expression, since <c>#&lt;value</c> given
     /// <c>a + b</c> means <c>#&lt;(a + b)</c> and not <c>(#&lt;a) + b</c>.
     /// </summary>
     private string? Given(MacroParameter parameter, NameExpressionSyntax name, Expansion at)
@@ -441,7 +467,7 @@ internal sealed class MacroExpansion
         }
 
         // An enum member may have been passed by its bare name, which resolves only through the
-        // parameter's enum type, so write it as a path that resolves where the call is.
+        // parameter's enum type, so it is given as a path that resolves where the call is.
         if (parameter.Kind == ParameterKind.Enum
             && model.GivenAt(parameter.Symbol, at) is { } given && model.MemberFor(given.Argument, given.Caller) is { } member)
         {
@@ -456,9 +482,9 @@ internal sealed class MacroExpansion
     }
 
     /// <summary>
-    /// An <c>operand</c> argument in the form the body used it: the operand itself where the
-    /// body used it whole, the byte a <c>.byteof</c> selects, or for <c>+ n</c> the offset
-    /// address followed by the argument's own index register.
+    /// Returns an <c>operand</c> argument in the form the body used it. That is the operand
+    /// itself where the body used it whole, the byte a <c>.byteof</c> selects, or, for
+    /// <c>+ n</c>, the offset address followed by the argument's own index register.
     /// </summary>
     private static string? Argument(OperandSubstitution given)
     {
@@ -490,16 +516,23 @@ internal sealed class MacroExpansion
     /// <summary>Adds one line of the expansion.</summary>
     private void Emit(string text) => lines.Add(text.TrimEnd());
 
-    /// <summary>Records why the expansion cannot be written into the file, keeping only the first reason.</summary>
+    /// <summary>
+    /// Records why the expansion cannot be inserted into the file, keeping only the first reason.
+    /// </summary>
     private void Refuse(string why) => refusal ??= why;
 
-    /// <summary>A call left unexpanded, so that a reader can ask for its expansion one level down.</summary>
+    /// <summary>
+    /// Represents a call left unexpanded, so that a reader can ask for its expansion one level
+    /// down.
+    /// </summary>
     /// <param name="Line">Which line of the expansion it is on, counting from zero.</param>
-    /// <param name="Text">The call as written, for the link's label.</param>
-    /// <param name="Into">The index path that expands it: which call to expand at each level.</param>
+    /// <param name="Text">The call's text, for the link's label.</param>
+    /// <param name="Into">The index path that expands it, giving which call to expand at each level.</param>
     internal sealed record Link(int Line, string Text, IReadOnlyList<int> Into);
 
-    /// <summary>Numbers the calls left unexpanded at one level; a link identifies a call by that number.</summary>
+    /// <summary>
+    /// Numbers the calls left unexpanded at one level. A link identifies a call by that number.
+    /// </summary>
     private sealed class Counter
     {
         private int next;

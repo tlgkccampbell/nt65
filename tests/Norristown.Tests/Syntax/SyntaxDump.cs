@@ -6,16 +6,20 @@ using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
 
 namespace Norristown.Tests.Syntax;
 
-/// <summary>Readable renderings of syntax, for assertions and failure messages.</summary>
+/// <summary>Provides readable renderings of syntax, for assertions and failure messages.</summary>
 internal static class SyntaxDump
 {
-    /// <summary>Token kinds and texts, without trivia or the end-of-line token: <c>Mnemonic:lda Hash:# NumberLiteral:1</c>.</summary>
+    /// <summary>
+    /// Renders a line's token kinds and texts, without trivia or the end-of-line token, as in
+    /// <c>Mnemonic:lda Hash:# NumberLiteral:1</c>.
+    /// </summary>
     public static string Tokens(GreenLine line) =>
         string.Join(" ", line.Tokens.Where(t => t.Kind != SyntaxKind.EndOfLine).Select(t => $"{t.Kind}:{t.Text}"));
 
     /// <summary>
-    /// The block structure, one block per row, indented by depth: the block kind, its first
-    /// and last line (1-based), and <c>no closer</c> when it ends without a <c>}</c> line.
+    /// Renders the block structure, one block per row, indented by depth. Each row gives the block
+    /// kind and its first and last line (1-based). It ends with <c>no closer</c> when the block
+    /// ends without a <c>}</c> line.
     /// </summary>
     public static string Blocks(SyntaxTree tree)
     {
@@ -38,16 +42,17 @@ internal static class SyntaxDump
     }
 
     /// <summary>
-    /// The statement trees, one node or token per row, indented by depth:
-    /// <c>InstructionStatement</c>, then <c>Mnemonic "lda"</c> for each token, and a row for the
-    /// node a list slot holds. The pieces the line holds rather than the statement — the
-    /// <c>.export</c> before a declaration and whatever the statement could not take — are written
-    /// with it; line breaks are left out, since every line ends with one.
+    /// Renders the statement trees, one node or token per row, indented by depth. A node row
+    /// gives its kind, such as <c>InstructionStatement</c>, and a token row gives its kind and
+    /// text, such as <c>Mnemonic "lda"</c>. The node a list slot holds gets a row of its own. The
+    /// child elements that belong to the line rather than the statement are rendered with it:
+    /// the <c>.export</c> before a declaration and the tokens the statement could not take. Line
+    /// breaks are left out, since every line ends with one.
     /// <para>
-    /// It walks the slots of the nodes the parse handed back, not the red tree over them. That is
-    /// what the trees being compared are made of — a reused statement is the same green node, and a
-    /// list slot is a node of its own — and it costs no red node for a dump that runs a few
-    /// thousand times over a whole corpus.
+    /// The dump walks the slots of the green nodes the parse returned, not the red tree over them.
+    /// Those green nodes are what the compared trees are made of: a reused statement is the same
+    /// green node, and a list slot is a node of its own. Walking them also creates no red nodes,
+    /// which matters for a dump that runs a few thousand times over a whole corpus.
     /// </para>
     /// </summary>
     public static string Statements(SyntaxTree tree)
@@ -61,7 +66,7 @@ internal static class SyntaxDump
             builder.Append('\n');
             for (var i = 0; i < node.SlotCount; i++)
             {
-                // A slot holding nothing is a piece that was not written, and writes nothing.
+                // An empty slot is a child element absent from the source, and renders nothing.
                 if (node.GetSlot(i) is { } slot)
                     Walk(slot, depth + 1);
             }
@@ -79,8 +84,8 @@ internal static class SyntaxDump
     }
 
     /// <summary>
-    /// A statement on one line, as <c>Kind(child child)</c> with tokens written as their
-    /// text: <c>InstructionStatement(lda ImmediateOperand(# NumberExpression($10)))</c>.
+    /// Renders a statement on one line as <c>Kind(child child)</c>, with tokens rendered as their
+    /// text, as in <c>InstructionStatement(lda ImmediateOperand(# NumberExpression($10)))</c>.
     /// </summary>
     public static string Shape(SyntaxNode node)
     {
@@ -89,8 +94,9 @@ internal static class SyntaxDump
     }
 
     /// <summary>
-    /// An expression with every binding made visible: <c>1 &lt;&lt; i + 1</c> renders as
-    /// <c>(1 &lt;&lt; (i + 1))</c>, and what the source itself parenthesized as <c>[...]</c>.
+    /// Renders an expression with every binding made visible. For example, <c>1 &lt;&lt; i + 1</c>
+    /// renders as <c>(1 &lt;&lt; (i + 1))</c>. Parentheses that the source itself contains render
+    /// as <c>[...]</c>.
     /// </summary>
     public static string Infix(SyntaxNode node) => node switch
     {
@@ -101,8 +107,8 @@ internal static class SyntaxDump
     };
 
     /// <summary>
-    /// The outline, one item per row, indented by depth: the kind, the name, the 1-based
-    /// first and last line it covers, and its detail in brackets.
+    /// Renders the outline, one item per row, indented by depth. Each row gives the item's kind,
+    /// its name, the 1-based first and last line it covers, and its detail in brackets.
     /// </summary>
     public static string Symbols(SyntaxTree tree)
     {
@@ -124,14 +130,15 @@ internal static class SyntaxDump
         return builder.ToString();
     }
 
-    /// <summary>The foldable ranges, one per row, as 1-based line numbers.</summary>
+    /// <summary>Renders the foldable ranges, one per row, as 1-based line numbers.</summary>
     public static string FoldingRanges(SyntaxTree tree) =>
         string.Concat(Folding.Build(tree).Select(r => $"{r.StartLine + 1}-{r.EndLine + 1}\n"));
 
     /// <summary>
-    /// Everything: every token with its trivia and what it reports, line kinds, blocks, statements
-    /// and diagnostics. Two trees of the same text dump the same, however each of them was built,
-    /// which is what the incremental tests compare.
+    /// Renders everything about a tree: every token with its trivia and diagnostics, the line
+    /// kinds, the blocks, the statements and the tree's diagnostics. Two trees of the same text
+    /// produce the same dump no matter how each was built. The incremental tests compare these
+    /// dumps.
     /// </summary>
     public static string Full(SyntaxTree tree)
     {

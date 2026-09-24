@@ -3,8 +3,8 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// Reads a test source in which <c>|</c> marks the caret. A test that writes the caret into
-/// its source, instead of counting lines and columns, keeps probing the same place when the
+/// Reads a test source in which <c>|</c> marks the caret. A test that marks the caret in its
+/// source, instead of counting lines and columns, keeps probing the same place when the
 /// source is edited.
 /// </summary>
 internal static class Caret

@@ -6,18 +6,19 @@ using Norristown.Semantics;
 namespace Norristown.Project;
 
 /// <summary>
-/// Reads <c>nt65.json</c>. The file is read as data, not executed: an unknown key or
-/// a value of the wrong shape is reported and the rest of the file is still read, so one
-/// typo does not hide the next.
+/// Reads <c>nt65.json</c>. The file is read as data, not executed. An unknown key or a value of
+/// the wrong shape is reported, and the rest of the file is still read, so one typo does not
+/// hide the next.
 /// <para>
-/// Diagnostics point at the key they are about, found by searching the text for it. That is
-/// enough for an editor to put a squiggle in the right place without a JSON parser that
-/// tracks positions; a key written twice is a matter for JSON, and nt65 does not check for it.
+/// Diagnostics point at the key they are about, which is found by searching the text for it.
+/// That is enough for an editor to put a squiggle in the right place without a JSON parser that
+/// tracks positions. A key that appears twice is a matter for JSON, and nt65 does not check for
+/// it.
 /// </para>
 /// </summary>
 public static class ProjectFile
 {
-    /// <summary>What the project file is called.</summary>
+    /// <summary>The file name of the project file.</summary>
     public const string Name = "nt65.json";
 
     private static readonly string[] known =
@@ -30,26 +31,33 @@ public static class ProjectFile
     private static readonly string[] ignored = ["$schema"];
 
     /// <summary>
-    /// Every key the file may hold, for code that describes the file to an editor. The schema
-    /// the editor extension contributes has to be kept in step with these lists.
+    /// Gets every key the file may hold, for code that describes the file to an editor. The
+    /// schema that the editor extension contributes has to be kept in step with these lists.
     /// </summary>
     public static IReadOnlyList<string> Keys { get; } = [.. known, .. ignored];
 
-    /// <summary>The keys one named configuration may hold.</summary>
+    /// <summary>Gets the keys one named configuration may hold.</summary>
     public static IReadOnlyList<string> ConfigurationKeys { get; } = ["defines", "diagnostics", "out"];
 
-    /// <summary>The values a <c>diagnostics</c> entry may give: the severity to report that diagnostic at, or <c>off</c>.</summary>
+    /// <summary>
+    /// Gets the values a <c>diagnostics</c> entry may give, which are the severity at which to
+    /// report that diagnostic, or <c>off</c>.
+    /// </summary>
     public static IReadOnlyList<string> Levels { get; } = ["off", "warning", "error"];
 
-    /// <summary>The keys one segment may hold.</summary>
+    /// <summary>Gets the keys one segment may hold.</summary>
     public static IReadOnlyList<string> SegmentKeys { get; } = ["size", "dp", "bank", "mirrors", "space"];
 
-    /// <summary>What a space may hold: this program's processor's code, or data and macro calls.</summary>
+    /// <summary>
+    /// Gets the values that say what a space may hold, which are code for this program's
+    /// processor, or data and macro calls.
+    /// </summary>
     public static IReadOnlyList<string> SpaceHolds { get; } = ["code", "data"];
 
     /// <summary>
     /// Reads the project described by <paramref name="text"/>. <paramref name="path"/> is the
-    /// logical path diagnostics refer to it by; problems with it are returned in the settings.
+    /// logical path that diagnostics use to refer to the file. Problems with the file are
+    /// returned in the settings.
     /// </summary>
     public static ProjectSettings Read(string path, string text)
     {
@@ -108,8 +116,8 @@ public static class ProjectFile
     }
 
     /// <summary>
-    /// Reads one <c>-D NAME=value</c> from the command line, or reports what is wrong
-    /// with it. <c>-D NAME</c> with no value defines it as 1, as a flag.
+    /// Reads one <c>-D NAME=value</c> from the command line, or reports what is wrong with it.
+    /// <c>-D NAME</c> with no value defines the name as 1, as a flag.
     /// </summary>
     public static Define? Definition(string argument, List<Diagnostic> diagnostics)
     {
@@ -133,8 +141,8 @@ public static class ProjectFile
     }
 
     /// <summary>
-    /// The message for a key nt65 does not know, naming the known key it most nearly matches
-    /// when there is one: a typo is usually a letter away from the key it was meant to be.
+    /// Returns the message for a key nt65 does not know, naming the known key it most nearly
+    /// matches, if there is one. A typo is usually a letter away from the key it was meant to be.
     /// </summary>
     private static DiagnosticMessage Unknown(string key)
     {
@@ -142,13 +150,19 @@ public static class ProjectFile
         return Catalogue.ProjectKeyUnknown.Says(key, Name, nearest is null ? "" : $"; did you mean `{nearest}`?");
     }
 
-    /// <summary>A JSON number, or a string in nt65's number syntax.</summary>
+    /// <summary>
+    /// Parses <paramref name="text"/> as a JSON number or as a number in nt65's number syntax,
+    /// or returns null if it is neither.
+    /// </summary>
     private static long? Number(string text) =>
         long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var number)
             ? number
             : Literals.Number(text);
 
-    /// <summary>A JSON number, or a string in nt65's number syntax, as a JSON value.</summary>
+    /// <summary>
+    /// Reads <paramref name="element"/> as a JSON number or as a string in nt65's number syntax,
+    /// or returns null if it is neither.
+    /// </summary>
     private static long? Number(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.Number => Number(element.GetRawText()),
@@ -156,12 +170,15 @@ public static class ProjectFile
         _ => null,
     };
 
-    /// <summary>Whether text is a define's name, or a <c>.config</c>'s name written with its module's path, as <c>hw::SOUND</c>.</summary>
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="text"/> is a define's name, or a
+    /// <c>.config</c>'s name qualified by its module's path, as in <c>hw::SOUND</c>.
+    /// </summary>
     private static bool IsName(string text) => text.Split("::").All(part =>
         part.Length > 0 && (char.IsAsciiLetter(part[0]) || part[0] == '_')
         && part.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'));
 
-    /// <summary>One project file being read, with the text kept so diagnostics can point into it.</summary>
+    /// <summary>Reads one project file, keeping its text so that diagnostics can point into it.</summary>
     private sealed class Reader(string path, string text, List<Diagnostic> diagnostics)
     {
         public Cpu? Cpu(JsonElement root)
@@ -175,9 +192,9 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// The <c>defines</c> of <paramref name="root"/>, which is the project or one of its
-        /// configurations; <paramref name="from"/> is the text offset where that object is
-        /// written, so that a define both of them give is reported at the one being read.
+        /// Reads the <c>defines</c> of <paramref name="root"/>, which is the project or one of
+        /// its configurations. <paramref name="from"/> is the text offset where that object
+        /// appears, so that a define both of them give is reported in the object being read.
         /// </summary>
         public IReadOnlyList<Define> Defines(JsonElement root, int from = 0)
         {
@@ -203,10 +220,11 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// <c>"diagnostics": { "unused-symbol": "off" }</c>: the severity this project reports
-        /// each named diagnostic at, overriding the one the catalogue gives it.
-        /// <paramref name="from"/> is the text offset of the object being read, so a configuration's
-        /// entry is reported where that configuration gives it.
+        /// Reads a <c>diagnostics</c> object, such as
+        /// <c>"diagnostics": { "unused-symbol": "off" }</c>, which gives the severity at which the
+        /// project reports each named diagnostic, overriding the one the catalogue gives it.
+        /// <paramref name="from"/> is the text offset of the object being read, so a
+        /// configuration's entry is reported where that configuration gives it.
         /// </summary>
         public IReadOnlyDictionary<string, Severity?> Severities(JsonElement root, int from = 0)
         {
@@ -244,8 +262,9 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// <c>"debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" }</c>: the named
-        /// configurations, each giving defines over the project's and an output directory.
+        /// Reads the named configurations, each of which gives defines over the project's and an
+        /// output directory, as in
+        /// <c>"debug": { "defines": { "DEBUG": 1 }, "out": "build/debug" }</c>.
         /// </summary>
         public IReadOnlyList<BuildConfiguration> Configurations(JsonElement root)
         {
@@ -347,8 +366,8 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// <c>"spc": "data"</c>: the address spaces other than the host's, each with whether it
-        /// runs this program's processor.
+        /// Reads the address spaces other than the host's, each with whether it runs this
+        /// program's processor, as in <c>"spc": "data"</c>.
         /// </summary>
         public IReadOnlyList<AddressSpace> Spaces(JsonElement root)
         {
@@ -369,9 +388,10 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// <c>"$2100-$21ff": ["$00-$3f", "$80-$bf"]</c>: the banks an absolute constant address
-        /// in each range may be reached from. A range is written <c>first-last</c> or as one
-        /// address, and two ranges may not overlap, so each address has only one answer.
+        /// Reads the ranges, each giving the banks from which an absolute constant address in it
+        /// may be reached, as in <c>"$2100-$21ff": ["$00-$3f", "$80-$bf"]</c>. A range is given as
+        /// <c>first-last</c> or as one address. Two ranges may not overlap, so each address has
+        /// only one answer.
         /// </summary>
         public IReadOnlyList<AccessRange> Ranges(JsonElement root)
         {
@@ -403,7 +423,10 @@ public static class ProjectFile
             return [.. read.OrderBy(range => range.First)];
         }
 
-        /// <summary><c>["$00-$3f", "$80-$bf"]</c>: banks, each one bank or a range of them.</summary>
+        /// <summary>
+        /// Reads a list of banks, each one bank or a range of them, as in
+        /// <c>["$00-$3f", "$80-$bf"]</c>.
+        /// </summary>
         public List<(long First, long Last)> Banks(string key, JsonElement value)
         {
             var banks = new List<(long First, long Last)>();
@@ -460,8 +483,9 @@ public static class ProjectFile
             diagnostics.Add(new Diagnostic(At(key, from), Severity.Error, message));
 
         /// <summary>
-        /// Whether <paramref name="written"/> is one of the three severity words, with the
-        /// severity it names in <paramref name="level"/>; <c>off</c> gives null.
+        /// Returns a value indicating whether <paramref name="written"/> is one of the three
+        /// severity words, and sets <paramref name="level"/> to the severity it names. The word
+        /// <c>off</c> gives null.
         /// </summary>
         private static bool Level(string? written, out Severity? level)
         {
@@ -474,7 +498,10 @@ public static class ProjectFile
             return written is "off" or "warning" or "error";
         }
 
-        /// <summary><c>first-last</c> or a single number, each no more than <paramref name="largest"/>.</summary>
+        /// <summary>
+        /// Parses <paramref name="text"/> as <c>first-last</c> or as a single number, each no
+        /// greater than <paramref name="largest"/>, or returns null if it is neither.
+        /// </summary>
         private static (long First, long Last)? Interval(string text, long largest)
         {
             var parts = text.Split('-');
@@ -496,13 +523,17 @@ public static class ProjectFile
             return false;
         }
 
-        /// <summary>Where a key is first written at or after <paramref name="from"/>, or <paramref name="from"/> when it is not.</summary>
+        /// <summary>
+        /// Returns the offset where <paramref name="key"/> first appears at or after
+        /// <paramref name="from"/>, or <paramref name="from"/> if it does not appear.
+        /// </summary>
         private int Offset(string key, int from = 0) =>
             text.IndexOf($"\"{key}\"", from, StringComparison.Ordinal) is var at && at >= 0 ? at : from;
 
         /// <summary>
-        /// Where a key is written, at or after <paramref name="from"/>. The text is searched for
-        /// it rather than tracked while parsing, which is enough to put a diagnostic on the right line.
+        /// Returns the span where <paramref name="key"/> appears, at or after
+        /// <paramref name="from"/>. Searching the text for the key, rather than tracking positions
+        /// while parsing, is enough to put a diagnostic on the right line.
         /// </summary>
         private Span At(string key, int from = 0)
         {

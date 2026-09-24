@@ -1,6 +1,6 @@
 namespace Norristown.Semantics;
 
-/// <summary>What a <see cref="Value"/> holds.</summary>
+/// <summary>Specifies what a <see cref="Value"/> holds.</summary>
 public enum ValueKind
 {
     /// <summary>Nothing: the expression is not constant, or only the linker knows it.</summary>
@@ -16,8 +16,8 @@ public enum ValueKind
     String,
 
     /// <summary>
-    /// A bare word: what a <c>one</c> parameter is given, and what an <c>.each</c> over a
-    /// list of them binds. A word is never looked up and is only ever compared with another.
+    /// A bare word, which is what a <c>one</c> parameter is given and what an <c>.each</c> over a
+    /// list of words binds. A word is never looked up and is only ever compared with another.
     /// </summary>
     Word,
 }

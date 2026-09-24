@@ -3,10 +3,10 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What every name a file writes refers to. This half of the binder runs once the whole
-/// program has been read: the walk over the file has finished, so nothing here depends on how
-/// far it had got, and a name is resolved from the scopes around it, what the file's
-/// <c>.use</c> items brought in, the defines and the other modules.
+/// Resolves every name in a file. This half of the binder runs once the whole program has been
+/// read. The walk over the file has finished, so nothing here depends on how far it had
+/// progressed. A name is resolved from the scopes around it, the names the file's <c>.use</c>
+/// items brought in, the defines and the other modules.
 /// </summary>
 internal sealed partial class Binder
 {
@@ -74,12 +74,12 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// Records a name a macro body uses that it neither declared nor was given as a parameter.
-    /// Every expansion needs that name, whichever file the macro is called from, so the macro
-    /// keeps a list of them: the calling file brings them in, and an exported macro may only
-    /// use names that are exported too.
+    /// Records a name that a macro body uses without declaring it or receiving it as a
+    /// parameter. Every expansion needs that name, regardless of which file calls the macro, so
+    /// the macro keeps a list of such names. The calling file brings them in, and an exported
+    /// macro may only use names that are also exported.
     /// </summary>
-    /// <returns>Whether the name is written in a macro body.</returns>
+    /// <returns>True if the name appears in a macro body.</returns>
     private static bool RecordBodyUse(Scope at, Symbol used, SyntaxToken token, bool last)
     {
         var body = at.Enclosing(ScopeKind.Macro);
@@ -99,9 +99,9 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// What one part of a written name means. <paramref name="previous"/> is what the part
-    /// before it resolved to, so a path walks into a scope or a module instead of looking
-    /// outward again.
+    /// Resolves one part of a name. <paramref name="previous"/> is what the part before it
+    /// resolved to, so that a path walks into a scope or a module instead of looking outward
+    /// again.
     /// </summary>
     private Place? Resolve(Use use, Place? previous)
     {
@@ -126,10 +126,10 @@ internal sealed partial class Binder
 
         if (!path)
         {
-            // A register parses as a name so that a macro body may pass it as a word. Outside
-            // one it can only be a mistake, and saying that it is a register beats saying the
-            // name is not declared. A register that was declared anyway — which is an error —
-            // has been reported where it was declared.
+            // A register parses as a name so that a macro body may pass it as a word. Outside a
+            // macro body it can only be a mistake, and reporting that it is a register is more
+            // helpful than reporting that the name is not declared. A register that was declared
+            // anyway, which is an error, has already been reported at its declaration.
             if (at.Lookup(token.Text) is { } symbol)
                 return new Place(symbol);
             if (!word && !CheckReservedWord(token))
@@ -150,7 +150,7 @@ internal sealed partial class Binder
         if (before.Module is { } prefix)
             return InModule(token, prefix, last, report);
 
-        // A part after `::`: the scope to look in is the one the part before it opened.
+        // For a part after `::`, the scope to look in is the one the part before it opened.
         var container = BodyOf(before.Symbol!);
         if (container is null)
         {
@@ -176,8 +176,9 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// What a name the scopes around it do not declare means: what a <c>.use</c> brought in, a
-    /// define, the first part of a module's path, or what a <c>.use module::*</c> brought in.
+    /// Resolves a name that the scopes around it do not declare. The name may be one that a
+    /// <c>.use</c> brought in, a define, the first part of a module's path, or one that a
+    /// <c>.use module::*</c> brought in.
     /// </summary>
     private Place? Outside(SyntaxToken token, bool last, Action<TextSpan, DiagnosticMessage>? report) =>
         Lookup.Outside(token.Text, last, program, used, globs, Touch, At(token, report));
@@ -206,13 +207,17 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// The declared name that <paramref name="written"/> is most likely a misspelling of: one in
-    /// scope, or one a <c>.use</c> brought in, that differs from it by a letter or two.
+    /// Returns the declared name that <paramref name="written"/> is most likely a misspelling of.
+    /// The candidate is a name in scope, or one that a <c>.use</c> brought in, that differs from
+    /// it by a letter or two.
     /// </summary>
     private string? NearestName(Scope at, string written, bool cheap) =>
         Spelling.Nearest(written, Candidates(at, cheap));
 
-    /// <summary>The names a misspelling could have meant: what the scopes around it hold, and what a <c>.use</c> named.</summary>
+    /// <summary>
+    /// Returns the names a misspelling could have meant, which are the names in the enclosing
+    /// scopes and the names a <c>.use</c> brought in.
+    /// </summary>
     private IEnumerable<string> Candidates(Scope at, bool cheap)
     {
         for (var scope = at; scope is not null; scope = scope.Parent)
@@ -231,8 +236,9 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// The callback a reporting lookup reports through: it puts each message on the token that
-    /// was looked up, and records the fix the message suggests, if any.
+    /// Returns the callback through which a reporting lookup reports, or null when
+    /// <paramref name="report"/> is null. The callback puts each message on the token that was
+    /// looked up and records the fix the message suggests, if any.
     /// </summary>
     private Action<DiagnosticMessage, DiagnosticFix?>? At(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
         report is null ? null : (message, fix) =>
@@ -242,11 +248,14 @@ internal sealed partial class Binder
                 Fixed(written);
         };
 
-    /// <summary>The first part of a path written from the root of the modules.</summary>
+    /// <summary>Resolves the first part of a path that starts at the root of the modules.</summary>
     private Place? ModuleRoot(SyntaxToken token, Action<TextSpan, DiagnosticMessage>? report) =>
         Lookup.ModuleRoot(token.Text, program, At(token, report));
 
-    /// <summary>The part after <paramref name="prefix"/>, which is a module or the start of one's name.</summary>
+    /// <summary>
+    /// Resolves the part after <paramref name="prefix"/>, which is a module or the start of a
+    /// module's name.
+    /// </summary>
     private Place? InModule(SyntaxToken token, string prefix, bool last, Action<TextSpan, DiagnosticMessage>? report)
     {
         var found = Lookup.InModule(token.Text, prefix, program, Touch, At(token, report));
@@ -255,18 +264,23 @@ internal sealed partial class Binder
             : found;
     }
 
-    /// <summary>Remembers that resolving this file looked for <paramref name="name"/> in <paramref name="module"/>.</summary>
+    /// <summary>
+    /// Records that resolving this file looked for <paramref name="name"/> in
+    /// <paramref name="module"/>.
+    /// </summary>
     private void Touch(string? module, string name) => lookedUp.Add(new LookedUpName(module, name));
 
     /// <summary>
-    /// A symbol another module declares may only be named if that module exports it. The
-    /// check is on the last part of a name: <c>hw::outer::inner</c> needs <c>inner</c>
-    /// exported, and <c>outer</c> is only the way in. The symbol is returned either way, so an
-    /// editor can still go to a declaration that is private rather than missing.
+    /// Reports a symbol that another module declares but does not export, since such a symbol
+    /// may not be named. The check applies to the last part of a name, so <c>hw::outer::inner</c>
+    /// needs <c>inner</c> exported, and <c>outer</c> is only the way in. The symbol is returned
+    /// either way, so that an editor can still go to a declaration that is private rather than
+    /// missing.
     /// </summary>
     private Symbol CheckExported(SyntaxToken token, Symbol symbol, bool last)
     {
-        // Said once, where the file first names it: every other use is the same mistake.
+        // Reported once, where the file first names the symbol, because every other use is the
+        // same mistake.
         if (!last || symbol.Tree == tree || symbol.IsExported || symbol.IsDefine || !unexported.Add(symbol))
             return symbol;
         Report(token.Span, Catalogue.NotExported.Says(symbol.PathName, symbol.Module),
@@ -276,10 +290,11 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// The scope a path can look into after <paramref name="symbol"/>, while the file is being
-    /// bound: the scope a routine or a scope opens, or the one belonging to the type a member or
-    /// a data declaration names, which is what makes the fields of <c>.type T</c> data reachable
-    /// through it. The type is resolved here, on demand, because nothing has been evaluated yet.
+    /// Returns the scope that a path can look into after <paramref name="symbol"/> while the
+    /// file is being bound. This is the scope a routine or a scope opens, or the scope of the type
+    /// that a member or a data declaration names. The type's scope makes the fields of
+    /// <c>.type T</c> data reachable through the data. The type is resolved here, on demand,
+    /// because nothing has been evaluated yet.
     /// </summary>
     private Scope? BodyOf(Symbol symbol)
     {
@@ -293,10 +308,10 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// The type a <c>.type</c> names, resolved from where it was written. This runs on demand
-    /// rather than in order, because a name may reach into a type the file declares later.
-    /// Nothing is reported from here: the names in the type are uses like any others, and are
-    /// reported where they are resolved.
+    /// Resolves the type that a <c>.type</c> names, from where the <c>.type</c> appears. This runs
+    /// on demand rather than in order, because a name may reach into a type that the file declares
+    /// later. Nothing is reported from here, because the names in the type are uses like any
+    /// others and are reported where they are resolved.
     /// </summary>
     private Symbol? TypeOf(Symbol symbol)
     {
@@ -327,9 +342,9 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// Resolves a <c>.use</c>: its path from the root of the modules, and each name it brings
-    /// in. A name it brings in may not also be declared in the module, because then which one a
-    /// use of it meant would depend on a rule rather than on what is written.
+    /// Resolves a <c>.use</c>, including its path from the root of the modules and each name it
+    /// brings in. A name it brings in may not also be declared in the module, because otherwise
+    /// the declaration a use of that name meant would depend on a rule rather than on the source.
     /// </summary>
     private void ResolveUse(UseDirectiveSyntax statement)
     {
@@ -392,7 +407,7 @@ internal sealed partial class Binder
         }
     }
 
-    /// <summary>A part of a <c>.use</c> path that names nothing in the symbol before it.</summary>
+    /// <summary>Reports a part of a <c>.use</c> path that names nothing in the symbol before it.</summary>
     private Place? NotIn(SyntaxToken token, Symbol container)
     {
         Report(token.Span, container.Body is null && container.TypeExpression is null
@@ -401,7 +416,7 @@ internal sealed partial class Binder
         return null;
     }
 
-    /// <summary>One name a <c>.use</c> brings in, under the name <paramref name="name"/> writes.</summary>
+    /// <summary>Brings in one name from a <c>.use</c>, under the name that <paramref name="name"/> gives.</summary>
     private void BringIn(SyntaxToken name, Place target, bool renamed, bool exported)
     {
         if (exported && target.Symbol is null)

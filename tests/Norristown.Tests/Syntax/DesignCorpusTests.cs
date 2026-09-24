@@ -13,7 +13,10 @@ public sealed class DesignCorpusTests
         Assert.True(DesignCorpus.Blocks.Count > 30);
     }
 
-    /// <summary>Every nt65 example lexes and parses without errors, has balanced blocks and round-trips exactly.</summary>
+    /// <summary>
+    /// Every nt65 example lexes and parses without errors, has balanced blocks and round-trips
+    /// exactly.
+    /// </summary>
     [Fact]
     public void EveryNt65CodeBlockLexesAndBalances()
     {
@@ -33,9 +36,9 @@ public sealed class DesignCorpusTests
 
     /// <summary>
     /// Every nt65 example is part of a fixture or a corpus program, so each is analyzed and its
-    /// output checked. An example's paragraphs, the runs of lines between blank lines and
-    /// <c>...</c>, appear in order in one source, each line after the one before it; a fixture
-    /// may write what an example leaves out around and between them. Lines compare by their
+    /// output checked. An example's paragraphs, which are the runs of lines between blank lines
+    /// and <c>...</c>, appear in order in one source, each line after the one before it. A fixture
+    /// may contain what an example leaves out around and between them. Lines compare by their
     /// tokens, so spacing and comments, such as a fixture's <c>;!</c>, may differ.
     /// </summary>
     [Fact]
@@ -54,9 +57,9 @@ public sealed class DesignCorpusTests
     }
 
     /// <summary>
-    /// Every ca65 example is what nt65 writes: its lines, one after another, in a fixture's
-    /// expected output. Blank lines are ignored on both sides, because the documents leave
-    /// them out.
+    /// Every ca65 example is what nt65 writes, so its lines appear one after another in a
+    /// fixture's expected output. Blank lines are ignored on both sides, because the documents
+    /// leave them out.
     /// </summary>
     [Fact]
     public void EveryCa65CodeBlockIsFixtureOutput()

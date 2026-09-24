@@ -6,9 +6,9 @@ using System.Text.RegularExpressions;
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// Runs ca65 built from the pinned cc65 commit (scripts/cc65.commit), and nothing else: not
-/// whatever is on PATH, and not a build that reports another commit. The ld65 and cc65 beside
-/// it are the same build.
+/// Runs ca65 built from the pinned cc65 commit (<c>scripts/cc65.commit</c>). It never runs a
+/// ca65 found on PATH, or a build that reports a different commit. The ld65 and cc65 beside it
+/// come from the same build.
 /// </summary>
 internal sealed partial class Ca65Oracle
 {
@@ -22,13 +22,13 @@ internal sealed partial class Ca65Oracle
     private readonly string cc65;
     private readonly string commit;
 
-    // A hash of the assembler binary itself. The commit says which source ca65 was built from,
-    // not what the build produced, so a cached result is keyed on the binary that produced it: a
-    // rebuilt ca65 that behaves differently must not be trusted with an old cache entry.
+    // A hash of the assembler binary itself. The commit identifies the source ca65 was built
+    // from, not what the build produced, so a cached result is keyed on the binary that produced
+    // it. A rebuilt ca65 that behaves differently must not be trusted with an old cache entry.
     private readonly string binary;
 
-    // A hash of the linker binary, for the same reason: a cached link is keyed on the ld65 that
-    // made it as well as on the ca65 that assembled its objects.
+    // A hash of the linker binary, kept for the same reason. A cached link is keyed on the ld65
+    // that made it as well as on the ca65 that assembled its objects.
     private readonly string linker;
     private readonly string? cacheDirectory;
 
@@ -47,7 +47,7 @@ internal sealed partial class Ca65Oracle
         this.cacheDirectory = cacheDirectory;
     }
 
-    /// <summary>The pinned build, checked once per test run.</summary>
+    /// <summary>Gets the oracle for the pinned build, whose version is checked once per test run.</summary>
     public static Ca65Oracle Pinned => pinned.Value;
 
     /// <summary>Throws unless the <c>ca65 --version</c> output names <paramref name="pinnedCommit"/>.</summary>
@@ -63,11 +63,11 @@ internal sealed partial class Ca65Oracle
     }
 
     /// <summary>
-    /// Byte counts per line of the included file (listing level 2). A ca65 listing row is
-    /// <c>AAAAAAr L  BB BB BB BB  source</c>: address and relocation flag, include level,
-    /// up to four bytes in a 13-column field, then the source text with trailing blanks
-    /// removed. Bytes past the fourth go on continuation rows with no source text; a blank
-    /// source line also has no text, but never has bytes.
+    /// Returns the byte count for each line of the included file, which is listing level 2. A
+    /// ca65 listing row has the form <c>AAAAAAr L  BB BB BB BB  source</c>. It holds the address
+    /// and relocation flag, the include level, up to four bytes in a 13-column field, and then
+    /// the source text with trailing blanks removed. Bytes past the fourth go on continuation
+    /// rows with no source text. A blank source line also has no text, but it never has bytes.
     /// </summary>
     public static int[] ParseListing(string listing, int sourceLines)
     {
@@ -122,8 +122,8 @@ internal sealed partial class Ca65Oracle
             File.WriteAllText(Path.Combine(directory, "oracle-wrapper.s"),
                 $".listbytes unlimited\n.include \"{Path.GetFileName(fileName)}\"\n");
 
-            // Default warning level. -W2 is unusable: it warns that ca65's own predefined
-            // CPU_* symbols are unused, even for an empty file.
+            // This uses the default warning level. -W2 is unusable because it warns that ca65's
+            // own predefined CPU_* symbols are unused, even for an empty file.
             var (exitCode, output) = Execute(ca65,
                 ["-g", "-l", "oracle-wrapper.lst", "-o", "oracle-wrapper.o", "oracle-wrapper.s"], directory);
             var succeeded = exitCode == 0 && output.Trim().Length == 0;
@@ -153,8 +153,8 @@ internal sealed partial class Ca65Oracle
 
     /// <summary>
     /// Assembles each file and links them with ld65 against <paramref name="config"/>. This
-    /// checks that nt65's output assembles to an object file like any other: it links with
-    /// modules written by hand, and a failing linker assertion in it is a link error. Paths are
+    /// checks that nt65's output assembles to an object file like any other. The object links
+    /// with modules written by hand, and a failing linker assertion in it is a link error. Paths are
     /// relative to one working tree, as for <see cref="Assemble"/>, and each file's own
     /// directory is searched for what it includes. <paramref name="options"/> gives the extra
     /// ca65 options for each file. Clean results are cached by content, as for
@@ -201,7 +201,10 @@ internal sealed partial class Ca65Oracle
     /// <paramref name="headers"/> written beside it and cc65's own headers where
     /// <c>scripts/build-cc65.ps1</c> put them.
     /// </summary>
-    /// <returns>What cc65 said, which is empty when it compiled cleanly.</returns>
+    /// <returns>
+    /// The messages cc65 printed, followed by its exit code if it failed, or an empty string when
+    /// it compiled cleanly.
+    /// </returns>
     public string CompileC(string source, IReadOnlyList<(string Name, string Text)> headers)
     {
         var work = Directory.CreateTempSubdirectory("nt65-cc65-");
@@ -220,13 +223,14 @@ internal sealed partial class Ca65Oracle
     }
 
     /// <summary>
-    /// What ca65 printed about the file it was given, without its warnings that a symbol is
-    /// defined but never used. That warning is one of the two that <c>-W2</c> adds beyond the
-    /// default level, and ca65 gives it for its own predefined symbols such as
-    /// <c>CPU_65816</c> in every file, for any symbol a <c>-D</c> defined, and for a label nt65
-    /// wrote for a linker configuration to place, which nothing in the module refers to by
-    /// design. The other — a symbol imported and never used — is kept, because nt65 imports only
-    /// what a file uses, so that warning would mean an nt65 bug.
+    /// Returns what ca65 printed about the file it was given, without blank lines and without
+    /// its warnings that a symbol is defined but never used. That warning is one of the two that
+    /// <c>-W2</c> adds beyond the default level. ca65 gives it for its own predefined symbols
+    /// such as <c>CPU_65816</c> in every file, and for any symbol a <c>-D</c> defined. It also
+    /// gives it for a label that nt65 wrote for a linker configuration to position, which by
+    /// design nothing in the module refers to. The other warning, for a symbol imported and
+    /// never used, is kept. nt65 imports only what a file uses, so that warning would mean an
+    /// nt65 bug.
     /// </summary>
     private static string Said(string output) =>
         string.Join('\n', output.ReplaceLineEndings("\n").Split('\n')
@@ -270,7 +274,9 @@ internal sealed partial class Ca65Oracle
     [GeneratedRegex(@"^[0-9A-F]{6}[r ] (?<level>\d+)(?:[+ ] (?<bytes>.{0,13})(?<text>.*))?$")]
     private static partial Regex ListingRow();
 
-    /// <summary>Assembles and links the files for <see cref="Link"/>, which has found no cached result.</summary>
+    /// <summary>
+    /// Assembles and links the files for <see cref="Link"/> when it has found no cached result.
+    /// </summary>
     private LinkResult LinkUncached(
         string config, IReadOnlyList<(string Name, string Source)> files,
         IReadOnlyList<(string Name, byte[] Content)>? alongside, bool debugFile,

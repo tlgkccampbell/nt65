@@ -1,6 +1,6 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>What is special about a diagnostic, as LSP numbers it.</summary>
+/// <summary>Specifies a tag that changes how a client renders a diagnostic, as LSP numbers it.</summary>
 internal enum DiagnosticTag
 {
     /// <summary>Code the build does not use, which clients render faded.</summary>

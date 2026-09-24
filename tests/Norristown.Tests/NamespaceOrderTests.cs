@@ -5,20 +5,20 @@ using Norristown.Syntax;
 namespace Norristown.Tests;
 
 /// <summary>
-/// The order of the namespace layers in <c>Norristown.Core</c>, and a check that no layer depends
-/// on one above it. Two such upward dependencies were found and removed — the semantic layer
-/// relied on layout for the instruction tables and the register vocabulary, and layout contained
-/// the flow analysis — and nothing but this test stops them coming back.
+/// Tests the order of the namespace layers in <c>Norristown.Core</c>, and checks that no layer
+/// depends on one above it. Two such upward dependencies were found and removed. The semantic
+/// layer relied on layout for the instruction tables and the register vocabulary, and layout
+/// contained the flow analysis. Nothing but this test stops them from coming back.
 /// </summary>
 public sealed class NamespaceOrderTests
 {
     /// <summary>
     /// The layers, lowest first. Syntax knows nothing of the processor, so every operand form
-    /// parses under every CPU; the modules that come with nt65 are only source it has parsed; the
-    /// processor's tables know nothing of what a program means;
-    /// semantics comes before layout, which assigns the bytes; the project layer sits above
-    /// semantics, because the project file's segments and addresses are checked the same way a
-    /// source file's are; the flow analysis reads a layout; and emission draws on all of them.
+    /// parses under every CPU. The modules that come with nt65 are only source it has parsed. The
+    /// processor's tables know nothing of what a program means. Semantics comes before layout,
+    /// which assigns the bytes. The project layer sits above semantics, because the project file's
+    /// segments and addresses are checked the same way a source file's are. The flow analysis
+    /// reads a layout, and emission draws on all of the layers.
     /// </summary>
     private static readonly string[] Order =
     [
@@ -26,12 +26,15 @@ public sealed class NamespaceOrderTests
         "Norristown.Layout", "Norristown.Flow", "Norristown.Emit",
     ];
 
-    /// <summary>Every member a type declares, at every accessibility.</summary>
+    /// <summary>Gets the binding flags that select every member a type declares, at every accessibility.</summary>
     private static BindingFlags Everything =>
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
         | BindingFlags.DeclaredOnly;
 
-    /// <summary>No type's fields, parameters, return types, base type or interfaces come from a layer above its own.</summary>
+    /// <summary>
+    /// No type's fields, parameters, return types, base type or interfaces come from a layer above
+    /// its own.
+    /// </summary>
     [Fact]
     public void NoTypeNamesALayerAboveItsOwn()
     {
@@ -51,8 +54,9 @@ public sealed class NamespaceOrderTests
     }
 
     /// <summary>
-    /// The same check for names used only inside method bodies, which signatures do not show: no
-    /// file in a layer's folder has a <c>using</c> for a layer above it or a name qualified with one.
+    /// Applies the same check to names used only inside method bodies, which signatures do not
+    /// show. No file in a layer's folder has a <c>using</c> for a layer above it or a name
+    /// qualified with one.
     /// </summary>
     [Fact]
     public void NoFolderNamesALayerAboveItsOwn()
@@ -74,7 +78,10 @@ public sealed class NamespaceOrderTests
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
-    /// <summary>The index of the layer a namespace belongs to, or null for one not in the order.</summary>
+    /// <summary>
+    /// Returns the index of the layer a namespace belongs to, or null for a namespace that is not
+    /// in the order.
+    /// </summary>
     private static int? Layer(string? name)
     {
         var found = Array.FindIndex(Order, layer => name == layer
@@ -82,10 +89,13 @@ public sealed class NamespaceOrderTests
         return found < 0 ? null : found;
     }
 
-    /// <summary>A namespace without the assembly's own name in front of it.</summary>
+    /// <summary>Returns a namespace name without the assembly's own name in front of it.</summary>
     private static string Short(string name) => name["Norristown.".Length..];
 
-    /// <summary>The types <paramref name="member"/>'s signature names.</summary>
+    /// <summary>
+    /// Returns the types that the signature of <paramref name="member"/> names. For a nested type,
+    /// these are its base type and its interfaces.
+    /// </summary>
     private static IEnumerable<Type> Mentioned(MemberInfo member) => member switch
     {
         FieldInfo field => [field.FieldType],
@@ -97,8 +107,10 @@ public sealed class NamespaceOrderTests
     };
 
     /// <summary>
-    /// <paramref name="type"/> and the types it is built out of: what an array or a by-reference
-    /// is of, and the arguments a generic type is closed over.
+    /// Returns <paramref name="type"/>, or its generic definition when it is a constructed generic
+    /// type, followed by the types its generic arguments are built from. For an array or a
+    /// by-reference, it returns the types its element is built from instead. A generic parameter
+    /// yields nothing.
     /// </summary>
     private static IEnumerable<Type> Unwrapped(Type type)
     {

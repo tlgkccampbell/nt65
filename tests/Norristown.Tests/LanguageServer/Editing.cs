@@ -2,10 +2,13 @@ using Norristown.LanguageServer.Protocol;
 
 namespace Norristown.Tests.LanguageServer;
 
-/// <summary>Applying what the server sends back, the way an editor would.</summary>
+/// <summary>Applies the edits the server sends back, the way an editor would.</summary>
 internal static class Editing
 {
-    /// <summary><paramref name="text"/> with <paramref name="edits"/> applied, last in the file first so that earlier edits' positions stay valid.</summary>
+    /// <summary>
+    /// Returns <paramref name="text"/> with <paramref name="edits"/> applied. The edits are
+    /// applied from the end of the file backward, so that earlier edits' positions stay valid.
+    /// </summary>
     public static string Apply(string text, IReadOnlyList<TextEdit> edits)
     {
         var starts = new List<int> { 0 };

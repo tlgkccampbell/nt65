@@ -1,6 +1,6 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>A range of the document that opens something else when it is clicked.</summary>
-/// <param name="Range">The text that is the link.</param>
-/// <param name="Target">What clicking it opens, as a URI.</param>
+/// <summary>Represents a range of the document that opens another resource when clicked.</summary>
+/// <param name="Range">The text that forms the link.</param>
+/// <param name="Target">The URI that clicking the link opens.</param>
 internal sealed record DocumentLink(Range Range, string Target);

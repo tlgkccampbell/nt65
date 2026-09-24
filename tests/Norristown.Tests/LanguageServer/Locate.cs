@@ -1,14 +1,14 @@
 using Norristown.LanguageServer.Protocol;
 
-// The protocol has a Range of its own, which is the one this helper means.
+// The protocol defines its own Range type, and this helper uses that one.
 using Range = Norristown.LanguageServer.Protocol.Range;
 
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// Finds positions in a test source by the text written there. A test that names what it
-/// probes, as in <c>Locate.At(Source, "lda |ptr")</c>, says what it is about, and keeps probing
-/// the same place when lines are added to the source above it.
+/// Finds positions in a test source by searching for the text at them. A test that names the
+/// text it probes, as in <c>Locate.At(Source, "lda |ptr")</c>, shows what it is about, and it
+/// keeps probing the same place when lines are added to the source above it.
 /// </summary>
 internal static class Locate
 {

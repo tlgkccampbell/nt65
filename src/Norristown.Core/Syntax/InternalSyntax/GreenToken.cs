@@ -3,14 +3,14 @@ using System.Text;
 
 namespace Norristown.Syntax.InternalSyntax;
 
-/// <summary>One token and the trivia around it.</summary>
+/// <summary>Represents one token and the trivia around it.</summary>
 internal sealed class GreenToken : GreenNode
 {
-    // One shared missing token per kind, for missing tokens that report no diagnostic: such a
+    // One shared missing token per kind, for missing tokens that report no diagnostic. Such a
     // token has no text, no trivia and no diagnostic of its own, so a single instance per kind
     // serves every node that needs one. They are held here and not in the lexer's cache, so the
-    // cache can never hand one out for a token the source actually wrote. A SyntaxKind fits in a
-    // byte, hence the array's size.
+    // cache can never hand one out for a token that is actually in the source. A SyntaxKind fits
+    // in a byte, hence the array's size.
     private static readonly GreenToken?[] missing = new GreenToken?[byte.MaxValue + 1];
 
     internal GreenToken(SyntaxKind kind, string text, ImmutableArray<GreenTrivia> leading,
@@ -41,41 +41,47 @@ internal sealed class GreenToken : GreenNode
             Report(diagnostic);
     }
 
-    /// <summary>The token's text, exactly as in the source.</summary>
+    /// <summary>Gets the token's text, exactly as in the source.</summary>
     public string Text { get; }
 
-    /// <summary>The instruction a mnemonic token names, and <see cref="MnemonicKind.None"/> for every other token.</summary>
+    /// <summary>
+    /// Gets the instruction a mnemonic token names, or <see cref="MnemonicKind.None"/> for every
+    /// other token.
+    /// </summary>
     public MnemonicKind MnemonicKind { get; }
 
-    /// <summary>Whitespace before the token; only the first token on a line has any.</summary>
+    /// <summary>Gets the whitespace before the token. Only the first token on a line has any.</summary>
     public ImmutableArray<GreenTrivia> LeadingTrivia { get; }
 
-    /// <summary>Whitespace and a comment after the token, up to the end of its line.</summary>
+    /// <summary>Gets the whitespace and any comment after the token, up to the end of its line.</summary>
     public ImmutableArray<GreenTrivia> TrailingTrivia { get; }
 
     /// <summary>
-    /// Whether the token fills a place the grammar requires but the source does not write. It
-    /// has no text and no trivia, so it is nowhere in the file's text and takes up no width.
+    /// Gets a value indicating whether the token fills a place the grammar requires but the
+    /// source does not contain. Such a token has no text and no trivia, so it is nowhere in the
+    /// file's text and takes up no width.
     /// </summary>
     public override bool IsMissing { get; }
 
-    /// <summary>Width of the leading trivia, which is where the token's own text starts.</summary>
+    /// <summary>Gets the width of the leading trivia, which is where the token's own text starts.</summary>
     public int LeadingWidth => TriviaWidth(LeadingTrivia);
 
-    /// <summary>Width of the trailing trivia, which is what stands between this token and the next.</summary>
+    /// <summary>
+    /// Gets the width of the trailing trivia, which is what stands between this token and the next.
+    /// </summary>
     public int TrailingWidth => TriviaWidth(TrailingTrivia);
 
-    /// <summary>Always 0: a token has no children.</summary>
+    /// <summary>Gets 0, because a token has no children.</summary>
     public override int SlotCount => 0;
 
-    /// <summary>A token has no children, so this always throws.</summary>
+    /// <summary>Always throws, because a token has no children.</summary>
     public override GreenNode? GetSlot(int index) => throw new ArgumentOutOfRangeException(nameof(index));
 
-    /// <summary>The token's text, without trivia.</summary>
+    /// <summary>Returns the token's text, without trivia.</summary>
     public override string ToString() => Text;
 
     /// <summary>
-    /// The missing token of <paramref name="kind"/>, for a piece a line needs and does not
+    /// Returns the missing token of <paramref name="kind"/>, for a piece a line needs and does not
     /// have. One instance per kind is shared, since such a token holds nothing of its own.
     /// </summary>
     internal static GreenToken Missing(SyntaxKind kind)
@@ -88,12 +94,12 @@ internal sealed class GreenToken : GreenNode
     }
 
     /// <summary>
-    /// The missing token of <paramref name="kind"/> that reports why it is missing. It is a new
-    /// instance rather than the shared one, since its diagnostic applies only to the one place
+    /// Returns a missing token of <paramref name="kind"/> that reports why it is missing. It is a
+    /// new instance rather than the shared one, since its diagnostic applies only to the one place
     /// where it is used.
     /// </summary>
     /// <param name="kind">The kind of token the source does not have.</param>
-    /// <param name="diagnostic">What to say about it, placed within the token.</param>
+    /// <param name="diagnostic">The diagnostic to report for the missing token, placed within the token.</param>
     internal static GreenToken Missing(SyntaxKind kind, GreenDiagnostic diagnostic) => new(kind, diagnostic);
 
     internal override SyntaxNode CreateRed(SyntaxTree tree, SyntaxNode? parent, int position) =>

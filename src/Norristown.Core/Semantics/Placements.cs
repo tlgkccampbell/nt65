@@ -3,12 +3,13 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Which modules place which, and so which translation units the program is written as.
+/// Records which modules place which, and therefore which translation units make up the
+/// program.
 /// <para>
-/// Everything here is read from the files alone: a <c>.place</c> must be at file level and never
-/// under an <c>.if</c>, and whether a module may be placed is said in its declaration, so the
-/// units follow from the text and from nothing a build decides. That also makes them cheap
-/// enough to work out again after every edit, whichever file it was in.
+/// Everything here is read from the files alone. A <c>.place</c> must be at file level and never
+/// under an <c>.if</c>, and a module's declaration states whether it may be placed, so the units
+/// follow from the text and from nothing a build decides. That also makes them cheap enough to
+/// recompute after every edit, in any file.
 /// </para>
 /// </summary>
 public sealed class Placements
@@ -32,14 +33,14 @@ public sealed class Placements
         Diagnostics = diagnostics;
     }
 
-    /// <summary>A program in which nothing places anything.</summary>
+    /// <summary>Gets the placements of a program in which no module places another.</summary>
     public static Placements None { get; } = new([], [], [], [], [], []);
 
-    /// <summary>What is wrong with the program's placements.</summary>
+    /// <summary>Gets the diagnostics for the program's placements.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; }
 
     /// <summary>
-    /// Works out the placements of <paramref name="trees"/>, leaving out
+    /// Computes the placements of <paramref name="trees"/>, leaving out
     /// <paramref name="defines"/>, which is not a module anyone wrote.
     /// </summary>
     public static Placements Of(IEnumerable<SyntaxTree> trees, SyntaxTree? defines)
@@ -54,8 +55,8 @@ public sealed class Placements
             if (Declaration(tree) is not { } module || PathOf(module.Name) is not { } name)
                 continue;
 
-            // Two files declaring one module are reported where modules are checked; here the
-            // first one is kept.
+            // Two files that declare the same module are reported where modules are checked.
+            // Here the first one is kept.
             modules.TryAdd(name, tree);
             declarations[tree.Path] = module;
             declared[tree.Path] = MarkerOf(module);
@@ -73,8 +74,8 @@ public sealed class Placements
                     continue;
                 if (!AtFileLevel(place))
                 {
-                    // It still names the module, so the module is not also reported as placed
-                    // nowhere.
+                    // The misplaced `.place` still names the module, so the module is not also
+                    // reported as placed nowhere.
                     diagnostics.Add(new Diagnostic(tree.GetSpan(place.Keyword.Span), Catalogue.PlaceMisplaced));
                     if (modules.TryGetValue(path, out var meant))
                         named.Add(meant.Path);
@@ -115,8 +116,8 @@ public sealed class Placements
             }
         }
 
-        // A module that must be placed and that no `.place` names is the mistake of forgetting
-        // it. One that some `.place` names wrongly has been reported there already.
+        // A module that must be placed but that no `.place` names means the `.place` was
+        // forgotten. A module that some `.place` names wrongly has already been reported there.
         foreach (var tree in files)
         {
             if (declared.GetValueOrDefault(tree.Path) == ModulePlacement.Placed && !named.Contains(tree.Path)
@@ -127,8 +128,8 @@ public sealed class Placements
             }
         }
 
-        // Every file that nothing places is the root of a unit, which holds what it places in the
-        // order it places them, each followed by what that one places in turn.
+        // Every file that no module places is the root of a unit. The unit holds the modules the
+        // root places, in order, each followed by the modules it places in turn.
         var units = new Dictionary<string, TranslationUnit>(StringComparer.Ordinal);
         foreach (var root in files.Where(tree => !placedBy.ContainsKey(tree.Path)))
         {
@@ -149,8 +150,9 @@ public sealed class Placements
     }
 
     /// <summary>
-    /// Whether <paramref name="statement"/> stands at file level: in no block but a
-    /// <c>.segment</c> region, which is where file level is once one has been opened.
+    /// Returns a value indicating whether <paramref name="statement"/> is at file level, meaning
+    /// it is in no block other than a <c>.segment</c> region. Once a region has been opened, file
+    /// level is inside it.
     /// </summary>
     public static bool AtFileLevel(StatementSyntax statement)
     {
@@ -162,7 +164,9 @@ public sealed class Placements
         return true;
     }
 
-    /// <summary>The <c>.module</c> line of <paramref name="tree"/>, or null when it has none.</summary>
+    /// <summary>
+    /// Returns the <c>.module</c> line of <paramref name="tree"/>, or null when it has none.
+    /// </summary>
     public static ModuleDirectiveSyntax? Declaration(SyntaxTree tree)
     {
         foreach (var child in tree.Root.Members)
@@ -175,42 +179,60 @@ public sealed class Placements
         return null;
     }
 
-    /// <summary>What a declaration says about placing its module.</summary>
+    /// <summary>Returns what <paramref name="module"/> declares about placing its module.</summary>
     public static ModulePlacement MarkerOf(ModuleDirectiveSyntax module) =>
         module.Placement is not { IsMissing: false } word ? ModulePlacement.Alone
         : word.Text.Equals("placed", StringComparison.OrdinalIgnoreCase) ? ModulePlacement.Placed
         : ModulePlacement.Placeable;
 
-    /// <summary>A module path as written, or null where a part of it is missing.</summary>
+    /// <summary>
+    /// Returns a module path as it appears in the source, or null when a part of it is missing.
+    /// </summary>
     public static string? PathOf(NameExpressionSyntax name) =>
         name.Names.Length == 0 || name.Names.Any(part => part.IsMissing)
             ? null
             : string.Join("::", name.Names.Select(part => part.Text));
 
-    /// <summary>What <paramref name="tree"/>'s declaration says about placing it.</summary>
+    /// <summary>Returns what <paramref name="tree"/>'s declaration says about placing it.</summary>
     public ModulePlacement DeclaredFor(SyntaxTree tree) => declared.GetValueOrDefault(tree.Path);
 
-    /// <summary>The unit <paramref name="tree"/> is written in, or null for a file this program does not have.</summary>
+    /// <summary>
+    /// Returns the unit <paramref name="tree"/> belongs to, or null for a file this program does
+    /// not have.
+    /// </summary>
     public TranslationUnit? UnitOf(SyntaxTree tree) => units.GetValueOrDefault(tree.Path);
 
-    /// <summary>The file and the <c>.place</c> that place <paramref name="tree"/>, or null when nothing does.</summary>
+    /// <summary>
+    /// Returns the file and the <c>.place</c> that place <paramref name="tree"/>, or null when no
+    /// module places it.
+    /// </summary>
     public (SyntaxTree Placer, PlaceDirectiveSyntax At)? PlacerOf(SyntaxTree tree) =>
         placedBy.TryGetValue(tree.Path, out var found) ? found : null;
 
-    /// <summary>The file a <c>.place</c> places, or null when it places nothing because it is wrong.</summary>
+    /// <summary>
+    /// Returns the file <paramref name="place"/> places, or null when the directive is in error
+    /// and places nothing.
+    /// </summary>
     public SyntaxTree? Placed(PlaceDirectiveSyntax place) => placing.GetValueOrDefault(place);
 
-    /// <summary>The file of module <paramref name="path"/>, or null when the program has none.</summary>
+    /// <summary>
+    /// Returns the file of the module <paramref name="path"/>, or null when the program has no
+    /// such module.
+    /// </summary>
     public SyntaxTree? ModuleNamed(string path) => modules.GetValueOrDefault(path);
 
-    /// <summary>The module a file is, as its declaration writes it.</summary>
+    /// <summary>
+    /// Returns the module name of <paramref name="tree"/> as its declaration gives it, or the
+    /// file's path when it has none.
+    /// </summary>
     private static string ModuleOf(SyntaxTree tree, Dictionary<string, ModuleDirectiveSyntax> declarations) =>
         declarations.TryGetValue(tree.Path, out var module) && PathOf(module.Name) is { } name ? name : tree.Path;
 
     /// <summary>
-    /// The cycle that <paramref name="placer"/> placing <paramref name="target"/> would close,
-    /// spelled out from the target, or null when it closes none. It closes one when the target
-    /// already places, however indirectly, the module that would place it.
+    /// Returns a description, starting from the target, of the cycle that
+    /// <paramref name="placer"/> placing <paramref name="target"/> would close, or null when it
+    /// closes none. It closes a cycle when the target already places, directly or indirectly,
+    /// the module that would place it.
     /// </summary>
     private static string? Cycle(
         SyntaxTree placer, SyntaxTree target, Dictionary<string, (SyntaxTree Placer, PlaceDirectiveSyntax At)> placedBy,

@@ -5,9 +5,9 @@ using Norristown.Cli;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// <c>nt65 build --watch</c>: one build, then one more whenever the program changes, until it is
-/// interrupted. Each build ends with the line that says it is waiting, which is what a test
-/// waits for too.
+/// Tests <c>nt65 build --watch</c>, which runs one build and then another whenever the program
+/// changes, until it is interrupted. Each build ends with the line that says it is waiting, and
+/// a test waits for that line too.
 /// </summary>
 public sealed class WatchCommandTests : IDisposable
 {
@@ -73,7 +73,10 @@ public sealed class WatchCommandTests : IDisposable
         Assert.Equal("nt65: no input files, and no nt65.json", await said.NextAsync(timeout));
     }
 
-    /// <summary>What the build said, up to the line that says it is waiting for the next change.</summary>
+    /// <summary>
+    /// Returns the lines the build printed, up to the line that says it is waiting for the next
+    /// change.
+    /// </summary>
     private static async Task<IReadOnlyList<string>> WaitAsync(Lines said, CancellationToken timeout)
     {
         var lines = new List<string>();
@@ -85,8 +88,8 @@ public sealed class WatchCommandTests : IDisposable
     private void Write(string path, string text) => Repo.WriteText(Path.Combine(root.FullName, path), text);
 
     /// <summary>
-    /// A writer whose lines can be waited for one at a time, because a watch writes them as it
-    /// goes and a test has to know which build it is looking at.
+    /// Represents a writer whose lines can be awaited one at a time. A watch writes its lines as
+    /// it goes, and a test has to know which build it is looking at.
     /// </summary>
     private sealed class Lines : TextWriter
     {

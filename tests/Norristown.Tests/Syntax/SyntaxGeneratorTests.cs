@@ -3,9 +3,10 @@ using Norristown.SyntaxGenerator;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// What the generator writes for a node, from a table of its own rather than the repository's:
-/// the red class, whose every property reads a slot of the green one, and the green class, whose
-/// constructor takes one parameter per slot and keeps each in a property of its own name.
+/// Checks what the generator writes for a node, from a table of its own rather than the
+/// repository's. It writes the red class, whose every property reads a slot of the green one. It
+/// also writes the green class, whose constructor takes one parameter per slot and keeps each in
+/// a property of its own name.
 /// </summary>
 public sealed class SyntaxGeneratorTests
 {
@@ -73,7 +74,7 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// A field reads its slot and may not have a <c>Read</c>; a member is computed from other
+    /// A field reads its slot and may not have a <c>Read</c>. A member is computed from other
     /// properties and must have one.
     /// </summary>
     [Fact]
@@ -138,8 +139,9 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// A node slot takes the green class of its own type, and a bare green node where the table
-    /// writes none: <c>SyntaxNode</c> itself, or a class written by hand.
+    /// A node slot takes the green class of its own type. Where the table generates no class for
+    /// the type, as for <c>SyntaxNode</c> itself or a hand-written class, it takes a bare green
+    /// node.
     /// </summary>
     [Fact]
     public void ANodeSlotTakesTheGreenClassOfItsType()
@@ -225,9 +227,10 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// A node is changed by being rebuilt: one <c>Update</c> over every slot, in source order,
-    /// and one <c>With</c> per slot that calls it. Same green node in every slot, same node out,
-    /// which is what lets a rewrite that changes nothing come back as the tree it went in as.
+    /// A node is changed by being rebuilt. It has one <c>Update</c> over every slot, in source
+    /// order, and one <c>With</c> per slot that calls it. When every slot gets the same green
+    /// node, the same node comes out, so a rewrite that changes nothing returns the tree it was
+    /// given.
     /// </summary>
     [Fact]
     public void EverySlotHasAWithAndTheNodeHasAnUpdate()
@@ -261,7 +264,7 @@ public sealed class SyntaxGeneratorTests
     /// <summary>
     /// A green node rolls up what its slots hold as it is built — a diagnostic, an annotation —
     /// so that a walk looking for one of those follows only the slots that lead to one. They are
-    /// bits of one flags word, so each slot is read once however many things are rolled up.
+    /// bits of one flags word, so each slot is read once no matter how many things are rolled up.
     /// </summary>
     [Fact]
     public void AGreenNodeRollsUpWhatItsSlotsHold()
@@ -276,9 +279,9 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// The factory takes a node's pieces as red-tree values and hands their green nodes to the
-    /// typed green constructor. An optional piece may be left out of the call too, as long as
-    /// every piece after it is optional as well.
+    /// The factory takes a node's child elements as red-tree values and hands their green nodes to
+    /// the typed green constructor. An optional child element may be left out of the call too, as
+    /// long as every child element after it is optional as well.
     /// </summary>
     [Fact]
     public void TheFactoryBuildsANodeFromItsPieces()
@@ -315,7 +318,10 @@ public sealed class SyntaxGeneratorTests
             rewriter);
     }
 
-    /// <summary>One row per class: a second row of the same name would write the same file twice.</summary>
+    /// <summary>
+    /// The table allows one row per class, because a second row of the same name would write the
+    /// same file twice.
+    /// </summary>
     [Fact]
     public void ANodeIsWrittenOnce()
     {
@@ -343,7 +349,7 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// The files generated for <paramref name="nodes"/>, which are written without the enclosing
+    /// Returns the files generated for <paramref name="nodes"/>, whose XML omits the enclosing
     /// <c>Tree</c> element. An abstract <c>StatementSyntax</c> is added for them to derive from,
     /// since every node's base must be a node of the table.
     /// </summary>

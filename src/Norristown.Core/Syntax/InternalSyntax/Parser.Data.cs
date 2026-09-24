@@ -1,14 +1,15 @@
 namespace Norristown.Syntax.InternalSyntax;
 
-// The data directives and what they are written with: element types and their counts,
-// declarations, bodies, braced values, and the members of an enum or a charmap.
+// The data directives and their parts: element types and their counts, declarations, bodies,
+// braced values, and the members of an enum or a charmap.
 internal sealed partial class Parser
 {
     /// <summary>
-    /// A data directive. An element type — <c>.byte</c>, <c>.word</c>, <c>.addr</c>,
-    /// <c>.faraddr</c>, <c>.dword</c> or <c>.type T</c> — may take a count, <c>[16]</c> or
-    /// <c>[]</c>, and then values: after it on the line, in braces on the line, or in the body
-    /// the line opens. Any other directive takes its operands as ca65's does.
+    /// Parses a data directive. An element type, which is <c>.byte</c>, <c>.word</c>,
+    /// <c>.addr</c>, <c>.faraddr</c>, <c>.dword</c> or <c>.type T</c>, may take a count,
+    /// <c>[16]</c> or <c>[]</c>, and then values. The values follow it on the line, sit in braces
+    /// on the line, or fill the body the line opens. Any other directive takes its operands as
+    /// ca65's does.
     /// </summary>
     private DataDirectiveSyntax ParseDataDirective()
     {
@@ -56,13 +57,13 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The values written after the directive on the same line, as an inline tail; null when
-    /// there are none, in which case the directive has no tail.
+    /// Parses the values after the directive on the same line as an inline tail, or returns null
+    /// if there are none, in which case the directive has no tail.
     /// </summary>
     private DataTailSyntax? ParseInlineData() =>
         ParseSeparatedList(ParseExpression) is { } values ? new InlineDataSyntax(values) : null;
 
-    /// <summary><c>[n]</c>, or <c>[]</c> for as many elements as the values given.</summary>
+    /// <summary>Parses <c>[n]</c>, or <c>[]</c> for as many elements as there are values.</summary>
     private ElementCountSyntax ParseElementCount()
     {
         var bracket = Advance();
@@ -72,9 +73,9 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// <c>.data name: element</c>, or <c>.data name {</c> for mixed data. The name is
-    /// required: <c>.data</c> always declares named data. To switch to the segment called
-    /// DATA, write <c>.segment DATA</c>.
+    /// Parses <c>.data name: element</c>, or <c>.data name {</c> for mixed data. The name is
+    /// required, because <c>.data</c> always declares named data. To switch to the segment called
+    /// DATA, a program uses <c>.segment DATA</c>.
     /// </summary>
     private GreenNode ParseDataDeclaration()
     {
@@ -114,7 +115,9 @@ internal sealed partial class Parser
         return new DataDeclarationSyntax(keyword, name, colon, element, brace);
     }
 
-    /// <summary>One line of a data body: values separated by commas, one element each.</summary>
+    /// <summary>
+    /// Parses one line of a data body, which holds values separated by commas, one element each.
+    /// </summary>
     private GreenNode ParseDataValuesLine()
     {
         if (Kind == SyntaxKind.Directive && !SyntaxFacts.IsBuiltinFunction(Current.Text))
@@ -124,11 +127,11 @@ internal sealed partial class Parser
         return Finish(new DataValuesSyntax(ParseSeparatedList(ParseDataValue)));
     }
 
-    /// <summary>A value: an expression, or a braced record or list.</summary>
+    /// <summary>Parses a value, which is an expression or a braced record or list.</summary>
     private GreenNode ParseDataValue() => Kind == SyntaxKind.OpenBrace ? ParseBracedValue() : ParseExpression();
 
     /// <summary>
-    /// <c>{ member = value, … }</c>, a record, or <c>{ value, … }</c>, a list of elements.
+    /// Parses <c>{ member = value, … }</c>, a record, or <c>{ value, … }</c>, a list of elements.
     /// No expression contains <c>=</c>, so the first item decides which one it is, and
     /// <c>{}</c> is a record that sets no member.
     /// </summary>
@@ -140,7 +143,7 @@ internal sealed partial class Parser
         return value;
     }
 
-    /// <summary>A braced value, once there is room on the stack to read one.</summary>
+    /// <summary>Parses a braced value, once there is room on the stack to read one.</summary>
     private GreenNode ParseBraced()
     {
         var record = Next == SyntaxKind.CloseBrace
@@ -158,8 +161,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// One <c>member = value</c>. A member that is a record or an array takes a braced value,
-    /// which is written on one line.
+    /// Parses one <c>member = value</c>. A member that is a record or an array takes a braced
+    /// value, which is on one line.
     /// </summary>
     private GreenNode? ParseMemberValue()
     {
@@ -174,13 +177,17 @@ internal sealed partial class Parser
         return new MemberValueSyntax(name, equals, ParseDataValue());
     }
 
-    /// <summary>One line of a multi-line initializer, which holds one <c>member = value</c>.</summary>
+    /// <summary>
+    /// Parses one line of a multi-line initializer, which holds one <c>member = value</c>.
+    /// </summary>
     private GreenNode ParseMemberValueLine() =>
         ParseMemberValue() is { } value
             ? Finish(value)
             : ErrorLine(Catalogue.ExpectedMemberValue);
 
-    /// <summary>One member of an <c>.enum</c>: a name, or a name and the value it is given.</summary>
+    /// <summary>
+    /// Parses one member of an <c>.enum</c>, which is a name, or a name and the value it is given.
+    /// </summary>
     private GreenNode ParseEnumMember()
     {
         if (!AtName)
@@ -192,7 +199,10 @@ internal sealed partial class Parser
         return Finish(new EnumMemberSyntax(name, equals, ParseExpression()));
     }
 
-    /// <summary>One entry of a <c>.charmap</c>: a character, or a range of them, and a value.</summary>
+    /// <summary>
+    /// Parses one entry of a <c>.charmap</c>, which is a character or a range of characters, and a
+    /// value.
+    /// </summary>
     private GreenNode ParseCharmapEntry()
     {
         var first = ParseExpression();

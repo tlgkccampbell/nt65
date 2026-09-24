@@ -1,6 +1,6 @@
 namespace Norristown.Processor;
 
-/// <summary>Which register's width sizes a 65816 immediate.</summary>
+/// <summary>Specifies which register's width sizes a 65816 immediate.</summary>
 public enum WidthRegister
 {
     /// <summary>The accumulator, set by the M flag.</summary>

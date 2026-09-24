@@ -1,9 +1,9 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// <c>.next</c> and <c>.patch</c>: what statement they may follow, and what the names they give
-/// refer to. On the 6502 and the 65C02 nothing depends on processor state, so an annotation is
-/// accepted and its names are checked, but none is ever required.
+/// Checks <c>.next</c> and <c>.patch</c>, including what statement they may follow and what the
+/// names they give refer to. On the 6502 and the 65C02 nothing depends on processor state, so an
+/// annotation is accepted and its names are checked, but none is ever required.
 /// </summary>
 public sealed class AnnotationTests
 {
@@ -92,7 +92,7 @@ public sealed class AnnotationTests
 
     /// <summary>
     /// An annotation is a claim about the statement above it. With nothing above, it claims
-    /// nothing, which is worth saying rather than quietly ignoring.
+    /// nothing, which is worth reporting rather than quietly ignoring.
     /// </summary>
     [Theory]
     [InlineData(".proc p {\n    .next @a\n@a: rts\n}\n", ".next")]

@@ -2,7 +2,10 @@ using Norristown.Cli;
 
 namespace Norristown.Tests.Cli;
 
-/// <summary><c>nt65 remap-dbg</c>: the command, the files it finds, and what it says when it cannot.</summary>
+/// <summary>
+/// Tests <c>nt65 remap-dbg</c>, covering the command, the files it finds, and what it reports
+/// when it cannot remap a file.
+/// </summary>
 public sealed class RemapCommandTests : IDisposable
 {
     private const string Linked = """
@@ -57,7 +60,10 @@ public sealed class RemapCommandTests : IDisposable
         Assert.Contains("name=\"src/main.nt65\"", Read("mapped.dbg"));
     }
 
-    /// <summary>A debug file whose <c>.s</c> has no line map beside it was not built from nt65 output, and is left unchanged.</summary>
+    /// <summary>
+    /// A debug file whose <c>.s</c> has no line map beside it was not built from nt65 output, and
+    /// is left unchanged.
+    /// </summary>
     [Fact]
     public void ADebugFileWithNoMapIsLeftAlone()
     {

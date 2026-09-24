@@ -5,24 +5,28 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The refactoring that moves lines of a routine into a new routine of their own, leaving a
-/// call in their place.
+/// Provides the refactoring that moves lines of a routine into a new routine of their own, leaving
+/// a call in their place.
 /// <para>
-/// The selection must be code a call can replace: whole lines of one routine, with no
-/// instruction that leaves the routine, no reference to a label the enclosing routine declares
-/// outside the selection, and no reference from outside to a label declared in the selection.
-/// Where any of that does not hold, extraction is not offered, rather than done wrongly.
+/// The selection must be code that a call can replace. It must consist of whole lines of one
+/// routine, with no instruction that leaves the routine, no reference to a label the enclosing
+/// routine declares outside the selection, and no reference from outside to a label declared in
+/// the selection. Where any of these conditions fails, extraction is not offered, rather than
+/// done wrongly.
 /// </para>
 /// <para>
 /// On the 65816 the new routine's signature declares the processor state the analysis finds at
-/// the lines: the state on entry to the first, and, as the exit state, the state on entry to
-/// whatever followed the last. A routine that states nothing would be read as assuming the
-/// default state, which is not what the code was written for.
+/// the lines. The entry state is the state on entry to the first line, and the exit state is the
+/// state on entry to whatever followed the last line. A routine that declares no state would be
+/// read as assuming the default state, which is not what the code was written for.
 /// </para>
 /// </summary>
 internal static class ExtractProc
 {
-    /// <summary>The change that extracts the lines <paramref name="range"/> covers into a routine, where that is possible.</summary>
+    /// <summary>
+    /// Returns the change that extracts the lines <paramref name="range"/> covers into a routine,
+    /// or nothing where that is not possible.
+    /// </summary>
     public static IEnumerable<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
     {
         var tree = model.Tree;
@@ -65,16 +69,18 @@ internal static class ExtractProc
     }
 
     /// <summary>
-    /// The placeholder name for the new routine: the label the selection starts with, which is
-    /// the only name the file already gives these lines, or null where it starts with none.
+    /// Returns the placeholder name for the new routine, which is the label the selection starts
+    /// with, or null where it starts with none. That label is the only name the file already
+    /// gives these lines.
     /// </summary>
     private static string? Called(SyntaxTree tree, int first) =>
         StatementOn(tree, first) is LabeledLineSyntax labelled ? labelled.Label.Name.Text.TrimStart('@') : null;
 
     /// <summary>
-    /// The lines of the selection, provided each is code a call can replace: an instruction, a
-    /// label, or a blank line. Null for a selection holding anything else, one containing a
-    /// return, which would return from the new routine instead, or one with no instruction at all.
+    /// Returns the lines of the selection, provided each is code a call can replace, which means
+    /// an instruction, a label or a blank line. Returns null for a selection that holds anything
+    /// else, for one that contains a return, which would return from the new routine instead,
+    /// and for one with no instruction at all.
     /// </summary>
     private static IReadOnlyList<int>? Selected(SyntaxTree tree, int first, int last)
     {
@@ -101,7 +107,10 @@ internal static class ExtractProc
         return code ? lines : null;
     }
 
-    /// <summary>The block holding the whole selection, where one routine's body holds all of it.</summary>
+    /// <summary>
+    /// Returns the block holding the whole selection, or null unless one routine's body holds all
+    /// of it.
+    /// </summary>
     private static BlockSyntax? Around(SyntaxTree tree, int first, int last)
     {
         var block = Edits.BlockAround(tree, first);
@@ -111,10 +120,10 @@ internal static class ExtractProc
     }
 
     /// <summary>
-    /// Whether the selection is self-contained: nothing in it names a label the enclosing
-    /// routine declares outside it, nothing outside it names a label declared in it, and every
-    /// jump in it lands on a label declared in it. A jump anywhere else — to another routine, or
-    /// through a pointer — would leave the new routine without coming back to its caller.
+    /// Checks whether the selection is self-contained. Nothing in it may name a label the enclosing
+    /// routine declares outside it, nothing outside it may name a label declared in it, and every
+    /// jump in it must land on a label declared in it. A jump anywhere else — to another routine,
+    /// or through a pointer — would leave the new routine without coming back to its caller.
     /// </summary>
     private static bool IsSelfContained(SemanticModel model, SyntaxTree tree, int first, int last)
     {
@@ -155,9 +164,10 @@ internal static class ExtractProc
     }
 
     /// <summary>
-    /// The new routine's signature: the state on entry to the first line and, where it differs,
-    /// the state the lines exit with, which is the state on entry to whatever followed them.
-    /// Empty on processors that have no such state to track.
+    /// Returns the new routine's signature, which gives the state on entry to the first line and,
+    /// where it differs, the state the lines exit with. The exit state is the state on entry to
+    /// whatever followed the lines. The signature is empty on processors that have no such state
+    /// to track.
     /// </summary>
     private static string Signature(
         ProgramAnalysis analysis, SemanticModel model, IReadOnlyList<int> lines, int last)
@@ -181,13 +191,14 @@ internal static class ExtractProc
     }
 
     /// <summary>
-    /// A line exactly as written. The new routine is declared at the same level as the old one,
-    /// so its body keeps the old body's indentation, and a label at the margin stays there.
+    /// Returns a line's text unchanged apart from trailing whitespace. The new routine is declared
+    /// at the same level as the old one, so its body keeps the old body's indentation, and a label
+    /// at the margin stays there.
     /// </summary>
     private static string Written(SyntaxTree tree, int line) =>
         tree.Text[tree.LineStarts[line]..LineEnd(tree, line)].TrimEnd();
 
-    /// <summary>The instruction statements of the selected lines, in order.</summary>
+    /// <summary>Returns the instruction statements of the selected lines, in order.</summary>
     private static IEnumerable<InstructionStatementSyntax> Statements(SyntaxTree tree, IReadOnlyList<int> lines)
     {
         foreach (var line in lines)
@@ -197,7 +208,10 @@ internal static class ExtractProc
         }
     }
 
-    /// <summary>The first instruction after <paramref name="line"/> in the same block, or null.</summary>
+    /// <summary>
+    /// Returns the first instruction after <paramref name="line"/> in the same block, or null if
+    /// there is none.
+    /// </summary>
     private static InstructionStatementSyntax? StatementAfter(SyntaxTree tree, int line)
     {
         var block = Edits.BlockAround(tree, line);
@@ -210,7 +224,10 @@ internal static class ExtractProc
         return null;
     }
 
-    /// <summary>The instruction a line holds, a labelled one included; null for a line holding none.</summary>
+    /// <summary>
+    /// Returns the instruction a statement holds, including one after a label, or null for a
+    /// statement that holds none.
+    /// </summary>
     private static InstructionStatementSyntax? Instruction(StatementSyntax? statement) => statement switch
     {
         InstructionStatementSyntax instruction => instruction,
@@ -218,15 +235,21 @@ internal static class ExtractProc
         _ => null,
     };
 
-    /// <summary>The symbol declared on <paramref name="line"/>, or null for a line that declares none.</summary>
+    /// <summary>
+    /// Returns the symbol declared on <paramref name="line"/>, or null for a line that declares
+    /// none.
+    /// </summary>
     private static Symbol? DeclaredOn(SemanticModel model, int line) =>
         model.Symbols.FirstOrDefault(symbol => symbol.Tree == model.Tree && symbol.DeclarationSpan.Line - 1 == line);
 
-    /// <summary>The statement parsed from <paramref name="line"/>, or null where the file has no such line.</summary>
+    /// <summary>
+    /// Returns the statement parsed from <paramref name="line"/>, or null where the file has no
+    /// such line.
+    /// </summary>
     private static StatementSyntax? StatementOn(SyntaxTree tree, int line) =>
         line >= 0 && line < tree.LineCount ? tree.GetLine(line).Statement : null;
 
-    /// <summary>Where a line's text ends, the line break included.</summary>
+    /// <summary>Returns the position where a line's text ends, including the line break.</summary>
     private static int LineEnd(SyntaxTree tree, int line) =>
         line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length;
 }

@@ -1,8 +1,10 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>What the server can do about the workspace itself, rather than about a document in it.</summary>
-/// <param name="WorkspaceFolders">What it does about the folders the client has open.</param>
-/// <param name="FileOperations">What it does when a file moves, or null where it does nothing.</param>
+/// <summary>
+/// Describes what the server can do with the workspace itself, as opposed to a document in it.
+/// </summary>
+/// <param name="WorkspaceFolders">What the server does with the folders the client has open.</param>
+/// <param name="FileOperations">What the server does when a file moves, or null when it does nothing.</param>
 internal sealed record WorkspaceServerCapabilities(
     WorkspaceFoldersServerCapabilities? WorkspaceFolders,
     FileOperationsServerCapabilities? FileOperations = null);

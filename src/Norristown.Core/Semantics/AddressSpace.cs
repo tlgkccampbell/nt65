@@ -1,20 +1,23 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// An address space other than the host's: the memory another processor runs in, such as the
-/// SNES sound CPU's or a disk drive's. A segment that names a space is in it; every other
-/// segment is in the host's. An address in one space is only a number to code in another
-/// space: that code may use its value but can never jump to it or read or write through it.
+/// Represents an address space other than the host's, such as the memory of the SNES sound CPU
+/// or of a disk drive. A segment that names a space is in that space, and every other segment
+/// is in the host's space. To code in another space, an address is only a number: that code
+/// may use its value, but it can never jump to the address or read or write through it.
 /// </summary>
-/// <param name="Name">The name segments refer to it by, as <c>space = name</c>.</param>
+/// <param name="Name">The name that segments use to refer to the space, as <c>space = name</c>.</param>
 /// <param name="HoldsCode">
-/// Whether the program's own processor runs in this space, so its segments may hold routines
-/// that nt65 checks; otherwise the code in it belongs to another processor and is written as
-/// data and macro calls.
+/// Whether the program's own processor runs in this space, so that its segments may hold
+/// routines that nt65 checks. Otherwise the code in the space belongs to another processor and
+/// is expressed as data and macro calls.
 /// </param>
-/// <param name="Declaration">Where it is declared.</param>
+/// <param name="Declaration">The span where the space is declared.</param>
 public sealed record AddressSpace(string Name, bool HoldsCode, Span Declaration)
 {
-    /// <summary>How a diagnostic names a space: <c>space `spc`</c>, or "the host's space" for null.</summary>
+    /// <summary>
+    /// Returns the name a diagnostic uses for a space, such as <c>space `spc`</c>, or "the host's
+    /// space" when <paramref name="space"/> is null.
+    /// </summary>
     public static string Spell(string? space) => space is null ? "the host's space" : $"space `{space}`";
 }

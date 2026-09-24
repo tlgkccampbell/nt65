@@ -3,19 +3,26 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Workspace symbol search: the declarations in every file of the workspace whose names contain
-/// the letters the programmer typed, in order, ignoring case. They are read from each file's
-/// outline, so a search analyzes nothing.
+/// Implements workspace symbol search. It finds the declarations in every file of the workspace
+/// whose names contain the letters the programmer typed, in order, ignoring case. The declarations
+/// are read from each file's outline, so a search analyzes nothing.
 /// </summary>
 internal static class WorkspaceSymbols
 {
-    /// <summary>The most results a search returns, which is already more than anyone reads.</summary>
+    /// <summary>
+    /// The maximum number of results a search returns, which is already more than anyone reads.
+    /// </summary>
     private const int Most = 500;
 
-    /// <summary>The declarations in <paramref name="files"/> that match <paramref name="query"/>, best matches first.</summary>
+    /// <summary>
+    /// Returns the declarations in <paramref name="files"/> that match <paramref name="query"/>,
+    /// best matches first.
+    /// </summary>
     /// <param name="files">Every file of the workspace, which may be hundreds.</param>
-    /// <param name="query">What the programmer typed.</param>
-    /// <param name="cancellation">Checked between files, so a search the user has moved on from stops early.</param>
+    /// <param name="query">The text the programmer typed.</param>
+    /// <param name="cancellation">
+    /// Checked between files, so that a search the user has moved on from stops early.
+    /// </param>
     public static IReadOnlyList<Protocol.SymbolInformation> Matching(
         IEnumerable<SyntaxTree> files, string query, CancellationToken cancellation = default)
     {
@@ -34,9 +41,10 @@ internal static class WorkspaceSymbols
     }
 
     /// <summary>
-    /// How well <paramref name="name"/> matches: 0 for the same name, 1 for one that starts with the
-    /// query, 2 for one that contains it, 3 for one that contains its letters in order (and for an
-    /// empty query); null for no match.
+    /// Returns how well <paramref name="name"/> matches <paramref name="query"/>, where a lower
+    /// score is a better match. The score is 0 for the same name, 1 for a name that starts with the
+    /// query, 2 for one that contains it, and 3 for one that contains its letters in order or for
+    /// an empty query. Returns null for no match.
     /// </summary>
     public static int? Score(string name, string query)
     {
@@ -80,7 +88,10 @@ internal static class WorkspaceSymbols
         }
     }
 
-    /// <summary>The module a file's <c>.module</c> names, or null when its first non-blank line is not a <c>.module</c>.</summary>
+    /// <summary>
+    /// Returns the module a file's <c>.module</c> names, or null when its first non-blank line is
+    /// not a <c>.module</c>.
+    /// </summary>
     private static string? ModuleOf(SyntaxTree tree)
     {
         foreach (var line in tree.Root.DescendantNodes().OfType<LineSyntax>())

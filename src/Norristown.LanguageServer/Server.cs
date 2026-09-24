@@ -9,31 +9,36 @@ using StreamJsonRpc;
 
 namespace Norristown.LanguageServer;
 
-// The Protocol folder holds hand-written LSP types, only for the messages the server
-// handles. Property names are camel-cased by the formatter.
+// The Protocol folder holds hand-written LSP types for only the messages the server handles.
+// The formatter converts property names to camel case.
 
+/// <summary>Serves the Language Server Protocol to one client over a pair of streams.</summary>
 internal sealed class Server : IDisposable
 {
-    /// <summary>How long after the last edit before the rest of the program's diagnostics are published.</summary>
+    /// <summary>
+    /// The time to wait after the last edit before publishing the rest of the program's diagnostics.
+    /// </summary>
     private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(200);
 
     private readonly ServerLog log;
     private readonly Framing framing;
     private readonly Workspace workspace = new();
 
-    // Publishing diagnostics for every file but the edited one waits for typing to stop. A
-    // feature that follows the whole program rather than the caret — the output view beside
-    // the source — is refreshed after the same wait, so that it updates when the squiggles do.
+    // Publishing diagnostics for every file except the edited one waits for typing to stop. A
+    // feature that follows the whole program rather than the caret, such as the output view
+    // beside the source, is refreshed after the same wait, so that it updates when the
+    // squiggles do.
     private readonly Debounce settling;
 
     // The exit code for the process, set once `exit` arrives or the editor process goes away.
     private readonly TaskCompletionSource<int> leaving =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    // A signature of the diagnostics last published for each URI, so that a file is sent again
-    // only when its diagnostics change; and the newest revision the client has sent of each
-    // open file, so that nothing is published about text that has since changed. Publishing
-    // for a keystroke and publishing after the debounce can run at once, so both are concurrent.
+    // `published` holds a signature of the diagnostics last published for each URI, so that a
+    // file is sent again only when its diagnostics change. `newest` holds the newest version of
+    // each open file that the client has sent, so that nothing is published about text that has
+    // since changed. Both are concurrent because publishing for a keystroke and publishing after
+    // the debounce can run at the same time.
     private readonly ConcurrentDictionary<string, string> published = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> newest = new(StringComparer.Ordinal);
 
@@ -46,15 +51,15 @@ internal sealed class Server : IDisposable
     private ClientCapabilities client = ClientCapabilities.None;
     private Outgoing outgoing;
 
-    // Which hints the editor shows, from its settings, and the cycle-hint override a command
-    // toggles for as long as this server runs: cycle counts are wanted while a routine is being
-    // timed, not permanently, so the toggle lasts for the session and is not saved.
+    // The hints the editor's settings show, and the cycle-hint override that a command toggles
+    // for as long as this server runs. The toggle lasts for the session and is not saved,
+    // because cycle counts are wanted while a routine is being timed, not permanently.
     private HintSettings hints = HintSettings.Default;
     private bool? cyclesThisSession;
 
     // The documentation of each item in the last completion list, kept until the next list
-    // replaces it: the client only resolves items of the list it is showing, which is always
-    // the one most recently returned.
+    // replaces it. The client resolves only items of the list it is showing, which is always
+    // the list most recently returned.
     private IReadOnlyDictionary<string, string> described =
         new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -66,14 +71,14 @@ internal sealed class Server : IDisposable
     private int classifiedId;
 
     // The editor process that started this server. It is watched rather than relied on to send
-    // `exit`: an editor that crashes never sends it, and a server with no client should not
-    // outlive its editor.
+    // `exit`, because an editor that crashes never sends it, and a server with no client should
+    // not outlive its editor.
     private Process? parent;
 
-    // Whether the client has ever asked for a file's output. Such a client is notified when the
-    // program settles after an edit; one that never asked is not sent a notification it may
-    // have no handler for. It is set by a request handler and read by the publishing code, which
-    // run on different threads.
+    // Whether the client has ever asked for a file's output. Such a client is notified whenever
+    // the whole program's diagnostics are published after an edit. A client that never asked is
+    // not sent a notification it may have no handler for. The flag is set by a request handler
+    // and read by the publishing code, which run on different threads.
     private volatile bool watchingOutput;
 
     // The binaries the client has been asked to watch. The editor watches the sources and the
@@ -89,24 +94,30 @@ internal sealed class Server : IDisposable
         outgoing = new Outgoing(workspace, client);
     }
 
-    /// <summary>Which hints are shown: the editor's settings, with this session's cycle-hint toggle overriding them.</summary>
+    /// <summary>
+    /// Gets the hints to show, which are the editor's settings with this session's cycle-hint
+    /// toggle overriding them.
+    /// </summary>
     private HintSettings Shown =>
         cyclesThisSession is { } session ? hints with { Cycles = session } : hints;
 
     /// <summary>
     /// Serves one client until it sends <c>exit</c>, the editor that started the server exits,
-    /// or the connection is lost, and returns the process's exit code: 0 when the client sent
-    /// <c>shutdown</c> before <c>exit</c> or the connection was lost, 1 when it sent <c>exit</c>
-    /// without <c>shutdown</c> or the editor went away, and 70 when nt65 itself failed, which
-    /// makes the editor's client start a new server.
+    /// or the connection is lost.
     /// </summary>
-    /// <param name="input">Where the client's messages arrive.</param>
-    /// <param name="output">Where the server's messages go.</param>
-    /// <param name="log">Where the server logs what it is doing.</param>
+    /// <param name="input">The stream the client's messages arrive on.</param>
+    /// <param name="output">The stream the server's messages are sent on.</param>
+    /// <param name="log">The log the server records its activity in.</param>
     /// <param name="delay">
-    /// How to wait between an edit and publishing the rest of the program, supplied by a test
-    /// that drives the wait itself; a real delay when not given.
+    /// The wait between an edit and publishing the rest of the program. A test supplies its own
+    /// so that it can drive the wait itself; a real delay is used when none is given.
     /// </param>
+    /// <returns>
+    /// The process's exit code. It is 0 when the client sent <c>shutdown</c> before <c>exit</c>
+    /// or the connection was lost, and 1 when the client sent <c>exit</c> without
+    /// <c>shutdown</c> or the editor went away. It is 70 when nt65 itself failed, which makes the
+    /// editor's client start a new server.
+    /// </returns>
     public static async Task<int> RunAsync(Stream input, Stream output, ServerLog log, Delay? delay = null)
     {
         using var framing = new Framing(input, output, CreateFormatter());
@@ -131,10 +142,10 @@ internal sealed class Server : IDisposable
         }
         catch (Exception e)
         {
-            // The handler of last resort: the message loop itself failed, which is a bug in nt65.
-            // The exception goes to the log for a bug report and is shown to the user, and the
-            // process exits with a failure code so the client does not keep talking to a dead
-            // server.
+            // This is the handler of last resort. The message loop itself failed, which is a bug
+            // in nt65. The exception goes to the log for a bug report and is shown to the user,
+            // and the process exits with a failure code so that the client does not keep talking
+            // to a dead server.
             log.Write($"internal error: {e}");
             await server.ShowAsync(MessageType.Error, $"nt65: internal error: {e.Message}").ConfigureAwait(false);
             return 70;
@@ -158,8 +169,9 @@ internal sealed class Server : IDisposable
         var named = request.ClientInfo is { } info ? $"{info.Name} {info.Version}".TrimEnd() : "unknown client";
         log.Write($"connected: {named}");
 
-        // The projects are found in the folders the client opened, and built as the configuration
-        // the client's settings choose: a project's files are the program a name is resolved against.
+        // The projects are found in the folders the client opened, and built in the configuration
+        // the client's settings choose. A project's files are the program that a name is resolved
+        // against.
         IReadOnlyList<string> roots = request.WorkspaceFolders is { Count: > 0 } folders
             ? [.. folders.Select(folder => folder.Uri)]
             : request.RootUri is { } root ? [root] : [];
@@ -194,9 +206,9 @@ internal sealed class Server : IDisposable
             DocumentFormattingProvider: true,
             DocumentRangeFormattingProvider: true,
 
-            // Positions are UTF-16 offsets within a line, the protocol's own default and what
-            // nt65 has always used; stating it tells a client that would prefer another encoding
-            // not to use one.
+            // Positions are UTF-16 offsets within a line, which is the protocol's own default and
+            // what nt65 has always used. Stating it tells a client that would prefer another
+            // encoding not to use one.
             PositionEncoding: "utf-16",
 
             // A client that supports workspace folders is asked to report changes to them, so a
@@ -215,8 +227,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// The client is ready. What is wrong with every file of every project is published
-    /// straight away, so a broken export shows in the Problems panel before anything is opened.
+    /// Handles the notification that the client is ready. The diagnostics of every file of every
+    /// project are published immediately, so that a broken export shows in the Problems panel
+    /// before anything is opened.
     /// </summary>
     [JsonRpcMethod("initialized")]
     public async Task InitializedAsync(JsonElement _, CancellationToken cancellation)
@@ -226,7 +239,10 @@ internal sealed class Server : IDisposable
         await PublishEverythingAsync(null, cancellation, refresh: false).ConfigureAwait(false);
     }
 
-    /// <summary>The client's settings changed: the project is read again as the configuration they now choose.</summary>
+    /// <summary>
+    /// Handles a change to the client's settings by reading the project again in the configuration
+    /// the settings now choose.
+    /// </summary>
     [JsonRpcMethod("workspace/didChangeConfiguration")]
     public Task DidChangeConfigurationAsync(JsonElement request, CancellationToken cancellation)
     {
@@ -264,9 +280,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// The inlay hints for the lines the editor is showing. Only those lines are computed: the
-    /// client fetches hints again as a file is scrolled, and a keystroke should not pay for
-    /// lines nobody is looking at.
+    /// Returns the inlay hints for the lines the editor is showing. Only those lines are computed,
+    /// because the client fetches hints again as a file is scrolled, and a keystroke should not
+    /// pay for lines nobody is looking at.
     /// </summary>
     [JsonRpcMethod("textDocument/inlayHint")]
     public IReadOnlyList<InlayHint> InlayHints(InlayHintParams request, CancellationToken cancellation)
@@ -282,8 +298,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// A folder was added to the workspace or taken out of it. The projects in the folders the
-    /// client now has are the workspace, so they are looked for again from scratch.
+    /// Handles a folder being added to or removed from the workspace. The workspace consists of
+    /// the projects in the folders the client now has open, so the projects are looked for again
+    /// from scratch.
     /// </summary>
     [JsonRpcMethod("workspace/didChangeWorkspaceFolders")]
     public Task DidChangeWorkspaceFoldersAsync(
@@ -297,9 +314,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// Files changed on disk: a project file, a source no one has open, or a binary an
-    /// <c>.incbin</c> includes. Diagnostics are published again when any of them is a file a
-    /// program reads.
+    /// Handles files that changed on disk, such as a project file, a source no one has open, or a
+    /// binary an <c>.incbin</c> includes. Diagnostics are published again when any of them is a
+    /// file that a program reads.
     /// </summary>
     [JsonRpcMethod("workspace/didChangeWatchedFiles")]
     public Task DidChangeWatchedFilesAsync(DidChangeWatchedFilesParams request, CancellationToken cancellation)
@@ -311,12 +328,12 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// Files are about to be moved or renamed. A module's name comes from its <c>.module</c> line
-    /// and its output is named after that, so moving a source needs few edits: a <c>files</c>
-    /// entry that names it literally, and <c>.incbin</c> paths, which are resolved relative to
-    /// the including file and so change when either end moves. A glob that stops matching is
-    /// reported rather than rewritten, because only the programmer knows which glob was meant to
-    /// cover the file.
+    /// Returns the edits to make before files are moved or renamed. A module's name comes from its
+    /// <c>.module</c> line and its output is named after that, so moving a source needs few
+    /// edits. A <c>files</c> entry that names the source literally is updated, and so are
+    /// <c>.incbin</c> paths, which are resolved relative to the including file and so change when
+    /// either end moves. A glob that stops matching is reported rather than rewritten, because
+    /// only the programmer knows which glob was meant to cover the file.
     /// </summary>
     [JsonRpcMethod("workspace/willRenameFiles")]
     public async Task<WorkspaceEdit?> WillRenameFilesAsync(
@@ -331,24 +348,16 @@ internal sealed class Server : IDisposable
         return outgoing.Spell(edit);
     }
 
-    /// <summary>The named configurations the workspace's projects have, for the client to offer.</summary>
+    /// <summary>
+    /// Returns the named configurations of the workspace's projects, for the client to offer.
+    /// </summary>
     [JsonRpcMethod("nt65/configurations")]
     public IReadOnlyList<string> Configurations(JsonElement _) => workspace.Configurations();
 
     /// <summary>
-    /// The output for a file: the ca65 a build would write for it from the program as it stands
-    /// in the editor, unsaved edits included, and which output lines each source line produced.
-    /// For a file no program holds the answer is null, and what to show is up to the client.
-    /// <para>
-    /// Once this has been requested, the server sends <c>nt65/outputChanged</c> whenever the
-    /// program settles after an edit, so that a view beside the source updates when the
-    /// squiggles do.
-    /// </para>
-    /// </summary>
-    /// <summary>
-    /// The source of a module that comes with nt65, which no file on disk holds. A definition or
-    /// reference that leads into one gives an <c>nt65:</c> URI, and the client asks for the text
-    /// to show under it, read-only.
+    /// Returns the source of a module that comes with nt65, which no file on disk holds. A
+    /// definition or reference that leads into such a module gives an <c>nt65:</c> URI, and the
+    /// client requests the text to show under it, read-only.
     /// </summary>
     [JsonRpcMethod("nt65/standardModule")]
     public string? StandardModule(StandardModuleParams request, CancellationToken cancellation)
@@ -357,6 +366,17 @@ internal sealed class Server : IDisposable
         return StandardModules.Text(Workspace.PathOf(request.TextDocument.Uri));
     }
 
+    /// <summary>
+    /// Returns the output for a file, which is the ca65 source a build would write for it from the
+    /// program as it stands in the editor, unsaved edits included, together with which output
+    /// lines each source line produced. For a file that no program holds, the result is null and
+    /// the client decides what to show.
+    /// <para>
+    /// Once this has been requested, the server sends <c>nt65/outputChanged</c> whenever the whole
+    /// program's diagnostics are published after an edit, so that a view beside the source
+    /// updates when the squiggles do.
+    /// </para>
+    /// </summary>
     [JsonRpcMethod("nt65/output")]
     public OutputResult? Output(OutputParams request, CancellationToken cancellation)
     {
@@ -371,9 +391,10 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// What the macro call at a position expands to, written as nt65 rather than ca65: the body
-    /// with the arguments substituted. Nested calls are left unexpanded, one level at a time,
-    /// each with the index path to send back to have it expanded too.
+    /// Returns what the macro call at a position expands to, rendered as nt65 rather than ca65,
+    /// which is the macro body with the arguments substituted. Nested calls are left unexpanded,
+    /// one level at a time, and each comes with the index path to send back to have it expanded
+    /// as well.
     /// </summary>
     [JsonRpcMethod("nt65/expansion")]
     public ExpansionResult? Expansion(ExpansionParams request, CancellationToken cancellation)
@@ -434,8 +455,8 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// The file's outline: a tree of its segments and scopes for a client that supports one, or
-    /// the protocol's older flat list otherwise.
+    /// Returns the file's outline, which is a tree of its segments and scopes for a client that
+    /// supports one, or the protocol's older flat list otherwise.
     /// </summary>
     [JsonRpcMethod("textDocument/documentSymbol")]
     public object DocumentSymbols(DocumentSymbolParams request, CancellationToken cancellation)
@@ -477,7 +498,9 @@ internal sealed class Server : IDisposable
         TextDocumentPositionParams request, CancellationToken cancellation) =>
         At(request, cancellation) is { } asked ? Lsp.ToHighlights(asked.Model, asked.Position) : [];
 
-    /// <summary>What a rename would replace, which a client asks for before offering one.</summary>
+    /// <summary>
+    /// Returns the range a rename would replace, which a client requests before offering a rename.
+    /// </summary>
     [JsonRpcMethod("textDocument/prepareRename")]
     public Protocol.Range? PrepareRename(TextDocumentPositionParams request, CancellationToken cancellation) =>
         At(request, cancellation) is { } asked ? Lsp.ToRenameRange(asked.Model, asked.Position) : null;
@@ -544,8 +567,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// The whole file formatted in nt65's layout. It needs no analysis: a line's indentation
-    /// depends only on the braces in its own file, so a file with errors in it still formats.
+    /// Returns edits that format the whole file in nt65's layout. Formatting needs no analysis,
+    /// because a line's indentation depends only on the braces in its own file, so a file with
+    /// errors in it still formats.
     /// </summary>
     [JsonRpcMethod("textDocument/formatting")]
     public IReadOnlyList<TextEdit> Formatting(DocumentFormattingParams request, CancellationToken cancellation)
@@ -557,8 +581,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// The selected lines formatted. Layout is computed over the whole file — a run of data
-    /// lines, for instance, shares one column — but only the selected lines are changed.
+    /// Returns edits that format the selected lines. Layout is computed over the whole file,
+    /// because a run of data lines, for instance, shares one column, but only the selected lines
+    /// are changed.
     /// </summary>
     [JsonRpcMethod("textDocument/rangeFormatting")]
     public IReadOnlyList<TextEdit> RangeFormatting(
@@ -578,8 +603,9 @@ internal sealed class Server : IDisposable
             : [];
 
     /// <summary>
-    /// What calls a routine (and, in the next method, what it calls). The client sends the item
-    /// back as the server gave it, so the program it belongs to is found from the file it names.
+    /// Returns the routines that call a routine; <see cref="OutgoingCalls"/> returns the routines
+    /// it calls. The client sends the item back as the server gave it, so the program it belongs
+    /// to is found from the file it names.
     /// </summary>
     [JsonRpcMethod("callHierarchy/incomingCalls")]
     public IReadOnlyList<CallHierarchyIncomingCall> IncomingCalls(
@@ -617,9 +643,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// The semantic tokens for the lines the editor is showing. For a file of thousands of
-    /// lines the client asks for the visible screenful, which is coloured while the rest of
-    /// the file is computed.
+    /// Returns the semantic tokens for the lines the editor is showing. For a file of thousands of
+    /// lines, the client requests the visible screenful, which is coloured while the rest of the
+    /// file is computed.
     /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/range")]
     public Protocol.SemanticTokens SemanticTokensRange(
@@ -632,8 +658,8 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// What changed since the tokens the client is holding. An edit in one place changes a
-    /// handful of numbers in a file of thousands; a client quoting a result id this server no
+    /// Returns what changed since the tokens the client holds. An edit in one place changes a
+    /// handful of numbers in a file of thousands. A client quoting a result id this server no
     /// longer has gets the full tokens instead.
     /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/full/delta")]
@@ -648,8 +674,8 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// The ranges each caret's selection steps through as it is expanded: the operand, the
-    /// instruction, the block and the routine, taken straight from the syntax tree.
+    /// Returns the ranges each caret's selection steps through as it is expanded, which are the
+    /// operand, the instruction, the block and the routine, taken directly from the syntax tree.
     /// </summary>
     [JsonRpcMethod("textDocument/selectionRange")]
     public IReadOnlyList<SelectionRange> SelectionRanges(
@@ -676,9 +702,10 @@ internal sealed class Server : IDisposable
     public object? Shutdown() => null;
 
     /// <summary>
-    /// The client is done. The process exits with 0 if the client sent <c>shutdown</c> first and
-    /// 1 if it did not, as the protocol requires; the message loop is signalled rather than
-    /// stopped, because a handler cannot end the dispatch it is running in.
+    /// Handles the notification that the client is done. The process exits with 0 if the client
+    /// sent <c>shutdown</c> first and 1 if it did not, as the protocol requires. The message loop
+    /// is signalled rather than stopped, because a handler cannot end the dispatch it is running
+    /// in.
     /// </summary>
     [JsonRpcMethod("exit")]
     public void Exit() => Leave(framing.Phase == ServerPhase.ShuttingDown ? 0 : 1, "the client said goodbye");
@@ -691,7 +718,10 @@ internal sealed class Server : IDisposable
         return formatter;
     }
 
-    /// <summary>The named configuration the client's <c>nt65</c> settings choose, or null for the project's own settings.</summary>
+    /// <summary>
+    /// Returns the named configuration the client's <c>nt65</c> settings choose, or null for the
+    /// project's own settings.
+    /// </summary>
     private static string? ActiveConfiguration(JsonElement? settings) =>
         settings is { ValueKind: JsonValueKind.Object } options
             && options.TryGetProperty("configuration", out var named)
@@ -700,8 +730,8 @@ internal sealed class Server : IDisposable
             : null;
 
     /// <summary>
-    /// What was published for a file, as one string: enough to tell one set of diagnostics
-    /// from another, and nothing more, since nothing reads it back.
+    /// Returns a string that stands for the diagnostics published for a file. It holds enough to
+    /// tell one set of diagnostics from another and nothing more, because nothing reads it back.
     /// </summary>
     private static string Signature(IReadOnlyList<Protocol.Diagnostic> diagnostics) =>
         string.Join("\n", diagnostics.Select(d =>
@@ -781,14 +811,14 @@ internal sealed class Server : IDisposable
         });
 
     /// <summary>
-    /// Publishes diagnostics for every file of every program, not only the open ones: an export
-    /// broken in one file breaks every module that uses it, and none of those may be open.
+    /// Publishes diagnostics for every file of every program, not only the open ones. An export
+    /// broken in one file breaks every module that uses it, and none of those modules may be open.
     /// </summary>
     /// <param name="changed">
     /// The file the client is editing, which has already been published from its own analysis
     /// and is skipped here; null when this is not an edit.
     /// </param>
-    /// <param name="cancellation">Checked between files, since a program may hold hundreds.</param>
+    /// <param name="cancellation">Checked between files, because a program may hold hundreds.</param>
     /// <param name="refresh">
     /// Whether the client may be asked to fetch semantic tokens, lenses and hints again. There
     /// is no point asking as the client connects, when it holds nothing yet.
@@ -873,10 +903,11 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// Publishes one file, unless what is wrong with it is what was published last time — a
-    /// program may hold hundreds of files and every keystroke re-analyzes it — or unless the
-    /// client has since sent a newer revision of it, in which case this is about text that is
-    /// already gone.
+    /// Publishes one file's diagnostics, unless they match what was published last time or the
+    /// client has since sent a newer version of the file. Unchanged diagnostics are skipped
+    /// because a program may hold hundreds of files and every keystroke re-analyzes it.
+    /// Diagnostics for an older version are skipped because they are about text that is already
+    /// gone.
     /// </summary>
     /// <param name="file">The file and what is wrong with it.</param>
     /// <param name="always">Whether to send even when nothing changed, as for the edited file.</param>
@@ -939,8 +970,8 @@ internal sealed class Server : IDisposable
     /// Shows a message to the user in the client. If the client has already gone, the message
     /// is only written to the log.
     /// </summary>
-    /// <param name="type">How bad the news is.</param>
-    /// <param name="message">What to show.</param>
+    /// <param name="type">The severity of the message.</param>
+    /// <param name="message">The text to show.</param>
     private async Task ShowAsync(MessageType type, string message)
     {
         try
@@ -972,8 +1003,8 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// The semantic tokens of a whole file, stored under a new result id so that the client can
-    /// ask for a delta against them next time.
+    /// Returns the semantic tokens of a whole file, and stores them under a new result id so that
+    /// the client can request a delta against them next time.
     /// </summary>
     private Protocol.SemanticTokens Classified(string uri)
     {
@@ -986,7 +1017,9 @@ internal sealed class Server : IDisposable
         return new Protocol.SemanticTokens(data, id);
     }
 
-    /// <summary>The semantic model of the file a URI names, or null when no program holds it.</summary>
+    /// <summary>
+    /// Returns the semantic model of the file a URI names, or null when no program holds it.
+    /// </summary>
     private SemanticModel? Model(string uri)
     {
         var path = workspace.Find(uri) is { } document ? document.Tree.Path : Workspace.PathOf(uri);
@@ -994,8 +1027,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// What a request points at: the program, the file it is in, and where in that file. Null
-    /// when the client never opened the document, or when the program does not hold it.
+    /// Returns what a request points at, which is the program, the file the position is in and
+    /// the offset in that file. Returns null when the client never opened the document or when
+    /// the program does not hold it.
     /// </summary>
     private Asked? At(TextDocumentPositionParams request, CancellationToken cancellation)
     {
@@ -1013,11 +1047,11 @@ internal sealed class Server : IDisposable
             document.Tree.GetPosition(request.Position.Line, request.Position.Character));
     }
 
-    /// <summary>One request, resolved to what it is about.</summary>
+    /// <summary>Represents a request resolved to what it is about.</summary>
     /// <param name="Analysis">The analysis of the whole program, for questions about layout and flow.</param>
     /// <param name="Program">Every file, for names that cross from one file to another.</param>
     /// <param name="Model">The file the caret is in.</param>
-    /// <param name="Position">Where in that file's text.</param>
+    /// <param name="Position">The offset in that file's text.</param>
     private sealed record Asked(
         ProgramAnalysis Analysis, ProgramModel Program, SemanticModel Model, int Position);
 }

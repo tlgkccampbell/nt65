@@ -3,16 +3,18 @@ using System.Text;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// The code blocks of the documents, DESIGN.md and the guide, by the language their fences are
-/// tagged with.
+/// Provides the code blocks of the documents, DESIGN.md and the guide, grouped by the language
+/// their fences are tagged with.
 /// </summary>
 internal static class DesignCorpus
 {
+    /// <summary>The documents whose code blocks make up the corpus.</summary>
     public static readonly IReadOnlyList<string> Documents = ["DESIGN.md", "docs/GUIDE.md"];
 
+    /// <summary>The nt65 code blocks.</summary>
     public static readonly IReadOnlyList<CodeBlock> Blocks = Load("nt65");
 
-    /// <summary>The ca65 code blocks: output as nt65 writes it.</summary>
+    /// <summary>The ca65 code blocks, which show output as nt65 writes it.</summary>
     public static readonly IReadOnlyList<CodeBlock> Ca65Blocks = Load("ca65");
 
     /// <summary>Opening fences with no language tag, which the corpus would silently skip.</summary>

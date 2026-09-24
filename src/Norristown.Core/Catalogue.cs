@@ -3,24 +3,24 @@ using System.Reflection;
 namespace Norristown;
 
 /// <summary>
-/// Every diagnostic nt65 reports, by name. A name says what is wrong rather than which
-/// pass found it, is kebab-case, and is stable once released: it is what a project file
-/// switches, what the editor shows beside the message, and what CI matches on.
+/// Lists every diagnostic nt65 reports, by name. A name says what is wrong rather than which
+/// pass found it, is kebab-case, and is stable once released. A project file switches
+/// diagnostics by name, the editor shows the name beside the message, and CI matches on it.
 /// <para>
-/// A reporting site names one of these and supplies the arguments for its message. The
-/// explanation is separate from the message: it holds what a one-line message has no room
-/// for, and is what <c>nt65 explain</c> prints.
+/// A reporting site names one of these entries and supplies the arguments for its message. The
+/// explanation is separate from the message. It holds what a one-line message has no room for,
+/// and <c>nt65 explain</c> prints it.
 /// </para>
 /// </summary>
 public static class Catalogue
 {
-    // The area most recently opened. Each entry takes the area whose heading is written above
+    // The area most recently opened. Each entry takes the area whose heading is declared above
     // it, rather than naming its area, which would add a line to every entry. This works
     // because static initializers run in the order they appear in the file, so each heading is
     // set before the entries below it are created.
     private static DiagnosticArea? opening;
 
-    /// <summary>Every area, in the order they are written here and printed.</summary>
+    /// <summary>Gets every area, in the order the areas are declared here and printed.</summary>
     public static IReadOnlyList<DiagnosticArea> Areas =>
     [
         ReadingALine, Names, Values, Macros, Data, Placement,
@@ -2644,8 +2644,8 @@ public static class Catalogue
             + "under one name. `as` gives one of them a name of its own.");
 
     /// <summary>
-    /// The one entry the compiler itself never reports: an editor uses it to mark the lines the
-    /// build configuration leaves out, and nothing else reports on those lines.
+    /// Gets the one entry the compiler itself never reports. An editor uses it to mark the lines
+    /// the build configuration leaves out, and nothing else reports on those lines.
     /// </summary>
     public static DiagnosticDescriptor OmittedBranch { get; } = Entry(
         "omitted-branch",
@@ -3032,27 +3032,31 @@ public static class Catalogue
         "What a routine is and how it is called are true of it from entry to exit, so they are written once, "
             + "before the arrow. What comes after the arrow is what the routine leaves.");
 
-    // Found by reflecting over the class rather than listed by hand, so that a new entry above is
-    // included automatically. It is built on first use rather than alongside the entries:
-    // reflecting on a type while its own static initializer is still running can deadlock two
-    // threads that ask for it at the same time.
+    // The list is found by reflecting over the class rather than listed by hand, so that a new
+    // entry above is included automatically. It is built on first use rather than alongside the
+    // entries, because reflecting on a type while its own static initializer is still running can
+    // deadlock two threads that ask for it at the same time.
     private static readonly Lazy<IReadOnlyList<DiagnosticDescriptor>> all = new(() =>
         [.. typeof(Catalogue).GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Where(property => property.PropertyType == typeof(DiagnosticDescriptor))
             .Select(property => (DiagnosticDescriptor)property.GetValue(null)!)
             .OrderBy(descriptor => descriptor.Id, StringComparer.Ordinal)]);
 
-    /// <summary>Every descriptor, in name order.</summary>
+    /// <summary>Gets every descriptor, in name order.</summary>
     public static IReadOnlyList<DiagnosticDescriptor> All => all.Value;
 
-    /// <summary>The descriptor named <paramref name="id"/>, or null when no diagnostic has that name.</summary>
+    /// <summary>
+    /// Returns the descriptor named <paramref name="id"/>, or null when no diagnostic has that name.
+    /// </summary>
     public static DiagnosticDescriptor? Find(string id) =>
         All.FirstOrDefault(descriptor => descriptor.Id == id);
 
-    /// <summary>Opens an area: the entries written below it, down to the next heading, belong to it.</summary>
+    /// <summary>
+    /// Opens an area. The entries declared below it, down to the next heading, belong to it.
+    /// </summary>
     private static DiagnosticArea Opens(string name, string about) => opening = new(name, about);
 
-    /// <summary>One entry, under the heading above it.</summary>
+    /// <summary>Creates one entry, under the heading declared above it.</summary>
     private static DiagnosticDescriptor Entry(string id, Severity severity, string format, string explanation) =>
         new(
             id,

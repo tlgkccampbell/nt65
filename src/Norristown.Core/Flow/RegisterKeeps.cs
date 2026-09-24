@@ -6,28 +6,28 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// Which registers each routine returns holding the values it was entered with, worked out
+/// Works out which registers each routine returns holding the values it was entered with,
 /// across the program. A 6502 programmer's first question about someone else's routine is which
 /// registers survive it, and without this analysis the answer lives only in a comment.
 /// <para>
-/// A routine is analysed the same way as the 65816's processor state: its blocks are run to a
+/// A routine is analysed the same way as the 65816's processor state. Its blocks are run to a
 /// fixed point over what each register may hold, and a save and its restore cancel through the
 /// stack, so <c>pha</c> … <c>pla</c> around a call needs no annotation. What its calls do is
-/// worked out alongside it, over the whole program: every routine starts out keeping every
+/// worked out alongside it, over the whole program. Every routine starts out keeping every
 /// register, and registers are removed from each routine's set until nothing changes. Because
-/// the sets only shrink, two routines that call each other converge rather than loop for ever,
-/// which is the one respect in which this is easier than the cycle counts.
+/// the sets only shrink, two routines that call each other converge rather than loop forever.
+/// In that one respect this is easier than the cycle counts.
 /// </para>
 /// <para>
 /// A restore through memory is not seen, because ruling out every store that could have reached
-/// the byte would need final addresses, which only the linker knows. Writing
-/// <c>.state keeps a</c> where the value is restored tells the analysis what it cannot see.
+/// the byte would need final addresses, which only the linker knows. A <c>.state keeps a</c>
+/// where the value is restored tells the analysis what it cannot see.
 /// </para>
 /// </summary>
 public static class RegisterKeeps
 {
     /// <summary>
-    /// Works out what every routine of <paramref name="flows"/> keeps, writes it on each region,
+    /// Works out what every routine of <paramref name="flows"/> keeps, stores it on each region,
     /// and reports the routines that break what they promise. The lists are parallel, with one
     /// file at each index, and <paramref name="states"/> is empty on the CPUs that have no
     /// register widths to follow.
@@ -82,16 +82,17 @@ public static class RegisterKeeps
             flows[i].Registers = byFile[i].Held;
         return Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
 
-        // What a routine keeps: what the walk found, or, for one whose body is not here, what
-        // it declares. A routine that declares more than its body shows is taken at its word,
-        // so the mistake is reported where it is written and not at every call.
+        // Returns what a routine keeps. That is what the walk found or, for a routine whose body
+        // is not in the program, what it declares. A routine that declares more than its body
+        // shows is taken at its word, so the mistake is reported at the declaration and not at
+        // every call.
         //
-        // A label is treated as the routine it is inside: a jump into another routine's
-        // interior leaves this routine for that one, so what it hands back is whatever that
-        // routine hands back, the same answer a jump to the routine's entry gets.
+        // A label is treated as the routine it is inside. A jump into another routine's interior
+        // leaves this routine for that one, so what it hands back is what that routine hands
+        // back. A jump to the routine's entry gets the same answer.
         //
-        // A routine that never returns hands nothing back to anyone, so it keeps everything:
-        // a path that calls it or jumps into it ends there, with no caller left to disappoint.
+        // A routine that never returns is treated as keeping every register, because no caller
+        // ever sees what it leaves in them. A path that calls it or jumps into it ends there.
         RoutineRegisters Of(Symbol target)
         {
             var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
@@ -103,21 +104,22 @@ public static class RegisterKeeps
         }
     }
 
-    /// <summary>What a routine keeps, with what it declares taken as kept too.</summary>
+    /// <summary>Returns what a routine keeps, with what it declares taken as kept too.</summary>
     private static RoutineRegisters Declared(Symbol routine, RoutineRegisters found) =>
         routine.Signature?.Keeps is { } keeps && keeps != Registers.None
             ? found with { Kept = found.Kept | keeps }
             : found;
 
     /// <summary>
-    /// A routine identified by its file and its flattened name, rather than by its symbol: an
-    /// analysis that kept a file's results from before an edit holds a different symbol object
-    /// for the same routine. It is the name and not the position, because a kept file still
-    /// refers to the routines of an edited file at the positions they had before the edit.
+    /// Returns a key that identifies a routine by its file and its flattened name, rather than by
+    /// its symbol. An analysis that kept a file's results from before an edit holds a different
+    /// symbol object for the same routine. The key uses the name and not the position, because a
+    /// kept file still refers to the routines of an edited file at the positions they had before
+    /// the edit.
     /// </summary>
     private static (string Path, string Name) Named(Symbol routine) => (routine.Tree.Path, routine.FlatName);
 
-    /// <summary>One file's routines, followed a routine at a time.</summary>
+    /// <summary>Follows one file's routines, a routine at a time.</summary>
     private sealed class Walk
     {
         private readonly SemanticModel model;
@@ -136,14 +138,14 @@ public static class RegisterKeeps
             Held = new RegisterStates(model.Tree);
         }
 
-        /// <summary>What the registers hold at each statement of the file, for an editor to show.</summary>
+        /// <summary>Gets what the registers hold at each statement of the file, for an editor to show.</summary>
         public RegisterStates Held { get; }
 
         /// <summary>
-        /// What <paramref name="region"/>'s routine keeps, with <paramref name="of"/> saying what
-        /// each routine it calls keeps. <paramref name="report"/> collects what is wrong with it
-        /// on the final walk, once the answer has settled; earlier rounds pass null and report
-        /// nothing.
+        /// Returns what <paramref name="region"/>'s routine keeps, with <paramref name="of"/> giving
+        /// what each routine it calls keeps. <paramref name="report"/> collects what is wrong with
+        /// the routine on the final walk, once the answer has reached a fixed point. Earlier rounds
+        /// pass null and report nothing.
         /// </summary>
         public RoutineRegisters Run(FlowRegion region, Func<Symbol, RoutineRegisters> of, List<Diagnostic>? report)
         {
@@ -159,9 +161,9 @@ public static class RegisterKeeps
 
             // A label a `.state` declares may be jumped into from another routine, so the
             // registers there hold nothing this routine put in them. The stack there is what a
-            // call to the routine leaves, which is empty: code that jumps in has made none of
-            // this routine's saves, so a save the path above the label carries past it cannot
-            // be shown to be the one a pull below the label takes back.
+            // call to the routine leaves, which is empty. Code that jumps in has made none of
+            // this routine's saves, so a save that the path above the label leaves on the stack
+            // cannot be shown to be the one a pull below the label takes back.
             foreach (var block in blocks)
             {
                 if (!block.IsDeclared)
@@ -221,7 +223,7 @@ public static class RegisterKeeps
             }
 
             // A routine no path leaves never returns anything to a caller, so there is nothing
-            // it can fail to keep; what it does to the registers matters to no one else.
+            // it can fail to keep. What it does to the registers matters to no one else.
             return leaves ? new RoutineRegisters(kept, complete) : RoutineRegisters.Everything;
 
             void Settle()
@@ -246,10 +248,10 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// The state at a declared label that can also be entered from outside the routine: the
-        /// registers as the path from above leaves them, with its stack merged with the empty
-        /// stack a call to the routine leaves. Where the path above has pushed something, the
-        /// two stacks disagree, the stack becomes unknown, and a pull below the label restores
+        /// Returns the state at a declared label that can also be entered from outside the routine.
+        /// The registers are as the path from above leaves them, and its stack is merged with the
+        /// empty stack a call to the routine leaves. Where the path above has pushed something, the
+        /// two stacks disagree and the stack becomes unknown. A pull below the label then restores
         /// nothing known.
         /// </summary>
         private static RegisterState Entered(RegisterState reached, BasicBlock block, Symbol routine)
@@ -265,9 +267,9 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// The blocks the state after a block flows to, as the 65816's analysis treats them: after
-        /// a call, flow goes on at the statement after it, and a jump to a routine's entry leaves
-        /// this routine.
+        /// Returns the blocks the state after a block flows to, as the 65816's analysis treats them.
+        /// After a call, flow goes on at the statement after it, and a jump to a routine's entry
+        /// leaves this routine.
         /// </summary>
         private IEnumerable<int> CarriedTo(IReadOnlyList<BasicBlock> blocks, BasicBlock block)
         {
@@ -283,9 +285,9 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// Which registers each inline <c>.scope</c> block of <paramref name="region"/> leaves
-        /// unchanged. This is the question asked of the routine, but measured from where the
-        /// scope is entered rather than where the routine was: a scope that saves a register and
+        /// Returns which registers each inline <c>.scope</c> block of <paramref name="region"/>
+        /// leaves unchanged. This is the question asked of the routine, but measured from where the
+        /// scope is entered rather than where the routine was. A scope that saves a register and
         /// restores it keeps it, even where the routine around it does not.
         /// </summary>
         public IReadOnlyList<ScopeRegisters> Scopes(FlowRegion region, Func<Symbol, RoutineRegisters> of)
@@ -300,11 +302,11 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// Which registers the part of a routine written inside <paramref name="whole"/> leaves
-        /// unchanged, or null where there is no single pass through it to ask about, such as
-        /// when a basic block holds part of it and part of something else. The shapes accepted
-        /// are the ones a scope's cost is worked out for: the scope lies inside one basic block,
-        /// or is made up of whole basic blocks.
+        /// Returns which registers the part of a routine inside <paramref name="whole"/> leaves
+        /// unchanged. It returns null where there is no single pass through that part to ask
+        /// about, such as when a basic block holds part of it and part of something else. The
+        /// shapes accepted are the ones a scope's cost is worked out for. The scope either lies
+        /// inside one basic block or is made up of whole basic blocks.
         /// </summary>
         private RoutineRegisters? Within(FlowRegion region, TextSpan whole, Func<Symbol, RoutineRegisters> of)
         {
@@ -324,7 +326,7 @@ public static class RegisterKeeps
                     part++;
             }
 
-            // Written inside one block, which runs all of it: what it keeps is what its own
+            // The scope lies inside one block, which runs all of it. What it keeps is what its own
             // statements leave, with nothing branching in or out of the middle of them.
             if (part == 1 && all == 0)
             {
@@ -366,7 +368,7 @@ public static class RegisterKeeps
                 complete &= Followed(blocks[i], of);
 
                 // A block is an exit from the scope when what runs after it is outside the
-                // scope; a return, or a jump to another routine, is an exit too.
+                // scope. A return, or a jump to another routine, is an exit too.
                 var left = Leaves(blocks[i], region.Routine).ToList();
                 if (left.Count == 0 && CarriedTo(blocks, blocks[i]).All(to => inside[to])
                     && !Ends(blocks[i]).Returns)
@@ -382,7 +384,10 @@ public static class RegisterKeeps
             return leaves ? new RoutineRegisters(kept, complete) : null;
         }
 
-        /// <summary>Which registers the statements of one block written inside a span leave unchanged.</summary>
+        /// <summary>
+        /// Returns which registers the statements of one block that lie inside a span leave
+        /// unchanged.
+        /// </summary>
         private RoutineRegisters? Straight(BasicBlock block, TextSpan whole, Func<Symbol, RoutineRegisters> of)
         {
             var state = RegisterState.Entered;
@@ -403,13 +408,13 @@ public static class RegisterKeeps
             return any ? new RoutineRegisters(state.Kept, Followed(block, of)) : null;
         }
 
-        /// <summary>Whether every call a block makes is one nt65 could follow into a body.</summary>
+        /// <summary>Returns whether every call a block makes is one nt65 could follow into a body.</summary>
         private static bool Followed(BasicBlock block, Func<Symbol, RoutineRegisters> of) =>
             !block.CallsUnknown && block.Calls.All(callee => of(callee).Complete);
 
         /// <summary>
-        /// Checks whether a routine's <c>keeps</c> promise holds where a path leaves it, and
-        /// reports what to write when it does not. <paramref name="into"/> is the routine or
+        /// Reports a diagnostic where a routine's <c>keeps</c> promise does not hold at a point a
+        /// path leaves it, saying what to change. <paramref name="into"/> is the routine or
         /// label the path passes control to, if any, and <paramref name="kept"/> the registers
         /// that routine returns unchanged.
         /// </summary>
@@ -429,14 +434,14 @@ public static class RegisterKeeps
             var items = names.ToLowerInvariant();
             var one = RegisterEffects.Each(broken).Count() == 1;
 
-            // Registers that the routine the path passes control to makes no promise about
-            // cannot be promised by this routine either, and the promise belongs on the routine
-            // whose code has to honour it.
+            // This routine cannot promise registers that the routine the path passes control to
+            // makes no promise about. The promise belongs on the routine whose code has to
+            // honour it.
             var missing = into is not null ? broken & ~kept : Registers.None;
 
-            // When the stack is unknown, that is why the restore could not be seen, and saying
-            // what made it unknown points nearer the mistake than telling the routine to
-            // restore the register again.
+            // When the stack is unknown, that is why the restore could not be seen. Saying what
+            // made it unknown points nearer the mistake than telling the routine to restore the
+            // register again.
             var fix = missing != Registers.None
                 ? Handing(into!, missing)
                 : state.Stack is null && state.WhyStack is { } lost
@@ -449,9 +454,9 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// What to write where handing control to another routine is what loses the registers:
-        /// the promise goes on the routine handed to, since that is the code the register has
-        /// to come back through, and control never comes back here to restore anything.
+        /// Returns the fix to suggest where handing control to another routine is what loses the
+        /// registers. The promise goes on the routine handed to, since that is the code the
+        /// register has to come back through. Control never comes back here to restore anything.
         /// </summary>
         private static string Handing(Symbol into, Registers missing)
         {
@@ -460,8 +465,8 @@ public static class RegisterKeeps
             var items = RegisterEffects.Spell(missing).ToLowerInvariant();
             var one = RegisterEffects.Each(missing).Count() == 1;
 
-            // Where the path names a label rather than the routine itself, both names are worth
-            // writing: one says where control went, the other where the promise belongs.
+            // Where the path names a label rather than the routine itself, the message gives both
+            // names. One says where control went, and the other says where the promise belongs.
             var gone = owner == into
                 ? $"control does not come back from `{name}`, which does not promise to keep {items}"
                 : $"control does not come back from `{into.DisplayName}`, and `{name}` does not promise "
@@ -470,7 +475,7 @@ public static class RegisterKeeps
                 + "or write `.next ?` here to end the path unchecked";
         }
 
-        /// <summary>What one block does to the registers, from the state that reaches it.</summary>
+        /// <summary>Returns what one block does to the registers, from the state that reaches it.</summary>
         private RegisterState Through(
             BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of, List<Diagnostic>? report)
         {
@@ -487,7 +492,7 @@ public static class RegisterKeeps
             return state;
         }
 
-        /// <summary>What one statement does to the registers.</summary>
+        /// <summary>Returns what one statement does to the registers.</summary>
         private RegisterState Step(Step step, RegisterState state, List<Diagnostic>? report)
         {
             if (step.Statement is StateDirectiveSyntax)
@@ -509,8 +514,8 @@ public static class RegisterKeeps
                 return state;
 
             // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
-            // back, so a handler that has left the stack where it found it hands the carry back
-            // however it used it on the way.
+            // back. A handler that has left the stack where it found it therefore hands the carry
+            // back unchanged, no matter how it used the carry on the way.
             if (mnemonic == MnemonicKind.Rti)
                 return state.With(Registers.C, state.Stack is { Depth: 0 } ? RegisterValue.Of(Registers.C) : RegisterValue.Unknown);
 
@@ -530,7 +535,10 @@ public static class RegisterKeeps
                 RegisterValue.Written);
         }
 
-        /// <summary>What a <c>.state keeps</c> says: from here, those registers hold what the routine was entered with.</summary>
+        /// <summary>
+        /// Returns the state after a <c>.state keeps</c>, from which point those registers hold what
+        /// the routine was entered with.
+        /// </summary>
         private static RegisterState Asserted(Step step, RegisterState state, List<Diagnostic>? report)
         {
             foreach (var item in StateItem.Read(step.Statement))
@@ -552,20 +560,20 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// The state after a path passes control to a routine instead of returning: the
-        /// registers that routine keeps are unchanged, and nothing is known of the rest.
+        /// Returns the state after a path passes control to a routine instead of returning. The
+        /// registers that routine keeps are unchanged, and nothing is known about the rest.
         /// </summary>
         private static RegisterState Handed(RegisterState state, RoutineRegisters kept) =>
             state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown);
 
-        /// <summary>What the routines a block calls leave behind.</summary>
+        /// <summary>Returns the state the routines a block calls leave behind.</summary>
         private static RegisterState Calls(BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of)
         {
             if (block.CallsUnknown || block.Calls.Count == 0)
                 return state.WithEach(Registers.All, RegisterValue.Unknown);
 
             // A call through a pointer whose `.next` names several routines comes back with
-            // whatever every one of them may have left.
+            // anything any one of them may have left.
             RegisterState? reached = null;
             foreach (var callee in block.Calls)
             {
@@ -575,14 +583,20 @@ public static class RegisterKeeps
             return reached!;
         }
 
-        /// <summary>A push: what the register held goes on the stack, and nothing known for the rest.</summary>
+        /// <summary>
+        /// Returns the state after a push, which puts what the register held on the stack, or a
+        /// value nothing is known about for a push of no register.
+        /// </summary>
         private RegisterState Saved(Step step, RegisterState state, InstructionFacts facts, PushSize size)
         {
             var value = facts.Held == Registers.None ? RegisterValue.Unknown : state.Of(facts.Held);
             return state with { Stack = state.Stack?.Push(new SavedPush(value, size, Width(step, size))) };
         }
 
-        /// <summary>A pull: the register it fills gets back what the push it matches held.</summary>
+        /// <summary>
+        /// Returns the state after a pull, in which the register it fills gets back what the
+        /// matching push held.
+        /// </summary>
         private RegisterState Restored(Step step, RegisterState state, InstructionFacts facts, PushSize size)
         {
             var width = Width(step, size);
@@ -592,9 +606,9 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// How wide the register a push of this size moves is. Only the 65816 has widths, and a
-        /// routine that changes neither width reads <see cref="Semantics.Width.Unchanged"/> at
-        /// both the save and the restore, which is what lets the two cancel.
+        /// Returns how wide the register a push of this size moves is. Only the 65816 has widths. A
+        /// routine that changes neither width reads <see cref="Semantics.Width.Unchanged"/> at both
+        /// the save and the restore, so the two cancel.
         /// </summary>
         private Semantics.Width Width(Step step, PushSize size)
         {
@@ -605,7 +619,7 @@ public static class RegisterKeeps
             return size == PushSize.Accumulator ? processor.A : processor.Index;
         }
 
-        /// <summary>How a block ends: calling, jumping away for good, or returning.</summary>
+        /// <summary>Returns how a block ends, which is by calling, jumping away for good, or returning.</summary>
         private (bool Calls, bool Tail, bool Returns) Ends(BasicBlock block)
         {
             if (block.Steps.Count == 0)
@@ -621,8 +635,8 @@ public static class RegisterKeeps
                 || flow.RelativeCallAt(step) is not null
                 || (transfer == Transfer.Elsewhere && control == Control.Calls);
 
-            // `stp` and `jam` stop the processor, so nothing ever reads what they left; `rti`
-            // goes back to whatever the interrupt broke into, which is exactly where the
+            // `stp` and `jam` stop the processor, so nothing ever reads what they left. `rti`
+            // goes back to the code the interrupt broke into, which is exactly where the
             // registers matter.
             var returns = transfer == Transfer.Return && block.Next is null && control != Control.Stops;
             var tail = !calls && !returns && (block.Calls.Count > 0 || block.CallsUnknown);
@@ -630,11 +644,11 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// What a block hands control to: the other routines, and the labels inside them, that
-        /// its jump or its branch names, that a <c>.next</c> on it names in their place, or that
-        /// the <c>.fallthrough</c> ending it runs into.
-        /// Control never comes back from one, because that routine returns to this routine's
-        /// caller, so the path ends there as a tail call's does.
+        /// Returns what a block hands control to. That is the other routines, and the labels inside
+        /// them, that its jump or branch names, that a <c>.next</c> on it names in their place, or
+        /// that the <c>.fallthrough</c> ending it runs into. Control never comes back from any of
+        /// them, because that routine returns to this routine's caller. The path therefore ends
+        /// there, as a tail call's does.
         /// </summary>
         private IEnumerable<Symbol> Leaves(BasicBlock block, Symbol routine)
         {
@@ -674,24 +688,25 @@ public static class RegisterKeeps
         }
 
         /// <summary>
-        /// Whether a target hands control to a routine other than <paramref name="routine"/>.
-        /// Another instance of the same family does not count as another routine: all the
-        /// instances share one written body.
+        /// Returns whether a target hands control to a routine other than
+        /// <paramref name="routine"/>. Another instance of the same <see cref="Family"/> does not
+        /// count as another routine, because all the instances share one body in the source.
         /// </summary>
         private static bool Outside(Symbol target, Symbol routine) =>
             Owner(target) is { } owner && owner != routine && !owner.IsSiblingOf(routine);
 
         /// <summary>
-        /// The routine a target hands control to: the routine itself where it names one, the
-        /// routine a label is written inside where it names a label, and null where it names
-        /// neither, which is a target this analysis has nothing to say about.
+        /// Returns the routine a target hands control to. That is the routine itself where the
+        /// target names one, and the routine a label is inside where it names a label. It is null
+        /// where the target names neither, which is a target this analysis has nothing to say
+        /// about.
         /// </summary>
         private static Symbol? Owner(Symbol target) =>
             target.Signature is not null ? target
                 : target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner
                 : null;
 
-        /// <summary>The value of an immediate operand, where it is known.</summary>
+        /// <summary>Returns the value of an immediate operand, where it is known.</summary>
         private long? Constant(Step step) =>
             (step.Statement as InstructionStatementSyntax)?.Operand?.ChildNodes
                 .OfType<ExpressionSyntax>().FirstOrDefault() is { } expression

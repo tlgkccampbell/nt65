@@ -3,10 +3,10 @@ using System.Text.Json;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The optional protocol features the client supports, read once from the <c>initialize</c>
-/// request and consulted from then on. A capability the client does not declare is treated as
-/// off: a client that declares nothing gets the plain form of each answer, which every client
-/// understands.
+/// Represents the optional protocol features the client supports, read once from the
+/// <c>initialize</c> request and consulted from then on. A capability the client does not
+/// declare is treated as off, so a client that declares nothing gets the plain form of each
+/// answer, which every client understands.
 /// </summary>
 /// <param name="RefreshesTokens">Whether the client can be asked to fetch semantic tokens again.</param>
 /// <param name="RefreshesLenses">Whether it can be asked to fetch code lenses again.</param>
@@ -18,7 +18,9 @@ namespace Norristown.LanguageServer;
 /// refused rather than applied.
 /// </param>
 /// <param name="HierarchicalSymbols">Whether an outline may be a tree rather than a flat list.</param>
-/// <param name="WorkspaceFolders">Whether the client opened folders, and will say when they change.</param>
+/// <param name="WorkspaceFolders">
+/// Whether the client opened folders, and will report when they change.
+/// </param>
 /// <param name="WillRenameFiles">
 /// Whether the client asks the server before it moves a file, so that the edits the move
 /// requires are applied together with it rather than afterwards.
@@ -39,11 +41,17 @@ internal sealed record ClientCapabilities(
     bool WillRenameFiles,
     bool WatchesWhatItIsAsked)
 {
-    /// <summary>A client that has declared nothing, which is what the server assumes until <c>initialize</c> arrives.</summary>
+    /// <summary>
+    /// Gets the capabilities of a client that has declared nothing, which is what the server
+    /// assumes until <c>initialize</c> arrives.
+    /// </summary>
     public static ClientCapabilities None { get; } =
         new(false, false, false, false, false, false, false, false, false);
 
-    /// <summary>What the <c>capabilities</c> of an <c>initialize</c> request declare.</summary>
+    /// <summary>
+    /// Returns the capabilities that the <c>capabilities</c> of an <c>initialize</c> request
+    /// declare.
+    /// </summary>
     public static ClientCapabilities Of(JsonElement? capabilities) => new(
         RefreshesTokens: Flag(capabilities, "workspace", "semanticTokens", "refreshSupport"),
         RefreshesLenses: Flag(capabilities, "workspace", "codeLens", "refreshSupport"),
@@ -57,7 +65,7 @@ internal sealed record ClientCapabilities(
         WatchesWhatItIsAsked: Flag(
             capabilities, "workspace", "didChangeWatchedFiles", "dynamicRegistration"));
 
-    /// <summary>Whether the nested property <paramref name="path"/> names is declared true.</summary>
+    /// <summary>Checks whether the nested property <paramref name="path"/> names is declared true.</summary>
     private static bool Flag(JsonElement? capabilities, params string[] path)
     {
         var at = capabilities;

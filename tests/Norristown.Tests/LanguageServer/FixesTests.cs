@@ -8,9 +8,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The fixes for diagnostics that suggest one, requested from the workspace directly rather than
-/// through the protocol: each is applied, the resulting file is compared with what the programmer
-/// would have written, and that file is checked to have no diagnostics at all.
+/// Tests the fixes for diagnostics that suggest one, requested from the workspace directly rather
+/// than through the protocol. Each fix is applied, the resulting file is compared with what the
+/// programmer would have written, and that file is checked to have no diagnostics at all.
 /// </summary>
 public sealed class FixesTests
 {
@@ -108,8 +108,9 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// The fix that exports an unused name writes the <c>.export</c> directly under the file's
-    /// <c>.module</c>, which is also where the fix for a name another module cannot see writes one.
+    /// The fix that exports an unused name inserts the <c>.export</c> directly under the file's
+    /// <c>.module</c>, which is also where the fix for a name another module cannot see inserts
+    /// one.
     /// </summary>
     [Fact]
     public void ExportingWhatNothingNamesWritesTheExportUnderTheModule()
@@ -148,7 +149,10 @@ public sealed class FixesTests
             Editing.Apply(Header + Body, actions[0].Edit.Changes[Uri]));
     }
 
-    /// <summary>A name brought in by <c>.use</c> and never used is shown faded, and a fix removes it from the <c>.use</c>.</summary>
+    /// <summary>
+    /// A name brought in by <c>.use</c> and never used is shown faded, and a fix removes it from
+    /// the <c>.use</c>.
+    /// </summary>
     [Fact]
     public void AUseItemNothingNamesIsOfferedForRemoval()
     {
@@ -172,9 +176,9 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// A missing bracket is written where the syntax tree holds a place for the missing token.
+    /// A missing bracket is inserted where the syntax tree holds a place for the missing token.
     /// The position comes from that token rather than from the end of the text, so on a line with
-    /// a trailing comment the brace is written before the comment rather than after it.
+    /// a trailing comment the brace is inserted before the comment rather than after it.
     /// </summary>
     [Theory]
     [InlineData(".export .proc main: a8, i8\n    rts\n}\n", "Write the `{`", ".export .proc main: a8, i8 {\n    rts\n}\n")]
@@ -194,7 +198,7 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// Writing the missing brace of a routine's body leaves a file with no diagnostics: one that
+    /// Inserting the missing brace of a routine's body leaves a file with no diagnostics, which
     /// parses and means what it appears to mean.
     /// </summary>
     [Fact]
@@ -211,9 +215,9 @@ public sealed class FixesTests
     }
 
     /// <summary>
-    /// A name that ca65 would read as an instruction has no mechanical fix, so the fix writes
-    /// nothing: it puts the caret on the name and starts a rename, because what it should be
-    /// called is for the programmer to decide, not for the server to guess.
+    /// A name that ca65 would read as an instruction has no mechanical fix, so the fix inserts no
+    /// text. Instead it puts the caret on the name and starts a rename, because what the name
+    /// should be is for the programmer to decide, not for the server to guess.
     /// </summary>
     [Fact]
     public void AMnemonicNameOffersARenameAndWritesNothing()
@@ -239,7 +243,10 @@ public sealed class FixesTests
         Assert.NotEmpty(CodeActions.In(analysis, model, Whole, ["quickfix"]));
     }
 
-    /// <summary>A range covering the whole file, as a client sends when it asks for actions across all of it.</summary>
+    /// <summary>
+    /// Gets a range covering the whole file, as a client sends when it asks for actions across all
+    /// of it.
+    /// </summary>
     private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string text)

@@ -5,8 +5,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// The modules that come with nt65: the bytes each charmap gives, that they join only a
-/// program that could name them, that they write nothing, and that their root is reserved.
+/// Checks the modules that come with nt65. The tests check the bytes each charmap gives, and
+/// check that the modules join only a program that could name them, that they write nothing, and
+/// that their root is reserved.
 /// </summary>
 public sealed class StandardModulesTests
 {
@@ -50,7 +51,7 @@ public sealed class StandardModulesTests
 
     /// <summary>
     /// The modules join a program whose text mentions <c>nt65</c>, report nothing of their own,
-    /// and write no output; a program that never mentions them is analyzed without them.
+    /// and write no output. A program that never mentions them is analyzed without them.
     /// </summary>
     [Fact]
     public void TheModulesJoinOnlyAProgramThatCouldNameThem()
@@ -87,7 +88,10 @@ public sealed class StandardModulesTests
         Assert.DoesNotContain(third.Diagnostics, d => d.Severity == Severity.Error);
     }
 
-    /// <summary>No module of a program's own may be under <c>nt65</c>, whether or not the modules there are in use.</summary>
+    /// <summary>
+    /// No module of a program's own may be under <c>nt65</c>, whether or not the modules there are
+    /// in use.
+    /// </summary>
     [Theory]
     [InlineData("nt65")]
     [InlineData("nt65::mine")]
@@ -99,6 +103,6 @@ public sealed class StandardModulesTests
         Assert.DoesNotContain(problems, problem => problem.Contains("already declared", StringComparison.Ordinal));
     }
 
-    /// <summary>No test here reads a binary file.</summary>
+    /// <summary>Returns no length for any path, because no test here reads a binary file.</summary>
     private static long? Nothing(string path) => null;
 }

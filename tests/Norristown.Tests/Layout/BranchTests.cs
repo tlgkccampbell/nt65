@@ -3,14 +3,14 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// How far a branch reaches, and what a long branch is written as. The distance is known
+/// Checks how far a branch reaches, and what a long branch is written as. The distance is known
 /// when the branch and its target sit in one stream of bytes with no <c>.align</c> between
 /// them. Where it is not known, nt65 reports nothing and leaves the range check to ca65, and
 /// a long branch is always written in its long form.
 /// </summary>
 public sealed class BranchTests
 {
-    /// <summary>Filler of <paramref name="bytes"/> bytes, one <c>nop</c> each.</summary>
+    /// <summary>Returns filler of <paramref name="bytes"/> bytes, one <c>nop</c> each.</summary>
     private static string Nops(int bytes) => $".repeat {bytes}, i {{\n        nop\n    }}\n";
 
     [Fact]
@@ -32,7 +32,7 @@ public sealed class BranchTests
 
     /// <summary>
     /// Lengthening a branch moves everything after it, which can put a branch before it out
-    /// of reach. That is why the file is laid out again until nothing changes; the repetition
+    /// of reach. That is why the file is laid out again until nothing changes. The repetition
     /// terminates because a branch only ever grows, never shrinks.
     /// </summary>
     [Fact]
@@ -41,8 +41,8 @@ public sealed class BranchTests
         var written = Written(
             $".proc p {{\n    jeq @out\n    jeq @far\n    {Nops(123)}@out:\n    rts\n    {Nops(130)}@far:\n    rts\n}}\n");
 
-        // On its own the first reaches 125 bytes and is in range; once the second has grown
-        // by the three bytes of its `jmp`, it reaches 128 and is not.
+        // On its own the first reaches 125 bytes and is in range. Once the second has grown by
+        // the three bytes of its `jmp`, it reaches 128 and is not.
         Assert.Equal(2, Occurrences(written, "    jmp p__"));
         Assert.DoesNotContain("    beq", written, StringComparison.Ordinal);
     }
@@ -57,7 +57,7 @@ public sealed class BranchTests
     }
 
     /// <summary>
-    /// A backward branch, to a target already written. This is the one case ca65's own
+    /// A backward branch goes to a target already written. This is the one case ca65's own
     /// long-branch macros can also shorten, because by the time ca65 reaches the branch it
     /// knows where the target landed.
     /// </summary>
@@ -106,7 +106,10 @@ public sealed class BranchTests
         Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", text)).Problems());
     }
 
-    /// <summary>The ca65 source written for <paramref name="text"/>, placed in the code segment.</summary>
+    /// <summary>
+    /// Returns the ca65 source written for <paramref name="text"/>, which is put in the code
+    /// segment.
+    /// </summary>
     private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     private static int Occurrences(string text, string find)

@@ -39,10 +39,11 @@ internal static class Lines
     }
 
     /// <summary>
-    /// The index of the token where the line writes one of ca65's unnamed labels, or -1. An
-    /// unnamed label is defined by a <c>:</c> at the start of a line and referred to by
-    /// <c>:+</c> or <c>:-</c> in an operand. A <c>:</c> right after a name is a label or an
-    /// address-size prefix instead, so <c>z:foo</c> and <c>a:-1</c> keep those meanings.
+    /// Returns the index of the token where one of ca65's unnamed labels appears on the line, or
+    /// -1 if none does. An unnamed label is defined by a <c>:</c> at the start of a line and
+    /// referred to by <c>:+</c> or <c>:-</c> in an operand. A <c>:</c> right after a name is a
+    /// label or an address-size prefix instead, so <c>z:foo</c> and <c>a:-1</c> keep those
+    /// meanings.
     /// </summary>
     public static int UnnamedLabel(ImmutableArray<GreenToken> tokens)
     {
@@ -61,8 +62,8 @@ internal static class Lines
     }
 
     /// <summary>
-    /// Whether the line opens a block (it ends with <c>{</c>) and whether it closes one (it
-    /// starts with <c>}</c>). A <c>{</c> inside a parenthesis still open on the line does not
+    /// Returns whether the line opens a block, by ending with <c>{</c>, and whether it closes one,
+    /// by starting with <c>}</c>. A <c>{</c> inside a parenthesis still open on the line does not
     /// open a block, so a half-typed <c>m!({</c> does not swallow the lines after it.
     /// </summary>
     public static (bool Opens, bool Closes) Braces(ImmutableArray<GreenToken> tokens)
@@ -83,8 +84,9 @@ internal static class Lines
     }
 
     /// <summary>
-    /// Whether the line is <c>.segment NAME</c> with neither a brace nor a size: a region line,
-    /// which puts the lines after it in the segment, rather than lines inside braces.
+    /// Returns a value indicating whether the line is <c>.segment NAME</c> with neither a brace
+    /// nor a size. Such a region line puts the lines after it in the segment, rather than lines
+    /// inside braces.
     /// </summary>
     public static bool IsRegion(ImmutableArray<GreenToken> tokens)
     {
@@ -102,10 +104,10 @@ internal static class Lines
     }
 
     /// <summary>
-    /// Whether the mnemonic at <paramref name="at"/> names a macro being called: a macro may be
-    /// named after an instruction, such as one another processor has. Only <c>!(</c> after it
-    /// makes a call, because <c>lda !flag</c> is an instruction whose operand is the logical not of
-    /// <c>flag</c>.
+    /// Returns a value indicating whether the mnemonic at <paramref name="at"/> names a macro
+    /// being called. A macro may be named after an instruction, such as one another processor
+    /// has. Only <c>!(</c> after it makes a call, because <c>lda !flag</c> is an instruction whose
+    /// operand is the logical not of <c>flag</c>.
     /// </summary>
     public static bool IsCallOfMnemonic(ImmutableArray<GreenToken> tokens, int at) =>
         at + 2 < tokens.Length && tokens[at].Kind == SyntaxKind.Mnemonic
@@ -142,10 +144,10 @@ internal static class Lines
     }
 
     /// <summary>
-    /// The kind of block a data line opens, which decides how the block's lines are parsed.
-    /// <c>.data name {</c> is mixed data; an element type with a count, such as
-    /// <c>.byte[] {</c>, holds an array's values; and <c>.type T {</c> with no count holds one
-    /// record's <c>member = value</c> lines. Null for a line that opens no data block.
+    /// Returns the kind of block a data line opens, which decides how the block's lines are
+    /// parsed, or null for a line that opens no data block. <c>.data name {</c> is mixed data. An
+    /// element type with a count, such as <c>.byte[] {</c>, holds an array's values, and
+    /// <c>.type T {</c> with no count holds one record's <c>member = value</c> lines.
     /// </summary>
     private static BlockKind? DataBlockKind(ImmutableArray<GreenToken> tokens, int start)
     {

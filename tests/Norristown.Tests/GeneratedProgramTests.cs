@@ -5,17 +5,18 @@ using Norristown.Syntax;
 namespace Norristown.Tests;
 
 /// <summary>
-/// Generated programs, put together from the kinds of construct that have crashed nt65 rather
-/// than produced diagnostics: an expression nested deeper than the parser reads, a number at the
-/// edge of nt65's integer range, a repetition longer than nt65 will unroll, a literal the lexer
-/// rejects, and a name defined in terms of itself. It is a safety net beneath
-/// <see cref="BrokenSourceTests"/>, which can only cut short the sources that exist, and none of
-/// these lines appears in any of them.
+/// Tests generated programs, put together from the kinds of construct that have crashed nt65
+/// instead of producing diagnostics. These are an expression nested deeper than the parser
+/// reads, a number at the edge of nt65's integer range, a repetition longer than nt65 will
+/// unroll, a literal the lexer rejects, and a name defined in terms of itself. The test is a
+/// safety net beneath <see cref="BrokenSourceTests"/>, which can only cut short the sources that
+/// exist, and none of these lines appears in any of them.
 /// <para>
-/// A fixed seed and a fixed count: a suite that runs a different program on every build reports
-/// failures nobody can reproduce, and a long randomized run is for a person to start deliberately,
-/// not for the edit loop. The diagnostics are not checked, because a generated program has no
-/// single right diagnostic; the test asks only that analysing and emitting it do not throw.
+/// The seed and the count are fixed. A suite that runs a different program on every build
+/// reports failures nobody can reproduce, and a long randomized run is for a person to start
+/// deliberately, not for the edit loop. The diagnostics are not checked, because a generated
+/// program has no single right diagnostic. The test asks only that analysing and emitting it do
+/// not throw.
 /// </para>
 /// </summary>
 public sealed class GeneratedProgramTests
@@ -35,8 +36,8 @@ public sealed class GeneratedProgramTests
     }
 
     /// <summary>
-    /// Analyses one program and emits it, and reports a failure when either throws. The report
-    /// includes the program's text, which is all that is needed to reproduce the failure.
+    /// Analyses one program and emits it, and returns a failure message when either throws. The
+    /// message includes the program's text, which is all that is needed to reproduce the failure.
     /// </summary>
     /// <param name="text">The program.</param>
     private static IEnumerable<string> Problems(string text)
@@ -46,8 +47,8 @@ public sealed class GeneratedProgramTests
         ProgramAnalysis analysis;
         try
         {
-            // An `.incbin` is given an unknown length rather than read from disk, as in
-            // BrokenSourceTests: nothing here depends on where the code after one is placed.
+            // An `.incbin` is given an unknown length instead of being read from disk, as in
+            // BrokenSourceTests, because nothing here depends on where the code after one is laid out.
             analysis = Compiler.Analyze([tree], ProjectSettings.None, _ => (long?)null);
         }
         catch (Exception e)
@@ -65,7 +66,7 @@ public sealed class GeneratedProgramTests
         return problems;
     }
 
-    /// <summary>Program <paramref name="number"/>, which is the same program on every run.</summary>
+    /// <summary>Builds program <paramref name="number"/>, which is the same program on every run.</summary>
     /// <param name="number">Which program to build.</param>
     private static string Program(int number)
     {
@@ -78,12 +79,12 @@ public sealed class GeneratedProgramTests
     }
 
     /// <summary>
-    /// One declaration, of one of the kinds that have caused crashes. The kind is chosen in
-    /// rotation rather than at random, so that every kind appears about equally often across the
-    /// programs; only the declaration's contents are random.
+    /// Builds one declaration, of one of the kinds that have caused crashes. The kind is chosen in
+    /// rotation instead of at random, so that every kind appears about equally often across the
+    /// programs. Only the declaration's contents are random.
     /// </summary>
     /// <param name="random">The random source for the declaration's contents.</param>
-    /// <param name="kind">Which kind of declaration to write.</param>
+    /// <param name="kind">Which kind of declaration to build.</param>
     /// <param name="at">The declaration's position in the program, which its name includes.</param>
     private static string Piece(Random random, int kind, int at) => (kind % 8) switch
     {
@@ -93,9 +94,9 @@ public sealed class GeneratedProgramTests
         3 => $".data d{at}: .byte[] {{\n    {Literal(random)}, {Number(random)}\n}}",
         4 => $".data d{at} {{\n    .repeat {Turns(random)}, i {{\n        .byte i\n    }}\n}}",
 
-        // A cycle of constants, and a struct containing an instance of itself: neither has a
-        // value or a size, and emission must skip what the analysis has already reported as
-        // cyclic rather than following the cycle until the stack overflows.
+        // A cycle of constants has no value, and a struct containing an instance of itself has
+        // no size. Emission must skip what the analysis has already reported as cyclic instead of
+        // following the cycle until the stack overflows.
         5 => $"A{at} = B{at} {Operator(random)} 1\nB{at} = A{at} + 1",
         6 => $".struct S{at} {{\n    inner: .type S{at}\n}}\n.data s{at}: .type S{at}",
         _ => $".segment CODE {{\n    .export .proc p{at} {{\n"
@@ -103,8 +104,8 @@ public sealed class GeneratedProgramTests
     };
 
     /// <summary>
-    /// An expression in parentheses, nested from one level to deeper than the parser reads, and
-    /// half the time with none of them closed.
+    /// Builds an expression in parentheses, nested from one level to deeper than the parser reads.
+    /// Half the time, none of the parentheses is closed.
     /// </summary>
     private static string Nested(Random random, string inner)
     {
@@ -119,8 +120,9 @@ public sealed class GeneratedProgramTests
     private static string Literal(Random random) => Literals[random.Next(Literals.Length)];
 
     /// <summary>
-    /// A repetition's count. None falls between a handful and the limit: a count just under the
-    /// limit unrolls the body tens of thousands of times, which is slow rather than interesting.
+    /// Returns a repetition's count. No count falls between a handful and the limit, because a
+    /// count just under the limit unrolls the body tens of thousands of times, which is slow
+    /// rather than interesting.
     /// </summary>
     private static string Turns(Random random) => TurnCounts[random.Next(TurnCounts.Length)];
 

@@ -8,9 +8,10 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The capabilities the client declares, read once and used from then on to decide the form of
-/// each answer. A client that declares nothing is given the plain form, which every client
-/// understands, and one that declares more is given the richer forms it declared.
+/// Tests how the server uses the capabilities the client declares. The server reads them once and
+/// uses them from then on to decide the form of each answer. A client that declares nothing is
+/// given the plain form, which every client understands. A client that declares more is given the
+/// richer forms it declared.
 /// </summary>
 public sealed class CapabilitiesTests : IDisposable
 {
@@ -57,7 +58,7 @@ public sealed class CapabilitiesTests : IDisposable
         Assert.Equal(ClientCapabilities.None, ClientCapabilities.Of(JsonDocument.Parse("{}").RootElement));
         Assert.Equal(ClientCapabilities.None, ClientCapabilities.Of(null));
 
-        // A capability spelled as something other than true is not declared.
+        // A capability given any value other than true is not declared.
         Assert.Equal(
             ClientCapabilities.None,
             ClientCapabilities.Of(JsonDocument.Parse("""
@@ -128,8 +129,8 @@ public sealed class CapabilitiesTests : IDisposable
     }
 
     /// <summary>
-    /// A folder added to the workspace brings whatever projects are in it, and a file that was
-    /// a program of its own becomes part of one.
+    /// A folder added to the workspace brings the projects in it, and a file that was a program
+    /// of its own becomes part of one of those projects.
     /// </summary>
     [Fact]
     public async Task AFolderAddedToTheWorkspaceBringsItsProjects()

@@ -2,20 +2,20 @@ using Norristown.Syntax;
 
 namespace Norristown.Processor;
 
-/// <summary>How a CPU is written: in nt65 source, and in the ca65 output.</summary>
+/// <summary>Converts between CPUs and their names in nt65 source and in the ca65 output.</summary>
 public static class CpuNames
 {
-    /// <summary>Every CPU, in the order nt65 lists them.</summary>
+    /// <summary>Gets every CPU, in the order nt65 lists them.</summary>
     public static IReadOnlyList<Cpu> All { get; } = Enum.GetValues<Cpu>();
 
     /// <summary>
-    /// The names, as a message lists them: <c>6502</c>, <c>65sc02</c>, and so on. The lexer
-    /// recognizes CPU names without knowing about <see cref="Cpu"/>, so it owns the spellings,
-    /// and a message about a name it rejected lists exactly the ones it accepts.
+    /// Gets the CPU names as a message lists them, such as <c>6502</c> and <c>65sc02</c>. The
+    /// lexer recognizes CPU names without knowing about <see cref="Cpu"/>, so it owns the
+    /// names, and a message about a name it rejected lists exactly the ones it accepts.
     /// </summary>
     public static string Listed => SyntaxFacts.ListedCpuNames;
 
-    /// <summary>The CPU a name stands for, or null when it names none.</summary>
+    /// <summary>Returns the CPU that <paramref name="text"/> names, or null if it names none.</summary>
     public static Cpu? Parse(string text) => text.ToLowerInvariant() switch
     {
         "6502" => Cpu.Mos6502,
@@ -27,7 +27,7 @@ public static class CpuNames
         _ => null,
     };
 
-    /// <summary>The name nt65 writes.</summary>
+    /// <summary>Returns the name nt65 uses for <paramref name="cpu"/>.</summary>
     public static string Spell(Cpu cpu) => cpu switch
     {
         Cpu.Mos6502 => "6502",
@@ -38,7 +38,10 @@ public static class CpuNames
         _ => "65816",
     };
 
-    /// <summary>The name ca65's <c>.setcpu</c> takes, whose instruction set is exactly the CPU's.</summary>
+    /// <summary>
+    /// Returns the name ca65's <c>.setcpu</c> takes for <paramref name="cpu"/>, chosen so that
+    /// ca65's instruction set under it is exactly the CPU's.
+    /// </summary>
     public static string SpellForCa65(Cpu cpu) => cpu switch
     {
         Cpu.Mos6502 => "6502",

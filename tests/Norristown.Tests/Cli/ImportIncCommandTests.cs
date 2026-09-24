@@ -4,9 +4,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// <c>nt65 import-inc</c>: the one-time conversion of a ca65 include file of constants into an
-/// nt65 module. What it writes is read by a person, so nothing is dropped silently: a line it
-/// cannot convert is kept in the module as a comment and is counted on standard error.
+/// Tests <c>nt65 import-inc</c>, the one-time conversion of a ca65 include file of constants
+/// into an nt65 module. A person reads the module it writes, so nothing is dropped silently. A
+/// line it cannot convert is kept in the module as a comment and is counted on standard error.
 /// </summary>
 public sealed class ImportIncCommandTests
 {
@@ -39,9 +39,9 @@ public sealed class ImportIncCommandTests
     }
 
     /// <summary>
-    /// A line nt65 cannot read stays in the module as a comment, and is counted: a ca65
-    /// directive, a ca65 operator nt65 does not have, and an expression that nt65 requires
-    /// parentheses in to make its order explicit.
+    /// A line nt65 cannot read stays in the module as a comment and is counted. Such lines
+    /// include a ca65 directive, a ca65 operator nt65 does not have, and an expression in which
+    /// nt65 requires parentheses to make its order explicit.
     /// </summary>
     [Fact]
     public void WhatItCannotConvertIsLeftAsAComment()
@@ -67,7 +67,7 @@ public sealed class ImportIncCommandTests
         Assert.Contains(".export OK", text, StringComparison.Ordinal);
     }
 
-    /// <summary>What it writes is an nt65 module: it parses, and it is in the standard layout.</summary>
+    /// <summary>The file it writes is an nt65 module that parses and is in the standard layout.</summary>
     [Fact]
     public void WhatItWritesReadsBackAsNt65()
     {

@@ -5,19 +5,20 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Which <c>.if</c> branches a build takes, and so which parts of the program exist at all.
+/// Determines which <c>.if</c> branches a build takes, and therefore which parts of the program
+/// exist at all.
 /// <para>
-/// A condition tests the build configuration and never the program: it may use literals,
-/// operators, built-in functions, defines and <c>.config</c> settings, and nothing else a file
-/// declares. That is what lets every condition be answered here, before a single declaration
-/// has been collected — which declarations exist follows from the configuration alone, so the
-/// same name may be declared under two conditions and only one of them is real. A check that depends on the
-/// program is an <c>.assert</c>, which is evaluated last.
+/// A condition tests the build configuration and never the program. It may use literals,
+/// operators, built-in functions, defines and <c>.config</c> settings, and nothing else that a
+/// file declares. This lets every condition be evaluated here, before any declaration has been
+/// collected. Which declarations exist follows from the configuration alone, so the same name
+/// may be declared under two conditions and only one of them is real. A check that depends on
+/// the program is an <c>.assert</c>, which is evaluated last.
 /// </para>
 /// </summary>
 public sealed class Configuration
 {
-    // A file's `.config` items wherever they are written, read once per tree.
+    // A file's `.config` items, wherever they appear, read once per tree.
     private static readonly ConditionalWeakTable<SyntaxTree, List<ConfigDeclarationSyntax>> written = new();
 
     private readonly Dictionary<SyntaxTree, List<TextSpan>> omitted;
@@ -33,14 +34,14 @@ public sealed class Configuration
         Cpu = cpu;
     }
 
-    /// <summary>A build that leaves nothing out, for a caller with no conditions to resolve.</summary>
+    /// <summary>Gets a build that leaves nothing out, for a caller with no conditions to resolve.</summary>
     public static Configuration Everything { get; } = new([], [], ProgramCpu.Default, new Settings());
 
-    /// <summary>The CPU the build is for, which <c>.target</c> and <c>.has</c> ask about.</summary>
+    /// <summary>Gets the CPU the build is for, which <c>.target</c> and <c>.has</c> ask about.</summary>
     public Cpu Cpu { get; }
 
     /// <summary>
-    /// Works out which branches <paramref name="trees"/> take when built for
+    /// Determines which branches <paramref name="trees"/> take when built for
     /// <paramref name="cpu"/> with <paramref name="defines"/>.
     /// </summary>
     public static Configuration Resolve(
@@ -64,20 +65,20 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// Whether <paramref name="tree"/> writes a <c>.config</c> anywhere, whose value any file's
-    /// conditions may read.
+    /// Determines whether <paramref name="tree"/> declares a <c>.config</c> anywhere. Any file's
+    /// conditions may read the value of such a setting.
     /// </summary>
     public static bool DeclaresSettings(SyntaxTree tree) => SettingsIn(tree).Count > 0;
 
     /// <summary>
-    /// Whether this pass answered the condition on <paramref name="block"/>. It answers every
-    /// one it can reach before a declaration is looked up; the ones it cannot are inside a
-    /// macro body, a <c>.repeat</c> or an <c>.each</c>, where a condition may name what the
-    /// expansion binds, and those are answered once per expansion instead.
+    /// Determines whether this pass evaluated the condition on <paramref name="block"/>. The pass
+    /// evaluates every condition it can reach before a declaration is looked up. The ones it
+    /// cannot reach are inside a macro body, a <c>.repeat</c> or an <c>.each</c>, where a condition
+    /// may name what the expansion binds, and those are evaluated once per expansion instead.
     /// </summary>
     public bool Answered(BlockSyntax block) => answered.Contains((block.Tree, block.Position));
 
-    /// <summary>Whether the build includes what is written at <paramref name="node"/>.</summary>
+    /// <summary>Determines whether the build includes the source at <paramref name="node"/>.</summary>
     public bool Includes(SyntaxNode node)
     {
         if (!omitted.TryGetValue(node.Tree, out var left))
@@ -91,7 +92,7 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// The branches of <paramref name="tree"/> this build leaves out, for an editor to dim.
+    /// Returns the branches of <paramref name="tree"/> that this build leaves out, for an editor to dim.
     /// A branch inside one that is already left out is not listed again.
     /// </summary>
     public IReadOnlyList<TextSpan> Omitted(SyntaxTree tree) =>
@@ -99,9 +100,9 @@ public sealed class Configuration
 
 
     /// <summary>
-    /// What <c>.target(cpu)</c> or <c>.has(mnemonic)</c> answers for a build for
-    /// <paramref name="cpu"/>, or null when <paramref name="name"/> is neither. What is wrong
-    /// with the argument goes to <paramref name="report"/>.
+    /// Returns the value of <c>.target(cpu)</c> or <c>.has(mnemonic)</c> for a build for
+    /// <paramref name="cpu"/>, or null when <paramref name="name"/> is neither. Problems with the
+    /// argument are reported through <paramref name="report"/>.
     /// </summary>
     internal static Value? AboutTheCpu(
         string name, SyntaxToken function, IReadOnlyList<SyntaxNode> given, Cpu cpu,
@@ -117,8 +118,9 @@ public sealed class Configuration
                 }
                 return Value.Of(named == cpu);
 
-            // Whether the CPU has an instruction, whichever it is: a program that runs on more
-            // than one asks this rather than listing the CPUs that have it.
+            // `.has` asks whether the build's CPU has an instruction, whichever CPU that is. A
+            // program that runs on more than one CPU asks this rather than listing the CPUs
+            // that have the instruction.
             case ".has":
                 if (given.Count != 1 || given[0] is not NameExpressionSyntax { SimpleName: { Kind: SyntaxKind.Mnemonic } mnemonic })
                 {
@@ -133,29 +135,33 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// The one token an argument is written as — a CPU name, a number, or a name of a single
-    /// component — or null where it is written as anything more.
+    /// Returns the single token that makes up an argument, such as a CPU name, a number, or a
+    /// name with a single component. Returns null when the argument is anything more.
     /// </summary>
     private static SyntaxToken? Alone(SyntaxNode argument) =>
         argument is NameExpressionSyntax name ? name.SimpleName
         : argument.ChildTokens is [var only] ? only
         : null;
 
-    /// <summary>Whether a statement is written at file level, outside every block, exported or not.</summary>
+    /// <summary>
+    /// Determines whether a statement is at file level, outside every block, whether or not it is
+    /// exported.
+    /// </summary>
     internal static bool AtFileLevel(StatementSyntax statement) =>
         statement.Parent?.FirstAncestorOrSelf<LineSyntax>()?.Parent?.Parent is null;
 
     /// <summary>
-    /// What the build makes the <c>.config</c> <paramref name="name"/> that <paramref name="tree"/>
-    /// declares, or null when it declares none by that name or its value is unknown.
+    /// Returns the value the build gives the <c>.config</c> <paramref name="name"/> that
+    /// <paramref name="tree"/> declares, or null when it declares none by that name or its value
+    /// is unknown.
     /// </summary>
     internal long? SettingOf(SyntaxTree tree, string name) => settings.ValueOf(tree, name);
 
     /// <summary>
-    /// The configuration of a program in which <paramref name="before"/> became
-    /// <paramref name="after"/>. A condition depends on nothing but the file it is in, the
-    /// build and the settings, and a file that declares a setting is analyzed with the whole
-    /// program, so every other file's answers remain valid.
+    /// Returns the configuration of a program in which <paramref name="before"/> was replaced by
+    /// <paramref name="after"/>. A condition depends only on the file it is in, the build and the
+    /// settings. A file that declares a setting is analyzed with the whole program, so every other
+    /// file's results remain valid.
     /// </summary>
     internal Configuration Replacing(
         SyntaxTree before, SyntaxTree after, Cpu cpu, IEnumerable<Define> defines, List<Diagnostic> diagnostics)
@@ -173,8 +179,8 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// The build's defines that a plain name in a file can refer to, by name. A define written
-    /// with a module's path sets a <c>.config</c> instead, and is not a name a file can write.
+    /// Returns the build's defines that a plain name in a file can refer to, by name. A define
+    /// given with a module's path sets a <c>.config</c> instead, and is not a name a file can use.
     /// </summary>
     private static Dictionary<string, long> Plain(IEnumerable<Define> defines)
     {
@@ -188,10 +194,11 @@ public sealed class Configuration
         written.GetValue(tree, tree => [.. tree.Root.DescendantNodes().OfType<ConfigDeclarationSyntax>()]);
 
     /// <summary>
-    /// Reads one file's conditions. A chain is a run of sibling blocks: the <c>.if</c> that
-    /// starts it, then whichever <c>.elseif</c>s and <c>.else</c> continue it. The first
-    /// branch whose condition holds is the one the build takes; the conditions after it are
-    /// never evaluated, so nothing is reported about a branch that is not there.
+    /// Reads one file's conditions. A chain is a run of sibling blocks, made up of the
+    /// <c>.if</c> that starts it followed by any <c>.elseif</c> and <c>.else</c> blocks that
+    /// continue it. The first branch whose condition holds is the one the build takes. The
+    /// conditions after it are never evaluated, so nothing is reported about a branch that is
+    /// not there.
     /// </summary>
     private sealed class Reader(
         SyntaxTree tree,
@@ -213,7 +220,7 @@ public sealed class Configuration
                 }
 
                 // A condition inside one of these may name what the expansion binds, so it
-                // has no answer until there is an expansion to answer it for.
+                // has no value until there is an expansion to evaluate it in.
                 if (block.BlockKind is BlockKind.Macro or BlockKind.Repeat or BlockKind.Each or BlockKind.MultiProc)
                 {
                     chaining = false;
@@ -255,8 +262,9 @@ public sealed class Configuration
             diagnostics.Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message));
 
         /// <summary>
-        /// One branch of a chain: whether the build takes it. <paramref name="already"/> says
-        /// an earlier branch was taken, in which case this one is left out whatever it says.
+        /// Determines whether the build takes one branch of a chain. <paramref name="already"/>
+        /// indicates that an earlier branch was taken, in which case this one is left out
+        /// regardless of its condition.
         /// </summary>
         private bool Branch(BlockSyntax block, StatementSyntax opener, bool already)
         {
@@ -276,7 +284,7 @@ public sealed class Configuration
             return take;
         }
 
-        /// <summary>Whether the condition an <c>.if</c> or <c>.elseif</c> writes holds.</summary>
+        /// <summary>Determines whether the condition of an <c>.if</c> or <c>.elseif</c> holds.</summary>
         private bool Holds(StatementSyntax opener)
         {
             if (opener is ElseDirectiveSyntax)
@@ -293,9 +301,9 @@ public sealed class Configuration
             return value.AsNumber() is { } number && number != 0;
         }
 
-        // From the block's full start, indentation included, to its closing brace: `Includes`
-        // compares where a node starts, and an indented block starts at its line's leading
-        // whitespace, before its first token.
+        // The span runs from the block's full start, including indentation, to its closing
+        // brace. `Includes` compares where a node starts, and an indented block starts at its
+        // line's leading whitespace, before its first token.
         private void Leave(BlockSyntax block) =>
             omitted.Add(new TextSpan(block.Position, block.Span.End - block.Position));
 
@@ -304,11 +312,11 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// The <c>.config</c> items of a program: defines written in source files, each belonging to
-    /// its module. Each is written at file level outside every block, so that which settings
-    /// exist depends on no condition, and its value may use literals, built-ins, the build's
-    /// defines and other settings. The build can set one that a module exports by its qualified
-    /// name, which makes the value the file writes only a default.
+    /// Represents the <c>.config</c> items of a program, which are defines declared in source
+    /// files, each belonging to its module. Each is declared at file level outside every block,
+    /// so that which settings exist depends on no condition. Its value may use literals,
+    /// built-ins, the build's defines and other settings. The build can set a setting that a
+    /// module exports by its qualified name, which makes the value in the file only a default.
     /// </summary>
     private sealed class Settings
     {
@@ -333,8 +341,9 @@ public sealed class Configuration
         }
 
         /// <summary>
-        /// Every setting <paramref name="trees"/> declare, with what the build sets, each
-        /// evaluated once so that what is wrong with one is reported whether or not anything reads it.
+        /// Reads every setting that <paramref name="trees"/> declare, together with what the build
+        /// sets. Each setting is evaluated once, so that a problem with it is reported whether or
+        /// not anything reads it.
         /// </summary>
         public static Settings Read(
             IReadOnlyList<SyntaxTree> trees, Cpu cpu, Dictionary<string, long> defines, IEnumerable<Define> set,
@@ -348,7 +357,7 @@ public sealed class Configuration
                 var exported = ExportedNames(tree);
                 foreach (var declaration in SettingsIn(tree))
                 {
-                    // A setting is known by its name, so a line that writes none declares nothing.
+                    // A setting is identified by its name, so a line without a name declares nothing.
                     if (declaration.Name is not { IsMissing: false } name)
                         continue;
                     if (!Configuration.AtFileLevel(declaration))
@@ -362,8 +371,8 @@ public sealed class Configuration
                 }
             }
 
-            // What the build says about a setting is written with the module's path, as the
-            // setting is named from outside the module.
+            // The build names a setting with the module's path, as the setting is named from
+            // outside the module.
             foreach (var define in set.Where(define => define.IsSetting))
             {
                 var at = define.Name.LastIndexOf("::", StringComparison.Ordinal);
@@ -392,9 +401,9 @@ public sealed class Configuration
         }
 
         /// <summary>
-        /// The same settings, after <paramref name="before"/> became <paramref name="after"/>.
-        /// Neither version declares a setting (otherwise the whole program would be read again),
-        /// so every value is kept.
+        /// Returns these settings after <paramref name="before"/> was replaced by
+        /// <paramref name="after"/>. Neither version declares a setting, because otherwise the
+        /// whole program would be read again, so every value is kept.
         /// </summary>
         public Settings Replacing(SyntaxTree before, SyntaxTree after)
         {
@@ -405,17 +414,17 @@ public sealed class Configuration
         }
 
         /// <summary>
-        /// An evaluator for the conditions of a build for <paramref name="cpu"/> with
-        /// <paramref name="defines"/>, whose names are these settings and which reports into
+        /// Creates an evaluator for the conditions of a build for <paramref name="cpu"/> with
+        /// <paramref name="defines"/>. Its names refer to these settings, and it reports into
         /// <paramref name="diagnostics"/>.
         /// </summary>
         public Evaluator EvaluatorFor(Cpu cpu, Dictionary<string, long> defines, List<Diagnostic> diagnostics) =>
             Evaluator.ForConditions(new Conditions(cpu, defines, Lookup), diagnostics);
 
         /// <summary>
-        /// The value of a name written in a condition, as a setting, or null when it names no
-        /// setting and nothing was reported about it, which leaves the caller to report it as an
-        /// unknown name.
+        /// Returns the value of a name in a condition as a setting. Returns null when the name
+        /// refers to no setting and nothing was reported about it, which leaves the caller to
+        /// report it as an unknown name.
         /// </summary>
         public Value? Lookup(NameExpressionSyntax name, Action<SyntaxNode, DiagnosticMessage> report)
         {
@@ -425,16 +434,20 @@ public sealed class Configuration
             return reported ? Value.Unknown : null;
         }
 
-        /// <summary>The value of the setting <paramref name="name"/> in <paramref name="tree"/>, or null.</summary>
+        /// <summary>
+        /// Returns the value of the setting <paramref name="name"/> in <paramref name="tree"/>, or
+        /// null.
+        /// </summary>
         public long? ValueOf(SyntaxTree tree, string name) =>
             modules.TryGetValue(tree, out var module) && byName.TryGetValue((module, name), out var setting)
                 ? values.GetValueOrDefault(setting)
                 : null;
 
         /// <summary>
-        /// The setting a name written in <paramref name="tree"/> refers to: one its own module
-        /// declares, one a <c>.use</c> brought in, or one written with its module's path; and
-        /// whether anything was reported about it, such as a setting another module does not export.
+        /// Finds the setting that a name in <paramref name="tree"/> refers to, and whether anything
+        /// was reported about it, such as a setting that another module does not export. The
+        /// setting may be one the file's own module declares, one a <c>.use</c> brought in, or one
+        /// named with its module's path.
         /// </summary>
         public (Setting? Setting, bool Reported) Find(SyntaxTree tree, NameExpressionSyntax name, Action<SyntaxNode, DiagnosticMessage> report)
         {
@@ -464,7 +477,10 @@ public sealed class Configuration
             return (found, false);
         }
 
-        /// <summary>The value of a setting: what the build sets, or else what its file writes.</summary>
+        /// <summary>
+        /// Returns the value of a setting, which is the value the build sets or otherwise the
+        /// value its file gives it.
+        /// </summary>
         public long? Worth(Setting setting)
         {
             if (values.TryGetValue(setting, out var known))
@@ -496,7 +512,7 @@ public sealed class Configuration
             return "";
         }
 
-        /// <summary>The names a file's <c>.export</c> lists name, which a setting may be among.</summary>
+        /// <summary>Returns the names in a file's <c>.export</c> lists, which may include settings.</summary>
         private static HashSet<string> ExportedNames(SyntaxTree tree)
         {
             var names = new HashSet<string>(StringComparer.Ordinal);
@@ -514,8 +530,9 @@ public sealed class Configuration
         }
 
         /// <summary>
-        /// The setting a <c>.use</c> in <paramref name="tree"/> brings in as <paramref name="name"/>:
-        /// named alone or in braces, under its own name or another, or with everything a module exports.
+        /// Returns the setting that a <c>.use</c> in <paramref name="tree"/> brings in as
+        /// <paramref name="name"/>. The <c>.use</c> may name the setting alone or in braces, under
+        /// its own name or an alias, or bring in everything a module exports.
         /// </summary>
         private Setting? Used(SyntaxTree tree, string name)
         {
@@ -550,7 +567,10 @@ public sealed class Configuration
         }
     }
 
-    /// <summary>One <c>.config</c>: where it is written, what its file gives it, and what the build sets.</summary>
+    /// <summary>
+    /// Represents one <c>.config</c>, with where it is declared, the value its file gives it, and
+    /// the value the build sets.
+    /// </summary>
     private sealed class Setting(SyntaxTree tree, SyntaxToken name, ExpressionSyntax? expression, bool isExported)
     {
         public SyntaxTree Tree { get; } = tree;

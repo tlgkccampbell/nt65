@@ -3,10 +3,11 @@ using Norristown.Emit;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 remap-dbg</c>: makes the debug file ld65 wrote name the <c>.nt65</c> sources as well
-/// as the <c>.s</c> files that were assembled, from the line maps nt65 wrote beside those.
+/// Implements <c>nt65 remap-dbg</c>, which makes the debug file ld65 wrote name the
+/// <c>.nt65</c> sources as well as the <c>.s</c> files that were assembled. It uses the line maps
+/// nt65 wrote beside those files.
 /// <para>
-/// It runs after the link, and needs nothing but the debug file: that file names every <c>.s</c>
+/// It runs after the link, and needs nothing but the debug file. That file names every <c>.s</c>
 /// the program was built from, and each <c>.s</c> nt65 wrote has its line map beside it. A
 /// <c>.s</c> with no line map was not written by nt65, and is left alone.
 /// </para>
@@ -69,8 +70,8 @@ public static class RemapCommand
     }
 
     /// <summary>
-    /// The line map beside <paramref name="source"/>, resolving it against each of
-    /// <paramref name="directories"/> in turn, or null when none has one.
+    /// Returns the line map beside <paramref name="source"/>, resolving the source against each
+    /// of <paramref name="directories"/> in turn, or null when no directory has one.
     /// </summary>
     private static string? Map(string source, params string[] directories)
     {

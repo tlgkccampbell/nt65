@@ -4,51 +4,55 @@ using System.Numerics;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The arithmetic behind the built-in functions that work a number out rather than ask about
-/// the program: a square root, a scaled product and the two trigonometric functions a table is
-/// built with. Every one of them takes whole numbers and answers a whole number.
+/// Provides the arithmetic behind the built-in functions that compute a number rather than
+/// query the program. These are a square root, a scaled product and the two trigonometric
+/// functions used to build tables. Every one of them takes whole numbers and returns a whole
+/// number.
 /// <para>
-/// Nothing here is floating point, and nothing here may be: a declaration's value is
-/// written into the output, so two machines that disagreed about the last bit of a sine would
-/// assemble different bytes from one program. Each answer is defined as a whole number — the
-/// nearest one to an exact value, with a half going away from zero — and is worked out in exact
-/// integer arithmetic. Where the exact value is a half, which is only where the sine or the
-/// cosine is <c>±1/2</c>, the answer is worked out from that fraction rather than from a series,
-/// so the rule decides it rather than the last bit of an approximation.
+/// Nothing here uses floating point, and nothing here may. A declaration's value is emitted into
+/// the output, so two machines that disagreed about the last bit of a sine would assemble
+/// different bytes from one program. Each result is defined as the whole number nearest to an
+/// exact value, with halves rounded away from zero, and is computed in exact integer arithmetic.
+/// The exact value is a half only where the sine or the cosine is <c>±1/2</c>. There the result
+/// is computed from that fraction, not from a series, so the rounding rule decides it rather
+/// than the last bit of an approximation.
 /// </para>
 /// </summary>
 public static class IntegerMath
 {
     /// <summary>
-    /// How many bits of the fraction the series is worked out to. It is far more than the
-    /// distance between two neighbouring answers at any scale the language takes, and the one
-    /// place where an exact value could sit halfway between two answers is worked out exactly
-    /// instead, so which whole number is nearest is never a question about the last bit.
+    /// The number of fraction bits the series is computed to. This precision far exceeds the
+    /// distance between two neighbouring results at any scale the language accepts. The one case
+    /// where an exact value could sit halfway between two results is computed exactly instead,
+    /// so the nearest whole number never depends on the last bit.
     /// </summary>
     private const int Bits = 192;
 
     /// <summary>
-    /// The largest turn and scale the trigonometric functions take. A value the output carries
-    /// fits ca65's 32 bits anyway, and bounding both keeps the intermediate numbers comfortably
+    /// The largest turn and scale the trigonometric functions accept. A value in the output must
+    /// fit ca65's 32 bits anyway, and bounding both keeps the intermediate numbers comfortably
     /// small.
     /// </summary>
     public const long Limit = 0x7fffffff;
 
     /// <summary>
-    /// π/2 as a fraction with <see cref="Bits"/> bits after the point, written out rather than
-    /// worked out, so that it is the same number on every machine and in every release.
+    /// π/2 as a fraction with <see cref="Bits"/> bits after the point. It is a literal rather than
+    /// a computed value, so that it is the same number on every machine and in every release.
     /// </summary>
     private static readonly BigInteger HalfPi = BigInteger.Parse(
         "01921fb54442d18469898cc51701b839a252049c1114cf98e8",
         NumberStyles.AllowHexSpecifier,
         CultureInfo.InvariantCulture);
 
-    /// <summary>Whether a turn and a scale are ones the trigonometric functions take.</summary>
+    /// <summary>
+    /// Returns a value indicating whether the trigonometric functions accept
+    /// <paramref name="turn"/> and <paramref name="scale"/>.
+    /// </summary>
     public static bool InRange(long turn, long scale) => turn is > 0 and <= Limit && Math.Abs(scale) <= Limit;
 
     /// <summary>
-    /// The largest whole number whose square is at most <paramref name="n"/>, or null when
-    /// <paramref name="n"/> is negative and there is no such number.
+    /// Returns the largest whole number whose square is at most <paramref name="n"/>, or null
+    /// when <paramref name="n"/> is negative and there is no such number.
     /// </summary>
     public static long? Sqrt(long n)
     {
@@ -57,9 +61,9 @@ public static class IntegerMath
         if (n == 0)
             return 0;
 
-        // A first guess above the answer, from the number's length: half the bits, rounded up.
-        // Each step of Newton's method stays above it and comes down, so the first step that
-        // does not come down is the answer.
+        // The first guess is above the answer and comes from the number's length: half its bits,
+        // rounded up. Each step of Newton's method stays above the answer and decreases, so the
+        // first step that does not decrease is the answer.
         var root = 1L << (((64 - BitOperations.LeadingZeroCount((ulong)n)) + 1) / 2);
         while (true)
         {
@@ -71,43 +75,49 @@ public static class IntegerMath
     }
 
     /// <summary>
-    /// <paramref name="a"/> times <paramref name="b"/> divided by <paramref name="c"/>, with the
-    /// product worked out exactly however large it is and the quotient rounded to the nearest
-    /// whole number, a half going away from zero. Null when <paramref name="c"/> is zero or the
-    /// answer leaves 64 bits.
+    /// Returns <paramref name="a"/> times <paramref name="b"/> divided by <paramref name="c"/>.
+    /// The product is computed exactly at any size, and the quotient is rounded to the nearest
+    /// whole number, with halves rounded away from zero. Returns null when <paramref name="c"/> is
+    /// zero or the result does not fit in 64 bits.
     /// </summary>
     public static long? MulDiv(long a, long b, long c) =>
         c == 0 ? null : Fits(Rounded(new BigInteger(a) * b, c));
 
     /// <summary>
-    /// <paramref name="scale"/> times the sine of <paramref name="angle"/>, where a whole turn
-    /// is <paramref name="turn"/> of the angle's units, rounded to the nearest whole number with
-    /// a half going away from zero. Null when the turn or the scale is outside what the function
-    /// takes.
+    /// Returns <paramref name="scale"/> times the sine of <paramref name="angle"/>, where a whole
+    /// turn is <paramref name="turn"/> of the angle's units. The result is rounded to the nearest
+    /// whole number, with halves rounded away from zero. Returns null when the turn or the scale
+    /// is outside the range the function accepts.
     /// </summary>
     public static long? Sin(long angle, long turn, long scale) => Circle(angle, turn, scale, cosine: false);
 
-    /// <summary>The same for the cosine.</summary>
+    /// <summary>
+    /// Returns <paramref name="scale"/> times the cosine of <paramref name="angle"/>, where a
+    /// whole turn is <paramref name="turn"/> of the angle's units. The result is rounded to the
+    /// nearest whole number, with halves rounded away from zero. Returns null when the turn or the
+    /// scale is outside the range the function accepts.
+    /// </summary>
     public static long? Cos(long angle, long turn, long scale) => Circle(angle, turn, scale, cosine: true);
 
     /// <summary>
-    /// The sine or the cosine, scaled and rounded. The angle is taken round the circle first, so
-    /// a table written with a running index needs no wrapping of its own; a cosine is the sine a
-    /// quarter turn further on, which is the same walk with one quarter added.
+    /// Returns the sine or the cosine, scaled and rounded. The angle is first reduced to one turn,
+    /// so a table built with a running index needs no wrapping of its own. A cosine is computed
+    /// as the sine a quarter turn further on.
     /// </summary>
     private static long? Circle(long angle, long turn, long scale, bool cosine)
     {
         if (!InRange(turn, scale))
             return null;
 
-        // The angle as a fraction of the turn, over four times the turn so that the quarter a
-        // cosine adds is a whole number of the same units whatever the turn is.
+        // The angle is expressed as a fraction with four times the turn as its denominator, so
+        // that the quarter turn a cosine adds is a whole number of the same units for any turn.
         var denominator = 4 * turn;
         var numerator = (((4 * (angle % turn)) + (cosine ? turn : 0)) + denominator) % denominator;
 
-        // Where the sine is a whole fraction, it is worked out from that fraction: those are
-        // the only angles at which the exact value can sit halfway between two answers, and a
-        // series would leave the rounding to its own last bit rather than to the rule.
+        // Where the angle is a multiple of a twelfth of a turn, the sine is computed from its
+        // exact fraction. Those are the only angles at which the exact value can sit halfway
+        // between two results, and a series would leave the rounding to its own last bit rather
+        // than to the rule.
         if (12 * numerator % denominator == 0)
         {
             return (12 * numerator / denominator) switch
@@ -124,9 +134,9 @@ public static class IntegerMath
     }
 
     /// <summary>
-    /// The sine of <c>numerator/denominator</c> of a turn, times <paramref name="scale"/> and
-    /// rounded. The quarter the angle lands in decides which series is worked out and with which
-    /// sign, which keeps every series to the first quarter turn, where it settles quickest.
+    /// Returns the sine of <c>numerator/denominator</c> of a turn, times <paramref name="scale"/>
+    /// and rounded. The quarter the angle lands in decides which series is computed and with which
+    /// sign. This keeps every series within the first quarter turn, where it converges fastest.
     /// </summary>
     private static long? Scaled(long numerator, long denominator, long scale)
     {
@@ -137,9 +147,9 @@ public static class IntegerMath
     }
 
     /// <summary>
-    /// The sine or the cosine of <c>(π/2)(into/turn)</c>, as a fraction with <see cref="Bits"/>
-    /// bits after the point. The angle is at most a quarter turn, so the series settles in a few
-    /// dozen terms, and each term is worked out from the one before it.
+    /// Returns the sine or the cosine of <c>(π/2)(into/turn)</c>, as a fraction with
+    /// <see cref="Bits"/> bits after the point. The angle is at most a quarter turn, so the series
+    /// converges in a few dozen terms. Each term is computed from the one before it.
     /// </summary>
     private static BigInteger Series(long into, long turn, bool sine)
     {
@@ -165,8 +175,8 @@ public static class IntegerMath
     }
 
     /// <summary>
-    /// <paramref name="value"/> divided by <paramref name="by"/>, rounded to the nearest whole
-    /// number with a half going away from zero. <paramref name="by"/> is positive.
+    /// Returns <paramref name="value"/> divided by <paramref name="by"/>, rounded to the nearest
+    /// whole number, with halves rounded away from zero. <paramref name="by"/> must be positive.
     /// </summary>
     private static BigInteger Rounded(BigInteger value, BigInteger by)
     {
@@ -176,7 +186,9 @@ public static class IntegerMath
         return negative ? -rounded : rounded;
     }
 
-    /// <summary>The value as a 64-bit number, or null where it does not fit one.</summary>
+    /// <summary>
+    /// Returns <paramref name="value"/> as a 64-bit number, or null if it does not fit in one.
+    /// </summary>
     private static long? Fits(BigInteger value) =>
         value >= long.MinValue && value <= long.MaxValue ? (long)value : null;
 }

@@ -4,9 +4,9 @@ namespace Norristown;
 
 /// <summary>
 /// Maps positions in one version of a file to the same positions in the next version. The two
-/// texts are compared for the prefix and suffix they share: a position before the changed
-/// region stays where it was, a position after it shifts by however much longer or shorter the
-/// text got, and a position inside it has no counterpart.
+/// texts are compared for the prefix and suffix they share. A position before the changed region
+/// stays where it was, a position after it shifts by the change in the text's length, and a
+/// position inside it has no counterpart.
 /// </summary>
 internal sealed class EditMap
 {
@@ -30,8 +30,8 @@ internal sealed class EditMap
     }
 
     /// <summary>
-    /// A function that moves a diagnostic through every one of <paramref name="maps"/> (each for its
-    /// own file), returning null when any map cannot move it.
+    /// Returns a function that moves a diagnostic through every one of <paramref name="maps"/>,
+    /// each for its own file. The function returns null when any map cannot move the diagnostic.
     /// </summary>
     public static Func<Diagnostic, Diagnostic?> Composed(IReadOnlyList<EditMap> maps) => diagnostic =>
     {
@@ -45,8 +45,8 @@ internal sealed class EditMap
     };
 
     /// <summary>
-    /// Every diagnostic in <paramref name="diagnostics"/> moved by <paramref name="moved"/>, or
-    /// null when any one of them could not be moved.
+    /// Returns every diagnostic in <paramref name="diagnostics"/> moved by
+    /// <paramref name="moved"/>, or null when any one of them could not be moved.
     /// </summary>
     public static List<Diagnostic>? Moved(IEnumerable<Diagnostic> diagnostics, Func<Diagnostic, Diagnostic?> moved)
     {
@@ -61,8 +61,8 @@ internal sealed class EditMap
     }
 
     /// <summary>
-    /// <paramref name="diagnostic"/> with every place it names in the edited file moved to
-    /// where it is now, or null when the edit rewrote one of them.
+    /// Returns <paramref name="diagnostic"/> with every span it names in the edited file moved to
+    /// its position after the edit, or null when the edit changed the text of one of them.
     /// </summary>
     public Diagnostic? Moved(Diagnostic diagnostic)
     {

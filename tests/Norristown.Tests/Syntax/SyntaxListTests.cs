@@ -106,7 +106,7 @@ public sealed class SyntaxListTests
         Assert.Empty(HandBuilt.SeparatedList<SyntaxNode>(parent, 1));
         Assert.Empty(HandBuilt.TokenList(parent, 1));
 
-        // The empty list sits where its items would have been written, and takes up nothing.
+        // The empty list sits where its items would have been, and takes up nothing.
         Assert.Equal(new TextSpan(1, 0), parent.SlotRed(1)!.Span);
         Assert.Empty(parent.ChildNodes);
         Assert.Equal("()", parent.ToFullString());
@@ -157,8 +157,8 @@ public sealed class SyntaxListTests
     }
 
     /// <summary>
-    /// The items of an argument list built from <paramref name="text"/>: every token between
-    /// the parentheses becomes an item, and every comma the separator after one.
+    /// Returns the items of an argument list built from <paramref name="text"/>. Every token
+    /// between the parentheses becomes an item, and every comma becomes the separator after one.
     /// </summary>
     private static SeparatedSyntaxList<IdentifierNameSyntax> Arguments(string text)
     {

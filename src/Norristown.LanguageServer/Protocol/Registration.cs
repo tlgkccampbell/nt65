@@ -1,7 +1,9 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>Something a server asks a client to do for it, after they have connected.</summary>
-/// <param name="Id">What it is called, so that it can be taken back.</param>
-/// <param name="Method">The message it is about.</param>
-/// <param name="RegisterOptions">What it asks for, whose shape the method decides.</param>
+/// <summary>
+/// Represents a capability the server registers with the client after they have connected.
+/// </summary>
+/// <param name="Id">An identifier for the registration, so that it can be unregistered later.</param>
+/// <param name="Method">The method the registration is for.</param>
+/// <param name="RegisterOptions">The registration options, whose shape depends on the method.</param>
 internal sealed record Registration(string Id, string Method, object? RegisterOptions);

@@ -3,16 +3,16 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The symbols placed in a segment (labels, routines and data declarations) that an expression
-/// refers to, found by following address aliases and the operands a macro call passed. Which
-/// memory an operand reaches through the direct page or the data bank depends on the segments
-/// these symbols are in.
+/// Finds the symbols with an address in a segment (labels, routines and data declarations) that
+/// an expression refers to, by following address aliases and the operands a macro call passed.
+/// The memory an operand reaches through the direct page or the data bank depends on the
+/// segments these symbols are in.
 /// </summary>
 public static class AddressSymbols
 {
     /// <summary>
-    /// The placed symbols <paramref name="expression"/> refers to, with macro parameters resolved
-    /// in the expansion <paramref name="on"/>.
+    /// Returns the symbols with an address in a segment that <paramref name="expression"/> refers
+    /// to, resolving macro parameters in the expansion <paramref name="on"/>.
     /// </summary>
     public static IEnumerable<Symbol> In(SemanticModel model, SyntaxNode expression, Expansion? on) =>
         Collect(model, expression, on, []).Distinct();
@@ -27,7 +27,7 @@ public static class AddressSymbols
             if (model.SymbolOf(name) is not { } symbol)
                 continue;
 
-            // A field of a data declaration is at a place in the declaration's segment.
+            // A field of a data declaration has an address in the declaration's segment.
             if (symbol.Kind == SymbolKind.Member && name is { GlobalToken: null, Names: [var outermost, ..] }
                 && model.SymbolAt(outermost) is { Kind: SymbolKind.Data } instance)
             {
@@ -40,8 +40,8 @@ public static class AddressSymbols
                     yield return symbol;
                     break;
 
-                // An import that declares which segment it is in is treated as placed in that
-                // segment.
+                // An import that declares which segment it is in is treated as having an
+                // address in that segment.
                 case SymbolKind.ImportedAddress when symbol.Segment is not null:
                     yield return symbol;
                     break;

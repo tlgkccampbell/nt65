@@ -4,22 +4,22 @@ using Norristown.Syntax;
 namespace Norristown.Processor;
 
 /// <summary>
-/// Which CPU a program is built for. One per program: it may be given on the command
-/// line or by a <c>.cpu</c> item, and every file that states it must agree.
+/// Determines which CPU a program is built for. A program has one CPU. It may be given on the
+/// command line or by a <c>.cpu</c> item, and every file that states it must agree.
 /// </summary>
 public static class ProgramCpu
 {
     /// <summary>The CPU a program is built for when nothing says which.</summary>
     public const Cpu Default = Cpu.Mos6502;
 
-    // A file's `.cpu` items, read once per tree and cached: every analysis of the program reads
+    // A file's `.cpu` items, read once per tree and cached. Every analysis of the program reads
     // every file, and after an edit only one of them is a tree that has not been seen before.
     private static readonly ConditionalWeakTable<SyntaxTree, List<(Cpu Cpu, TextSpan Span)>> written = new();
 
     /// <summary>
-    /// The program's CPU. <paramref name="configured"/> is what the command line or the
-    /// project file says, if anything; a <c>.cpu</c> item that disagrees with it, or with an
-    /// earlier one, is an error on its own line.
+    /// Returns the program's CPU. <paramref name="configured"/> is the CPU the command line or
+    /// the project file gives, if any. Reports an error on the line of each <c>.cpu</c> item
+    /// that disagrees with it or with an earlier item.
     /// </summary>
     public static Cpu Resolve(IEnumerable<SyntaxTree> trees, Cpu? configured, List<Diagnostic> diagnostics)
     {
@@ -40,10 +40,13 @@ public static class ProgramCpu
         return chosen ?? Default;
     }
 
-    /// <summary>Whether any of <paramref name="trees"/> says which CPU the program is for.</summary>
+    /// <summary>
+    /// Returns a value indicating whether any of <paramref name="trees"/> states which CPU the
+    /// program is for.
+    /// </summary>
     public static bool IsStated(IEnumerable<SyntaxTree> trees) => trees.Any(tree => Statements(tree).Count > 0);
 
-    /// <summary>Every <c>.cpu</c> item in a file, in source order.</summary>
+    /// <summary>Returns every <c>.cpu</c> item in a file, in source order.</summary>
     private static List<(Cpu Cpu, TextSpan Span)> Statements(SyntaxTree tree) =>
         written.GetValue(tree, tree => [.. Read(tree)]);
 

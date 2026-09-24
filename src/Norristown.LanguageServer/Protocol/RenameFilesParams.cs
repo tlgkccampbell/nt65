@@ -1,5 +1,7 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary><c>workspace/willRenameFiles</c>: the files about to move.</summary>
-/// <param name="Files">Each file, where it is and where it is going.</param>
+/// <summary>
+/// Parameters of the <c>workspace/willRenameFiles</c> request, which lists the files about to move.
+/// </summary>
+/// <param name="Files">Each file's current and new URI.</param>
 internal sealed record RenameFilesParams(IReadOnlyList<FileRename> Files);

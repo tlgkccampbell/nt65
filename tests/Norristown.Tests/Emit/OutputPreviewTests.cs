@@ -5,9 +5,9 @@ using Norristown.Tests.Fixtures;
 namespace Norristown.Tests.Emit;
 
 /// <summary>
-/// The output preview — what the editor shows beside a source, and what
-/// <c>nt65 build --stdout</c> writes — against what a build writes: they must be the same text,
-/// or the preview is showing something other than the program.
+/// Checks the output preview against what a build writes. The preview is what the editor shows
+/// beside a source, and what <c>nt65 build --stdout</c> writes. The two must be the same text, or
+/// the preview is showing something other than the program.
 /// </summary>
 public sealed class OutputPreviewTests
 {
@@ -58,9 +58,9 @@ public sealed class OutputPreviewTests
     }
 
     /// <summary>
-    /// A file with errors shows what could be written, under a first line saying that it is
-    /// incomplete and why: how many errors the program has, then the first error's line and
-    /// message.
+    /// A file with errors shows what could be written, under a first line that says it is
+    /// incomplete and why. That line gives how many errors the program has, then the first
+    /// error's line and message.
     /// </summary>
     [Fact]
     public void AFileWithErrorsIsShownUnderANoteSayingWhy()

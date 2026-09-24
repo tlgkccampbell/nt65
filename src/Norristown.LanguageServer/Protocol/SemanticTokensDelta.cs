@@ -1,6 +1,10 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>What changed since the answer the client is holding.</summary>
-/// <param name="ResultId">The id to quote for this answer when asking for the next change to it.</param>
-/// <param name="Edits">The runs of numbers that changed; a single contiguous edit produces at most one.</param>
+/// <summary>Represents the changes since the result the client holds.</summary>
+/// <param name="ResultId">
+/// The identifier for this result, used when requesting the next change to it.
+/// </param>
+/// <param name="Edits">
+/// The runs of numbers that changed. A single contiguous edit produces at most one run.
+/// </param>
 internal sealed record SemanticTokensDelta(string? ResultId, IReadOnlyList<SemanticTokensEdit> Edits);

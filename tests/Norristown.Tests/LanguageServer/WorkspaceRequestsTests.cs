@@ -6,9 +6,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an editor gets across modules: an exported name is the same symbol in every module that
-/// uses it, so definition, references and rename follow it into those modules through the
-/// <c>.use</c> that brings it in, and an edit in one module changes the diagnostics of another.
+/// Tests what an editor gets across modules. An exported name is the same symbol in every module
+/// that uses it, so definition, references and rename follow it into those modules through the
+/// <c>.use</c> that brings it in. An edit in one module changes the diagnostics of another.
 /// </summary>
 public sealed class WorkspaceRequestsTests
 {
@@ -66,9 +66,9 @@ public sealed class WorkspaceRequestsTests
         Assert.Contains("```nt65\n.proc gfx::clear\n```", hover.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("from       gfx.nt65", hover.Contents.Value, StringComparison.Ordinal);
 
-        // What the call costs, worked out from the flow analysis of the file that declares the
-        // routine rather than the file the call is written in. It is what a caller hovers to find
-        // out, so it comes above the rule, and the routine's address comes below it.
+        // The hover shows what the call costs, worked out from the flow analysis of the file that
+        // declares the routine rather than the file that contains the call. It is what a caller
+        // hovers to find out, so it comes above the rule, and the routine's address comes below it.
         Assert.Contains(
             "from       gfx.nt65\ncost       6 cycles\npreserves  A, X, Y, C\n```\n---\n",
             hover.Contents.Value,
@@ -82,8 +82,8 @@ public sealed class WorkspaceRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        // From the declaration in gfx.nt65: the `.export`, the `.proc`, and in main the `.use`
-        // and the call.
+        // Starting from the declaration in gfx.nt65, the references are the `.export` and the
+        // `.proc` there, and the `.use` and the call in main.
         var references = await client.ReferencesAsync(GfxUri, Locate.At(Gfx, ".proc |clear"), true, timeout);
 
         Assert.Equal([GfxUri, GfxUri, MainUri, MainUri], references.Select(r => r.Uri));
@@ -106,7 +106,7 @@ public sealed class WorkspaceRequestsTests
     }
 
     /// <summary>
-    /// An alias given by <c>.use ... as</c> belongs to the module that declares it: renaming the
+    /// An alias given by <c>.use ... as</c> belongs to the module that declares it. Renaming the
     /// original symbol leaves the alias alone, and renaming the alias changes only the alias.
     /// </summary>
     [Fact]
@@ -144,8 +144,8 @@ public sealed class WorkspaceRequestsTests
     }
 
     /// <summary>
-    /// An edit to one module republishes the others: dropping an export makes the module that
-    /// used the name wrong, and the editor has to say so there.
+    /// An edit to one module republishes the others. Dropping an export makes the module that
+    /// used the name wrong, and the editor has to report the error there.
     /// </summary>
     [Fact]
     public async Task AnEditInOneModuleChangesWhatIsWrongWithAnother()
@@ -189,7 +189,10 @@ public sealed class WorkspaceRequestsTests
         Assert.Equal([GfxUri, GfxUri, MainUri, MainUri], references.Select(r => r.Uri));
     }
 
-    /// <summary>A signature set named in a signature is a name like any other: hover and definition find it in its module.</summary>
+    /// <summary>
+    /// A signature set named in a signature is a name like any other, so hover and definition find
+    /// it in its module.
+    /// </summary>
     [Fact]
     public async Task ASignatureSetInASignatureLeadsToItsDeclaration()
     {
@@ -218,7 +221,7 @@ public sealed class WorkspaceRequestsTests
         Assert.Contains("```nt65\n.export .signature sys::std = a8\n```", hover.Contents.Value, StringComparison.Ordinal);
     }
 
-    /// <summary>The next diagnostics published for one file, skipping the others.</summary>
+    /// <summary>Returns the next diagnostics published for one file, skipping those for other files.</summary>
     private static async Task<PublishDiagnosticsParams> NextForAsync(
         TestClient client, string uri, CancellationToken cancellation)
     {

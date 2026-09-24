@@ -6,15 +6,15 @@ using Norristown.Syntax;
 namespace Norristown.Emit;
 
 /// <summary>
-/// A C header of what a program exports, for C compiled with cc65 to use: structs and unions
-/// laid out byte for byte in cc65's types, enums, constants, data and routines. Every C name is
-/// the symbol's linker name, less the <c>_</c> cc65 puts in front of a C name, so what C
-/// declares is what the linker finds.
+/// Builds a C header of what a program exports, for C compiled with cc65 to use. The header
+/// declares structs and unions laid out byte for byte in cc65's types, along with enums,
+/// constants, data and routines. Every C name is the symbol's linker name without the <c>_</c>
+/// that cc65 puts in front of a C name, so what C declares is what the linker finds.
 /// <para>
 /// A routine is declared <c>void name(void)</c>, because nt65 describes the processor state a
-/// routine leaves, not the arguments C passes it. C does not allow a second, different prototype, so each
-/// declaration is skipped when <c>NT65_OWN_name</c> is defined, and the programmer's own
-/// prototype takes its place.
+/// routine leaves, not the arguments C passes it. C does not allow a second, different
+/// prototype, so each declaration is skipped when <c>NT65_OWN_name</c> is defined, and the
+/// programmer's own prototype takes its place.
 /// </para>
 /// </summary>
 public sealed class CHeader
@@ -34,8 +34,8 @@ public sealed class CHeader
     }
 
     /// <summary>
-    /// The header for <paramref name="program"/>, guarded by a macro made from
-    /// <paramref name="fileName"/>. What C cannot use is reported as a warning.
+    /// Returns the header for <paramref name="program"/>, guarded by a macro made from
+    /// <paramref name="fileName"/>. Anything C cannot use is reported as a warning.
     /// </summary>
     public static string Write(ProgramModel program, string fileName, List<Diagnostic> diagnostics)
     {
@@ -44,14 +44,20 @@ public sealed class CHeader
         return header.text.ToString();
     }
 
-    /// <summary>The include guard for a header file: its name in capitals, every other character an underscore.</summary>
+    /// <summary>
+    /// Returns the include guard for a header file, which is its name in capitals with every other
+    /// character replaced by an underscore.
+    /// </summary>
     private static string Guard(string fileName) =>
         new(Path.GetFileName(fileName).Select(c => char.IsAsciiLetterOrDigit(c) ? char.ToUpperInvariant(c) : '_').ToArray());
 
-    /// <summary>The C name of what the linker knows as <paramref name="linkerName"/>: cc65 writes a C name with <c>_</c> in front.</summary>
+    /// <summary>
+    /// Returns the C name of the symbol the linker knows as <paramref name="linkerName"/>. cc65
+    /// emits a C name with <c>_</c> in front, so that prefix is removed.
+    /// </summary>
     private static string CName(string linkerName) => linkerName.StartsWith('_') ? linkerName[1..] : linkerName;
 
-    /// <summary>A number as C writes it: small ones in decimal, the rest in hexadecimal.</summary>
+    /// <summary>Formats a number as C writes it, with small numbers in decimal and the rest in hexadecimal.</summary>
     private static string Number(long value) => value switch
     {
         < 0 => $"({value.ToString(CultureInfo.InvariantCulture)})",
@@ -61,8 +67,9 @@ public sealed class CHeader
     };
 
     /// <summary>
-    /// The C type and the dimensions after the name that hold one element of an element type:
-    /// <c>unsigned int</c>, or <c>unsigned char</c> and <c>[3]</c> for a width C has no integer for.
+    /// Returns the C type, and the dimensions after the name, that hold one element of an element
+    /// type. For example, the type may be <c>unsigned int</c>, or <c>unsigned char</c> with
+    /// <c>[3]</c> for a width C has no integer for.
     /// </summary>
     private static (string Type, string Dimensions)? ElementType(string directive) => directive switch
     {
@@ -87,7 +94,7 @@ public sealed class CHeader
         Line($"#ifndef {guard}");
         Line($"#define {guard}");
 
-        // A member of a named enum is written inside its enum rather than as a #define, and a
+        // A member of a named enum is emitted inside its enum rather than as a #define, and a
         // field of typed data is reached through the data rather than on its own.
         var constants = exported.Where(symbol => symbol is { Kind: SymbolKind.Constant, IsDefine: false, IsConfig: false }
             && symbol.Value.AsNumber() is not null && ProgramSymbols.IsLinked(symbol)
@@ -100,7 +107,7 @@ public sealed class CHeader
         foreach (var enumeration in exported.Where(symbol => symbol.Kind == SymbolKind.Enum))
             Enum(enumeration);
 
-        // A type is defined before anything that holds one, whichever module declares it.
+        // A type is defined before anything that holds one, regardless of which module declares it.
         var types = exported.Where(symbol => symbol.IsLayout && symbol.Size is not null).ToList();
         var visiting = new HashSet<Symbol>();
         foreach (var type in types)
@@ -150,8 +157,8 @@ public sealed class CHeader
     }
 
     /// <summary>
-    /// Writes a struct or a union, after first writing the exported types its members hold; a
-    /// type that contains itself, which nt65 has already reported, is written only once.
+    /// Writes a struct or a union after first writing the exported types its members hold. A type
+    /// that contains itself, which nt65 has already reported, is written only once.
     /// </summary>
     private void Layout(Symbol type, IReadOnlyList<Symbol> types, HashSet<Symbol> visiting)
     {
@@ -176,8 +183,9 @@ public sealed class CHeader
     }
 
     /// <summary>
-    /// <paramref name="name"/> declared as what <paramref name="symbol"/>, a data declaration or
-    /// a member, holds: one element or an array of them, or bytes when C has no type for it.
+    /// Returns a C declaration of <paramref name="name"/> as what <paramref name="symbol"/>, a data
+    /// declaration or a member, holds. That is one element or an array of them, or bytes when C has
+    /// no type for it.
     /// </summary>
     private string Declarator(Symbol symbol, string name)
     {
@@ -208,9 +216,9 @@ public sealed class CHeader
     }
 
     /// <summary>
-    /// Whether C can name <paramref name="symbol"/>: cc65 puts <c>_</c> in front of every C name,
-    /// so a routine or data declaration C uses is exported under a name that starts with one.
-    /// When C cannot name it, a diagnostic saying so is reported.
+    /// Returns whether C can name <paramref name="symbol"/>. cc65 puts <c>_</c> in front of every
+    /// C name, so a routine or data declaration that C uses is exported under a name that starts
+    /// with an underscore. When C cannot name the symbol, a diagnostic is reported.
     /// </summary>
     private bool Reachable(Symbol symbol, string what)
     {

@@ -7,8 +7,9 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The code lenses shown above a routine and above each inline <c>.scope</c> block inside one:
-/// how many cycles a pass through it costs, and which registers it preserves. A <c>.scope</c>
+/// Builds the code lenses shown above a routine and above each inline <c>.scope</c> block inside
+/// a routine. The lenses show how many cycles a pass through the code costs and which registers
+/// it preserves. A <c>.scope</c>
 /// at file level holds only declarations and no code, so it gets neither lens; a <c>.scope</c>
 /// inside a routine is part of that routine's code and gets both.
 /// <para>
@@ -16,14 +17,14 @@ namespace Norristown.LanguageServer;
 /// different questions and a reader looking for one should not have to read past the other.
 /// </para>
 /// <para>
-/// The routines a family declares get no lenses. Every instance is declared on the family's
-/// one line, so their lenses would all land on it, one per instance, and make a line too long
-/// to read. The hover on that line gives each instance's cost and registers instead.
+/// The routines a <see cref="Family"/> declares get no lenses. Every instance is declared on the
+/// family's single line, so their lenses would all land on it, one per instance, and make a line
+/// too long to read. The hover on that line gives each instance's cost and registers instead.
 /// </para>
 /// </summary>
 internal static class CodeLenses
 {
-    /// <summary>The lenses for <paramref name="tree"/>, in position order.</summary>
+    /// <summary>Returns the lenses for <paramref name="tree"/>, in position order.</summary>
     public static IReadOnlyList<Protocol.CodeLens> In(
         SyntaxTree tree, IReadOnlyList<Family> families, ControlFlow? flow)
     {
@@ -56,21 +57,21 @@ internal static class CodeLenses
     }
 
     /// <summary>
-    /// A routine's cost as the lens shows it: a cycle interval when the longest path is bounded,
-    /// or the minimum followed by <c>+</c> when it is not, with <c>, loops</c> when the routine
-    /// loops; then the cost including its calls, and what that leaves out because nt65 cannot
-    /// count it. <paramref name="endless"/> is the text to show when no path leaves the routine
-    /// at all.
+    /// Formats a routine's cost as the lens shows it. The cost is a cycle interval when the
+    /// longest path is bounded, or the minimum followed by <c>+</c> when it is not, with
+    /// <c>, loops</c> appended when the routine loops. The cost including calls follows, with
+    /// what that cost leaves out because nt65 cannot count it. <paramref name="endless"/> is the
+    /// text to show when no path leaves the routine at all.
     /// <para>
-    /// The hover shows the cost too, at the declaration and at every call, and calls this so
-    /// that the two agree word for word. It lists what is left out on rows of its own, with
-    /// why, so it asks for the cost without <paramref name="excluding"/>.
+    /// The hover shows the cost too, at the declaration and at every call, and calls this method
+    /// so that the two agree word for word. The hover lists what is left out on rows of its own,
+    /// with the reason for each, so it passes false for <paramref name="excluding"/>.
     /// </para>
     /// </summary>
     internal static string? Spell(RoutineCost cost, RoutineCost? total, string? endless, bool excluding)
     {
-        // A routine that no path leaves has no complete pass to cost. Say so, rather than show
-        // nothing and look as though the lens failed.
+        // A routine that no path leaves has no complete pass to cost. Report that, rather than
+        // showing nothing and looking as though the lens failed.
         if (!cost.Ends)
             return endless;
         // A routine containing an instruction whose cycle count is only known at run time has
@@ -103,8 +104,9 @@ internal static class CodeLenses
     }
 
     /// <summary>
-    /// What a cost with calls leaves out, as the lens names it: two at most, then how many
-    /// more, since a lens shares its line and the hover lists them all.
+    /// Names what a cost with calls leaves out, as the lens shows it. At most two items are
+    /// named, followed by how many more there are, since a lens shares its line and the hover
+    /// lists them all.
     /// </summary>
     private static string Named(IReadOnlyList<Exclusion> excluded) => excluded.Count switch
     {
@@ -114,25 +116,31 @@ internal static class CodeLenses
     };
 
     /// <summary>
-    /// Which registers a routine returns holding the values it was entered with, or null when
-    /// no path through the routine, its calls included, returns.
+    /// Formats the registers a routine returns holding the values it was entered with, or returns
+    /// null when no path through the routine, including its calls, returns.
     /// </summary>
     private static string? Kept(FlowRegion region) => region.Total.Ends
         ? Spell(region.Registers.Kept, region.Registers.Complete)
         : null;
 
     /// <summary>
-    /// The preserved registers as the lens shows them. The hover formats the list the same way
-    /// but leaves off the word "preserves", because the label beside it already says what the
+    /// Formats the preserved registers as the lens shows them. The hover formats the list the same
+    /// way but leaves off the word "preserves", because the label beside it already says what the
     /// list is.
     /// </summary>
     private static string Spell(Registers kept, bool complete) => $"preserves {Lsp.Spell(kept, complete)}";
 
-    /// <summary>A cycle count as shown: an interval, or the minimum and a <c>+</c> when there is no maximum.</summary>
+    /// <summary>
+    /// Formats a cycle count as an interval, or as the minimum followed by a <c>+</c> when there
+    /// is no maximum.
+    /// </summary>
     private static string Count(int least, int? most) =>
         most is { } bound ? Lsp.Spell(new CycleCount(least, bound)) : $"{least}+ cycles";
 
-    /// <summary>The same count without the word <c>cycles</c>.</summary>
+    /// <summary>
+    /// Formats a cycle count as an interval, or as the minimum followed by a <c>+</c> when there
+    /// is no maximum, without the word <c>cycles</c>.
+    /// </summary>
     private static string Number(int least, int? most) =>
         most is { } bound ? new CycleCount(least, bound).ToString() : $"{least}+";
 }

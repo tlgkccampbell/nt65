@@ -3,7 +3,7 @@ using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
 
-/// <summary>A whole file: the lines and blocks at its top level.</summary>
+/// <summary>Represents a whole file, which consists of the lines and blocks at its top level.</summary>
 public sealed partial class FileSyntax : SyntaxNode
 {
     private ImmutableArray<LineSyntax> lines;
@@ -13,24 +13,24 @@ public sealed partial class FileSyntax : SyntaxNode
     {
     }
 
-    /// <summary>The file's top-level lines and blocks, in source order.</summary>
+    /// <summary>Gets the file's top-level lines and blocks, in source order.</summary>
     public ImmutableArray<SyntaxNode> Members => ChildNodes;
 
     /// <inheritdoc/>
     /// <remarks>
-    /// The root answers for the whole file, so this is true exactly when
-    /// <see cref="SyntaxTree.Diagnostics"/> has a syntax diagnostic in it.
+    /// The root covers the whole file, so this value is true exactly when
+    /// <see cref="SyntaxTree.Diagnostics"/> contains a syntax diagnostic.
     /// </remarks>
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(0, Tree.LineCount - 1);
 
     /// <inheritdoc/>
-    /// <remarks>The root covers every line of the file, as it does for the diagnostics.</remarks>
+    /// <remarks>The root covers every line of the file, as it does for diagnostics.</remarks>
     public override bool ContainsAnnotations => Tree.LinesContainAnnotations(0, Tree.LineCount - 1);
 
     /// <summary>
-    /// The file's lines in source order, however deep in blocks they are written. The blocks are
-    /// walked once, on the first ask, so that finding the line at a position costs a lookup
-    /// rather than a walk of the file.
+    /// Gets the file's lines in source order, at any depth of block nesting. The blocks are walked
+    /// once, on first access, so that finding the line at a position costs a lookup rather than a
+    /// walk of the file.
     /// </summary>
     internal ImmutableArray<LineSyntax> Lines
     {
@@ -50,7 +50,9 @@ public sealed partial class FileSyntax : SyntaxNode
     private protected override void CollectDiagnostics(List<Diagnostic> result) =>
         Tree.CollectLines(0, Tree.LineCount - 1, result);
 
-    /// <summary>Adds the lines under <paramref name="node"/>, and those under its blocks, in order.</summary>
+    /// <summary>
+    /// Adds the lines under <paramref name="node"/>, including those under its blocks, in order.
+    /// </summary>
     private static void Collect(SyntaxNode node, ImmutableArray<LineSyntax>.Builder builder)
     {
         foreach (var child in node.ChildNodes)

@@ -5,19 +5,25 @@ using Norristown.Tests.Fixtures;
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// A realistic program under <c>tests/corpus</c> or <c>examples</c>, built the way its build script builds it:
-/// its <c>nt65.json</c>, the sources its globs name, which may be outside it, one linker
-/// configuration, and whatever hand-written ca65, include files and binaries sit beside them.
-/// Its <c>build/</c> directory is output and is never read, and a directory with no
-/// <c>nt65.json</c> is not a program, only sources that programs share.
+/// Represents a realistic program under <c>tests/corpus</c> or <c>examples</c>, built the way
+/// its build script builds it. The program consists of its <c>nt65.json</c>, the sources its
+/// globs name (which may be outside its directory), one linker configuration, and any
+/// hand-written ca65, include files and binaries beside them. Its <c>build/</c> directory is
+/// output and is never read. A directory with no <c>nt65.json</c> is not a program; it holds
+/// only sources that programs share.
 /// </summary>
 /// <param name="Name">The program's directory name.</param>
-/// <param name="Directory">Where it is.</param>
-/// <param name="Sources">Its nt65 sources, with paths relative to <paramref name="Directory"/>, some perhaps above it.</param>
+/// <param name="Directory">The program's directory.</param>
+/// <param name="Sources">
+/// Its nt65 sources, with paths relative to <paramref name="Directory"/>. Some of them may be
+/// above it.
+/// </param>
 /// <param name="Project">Its <c>nt65.json</c>.</param>
 /// <param name="LinkerConfig">The text of its one <c>.cfg</c> file.</param>
 /// <param name="HandWritten">Its ca65 sources, relative to <paramref name="Directory"/>.</param>
-/// <param name="Other">Every other file, such as includes and binaries, relative to <paramref name="Directory"/>.</param>
+/// <param name="Other">
+/// Every other file, such as includes and binaries, relative to <paramref name="Directory"/>.
+/// </param>
 internal sealed record CorpusProgram(
     string Name,
     string Directory,
@@ -28,9 +34,9 @@ internal sealed record CorpusProgram(
     IReadOnlyList<(string Name, byte[] Content)> Other)
 {
     /// <summary>
-    /// Every corpus program and example, or only those whose name contains NT65_FIXTURE
-    /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>), except the ones only their own build scripts
-    /// can build, which <c>scripts/corpus.ps1</c> runs.
+    /// Returns every corpus program and example, or only those whose name contains NT65_FIXTURE
+    /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>). It leaves out the programs that only their own
+    /// build scripts can build, which <c>scripts/corpus.ps1</c> runs.
     /// </summary>
     public static IReadOnlyList<CorpusProgram> All()
     {
@@ -46,12 +52,11 @@ internal sealed record CorpusProgram(
     }
 
     /// <summary>
-    /// Programs with build steps this loader does not model: the LoROM template converts its
-    /// assets with Python before nt65 can read their sizes, links a second image with a second
-    /// configuration,
-    /// and assembles its hand-written ca65 with no CPU; msbasic is ten programs, one per
-    /// configuration, each with a linker configuration of its own and an image to match. The
-    /// gate builds both end to end.
+    /// Names the programs with build steps that this loader does not model. The LoROM template
+    /// converts its assets with Python before nt65 can read their sizes, links a second image
+    /// with a second configuration, and assembles its hand-written ca65 with no CPU. The msbasic
+    /// example is ten programs, one per configuration, each with its own linker configuration
+    /// and a matching image. The gate builds both end to end.
     /// </summary>
     private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "lorom-template", "msbasic" };
 

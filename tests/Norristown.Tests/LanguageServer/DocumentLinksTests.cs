@@ -3,8 +3,9 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The paths in a file that name another file, which are those an <c>.incbin</c> includes. Each
-/// is resolved relative to the file it is written in, as the build resolves it.
+/// Tests the links for paths in a file that name another file, which are the paths that
+/// <c>.incbin</c> directives include. Each path is resolved relative to the file that contains
+/// it, as the build resolves it.
 /// </summary>
 public sealed class DocumentLinksTests
 {
@@ -31,7 +32,8 @@ public sealed class DocumentLinksTests
             ["file:///c:/work/src/art/tiles.bin", "file:///c:/work/shared/font.chr"],
             links.Select(link => link.Target));
 
-        // The link's range is the written path, quotes included, so a click anywhere on it follows it.
+        // The link's range is the path as it appears in the source, quotes included, so a click
+        // anywhere on it follows it.
         var path = Locate.Span(Source, "\"art/tiles.bin\"");
         Assert.Equal(path.Start, links[0].Range.Start);
         Assert.Equal(path.End, links[0].Range.End);

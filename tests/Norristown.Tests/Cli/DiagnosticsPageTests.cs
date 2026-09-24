@@ -3,8 +3,8 @@ using Norristown.Cli;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// The page <c>nt65 explain --markdown</c> writes from the catalogue, and the areas the catalogue
-/// is written under.
+/// Tests the page that <c>nt65 explain --markdown</c> writes from the catalogue, and the areas
+/// the catalogue groups its entries under.
 /// </summary>
 public sealed class DiagnosticsPageTests
 {
@@ -28,8 +28,8 @@ public sealed class DiagnosticsPageTests
     }
 
     /// <summary>
-    /// Every entry is under exactly one heading, and every heading has entries: an entry added
-    /// below the last heading of the catalogue would otherwise be filed under it in silence.
+    /// Every entry is under exactly one heading, and every heading has entries. Otherwise an
+    /// entry added below the last heading of the catalogue would be filed under it in silence.
     /// </summary>
     [Fact]
     public void EveryEntryIsUnderOneOfTheAreas()

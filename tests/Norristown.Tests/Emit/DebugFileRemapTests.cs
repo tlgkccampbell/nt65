@@ -3,15 +3,15 @@ using Norristown.Emit;
 namespace Norristown.Tests.Emit;
 
 /// <summary>
-/// What <c>nt65 remap-dbg</c> does to the debug file ld65 wrote, on a small one written here so
-/// that every record it touches can be read at once.
+/// Checks what <c>nt65 remap-dbg</c> does to the debug file ld65 wrote, using a small one written
+/// here so that every record it touches can be read at once.
 /// </summary>
 public sealed class DebugFileRemapTests
 {
     /// <summary>
     /// One nt65 module, <c>main.s</c>, and one hand-written one, <c>hand.s</c>, linked together.
     /// Line 4 and line 5 of <c>main.s</c> both came from line 9 of the source, as the lines of a
-    /// macro expansion do; line 7 came from line 12; and line 2, the header, came from nowhere.
+    /// macro expansion do. Line 7 came from line 12, and line 2, the header, came from nowhere.
     /// </summary>
     private const string Linked = """
         version	major=2,minor=0
@@ -88,12 +88,15 @@ public sealed class DebugFileRemapTests
     {
         var remapped = Remapped(Linked);
 
-        // Line record 0 maps to new record 5, and 2 to 6; record 4 is the hand-written module's.
+        // Line record 0 maps to new record 5, and 2 to 6. Record 4 is the hand-written module's.
         Assert.Contains("sym\tid=0,name=\"start\",addrsize=absolute,scope=0,def=0+5,ref=2+4+6,", remapped);
         Assert.Contains("sym\tid=1,name=\"other\",addrsize=absolute,scope=0,def=4,", remapped);
     }
 
-    /// <summary>Remapping an already remapped file changes nothing, so a build that repeats the step is safe.</summary>
+    /// <summary>
+    /// Remapping an already remapped file changes nothing, so a build that repeats the step is
+    /// safe.
+    /// </summary>
     [Fact]
     public void RemappingTwiceChangesNothingTheSecondTime()
     {
@@ -102,7 +105,10 @@ public sealed class DebugFileRemapTests
         Assert.Equal(once, Remapped(once));
     }
 
-    /// <summary>A debug file whose <c>.s</c> files have no line maps was not built from nt65 output, and is left unchanged.</summary>
+    /// <summary>
+    /// A debug file whose <c>.s</c> files have no line maps was not built from nt65 output, and is
+    /// left unchanged.
+    /// </summary>
     [Fact]
     public void ADebugFileWithNoMapsIsUnchanged()
     {
@@ -110,7 +116,10 @@ public sealed class DebugFileRemapTests
         Assert.Null(problem);
     }
 
-    /// <summary>ld65 writes the file in text mode, so the remapped file keeps whichever line endings it arrived with.</summary>
+    /// <summary>
+    /// ld65 writes the file in text mode, so the remapped file keeps the line endings it arrived
+    /// with.
+    /// </summary>
     [Fact]
     public void TheLineEndingsThatArrivedAreTheOnesWrittenBack()
     {

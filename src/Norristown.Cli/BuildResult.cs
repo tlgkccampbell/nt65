@@ -1,11 +1,14 @@
 namespace Norristown.Cli;
 
 /// <summary>
-/// The outcome of one build: its exit code, and the files it read, which are what <c>--watch</c>
-/// watches for changes. The paths are absolute, because a file watcher reports absolute paths
-/// rather than paths relative to a project.
+/// Represents the outcome of one build, which is its exit code and the files it read. The files
+/// are what <c>--watch</c> watches for changes. The paths are absolute, because a file watcher
+/// reports absolute paths rather than paths relative to a project.
 /// </summary>
-/// <param name="Code">0 when it built, 1 when the program has errors, 2 when the command line is wrong.</param>
+/// <param name="Code">
+/// The exit code, which is 0 when the build succeeded, 1 when the program has errors, and 2 when
+/// the command line is wrong.
+/// </param>
 /// <param name="Root">The project root, or where nt65 ran when there is no project.</param>
 /// <param name="Watched">
 /// The project file, every source file in the program, and every binary file an <c>.incbin</c>

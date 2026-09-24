@@ -4,16 +4,16 @@ using System.Text;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a literal token means. The lexer has already said whether a literal is
-/// well formed, so these read a token the lexer accepted and quietly return null for one it
-/// did not: an unreadable literal has no value rather than a value nobody meant, and what is
-/// wrong with it has already been reported where it is written.
+/// Converts literal tokens to the values they mean. The lexer has already reported whether a
+/// literal is well formed, so these methods read a token the lexer accepted and quietly return
+/// null for a token it rejected. An unreadable literal has no value rather than a value nobody
+/// meant, and its problem has already been reported where it appears.
 /// </summary>
 public static class Literals
 {
     /// <summary>
-    /// The value of a number token: <c>$1F</c>, <c>%1010</c> or <c>255</c>, with a <c>_</c>
-    /// between digits counting for nothing.
+    /// Returns the value of a number token such as <c>$1F</c>, <c>%1010</c> or <c>255</c>. A
+    /// <c>_</c> between digits is ignored.
     /// </summary>
     public static long? Number(string text) => text.Length switch
     {
@@ -27,9 +27,9 @@ public static class Literals
     };
 
     /// <summary>
-    /// The text of a string or character literal, with its escapes applied. Outside a
-    /// charmap the text is ASCII, and <c>\xHH</c> writes any byte; a byte above <c>$7f</c>
-    /// is kept as the character of that code, which is what a charmap will map.
+    /// Returns the text of a string or character literal, with its escapes applied. Outside a
+    /// charmap the text is ASCII, and <c>\xHH</c> produces any byte. A byte above <c>$7f</c> is
+    /// kept as the character with that code, which a charmap then maps.
     /// </summary>
     public static string? Text(string literal)
     {
@@ -68,7 +68,7 @@ public static class Literals
         return text.ToString();
     }
 
-    /// <summary>The code of a character literal, <c>'c'</c>.</summary>
+    /// <summary>Returns the code of a character literal such as <c>'c'</c>.</summary>
     public static long? Character(string literal) =>
         Text(literal) is { Length: 1 } text ? text[0] : null;
 
@@ -79,8 +79,8 @@ public static class Literals
         long value = 0;
         foreach (var c in digits)
         {
-            // `_` between digits is a separator and counts for nothing; the lexer has already
-            // checked that it is somewhere a separator is allowed.
+            // A `_` between digits is a separator and is ignored. The lexer has already checked
+            // that it appears where a separator is allowed.
             if (c == '_')
                 continue;
             var digit = char.IsAsciiDigit(c) ? c - '0'
@@ -89,8 +89,8 @@ public static class Literals
             if (digit < 0 || digit >= radix)
                 return null;
 
-            // A literal too large for a 64-bit value has no useful value, so it gets none; the
-            // stage that writes values out is where their range is checked.
+            // A literal too large for a 64-bit value has no useful value, so it gets none. The
+            // stage that emits values is where their range is checked.
             try
             {
                 value = checked(value * radix + digit);

@@ -6,23 +6,23 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// The loops whose iteration count nt65 can work out. The program does not say how long most
-/// loops run, but a counted loop (a register loaded with an immediate, decremented once per
-/// iteration and branched on) states it outright, and such a loop is typically where a
-/// routine's cycles go.
+/// Finds the loops whose iteration count nt65 can work out. The program does not say how long
+/// most loops run, but a counted loop states it outright. In a counted loop a register is loaded
+/// with an immediate, decremented once per iteration and branched on. Such a loop is typically
+/// where a routine's cycles go.
 /// <para>
-/// Only one shape is recognised: each iteration ends with a <c>dex</c> or <c>dey</c> and then
-/// a <c>bne</c> or <c>bpl</c> back to the top, nothing else in the loop writes that register,
-/// there is one way in, which loads the immediate, and one way out, which is the branch
-/// itself. Every other loop is left uncounted, with no upper bound, because a loop counted
-/// wrongly is worse than one not counted at all.
+/// Only one shape is recognised. Each iteration ends with a <c>dex</c> or <c>dey</c> and then a
+/// <c>bne</c> or <c>bpl</c> back to the top, and nothing else in the loop writes that register.
+/// There is one way in, which loads the immediate, and one way out, which is the branch itself.
+/// Every other loop is left uncounted, with no upper bound, because a loop counted wrongly is
+/// worse than one not counted at all.
 /// </para>
 /// </summary>
 internal static class CountedLoops
 {
     /// <summary>
-    /// Finds every counted loop in <paramref name="blocks"/> and writes what it costs on it.
-    /// A loop inside another is settled first, so that the cost of one iteration of the
+    /// Finds every counted loop in <paramref name="blocks"/> and records its cost on its blocks.
+    /// A loop inside another is handled first, so that the cost of one iteration of the
     /// enclosing loop already includes what the inner loop costs.
     /// </summary>
     public static void Find(SemanticModel model, CodeLayout layout, IReadOnlyList<BasicBlock> blocks)
@@ -33,7 +33,7 @@ internal static class CountedLoops
                 continue;
 
             // The loop is marked as counted while the cost of an iteration is worked out, so
-            // that the walk of it stops at the latch instead of going round again; if that
+            // that the walk of it stops at the latch instead of going round again. If that
             // cost turns out to be unknown, the marking is undone.
             Mark(blocks, loop, turns);
             if (Repeated(layout, blocks, loop, turns) is { } cost)
@@ -44,13 +44,13 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// How many iterations a loop runs, or null when it is not a shape nt65 recognises. Every
-    /// part of the shape has to hold: anything unexpected leaves the loop uncounted.
+    /// Returns how many iterations a loop runs, or null when it is not a shape nt65 recognises.
+    /// Every part of the shape has to hold, and anything unexpected leaves the loop uncounted.
     /// </summary>
     private static int? Turns(SemanticModel model, IReadOnlyList<BasicBlock> blocks, Loop loop)
     {
-        // Each iteration ends with the decrement immediately followed by the branch back:
-        // anything between the two could set the flags the branch tests instead.
+        // Each iteration ends with the decrement immediately followed by the branch back,
+        // because anything between the two could set the flags the branch tests instead.
         var steps = Written(blocks[loop.Latch]);
         if (steps.Count < 2)
             return null;
@@ -63,7 +63,7 @@ internal static class CountedLoops
         var register = counter == MnemonicKind.Dex ? Registers.X : Registers.Y;
 
         // The count may come down by more than one per iteration, as it does when the loop
-        // walks an array of words: every decrement in the unbroken run just before the branch
+        // walks an array of words. Every decrement in the unbroken run just before the branch
         // executes on each iteration, so the stride is how many of them there are.
         var stride = 0;
         var counting = new HashSet<(int Position, Expansion? On)>();
@@ -99,7 +99,7 @@ internal static class CountedLoops
             }
         }
 
-        // One way in, carrying the immediate the count starts at.
+        // There must be one way in, and it must load the immediate the count starts at.
         var from = new List<int>();
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -132,8 +132,9 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// The immediate the block before the loop leaves in the register, or null when what it
-    /// leaves there is anything else. The last thing it writes is what the loop starts from.
+    /// Returns the immediate the block before the loop leaves in the register, or null when it
+    /// leaves anything else there. The last value the block writes to the register is what the
+    /// loop starts from.
     /// </summary>
     private static long? Started(SemanticModel model, BasicBlock before, MnemonicKind load, Registers register)
     {
@@ -167,7 +168,7 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// What all the iterations of a loop cost, from what one iteration costs. The branch is
+    /// Returns what all the iterations of a loop cost, from what one iteration costs. The branch is
     /// taken on every iteration but the last, which is the only difference between the final
     /// iteration and the others.
     /// </summary>
@@ -180,8 +181,8 @@ internal static class CountedLoops
         if (layout.Of(last.Statement, last.On)?.Cycles is not { } branch)
             return null;
 
-        // A branch costs its fewest when it is not taken, and one more than that when it is; a
-        // taken one that crosses a page costs the most of all.
+        // A branch costs its fewest cycles when it is not taken, and one more than that when it
+        // is taken. A taken branch that crosses a page costs its most cycles.
         var taken = new CycleCount(branch.Least + 1, branch.Most);
         return new CycleCount(
             ((low - branch.Least) * turns) + (taken.Least * (turns - 1)) + branch.Least,
@@ -189,7 +190,7 @@ internal static class CountedLoops
     }
 
     /// <summary>
-    /// Records the loop's total cost on its header and zero on its other blocks: a walk of the
+    /// Records the loop's total cost on its header and zero on its other blocks. A walk of the
     /// routine still passes through all of them, and the header's total already includes every
     /// iteration of every block.
     /// </summary>
@@ -202,19 +203,22 @@ internal static class CountedLoops
         }
     }
 
-    /// <summary>Whether a mnemonic may leave <paramref name="register"/> holding something else.</summary>
+    /// <summary>Returns whether a mnemonic may leave <paramref name="register"/> holding something else.</summary>
     private static bool Writes(MnemonicKind mnemonic, Registers register) =>
         Instructions.Facts(mnemonic).Writes.HasFlag(register);
 
-    /// <summary>The instructions written in a block, the markers and the directives aside.</summary>
+    /// <summary>Returns the instructions in a block, leaving out markers and directives.</summary>
     private static List<Step> Written(BasicBlock block) =>
         [.. block.Steps.Where(step => !step.IsMarker && step.Statement is InstructionStatementSyntax)];
 
-    /// <summary>The mnemonic a step's statement is written with, or <see cref="MnemonicKind.None"/>.</summary>
+    /// <summary>Returns the mnemonic of a step's statement, or <see cref="MnemonicKind.None"/>.</summary>
     private static MnemonicKind Mnemonic(Step step) =>
         (step.Statement as InstructionStatementSyntax)?.MnemonicKind ?? MnemonicKind.None;
 
-    /// <summary>The value of the immediate a step is written with, or null when it has none nt65 knows.</summary>
+    /// <summary>
+    /// Returns the value of a step's immediate operand, or null when it has none whose value nt65
+    /// knows.
+    /// </summary>
     private static long? Immediate(SemanticModel model, Step step) =>
         step.Statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax operand }
             ? model.ValueOf(operand.Value, step.On).AsNumber()

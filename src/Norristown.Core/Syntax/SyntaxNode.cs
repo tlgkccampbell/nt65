@@ -4,17 +4,22 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A red node: a green node with its parent and absolute position, created on demand.
-/// Everything above the syntax layer works with these, through the class each kind of node
-/// has: a <see cref="BinaryExpressionSyntax"/> has a left and a right, a
-/// <see cref="ProcDeclarationSyntax"/> a name and a signature.
+/// Represents a node of a syntax tree. This is the red node, which wraps a green node, adds its
+/// parent and absolute position, and is created on demand. Everything above the syntax layer
+/// works with red nodes through the class for each kind of node. For example, a
+/// <see cref="BinaryExpressionSyntax"/> has a left and a right operand, and a
+/// <see cref="ProcDeclarationSyntax"/> has a name and a signature.
 /// <para>
-/// A node's shape is fixed: it has a slot for each piece the kind is written with, in source
-/// order, and a required piece stands in its slot whether or not the source wrote it. So a
-/// required property is never null, and a piece the source left out is a
-/// <see cref="SyntaxToken"/> with <see cref="SyntaxToken.IsMissing"/> set, of no width, placed
-/// where it belongs. A nullable property is null only when the piece belongs to an optional
-/// part of the line that the source did not write at all.
+/// A <em>piece</em> of a node is one of the tokens, nodes or lists that its kind is made of,
+/// such as the operator of a binary expression. A <em>slot</em> is a numbered position in the
+/// green node's fixed layout. Each piece has its own slot, and the slots are in source order.
+/// </para>
+/// <para>
+/// A required piece occupies its slot whether or not the source contains it, so a required
+/// property is never null. A piece the source leaves out is a <see cref="SyntaxToken"/> with
+/// <see cref="SyntaxToken.IsMissing"/> set, of zero width, at the position where it belongs. A
+/// nullable property is null only when the piece belongs to an optional part of the line that
+/// the source omits entirely.
 /// </para>
 /// </summary>
 public abstract class SyntaxNode
@@ -31,25 +36,25 @@ public abstract class SyntaxNode
         Position = position;
     }
 
-    /// <summary>The tree this node belongs to.</summary>
+    /// <summary>Gets the tree this node belongs to.</summary>
     public SyntaxTree Tree { get; }
 
-    /// <summary>The node containing this one, or null for the root.</summary>
+    /// <summary>Gets the node that contains this node, or null if this node is the root.</summary>
     public SyntaxNode? Parent { get; }
 
-    /// <summary>Where the node starts in the file's text, trivia included.</summary>
+    /// <summary>Gets the offset in the file's text where this node starts, including trivia.</summary>
     public int Position { get; }
 
-    /// <summary>What the node is.</summary>
+    /// <summary>Gets the kind of this node.</summary>
     public SyntaxKind Kind => Green.Kind;
 
-    /// <summary>The node's range in the file's text, trivia included.</summary>
+    /// <summary>Gets the node's range in the file's text, including trivia.</summary>
     public TextSpan FullSpan => new(Position, Green.FullWidth);
 
     /// <summary>
-    /// The node's range without the trivia around it and without the line break that ends
-    /// it: what an editor selects or reveals for the node. A node holding nothing but a line
-    /// break is empty, positioned where the break is.
+    /// Gets the node's range without the trivia around it and without the line break that ends
+    /// it. This is the range an editor selects or reveals for the node. For a node that contains
+    /// only a line break, the range is empty and positioned where the break is.
     /// </summary>
     public TextSpan Span
     {
@@ -61,22 +66,26 @@ public abstract class SyntaxNode
         }
     }
 
-    /// <summary>The 0-based line this node starts on.</summary>
+    /// <summary>Gets the 0-based index of the line this node starts on.</summary>
     public int LineIndex => Tree.GetLineIndex(Position);
 
     /// <summary>
-    /// Whether this node or anything under it carries a diagnostic, answered without walking.
+    /// Gets a value indicating whether this node or anything under it has a diagnostic. The
+    /// answer is computed without walking the tree.
     /// </summary>
     public virtual bool ContainsDiagnostics => Green.ContainsDiagnostics;
 
     /// <summary>
-    /// Whether this node or anything under it carries a <see cref="SyntaxAnnotation"/>, answered
-    /// without walking, so that a search for annotated pieces walks only the subtrees that
-    /// contain one.
+    /// Gets a value indicating whether this node or anything under it has a
+    /// <see cref="SyntaxAnnotation"/>. The answer is computed without walking the tree, so a search
+    /// for annotated pieces walks only the subtrees that contain an annotation.
     /// </summary>
     public virtual bool ContainsAnnotations => Green.ContainsAnnotations;
 
-    /// <summary>Child lines and blocks of a file or block, a line's statement, or the nodes a statement is made of.</summary>
+    /// <summary>
+    /// Gets the child nodes of this node. These are the lines and blocks of a file or block, the
+    /// statement of a line, or the nodes a statement is made of.
+    /// </summary>
     public ImmutableArray<SyntaxNode> ChildNodes
     {
         get
@@ -87,7 +96,10 @@ public abstract class SyntaxNode
         }
     }
 
-    /// <summary>Tokens directly under this node, such as a line's, and the separators of its lists.</summary>
+    /// <summary>
+    /// Gets the tokens directly under this node, such as a line's tokens, and the separators of
+    /// its lists.
+    /// </summary>
     public ImmutableArray<SyntaxToken> ChildTokens
     {
         get
@@ -112,50 +124,54 @@ public abstract class SyntaxNode
         }
     }
 
-    /// <summary>The green node this one wraps.</summary>
+    /// <summary>Gets the green node that this node wraps.</summary>
     internal GreenNode Green { get; }
 
     /// <summary>
-    /// The 0-based line this node ends on, which for a node written on one line is
-    /// <see cref="LineIndex"/> and for a block or a file is the last line under it.
+    /// Gets the 0-based index of the line this node ends on. For a node on a single line this is
+    /// <see cref="LineIndex"/>, and for a block or a file it is the last line under it.
     /// </summary>
     internal int LastLineIndex => Tree.GetLineIndex(Math.Max(Position, FullSpan.End - 1));
 
     /// <summary>
-    /// The node that this node's children report as their parent. It is this node, except for
-    /// the internal node over a list: its items and separators report the node that holds the
-    /// list, and the list node only caches their red nodes and is otherwise invisible.
+    /// Gets the node that this node's children report as their parent. This is the node itself,
+    /// except for the internal node over a list. The items and separators of a list report the
+    /// node that holds the list, and the list node only caches their red nodes and is otherwise
+    /// invisible.
     /// </summary>
     internal virtual SyntaxNode ChildParent => this;
 
     /// <summary>
-    /// The children this node exposes instead of its slots, or null when its slots are its
+    /// Gets the children this node exposes instead of its slots, or null if its slots are its
     /// children. A line's slots are its tokens, but its children are the pieces it is made of,
-    /// which hold those same tokens. Every walk of the tree goes through the pieces, so each
+    /// which contain those same tokens. Every walk of the tree goes through the pieces, so each
     /// token is reached once, with the node it is part of as its parent.
     /// </summary>
     internal virtual ImmutableArray<SyntaxNodeOrToken>? RedChildren => null;
 
-    /// <summary>Calls the method <paramref name="visitor"/> has for this node's class.</summary>
+    /// <summary>Calls the method of <paramref name="visitor"/> that handles this node's class.</summary>
     /// <param name="visitor">The visitor to call.</param>
     public abstract void Accept(SyntaxVisitor visitor);
 
-    /// <summary>Calls the method <paramref name="visitor"/> has for this node's class.</summary>
+    /// <summary>
+    /// Calls the method of <paramref name="visitor"/> that handles this node's class and returns
+    /// its result.
+    /// </summary>
     /// <typeparam name="TResult">The type of result the visitor computes.</typeparam>
     /// <param name="visitor">The visitor to call.</param>
     /// <returns>The result of that method.</returns>
     public abstract TResult? Accept<TResult>(SyntaxVisitor<TResult> visitor);
 
-    /// <summary>This node's children, nodes and tokens together, in source order.</summary>
+    /// <summary>Returns this node's child nodes and tokens together, in source order.</summary>
     public ChildSyntaxList ChildNodesAndTokens() => new(this);
 
     /// <summary>
-    /// The syntax diagnostics of this node and everything under it, in the order of the pieces
-    /// that hold them. Nothing is walked where <see cref="ContainsDiagnostics"/> says there is
-    /// nothing to find.
+    /// Returns the syntax diagnostics of this node and everything under it, in the order of the
+    /// pieces that hold them. A subtree is not walked when <see cref="ContainsDiagnostics"/> is
+    /// false for it.
     /// <para>
-    /// A line reports everything written on it, and a block or a file reports every line under
-    /// it, errors about its braces included, so the root's result covers the whole file and is
+    /// A line reports every diagnostic on it. A block or a file reports those of every line under
+    /// it, including errors about its braces, so the root's result covers the whole file and is
     /// the same list as <see cref="SyntaxTree.Diagnostics"/>.
     /// </para>
     /// </summary>
@@ -167,9 +183,9 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Every node below this one, parents before children. The walk keeps its own stack rather
-    /// than recursing: a deeply nested expression can occur in real source, and a stack overflow
-    /// would kill the process.
+    /// Returns every node below this node, with parents before children. The walk keeps its own
+    /// stack rather than recursing, because a deeply nested expression can occur in real source,
+    /// and a stack overflow would kill the process.
     /// </summary>
     public IEnumerable<SyntaxNode> DescendantNodes()
     {
@@ -182,7 +198,10 @@ public abstract class SyntaxNode
         }
     }
 
-    /// <summary>The nearest node of type <typeparamref name="T"/> among this one and those containing it, or null.</summary>
+    /// <summary>
+    /// Returns the nearest node of type <typeparamref name="T"/> among this node and the nodes
+    /// that contain it, or null if there is none.
+    /// </summary>
     public T? FirstAncestorOrSelf<T>() where T : SyntaxNode
     {
         for (var node = this; node is not null; node = node.Parent)
@@ -194,31 +213,32 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// This node with <paramref name="oldNode"/> written as <paramref name="newNode"/>. Nothing
-    /// else changes: every other character of the file stays the same, and a replacement that
-    /// changes nothing returns this node itself.
+    /// Returns a copy of this node in which <paramref name="oldNode"/> is replaced with
+    /// <paramref name="newNode"/>. The rest of the file's text is unchanged. If the replacement
+    /// changes nothing, this node itself is returned.
     /// <para>
     /// A statement and everything under it is rebuilt in place. A line, a block and the file are
-    /// written back out as text and parsed again, so replacing inside one of those returns the
-    /// corresponding node of a <em>new</em> tree, which its <see cref="Tree"/> gives.
+    /// converted back to text and parsed again, so replacing inside one of those returns the
+    /// corresponding node of a <em>new</em> tree, which the result's <see cref="Tree"/> gives.
     /// </para>
     /// </summary>
-    /// <param name="oldNode">The node to write over, which is under this one.</param>
-    /// <param name="newNode">What to write there.</param>
+    /// <param name="oldNode">The node to replace, which is under this node.</param>
+    /// <param name="newNode">The node to put in its place.</param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode ReplaceNode(SyntaxNode oldNode, SyntaxNode newNode) =>
         ReplaceNodes<SyntaxNode>([oldNode], (_, _) => newNode);
 
     /// <summary>
-    /// This node with each of <paramref name="nodes"/> written as
-    /// <paramref name="computeReplacement"/> says; a fix applied across a whole file uses this. A
-    /// null replacement removes the node, which is allowed only for a list item or an optional
-    /// piece.
+    /// Returns a copy of this node in which each of <paramref name="nodes"/> is replaced with the
+    /// node that <paramref name="computeReplacement"/> returns for it. A fix applied across a whole
+    /// file uses this method. A null replacement removes the node, which is allowed only for a
+    /// list item or an optional piece.
     /// </summary>
-    /// <typeparam name="TNode">What the nodes replaced are.</typeparam>
-    /// <param name="nodes">The nodes to write over, which are under this one.</param>
+    /// <typeparam name="TNode">The type of the nodes to replace.</typeparam>
+    /// <param name="nodes">The nodes to replace, which are under this node.</param>
     /// <param name="computeReplacement">
-    /// Given the node as it was found, passed as both arguments, returns what to write there.
+    /// A function that receives the node as it was found, passed as both arguments, and returns
+    /// the node to put in its place.
     /// </param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode ReplaceNodes<TNode>(
@@ -227,17 +247,24 @@ public abstract class SyntaxNode
         new NodeReplacer<TNode>(nodes, computeReplacement).Visit(this)
             ?? throw new InvalidOperationException("a node cannot be taken out of itself");
 
-    /// <summary>This node with <paramref name="oldToken"/> written as <paramref name="newToken"/>.</summary>
-    /// <param name="oldToken">The token to write over, which is under this node.</param>
-    /// <param name="newToken">What to write there.</param>
+    /// <summary>
+    /// Returns a copy of this node in which <paramref name="oldToken"/> is replaced with
+    /// <paramref name="newToken"/>.
+    /// </summary>
+    /// <param name="oldToken">The token to replace, which is under this node.</param>
+    /// <param name="newToken">The token to put in its place.</param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode ReplaceToken(SyntaxToken oldToken, SyntaxToken newToken) =>
         ReplaceTokens([oldToken], (_, _) => newToken);
 
-    /// <summary>This node with each of <paramref name="tokens"/> written as <paramref name="computeReplacement"/> says.</summary>
-    /// <param name="tokens">The tokens to write over, which are under this node.</param>
+    /// <summary>
+    /// Returns a copy of this node in which each of <paramref name="tokens"/> is replaced with the
+    /// token that <paramref name="computeReplacement"/> returns for it.
+    /// </summary>
+    /// <param name="tokens">The tokens to replace, which are under this node.</param>
     /// <param name="computeReplacement">
-    /// Given the token as it was found, passed as both arguments, returns what to write there.
+    /// A function that receives the token as it was found, passed as both arguments, and returns
+    /// the token to put in its place.
     /// </param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode ReplaceTokens(
@@ -246,23 +273,24 @@ public abstract class SyntaxNode
             ?? throw new InvalidOperationException("a node cannot be taken out of itself");
 
     /// <summary>
-    /// This node without <paramref name="node"/>. A line goes with the break that ends it; an
-    /// item of a list goes with the separator written after it; a piece that must be there cannot
-    /// go at all.
+    /// Returns a copy of this node from which <paramref name="node"/> is removed. A line is
+    /// removed together with the line break that ends it, and a list item together with the
+    /// separator after it. A required piece cannot be removed.
     /// </summary>
-    /// <param name="node">The node to take out, which is under this one.</param>
+    /// <param name="node">The node to remove, which is under this node.</param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode RemoveNode(SyntaxNode node) => ReplaceNodes<SyntaxNode>([node], (_, _) => null);
 
     /// <summary>
-    /// This node with all its trivia, comments included, thrown away and replaced by standard
-    /// spacing: one space where two tokens would otherwise run together, and none elsewhere. A
-    /// node built from bare tokens needs this before it goes into a file: the factory invents no
-    /// whitespace, so without this a built <c>lda #0</c> is written <c>lda#0</c>.
+    /// Returns a copy of this node in which all trivia, including comments, is discarded and
+    /// replaced by standard spacing. Standard spacing puts one space where two tokens would
+    /// otherwise run together, and none elsewhere. A node built from bare tokens needs this before
+    /// it goes into a file, because the factory adds no whitespace, so a built <c>lda #0</c> would
+    /// otherwise come out as <c>lda#0</c>.
     /// <para>
-    /// The result is readable nt65, not the file's layout: <see cref="Formatter"/> sets a line's
-    /// indentation, and running it over the tree a rewrite returns is what moves a built line
-    /// to its proper indentation.
+    /// The result is readable nt65, but it does not follow the file's layout.
+    /// <see cref="Formatter"/> sets a line's indentation, so running it over the tree that a
+    /// rewrite returns moves a built line to its proper indentation.
     /// </para>
     /// </summary>
     /// <returns>This node, or the node it has become.</returns>
@@ -283,12 +311,14 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// This node carrying <paramref name="annotations"/> as well as the ones it has. What comes
-    /// back is a node of this node's own class, belonging to no file until a rewrite puts it into
-    /// one, and it is a <em>different</em> node from this one: that is what lets a rewrite find it
-    /// again afterwards.
+    /// Returns a copy of this node that has <paramref name="annotations"/> in addition to the
+    /// annotations it already has. The result is a node of this node's own class. It belongs to no
+    /// file until a rewrite puts it into one, and it is a <em>different</em> node from this one,
+    /// so that a rewrite can find it again afterwards.
     /// </summary>
-    /// <param name="annotations">The annotations to put on, which it does not already carry.</param>
+    /// <param name="annotations">
+    /// The annotations to add. Annotations this node already has are skipped.
+    /// </param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode WithAdditionalAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
     {
@@ -297,8 +327,11 @@ public abstract class SyntaxNode
         return wanted.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(wanted));
     }
 
-    /// <summary>This node without <paramref name="annotations"/>, and with the rest of its own.</summary>
-    /// <param name="annotations">The annotations to take off.</param>
+    /// <summary>
+    /// Returns a copy of this node without <paramref name="annotations"/>, keeping its other
+    /// annotations.
+    /// </summary>
+    /// <param name="annotations">The annotations to remove.</param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode WithoutAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
     {
@@ -307,8 +340,10 @@ public abstract class SyntaxNode
         return kept.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(kept));
     }
 
-    /// <summary>This node without the annotations of <paramref name="kind"/> it carries.</summary>
-    /// <param name="kind">The kind of annotation to take off.</param>
+    /// <summary>
+    /// Returns a copy of this node without its annotations of kind <paramref name="kind"/>.
+    /// </summary>
+    /// <param name="kind">The kind of annotation to remove.</param>
     /// <returns>This node, or the node it has become.</returns>
     public SyntaxNode WithoutAnnotations(string kind)
     {
@@ -317,63 +352,83 @@ public abstract class SyntaxNode
         return kept.Length == own.Length ? this : SyntaxTree.Detached(Green.WithAnnotations(kept));
     }
 
-    /// <summary>Whether this node itself carries <paramref name="annotation"/>.</summary>
+    /// <summary>Checks whether this node itself has <paramref name="annotation"/>.</summary>
     /// <param name="annotation">The annotation to look for, matched by reference.</param>
     public bool HasAnnotation(SyntaxAnnotation annotation) => Green.Annotations.Contains(annotation);
 
-    /// <summary>Whether this node itself carries an annotation of <paramref name="kind"/>.</summary>
+    /// <summary>Checks whether this node itself has an annotation of kind <paramref name="kind"/>.</summary>
     /// <param name="kind">The kind to look for.</param>
     public bool HasAnnotations(string kind) => GetAnnotations(kind).Any();
 
-    /// <summary>The annotations of <paramref name="kind"/> on this node itself, in the order they were put on.</summary>
+    /// <summary>
+    /// Returns the annotations of kind <paramref name="kind"/> on this node itself, in the order
+    /// they were added.
+    /// </summary>
     /// <param name="kind">The kind to look for.</param>
     public IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) =>
         Green.Annotations.Where(annotation => annotation.Kind == kind);
 
     /// <summary>
-    /// Every node at or below this one carrying <paramref name="annotation"/>, in source order.
-    /// It is how a fix finds the piece it tagged in the tree the rewrite gave back.
+    /// Returns every node at or below this node that has <paramref name="annotation"/>, in source
+    /// order. A fix uses this method to find the piece it tagged in the tree that the rewrite
+    /// returned.
     /// </summary>
     /// <param name="annotation">The annotation to look for.</param>
     public IEnumerable<SyntaxNode> GetAnnotatedNodes(SyntaxAnnotation annotation) =>
         GetAnnotatedNodesAndTokens(annotation).Select(child => child.AsNode()).OfType<SyntaxNode>();
 
-    /// <summary>Every node at or below this one carrying an annotation of <paramref name="kind"/>, in source order.</summary>
+    /// <summary>
+    /// Returns every node at or below this node that has an annotation of kind
+    /// <paramref name="kind"/>, in source order.
+    /// </summary>
     /// <param name="kind">The kind to look for.</param>
     public IEnumerable<SyntaxNode> GetAnnotatedNodes(string kind) =>
         GetAnnotatedNodesAndTokens(kind).Select(child => child.AsNode()).OfType<SyntaxNode>();
 
-    /// <summary>Every token below this node carrying <paramref name="annotation"/>, in source order.</summary>
+    /// <summary>
+    /// Returns every token below this node that has <paramref name="annotation"/>, in source order.
+    /// </summary>
     /// <param name="annotation">The annotation to look for.</param>
     public IEnumerable<SyntaxToken> GetAnnotatedTokens(SyntaxAnnotation annotation) =>
         GetAnnotatedNodesAndTokens(annotation).Where(child => child.IsToken).Select(child => child.AsToken());
 
-    /// <summary>Every token below this node carrying an annotation of <paramref name="kind"/>, in source order.</summary>
+    /// <summary>
+    /// Returns every token below this node that has an annotation of kind <paramref name="kind"/>,
+    /// in source order.
+    /// </summary>
     /// <param name="kind">The kind to look for.</param>
     public IEnumerable<SyntaxToken> GetAnnotatedTokens(string kind) =>
         GetAnnotatedNodesAndTokens(kind).Where(child => child.IsToken).Select(child => child.AsToken());
 
-    /// <summary>Everything at or below this node carrying <paramref name="annotation"/>, in source order.</summary>
+    /// <summary>
+    /// Returns every node and token at or below this node that has <paramref name="annotation"/>,
+    /// in source order.
+    /// </summary>
     /// <param name="annotation">The annotation to look for.</param>
     public IEnumerable<SyntaxNodeOrToken> GetAnnotatedNodesAndTokens(SyntaxAnnotation annotation) =>
         AnnotatedPieces(carried => carried.Contains(annotation));
 
-    /// <summary>Everything at or below this node carrying an annotation of <paramref name="kind"/>, in source order.</summary>
+    /// <summary>
+    /// Returns every node and token at or below this node that has an annotation of kind
+    /// <paramref name="kind"/>, in source order.
+    /// </summary>
     /// <param name="kind">The kind to look for.</param>
     public IEnumerable<SyntaxNodeOrToken> GetAnnotatedNodesAndTokens(string kind) =>
         AnnotatedPieces(carried => carried.Any(annotation => annotation.Kind == kind));
 
-    /// <summary>The node's text, exactly as in the source.</summary>
+    /// <summary>Returns the node's full text, including trivia, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
 
-    /// <summary>The node's text over <see cref="Span"/>: no surrounding trivia, no line break.</summary>
+    /// <summary>
+    /// Returns the node's text over <see cref="Span"/>, without surrounding trivia or the line break.
+    /// </summary>
     public string GetText() => Tree.Text.Substring(Span.Start, Span.Length);
 
-    /// <summary>The node's kind and range, for debugging.</summary>
+    /// <summary>Returns the node's kind and range, for debugging.</summary>
     public override string ToString() => $"{Kind} at {FullSpan}";
 
     /// <summary>
-    /// Everything below this node, nodes and tokens together, a parent before its children and
+    /// Returns every node and token below this node, with a parent before its children and
     /// siblings in source order.
     /// </summary>
     public IEnumerable<SyntaxNodeOrToken> DescendantNodesAndTokens()
@@ -383,8 +438,8 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Every token below this node, in source order, each of them once. A missing token is one
-    /// of them: it stands in the tree where the piece it names belongs, with no text.
+    /// Returns every token below this node once each, in source order. Missing tokens are
+    /// included; a missing token has no text and stands where the piece it represents belongs.
     /// </summary>
     public IEnumerable<SyntaxToken> DescendantTokens()
     {
@@ -395,14 +450,14 @@ public abstract class SyntaxNode
         }
     }
 
-    /// <summary>The nodes containing this one, innermost first.</summary>
+    /// <summary>Returns the nodes that contain this node, innermost first.</summary>
     public IEnumerable<SyntaxNode> Ancestors()
     {
         for (var node = Parent; node is not null; node = node.Parent)
             yield return node;
     }
 
-    /// <summary>This node and the nodes containing it, this one first.</summary>
+    /// <summary>Returns this node followed by the nodes that contain it, innermost first.</summary>
     public IEnumerable<SyntaxNode> AncestorsAndSelf()
     {
         for (SyntaxNode? node = this; node is not null; node = node.Parent)
@@ -410,11 +465,11 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The first token of this node, or null when it has none. <paramref name="includeZeroWidth"/>
-    /// takes in the tokens that write nothing: a missing token, and the line break of a file that
-    /// ends without one.
+    /// Returns the first token of this node, or null if it has none.
+    /// <paramref name="includeZeroWidth"/> makes the search include tokens with no text, which
+    /// are missing tokens and the line break of a file that ends without one.
     /// </summary>
-    /// <param name="includeZeroWidth">Whether a token with no text counts.</param>
+    /// <param name="includeZeroWidth">A value indicating whether a token with no text counts.</param>
     public SyntaxToken? GetFirstToken(bool includeZeroWidth = false)
     {
         foreach (var token in DescendantTokens())
@@ -426,10 +481,10 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The last token of this node, or null when it has none.
-    /// <paramref name="includeZeroWidth"/> takes in the tokens that write nothing.
+    /// Returns the last token of this node, or null if it has none.
+    /// <paramref name="includeZeroWidth"/> makes the search include tokens with no text.
     /// </summary>
-    /// <param name="includeZeroWidth">Whether a token with no text counts.</param>
+    /// <param name="includeZeroWidth">A value indicating whether a token with no text counts.</param>
     public SyntaxToken? GetLastToken(bool includeZeroWidth = false)
     {
         SyntaxToken? found = null;
@@ -442,15 +497,15 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The token whose full span, trivia included, contains <paramref name="position"/>. The
-    /// whitespace and the comment after a token belong to it, and the indentation before the
-    /// first token of a line belongs to that token, so a caret in either finds the token the
-    /// trivia is written beside, as in Roslyn. A missing token has no width and so contains no
-    /// position, so it is never the result except at the end of a node, below.
+    /// Returns the token whose full span, including trivia, contains <paramref name="position"/>.
+    /// The whitespace and the comment after a token belong to it, and the indentation before the
+    /// first token of a line belongs to that token. A caret in either trivia therefore finds the
+    /// token next to it, as in Roslyn. A missing token has zero width and contains no position,
+    /// so it is never the result except at the end of a node, described below.
     /// <para>
-    /// The end of a node is past everything written in it and so falls in no token; the result
-    /// there is the node's last token: the line break at the end of a file, or, in a node whose
-    /// last piece the source leaves out, the missing token in its place.
+    /// The end of a node is past all of its text, so it falls in no token. At that position the
+    /// result is the node's last token. This is the line break at the end of a file or, in a node
+    /// whose last piece the source leaves out, the missing token in its place.
     /// </para>
     /// </summary>
     /// <param name="position">An offset from this node's start to its end.</param>
@@ -477,7 +532,7 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The whitespace or comment <paramref name="position"/> is written in, or null when the
+    /// Returns the whitespace or comment that contains <paramref name="position"/>, or null if the
     /// position is in a token's own text.
     /// </summary>
     /// <param name="position">An offset from this node's start to its end.</param>
@@ -498,11 +553,11 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The innermost node containing the whole of <paramref name="span"/>, which is what an
-    /// editor is asking about when it names a range. When no child of this node contains the
-    /// whole span the result is this node, and a span outside this node is an error. An empty
-    /// span is a caret rather than a selection: it belongs to what is written after it, not to
-    /// what ends where it stands.
+    /// Returns the innermost node that contains the whole of <paramref name="span"/>, which is the
+    /// node an editor asks about when it names a range. If no child of this node contains the
+    /// whole span, the result is this node. A span outside this node is an error. An empty span
+    /// is a caret rather than a selection, so it belongs to the text that follows it, not to the
+    /// text that ends at its position.
     /// </summary>
     /// <param name="span">A range within this node.</param>
     public SyntaxNode FindNode(TextSpan span)
@@ -513,27 +568,30 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// <paramref name="built"/> with this node's own annotations added, which is what an
-    /// <c>Update</c> returns: a node rebuilt from new pieces is still the node that was tagged,
-    /// and the pieces keep whatever annotations they carry themselves.
+    /// Returns <paramref name="built"/> with this node's own annotations added. An
+    /// <c>Update</c> method returns this, because a node rebuilt from new pieces is still the node
+    /// that was tagged. The pieces keep their own annotations.
     /// </summary>
-    /// <typeparam name="T">What the node is.</typeparam>
+    /// <typeparam name="T">The type of the node.</typeparam>
     /// <param name="built">The node just rebuilt out of this one's pieces.</param>
     /// <returns>That node, or the node it has become.</returns>
     private protected T Annotated<T>(T built) where T : SyntaxNode =>
         Green.Annotations.IsEmpty ? built : (T)built.WithAdditionalAnnotations(Green.Annotations);
 
     /// <summary>
-    /// Everything at or below this node carrying an annotation of any kind, in source order,
-    /// which is what a rewrite reads to carry them across a reparse.
+    /// Returns every node and token at or below this node that has an annotation of any kind, in
+    /// source order. A rewrite reads these so that the annotations survive a reparse.
     /// </summary>
     internal IEnumerable<SyntaxNodeOrToken> AnnotatedPieces() => AnnotatedPieces(carried => !carried.IsEmpty);
 
     /// <summary>
-    /// Everything at or below this node whose annotations <paramref name="wanted"/> accepts, in
-    /// source order. Only the subtrees that say they hold an annotation are walked at all.
+    /// Returns every node and token at or below this node whose annotations
+    /// <paramref name="wanted"/> accepts, in source order. Only the subtrees whose
+    /// <see cref="ContainsAnnotations"/> is true are walked.
     /// </summary>
-    /// <param name="wanted">Whether a piece's annotations are the ones being looked for.</param>
+    /// <param name="wanted">
+    /// A function that checks whether a piece's annotations are the ones being looked for.
+    /// </param>
     private IEnumerable<SyntaxNodeOrToken> AnnotatedPieces(Func<ImmutableArray<SyntaxAnnotation>, bool> wanted)
     {
         if (!ContainsAnnotations)
@@ -554,7 +612,10 @@ public abstract class SyntaxNode
         }
     }
 
-    /// <summary>Where slot <paramref name="index"/> starts in the file's text, trivia included.</summary>
+    /// <summary>
+    /// Returns the offset in the file's text where slot <paramref name="index"/> starts, including
+    /// trivia.
+    /// </summary>
     internal int SlotPosition(int index)
     {
         var position = Position;
@@ -564,8 +625,8 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The red node for slot <paramref name="index"/>, made on first use and kept, or null for
-    /// a slot that holds a token or nothing.
+    /// Returns the red node for slot <paramref name="index"/>, which is created on first use and
+    /// cached. Returns null if the slot holds a token or is empty.
     /// </summary>
     internal SyntaxNode? SlotRed(int index)
     {
@@ -583,23 +644,25 @@ public abstract class SyntaxNode
         return Interlocked.CompareExchange(ref cache[index], created, null) ?? created;
     }
 
-    /// <summary>Whether <paramref name="node"/> is a list node, whose items its parent exposes directly.</summary>
+    /// <summary>
+    /// Checks whether <paramref name="node"/> is a list node, whose items its parent exposes directly.
+    /// </summary>
     internal static bool IsList(GreenNode node) => node is GreenList or GreenSeparatedList;
 
     /// <summary>
-    /// Adds this node's diagnostics to <paramref name="result"/>. For most nodes, what the green
-    /// node and its children carry is the whole answer. A line, a block and a file differ: they
-    /// hold a line's tokens rather than what the line parses to, so each overrides this to
-    /// collect the tree's per-line diagnostics for the lines it spans.
+    /// Adds this node's diagnostics to <paramref name="result"/>. For most nodes, the diagnostics
+    /// on the green node and its children are the complete set. A line, a block and a file hold a
+    /// line's tokens rather than what the line parses to, so each of them overrides this method
+    /// to collect the tree's per-line diagnostics for the lines it spans.
     /// </summary>
     /// <param name="result">The list to add to.</param>
     private protected virtual void CollectDiagnostics(List<Diagnostic> result) =>
         Tree.Collect(Green, Position, result);
 
     /// <summary>
-    /// The red node for each child that is not a token, in source order. A slot holding a list
-    /// shows its items here rather than itself, as Roslyn's does, so nothing above the syntax
-    /// layer ever meets the node over a list.
+    /// Creates the red node for each child that is not a token, in source order. A slot that
+    /// holds a list contributes its items rather than the list node, as in Roslyn, so nothing
+    /// above the syntax layer ever sees the node over a list.
     /// </summary>
     private protected virtual ImmutableArray<SyntaxNode> CreateChildNodes()
     {
@@ -616,35 +679,38 @@ public abstract class SyntaxNode
         return builder.ToImmutable();
     }
 
-    /// <summary>The token in slot <paramref name="index"/>, which a required slot always holds.</summary>
+    /// <summary>Returns the token in slot <paramref name="index"/>, which a required slot always holds.</summary>
     internal SyntaxToken SlotToken(int index) =>
         new(ChildParent, (GreenToken)Green.GetSlot(index)!, SlotPosition(index));
 
-    /// <summary>The token in slot <paramref name="index"/>, or null when the slot is empty.</summary>
+    /// <summary>Returns the token in slot <paramref name="index"/>, or null if the slot is empty.</summary>
     private protected SyntaxToken? SlotTokenOrNull(int index) =>
         Green.GetSlot(index) is GreenToken token ? new SyntaxToken(ChildParent, token, SlotPosition(index)) : null;
 
-    /// <summary>The node in slot <paramref name="index"/>, which a required slot always holds.</summary>
+    /// <summary>Returns the node in slot <paramref name="index"/>, which a required slot always holds.</summary>
     private protected T SlotNode<T>(int index) where T : SyntaxNode => (T)SlotRed(index)!;
 
-    /// <summary>The node in slot <paramref name="index"/>, or null when the slot is empty.</summary>
+    /// <summary>Returns the node in slot <paramref name="index"/>, or null if the slot is empty.</summary>
     private protected T? SlotNodeOrNull<T>(int index) where T : SyntaxNode => SlotRed(index) as T;
 
-    /// <summary>The items of the list in slot <paramref name="index"/>; an empty slot is an empty list.</summary>
+    /// <summary>
+    /// Returns the items of the list in slot <paramref name="index"/>. An empty slot gives an
+    /// empty list.
+    /// </summary>
     private protected SyntaxList<T> SlotList<T>(int index) where T : SyntaxNode => new(SlotRed(index));
 
-    /// <summary>The items and separators of the list in slot <paramref name="index"/>.</summary>
+    /// <summary>Returns the items and separators of the list in slot <paramref name="index"/>.</summary>
     private protected SeparatedSyntaxList<T> SlotSeparatedList<T>(int index) where T : SyntaxNode =>
         new(SlotRed(index));
 
-    /// <summary>The tokens of the list in slot <paramref name="index"/>.</summary>
+    /// <summary>Returns the tokens of the list in slot <paramref name="index"/>.</summary>
     private protected SyntaxTokenList SlotTokenList(int index) => new(SlotRed(index));
 
     /// <summary>
-    /// Everything below <paramref name="node"/>, nodes and tokens together, a parent before its
-    /// children and siblings in source order. The children being walked at each level are held
-    /// here rather than in stack frames, so the stack used does not grow with how deeply the
-    /// file nests.
+    /// Returns every node and token below <paramref name="node"/>, with a parent before its
+    /// children and siblings in source order. The enumerators for each level are kept on an
+    /// explicit stack rather than in call frames, so the call stack does not grow with the depth
+    /// of nesting in the file.
     /// </summary>
     /// <param name="node">The node to walk below.</param>
     private static IEnumerable<SyntaxNodeOrToken> Below(SyntaxNode node)
@@ -688,7 +754,10 @@ public abstract class SyntaxNode
             pending.Push(children[i]);
     }
 
-    /// <summary>The first token's text start and the last non-line-break token's text end.</summary>
+    /// <summary>
+    /// Finds the start of the first token's text and the end of the last token's text, ignoring
+    /// line breaks for the end.
+    /// </summary>
     private static void Measure(GreenNode node, int position, ref int start, ref int end)
     {
         if (node is GreenToken token)
@@ -713,9 +782,10 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Every token under <paramref name="node"/>, in source order, each paired with whether its
-    /// parent writes it with no space before the next token: nt65 leaves no space inside a prefix
-    /// operator and its operand, inside an instruction operand, or inside an address prefix.
+    /// Adds every token under <paramref name="node"/> to <paramref name="written"/>, in source
+    /// order. Each token is paired with a value indicating whether its parent allows no space
+    /// before the next token. nt65 puts no space between a prefix operator and its operand, inside
+    /// an instruction operand, or inside an address prefix.
     /// </summary>
     private static void Flatten(SyntaxNode node, List<(SyntaxToken Token, bool Tight)> written)
     {
@@ -730,8 +800,8 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Whether a space goes between a token of <paramref name="left"/> and one of
-    /// <paramref name="right"/>. Punctuation that binds tightly gets no space on its binding
+    /// Checks whether a space goes between a token of kind <paramref name="left"/> and a token of
+    /// kind <paramref name="right"/>. Punctuation that binds tightly gets no space on its binding
     /// side, two adjacent words need a space to stay separate, and a binary operator gets a
     /// space on both sides.
     /// </summary>
@@ -756,7 +826,10 @@ public abstract class SyntaxNode
         return Operator(left) || Operator(right) || (Word(left) && Word(right));
     }
 
-    /// <summary>The binary operators, which are written clear of what they are between.</summary>
+    /// <summary>
+    /// Checks whether <paramref name="kind"/> is a binary operator, which gets a space on both
+    /// sides.
+    /// </summary>
     private static bool Operator(SyntaxKind kind) => kind is SyntaxKind.Star or SyntaxKind.Slash
         or SyntaxKind.Plus or SyntaxKind.Minus or SyntaxKind.LessLess or SyntaxKind.GreaterGreater
         or SyntaxKind.Less or SyntaxKind.LessEquals or SyntaxKind.Greater or SyntaxKind.GreaterEquals
@@ -764,15 +837,18 @@ public abstract class SyntaxNode
         or SyntaxKind.AmpersandAmpersand or SyntaxKind.Bar or SyntaxKind.BarBar or SyntaxKind.Caret
         or SyntaxKind.CaretCaret or SyntaxKind.Equals or SyntaxKind.Arrow;
 
-    /// <summary>Word-like tokens, which need a space between them to be read as separate tokens.</summary>
+    /// <summary>
+    /// Checks whether <paramref name="kind"/> is a word-like token, which needs a space between it
+    /// and another word to be read as a separate token.
+    /// </summary>
     private static bool Word(SyntaxKind kind) => kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
         or SyntaxKind.Mnemonic or SyntaxKind.Register or SyntaxKind.Directive or SyntaxKind.NumberLiteral
         or SyntaxKind.CharacterLiteral or SyntaxKind.StringLiteral or SyntaxKind.CpuName or SyntaxKind.BadToken;
 
     /// <summary>
-    /// The child whose full span contains <paramref name="position"/>, for the walk down to a
-    /// token to continue through; default when no child does. A child of no width contains no
-    /// position, so a missing token is never returned.
+    /// Returns the child whose full span contains <paramref name="position"/>, through which the
+    /// walk down to a token continues, or the default value if no child contains it. A child of
+    /// zero width contains no position, so a missing token is never returned.
     /// </summary>
     private SyntaxNodeOrToken ChildContaining(int position)
     {
@@ -802,11 +878,11 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// The innermost node under this one holding the whole of <paramref name="span"/>, or null
-    /// when no child contains it. A non-empty span is contained by one child at most, but an empty
-    /// one is contained both by the child that ends where it stands and by the child that starts
-    /// there, so every child containing it is searched and the narrowest result wins, with ties
-    /// going to the later child.
+    /// Returns the innermost node under this node that contains the whole of
+    /// <paramref name="span"/>, or null if no child contains it. At most one child contains a
+    /// non-empty span. An empty span is contained both by the child that ends at its position and
+    /// by the child that starts there. So every child that contains the span is searched, and the
+    /// narrowest result wins, with ties going to the later child.
     /// </summary>
     private SyntaxNode? ChildHolding(TextSpan span)
     {
@@ -822,8 +898,8 @@ public abstract class SyntaxNode
         return best;
     }
 
-    /// <summary>A rewrite that replaces the nodes it was given, or removes them from the tree.</summary>
-    /// <typeparam name="TNode">What the nodes replaced are.</typeparam>
+    /// <summary>Replaces the given nodes, or removes them from the tree, during a rewrite.</summary>
+    /// <typeparam name="TNode">The type of the nodes to replace.</typeparam>
     private sealed class NodeReplacer<TNode> : SyntaxRewriter where TNode : SyntaxNode
     {
         private readonly HashSet<SyntaxNode> sought;
@@ -837,14 +913,14 @@ public abstract class SyntaxNode
 
         /// <inheritdoc/>
         /// <remarks>
-        /// A node that is being replaced is not walked into: its replacement is computed from
-        /// the original node, which is what a fix expects to read.
+        /// A node that is being replaced is not walked into. Its replacement is computed from
+        /// the original node, because that is the node a fix expects to read.
         /// </remarks>
         public override SyntaxNode? Visit(SyntaxNode? node) =>
             node is TNode found && sought.Contains(node) ? replacement(found, found) : base.Visit(node);
     }
 
-    /// <summary>A rewrite that replaces the tokens it was given.</summary>
+    /// <summary>Replaces the given tokens during a rewrite.</summary>
     private sealed class TokenReplacer : SyntaxRewriter
     {
         private readonly HashSet<SyntaxToken> sought;
@@ -862,9 +938,9 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// A rewrite that returns the already-spaced tokens it was given, in the order it visits
-    /// them. The spacing was computed over the same walk order, so the nth token visited is
-    /// the nth token in the list.
+    /// Replaces each token with the corresponding already-spaced token it was given, in the order
+    /// it visits them. The spacing was computed over the same walk order, so the nth token visited
+    /// is the nth token in the list.
     /// </summary>
     /// <param name="spaced">Every token of the node, in source order, with its new trivia.</param>
     private sealed class Spacer(ImmutableArray<SyntaxToken> spaced) : SyntaxRewriter

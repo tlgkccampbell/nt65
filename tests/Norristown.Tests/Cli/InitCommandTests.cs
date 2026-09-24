@@ -6,8 +6,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// <c>nt65 init</c>: the two files a minimal program consists of, written so that the next
-/// command run is a build that works, and never written over files that already exist.
+/// Tests <c>nt65 init</c>, which writes the two files a minimal program consists of. They are
+/// written so that the next command run is a build that works, and they never replace files
+/// that already exist.
 /// </summary>
 public sealed class InitCommandTests : IDisposable
 {
@@ -15,7 +16,7 @@ public sealed class InitCommandTests : IDisposable
 
     public void Dispose() => root.Delete(recursive: true);
 
-    /// <summary>What it writes builds, and it says what it wrote.</summary>
+    /// <summary>The files it writes build, and it reports which files it wrote.</summary>
     [Fact]
     public void WhatItWritesBuilds()
     {
@@ -28,7 +29,7 @@ public sealed class InitCommandTests : IDisposable
 
     /// <summary>
     /// The project file holds keys nt65 reads and nothing else, and the source is already in the
-    /// standard layout, so a first `nt65 fmt` on a new project changes nothing.
+    /// standard layout, so a first <c>nt65 fmt</c> on a new project changes nothing.
     /// </summary>
     [Fact]
     public void WhatItWritesIsWhatNt65WouldWrite()
@@ -56,8 +57,8 @@ public sealed class InitCommandTests : IDisposable
     }
 
     /// <summary>
-    /// A directory that already holds either file is left exactly as it was, whichever of the
-    /// two is the one that is there.
+    /// A directory that already holds either file is left exactly as it was, no matter which of
+    /// the two it holds.
     /// </summary>
     [Fact]
     public void ItRefusesToWriteOverWhatIsThere()

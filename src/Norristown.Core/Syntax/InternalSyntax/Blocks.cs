@@ -3,9 +3,9 @@ using System.Collections.Immutable;
 namespace Norristown.Syntax.InternalSyntax;
 
 /// <summary>
-/// The block layer: a pass over the lines' brace values (+1, −1 or 0) that never looks inside a
-/// line. When the braces balance, the nesting follows directly from the running total of those
-/// values. When they do not, two recovery rules keep the damage local:
+/// Builds the block layer in a pass over the lines' brace values (+1, −1 or 0) that never looks
+/// inside a line. When the braces balance, the nesting follows directly from the running total
+/// of those values. When they do not, two recovery rules keep the damage local:
 /// <list type="bullet">
 /// <item>a <c>}</c> with no open block is reported and treated as an ordinary line;</item>
 /// <item>a <c>.proc</c>, <c>.multiproc</c> or <c>.macro</c> opener inside one of those closes
@@ -72,7 +72,7 @@ internal static class Blocks
                 }
                 else if (line.Opens)
                 {
-                    // A continuation: it ends this block and opens the next.
+                    // A continuation line ends this block and opens the next.
                     Pop(hasCloser: false);
                 }
                 else

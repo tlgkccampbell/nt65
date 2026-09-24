@@ -4,9 +4,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// Which registers each instruction writes. The table is written out twice, here and in
-/// <see cref="RegisterEffects"/>, because a mnemonic left out of it would not fail anything
-/// on its own: it would quietly say the instruction writes nothing, and a routine would
+/// Checks which registers each instruction writes. The table is listed twice, here and in
+/// <see cref="RegisterEffects"/>, because a mnemonic left out of it would not fail anything on
+/// its own. The table would quietly say the instruction writes nothing, and a routine would
 /// promise to hand back a register it had destroyed.
 /// </summary>
 public sealed class RegisterEffectsTests
@@ -20,7 +20,7 @@ public sealed class RegisterEffectsTests
 
     /// <summary>
     /// Every mnemonic any CPU has is in the table. A new instruction fails this until someone
-    /// says what it does to the registers, which is the whole point of writing it out twice.
+    /// records what it does to the registers, which is the whole point of listing it twice.
     /// </summary>
     [Fact]
     public void EveryMnemonicIsInTheTable()
@@ -42,7 +42,9 @@ public sealed class RegisterEffectsTests
         }
     }
 
-    /// <summary>A shift through the accumulator writes it; one through memory writes only the carry.</summary>
+    /// <summary>
+    /// A shift through the accumulator writes it. A shift through memory writes only the carry.
+    /// </summary>
     [Theory]
     [InlineData(MnemonicKind.Asl)]
     [InlineData(MnemonicKind.Lsr)]
@@ -54,7 +56,9 @@ public sealed class RegisterEffectsTests
         Assert.Equal(Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Absolute, null));
     }
 
-    /// <summary>The CMOS `inc a` and `dec a` write the accumulator; through memory they write nothing.</summary>
+    /// <summary>
+    /// The CMOS `inc a` and `dec a` write the accumulator. Through memory they write nothing.
+    /// </summary>
     [Theory]
     [InlineData(MnemonicKind.Inc)]
     [InlineData(MnemonicKind.Dec)]
@@ -95,7 +99,9 @@ public sealed class RegisterEffectsTests
         Assert.Null(RegisterEffects.Moved(MnemonicKind.Xba));
     }
 
-    /// <summary>What every mnemonic writes, with an implied or absolute operand.</summary>
+    /// <summary>
+    /// Builds the table of what every mnemonic writes, with an implied or absolute operand.
+    /// </summary>
     private static Dictionary<string, Registers> Table()
     {
         var table = new Dictionary<string, Registers>(StringComparer.Ordinal);
@@ -116,9 +122,9 @@ public sealed class RegisterEffectsTests
         Add(Registers.C, "dcp");
         Add(Registers.All, "jam");
 
-        // Everything else leaves A, X, Y and the carry alone: the stores, the pushes, the
-        // branches, the jumps and returns, the flags that are not the carry, and the bit
-        // instructions.
+        // Everything else leaves A, X, Y and the carry alone. That includes the stores, the
+        // pushes, the branches, the jumps and returns, the flags that are not the carry, and the
+        // bit instructions.
         Add(
             Registers.None,
             "sta", "stx", "sty", "stz", "bit", "tsb", "trb", "inc", "dec", "nop", "wdm", "wai", "stp",

@@ -6,18 +6,20 @@ using Norristown.Tests.Syntax;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The TextMate grammar colours a file before the server answers, and the server's semantic
-/// tokens are drawn over it once it does. Wherever the grammar gives a name more than the plain
-/// scope, it must give the scope VS Code maps the server's token type to, so the name keeps its
-/// colour when the tokens arrive; and it must give every declaration such a scope, except the few
-/// whose kind cannot be told from their line.
+/// Checks that the TextMate grammar colours names as the server's semantic tokens do. The grammar
+/// colours a file before the server answers, and the server's tokens are drawn over it once it
+/// does. Wherever the grammar gives a name more than the plain scope, it must give the scope that
+/// VS Code maps the server's token type to, so that the name keeps its colour when the tokens
+/// arrive. The grammar must also give every declaration such a scope, except the few declarations
+/// whose kind cannot be determined from their line.
 /// </summary>
 public sealed class GrammarColoursTests
 {
     /// <summary>
-    /// The declarations whose kind cannot be told from their line, as pairs of the grammar's scope
-    /// and the token type's: a constant whose expression turns out to name an address, such as
-    /// <c>HERE = *</c>, which the grammar colours as a constant and the server as a variable.
+    /// The declarations whose kind cannot be determined from their line, as pairs of the grammar's
+    /// scope and the token type's scope. The one such declaration is a constant whose expression
+    /// turns out to name an address, such as <c>HERE = *</c>, which the grammar colours as a
+    /// constant and the server as a variable.
     /// </summary>
     private static readonly HashSet<(string Grammar, string Token)> Undecidable =
     [
@@ -46,7 +48,7 @@ public sealed class GrammarColoursTests
                     var declaration = (data[i + 4] & 1) != 0;
                     if (ScopeOf(type, (data[i + 4] & 2) != 0) is not { } expected)
                         continue;
-                    // A name given by `.use ... as` has whatever kind the module it comes from declares.
+                    // A name introduced by `.use ... as` has the kind that its source module declares.
                     if (declaration && tree.Lines[line].ToFullString()[..character].TrimEnd().EndsWith(" as", StringComparison.Ordinal))
                         continue;
                     var given = scopes[line][character..(character + data[i + 2])].Distinct().ToList();
@@ -66,7 +68,10 @@ public sealed class GrammarColoursTests
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 
-    /// <summary>The scope VS Code colours a token type by, or null for a type given no scope, such as a label.</summary>
+    /// <summary>
+    /// Returns the scope that VS Code colours a token type by, or null for a type given no scope,
+    /// such as a label.
+    /// </summary>
     private static string? ScopeOf(string type, bool readOnly) => type switch
     {
         "namespace" => TextMateGrammar.Namespace,
@@ -82,7 +87,10 @@ public sealed class GrammarColoursTests
         _ => null,
     };
 
-    /// <summary>Every fixture, corpus program and example, each a program of the sources beneath its folder.</summary>
+    /// <summary>
+    /// Returns every fixture, corpus program and example, each as a program made of the sources
+    /// beneath its folder.
+    /// </summary>
     private static IEnumerable<(IReadOnlyList<SyntaxTree> Trees, ProjectSettings Settings)> Programs()
     {
         var folders = new[] { Repo.Path("tests", "fixtures"), Repo.Path("tests", "corpus"), Repo.Path("examples") }

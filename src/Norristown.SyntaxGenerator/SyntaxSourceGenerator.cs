@@ -28,9 +28,9 @@ public sealed class SyntaxSourceGenerator : IIncrementalGenerator
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Collected rather than taken one at a time, so that a project without the table gets one
-        // diagnostic saying the table is missing, rather than errors about the hundred classes it
-        // then lacks.
+        // The tables are collected rather than taken one at a time, so that a project without the
+        // table gets one diagnostic saying the table is missing, rather than errors about the
+        // hundred classes it then lacks.
         var tables = context.AdditionalTextsProvider
             .Where(file => NameOf(file.Path) == TableName)
             .Select((file, token) => new Table(file.Path, file.GetText(token)?.ToString()))
@@ -81,8 +81,8 @@ public sealed class SyntaxSourceGenerator : IIncrementalGenerator
     }
 
     /// <summary>
-    /// Reports a table that cannot be read, on <paramref name="line"/> when it knows one and
-    /// nowhere at all when there is no file to point at.
+    /// Reports a table that cannot be read, on <paramref name="line"/> when the line is known, and
+    /// at no location when there is no file to point at.
     /// </summary>
     private static void Report(SourceProductionContext context, string? path, int line, string message)
     {
@@ -93,15 +93,18 @@ public sealed class SyntaxSourceGenerator : IIncrementalGenerator
         context.ReportDiagnostic(Diagnostic.Create(Unreadable, where, message));
     }
 
-    /// <summary>The last segment of <paramref name="path"/>, whichever separator it is written with.</summary>
+    /// <summary>
+    /// Returns the last segment of <paramref name="path"/>, with either <c>/</c> or <c>\</c> as the
+    /// separator.
+    /// </summary>
     private static string NameOf(string path)
     {
         var separator = path.LastIndexOfAny(['/', '\\']);
         return separator < 0 ? path : path.Substring(separator + 1);
     }
 
-    /// <summary>The table the generator reads, and where it came from.</summary>
+    /// <summary>Represents the table the generator reads, and where it came from.</summary>
     /// <param name="Path">The additional file's path, which the diagnostic points at.</param>
-    /// <param name="Text">Its text, or null when the compiler could not read it.</param>
+    /// <param name="Text">The file's text, or null if the compiler could not read it.</param>
     private sealed record Table(string Path, string? Text);
 }

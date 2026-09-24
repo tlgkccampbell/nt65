@@ -6,10 +6,10 @@ namespace Norristown.Tests.Syntax;
 public sealed class TypedNodeTests
 {
     /// <summary>
-    /// Every property of every node can be read, whatever the line: in each source as it is
-    /// written, and with every line cut short after its first few tokens or before its last,
-    /// which is what a line being typed looks like. A property that assumes a piece is there
-    /// when the parser may leave it out throws here.
+    /// Every property of every node can be read on any line. The check covers each source as it
+    /// stands, and each source with every line cut short after its first few tokens or before its
+    /// last, which is what a line being typed looks like. A property that assumes a child element
+    /// is present when the parser may leave it out throws here.
     /// </summary>
     [Fact]
     public void EveryPropertyReadsOnWholeAndBrokenLines()

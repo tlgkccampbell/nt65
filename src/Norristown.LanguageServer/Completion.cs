@@ -5,17 +5,17 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What could be written at the caret, and only that: the statements the enclosing context
-/// accepts, the forms an instruction has on this CPU and the registers that index them, the
-/// names a path leads to after <c>::</c> and in a <c>.use</c>, the names in scope where an
-/// operand or an expression goes, the items of a processor-state signature, and a macro's
-/// parameters as named arguments.
+/// Provides completion, which offers what could be typed at the caret and only that. It offers
+/// the statements the enclosing context accepts, the forms an instruction has on this CPU and
+/// the registers that index them, and the names a path leads to after <c>::</c> and in a
+/// <c>.use</c>. It also offers the names in scope where an operand or an expression goes, the
+/// items of a processor-state signature, and a macro's parameters as named arguments.
 /// <para>
-/// All of it is read off <see cref="LineContext"/>, which lexes the line as far as the caret,
-/// rather than off the nodes the file parsed to. That is deliberate: the caret cuts the line in
-/// the middle of what is being typed, so <c>$10</c> reads as <c>$1</c> and <c>.byt</c> is not
-/// yet <c>.byte</c>, and completion is about what has been typed so far. The tree answers
-/// questions about the line's surroundings: which blocks hold it, and what context they give it.
+/// All of it is read from <see cref="LineContext"/>, which lexes the line up to the caret, rather
+/// than from the nodes the file parsed to. That is deliberate. The caret cuts the line in the
+/// middle of what is being typed, so <c>$10</c> reads as <c>$1</c> and <c>.byt</c> is not yet
+/// <c>.byte</c>, and completion is about what has been typed so far. The tree answers questions
+/// about the line's surroundings, such as which blocks hold it and what context they give it.
 /// </para>
 /// </summary>
 internal static class Completion
@@ -23,17 +23,25 @@ internal static class Completion
     /// <summary>The processor-state items a signature may give for a point in the code, which a <c>.state</c> may give too.</summary>
     private static readonly string[] PointItems = ["a8", "a16", "a?", "i8", "i16", "i?", "native", "emu", "e?", "dp?", "dbr?"];
 
-    /// <summary>The items that take a value, written with their <c>=</c> so the value follows.</summary>
+    /// <summary>
+    /// The items that take a value, each inserted with its <c>=</c> so that the value follows.
+    /// </summary>
     private static readonly string[] ValuedItems = ["dp = ", "dbr = "];
 
-    /// <summary>The items with which a signature says a routine or a macro leaves part of the processor state unchanged.</summary>
+    /// <summary>
+    /// The items with which a signature states that a routine or a macro leaves part of the
+    /// processor state unchanged.
+    /// </summary>
     private static readonly string[] KeepItems = ["a*", "i*", "e*", "dp*", "dbr*"];
 
-    /// <summary>The items only a routine's signature may give: how it is called and how it returns.</summary>
+    /// <summary>
+    /// The items only a routine's signature may give, which describe how the routine is called and
+    /// how it returns.
+    /// </summary>
     private static readonly string[] RoutineItems = ["near", "far", "inline", "args", "interrupt", "noreturn"];
 
     /// <summary>
-    /// The item that says which registers a routine preserves, written so that the registers
+    /// The item that states which registers a routine preserves, inserted so that the registers
     /// follow it. A macro is expanded into the routine that calls it, so it has no such item.
     /// </summary>
     private static readonly string[] PromiseItems = ["keeps "];
@@ -44,7 +52,9 @@ internal static class Completion
     /// <summary>The attributes a segment declaration gives about where the segment is placed.</summary>
     private static readonly string[] SegmentAttributes = ["dp = ", "bank = ", "mirrors = "];
 
-    /// <summary>The directives that declare the name written after them; nothing is offered for that new name.</summary>
+    /// <summary>
+    /// The directives that declare the name after them. Nothing is offered for that new name.
+    /// </summary>
     private static readonly HashSet<string> Declaring = new(StringComparer.Ordinal)
     {
         ".module", ".proc", ".scope", ".data", ".enum", ".struct", ".union", ".macro", ".func", ".list",
@@ -59,14 +69,16 @@ internal static class Completion
     private static readonly Protocol.Command Again = new("Suggest", "editor.action.triggerSuggest");
 
     /// <summary>
-    /// The completion items at <paramref name="position"/> in <paramref name="model"/>'s file,
-    /// and, keyed by label, each item's documentation, which the client fetches for the one item
-    /// it highlights rather than receiving it with every item.
+    /// Returns the completion items at <paramref name="position"/> in <paramref name="model"/>'s
+    /// file, and each item's documentation keyed by label. The client fetches the documentation
+    /// for the one item it highlights rather than receiving it with every item.
     /// </summary>
-    /// <param name="program">Every file, for the names a path leads to and what a block opener writes.</param>
+    /// <param name="program">
+    /// Every file, for the names a path leads to and the text a block opener inserts.
+    /// </param>
     /// <param name="model">The file the caret is in.</param>
     /// <param name="cpu">The processor, which decides the instructions and the shape of a routine.</param>
-    /// <param name="position">Where in the file's text.</param>
+    /// <param name="position">The position in the file's text.</param>
     /// <param name="snippets">Whether the client accepts snippets with tab stops.</param>
     public static (IReadOnlyList<Protocol.CompletionItem> Items, IReadOnlyDictionary<string, string> About) At(
         ProgramModel program, SemanticModel model, Cpu cpu, int position, bool snippets)
@@ -113,8 +125,8 @@ internal static class Completion
     }
 
     /// <summary>
-    /// The macro or function a call names, written as the name or path that ends at
-    /// <paramref name="end"/>, exclusive.
+    /// Returns the macro or function a call names, given as the name or path that ends at token
+    /// index <paramref name="end"/>, exclusive.
     /// </summary>
     public static Symbol? Callee(SemanticModel model, LineContext line, int end)
     {
@@ -132,7 +144,7 @@ internal static class Completion
         var before = line.Before;
         var directive = line.Directive;
 
-        // After `::`, offer the members of whatever the path leads to. In a `.use`, a path
+        // After `::`, the members of what the path leads to are offered. In a `.use`, a path
         // starts at the root of the module tree, and inside its `{ }` the members of what the
         // path before the brace leads to are offered.
         if (directive == ".use")
@@ -267,10 +279,11 @@ internal static class Completion
     }
 
     /// <summary>
-    /// What the comparison at the caret compares against, when the caret follows <c>==</c> or
-    /// <c>!=</c> after <c>.mode(p)</c> of an <c>operand</c> parameter, or after the name of a
-    /// <c>one</c> parameter or of a repetition's binding over a <c>list(one(...))</c>: the
-    /// parameter's name, what it accepts, and whether the word to compare with is a mode.
+    /// Returns what the comparison at the caret compares against, as the parameter's name, what
+    /// it accepts, and whether the word to compare with is a mode. This applies when the caret
+    /// follows <c>==</c> or <c>!=</c> after <c>.mode(p)</c> of an <c>operand</c> parameter, or
+    /// after the name of a <c>one</c> parameter or of a repetition's binding over a
+    /// <c>list(one(...))</c>. Otherwise, returns null.
     /// </summary>
     private static (string Name, ArgumentKind Accepts, bool IsMode)? Compared(SemanticModel model, LineContext line)
     {
@@ -293,9 +306,9 @@ internal static class Completion
     }
 
     /// <summary>
-    /// Completions for a parameter's kind in a macro's header: after a parameter's <c>:</c> and
-    /// inside a <c>list(...)</c>, the kinds and the enums in scope; inside an
-    /// <c>operand(...)</c>, the modes it may list.
+    /// Offers completions for a parameter's kind in a macro's header. After a parameter's
+    /// <c>:</c> and inside a <c>list(...)</c>, it offers the kinds and the enums in scope. Inside
+    /// an <c>operand(...)</c>, it offers the modes the kind may list.
     /// </summary>
     /// <returns>Whether the caret is in a kind, so that nothing else is offered there.</returns>
     private static bool InParameterKind(SemanticModel model, LineContext line, Dictionary<string, Suggestion> items)
@@ -335,7 +348,10 @@ internal static class Completion
         return true;
     }
 
-    /// <summary>The kinds a parameter may be, and the enums in scope, whose members a parameter may take.</summary>
+    /// <summary>
+    /// Offers the kinds a parameter may be, and the enums in scope, whose members a parameter may
+    /// take.
+    /// </summary>
     private static void Kinds(SemanticModel model, LineContext line, Dictionary<string, Suggestion> items)
     {
         foreach (var (written, takes) in ParameterKinds.Written)
@@ -344,9 +360,9 @@ internal static class Completion
     }
 
     /// <summary>
-    /// What an argument for <paramref name="parameter"/> may be, offered before every other name:
-    /// the members of the enum an enum kind names, by their bare names, and the words a
-    /// <c>one(...)</c> lists. A <c>list</c> of either takes them too.
+    /// Offers what an argument for <paramref name="parameter"/> may be, ahead of every other
+    /// name. That is the members of the enum an enum kind names, by their bare names, and the
+    /// words a <c>one(...)</c> lists. A <c>list</c> of either kind takes them too.
     /// </summary>
     private static void Accepted(SemanticModel model, MacroParameter parameter, Dictionary<string, Suggestion> items)
     {
@@ -371,15 +387,15 @@ internal static class Completion
     }
 
     /// <summary>
-    /// Whether a token finishes an expression, so that what may follow it is an operator or a
-    /// separator and never a name of its own.
+    /// Checks whether a token finishes an expression, so that what may follow it is an operator or
+    /// a separator and never a name of its own.
     /// </summary>
     private static bool Ends(SyntaxKind kind) =>
         kind is SyntaxKind.NumberLiteral or SyntaxKind.Identifier or SyntaxKind.CheapLocal or SyntaxKind.Register
             or SyntaxKind.Mnemonic or SyntaxKind.StringLiteral or SyntaxKind.CharacterLiteral
             or SyntaxKind.CloseParen or SyntaxKind.CloseBracket;
 
-    /// <summary>What may begin a statement where the caret is.</summary>
+    /// <summary>Offers what may begin a statement where the caret is.</summary>
     private static void Starting(
         ProgramModel program, SemanticModel model, LineContext line, Cpu cpu,
         Dictionary<string, Suggestion> items)
@@ -389,8 +405,8 @@ internal static class Completion
 
         switch (line.Place)
         {
-            // Code: the instructions this CPU has, the macros in scope, and a block a macro
-            // body splices in by naming its parameter.
+            // Code may begin with an instruction this CPU has, a macro in scope, or a block
+            // that a macro body splices in by naming its parameter.
             case Place.Code or Place.Unknown:
                 foreach (var mnemonic in SyntaxFacts.Mnemonics)
                 {
@@ -430,7 +446,7 @@ internal static class Completion
     }
 
     /// <summary>
-    /// At the start of a statement a macro is inserted with the <c>!(</c> that calls it, so that
+    /// Makes each macro, at the start of a statement, insert the <c>!(</c> that calls it, so that
     /// its arguments are offered next. Macros are the only items whose kind is
     /// <c>Snippet</c>, which is how they are found here.
     /// </summary>
@@ -446,8 +462,8 @@ internal static class Completion
     }
 
     /// <summary>
-    /// What may follow a mnemonic: the forms the instruction has on this CPU, the registers
-    /// that index them, and the names an address or a value is written from.
+    /// Offers what may follow a mnemonic, which is the forms the instruction has on this CPU, the
+    /// registers that index them, and the names an address or a value is built from.
     /// </summary>
     private static void Operand(
         ProgramModel program, SemanticModel model, LineContext line, Cpu cpu,
@@ -458,8 +474,8 @@ internal static class Completion
         if (modes.Count == 0)
             return;
 
-        // The operand so far: whether it is written inside a `(` or a `[`, whether that has
-        // been closed again, and whether a `#` has made it a value.
+        // The operand so far is checked for whether it starts inside a `(` or a `[`, whether
+        // that has been closed again, and whether a `#` has made it a value.
         var written = line.Before.Skip(line.Start + 1).ToList();
         var opened = written.Count == 0 ? '\0' : written[0].Kind switch
         {
@@ -503,7 +519,9 @@ internal static class Completion
             AddExpression(program, model, line, items);
     }
 
-    /// <summary>The operand forms an instruction has, each offered as the character or prefix that begins it.</summary>
+    /// <summary>
+    /// Offers the operand forms an instruction has, each as the character or prefix that begins it.
+    /// </summary>
     private static void Forms(
         IReadOnlySet<AddressingMode> modes, Cpu cpu, MnemonicKind mnemonic,
         Dictionary<string, Suggestion> items)
@@ -538,7 +556,10 @@ internal static class Completion
             AddWord("d:", "a constant address in the direct page", items);
     }
 
-    /// <summary>What may follow the comma of an operand: the register that indexes it, or a second value.</summary>
+    /// <summary>
+    /// Offers what may follow the comma of an operand, which is the register that indexes it or a
+    /// second value.
+    /// </summary>
     private static void Indexing(
         IReadOnlySet<AddressingMode> modes, char opened, int depth, bool value,
         Dictionary<string, Suggestion> items)
@@ -581,19 +602,19 @@ internal static class Completion
     }
 
     /// <summary>
-    /// The addressing modes an instruction has on this CPU, or, for the long branches, which
-    /// nt65 accepts on every CPU, a single relative-long target.
+    /// Returns the addressing modes an instruction has on this CPU, or, for the long branches,
+    /// which nt65 accepts on every CPU, a single relative-long target.
     /// </summary>
     private static IReadOnlySet<AddressingMode> ModesOf(Cpu cpu, MnemonicKind mnemonic) =>
         SyntaxFacts.IsLongBranch(mnemonic)
             ? new HashSet<AddressingMode> { AddressingMode.RelativeLong }
             : Instructions.Modes(cpu, mnemonic);
 
-    /// <summary>Whether a form is written with an operand of its own.</summary>
+    /// <summary>Checks whether a form takes an operand of its own.</summary>
     private static bool Takes(AddressingMode mode) =>
         mode is not (AddressingMode.Implied or AddressingMode.Accumulator);
 
-    /// <summary>What an address-size prefix makes of the address after it.</summary>
+    /// <summary>Describes what an address-size prefix makes of the address after it.</summary>
     private static string Sized(string prefix) => prefix switch
     {
         "z:" => "the direct page",
@@ -602,8 +623,9 @@ internal static class Completion
     };
 
     /// <summary>
-    /// The words offered after punctuation in a declaration: an address size or what a
-    /// declaration or member holds after a <c>:</c>, and a segment's attributes after a <c>,</c>.
+    /// Returns the words offered after punctuation in a declaration, or null if there are none.
+    /// After a <c>:</c>, these are an address size or what a declaration or member holds. After a
+    /// <c>,</c> in a <c>.segment</c>, they are the segment's attributes.
     /// </summary>
     private static (IEnumerable<string> Words, string Detail)? AfterMark(LineContext line, string? directive)
     {
@@ -621,10 +643,15 @@ internal static class Completion
         };
     }
 
-    /// <summary>What a name leads into with <c>::</c>: its own body, or its type's.</summary>
+    /// <summary>
+    /// Returns the scope a name leads into with <c>::</c>, which is its own body or its type's.
+    /// </summary>
     private static Scope? BodyOf(Symbol symbol) => symbol.Body ?? symbol.Type?.Body;
 
-    /// <summary>The names after <c>::</c> where a path leads, and the modules below it when it is a module path.</summary>
+    /// <summary>
+    /// Offers the names after <c>::</c> where a path leads, and the modules below it when it is a
+    /// module path.
+    /// </summary>
     private static void AddMembers(
         ProgramModel program, SemanticModel model, SymbolInfo at, bool modulesToo,
         Dictionary<string, Suggestion> items)
@@ -655,7 +682,9 @@ internal static class Completion
         }
     }
 
-    /// <summary>The next part of every module path that starts with <paramref name="prefix"/>.</summary>
+    /// <summary>
+    /// Offers the next part of every module path that starts with <paramref name="prefix"/>.
+    /// </summary>
     private static void AddModules(
         ProgramModel program, string prefix,
         Dictionary<string, Suggestion> items)
@@ -673,9 +702,9 @@ internal static class Completion
     }
 
     /// <summary>
-    /// What an expression may start with: the prefix characters of numbers that are not plain
-    /// decimal, the names in scope, the modules a path may lead into, and the built-in
-    /// functions, including those only a macro body may use when the caret is in one.
+    /// Offers what an expression may start with. That is the prefix characters of numbers that
+    /// are not plain decimal, the names in scope, the modules a path may lead into, and the
+    /// built-in functions, including those only a macro body may use when the caret is in one.
     /// </summary>
     private static void AddExpression(
         ProgramModel program, SemanticModel model, LineContext line,
@@ -694,10 +723,10 @@ internal static class Completion
     }
 
     /// <summary>
-    /// Every name that may be written alone at <paramref name="position"/> and that
-    /// <paramref name="wanted"/> accepts, each under the spelling that reaches it there. The
-    /// list and its order are the model's, which is the binder's, so what is offered is what
-    /// the name will mean once it is written.
+    /// Offers every name that may appear alone at <paramref name="position"/> and that
+    /// <paramref name="wanted"/> accepts, each under the name that reaches it there. The list
+    /// and its order come from the model, which gets them from the binder, so what is offered is
+    /// what the name will mean once it is typed.
     /// </summary>
     private static void AddInScope(
         SemanticModel model, int position,
@@ -741,8 +770,8 @@ internal static class Completion
     }
 
     /// <summary>
-    /// A word, inserted with whatever must follow it (a space, <c>=</c> or <c>(</c>) but listed
-    /// without it, since the label is what the client filters on.
+    /// Offers a word, inserted with whatever must follow it (a space, <c>=</c> or <c>(</c>) but
+    /// listed without it, since the label is what the client filters on.
     /// </summary>
     private static void AddWord(
         string word, string detail,
@@ -760,15 +789,16 @@ internal static class Completion
         symbol.IsDefine ? "define" : symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;
 
     /// <summary>
-    /// Whether an item's text leaves the caret where something else must be written, so the
-    /// client is asked to reopen the completion list as soon as it has inserted it.
+    /// Checks whether an item's text leaves the caret where something else must be typed, so that
+    /// the client is asked to reopen the completion list as soon as it has inserted the item.
     /// </summary>
     private static bool Unfinished(string text) => text.Length > 0 && text[^1] is ' ' or ':' or '#' or '(' or '[';
 
     /// <summary>
-    /// The signature a line is writing, by the directive that declares it, when the caret is past
-    /// where the signature starts: after <c>:</c> in a <c>.proc</c> or a <c>.macro</c>, after
-    /// <c>=</c> in a <c>.signature</c>, and in the <c>proc(...)</c> of an <c>.import</c>.
+    /// Returns the directive that declares the signature the line contains, when the caret is
+    /// past where the signature starts, or null otherwise. A signature starts after <c>:</c> in a
+    /// <c>.proc</c> or a <c>.macro</c>, after <c>=</c> in a <c>.signature</c>, and in the
+    /// <c>proc(...)</c> of an <c>.import</c>.
     /// </summary>
     private static string? InSignature(LineContext line, string? directive)
     {
@@ -804,7 +834,10 @@ internal static class Completion
         }
     }
 
-    /// <summary>Whether the caret is where the value of a <c>dp =</c> or <c>dbr =</c> goes, which is an expression.</summary>
+    /// <summary>
+    /// Checks whether the caret is where the value of a <c>dp =</c> or <c>dbr =</c> goes, which
+    /// is an expression. The value after <c>inline</c> or <c>args</c> counts too.
+    /// </summary>
     private static bool AfterValuedItem(IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before)
     {
         for (var i = before.Count - 1; i >= 1; i--)

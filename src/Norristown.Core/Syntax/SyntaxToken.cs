@@ -4,17 +4,18 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A token with its parent and absolute position. It is a three-field value, copied rather than
-/// allocated, and two are equal when they are the same token of the same tree reached through
-/// the same parent node. Only a tree hands out real tokens: a default <see cref="SyntaxToken"/>
-/// belongs to nothing, and is what a lookup returns when there is no token to return.
+/// Represents a token together with its parent and absolute position. It is a three-field value,
+/// copied rather than allocated. Two tokens are equal when they are the same token of the same
+/// tree, reached through the same parent node. Only a tree hands out real tokens. A default
+/// <see cref="SyntaxToken"/> belongs to nothing, and a lookup returns it when there is no token
+/// to return.
 /// </summary>
 public readonly record struct SyntaxToken
 {
     /// <summary>Wraps <paramref name="green"/> as a token whose parent is <paramref name="parent"/>.</summary>
-    /// <param name="parent">The node the token is a piece of.</param>
-    /// <param name="green">The green token it wraps.</param>
-    /// <param name="position">Where it starts in the file's text, trivia included.</param>
+    /// <param name="parent">The node the token belongs to.</param>
+    /// <param name="green">The green token to wrap.</param>
+    /// <param name="position">The offset in the file's text where the token starts, trivia included.</param>
     internal SyntaxToken(SyntaxNode parent, GreenToken green, int position)
     {
         Parent = parent;
@@ -23,112 +24,115 @@ public readonly record struct SyntaxToken
     }
 
     /// <summary>
-    /// The node the token is part of; for a token read from <see cref="LineSyntax.Tokens"/>,
-    /// that is the line.
+    /// Gets the node the token belongs to. For a token read from <see cref="LineSyntax.Tokens"/>,
+    /// that node is the line.
     /// </summary>
     public SyntaxNode Parent { get; }
 
-    /// <summary>Where the token starts in the file's text, trivia included.</summary>
+    /// <summary>Gets the offset in the file's text where the token starts, trivia included.</summary>
     public int Position { get; }
 
-    /// <summary>What the token is.</summary>
+    /// <summary>Gets the kind of the token.</summary>
     public SyntaxKind Kind => Green.Kind;
 
-    /// <summary>The token's text, exactly as in the source.</summary>
+    /// <summary>Gets the token's text, exactly as in the source.</summary>
     public string Text => Green.Text;
 
     /// <summary>
-    /// The instruction a <see cref="SyntaxKind.Mnemonic"/> token names, whatever case it is
-    /// written in, and <see cref="Syntax.MnemonicKind.None"/> for every other token.
+    /// Gets the instruction a <see cref="SyntaxKind.Mnemonic"/> token names, in any letter case,
+    /// or <see cref="Syntax.MnemonicKind.None"/> for every other token.
     /// </summary>
     public MnemonicKind MnemonicKind => Green.MnemonicKind;
 
     /// <summary>
-    /// Whether the token fills a place the syntax requires but the source does not write. Its
-    /// text is empty and its span is the empty span where it would have been written.
+    /// Gets a value indicating whether the token fills a place the syntax requires but the source
+    /// leaves empty. Such a token's text is empty, and its span is the empty span where the token
+    /// would have been.
     /// </summary>
     public bool IsMissing => Green.IsMissing;
 
     /// <summary>
-    /// Whether the token carries a diagnostic: a lexical error over its text, or, on a missing
-    /// token, a report of what the line needed in its place.
+    /// Gets a value indicating whether the token has a diagnostic. The diagnostic is a lexical
+    /// error over the token's text or, on a missing token, a report of what the line needed in its
+    /// place.
     /// </summary>
     public bool ContainsDiagnostics => Green.ContainsDiagnostics;
 
-    /// <summary>Whether the token carries a <see cref="SyntaxAnnotation"/>.</summary>
+    /// <summary>Gets a value indicating whether the token has a <see cref="SyntaxAnnotation"/>.</summary>
     public bool ContainsAnnotations => Green.ContainsAnnotations;
 
-    /// <summary>The token's range, without trivia.</summary>
+    /// <summary>Gets the token's range, without trivia.</summary>
     public TextSpan Span => new(Position + Green.LeadingWidth, Green.Text.Length);
 
-    /// <summary>The token's range including its trivia.</summary>
+    /// <summary>Gets the token's range, including its trivia.</summary>
     public TextSpan FullSpan => new(Position, Green.FullWidth);
 
-    /// <summary>The whitespace before the token; only the first token on a line has any.</summary>
+    /// <summary>Gets the whitespace before the token. Only the first token on a line has any.</summary>
     public SyntaxTriviaList LeadingTrivia => new(this, Green.LeadingTrivia, Position);
 
-    /// <summary>The whitespace and comment after the token, up to the end of its line.</summary>
+    /// <summary>Gets the whitespace and comment after the token, up to the end of its line.</summary>
     public SyntaxTriviaList TrailingTrivia => new(this, Green.TrailingTrivia, Span.End);
 
-    /// <summary>The green token this one wraps.</summary>
+    /// <summary>Gets the green token this token wraps.</summary>
     internal GreenToken Green { get; }
 
-    /// <summary>The token's text with its trivia, exactly as in the source.</summary>
+    /// <summary>Returns the token's text with its trivia, exactly as in the source.</summary>
     public string ToFullString() => Green.ToFullString();
 
     /// <summary>
-    /// The token written after this one, wherever it is: the next token of this line, or the
-    /// first of the line below, and null at the end of the file. It walks the same tokens as
-    /// <see cref="SyntaxNode.DescendantTokens"/>, missing ones included, and each of them belongs
-    /// to the node it is part of.
+    /// Returns the token that follows this token in the file. That is the next token of this line,
+    /// or the first token of the line below, or null at the end of the file. The walk visits the
+    /// same tokens as <see cref="SyntaxNode.DescendantTokens"/>, missing tokens included, and each
+    /// returned token has the node it belongs to as its parent.
     /// </summary>
     public SyntaxToken? GetNextToken() => Step(1);
 
     /// <summary>
-    /// The token written before this one, wherever it is: the token before it on this line, or
-    /// the last of the line above, and null at the start of the file.
+    /// Returns the token that precedes this token in the file. That is the token before it on
+    /// this line, or the last token of the line above, or null at the start of the file.
     /// </summary>
     public SyntaxToken? GetPreviousToken() => Step(-1);
 
     /// <summary>
-    /// This token written as <paramref name="text"/>, keeping its kind and the trivia around it,
-    /// or this token itself when the text is unchanged. This is what a rename does: the same
-    /// token of the same line, spelled another way.
+    /// Returns a copy of this token with <paramref name="text"/> as its text, keeping its kind and
+    /// the trivia around it. If the text is unchanged, this token itself is returned. A rename
+    /// uses this method, since the result is the same token of the same line with different text.
     /// </summary>
-    /// <param name="text">What the token is to say.</param>
+    /// <param name="text">The token's new text.</param>
     /// <returns>The token, which belongs to no file until a rewrite puts it into one.</returns>
     public SyntaxToken WithText(string text) =>
         text == Text ? this : Rebuilt(text, Green.LeadingTrivia, Green.TrailingTrivia);
 
-    /// <summary>This token with <paramref name="trivia"/> before it.</summary>
-    /// <param name="trivia">The whitespace to write before the token.</param>
+    /// <summary>Returns a copy of this token with <paramref name="trivia"/> as its leading trivia.</summary>
+    /// <param name="trivia">The whitespace to place before the token.</param>
     /// <returns>The token, which belongs to no file until a rewrite puts it into one.</returns>
     public SyntaxToken WithLeadingTrivia(params IEnumerable<SyntaxTrivia> trivia) =>
         Rebuilt(Text, Trivia(trivia), Green.TrailingTrivia);
 
-    /// <summary>This token with <paramref name="trivia"/> after it.</summary>
-    /// <param name="trivia">The whitespace and comments to write after the token.</param>
+    /// <summary>Returns a copy of this token with <paramref name="trivia"/> as its trailing trivia.</summary>
+    /// <param name="trivia">The whitespace and comments to place after the token.</param>
     /// <returns>The token, which belongs to no file until a rewrite puts it into one.</returns>
     public SyntaxToken WithTrailingTrivia(params IEnumerable<SyntaxTrivia> trivia) =>
         Rebuilt(Text, Green.LeadingTrivia, Trivia(trivia));
 
     /// <summary>
-    /// This token with the trivia of <paramref name="other"/>: its own kind and text, and the
-    /// trivia <paramref name="other"/> carries. A fix that swaps one token for another uses it,
-    /// so that the indentation and the comment on the line stay where they were.
+    /// Returns a copy of this token that keeps its own kind and text but takes the leading and
+    /// trailing trivia of <paramref name="other"/>. A fix that swaps one token for another uses
+    /// this method so that the line's indentation and comment stay where they were.
     /// </summary>
-    /// <param name="other">The token being written over.</param>
+    /// <param name="other">The token being replaced.</param>
     /// <returns>The token, which belongs to no file until a rewrite puts it into one.</returns>
     public SyntaxToken WithTriviaFrom(SyntaxToken other) =>
         Rebuilt(Text, other.Green.LeadingTrivia, other.Green.TrailingTrivia);
 
     /// <summary>
-    /// This token carrying <paramref name="annotations"/> as well as the ones it has. It is a
-    /// <em>different</em> token from this one, belonging to no file until a rewrite puts it into
-    /// one, which is what lets a rewrite find it again afterwards.
+    /// Returns a copy of this token that has <paramref name="annotations"/> in addition to the
+    /// annotations it already has. The copy is a <em>different</em> token from this one and
+    /// belongs to no file until a rewrite puts it into one, so a rewrite can find it again
+    /// afterwards.
     /// </summary>
-    /// <param name="annotations">The annotations to put on, which it does not already carry.</param>
-    /// <returns>This token, or the token it has become.</returns>
+    /// <param name="annotations">The annotations to add, skipping any the token already has.</param>
+    /// <returns>This token if nothing was added; otherwise, the annotated copy.</returns>
     public SyntaxToken WithAdditionalAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
     {
         var own = Green.Annotations;
@@ -136,9 +140,12 @@ public readonly record struct SyntaxToken
         return wanted.Length == own.Length ? this : Carrying(wanted);
     }
 
-    /// <summary>This token without <paramref name="annotations"/>, and with the rest of its own.</summary>
-    /// <param name="annotations">The annotations to take off.</param>
-    /// <returns>This token, or the token it has become.</returns>
+    /// <summary>
+    /// Returns a copy of this token without <paramref name="annotations"/>, keeping its other
+    /// annotations.
+    /// </summary>
+    /// <param name="annotations">The annotations to remove.</param>
+    /// <returns>This token if nothing was removed; otherwise, the copy.</returns>
     public SyntaxToken WithoutAnnotations(params IEnumerable<SyntaxAnnotation> annotations)
     {
         var own = Green.Annotations;
@@ -146,9 +153,9 @@ public readonly record struct SyntaxToken
         return kept.Length == own.Length ? this : Carrying(kept);
     }
 
-    /// <summary>This token without the annotations of <paramref name="kind"/> it carries.</summary>
-    /// <param name="kind">The kind of annotation to take off.</param>
-    /// <returns>This token, or the token it has become.</returns>
+    /// <summary>Returns a copy of this token without its annotations of <paramref name="kind"/>.</summary>
+    /// <param name="kind">The kind of annotation to remove.</param>
+    /// <returns>This token if nothing was removed; otherwise, the copy.</returns>
     public SyntaxToken WithoutAnnotations(string kind)
     {
         var own = Green.Annotations;
@@ -156,20 +163,23 @@ public readonly record struct SyntaxToken
         return kept.Length == own.Length ? this : Carrying(kept);
     }
 
-    /// <summary>Whether this token carries <paramref name="annotation"/>.</summary>
+    /// <summary>Checks whether this token has <paramref name="annotation"/>.</summary>
     /// <param name="annotation">The annotation to look for, matched by reference.</param>
     public bool HasAnnotation(SyntaxAnnotation annotation) => Green.Annotations.Contains(annotation);
 
-    /// <summary>Whether this token carries an annotation of <paramref name="kind"/>.</summary>
+    /// <summary>Checks whether this token has an annotation of <paramref name="kind"/>.</summary>
     /// <param name="kind">The kind to look for.</param>
     public bool HasAnnotations(string kind) => GetAnnotations(kind).Any();
 
-    /// <summary>The annotations of <paramref name="kind"/> on this token, in the order they were put on.</summary>
+    /// <summary>
+    /// Returns the annotations of <paramref name="kind"/> on this token, in the order they were
+    /// added.
+    /// </summary>
     /// <param name="kind">The kind to look for.</param>
     public IEnumerable<SyntaxAnnotation> GetAnnotations(string kind) =>
         Green.Annotations.Where(annotation => annotation.Kind == kind);
 
-    /// <summary>The syntax diagnostics on this token, in source order.</summary>
+    /// <summary>Returns the syntax diagnostics on this token, in source order.</summary>
     public IReadOnlyList<Diagnostic> GetDiagnostics()
     {
         var result = new List<Diagnostic>();
@@ -177,22 +187,25 @@ public readonly record struct SyntaxToken
         return result;
     }
 
-    /// <summary>The token's text, without trivia.</summary>
+    /// <summary>Returns the token's text, without trivia.</summary>
     public override string ToString() => Text;
 
-    /// <summary>The green trivia of <paramref name="trivia"/>, in the order it is written.</summary>
+    /// <summary>Returns the green trivia of <paramref name="trivia"/>, in source order.</summary>
     private static ImmutableArray<GreenTrivia> Trivia(IEnumerable<SyntaxTrivia> trivia) =>
         [.. trivia.Select(one => one.Green)];
 
-    /// <summary>This token carrying <paramref name="wanted"/> in place of the annotations it has.</summary>
+    /// <summary>
+    /// Returns a detached copy of this token with <paramref name="wanted"/> in place of its
+    /// annotations.
+    /// </summary>
     private SyntaxToken Carrying(ImmutableArray<SyntaxAnnotation> wanted) =>
         SyntaxFactory.Detached((GreenToken)Green.WithAnnotations(wanted));
 
     /// <summary>
-    /// This token rebuilt with new text or trivia. A token's diagnostics are about the text it was
-    /// lexed from, so a rebuilt token carries none: no source has been lexed with its text yet.
-    /// Its annotations are not about its text, so they are kept: the same token of the same line,
-    /// spelled another way, is still the token that was tagged.
+    /// Returns a copy of this token rebuilt with new text or trivia. A token's diagnostics concern
+    /// the text it was lexed from, so a rebuilt token has none, because no source has been lexed
+    /// with its text yet. Its annotations do not concern its text, so they are kept. The same
+    /// token of the same line, with different text, is still the token that was tagged.
     /// </summary>
     private SyntaxToken Rebuilt(string text, ImmutableArray<GreenTrivia> leading, ImmutableArray<GreenTrivia> trailing)
     {
@@ -205,29 +218,29 @@ public readonly record struct SyntaxToken
     }
 
     /// <summary>
-    /// Whether <paramref name="token"/> is the same green token, at the same position, as
+    /// Checks whether <paramref name="token"/> is the same green token, at the same position, as
     /// <paramref name="sought"/>.
     /// </summary>
     private static bool Written(SyntaxToken token, SyntaxToken sought) =>
         token.Position == sought.Position && ReferenceEquals(token.Green, sought.Green);
 
     /// <summary>
-    /// The token one step along from this one, forwards or backwards. The search works one line
-    /// at a time: a line has few enough tokens to walk them all, and stepping past either end of
-    /// a line gives the first token of the next line or the last token of the previous one.
+    /// Returns the token one step forwards or backwards from this token. The search works one line
+    /// at a time, because a line has few enough tokens to walk them all. Stepping past either end
+    /// of a line gives the first token of the next line or the last token of the previous line.
     /// </summary>
-    /// <param name="direction">1 for the token after this one, −1 for the one before it.</param>
+    /// <param name="direction">1 for the token after this token, −1 for the token before it.</param>
     private SyntaxToken? Step(int direction)
     {
         // A token inside a statement has one of the statement's nodes as its parent, so walk up
-        // the parents to find the line it is written on.
+        // the parents to find the line that contains it.
         var owner = Parent;
         while (owner is not LineSyntax && owner.Parent is { } outer)
             owner = outer;
 
-        // Two missing pieces can sit at the same position with nothing between them — `f(g(1`
+        // Two missing tokens can sit at the same position with nothing between them — `f(g(1`
         // is missing two `)` — so identifying a token takes its parent as well as its position.
-        // A token read from the line's Tokens rather than from its pieces has the line as its
+        // A token read from the line's Tokens rather than from its child nodes has the line as its
         // parent instead, so when nothing matches by parent, match by position alone.
         var self = this;
         var (found, beside) = Beside(owner, direction,
@@ -255,16 +268,16 @@ public readonly record struct SyntaxToken
     }
 
     /// <summary>
-    /// The neighbour of the token that <paramref name="chosen"/> picks out among
-    /// <paramref name="owner"/>'s tokens, found in one pass without building a list, since an
-    /// editor asks for a token's neighbour very often.
+    /// Finds the neighbour of the token that <paramref name="chosen"/> picks out among
+    /// <paramref name="owner"/>'s tokens. The search makes one pass without building a list,
+    /// because an editor asks for a token's neighbour very often.
     /// </summary>
     /// <param name="owner">The node whose tokens to walk, which is a line.</param>
-    /// <param name="direction">1 for the token after the chosen one, −1 for the one before it.</param>
-    /// <param name="chosen">Which token to find the neighbour of.</param>
+    /// <param name="direction">1 for the token after the chosen token, −1 for the token before it.</param>
+    /// <param name="chosen">The test that identifies the token whose neighbour to find.</param>
     /// <returns>
-    /// Whether the chosen token was among them, and its neighbour, which is null where the
-    /// chosen token is the first or the last of them.
+    /// Whether the chosen token was among the owner's tokens, and its neighbour. The neighbour is
+    /// null when the chosen token is the first or the last of them.
     /// </returns>
     private static (bool Found, SyntaxToken? Beside) Beside(
         SyntaxNode owner, int direction, Func<SyntaxToken, bool> chosen)

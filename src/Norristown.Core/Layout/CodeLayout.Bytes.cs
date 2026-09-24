@@ -5,53 +5,56 @@ using Norristown.Syntax;
 namespace Norristown.Layout;
 
 /// <summary>
-/// Where the bytes land: which stream the walk is writing into, how far it has filled it,
-/// where each line's bytes and each label fall among them, and how many bytes a measured
-/// routine or declaration came to.
+/// Tracks where the bytes land. This part records the stream the walk is emitting into, how far
+/// it has filled it, where each line's bytes and each label fall among them, and how many bytes
+/// a measured routine or declaration came to.
 /// <para>
-/// The distance between two positions is known only within one run of a segment's bytes; the
+/// The distance between two positions is known only within one run of a segment's bytes. The
 /// branch range check, long-branch sizing and <c>.fallthrough</c> checks all rely on such
 /// distances. A segment's bytes form one run across all its regions and blocks, in the order
-/// the file writes them, which is how ca65 writes them; an <c>.align</c> or a <c>.place</c>
-/// ends the run. A long branch starts short and is lengthened where its target turns
-/// out to be out of reach, which moves everything after it, so the file is laid out again until
-/// none changes.
+/// they appear in the file, which is the order ca65 emits them. An <c>.align</c> or a
+/// <c>.place</c> ends the run. A long branch starts short and is lengthened where its target
+/// turns out to be out of reach. That moves everything after it, so the file is laid out again
+/// until no branch changes.
 /// </para>
 /// </summary>
 public sealed partial class CodeLayout
 {
-    /// <summary>The stream the walk is writing into.</summary>
+    /// <summary>Gets the stream the walk is emitting into.</summary>
     private int Stream => streams[^1];
 
     /// <summary>
-    /// The run the walk is writing into: the current segment's run, or, for bytes outside
-    /// every segment, the current stream's.
+    /// Gets the run the walk is emitting into, which is the current segment's run or, for bytes
+    /// outside every segment, the current stream's.
     /// </summary>
     private int Measured => segment is { } named ? RunOf(named) : measuredIn.GetValueOrDefault(Stream, Stream);
 
-    /// <summary>Whether a distance is one a branch can reach.</summary>
+    /// <summary>Returns whether a branch can reach the distance <paramref name="reach"/>.</summary>
     private static bool InRange(int reach) => reach is >= -128 and <= 127;
 
     /// <summary>
-    /// A <c>.place</c>, where another module's bytes go. Whatever that module writes comes
-    /// between the bytes before the line and the bytes after it, so this file cannot know the
-    /// distance from anything before it to anything after it; only the translation unit can
-    /// work that out, once every module in it is laid out. A <c>.place</c> written anywhere
-    /// but at file level places nothing, and has already been reported.
+    /// Records a <c>.place</c>, where another module's bytes go. Everything that module emits
+    /// comes between the bytes before the line and the bytes after it, so this file cannot know
+    /// the distance from anything before it to anything after it. Only the translation unit can
+    /// work that out, once every module in it is laid out. A <c>.place</c> anywhere but at file
+    /// level places nothing, and has already been reported.
     /// </summary>
     private void PlaceModule(PlaceDirectiveSyntax directive)
     {
         if (expansion is not null || !Placements.AtFileLevel(directive))
             return;
 
-        // The placed module may write to any segment, so every segment's run ends here.
+        // The placed module may emit to any segment, so every segment's run ends here.
         foreach (var named in runs.Keys.ToList())
             runs[named] = nextStream++;
         measuredIn[Stream] = nextStream++;
         placePoints.Add(new PlacePoint(directive, steps.Count, Measured, segment));
     }
 
-    /// <summary>The run a segment's bytes are in now, starting one for a segment nothing has written to yet.</summary>
+    /// <summary>
+    /// Returns the run a segment's bytes are in now, starting a new run for a segment that nothing
+    /// has emitted to yet.
+    /// </summary>
     private int RunOf(string named)
     {
         if (!runs.TryGetValue(named, out var run))
@@ -59,7 +62,7 @@ public sealed partial class CodeLayout
         return run;
     }
 
-    /// <summary>Records what a line assembles to on this writing of it.</summary>
+    /// <summary>Records what a line assembles to in the current expansion.</summary>
     private void Laid(StatementSyntax statement, LineLayout laid)
     {
         lines[(statement.Position, expansion)] = laid;
@@ -67,8 +70,8 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Records where a line's bytes land and moves the stream on. An <c>.align</c> starts a
-    /// new run of distances instead: how many bytes it generates depends on an address, so
+    /// Records where a line's bytes land and advances the run past them. An <c>.align</c> starts
+    /// a new run of distances instead. The number of bytes it generates depends on an address, so
     /// nothing after it stands at a distance nt65 knows from anything before it.
     /// </summary>
     private void Place(StatementSyntax statement, int length)
@@ -84,8 +87,8 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// A <c>.fallthrough</c>, which generates nothing and is placed where the routine's bytes
-    /// end. That is where the routine it names has to start, and its placement is looked up
+    /// Records a <c>.fallthrough</c>, which generates nothing and is recorded where the routine's
+    /// bytes end. That is where the routine it names has to start, and its position is looked up
     /// the same way a label's is.
     /// </summary>
     private void FallsThrough(FallthroughDirectiveSyntax directive)
@@ -95,7 +98,7 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Records where a label stands: at the first byte generated after it, which is the
+    /// Records where a label stands, which is at the first byte generated after it. That is the
     /// address a branch to it reaches.
     /// </summary>
     private void Mark(SyntaxNode declaration)
@@ -103,8 +106,9 @@ public sealed partial class CodeLayout
         if (NameOf(declaration) is not { } symbol)
             return;
 
-        // What has an address needs a segment to have one in. A routine or data outside every
-        // segment is reported where it is declared, and what is inside them is not reported again.
+        // Anything with an address needs a segment to have it in. A routine or data declaration
+        // outside every segment is reported where it is declared, and its contents are not
+        // reported again.
         if (segment is null && inData == 0
             && (declaration is ProcDeclarationSyntax or MultiProcDeclarationSyntax
                 || (routine is null && declaration is DataDeclarationSyntax)))
@@ -112,8 +116,8 @@ public sealed partial class CodeLayout
             Report(declaration.Tree, symbol.NameSpan, Catalogue.OutsideEverySegment.Says($"`{symbol.DisplayName}`"));
         }
 
-        // A label that a macro expansion places outside any routine marks a position in no
-        // code. Binding could not report it, because it only sees the macro body as written.
+        // A label that a macro expansion puts outside any routine marks a position in no code.
+        // Binding could not report it, because it sees only the macro body as declared.
         if (routine is null && inData == 0 && symbol.Kind == SymbolKind.Label && expansion?.NearestCall is not null)
         {
             Report(declaration.Tree, symbol.NameSpan, Catalogue.LabelOutsideARoutine.Says(symbol.DisplayName, ""));
@@ -124,8 +128,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// How far a branch reaches: from the instruction after it to its target, or null when
-    /// the two are not in one run of a segment's bytes or the target is no label this file placed.
+    /// Returns how far a branch reaches, from the instruction after it to its target. Returns null
+    /// when the two are not in one run of a segment's bytes, or when the target is not a label
+    /// this file recorded.
     /// </summary>
     private int? Distance(Branch branch)
     {
@@ -137,9 +142,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Where the label an expression names is placed. A macro parameter is resolved to the
-    /// argument the call passed, and that argument was written in the caller, so it is looked
-    /// up at the caller's expansion level rather than the macro body's.
+    /// Returns where the label an expression names stands. A macro parameter is resolved to the
+    /// argument the call passed. That argument appears in the caller, so it is looked up at the
+    /// caller's expansion level rather than the macro body's.
     /// </summary>
     private Placement? Located(SyntaxNode expression, Expansion? on)
     {
@@ -157,8 +162,8 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Lengthens every long branch this walk found out of reach, and says whether any
-    /// changed. A branch only ever grows, so repeating the walk until nothing changes ends.
+    /// Lengthens every long branch this walk found out of reach, and returns whether any
+    /// changed. A branch only ever grows, so repeating the walk until nothing changes terminates.
     /// </summary>
     private bool Lengthen()
     {
@@ -193,8 +198,9 @@ public sealed partial class CodeLayout
             ReportOnLine(branch.Target, branch.On,
                 Catalogue.BranchOutOfReach.Says(mnemonic, reach, fix),
 
-                // The change is to the branch, so it is offered only where the branch is
-                // written: an expansion's is the macro body's line, which is not this file's.
+                // The fix changes the branch, so it is offered only where the branch appears in
+                // this file. In an expansion, the branch is the macro body's line, which is not
+                // in this file.
                 longer is not null && branch.On is null && branch.Statement.Tree == model.Tree
                     ? new DiagnosticFix(FixKind.Branch, longer)
                     : null);
@@ -202,8 +208,8 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Takes the measured spans this walk worked out, and says whether any of them changed.
-    /// No length in the layout depends on a span, so one more walk is enough for them to stop
+    /// Records the measured spans this walk worked out, and returns whether any of them changed.
+    /// No length in the layout depends on a span, so one more walk is enough for the spans to stop
     /// changing.
     /// </summary>
     private bool Settle()
@@ -225,8 +231,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// A branch whose reach nt65 can check: where it stands, and the target it was written
-    /// with. A long branch is here too, because the same distance is what decides its form.
+    /// Represents a branch whose reach nt65 can check, with the statement and expansion it stands
+    /// at and the target expression it names. Long branches are included, because the same
+    /// distance decides their form.
     /// </summary>
     private readonly record struct Branch(InstructionStatementSyntax Statement, Expansion? On, ExpressionSyntax Target, bool Long);
 }

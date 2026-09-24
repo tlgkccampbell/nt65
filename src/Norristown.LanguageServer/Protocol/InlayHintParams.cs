@@ -1,6 +1,8 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary><c>textDocument/inlayHint</c>.</summary>
-/// <param name="TextDocument">The document to hint.</param>
-/// <param name="Range">The lines the editor is showing; hints are computed only for these.</param>
+/// <summary>Parameters of the <c>textDocument/inlayHint</c> request.</summary>
+/// <param name="TextDocument">The document to provide hints for.</param>
+/// <param name="Range">
+/// The lines the editor is showing. Hints are computed only for these lines.
+/// </param>
 internal sealed record InlayHintParams(TextDocumentIdentifier TextDocument, Range Range);

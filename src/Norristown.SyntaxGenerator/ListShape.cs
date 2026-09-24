@@ -1,9 +1,9 @@
 namespace Norristown.SyntaxGenerator;
 
-/// <summary>What a slot holds when it holds a list.</summary>
+/// <summary>Specifies what a slot holds when it holds a list.</summary>
 public enum ListShape
 {
-    /// <summary>Not a list: one token or one node.</summary>
+    /// <summary>Not a list. The slot holds one token or one node.</summary>
     None,
 
     /// <summary>Items with nothing between them.</summary>

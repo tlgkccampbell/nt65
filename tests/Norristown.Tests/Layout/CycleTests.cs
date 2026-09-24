@@ -7,9 +7,9 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// How long each instruction takes. The count is an interval wherever it depends on
-/// something the program does not say: whether an indexed read crosses a page, whether a
-/// branch is taken, and on the 65C02 whether the decimal flag is set.
+/// Checks how long each instruction takes. The count is an interval wherever it depends on
+/// something the program does not specify, such as whether an indexed read crosses a page,
+/// whether a branch is taken, and on the 65C02 whether the decimal flag is set.
 /// <para>
 /// The ca65 oracle checks instruction lengths, not timings, so the reference values below are
 /// the only check on nt65's cycle table.
@@ -26,8 +26,8 @@ public sealed class CycleTests
     [InlineData(MnemonicKind.Ldx, AddressingMode.DirectY, "4")]
     [InlineData(MnemonicKind.Lda, AddressingMode.DirectIndirectX, "6")]
 
-    // An indexed read pays for a page crossing only when it crosses one; a store always
-    // pays, because it cannot begin until the address is settled.
+    // An indexed read pays for a page crossing only when it crosses one. A store always pays,
+    // because it cannot begin until the address is complete.
     [InlineData(MnemonicKind.Lda, AddressingMode.AbsoluteX, "4-5")]
     [InlineData(MnemonicKind.Lda, AddressingMode.AbsoluteY, "4-5")]
     [InlineData(MnemonicKind.Lda, AddressingMode.DirectIndirectY, "5-6")]
@@ -35,8 +35,8 @@ public sealed class CycleTests
     [InlineData(MnemonicKind.Sta, AddressingMode.AbsoluteY, "5")]
     [InlineData(MnemonicKind.Sta, AddressingMode.DirectIndirectY, "6")]
 
-    // Read, modify and write back: a fixed count, and the indexed form always pays the cycle
-    // a read pays only on a page crossing.
+    // A read-modify-write has a fixed count, and the indexed form always pays the cycle that a
+    // read pays only on a page crossing.
     [InlineData(MnemonicKind.Asl, AddressingMode.Accumulator, "2")]
     [InlineData(MnemonicKind.Asl, AddressingMode.Direct, "5")]
     [InlineData(MnemonicKind.Asl, AddressingMode.DirectX, "6")]
@@ -93,7 +93,7 @@ public sealed class CycleTests
     [InlineData(MnemonicKind.Sax, AddressingMode.DirectIndirectX, "6")]
 
     // The immediate-only opcodes, and the indexed stores, which always pay the page-crossing
-    // cycle because they settle the address before writing.
+    // cycle because they complete the address before writing.
     [InlineData(MnemonicKind.Alr, AddressingMode.Immediate, "2")]
     [InlineData(MnemonicKind.Axs, AddressingMode.Immediate, "2")]
     [InlineData(MnemonicKind.Sha, AddressingMode.AbsoluteY, "5")]
@@ -111,7 +111,7 @@ public sealed class CycleTests
     }
 
     /// <summary>
-    /// <c>jam</c> halts the processor, so it has no cycle count; the block containing it
+    /// <c>jam</c> halts the processor, so it has no cycle count. The block containing it
     /// reports why it has no count rather than quietly leaving the instruction out.
     /// </summary>
     [Fact]
@@ -265,7 +265,7 @@ public sealed class CycleTests
 
     /// <summary>
     /// The cycle count layout records for an instruction is the one for the addressing mode
-    /// layout chose for it: direct for a zero-page operand, absolute for any other.
+    /// layout chose for it, which is direct for a zero-page operand and absolute for any other.
     /// </summary>
     [Fact]
     public void LayoutKeepsTheCountForTheModeItChose()

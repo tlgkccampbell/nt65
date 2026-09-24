@@ -4,12 +4,15 @@ using Norristown.Project;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// Conditional assembly: what a condition may test, which branch the build takes, and what
-/// the declarations inside a branch mean.
+/// Checks conditional assembly, including what a condition may test, which branch the build
+/// takes, and what the declarations inside a branch mean.
 /// </summary>
 public sealed class ConfigurationTests
 {
-    /// <summary>One name declared under each of two conditions: only the branch the build takes declares it.</summary>
+    /// <summary>
+    /// When one name is declared under each of two conditions, only the branch the build takes
+    /// declares it.
+    /// </summary>
     [Fact]
     public void TheSameNameMayBeDeclaredUnderSeveralConditions()
     {
@@ -41,7 +44,10 @@ public sealed class ConfigurationTests
         Assert.Equal(["main.nt65:5: `LINES` is not declared"], program.Problems());
     }
 
-    /// <summary>An <c>.if</c> chain takes the first branch whose condition holds, whatever the later ones say.</summary>
+    /// <summary>
+    /// An <c>.if</c> chain takes the first branch whose condition holds, regardless of the later
+    /// conditions.
+    /// </summary>
     [Theory]
     [InlineData(1, 0, "one")]
     [InlineData(0, 3, "two")]
@@ -76,7 +82,10 @@ public sealed class ConfigurationTests
         Assert.Empty(program.File("main.nt65").Symbols);
     }
 
-    /// <summary><c>.defined</c> asks whether a name is a define without using it, so an unknown name is a false answer, not an error.</summary>
+    /// <summary>
+    /// <c>.defined</c> asks whether a name is a define without using it, so an unknown name is a
+    /// false answer, not an error.
+    /// </summary>
     [Theory]
     [InlineData(".if .defined(DEBUG) {", true)]
     [InlineData(".if .defined(NOWHERE) {", false)]
@@ -150,7 +159,7 @@ public sealed class ConfigurationTests
         Assert.Equal([$"main.nt65:2: {message}"], program.Problems());
     }
 
-    /// <summary>A condition tests the configuration; a check on the program is an assertion.</summary>
+    /// <summary>A condition tests the configuration. A check on the program is an assertion.</summary>
     [Theory]
     [InlineData(".if SIZE > 2 {", "`SIZE` is not a define or a `.config` setting: an `.if` condition can "
         + "only test the build configuration; use `.assert` to check the program")]
@@ -199,7 +208,10 @@ public sealed class ConfigurationTests
         Assert.Equal("main", program.File("main.nt65").Symbol("@loop").Scope.Name);
     }
 
-    /// <summary><c>.cpu</c> cannot be written under a condition, because a condition may itself test the processor.</summary>
+    /// <summary>
+    /// <c>.cpu</c> cannot appear under a condition, because a condition may itself test the
+    /// processor.
+    /// </summary>
     [Fact]
     public void CpuMayNotBeWrittenUnderACondition()
     {
@@ -223,7 +235,7 @@ public sealed class ConfigurationTests
 
     /// <summary>
     /// The names a condition uses are resolved like any others, so an editor can follow a
-    /// define written in one to the configuration that gives it a value.
+    /// define used in one to the configuration that gives it a value.
     /// </summary>
     [Fact]
     public void ADefineNamedInAConditionResolvesToIt()
@@ -236,7 +248,7 @@ public sealed class ConfigurationTests
         Assert.Equal(2, define.Value.Number);
     }
 
-    /// <summary>Two builds of one file differ only in what the configuration says.</summary>
+    /// <summary>Two builds of one file differ only in what the configuration defines.</summary>
     [Fact]
     public void OneFileBuiltTwoWaysGivesTwoOutputs()
     {

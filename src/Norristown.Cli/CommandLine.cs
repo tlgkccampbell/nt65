@@ -2,11 +2,13 @@ using Norristown.Processor;
 
 namespace Norristown.Cli;
 
-/// <summary>What <c>nt65 build</c> was asked for, read from its arguments.</summary>
+/// <summary>Represents what <c>nt65 build</c> was asked for, read from its arguments.</summary>
 /// <param name="Project">The project file <c>--project</c> names, or null to look for one.</param>
-/// <param name="Configuration">The named configuration <c>--config</c> chooses, or null for the project's own settings.</param>
+/// <param name="Configuration">
+/// The named configuration <c>--config</c> chooses, or null for the project's own settings.
+/// </param>
 /// <param name="Cpu">The processor <c>--cpu</c> names, or null.</param>
-/// <param name="Defines">What <c>-D</c> adds or overrides, as written.</param>
+/// <param name="Defines">The defines that <c>-D</c> adds or overrides, as given.</param>
 /// <param name="Out">The output directory <c>--out</c> names, or null for the project's.</param>
 /// <param name="DependencyFile">Where <c>--depfile</c> writes make-style dependencies, or null.</param>
 /// <param name="Header">Where <c>--c-header</c> writes a C header, or null.</param>
@@ -29,7 +31,7 @@ public sealed record CommandLine(
     bool Json = false,
     bool Stdout = false)
 {
-    /// <summary>How the command is used, as <c>--help</c> prints it.</summary>
+    /// <summary>The usage text that <c>--help</c> prints.</summary>
     public const string Usage = """
         usage: nt65 build [options] [<file.nt65>...]
                nt65 init [<dir>] [--cpu <cpu>]
@@ -87,8 +89,8 @@ public sealed record CommandLine(
     public const string SeeHelp = "see `nt65 --help`";
 
     /// <summary>
-    /// Reads the arguments after <c>build</c>, or returns null with <paramref name="problem"/>
-    /// saying what is wrong with them.
+    /// Parses the arguments after <c>build</c>, or returns null with <paramref name="problem"/>
+    /// describing what is wrong with them.
     /// </summary>
     public static CommandLine? Parse(IReadOnlyList<string> arguments, out string? problem)
     {

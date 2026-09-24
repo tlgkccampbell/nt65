@@ -1,8 +1,8 @@
 namespace Norristown.Emit;
 
 /// <summary>
-/// What a line map says: the sources one generated <c>.s</c> was written from, and which line
-/// of which of them each of its lines came from.
+/// Represents the contents of a line map. It lists the sources one generated <c>.s</c> was
+/// emitted from, and gives, for each line of the <c>.s</c>, the source and line it came from.
 /// </summary>
 /// <param name="Sources">The sources, by the number the map gives each one.</param>
 /// <param name="Lines">

@@ -4,9 +4,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// The declarative constructs: enumerations, structures, unions, lists, character mappings
-/// and functions. They are read and their names are bound, and what the output writes for
-/// them is only what they name: constants, offsets and the values of a call.
+/// Checks the declarative constructs, which are enumerations, structures, unions, lists,
+/// character mappings and functions. They are read and their names are bound. The output writes
+/// for them only what they name, such as constants, offsets and the values of a call.
 /// </summary>
 public sealed class TypeSyntaxTests
 {
@@ -74,7 +74,7 @@ public sealed class TypeSyntaxTests
         Assert.Equal("Point__y", model.Symbol("y").FlatName);
     }
 
-    /// <summary>A function keeps its parameters and its body; a list keeps its items.</summary>
+    /// <summary>A function keeps its parameters and its body. A list keeps its items.</summary>
     [Fact]
     public void AFunctionAndAListKeepWhatTheyAreMadeOf()
     {
@@ -98,7 +98,7 @@ public sealed class TypeSyntaxTests
 
     /// <summary>
     /// A type says what something means without generating anything, so nothing is written
-    /// for it; an enum writes its members out as the constants they are.
+    /// for it. An enum writes its members out as the constants they are.
     /// </summary>
     [Fact]
     public void ATypeWritesNothingAndAnEnumWritesItsMembers()
@@ -124,7 +124,7 @@ public sealed class TypeSyntaxTests
         Assert.Empty(tree.Diagnostics);
     }
 
-    /// <summary>The ca65 a program becomes, which must be a program that compiles.</summary>
+    /// <summary>Returns the ca65 a program becomes, which must be a program that compiles.</summary>
     private static string Compiled(string source)
     {
         var compilation = Compiler.Compile([new SourceFile("main.nt65", source)]);

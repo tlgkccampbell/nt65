@@ -3,15 +3,15 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Which branch of an <c>.if</c> chain is written out, as a walk over a container's
-/// children meets them. A chain is a run of sibling blocks — the <c>.if</c> that starts it,
-/// then whichever <c>.elseif</c>s and <c>.else</c> continue it — so code that walks the
-/// siblings has to keep a little state: whether a chain is open, and whether one of its
-/// branches has already been taken.
+/// Tracks which branch of an <c>.if</c> chain is included, as a walk over a container's
+/// children reaches each branch. A chain is a run of sibling blocks, made up of the <c>.if</c>
+/// that starts it followed by any <c>.elseif</c> and <c>.else</c> blocks that continue it. Code
+/// that walks the siblings therefore keeps a little state, namely whether a chain is open and
+/// whether one of its branches has already been taken.
 /// <para>
-/// Most conditions were answered once for the build, before any declaration was looked up.
-/// The ones inside a macro body, a <c>.repeat</c> or an <c>.each</c> could not be: they may
-/// name what the expansion binds, so they are answered here, once per expansion.
+/// Most conditions are evaluated once for the build, before any declaration is looked up. The
+/// ones inside a macro body, a <c>.repeat</c> or an <c>.each</c> cannot be, because they may name
+/// what the <see cref="Expansion"/> binds. This type evaluates those once per expansion.
 /// </para>
 /// </summary>
 public sealed class ConditionChain
@@ -20,8 +20,9 @@ public sealed class ConditionChain
     private bool taken;
 
     /// <summary>
-    /// Whether <paramref name="block"/> is written out at <paramref name="on"/>. A block that
-    /// is not part of a chain is always written, and ends whatever chain came before it.
+    /// Determines whether <paramref name="block"/> is included in the expansion
+    /// <paramref name="on"/>. A block that is not part of a chain is always included, and it ends
+    /// any chain that came before it.
     /// </summary>
     public bool Includes(SemanticModel model, BlockSyntax block, Expansion? on)
     {

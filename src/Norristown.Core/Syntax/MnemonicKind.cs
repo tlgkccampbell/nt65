@@ -1,9 +1,9 @@
 namespace Norristown.Syntax;
 
 /// <summary>
-/// Which instruction a mnemonic token names. The lexer reads every mnemonic, whatever its case,
-/// as one of these, so the passes after it compare kinds rather than spellings; each member's
-/// name, lower case, is how it is written.
+/// Specifies the instruction that a mnemonic token names. The lexer reads every mnemonic,
+/// regardless of case, as one of these kinds, so later passes compare kinds rather than
+/// spellings. Each member's name, in lower case, is its spelling in source.
 /// <para>
 /// These are the canonical WDC mnemonics, and the undocumented opcodes of the NMOS 6502 in
 /// ca65's spellings, since those have no canonical name of their own. ca65's alternative 65816
@@ -13,7 +13,7 @@ namespace Norristown.Syntax;
 /// </summary>
 public enum MnemonicKind
 {
-    /// <summary>Not a mnemonic: the kind of every token that is not one.</summary>
+    /// <summary>No mnemonic; the kind of every token that is not a mnemonic.</summary>
     None,
 
     // The NMOS 6502's documented instructions.
@@ -65,7 +65,7 @@ public enum MnemonicKind
     /// <summary><c>cli</c>: clear interrupt disable.</summary>
     Cli,
 
-    /// <summary><c>clv</c>: V.</summary>
+    /// <summary><c>clv</c>: clear overflow.</summary>
     Clv,
 
     /// <summary><c>cmp</c>: compare accumulator.</summary>
@@ -74,7 +74,7 @@ public enum MnemonicKind
     /// <summary><c>cpx</c>: compare index x.</summary>
     Cpx,
 
-    /// <summary><c>cpy</c>: N Z C.</summary>
+    /// <summary><c>cpy</c>: compare index y.</summary>
     Cpy,
 
     /// <summary><c>dec</c>: decrement.</summary>
@@ -83,7 +83,7 @@ public enum MnemonicKind
     /// <summary><c>dex</c>: decrement index x.</summary>
     Dex,
 
-    /// <summary><c>dey</c>: N Z.</summary>
+    /// <summary><c>dey</c>: decrement index y.</summary>
     Dey,
 
     /// <summary><c>eor</c>: exclusive or accumulator.</summary>
@@ -110,7 +110,7 @@ public enum MnemonicKind
     /// <summary><c>ldx</c>: load index x.</summary>
     Ldx,
 
-    /// <summary><c>ldy</c>: N Z.</summary>
+    /// <summary><c>ldy</c>: load index y.</summary>
     Ldy,
 
     /// <summary><c>lsr</c>: logical shift right.</summary>
@@ -137,7 +137,7 @@ public enum MnemonicKind
     /// <summary><c>rol</c>: rotate left.</summary>
     Rol,
 
-    /// <summary><c>ror</c>: N Z C.</summary>
+    /// <summary><c>ror</c>: rotate right.</summary>
     Ror,
 
     /// <summary><c>rti</c>: return from interrupt.</summary>
@@ -146,16 +146,16 @@ public enum MnemonicKind
     /// <summary><c>rts</c>: return from subroutine.</summary>
     Rts,
 
-    /// <summary><c>sbc</c>: N V Z C.</summary>
+    /// <summary><c>sbc</c>: subtract with borrow.</summary>
     Sbc,
 
     /// <summary><c>sec</c>: set carry.</summary>
     Sec,
 
-    /// <summary><c>sed</c>: D.</summary>
+    /// <summary><c>sed</c>: set decimal mode.</summary>
     Sed,
 
-    /// <summary><c>sei</c>: I.</summary>
+    /// <summary><c>sei</c>: set interrupt disable.</summary>
     Sei,
 
     /// <summary><c>sta</c>: store accumulator.</summary>
@@ -192,13 +192,13 @@ public enum MnemonicKind
     /// <summary><c>anc</c>: and accumulator, then copy the sign into carry.</summary>
     Anc,
 
-    /// <summary><c>ane</c>: N Z.</summary>
+    /// <summary><c>ane</c>: transfer x to accumulator, then and accumulator (unstable).</summary>
     Ane,
 
-    /// <summary><c>arr</c>: N V Z C.</summary>
+    /// <summary><c>arr</c>: and accumulator, then rotate right.</summary>
     Arr,
 
-    /// <summary><c>axs</c>: N Z C.</summary>
+    /// <summary><c>axs</c>: and accumulator with x, then subtract without borrow into x.</summary>
     Axs,
 
     /// <summary><c>dcp</c>: decrement, then compare accumulator.</summary>
@@ -210,7 +210,7 @@ public enum MnemonicKind
     /// <summary><c>jam</c>: stop the processor.</summary>
     Jam,
 
-    /// <summary><c>las</c>: and the stack pointer, into the accumulator, x and it.</summary>
+    /// <summary><c>las</c>: and the stack pointer, into the accumulator, x and the stack pointer.</summary>
     Las,
 
     /// <summary><c>lax</c>: load accumulator and index x.</summary>
@@ -265,7 +265,7 @@ public enum MnemonicKind
     /// <summary><c>trb</c>: test and reset bits.</summary>
     Trb,
 
-    /// <summary><c>tsb</c>: Z.</summary>
+    /// <summary><c>tsb</c>: test and set bits.</summary>
     Tsb,
 
     /// <summary><c>stp</c>: stop the clock.</summary>
@@ -274,8 +274,8 @@ public enum MnemonicKind
     /// <summary><c>wai</c>: wait for interrupt.</summary>
     Wai,
 
-    // The Rockwell bit instructions, each family together and in bit order, which is what
-    // BitOf relies on.
+    // The Rockwell bit instructions, with each instruction group together and in bit order,
+    // because BitOf relies on that order.
     /// <summary><c>bbr0</c>: branch on bit reset 0.</summary>
     Bbr0,
 
@@ -412,7 +412,7 @@ public enum MnemonicKind
     /// <summary><c>plb</c>: pull data bank.</summary>
     Plb,
 
-    /// <summary><c>pld</c>: N Z.</summary>
+    /// <summary><c>pld</c>: pull direct register.</summary>
     Pld,
 
     /// <summary><c>rep</c>: reset status bits.</summary>
@@ -439,20 +439,20 @@ public enum MnemonicKind
     /// <summary><c>txy</c>: transfer x to y.</summary>
     Txy,
 
-    /// <summary><c>tyx</c>: N Z.</summary>
+    /// <summary><c>tyx</c>: transfer y to x.</summary>
     Tyx,
 
     /// <summary><c>wdm</c>: reserved for expansion.</summary>
     Wdm,
 
-    /// <summary><c>xba</c>: N Z.</summary>
+    /// <summary><c>xba</c>: exchange the accumulator's high and low bytes.</summary>
     Xba,
 
-    /// <summary><c>xce</c>: C.</summary>
+    /// <summary><c>xce</c>: exchange carry and emulation bits.</summary>
     Xce,
 
-    // The long branches, which nt65 writes on every CPU, kept together and last, which is what
-    // IsLongBranch relies on.
+    // The long branches, which nt65 emits on every CPU. They are kept together and last,
+    // because IsLongBranch relies on that order.
     /// <summary><c>jeq</c>: long branch on equal.</summary>
     Jeq,
 

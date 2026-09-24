@@ -5,15 +5,16 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// An analysis that starts from the one before an edit gives exactly what analyzing the
-/// program from scratch gives: the same diagnostics, the same output, and the same answers to
-/// every question an editor asks. Edit sequences are replayed both ways and compared after
+/// program from scratch gives, with the same diagnostics, the same output, and the same answers
+/// to every question an editor asks. Edit sequences are replayed both ways and compared after
 /// every edit.
 /// </summary>
 public sealed class IncrementalAnalysisTests
 {
     /// <summary>
-    /// Each edit says why the whole program should be analyzed again, or null when it should
-    /// not be, and how many files should be: the file it is in, and every file the change reaches.
+    /// The analysis after each edit reports why the whole program should be analyzed again, or
+    /// null when it should not be. It also reports how many files should be analyzed again, which
+    /// are the file the edit is in and every file the change reaches.
     /// </summary>
     [Fact]
     public void ScriptedEditsMatchAnalyzingFromScratch()
@@ -60,7 +61,7 @@ public sealed class IncrementalAnalysisTests
             ("defs.nt65", "std = a8, i8", "std = a16, i8", null, 3),                                 // gfx's `clear` takes the signature `std`, and errors calls `clear`
             ("defs.nt65", "std = a16, i8", "std = a8, i8", null, 3),
             // Two names that collide under one linker name are reported on the file that sorts
-            // later, which is not the file that changed; that file is analyzed again all the same.
+            // later, which is not the file that changed. That file is analyzed again all the same.
             ("app.nt65", "ENTRY = BASE", "ENTRY = BASE\n.export ENTRY as \"segs__hud_value\"", null, 2),
             ("app.nt65", "\n.export ENTRY as \"segs__hud_value\"", "", null, 2),
             ("main.nt65", "MAIN_PRIVATE = 10", "MAIN_PRIVATE = 10\n.config TRIAL = 1", WholeProgramReason.SettingsDeclared, 8),
@@ -80,7 +81,7 @@ public sealed class IncrementalAnalysisTests
 
     /// <summary>
     /// A change to something decided for the program as a whole — the files in it, the project,
-    /// the CPU — makes the whole program be analyzed again, and the analysis says which it was.
+    /// the CPU — makes the whole program be analyzed again, and the analysis reports which it was.
     /// </summary>
     [Fact]
     public void WhatIsDecidedForTheWholeProgramIsAnalyzedAgainWithAReason()
@@ -132,7 +133,10 @@ public sealed class IncrementalAnalysisTests
         Assert.Equal(scratch.Problems(), incremental.Problems());
     }
 
-    /// <summary>No file of these programs has an <c>.incbin</c> in it.</summary>
+    /// <summary>
+    /// Returns no length for any path, because no file of these programs has an <c>.incbin</c> in
+    /// it.
+    /// </summary>
     private static long? Nothing(string path) => null;
 
     /// <summary>An <c>.incbin</c> file that changed on disk is a change to the files that include it.</summary>

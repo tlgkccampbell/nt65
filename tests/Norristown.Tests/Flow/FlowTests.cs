@@ -4,8 +4,9 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Flow;
 
 /// <summary>
-/// Where control goes inside a routine: its blocks, the edges between them, and the
-/// diagnostics for a label that nothing reaches and for data that an instruction runs into.
+/// Checks where control goes inside a routine, including its blocks, the edges between them,
+/// and the diagnostics for a label that nothing reaches and for data that an instruction runs
+/// into.
 /// On the 6502 and the 65C02 no instruction depends on the processor state, so no annotation
 /// is required, and both diagnostics are warnings rather than errors.
 /// </summary>
@@ -194,7 +195,8 @@ public sealed class FlowTests
     /// <summary>
     /// A label that nothing runs into and nothing names is reported as never reached. The
     /// check trusts only what the source says, so a programmer who knows of a path nt65
-    /// cannot see has to write it down, for example with a <c>.next</c> that names the label.
+    /// cannot see has to state it in the source, for example with a <c>.next</c> that names the
+    /// label.
     /// </summary>
     [Fact]
     public void ALabelNothingReachesIsReported()
@@ -208,7 +210,7 @@ public sealed class FlowTests
 
     /// <summary>
     /// Anything that names the label counts as reaching it, whether or not flow can be seen
-    /// to get there: a branch, a <c>.next</c>, or taking its address in data.
+    /// to get there. That includes a branch, a <c>.next</c>, or taking its address in data.
     /// </summary>
     [Theory]
     [InlineData(".proc p {\n    beq @here\n    rts\n@here:\n    rts\n}\n")]
@@ -244,7 +246,7 @@ public sealed class FlowTests
 
     /// <summary>
     /// The <c>bit</c> skip trick: <c>$2c</c> is <c>bit abs</c>, which swallows the two bytes
-    /// after it, so flow carries on past the instruction they spell.
+    /// after it, so flow continues past the instruction those bytes encode.
     /// </summary>
     [Fact]
     public void TheBitSkipTrickIsAcceptedWithItsNext()
@@ -355,13 +357,13 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// The problems reported for <paramref name="text"/>, compiled after two lines that declare
-    /// the module and select the code segment.
+    /// Returns the problems reported for <paramref name="text"/>, compiled after two lines that
+    /// declare the module and select the code segment.
     /// </summary>
     private static IReadOnlyList<string> Problems(string text) =>
         Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text)).Problems();
 
-    /// <summary>The one region of the one routine in <paramref name="text"/>.</summary>
+    /// <summary>Returns the one region of the one routine in <paramref name="text"/>.</summary>
     private static FlowRegion Region(string text)
     {
         var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text));
@@ -373,8 +375,8 @@ public sealed class FlowTests
         region.Blocks.Single(block => block.Label?.DisplayName == label);
 
     /// <summary>
-    /// Whether some block has a declared edge, one that comes from a <c>.next</c>, to the block
-    /// at <paramref name="label"/>.
+    /// Returns whether some block has a declared edge, one that comes from a <c>.next</c>, to the
+    /// block at <paramref name="label"/>.
     /// </summary>
     private static bool IsDeclared(FlowRegion region, string label) =>
         region.Blocks.SelectMany(block => block.Successors)

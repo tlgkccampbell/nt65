@@ -6,8 +6,8 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The fixes that diagnostics suggest, offered as code actions: each is applied, and the
-/// resulting file is compared with what the programmer would have written by hand.
+/// Tests the fixes that diagnostics suggest, offered as code actions. Each fix is applied, and
+/// the resulting file is compared with what the programmer would have written by hand.
 /// </summary>
 public sealed class CodeActionsTests
 {
@@ -84,7 +84,10 @@ public sealed class CodeActionsTests
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics.Select(d => d.Message));
     }
 
-    /// <summary>A name another module declares but does not export gets an <c>.export</c> in that module; one it does export gets a <c>.use</c> here.</summary>
+    /// <summary>
+    /// A name another module declares but does not export gets an <c>.export</c> in that module;
+    /// one it does export gets a <c>.use</c> here.
+    /// </summary>
     [Fact]
     public async Task TheMissingExportOrUseIsWrittenWhereItBelongs()
     {

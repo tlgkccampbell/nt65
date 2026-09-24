@@ -1,5 +1,10 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary><c>nt65/standardModule</c>: the source of a module that comes with nt65.</summary>
-/// <param name="TextDocument">The module, by the <c>nt65:</c> URI a location into it gave.</param>
+/// <summary>
+/// Parameters of the <c>nt65/standardModule</c> request, which asks for the source of a module
+/// that comes with nt65.
+/// </summary>
+/// <param name="TextDocument">
+/// The module, named by the <c>nt65:</c> URI that a location into it gave.
+/// </param>
 internal sealed record StandardModuleParams(TextDocumentIdentifier TextDocument);

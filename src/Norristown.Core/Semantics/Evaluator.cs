@@ -4,14 +4,13 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Works out the values of expressions, and with them each symbol's kind, value
-/// and address size.
+/// Computes the values of expressions, and from them each symbol's kind, value and address
+/// size.
 /// <para>
-/// A constant may be written before the names it uses, so evaluation follows references
-/// rather than the order of the file, and a name whose value depends on itself is an error
-/// reported once for the whole cycle. Everything built only from constants gets a value;
-/// an expression naming an address gets none, and is emitted symbolically for ca65 to
-/// resolve.
+/// A constant may appear before the names it uses, so evaluation follows references rather than
+/// the order of the file. A name whose value depends on itself is an error, reported once for
+/// the whole cycle. Everything built only from constants gets a value. An expression that names
+/// an address gets none, and is emitted symbolically for ca65 to resolve.
 /// </para>
 /// </summary>
 internal sealed partial class Evaluator
@@ -24,10 +23,10 @@ internal sealed partial class Evaluator
     private readonly Dictionary<Symbol, Value> arguments = [];
 
     // Names an `.each` bound to a list item. Such a name is replaced by the item itself
-    // wherever it is written, not just by the item's value.
+    // wherever it appears, not just by the item's value.
     private readonly Dictionary<Symbol, SyntaxNode> items = [];
 
-    // The enum member each repetition binding is bound to on the current turn. A path that
+    // The enum member each repetition binding is bound to in the current iteration. A path that
     // ends in the binding reaches the container's member of that enum member's name.
     private readonly Dictionary<Symbol, Symbol> members = [];
 
@@ -36,30 +35,32 @@ internal sealed partial class Evaluator
     private readonly Dictionary<Symbol, MacroArgument> given = [];
     private readonly Func<string, long?>? binaryLength;
 
-    // How many bytes a routine or a data declaration takes. Only layout knows, so
-    // only a caller that has laid the file out can answer it.
+    // How many bytes a routine or a data declaration takes. Only layout knows this, so only a
+    // caller that has laid out the file can provide it.
     private readonly Func<Symbol, long?>? spans;
 
-    // What one pass over a span of code costs, which only layout knows and only a caller that
-    // has laid the file out can answer.
+    // The cycles one pass over a span of code costs. Only layout knows this, so only a caller
+    // that has laid out the file can provide it.
     private readonly Func<Symbol, Symbol, bool, CycleSpan>? cycles;
 
-    // For a program in which one file changed: the symbols of the files that did not, whose
-    // values are kept as they were, and which of them this file's symbols read.
+    // For a program in which one file changed, `settled` identifies the symbols of the files
+    // that did not change, whose values are kept and not evaluated again. `settledReads`
+    // collects the ones this file's symbols read.
     private readonly Func<Symbol, bool>? settled;
     private readonly HashSet<Symbol> settledReads = [];
 
-    // The file of the symbol being evaluated when each diagnostic was found, alongside them.
-    // What a symbol's evaluation finds belongs to its file even when it is found in another
-    // file's function body, so a file that is not evaluated again keeps reporting it.
+    // The file of the symbol being evaluated when each diagnostic was found, kept in step with
+    // the diagnostics. A problem found while evaluating a symbol belongs to that symbol's file,
+    // even when it is found in another file's function body, so a file that is not evaluated
+    // again keeps reporting it.
     private readonly List<string>? owners;
 
-    // Which branches the build takes, for the conditionals in a data body; without it every
-    // condition is worked out as one inside an expansion would be.
+    // Which branches the build takes, for the conditionals in a data body. Without it, every
+    // condition is evaluated as a condition inside an expansion would be.
     private readonly Configuration? configuration;
 
-    // Set when what is being evaluated is a build's own condition, which is read before there
-    // are any declarations, so its names and calls can mean much less than they do elsewhere.
+    // Set when evaluating a build's own condition, which is read before there are any
+    // declarations, so names and calls in it can mean much less than they do elsewhere.
     private readonly Conditions? conditions;
 
     // The declarations already reported for a value wider than ca65 can hold. The steps of the
@@ -67,25 +68,27 @@ internal sealed partial class Evaluator
     private readonly HashSet<Symbol> wide = [];
 
     // The literals already reported for holding a character outside ASCII. A macro body is
-    // evaluated once per call, but each literal in it is one piece of source, reported once.
+    // evaluated once per call, but each literal in it is one piece of source and is reported
+    // once.
     private readonly HashSet<SyntaxNode> outsideAscii = [];
 
-    // The data declarations whose places are being worked out, so that one asked about by
-    // what is written inside it gets an unknown answer rather than recursing.
+    // The data declarations being searched for a location inside them, so that a question
+    // about one from code inside it gets an unknown answer rather than recursing.
     private readonly HashSet<Symbol> placing = [];
 
-    // Whether the walk over what a file writes to its segments is under way, while computing
-    // a distance between two declarations; a length computed on the way may ask for it again.
+    // Whether the walk over what a file emits to its segments is under way while computing a
+    // distance between two declarations. A length computed along the way may ask for that
+    // walk again.
     private bool apart;
     private Symbol? owner;
 
-    // The symbol whose value expression is being evaluated. The output writes that
-    // expression as written, so every step of it is checked against what ca65 can hold.
+    // The symbol whose value expression is being evaluated. The output emits that expression
+    // as it appears in the source, so every step of it is checked against what ca65 can hold.
     private Symbol? declaring;
 
-    // How many `.select`-chosen values evaluation is inside, where an unresolved name has to
-    // be reported, and whether a function body is being read with no arguments, when no
-    // choice can be made.
+    // The number of `.select`-chosen values that evaluation is inside, where an unresolved
+    // name has to be reported. `readingBody` records whether a function body is being read
+    // with no arguments, when no choice can be made.
     private int choosing;
     private bool readingBody;
 
@@ -113,8 +116,8 @@ internal sealed partial class Evaluator
         this.spans = spans;
         this.cycles = cycles;
 
-        // A repetition's binding takes its value for the current turn, just as a function's
-        // parameter takes its argument's.
+        // A repetition's binding takes its value for the current iteration, just as a
+        // function's parameter takes its argument's.
         foreach (var (symbol, value) in bound ?? new Dictionary<Symbol, Expansion.Bound>())
         {
             if (value.Argument is { } argument)
@@ -129,8 +132,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Gives every symbol in <paramref name="symbols"/> its kind, value and address size,
-    /// reporting what it finds wrong into <paramref name="diagnostics"/>.
+    /// Assigns every symbol in <paramref name="symbols"/> its kind, value and address size,
+    /// reporting any problems it finds into <paramref name="diagnostics"/>.
     /// </summary>
     public static void EvaluateSymbols(
         SegmentTable segments,
@@ -146,10 +149,12 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The same, saying for each diagnostic which file's symbol found it, in
-    /// <paramref name="owners"/>. Where <paramref name="settled"/> says a symbol is settled, its
-    /// value is read as it stands rather than worked out again; the ones read are returned.
+    /// Assigns every symbol in <paramref name="symbols"/> its kind, value and address size,
+    /// recording in <paramref name="owners"/> the file of the symbol that found each diagnostic.
+    /// When <paramref name="settled"/> reports that a symbol belongs to an unchanged file, its
+    /// value is read as it stands rather than evaluated again.
     /// </summary>
+    /// <returns>The symbols of unchanged files whose values were read.</returns>
     public static IReadOnlySet<Symbol> EvaluateSymbols(
         SegmentTable segments,
         IReadOnlyList<Symbol> symbols,
@@ -168,8 +173,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Evaluates <paramref name="expression"/> and reports what is wrong with it. An
-    /// expression that is no symbol's value, such as an operand of a data directive, is never
+    /// Evaluates <paramref name="expression"/> and reports any problems with it. An
+    /// expression that is not a symbol's value, such as an operand of a data directive, is never
     /// reached by the pass over the symbols, so the code that reads it calls this to check it.
     /// </summary>
     public static void Check(
@@ -189,9 +194,9 @@ internal sealed partial class Evaluator
         if (BytesIn(operand) is not null)
             return;
 
-        // A named scope is a namespace and has no address of its own, so nothing is written
+        // A named scope is a namespace and has no address of its own, so nothing is emitted
         // for it and ca65 would find the name undefined. A name inside a call is left for the
-        // call to check, since some calls accept a scope (`.spanof` of a scope, for one).
+        // call to check, since some calls accept a scope (such as `.spanof` of a scope).
         foreach (var node in (IEnumerable<SyntaxNode>)[operand, .. operand.DescendantNodes()])
         {
             if (node is NameExpressionSyntax name && !InsideCall(name, operand)
@@ -211,7 +216,7 @@ internal sealed partial class Evaluator
         return false;
     }
 
-    /// <summary>The symbol a written name refers to, or null when it names none.</summary>
+    /// <summary>Returns the symbol that a name refers to, or null when it refers to none.</summary>
     public static Symbol? SymbolNamed(
         SyntaxNode name,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
@@ -221,9 +226,9 @@ internal sealed partial class Evaluator
             : null;
 
     /// <summary>
-    /// For <c>.exprof(p)</c>, the expression inside the operand the call passed as <c>p</c>, with
-    /// <paramref name="bound"/> saying what each parameter was passed; null when <c>p</c> is not an
-    /// <c>operand</c> parameter.
+    /// Returns, for <c>.exprof(p)</c>, the expression inside the operand that the call passed as
+    /// <c>p</c>, with <paramref name="bound"/> giving what each parameter was passed. Returns null
+    /// when <c>p</c> is not an <c>operand</c> parameter.
     /// </summary>
     public static SyntaxNode? ExprOf(
         CallExpressionSyntax call,
@@ -231,7 +236,7 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound) =>
         new Evaluator(SegmentTable.Standard, resolved, null, null, bound).ExprOf(call);
 
-    /// <summary>The items of the list a name refers to, or null when it does not name a list.</summary>
+    /// <summary>Returns the items of the list a name refers to, or null when it does not refer to a list.</summary>
     public static IReadOnlyList<SyntaxNode>? ItemsOf(
         SyntaxNode argument,
         IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved) =>
@@ -241,9 +246,9 @@ internal sealed partial class Evaluator
             : null;
 
     /// <summary>
-    /// The value of an expression once every symbol has been evaluated. Nothing is reported
-    /// from here: this answers a question an editor asked, about a file that has already had
-    /// everything wrong with it reported.
+    /// Returns the value of an expression once every symbol has been evaluated. Nothing is
+    /// reported from here, because this answers an editor's query about a file whose problems
+    /// have all been reported already.
     /// </summary>
     public static Value ValueOf(
         SyntaxNode expression,
@@ -255,25 +260,25 @@ internal sealed partial class Evaluator
         new Evaluator(segments, resolved, null, null, bound, spans, cycles).Evaluate(expression);
 
     /// <summary>
-    /// An evaluator for the conditions of a build, which are answered before a declaration
-    /// exists. Nothing resolves in one, so it carries no symbols at all:
-    /// <paramref name="conditions"/> decides what a name and a call may mean there.
+    /// Creates an evaluator for the conditions of a build, which are evaluated before any
+    /// declaration exists. Nothing resolves in a condition, so the evaluator carries no symbols
+    /// at all, and <paramref name="conditions"/> decides what a name and a call may mean there.
     /// </summary>
     public static Evaluator ForConditions(Conditions conditions, List<Diagnostic> diagnostics) =>
         new(SegmentTable.Standard, ReadOnlyDictionary<(SyntaxTree, int), Symbol>.Empty, diagnostics,
             conditions: conditions);
 
     /// <summary>
-    /// The value of an expression. A caller that reports — the pass over the symbols, and the
-    /// conditions of a build — evaluates through here; one that only asks goes through
-    /// <see cref="ValueOf"/>.
+    /// Returns the value of an expression. A caller that reports problems, such as the pass over
+    /// the symbols or the conditions of a build, evaluates through this method. A caller that
+    /// only queries goes through <see cref="ValueOf"/>.
     /// </summary>
     public Value Evaluate(SyntaxNode node) => declaring is null ? Evaluated(node) : Carried(node, Evaluated(node));
 
     /// <summary>
-    /// A value on its way into the output, checked against what ca65 can hold. ca65 computes
-    /// in 32 bits and the output writes a declaration's expression as the source wrote it, so
-    /// every step of one has to be a number ca65 reaches too.
+    /// Checks a value on its way into the output against what ca65 can hold, and returns it.
+    /// ca65 computes in 32 bits, and the output emits a declaration's expression as it appears in
+    /// the source, so every step of the expression has to be a number that ca65 can also reach.
     /// </summary>
     private Value Carried(SyntaxNode node, Value value)
     {
@@ -286,15 +291,16 @@ internal sealed partial class Evaluator
         return value;
     }
 
-    /// <summary>What is wrong with a value ca65 has no room for.</summary>
+    /// <summary>Returns the diagnostic message for a value too wide for ca65 to hold.</summary>
     private static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Says(Value.Of(number));
 
     /// <summary>
-    /// Outside a charmap, text is ASCII and <c>\xHH</c> writes any byte, so a character typed
-    /// directly above <c>$7f</c> is an error rather than a byte of some encoding. A charmap
-    /// entry is where such a character is given a byte, and what a data declaration holds is
-    /// checked where its bytes are laid out, which is where the charmap applied to it is known;
-    /// everything else — a constant, an operand, a condition — is reported here.
+    /// Reports a literal that contains a character above <c>$7f</c>, unless a charmap or layout
+    /// handles it. Outside a charmap, text is ASCII and <c>\xHH</c> produces any byte, so a character typed
+    /// directly above <c>$7f</c> is an error rather than a byte of some encoding. A charmap entry
+    /// is where such a character is given a byte. Text in a data declaration is checked where its
+    /// bytes are laid out, because that is where the charmap applied to it is known. Everything
+    /// else, such as a constant, an operand or a condition, is reported here.
     /// </summary>
     private void CheckAscii(LiteralExpressionSyntax literal)
     {
@@ -304,8 +310,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Whether the literal is somewhere a charmap maps it, or somewhere layout checks it. Text
-    /// a call builds from it is checked here, because layout sees only the call's result.
+    /// Determines whether the literal is in a place where a charmap maps it or where layout
+    /// checks it. Text that a call builds from the literal is checked here, because layout sees
+    /// only the call's result.
     /// </summary>
     private bool InCharmapOrData(SyntaxNode literal)
     {
@@ -324,14 +331,17 @@ internal sealed partial class Evaluator
         return false;
     }
 
-    /// <summary>Whether ca65 can hold a value: its own arithmetic is 32 bits, and it reads one unsigned.</summary>
+    /// <summary>
+    /// Determines whether ca65 can hold a value. ca65's own arithmetic is 32-bit signed, and it
+    /// also reads a 32-bit value as unsigned.
+    /// </summary>
     private static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
 
     private Value Evaluated(SyntaxNode node)
     {
-        // A literal the lexer refused has no value, as an undeclared name has none: what is
-        // wrong with it has been reported once, where it is written, and reading it for a value
-        // would be reading digits that are not digits.
+        // A literal the lexer rejected has no value, just as an undeclared name has none. Its
+        // problem has been reported once, where it appears, and reading it for a value would
+        // mean reading digits that are not digits.
         if (node is LiteralExpressionSyntax { Token.ContainsDiagnostics: true })
             return Value.Unknown;
 
@@ -358,18 +368,18 @@ internal sealed partial class Evaluator
                 return Unary(unary.OperatorToken, Evaluate(unary.Operand));
 
             case BinaryExpressionSyntax binary:
-                // `&&` and `||` leave the right operand alone once the left decides the
-                // result, so `.defined(TRACE) && TRACE` is answerable when TRACE is not
-                // defined and the name on the right is never looked up.
+                // `&&` and `||` skip the right operand once the left decides the result, so
+                // `.defined(TRACE) && TRACE` has a value when TRACE is not defined, and the
+                // name on the right is never looked up.
                 var op = binary.OperatorToken;
                 var first = Evaluate(binary.Left);
                 if (first.AsNumber() is { } decided && Operators.ShortCircuits(op.Kind, decided))
                     return Value.Of(decided != 0);
                 var second = Evaluate(binary.Right);
 
-                // A `one` parameter and a repetition over words compare as words: the side
-                // that is not already one is the bare name written beside it, which is a word
-                // rather than a name and is never looked up.
+                // A `one` parameter and a repetition over words compare as words. The side
+                // that is not already a word is the bare name beside it, which is treated as a
+                // word rather than a name and is never looked up.
                 if (op.Kind is SyntaxKind.EqualsEquals or SyntaxKind.BangEquals
                     && (first.IsWord || second.IsWord)
                     && WordOf(first, binary.Left) is { } left && WordOf(second, binary.Right) is { } right)
@@ -378,7 +388,8 @@ internal sealed partial class Evaluator
                     return Value.Of(op.Kind == SyntaxKind.EqualsEquals ? same : !same);
                 }
 
-                // Two places in one data declaration are a known distance apart wherever it lands.
+                // Two locations in one data declaration are a known distance apart wherever
+                // the declaration lands.
                 if (op.Kind == SyntaxKind.Minus && (first.Kind == ValueKind.Unknown || second.Kind == ValueKind.Unknown)
                     && Distance(binary) is { } distance)
                 {
@@ -389,8 +400,8 @@ internal sealed partial class Evaluator
             case CallExpressionSyntax call:
                 return Call(call);
 
-            // `*`, an error the parser has already reported, and the CPU names, which only
-            // `.cpu` and `.target` accept.
+            // The remaining cases are `*`, an error the parser has already reported, and the
+            // CPU names, which only `.cpu` and `.target` accept.
             default:
                 return Value.Unknown;
         }
@@ -398,9 +409,9 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// Evaluates <paramref name="symbol"/> unless it has been evaluated already. Only the pass
-    /// that reports does so: by the time anything else asks, every symbol has been evaluated
-    /// and every type laid out, and answering a question must never write to a symbol another
-    /// thread is reading.
+    /// that reports does this. By the time anything else asks, every symbol has been evaluated and
+    /// every type laid out, and answering a query must never modify a symbol that another thread
+    /// is reading.
     /// </summary>
     private void Settle(Symbol symbol)
     {
@@ -432,15 +443,15 @@ internal sealed partial class Evaluator
         if (!evaluated.Add(symbol))
             return;
 
-        // The type a `.type T` names is worth keeping on the symbol: emission walks into it,
-        // an editor asks what a path reaches through it, and nothing else would have resolved
-        // it unless a path happened to lead that way.
+        // The type that a `.type T` names is worth keeping on the symbol. Emission walks into
+        // it, an editor asks what a path reaches through it, and nothing else would have
+        // resolved it unless a path happened to lead that way.
         symbol.Type ??= symbol.TypeExpression is NameExpressionSyntax typed ? SymbolOf(typed) : null;
 
         switch (symbol.Kind)
         {
             // A layout assigns its members their offsets and sizes, and takes its own size
-            // from them; asking a member first asks the type that holds it.
+            // from them. Evaluating a member first evaluates the type that holds it.
             case SymbolKind.Struct:
             case SymbolKind.Union:
                 evaluating.Add(symbol);
@@ -478,15 +489,17 @@ internal sealed partial class Evaluator
                 break;
         }
 
-        // A data declaration takes its size and its element count from what it declares, which
-        // is what `.sizeof` and `.countof` answer for it. Mixed data has bytes and no elements.
-        // An import that writes an element type is sized from it in exactly the same way: what
-        // the import says is what nt65 works with, as a routine import's signature is.
+        // A data declaration takes its size and element count from what it declares, and these
+        // are what `.sizeof` and `.countof` return for it. Mixed data has bytes and no elements.
+        // An import that declares an element type is sized from it in exactly the same way,
+        // because nt65 works with what the import declares, as it does with a routine import's
+        // signature.
         if (symbol.Kind == SymbolKind.Data || symbol.IsTypedStorage)
         {
-            // How much room a declaration takes is nt65's own arithmetic, even while another
-            // symbol's value is being evaluated: the output carries only the resulting count, in
-            // a `.res`, so its steps are not checked against what ca65 can hold.
+            // How much room a declaration takes is computed with nt65's own arithmetic, even
+            // while another symbol's value is being evaluated. The output contains only the
+            // resulting count, in a `.res`, so its steps are not checked against what ca65 can
+            // hold.
             var outerSizing = declaring;
             declaring = null;
             evaluating.Add(symbol);
@@ -505,8 +518,8 @@ internal sealed partial class Evaluator
 
         if (symbol.ValueExpression is not { } expression)
         {
-            // A label, a routine or a data declaration: its address is where it lands, which
-            // only the linker knows, and its size comes from the segment it sits in.
+            // A label, a routine or a data declaration has its address where it lands, which
+            // only the linker knows. Its address size comes from the segment it is in.
             symbol.AddressSize = symbol.Kind switch
             {
                 SymbolKind.Label or SymbolKind.Proc or SymbolKind.Data => SegmentSize(symbol.Segment),
@@ -515,8 +528,8 @@ internal sealed partial class Evaluator
             return;
         }
 
-        // What the symbol is worth is what the output carries, and so is every step of the
-        // expression it is written with: ca65 works those steps out again from the text.
+        // The output contains the symbol's value and every step of the expression that
+        // defines it, because ca65 computes those steps again from the text.
         evaluating.Add(symbol);
         var outerDeclaring = declaring;
         declaring = symbol;
@@ -530,8 +543,8 @@ internal sealed partial class Evaluator
         // constant all the same, because nt65 has its value.
         if (symbol.Kind == SymbolKind.Constant && symbol.Value.AsNumber() is null && NamesAnAddress(expression))
         {
-            // An enum is a set of numbers, and one that stood for an address would give every
-            // member after it a value nothing can work out.
+            // An enum is a set of numbers, and a member that stood for an address would give
+            // every member after it a value that cannot be computed.
             if (symbol.IsEnumMember)
             {
                 Report(expression, Catalogue.EnumMemberIsNotAnAddress.Says(symbol.Name));
@@ -545,10 +558,11 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Reports a cycle once, naming the rest of the ring. Every symbol on it is left without a
-    /// value, and none of them reports again. It is reported at the declaration that comes
-    /// first in the program, by file and then by position, and the ring is named from there:
-    /// which symbol evaluation happened to reach the ring through must not change what is said.
+    /// Reports a cycle once, naming the rest of the ring. Every symbol on the ring is left without
+    /// a value, and none of them reports again. The cycle is reported at the declaration that
+    /// comes first in the program, by file and then by position, and the ring is named from
+    /// there. The symbol through which evaluation happened to reach the ring must not change the
+    /// report.
     /// </summary>
     private void ReportCycle(int index)
     {
@@ -559,8 +573,8 @@ internal sealed partial class Evaluator
             .First());
         List<Symbol> ring = [.. found.Skip(first), .. found.Take(first)];
 
-        // Every symbol on the ring is left without a value, and a type on one without a
-        // layout: whoever walks into a type later has to be able to tell.
+        // Every symbol on the ring is left without a value, and a type on the ring without a
+        // layout. Code that walks into a type later has to be able to tell.
         foreach (var member in ring)
             member.IsCyclic = true;
         var symbol = ring[0];
@@ -570,9 +584,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The value of a written name. Inside a function body a parameter has the value of the
-    /// argument it was called with; a member reached through a path is the offsets along
-    /// that path added up, which is what makes `Player::pos::y` a number.
+    /// Returns the value of a name. Inside a function body, a parameter has the value of the
+    /// argument it was called with. A member reached through a path has the sum of the offsets
+    /// along that path, which makes <c>Player::pos::y</c> a number.
     /// </summary>
     private Value ValueOfName(NameExpressionSyntax name)
     {
@@ -588,9 +602,10 @@ internal sealed partial class Evaluator
                 Report(alone, Catalogue.NotDeclared.Says(alone.Text, ""));
             return Value.Unknown;
         }
-        // A binding that walks an enum stands for the member itself, which is asked for its
-        // value now: the value copied when the binding was made is unknown whenever the enum's
-        // file has not been evaluated yet, and which files have been depends on their order.
+        // A binding that walks an enum stands for the member itself, whose value is requested
+        // now. The value copied when the binding was made is unknown whenever the enum's file
+        // has not been evaluated yet, and which files have been evaluated depends on their
+        // order.
         if (members.TryGetValue(symbol, out var member))
             return Indexed(name, ValueOfSymbol(member));
         if (arguments.TryGetValue(symbol, out var argument))
@@ -599,10 +614,10 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// <paramref name="value"/> with the elements any <c>[i]</c> along the path steps over:
-    /// on a member's offset when the path runs through a type, and on an address when it
-    /// starts at data. Every name a path can end in comes through here, so an index on one
-    /// that reaches no declaration is refused rather than quietly dropped.
+    /// Returns <paramref name="value"/> advanced past the elements that any <c>[i]</c> along the
+    /// path steps over. The value is a member's offset when the path runs through a type, and an
+    /// address when the path starts at data. Every name a path can end in comes through here, so
+    /// an index on a name that reaches no declaration is rejected rather than silently dropped.
     /// </summary>
     private Value Indexed(NameExpressionSyntax name, Value value)
     {
@@ -614,9 +629,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// How many bytes the indexes along a path come to, or null when one of them is wrong,
-    /// which is reported here. An index is worked out before the program runs, so it is a
-    /// constant and has to be an element the declaration holds.
+    /// Returns the number of bytes that the indexes along a path add up to, or null when one of
+    /// them is invalid, which is reported here. An index is computed before the program runs, so
+    /// it has to be a constant and select an element the declaration holds.
     /// </summary>
     private long? IndexOffset(NameExpressionSyntax name)
     {
@@ -636,7 +651,7 @@ internal sealed partial class Evaluator
                 return null;
             }
 
-            // A count nt65 cannot work out has already been reported where it is written.
+            // A count that nt65 cannot compute has already been reported where it appears.
             Settle(symbol);
             if (symbol.Count is not { } count || ElementIndexes.Stride(symbol) is not { } stride)
                 return null;
@@ -648,8 +663,9 @@ internal sealed partial class Evaluator
                 return null;
             if (Evaluate(written).AsNumber() is not { } at)
             {
-                // A name in it that does not resolve has already been reported where it is
-                // written, and is the only reason the index is not constant, so nothing more is said.
+                // A name in the index that does not resolve has already been reported where it
+                // appears, and it is the only reason the index is not constant, so nothing more
+                // is reported.
                 if (Names(written))
                 {
                     Report(written, Catalogue.ElementIndexNotConstant.Says(symbol.DisplayName));
@@ -670,9 +686,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The offset a path of members comes to. A type contributes nothing and a member its
-    /// own offset; a path that starts at an instance is an address, which only the linker
-    /// knows, so it has no value here and is written symbolically instead.
+    /// Returns the offset that a path of members adds up to. A type contributes nothing, and a
+    /// member contributes its own offset. A path that starts at an instance is an address, which
+    /// only the linker knows, so it has no value here and is emitted symbolically instead.
     /// </summary>
     private Value OffsetAlong(NameExpressionSyntax name)
     {
@@ -693,14 +709,18 @@ internal sealed partial class Evaluator
         return Value.Of(offset);
     }
 
-    /// <summary>Whether every name an expression writes names something, declared or bound.</summary>
+    /// <summary>
+    /// Determines whether every name in an expression refers to something, either declared or
+    /// bound.
+    /// </summary>
     private bool Names(SyntaxNode node) =>
         (node is not NameExpressionSyntax name || SymbolOf(name) is not null || BoundItem(name) is not null)
         && node.ChildNodes.All(Names);
 
     /// <summary>
-    /// An enum member with no value of its own: the one before it plus one, from zero, and
-    /// nothing when the one before has no value.
+    /// Returns the value of an enum member with no value of its own, which is the previous
+    /// member's value plus one, or zero for the first member. Returns null when the previous
+    /// member has no value.
     /// </summary>
     private long? Follows(Symbol member)
     {
@@ -711,8 +731,8 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The value of a symbol, evaluating its declaration first if need be. A label has no
-    /// value at all: only the linker knows where it lands.
+    /// Returns the value of a symbol, evaluating its declaration first if needed. A label has no
+    /// value at all, because only the linker knows where it lands.
     /// </summary>
     private Value ValueOfSymbol(Symbol symbol)
     {
@@ -732,8 +752,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The word one side of a comparison gives: the value when it is already a word, or else
-    /// the bare name written there, which is compared as a word without being looked up.
+    /// Returns the word that one side of a comparison gives. This is the value when it is
+    /// already a word, or otherwise the bare name on that side, which is compared as a word
+    /// without being looked up.
     /// </summary>
     private static string? WordOf(Value value, ExpressionSyntax written) => value.IsWord
         ? value.Text
@@ -757,7 +778,10 @@ internal sealed partial class Evaluator
         return Value.Unknown;
     }
 
-    /// <summary>An operand that is a string where a number belongs; there is no string arithmetic.</summary>
+    /// <summary>
+    /// Reports an operand that is a string where a number belongs, since there is no string
+    /// arithmetic, and returns an unknown value.
+    /// </summary>
     private Value Reject(SyntaxToken op, Value operand)
     {
         if (operand.IsString)
@@ -766,18 +790,18 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// What a name resolved to: the last part of the path, which is what the name refers to.
-    /// The file is part of the key, because a position in one file means something else in
-    /// another.
+    /// Returns the symbol a name resolved to, taken from the last resolved part of the path,
+    /// which is what the name refers to. The file is part of the key, because a position in one
+    /// file means something else in another.
     /// </summary>
     private Symbol? SymbolOf(NameExpressionSyntax name)
     {
-        // A name bound to a list item is that item: `.each handlers, h` makes `h` the label
-        // it stands for, with that label's address size and everything else about it.
+        // A name bound to a list item is that item. `.each handlers, h` makes `h` the label it
+        // stands for, with that label's address size and everything else about it.
         if (BoundItem(name) is NameExpressionSyntax item)
             return SymbolOf(item);
 
-        // A name written with a leading `::` is already a path, so a binding in its first part
+        // A name with a leading `::` is already a path, so a binding in its first part
         // is treated as one in a later part would be.
         var reached = name.GlobalToken is not null;
         var names = name.Names;
@@ -789,13 +813,16 @@ internal sealed partial class Evaluator
         return null;
     }
 
-    /// <summary>The same, for whatever is written where a name may be: only a name can refer to a symbol.</summary>
+    /// <summary>
+    /// Returns the symbol that a node refers to when the node is a name, or null otherwise,
+    /// because only a name can refer to a symbol.
+    /// </summary>
     private Symbol? SymbolOf(SyntaxNode written) => written is NameExpressionSyntax name ? SymbolOf(name) : null;
 
     /// <summary>
-    /// What <c>actions::c</c> names, where <c>c</c> walks an enum: the member of <c>actions</c>
-    /// named after the enum member <c>c</c> is bound to on the current turn. Outside any turn,
-    /// as when an editor asks, it names nothing.
+    /// Returns the symbol that <c>actions::c</c> names when <c>c</c> walks an enum. This is the
+    /// member of <c>actions</c> named after the enum member that <c>c</c> is bound to in the
+    /// current iteration. Outside any iteration, as when an editor asks, it names nothing.
     /// </summary>
     private Symbol? Namesake(NameExpressionSyntax name, int last, Symbol binding)
     {
@@ -820,7 +847,10 @@ internal sealed partial class Evaluator
         return null;
     }
 
-    /// <summary>The item a written name is bound to on this turn, or null when it is bound to none.</summary>
+    /// <summary>
+    /// Returns the item a name is bound to in the current iteration, or null when it is bound to
+    /// none.
+    /// </summary>
     private SyntaxNode? BoundItem(NameExpressionSyntax name)
     {
         if (items.Count == 0 || name.SimpleName is not { } only)

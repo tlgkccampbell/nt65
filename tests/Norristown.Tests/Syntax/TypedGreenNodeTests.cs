@@ -8,16 +8,16 @@ using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// Typed green nodes, with a slot per piece, built by hand rather than by the parser. A red
-/// class reads its pieces from its green node's slots, so everything an analyzer asks of a
-/// node — its pieces, its spans, its children, its text, its visitor — is answered here from
-/// the slots alone.
+/// Checks typed green nodes, with a slot per child element, built by hand rather than by the
+/// parser. A red class reads its child elements from its green node's slots. So everything an
+/// analyzer asks of a node is answered here from the slots alone, including its child elements,
+/// its spans, its children, its text and its visitor.
 /// </summary>
 public sealed class TypedGreenNodeTests
 {
     /// <summary>
-    /// A required token that was not written is a missing token in its slot: empty, and at the
-    /// position where it belongs.
+    /// A required token absent from the source is a missing token in its slot. The token is
+    /// empty, and it sits at the position where it belongs.
     /// </summary>
     [Fact]
     public void ARequiredTokenNotWrittenIsMissingInItsSlot()
@@ -43,7 +43,7 @@ public sealed class TypedGreenNodeTests
         Assert.Equal(text, proc.ToFullString());
         Assert.Equal(new TextSpan(0, 7), proc.Span);
 
-        // An empty slot contributes no child; the missing token is a child like any other.
+        // An empty slot contributes no child. The missing token is a child like any other.
         Assert.Equal([SyntaxKind.Directive, SyntaxKind.Identifier, SyntaxKind.OpenBrace],
             proc.ChildNodesAndTokens().Select(child => child.Kind));
         Assert.Empty(proc.ChildNodes);
@@ -147,8 +147,8 @@ public sealed class TypedGreenNodeTests
     }
 
     /// <summary>
-    /// An error expression, which stands where a required expression was not written, reports
-    /// itself as missing, as a missing token does.
+    /// An error expression, which stands where a required expression is absent, reports itself
+    /// as missing, as a missing token does.
     /// </summary>
     [Fact]
     public void AnErrorExpressionIsMissing()
@@ -197,7 +197,7 @@ public sealed class TypedGreenNodeTests
             new(null, new GreenSeparatedList([new Green.IdentifierNameSyntax(name, null)]));
     }
 
-    /// <summary>The name of the visitor method a node is handed to.</summary>
+    /// <summary>Returns the name of the visitor method a node is handed to.</summary>
     private sealed class Method : SyntaxVisitor<string>
     {
         public override string DefaultVisit(SyntaxNode node) => nameof(DefaultVisit);

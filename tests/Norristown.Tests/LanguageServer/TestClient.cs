@@ -5,15 +5,15 @@ using Norristown.LanguageServer;
 using Norristown.LanguageServer.Protocol;
 using StreamJsonRpc;
 
-// The protocol has a Range of its own, which is the one this client means.
+// The protocol defines its own Range type, and this client uses that one.
 using Range = Norristown.LanguageServer.Protocol.Range;
 
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// An editor, as far as the server can tell: the server running in this process over a pair
-/// of streams, and the JSON-RPC connection an editor would hold. Everything crosses the
-/// wire, so the protocol types and their JSON spelling are under test too.
+/// Represents an editor from the server's point of view. The server runs in this process over
+/// a pair of streams, and this client holds the JSON-RPC connection an editor would hold.
+/// Every message crosses the wire, so the protocol types and their JSON form are under test too.
 /// </summary>
 internal sealed class TestClient : IAsyncDisposable
 {
@@ -29,27 +29,33 @@ internal sealed class TestClient : IAsyncDisposable
         log = new ServerLog(logText);
 
         // The server decides when to wait between an edit and publishing the rest of the
-        // program's diagnostics, but the test supplies the wait: by default it takes no real
-        // time, and a test about the wait itself passes one that it releases when it is ready.
+        // program's diagnostics, but the test supplies the wait. By default the wait takes no
+        // real time. A test about the wait itself passes a wait that it releases when it is ready.
         server = Server.RunAsync(serverStream, serverStream, log, delay ?? Yield);
         rpc = new JsonRpc(new HeaderDelimitedMessageHandler(clientStream, clientStream, Server.CreateFormatter()));
         rpc.AddLocalRpcTarget(notifications);
         rpc.StartListening();
     }
 
-    /// <summary>What the server said it can do.</summary>
+    /// <summary>Gets the result of the initialize handshake, which declares what the server can do.</summary>
     public InitializeResult Initialized { get; private set; } = null!;
 
-    /// <summary>Everything the server wrote to its log.</summary>
+    /// <summary>Gets everything the server has written to its log.</summary>
     public string Log => logText.ToString();
 
-    /// <summary>Whether the server has asked for semantic tokens to be fetched again, without waiting for it to.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the server has asked for semantic tokens to be fetched
+    /// again. Reading it does not wait for the request.
+    /// </summary>
     public bool AskedForTokensRefresh => notifications.TokensRefreshed.Reader.Count > 0;
 
-    /// <summary>Whether no published diagnostics are waiting to be read, which is how a test checks that nothing came.</summary>
+    /// <summary>
+    /// Gets a value indicating whether no published diagnostics are waiting to be read. A test
+    /// uses it to check that nothing was published.
+    /// </summary>
     public bool Quiet => notifications.Published.Reader.Count == 0;
 
-    /// <summary>Connects and completes the initialize handshake.</summary>
+    /// <summary>Connects as the default client and completes the initialize handshake.</summary>
     public static Task<TestClient> StartAsync(CancellationToken cancellation, string name = "test-client") =>
         StartAsync(null, null, cancellation, name);
 
@@ -68,9 +74,9 @@ internal sealed class TestClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Does what <see cref="OpenedAsync"/> does, and also checks that the last file has no
-    /// diagnostics. A test class uses it for the shared source its tests query, so that a
-    /// mistake in that source fails here and not as a puzzling answer later.
+    /// Connects, opens each of <paramref name="files"/> in order, and checks that the last of
+    /// them has no diagnostics. A test class uses it for the shared source its tests query, so
+    /// that a mistake in that source fails here instead of as a puzzling answer later.
     /// </summary>
     public static async Task<TestClient> OpenedCleanlyAsync(
         CancellationToken cancellation, params (string Uri, string Text)[] files)
@@ -85,7 +91,8 @@ internal sealed class TestClient : IAsyncDisposable
     /// <summary>
     /// Connects with <paramref name="rootUri"/> as the folder the client opened, and
     /// <paramref name="configuration"/> as the configuration its settings choose.
-    /// <paramref name="refreshesTokens"/> says the client can be asked to fetch semantic tokens again.
+    /// <paramref name="refreshesTokens"/> indicates whether the client can be asked to fetch
+    /// semantic tokens again.
     /// </summary>
     public static Task<TestClient> StartAsync(
         string? rootUri, string? configuration, CancellationToken cancellation, string name = "test-client",
@@ -94,9 +101,10 @@ internal sealed class TestClient : IAsyncDisposable
             Capable(refreshesTokens), cancellation, rootUri: rootUri, configuration: configuration, name: name);
 
     /// <summary>
-    /// What a client of the kind nt65 is written for declares: an outline as a tree, edits
-    /// against a named document version, snippets, the folders it has open, and being asked
-    /// before it moves a file. It is what VS Code declares, so most of the suite connects as it.
+    /// Returns the capabilities declared by the kind of client nt65 is built for. Such a client
+    /// accepts an outline as a tree, edits against a named document version and snippets. It
+    /// reports the folders it has open and is asked before it moves a file. VS Code declares
+    /// these, so most of the suite connects with them.
     /// </summary>
     public static object Capable(bool refreshesTokens = false, bool refreshesHints = false) => new
     {
@@ -155,36 +163,42 @@ internal sealed class TestClient : IAsyncDisposable
         rpc.NotifyWithParameterObjectAsync("textDocument/didClose",
             new DidCloseTextDocumentParams(new TextDocumentIdentifier(uri)));
 
-    /// <summary>Says that files changed on disk.</summary>
+    /// <summary>Notifies the server that files changed on disk.</summary>
     public Task ChangedOnDiskAsync(params string[] uris) =>
         rpc.NotifyWithParameterObjectAsync("workspace/didChangeWatchedFiles",
             new DidChangeWatchedFilesParams([.. uris.Select(uri => new FileEvent(uri, FileChangeType.Changed))]));
 
-    /// <summary>Says that the folders the client has open have changed.</summary>
+    /// <summary>Notifies the server that the folders the client has open have changed.</summary>
     public Task FoldersChangedAsync(IEnumerable<string> added, IEnumerable<string> removed) =>
         rpc.NotifyWithParameterObjectAsync("workspace/didChangeWorkspaceFolders",
             new DidChangeWorkspaceFoldersParams(new WorkspaceFoldersChangeEvent(
                 [.. added.Select(uri => new WorkspaceFolder(uri, uri))],
                 [.. removed.Select(uri => new WorkspaceFolder(uri, uri))])));
 
-    /// <summary>Says that the client's <c>nt65</c> settings now choose <paramref name="configuration"/>.</summary>
+    /// <summary>
+    /// Notifies the server that the client's <c>nt65</c> settings now choose
+    /// <paramref name="configuration"/>.
+    /// </summary>
     public Task ConfigureAsync(string? configuration) =>
         rpc.NotifyWithParameterObjectAsync("workspace/didChangeConfiguration",
             new { settings = new { nt65 = new { configuration } } });
 
-    /// <summary>Sends any request, for the ones with no method of their own here.</summary>
+    /// <summary>Sends any request. Tests use it for requests that have no method of their own here.</summary>
     public Task<T> RequestAsync<T>(string method, object? parameters, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<T>(method, parameters, cancellation);
 
     /// <summary>
-    /// The next set of diagnostics the server publishes, for whichever file it is about. The
-    /// server publishes for every file of the program, so a test with more than one file in it
-    /// asks for the one it is about by name.
+    /// Waits for and returns the next set of diagnostics the server publishes, for any file. The
+    /// server publishes for every file of the program, so a test with more than one file asks
+    /// for the file it is about by name.
     /// </summary>
     public async Task<PublishDiagnosticsParams> NextDiagnosticsAsync(CancellationToken cancellation) =>
         await notifications.Published.Reader.ReadAsync(cancellation);
 
-    /// <summary>Everything published and not yet read, taken off without waiting for any more.</summary>
+    /// <summary>
+    /// Removes and returns every set of diagnostics published and not yet read, without waiting
+    /// for more.
+    /// </summary>
     public IReadOnlyList<PublishDiagnosticsParams> Pending()
     {
         var found = new List<PublishDiagnosticsParams>();
@@ -193,7 +207,10 @@ internal sealed class TestClient : IAsyncDisposable
         return found;
     }
 
-    /// <summary>The next set published for <paramref name="uri"/>, passing over every other file's.</summary>
+    /// <summary>
+    /// Waits for and returns the next set of diagnostics published for <paramref name="uri"/>,
+    /// discarding the sets published for other files.
+    /// </summary>
     public async Task<PublishDiagnosticsParams> NextDiagnosticsAsync(string uri, CancellationToken cancellation)
     {
         while (true)
@@ -208,34 +225,37 @@ internal sealed class TestClient : IAsyncDisposable
     public async Task NextTokensRefreshAsync(CancellationToken cancellation) =>
         await notifications.TokensRefreshed.Reader.ReadAsync(cancellation);
 
-    /// <summary>Waits for the server to say that the program has settled and a file's output has changed.</summary>
+    /// <summary>
+    /// Waits for the server to report that analysis of the program has finished and a file's
+    /// output has changed.
+    /// </summary>
     public async Task<JsonElement> NextOutputChangedAsync(CancellationToken cancellation) =>
         await notifications.OutputChanged.Reader.ReadAsync(cancellation);
 
-    /// <summary>The next message the server showed to the user.</summary>
+    /// <summary>Waits for and returns the next message the server shows to the user.</summary>
     public async Task<ShowMessageParams> NextShowMessageAsync(CancellationToken cancellation) =>
         await notifications.Shown.Reader.ReadAsync(cancellation);
 
-    /// <summary>The next message the server logged to the client's window.</summary>
+    /// <summary>Waits for and returns the next message the server logs to the client's window.</summary>
     public async Task<LogMessageParams> NextLogMessageAsync(CancellationToken cancellation) =>
         await notifications.Logged.Reader.ReadAsync(cancellation);
 
-    /// <summary>The document's outline.</summary>
+    /// <summary>Requests the document's outline as a tree.</summary>
     public Task<IReadOnlyList<DocumentSymbol>> SymbolsAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<DocumentSymbol>>("textDocument/documentSymbol",
             new DocumentSymbolParams(new TextDocumentIdentifier(uri)), cancellation);
 
-    /// <summary>The document's outline as a client that takes no tree gets it: one flat list.</summary>
+    /// <summary>Requests the document's outline as a client that takes no tree gets it, as one flat list.</summary>
     public Task<IReadOnlyList<SymbolInformation>> FlatSymbolsAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<SymbolInformation>>("textDocument/documentSymbol",
             new DocumentSymbolParams(new TextDocumentIdentifier(uri)), cancellation);
 
-    /// <summary>The document's names, classified.</summary>
+    /// <summary>Requests the semantic tokens that classify the document's names.</summary>
     public Task<SemanticTokens> SemanticTokensAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<SemanticTokens>("textDocument/semanticTokens/full",
             new SemanticTokensParams(new TextDocumentIdentifier(uri)), cancellation);
 
-    /// <summary>The hints for the lines <paramref name="first"/> to <paramref name="last"/>.</summary>
+    /// <summary>Requests the inlay hints for the lines <paramref name="first"/> to <paramref name="last"/>.</summary>
     public Task<IReadOnlyList<InlayHint>> InlayHintsAsync(
         string uri, int first, int last, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<InlayHint>>("textDocument/inlayHint",
@@ -244,11 +264,13 @@ internal sealed class TestClient : IAsyncDisposable
                 new Range(new Position(first, 0), new Position(last, 0))),
             cancellation);
 
-    /// <summary>Resolves one completion item, which fills in the documentation of what it is for.</summary>
+    /// <summary>Resolves one completion item, which fills in the documentation of what the item is for.</summary>
     public Task<CompletionItem> ResolveAsync(CompletionItem item, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<CompletionItem>("completionItem/resolve", item, cancellation);
 
-    /// <summary>Turns the cycle counts on or off for the session, and answers which they now are.</summary>
+    /// <summary>
+    /// Turns the cycle-count hints on or off for the session, and returns whether they are now on.
+    /// </summary>
     public Task<bool> ToggleCycleHintsAsync(CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<bool>("nt65/toggleCycleHints", new { }, cancellation);
 
@@ -256,7 +278,10 @@ internal sealed class TestClient : IAsyncDisposable
     public async Task NextHintsRefreshAsync(CancellationToken cancellation) =>
         await notifications.HintsRefreshed.Reader.ReadAsync(cancellation);
 
-    /// <summary>The names of the lines <paramref name="first"/> to <paramref name="last"/>, classified.</summary>
+    /// <summary>
+    /// Requests the semantic tokens that classify the names on the lines <paramref name="first"/>
+    /// to <paramref name="last"/>.
+    /// </summary>
     public Task<SemanticTokens> SemanticTokensRangeAsync(
         string uri, int first, int last, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<SemanticTokens>("textDocument/semanticTokens/range",
@@ -265,52 +290,55 @@ internal sealed class TestClient : IAsyncDisposable
                 new Range(new Position(first, 0), new Position(last, 0))),
             cancellation);
 
-    /// <summary>What changed about the document's names since <paramref name="previous"/>.</summary>
+    /// <summary>
+    /// Requests the changes to the document's semantic tokens since the result
+    /// <paramref name="previous"/>.
+    /// </summary>
     public Task<SemanticTokensDelta> SemanticTokensDeltaAsync(
         string uri, string previous, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<SemanticTokensDelta>("textDocument/semanticTokens/full/delta",
             new SemanticTokensDeltaParams(new TextDocumentIdentifier(uri), previous), cancellation);
 
-    /// <summary>The chain of ranges a selection at <paramref name="position"/> widens through.</summary>
+    /// <summary>Requests the chain of ranges that a selection at <paramref name="position"/> widens through.</summary>
     public Task<IReadOnlyList<SelectionRange>> SelectionRangesAsync(
         string uri, Position position, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<SelectionRange>>("textDocument/selectionRange",
             new SelectionRangeParams(new TextDocumentIdentifier(uri), [position]), cancellation);
 
-    /// <summary>The document's foldable ranges.</summary>
+    /// <summary>Requests the document's foldable ranges.</summary>
     public Task<IReadOnlyList<FoldingRange>> FoldingRangesAsync(string uri, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<FoldingRange>>("textDocument/foldingRange",
             new FoldingRangeParams(new TextDocumentIdentifier(uri)), cancellation);
 
-    /// <summary>What to show about the name at a place in the document.</summary>
+    /// <summary>Requests the hover text for the name at a position in the document.</summary>
     public Task<Hover?> HoverAsync(string uri, Position position, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<Hover?>("textDocument/hover",
             new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
 
-    /// <summary>Where the name at a place is declared.</summary>
+    /// <summary>Requests the location where the name at a position is declared.</summary>
     public Task<Location?> DefinitionAsync(string uri, Position position, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<Location?>("textDocument/definition",
             new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
 
-    /// <summary>Every place the name at a place is written.</summary>
+    /// <summary>Requests every location where the name at a position appears.</summary>
     public Task<IReadOnlyList<Location>> ReferencesAsync(
         string uri, Position position, bool includeDeclaration, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<Location>>("textDocument/references",
             new ReferenceParams(new TextDocumentIdentifier(uri), position, new ReferenceContext(includeDeclaration)),
             cancellation);
 
-    /// <summary>The places the name at a position is written, as the client highlights them.</summary>
+    /// <summary>Requests the locations where the name at a position appears, as the client highlights them.</summary>
     public Task<IReadOnlyList<DocumentHighlight>> HighlightsAsync(
         string uri, Position position, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<IReadOnlyList<DocumentHighlight>>("textDocument/documentHighlight",
             new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
 
-    /// <summary>What a rename at a place would replace.</summary>
+    /// <summary>Requests the range that a rename at a position would replace.</summary>
     public Task<Range?> PrepareRenameAsync(string uri, Position position, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<Range?>("textDocument/prepareRename",
             new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
 
-    /// <summary>Renames the name at a place, everywhere it is written.</summary>
+    /// <summary>Requests the edit that renames the name at a position everywhere it appears.</summary>
     public Task<WorkspaceEdit?> RenameAsync(
         string uri, Position position, string newName, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<WorkspaceEdit?>("textDocument/rename",
@@ -326,10 +354,13 @@ internal sealed class TestClient : IAsyncDisposable
         log.Dispose();
     }
 
-    /// <summary>The wait the suite uses by default: no real time, but the server still continues asynchronously rather than on the caller's stack.</summary>
+    /// <summary>
+    /// Provides the wait the suite uses by default. It takes no real time, but the server still
+    /// continues asynchronously instead of on the caller's stack.
+    /// </summary>
     private static async Task Yield(TimeSpan quiet) => await Task.Yield();
 
-    /// <summary>What the server sends without being asked.</summary>
+    /// <summary>Collects the notifications and requests the server sends without being asked.</summary>
     private sealed class Notifications
     {
         public Channel<PublishDiagnosticsParams> Published { get; } =

@@ -1,15 +1,18 @@
 namespace Norristown.Semantics;
 
-/// <summary>What a declaration declares.</summary>
+/// <summary>Specifies the kind of thing a declaration declares.</summary>
 public enum SymbolKind
 {
-    /// <summary>A label, <c>name:</c>: an address in the segment it was written in.</summary>
+    /// <summary>A label, <c>name:</c>: an address in the segment it is declared in.</summary>
     Label,
 
     /// <summary><c>NAME = expr</c> where the expression names no address.</summary>
     Constant,
 
-    /// <summary><c>NAME = expr</c> where it does: sized, exported and imported like a label.</summary>
+    /// <summary>
+    /// <c>NAME = expr</c> where the expression names an address. It is sized, exported and
+    /// imported like a label.
+    /// </summary>
     AddressAlias,
 
     /// <summary><c>.proc name { }</c>: a label and a scope.</summary>
@@ -54,7 +57,7 @@ public enum SymbolKind
     /// <summary><c>.func name(a, b) = expr</c>: a pure expression function.</summary>
     Func,
 
-    /// <summary>The name a <c>.repeat</c> or an <c>.each</c> binds: one value per turn.</summary>
+    /// <summary>The name a <c>.repeat</c> or an <c>.each</c> binds: one value per iteration.</summary>
     Binding,
 
     /// <summary><c>.macro name(...) { }</c>: a body expanded at each of its calls.</summary>
@@ -66,6 +69,8 @@ public enum SymbolKind
     /// <summary><c>.frame name: T</c>: the top bytes of the stack, laid out as a struct.</summary>
     Frame,
 
-    /// <summary><c>.signature name = items</c>: a named set of items that a signature can include by name.</summary>
+    /// <summary>
+    /// <c>.signature name = items</c>: a named set of items that a signature can include by name.
+    /// </summary>
     SignatureSet,
 }

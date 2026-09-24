@@ -1,13 +1,13 @@
 namespace Norristown.LanguageServer.Protocol;
 
 /// <summary>
-/// The classified tokens of a document, five numbers each: the line from the previous token's,
-/// the character from its start when on the same line, the length, the type and the modifier
-/// bits.
+/// Represents the classified tokens of a document, encoded as five numbers per token. The numbers
+/// are the line relative to the previous token's line, the character relative to the previous
+/// token's start when both are on the same line, the length, the type and the modifier bits.
 /// </summary>
-/// <param name="Data">The numbers.</param>
+/// <param name="Data">The encoded numbers.</param>
 /// <param name="ResultId">
-/// What to call this answer when asking for the next change to it, or null where the answer is
-/// about part of a document and there is no change to ask for.
+/// An identifier for this result, used when requesting the next change to it, or null when the
+/// result covers part of a document and no change can be requested.
 /// </param>
 internal sealed record SemanticTokens(IReadOnlyList<int> Data, string? ResultId = null);

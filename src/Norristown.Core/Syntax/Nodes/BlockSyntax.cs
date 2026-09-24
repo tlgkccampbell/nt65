@@ -4,9 +4,9 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A block: its opener line, then its contents, then the closing <c>}</c> line when it has
-/// one. A block closed by a continuation line (<c>} .else {</c>) has no closer: that line
-/// is the opener of the next block.
+/// Represents a block, which consists of its opening line, its contents, and the closing
+/// <c>}</c> line if it has one. A block closed by a continuation line (<c>} .else {</c>) has no
+/// closing line of its own, because that line opens the next block.
 /// </summary>
 public sealed partial class BlockSyntax : SyntaxNode
 {
@@ -15,31 +15,36 @@ public sealed partial class BlockSyntax : SyntaxNode
     {
     }
 
-    /// <summary>The kind of block, from the statement its opener line ends with.</summary>
+    /// <summary>Gets the kind of block, which the statement at the end of its opening line determines.</summary>
     public BlockKind BlockKind => GreenBlock.BlockKind;
 
-    /// <summary>Whether the block ends with a <c>}</c> line of its own.</summary>
+    /// <summary>Gets a value indicating whether the block ends with a <c>}</c> line of its own.</summary>
     public bool HasCloser => GreenBlock.HasCloser;
 
-    /// <summary>The line that opens the block.</summary>
+    /// <summary>Gets the line that opens the block.</summary>
     public LineSyntax Opener => (LineSyntax)ChildNodes[0];
 
-    /// <summary>The closing <c>}</c> line, or null when a continuation line ends the block.</summary>
+    /// <summary>Gets the closing <c>}</c> line, or null if a continuation line ends the block.</summary>
     public LineSyntax? Closer => HasCloser ? (LineSyntax)ChildNodes[^1] : null;
 
-    /// <summary>The opener line, the block's contents, and the closing line when it has one.</summary>
+    /// <summary>
+    /// Gets the opening line, the block's contents, and the closing line if the block has one.
+    /// </summary>
     public ImmutableArray<SyntaxNode> Members => ChildNodes;
 
     /// <inheritdoc/>
     /// <remarks>
-    /// A block's children are its source lines rather than the statements they parse to, so this
-    /// is answered from the tree's per-line record for the block's lines, the same way
+    /// A block's children are its source lines rather than the statements they parse to, so the
+    /// value comes from the tree's per-line record for the block's lines. This is the same way
     /// <see cref="SyntaxNode.GetDiagnostics"/> collects them.
     /// </remarks>
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(LineIndex, LastLineIndex);
 
     /// <inheritdoc/>
-    /// <remarks>Answered from the tree's per-line record for the block's lines, as for the diagnostics.</remarks>
+    /// <remarks>
+    /// The value comes from the tree's per-line record for the block's lines, as it does for the
+    /// diagnostics.
+    /// </remarks>
     public override bool ContainsAnnotations => Tree.LinesContainAnnotations(LineIndex, LastLineIndex);
 
     private GreenBlock GreenBlock => (GreenBlock)Green;

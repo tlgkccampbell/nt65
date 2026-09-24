@@ -3,15 +3,21 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// One level of "these same lines, written out again": a turn of a <c>.repeat</c> or an
-/// <c>.each</c>, or one expansion of a macro. Both are read once and written out many
-/// times, so this is what tells one written-out copy (a "writing") from another: what each
-/// name the level binds is bound to, and which writing a line belongs to.
+/// Represents an expansion, which is one emitted copy of a macro body or of a repetition's body.
+/// Each iteration of a <c>.repeat</c> or an <c>.each</c> produces one expansion, as does each
+/// call of a macro and each splice of a block argument. Expansions nest, and each one is a level
+/// inside the expansion that encloses it.
 /// <para>
-/// Layout and emission walk the same blocks in the same order and work these out
-/// independently, so they are compared by what they hold rather than by identity. What they
-/// hold is only what identifies the level — a turn's index, or the call being expanded —
-/// and never anything derived from it, which is worked out afresh each time it is asked for.
+/// The lines of a body are read once and emitted many times, so an expansion is what tells one
+/// emitted copy from another. It records what each name it binds is bound to, and it identifies
+/// the expansion that a line belongs to.
+/// </para>
+/// <para>
+/// Layout and emission walk the same blocks in the same order and create expansions
+/// independently, so expansions are compared by what they hold rather than by identity. They
+/// hold only what identifies the expansion, such as an iteration's index or the call being
+/// expanded, and never anything derived from it. Anything derived is recomputed each time it is
+/// requested.
 /// </para>
 /// </summary>
 public sealed class Expansion : IEquatable<Expansion>
@@ -33,35 +39,38 @@ public sealed class Expansion : IEquatable<Expansion>
         Body = body;
     }
 
-    /// <summary>The turn or expansion around this one, or null at the top.</summary>
+    /// <summary>Gets the expansion that encloses this one, or null at the top level.</summary>
     public Expansion? Outer { get; }
 
-    /// <summary>The name a repetition binds, or null for a macro expansion and for one that names none.</summary>
+    /// <summary>
+    /// Gets the name a repetition binds, or null for a macro expansion and for a repetition that
+    /// binds no name.
+    /// </summary>
     public Symbol? Binding { get; }
 
-    /// <summary>The value of that name on this turn.</summary>
+    /// <summary>Gets the value of the bound name in this iteration.</summary>
     public Value Value { get; }
 
-    /// <summary>The list item it is bound to, for an <c>.each</c> over a list.</summary>
+    /// <summary>Gets the list item the name is bound to, for an <c>.each</c> over a list.</summary>
     public SyntaxNode? Item { get; }
 
-    /// <summary>The enum member it is bound to, for an <c>.each</c> over an enum.</summary>
+    /// <summary>Gets the enum member the name is bound to, for an <c>.each</c> over an enum.</summary>
     public Symbol? Member { get; }
 
-    /// <summary>Which turn it is, from zero; zero for an expansion.</summary>
+    /// <summary>Gets the zero-based index of the iteration, or zero for a macro expansion.</summary>
     public int Index { get; }
 
-    /// <summary>The call being expanded, or null for a repetition turn.</summary>
+    /// <summary>Gets the call being expanded, or null for an iteration of a repetition.</summary>
     public MacroCallSyntax? Call { get; }
 
     /// <summary>
-    /// The block this level writes out: a repetition's body, a macro's body, or the block
-    /// argument a splice names. What is declared inside it belongs to this level, which is
-    /// how a name declared there is told apart from the same name at another level.
+    /// Gets the block this expansion emits, which is a repetition's body, a macro's body, or the
+    /// block argument a splice names. Declarations inside the block belong to this expansion, so
+    /// a name declared there is distinguished from the same name in another expansion.
     /// </summary>
     public BlockSyntax? Body { get; }
 
-    /// <summary>How deep the expansions go, which is what stops a runaway one.</summary>
+    /// <summary>Gets the nesting depth of this expansion, which is used to stop a runaway expansion.</summary>
     public int Depth
     {
         get
@@ -73,7 +82,7 @@ public sealed class Expansion : IEquatable<Expansion>
         }
     }
 
-    /// <summary>The nearest macro call this level is inside, or null when it is in none.</summary>
+    /// <summary>Gets the nearest macro call this expansion is inside, or null when it is inside none.</summary>
     public MacroCallSyntax? NearestCall
     {
         get
@@ -87,28 +96,31 @@ public sealed class Expansion : IEquatable<Expansion>
         }
     }
 
-    /// <summary>One turn of a repetition, with the name it binds and that name's value.</summary>
+    /// <summary>
+    /// Creates the expansion for one iteration of a repetition, with the name it binds and that
+    /// name's value.
+    /// </summary>
     public static Expansion Turn(
         Expansion? outer, BlockSyntax block, Symbol? binding, Value value, SyntaxNode? item, int index,
         Symbol? member = null) =>
         new(outer, binding, value, item, index, null, block, member: member);
 
-    /// <summary>One expansion of the macro <paramref name="call"/> names.</summary>
+    /// <summary>Creates one expansion of the macro that <paramref name="call"/> names.</summary>
     public static Expansion Of(Expansion? outer, MacroCallSyntax call, BlockSyntax definition) =>
         new(outer, null, Value.Unknown, null, 0, call, definition);
 
     /// <summary>
-    /// One splice of a block argument, named by the line that spliced it. A block binds no
-    /// name, so this level carries none; it is here because the same block may be spliced in
-    /// more than one place, and each splice writes its lines out again.
+    /// Creates the expansion for one splice of a block argument, identified by the line that
+    /// spliced it. A block binds no name, so this expansion binds none. It exists because the same
+    /// block may be spliced in more than one place, and each splice emits the block's lines again.
     /// </summary>
     public static Expansion Spliced(Expansion? outer, BlockSpliceSyntax splice, BlockSyntax block) =>
         new(outer, null, Value.Unknown, splice, 0, null, block, splice: true);
 
     /// <summary>
-    /// The level whose block contains the declaration of <paramref name="declared"/>, or null
-    /// when none of them does and the name simply belongs to the file. This is what tells one
-    /// expansion's locals from another's: the same body, written out twice, declares two.
+    /// Returns the expansion whose block contains the declaration of <paramref name="declared"/>,
+    /// or null when none does and the name belongs to the file. This distinguishes one expansion's
+    /// locals from another's, because the same body emitted twice declares two sets of locals.
     /// </summary>
     public static Expansion? Owning(Expansion? at, Symbol declared)
     {
@@ -125,14 +137,15 @@ public sealed class Expansion : IEquatable<Expansion>
     }
 
     /// <summary>
-    /// Whether <paramref name="definition"/> is already being expanded at <paramref name="at"/>
-    /// or around it: a macro that expands itself, directly or indirectly, which is reported
-    /// where it is declared and is never written out again inside itself.
+    /// Determines whether <paramref name="definition"/> is already being expanded in
+    /// <paramref name="at"/> or in an expansion that encloses it. That happens when a macro
+    /// expands itself, directly or indirectly. Such a macro is reported where it is declared and
+    /// is never emitted again inside itself.
     /// <para>
-    /// A block argument is the caller's code, not the macro's, so a call written in one is not
-    /// inside the macro it was given to: <c>if!(eq) { if!(ne) { ... } }</c> nests two calls
-    /// and is not recursion. From a splice, the walk jumps straight out to the expansion of the
-    /// macro whose body did the splicing.
+    /// A block argument is the caller's code, not the macro's, so a call inside a block argument
+    /// is not inside the macro the block was given to. For example,
+    /// <c>if!(eq) { if!(ne) { ... } }</c> nests two calls and is not recursion. From a splice, the
+    /// walk jumps straight out to the expansion of the macro whose body did the splicing.
     /// </para>
     /// </summary>
     public static bool Expanding(Expansion? at, BlockSyntax definition)
@@ -147,7 +160,10 @@ public sealed class Expansion : IEquatable<Expansion>
         return false;
     }
 
-    /// <summary>The expansion, around <paramref name="splice"/>, of the macro whose body holds <paramref name="line"/>.</summary>
+    /// <summary>
+    /// Returns the expansion enclosing <paramref name="splice"/> that belongs to the macro whose
+    /// body contains <paramref name="line"/>.
+    /// </summary>
     private static Expansion? SplicedBy(Expansion splice, SyntaxNode line)
     {
         for (var level = splice.Outer; level is not null; level = level.Outer)
@@ -162,12 +178,13 @@ public sealed class Expansion : IEquatable<Expansion>
     }
 
     /// <summary>
-    /// A problem with the text at <paramref name="span"/> of <paramref name="tree"/>, found while
-    /// laying out or emitting <paramref name="file"/> within the expansion <paramref name="at"/>.
-    /// Text in the file itself is reported at its own position. Text in another file's macro
-    /// body is reported at the nearest call in this file that expanded it, which this file
-    /// controls, with the body's text as a related location: the body's position belongs to the
-    /// other file, and this file's diagnostics should not move when that file is edited.
+    /// Creates a diagnostic for a problem with the text at <paramref name="span"/> of
+    /// <paramref name="tree"/>, found while laying out or emitting <paramref name="file"/> within
+    /// the expansion <paramref name="at"/>. Text in the file itself is reported at its own
+    /// position. Text in another file's macro body is reported at the nearest call in this file
+    /// that expanded it, which this file controls, with the body's text as a related location.
+    /// The body's position belongs to the other file, and this file's diagnostics should not move
+    /// when that file is edited.
     /// </summary>
     public static Diagnostic Problem(
         SyntaxTree file, SyntaxTree tree, TextSpan span, Expansion? at, Severity? severity, DiagnosticMessage message)
@@ -187,10 +204,10 @@ public sealed class Expansion : IEquatable<Expansion>
         return new Diagnostic(tree.GetSpan(span), severity ?? message.Descriptor.Severity, message);
     }
 
-    /// <summary>Whether two levels are the same writing of the same lines.</summary>
+    /// <summary>Determines whether two expansions are the same expansion of the same lines.</summary>
     public static bool operator ==(Expansion? a, Expansion? b) => Equals(a, b);
 
-    /// <summary>Whether two levels are different writings.</summary>
+    /// <summary>Determines whether two expansions are different.</summary>
     public static bool operator !=(Expansion? a, Expansion? b) => !Equals(a, b);
 
     /// <inheritdoc/>
@@ -211,19 +228,22 @@ public sealed class Expansion : IEquatable<Expansion>
     /// <inheritdoc/>
     public override int GetHashCode() => HashCode.Combine(Outer, Binding, Value, Item, Index, Call, Body);
 
-    /// <summary>What it expands, for debugging.</summary>
+    /// <summary>Returns a description of what this expansion expands, for debugging.</summary>
     public override string ToString() =>
         Call is not null ? $"expansion of {Call.GetText()}" : $"turn {Index}";
 
     /// <summary>
-    /// What one name is bound to at one level. An item is kept as the expression it was
-    /// written as, not only as a number: a list of labels has no numbers, a macro argument
-    /// may name an address, and a name bound to one has to behave as that expression
-    /// everywhere — in its value, how wide an address it is, and what is written out.
+    /// Represents what one name is bound to in one expansion. An item is kept as the expression
+    /// from the source, not only as a number, because a list of labels has no numbers and a macro
+    /// argument may name an address. A name bound to such an item has to behave as that expression
+    /// everywhere, including its value, the width of the address, and what is emitted.
     /// </summary>
-    /// <param name="Value">The number or word, where there is one.</param>
-    /// <param name="Item">The expression it is bound to, or null when it is bound to a value.</param>
-    /// <param name="Argument">What a macro parameter was given, for the built-ins that ask about it.</param>
-    /// <param name="Member">The enum member it is bound to; a path ending in the name reaches the container's member of the same name.</param>
+    /// <param name="Value">The number or word, when there is one.</param>
+    /// <param name="Item">The expression the name is bound to, or null when it is bound to a value.</param>
+    /// <param name="Argument">The argument a macro parameter was given, for the built-ins that ask about it.</param>
+    /// <param name="Member">
+    /// The enum member the name is bound to. A path ending in the name reaches the container's
+    /// member of the same name.
+    /// </param>
     public readonly record struct Bound(Value Value, SyntaxNode? Item, MacroArgument? Argument = null, Symbol? Member = null);
 }

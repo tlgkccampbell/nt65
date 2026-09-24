@@ -4,9 +4,9 @@ using Norristown.Cli;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// <c>nt65 build</c> on real directories: finding the project, where output goes, the named
-/// configurations, what is deleted and what dependencies are written. Each test builds a small
-/// project in a directory of its own and throws it away.
+/// Tests <c>nt65 build</c> on real directories. The tests cover finding the project, where
+/// output goes, the named configurations, what is deleted and what dependencies are written.
+/// Each test builds a small project in a directory of its own and throws it away.
 /// </summary>
 public sealed class BuildCommandTests : IDisposable
 {
@@ -40,7 +40,10 @@ public sealed class BuildCommandTests : IDisposable
         Assert.False(Exists("app/build/hw/vic.s.lines"));
     }
 
-    /// <summary><c>--config</c> applies the configuration's defines over the project's, and its output directory.</summary>
+    /// <summary>
+    /// <c>--config</c> applies the configuration's defines over the project's, and its output
+    /// directory.
+    /// </summary>
     [Fact]
     public void AConfigurationChoosesDefinesAndOutput()
     {
@@ -155,8 +158,8 @@ public sealed class BuildCommandTests : IDisposable
 
     /// <summary>
     /// When a build finds no files, an error in the project file is a far more common cause than a
-    /// missing `files`, so the project file's diagnostics come first and the forty lines of usage
-    /// text are not printed: the command line is not what needs fixing.
+    /// missing <c>files</c>. The project file's diagnostics therefore come first, and the forty
+    /// lines of usage text are not printed, because the command line is not what needs fixing.
     /// </summary>
     [Fact]
     public void AProjectFilesOwnProblemIsSaidBeforeThereAreNoFiles()
@@ -172,7 +175,10 @@ public sealed class BuildCommandTests : IDisposable
         Assert.DoesNotContain("usage: nt65 build", said);
     }
 
-    /// <summary>With no project, a name from a module missing from the build is reported, and a build that assumes a CPU notes it.</summary>
+    /// <summary>
+    /// With no project, a name from a module missing from the build is reported, and a build that
+    /// assumes a CPU notes it.
+    /// </summary>
     [Fact]
     public void WithoutAProjectWhatIsMissingIsSaid()
     {
@@ -190,8 +196,8 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
-    /// <c>--check</c> says what a build would say and writes none of what a build would write,
-    /// which is what a gate or a pre-commit hook wants: the report, the exit code, and no
+    /// <c>--check</c> reports what a build would report and writes none of the files a build
+    /// would write. A gate or a pre-commit hook wants the report and the exit code, with no
     /// output tree to clean up afterwards.
     /// </summary>
     [Fact]
@@ -240,7 +246,7 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Equal((3, "declared here"),
             (related.GetProperty("line").GetInt32(), related.GetProperty("message").GetString()));
 
-        // A diagnostic with nothing else to point at says nothing about related spans at all.
+        // A diagnostic with nothing else to point at has no related spans field at all.
         File("app/main.nt65", ".module main\n.export BORDER\nBORDER = $d020\nUNUSED = 1\n");
         Assert.DoesNotContain("related", Apart(app, false, "build", "--json").Output);
     }
@@ -313,9 +319,9 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
-    /// <c>--stdout</c> writes one file's ca65 and nothing else: the same text as the editor's
-    /// output preview, with a first line saying so when the program has errors, and no files
-    /// written.
+    /// <c>--stdout</c> writes one file's ca65 and nothing else. The text is the same as the
+    /// editor's output preview, with a first line that says the output is incomplete when the
+    /// program has errors, and no files are written.
     /// </summary>
     [Fact]
     public void StdoutWritesOneFilesOutputAndNoFiles()
@@ -348,9 +354,9 @@ public sealed class BuildCommandTests : IDisposable
     /// <summary>
     /// A module that another module places has no output of its own. <c>--stdout</c> on its file
     /// writes its part of the translation unit's output, between the comments that open and close
-    /// it, which is what the editor's preview shows; naming its file writes the unit it is placed
-    /// in; and the output it had while it stood alone is deleted by the next whole-program build,
-    /// like any output the program no longer writes.
+    /// it, as the editor's preview shows it. Naming its file in a build writes the unit it is
+    /// placed in. The output it had while it stood alone is deleted by the next whole-program
+    /// build, like any output the program no longer writes.
     /// </summary>
     [Fact]
     public void APlacedModuleIsWrittenAsItsPartOfTheUnit()
@@ -388,7 +394,10 @@ public sealed class BuildCommandTests : IDisposable
         return (code, output + error);
     }
 
-    /// <summary>Runs nt65 with standard output and standard error kept apart, for checking which stream something goes to.</summary>
+    /// <summary>
+    /// Runs nt65 with standard output and standard error kept apart, so that a test can check
+    /// which stream a message goes to.
+    /// </summary>
     private static (int Code, string Output, string Error) Apart(
         string directory, bool colour, params string[] arguments)
     {

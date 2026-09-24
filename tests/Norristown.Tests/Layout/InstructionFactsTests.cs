@@ -4,17 +4,17 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// The facts about each mnemonic beyond which addressing modes it has: whether it calls,
-/// returns, stores, pushes or pulls, and which width sizes its immediate. Every pass built on
-/// layout reads this table, so a mnemonic missing from it gives a silently wrong answer rather
-/// than a failure: a call not treated as a call, a push that moves nothing. The sets are
-/// written out a second time here for the same reason <see cref="RegisterEffectsTests"/>
-/// writes its table twice.
+/// Checks the facts about each mnemonic beyond which addressing modes it has. The facts are
+/// whether it calls, returns, stores, pushes or pulls, and which width sizes its immediate. Every
+/// pass built on layout reads this table, so a mnemonic missing from it gives a silently wrong
+/// answer rather than a failure, such as a call not treated as a call or a push that moves
+/// nothing. The sets are listed a second time here for the same reason
+/// <see cref="RegisterEffectsTests"/> lists its table twice.
 /// </summary>
 public sealed class InstructionFactsTests
 {
     /// <summary>
-    /// What each mnemonic does to the path. A software interrupt is not a stop: the handler's
+    /// Checks what each mnemonic does to the path. A software interrupt is not a stop: the handler's
     /// <c>rti</c> comes back to the instruction after <c>brk</c> or <c>cop</c>.
     /// </summary>
     [Fact]
@@ -81,7 +81,9 @@ public sealed class InstructionFactsTests
         Assert.Equal(["cpx", "cpy", "ldx", "ldy"], Where(facts => facts.SizedBy == WidthRegister.Index));
     }
 
-    /// <summary>The mnemonics any CPU has whose facts <paramref name="holds"/> accepts, in order.</summary>
+    /// <summary>
+    /// Returns the mnemonics any CPU has whose facts <paramref name="holds"/> accepts, in order.
+    /// </summary>
     private static IReadOnlyList<string> Where(Func<InstructionFacts, bool> holds) =>
         [.. SyntaxFacts.Mnemonics
             .Where(mnemonic => holds(Instructions.Facts(mnemonic)))

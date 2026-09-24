@@ -1,9 +1,9 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// One level of naming: a file, a <c>.proc</c> body or a <c>.scope</c> body. Lookup
-/// runs from the innermost scope outward, and a <c>.proc</c> or <c>.scope</c> also owns the
-/// cheap locals written inside it, which live in a namespace of their own.
+/// Represents one level of naming, such as a file, a <c>.proc</c> body or a <c>.scope</c> body.
+/// Lookup runs from the innermost scope outward. A <c>.proc</c> or <c>.scope</c> also owns the
+/// cheap locals declared inside it, which live in a namespace of their own.
 /// </summary>
 public sealed class Scope
 {
@@ -19,33 +19,36 @@ public sealed class Scope
         Owner = owner;
     }
 
-    /// <summary>What kind of scope this is.</summary>
+    /// <summary>Gets the kind of scope this is.</summary>
     public ScopeKind Kind { get; }
 
-    /// <summary>The scope's name, or null for a file or an anonymous <c>.scope</c>.</summary>
+    /// <summary>Gets the scope's name, or null for a file or an anonymous <c>.scope</c>.</summary>
     public string? Name { get; }
 
-    /// <summary>The scope around this one, or null for a file.</summary>
+    /// <summary>Gets the scope around this one, or null for a file.</summary>
     public Scope? Parent { get; }
 
     /// <summary>
-    /// The symbol this scope belongs to, or null for a file or an anonymous <c>.scope</c>. A
-    /// family's body belongs to the first of its instances, which are declared after the body
-    /// is read.
+    /// Gets the symbol this scope belongs to, or null for a file or an anonymous <c>.scope</c>.
+    /// The body of a <see cref="Family"/> belongs to the first of its instances, which are
+    /// declared after the body is read.
     /// </summary>
     public Symbol? Owner { get; internal set; }
 
-    /// <summary>For a file, the module its <c>.module</c> names; null for every other scope.</summary>
+    /// <summary>
+    /// Gets the module a file's <c>.module</c> names, for a file scope; null for every other scope.
+    /// </summary>
     public string? Module { get; internal set; }
 
-    /// <summary>Everything declared here, cheap locals included, in source order.</summary>
+    /// <summary>Gets every symbol declared in this scope, including cheap locals, in source order.</summary>
     public IReadOnlyList<Symbol> Symbols => order;
 
     /// <summary>
-    /// Whether every scope from here out to the file has a name, so what is declared here
-    /// can be reached with <c>::</c>. An anonymous <c>.scope { }</c> is inline code, and
-    /// nothing outside it can name what it declares; nor can anything outside a macro body,
-    /// whose declarations are local to each expansion, so none of them is a single name.
+    /// Gets a value indicating whether every scope from here out to the file has a name, so that
+    /// what is declared here can be reached with <c>::</c>. An anonymous <c>.scope { }</c> is
+    /// inline code, and nothing outside it can name what it declares. Nothing outside a macro body
+    /// can name what it declares either, because those declarations are local to each expansion
+    /// and so none of them is a single name.
     /// </summary>
     public bool IsReachableByPath
     {
@@ -61,9 +64,9 @@ public sealed class Scope
     }
 
     /// <summary>
-    /// The nearest scope of <paramref name="kind"/> from here outward, this one included, or
-    /// null when nothing out to the file is one: the macro body a name is written in, the
-    /// repetition a line is inside.
+    /// Returns the nearest scope of <paramref name="kind"/> from here outward, including this
+    /// one, or null when no scope out to the file has that kind. Examples are the macro body that
+    /// contains a name, or the repetition that contains a line.
     /// </summary>
     public Scope? Enclosing(ScopeKind kind)
     {
@@ -75,7 +78,9 @@ public sealed class Scope
         return null;
     }
 
-    /// <summary>The nearest scope with a name, which is the routine or scope a name lives in.</summary>
+    /// <summary>
+    /// Returns the nearest scope with a name, which is the routine or scope a name lives in.
+    /// </summary>
     public Scope? NearestNamed()
     {
         for (var scope = this; scope is not null; scope = scope.Parent)
@@ -100,15 +105,21 @@ public sealed class Scope
         return null;
     }
 
-    /// <summary>What <paramref name="name"/> means here, without looking outward.</summary>
+    /// <summary>
+    /// Returns the symbol <paramref name="name"/> means in this scope, without looking outward.
+    /// </summary>
     public Symbol? FindMember(string name) => members.GetValueOrDefault(name);
 
-    /// <summary>The cheap local <paramref name="name"/> declared here, without looking outward.</summary>
+    /// <summary>
+    /// Returns the cheap local <paramref name="name"/> declared in this scope, without looking
+    /// outward.
+    /// </summary>
     public Symbol? FindCheapLocal(string name) => cheapLocals.GetValueOrDefault(name);
 
     /// <summary>
-    /// What <paramref name="name"/> means, from here outward to the file. A nested
-    /// scope can therefore name what its proc declares, and a proc what its file declares.
+    /// Returns the symbol <paramref name="name"/> means, looking from here outward to the file. A
+    /// nested scope can therefore name what its proc declares, and a proc can name what its file
+    /// declares.
     /// </summary>
     public Symbol? Lookup(string name)
     {
@@ -121,8 +132,8 @@ public sealed class Scope
     }
 
     /// <summary>
-    /// The cheap local <paramref name="name"/>, looked up from here outward, so a nested
-    /// <c>.scope</c> can branch to its proc's <c>@done</c>.
+    /// Returns the cheap local <paramref name="name"/>, looking from here outward, so that a
+    /// nested <c>.scope</c> can branch to its proc's <c>@done</c>.
     /// </summary>
     public Symbol? LookupCheapLocal(string name)
     {
@@ -134,6 +145,6 @@ public sealed class Scope
         return null;
     }
 
-    /// <summary>The scope's kind and name, for debugging.</summary>
+    /// <summary>Returns the scope's kind and name, for debugging.</summary>
     public override string ToString() => Name is null ? Kind.ToString() : $"{Kind} {Name}";
 }

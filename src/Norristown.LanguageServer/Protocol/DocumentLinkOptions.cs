@@ -1,5 +1,7 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>How the server answers with links.</summary>
-/// <param name="ResolveProvider">Whether a link comes back without its target, to be asked for later.</param>
+/// <summary>Describes how the server provides document links.</summary>
+/// <param name="ResolveProvider">
+/// Whether a link is returned without its target, which the client requests later.
+/// </param>
 internal sealed record DocumentLinkOptions(bool ResolveProvider);

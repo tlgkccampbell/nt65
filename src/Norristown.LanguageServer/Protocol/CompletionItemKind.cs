@@ -1,6 +1,8 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>What a completion is, as LSP numbers it. Only the kinds nt65 uses are listed.</summary>
+/// <summary>
+/// Specifies the kind of a completion item, as LSP numbers it. Only the kinds nt65 uses are listed.
+/// </summary>
 internal enum CompletionItemKind
 {
     /// <summary>A mnemonic.</summary>

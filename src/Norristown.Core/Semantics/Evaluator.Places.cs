@@ -3,27 +3,28 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Where an address falls inside the data declaration it is part of. nt65 never knows where a
-/// declaration lands, but it lays out every byte of one it can size, so two places in the same
-/// declaration — the declaration itself, its end, a member declared in it, an <c>@</c> position
-/// and an element <c>name[i]</c> — are a known distance apart wherever it lands, and that
-/// distance is a constant like any other.
+/// Computes where an address falls inside the data declaration it is part of. nt65 never knows
+/// where a declaration lands, but it lays out every byte of a declaration it can size. Two
+/// locations in the same declaration are therefore a known distance apart wherever it lands,
+/// and that distance is a constant like any other. Such a location is the declaration itself,
+/// its end, a member declared in it, an <c>@</c> position, or an element <c>name[i]</c>.
 /// <para>
-/// A distance is known only where every length between the two places is: an <c>.align</c>
-/// between them depends on where the declaration lands, and a macro call writes its bytes only
-/// once it is expanded, which is after every constant has its value. Code is sized only by
-/// layout, which also comes after constants, so nothing in code is a place here. Two
-/// declarations of one segment in one file are a known distance apart too, where everything
-/// the file writes to that segment between them is data or padding nt65 knows the length of,
-/// whichever regions and blocks it is in.
+/// A distance is known only when every length between the two locations is known. An
+/// <c>.align</c> between them depends on where the declaration lands, and a macro call emits its
+/// bytes only once it is expanded, which is after every constant has its value. Code is sized
+/// only by layout, which also comes after constants, so no location in code counts here. Two
+/// declarations of one segment in one file are also a known distance apart, when everything the
+/// file emits to that segment between them is data or padding whose length nt65 knows,
+/// regardless of the regions and blocks it is in.
 /// </para>
 /// </summary>
 internal sealed partial class Evaluator
 {
     /// <summary>
-    /// The distance from the place <paramref name="difference"/>'s right side names to the one
-    /// its left side names, where both are in one data declaration and every length between
-    /// them is known; null for anything else.
+    /// Returns the distance from the location that the right side of
+    /// <paramref name="difference"/> names to the location its left side names. Returns null
+    /// unless both are in one data declaration, or in two declarations a known distance apart,
+    /// and every length between them is known.
     /// </summary>
     private long? Distance(BinaryExpressionSyntax difference)
     {
@@ -35,20 +36,21 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// How far the start of <paramref name="second"/> is from the start of <paramref name="first"/>,
-    /// two data declarations of one file in one segment, or null where nt65 does not know. ca65
-    /// writes a segment's bytes in the order the file writes them, whichever region or block they
-    /// are in, so two declarations of a segment are a known distance apart wherever that segment
-    /// lands when every byte the file writes to it between them has a length nt65 knows: data, and
-    /// padding other than an <c>.align</c>. Code between them is sized only at layout, which
-    /// comes after constants, and a macro call is expanded after constants too, so either leaves
-    /// the distance unknown; so does a <c>.place</c>, because what the placed module writes lands
+    /// Returns how far the start of <paramref name="second"/> is from the start of
+    /// <paramref name="first"/>, where both are data declarations of one file in one segment, or
+    /// null when nt65 does not know. ca65 emits a segment's bytes in the order the file emits
+    /// them, regardless of the region or block they are in. Two declarations of a segment are
+    /// therefore a known distance apart wherever that segment lands, when every byte the file
+    /// emits to it between them has a length nt65 knows. Such bytes are data, and padding other
+    /// than an <c>.align</c>. Code between them is sized only at layout, which comes after
+    /// constants, and a macro call is also expanded after constants, so either leaves the
+    /// distance unknown. So does a <c>.place</c>, because the output of the placed module lands
     /// between them.
     /// </summary>
     private long? Apart(Symbol first, Symbol second)
     {
-        // A length computed on the way may be that of a declaration whose count is this very
-        // distance, which would recurse; the `apart` flag cuts that off.
+        // A length computed along the way may be that of a declaration whose count is this very
+        // distance, which would recurse. The `apart` flag prevents that.
         if (first.Tree != second.Tree || apart)
             return null;
         apart = true;
@@ -75,10 +77,11 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// What <paramref name="children"/> write to each segment, in the order they write it, into
-    /// <paramref name="writes"/>: each data declaration and each piece of padding with its
-    /// length, each routine and macro call with none, and what could write to any segment as a
-    /// write everywhere. The conditionals are decided as the build decides them.
+    /// Collects into <paramref name="writes"/> what <paramref name="children"/> emit to each
+    /// segment, in the order they emit it. Each data declaration and each piece of padding is
+    /// recorded with its length, and each routine and macro call with no length. Anything that
+    /// could emit to any segment is recorded as a write to every segment. The conditionals are
+    /// decided as the build decides them.
     /// </summary>
     private void Writes(IReadOnlyList<SyntaxNode> children, int from, string? segment, List<Write> writes)
     {
@@ -131,8 +134,8 @@ internal sealed partial class Evaluator
                     writes.Add(new Write(segment, block.Span, NestedBytes(block), false));
                     break;
 
-                // A routine's own length is known only at layout. What it writes to other
-                // segments is in the segment blocks inside it, which write at their position.
+                // A routine's own length is known only at layout. What it emits to other
+                // segments is in the segment blocks inside it, which emit at their position.
                 case BlockKind.Proc or BlockKind.MultiProc:
                     writes.Add(new Write(segment, block.Span, null, false));
                     Detours(block.Members, segment, writes);
@@ -148,8 +151,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The segment blocks inside a routine's body, which write at their position, with the
-    /// conditionals around them decided. A repetition in a body could write any number of them.
+    /// Collects the segment blocks inside a routine's body, which emit at their position,
+    /// deciding the conditionals around them. A repetition in a body could emit any number of
+    /// them, so it is recorded as a write to every segment.
     /// </summary>
     private void Detours(IReadOnlyList<SyntaxNode> members, string? segment, List<Write> writes)
     {
@@ -189,8 +193,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The data declaration an expression names a place in, outermost first, and how far into
-    /// it that place is; null where it names no such place, or one whose offset nt65 cannot say.
+    /// Returns the outermost data declaration in which an expression names a location, and how
+    /// far into it that location is. Returns null when the expression names no such location, or
+    /// one whose offset nt65 cannot determine.
     /// </summary>
     private (Symbol Data, long Offset)? PlaceOf(SyntaxNode node)
     {
@@ -199,7 +204,7 @@ internal sealed partial class Evaluator
             case ParenthesizedExpressionSyntax parenthesized:
                 return PlaceOf(parenthesized.Expression);
 
-            // A place a constant away from another is a place too.
+            // A location a constant distance from another location is also a location.
             case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } moved:
                 var minus = moved.OperatorToken.Kind == SyntaxKind.Minus;
                 if (PlaceOf(moved.Left) is { } left && Evaluate(moved.Right).AsNumber() is { } by)
@@ -225,9 +230,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// The place a name refers to: a declaration or a position, plus the elements its indexes
-    /// step over, or a member reached through a record, with the member offsets along the path
-    /// added to the record's own place.
+    /// Returns the location a name refers to. This is a declaration or a position, plus the
+    /// elements its indexes step over, or a member reached through a record, with the member
+    /// offsets along the path added to the record's own location.
     /// </summary>
     private (Symbol Data, long Offset)? PlaceOfName(NameExpressionSyntax name)
     {
@@ -264,9 +269,9 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Where a symbol stands in the outermost data declaration around it: a declaration at the
-    /// top is its own start, and a member or a position is as far in as the bytes above it in
-    /// every body around it. A label outside every declaration is in none.
+    /// Returns where a symbol stands in the outermost data declaration around it. A declaration
+    /// at the top level stands at its own start, and a member or a position is as far in as the
+    /// bytes above it in every body around it. A label outside every declaration is in none.
     /// </summary>
     private (Symbol Data, long Offset)? PlaceOf(Symbol symbol)
     {
@@ -276,8 +281,8 @@ internal sealed partial class Evaluator
         if (outermost == symbol)
             return symbol.Kind == SymbolKind.Data ? (symbol, 0) : null;
 
-        // A declaration whose size is being worked out may be asked about by what is written
-        // in it; the distance is then unknown, rather than the question recursing.
+        // A declaration whose size is being computed may be asked about by code inside it. The
+        // distance is then unknown, rather than the question recursing.
         if (outermost.Definition is not BlockSyntax body || !placing.Add(outermost))
             return null;
         long offset = 0;
@@ -288,11 +293,14 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// Adds up the bytes of <paramref name="children"/> from <paramref name="from"/> until the
-    /// line or declaration written at <paramref name="position"/>, with the conditionals decided
-    /// as the build decides them and the repetitions unrolled, as a body's size is. True when it
-    /// is reached, with <paramref name="offset"/> the bytes before it; false when it is not among
-    /// them, with the bytes they all take; null as soon as a length on the way is unknown.
+    /// line or declaration at <paramref name="position"/>. The conditionals are decided as the
+    /// build decides them and the repetitions are unrolled, as they are for a body's size.
     /// </summary>
+    /// <returns>
+    /// True when the position is reached, with <paramref name="offset"/> holding the bytes before
+    /// it. False when it is not among the children, with <paramref name="offset"/> holding the
+    /// bytes they all take. Null as soon as a length along the way is unknown.
+    /// </returns>
     private bool? Seek(IReadOnlyList<SyntaxNode> children, int from, int position, ref long offset)
     {
         var chaining = false;
@@ -347,16 +355,17 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// What one item writes to a segment: where it is written, and how many bytes, or none
-    /// nt65 knows. One that could write to any segment is a write everywhere.
+    /// Represents what one item emits to a segment, with where the item is and how many bytes it
+    /// emits, when nt65 knows. An item that could emit to any segment is a write to every
+    /// segment.
     /// </summary>
-    /// <param name="Segment">The segment written to, or null for a write everywhere.</param>
-    /// <param name="Span">Where the item is written.</param>
-    /// <param name="Length">How many bytes it writes, or null when nt65 does not know.</param>
-    /// <param name="Everywhere">Whether it could write to any segment.</param>
+    /// <param name="Segment">The segment emitted to, or null for a write to every segment.</param>
+    /// <param name="Span">The span of the item.</param>
+    /// <param name="Length">The number of bytes the item emits, or null when nt65 does not know.</param>
+    /// <param name="Everywhere">Whether the item could emit to any segment.</param>
     private readonly record struct Write(string? Segment, TextSpan Span, long? Length, bool Everywhere)
     {
-        /// <summary>Whether this is the item that declares <paramref name="data"/>.</summary>
+        /// <summary>Determines whether this is the item that declares <paramref name="data"/>.</summary>
         public bool Declares(Symbol data) => !Everywhere && Span.Contains(data.NameSpan.Start);
     }
 }

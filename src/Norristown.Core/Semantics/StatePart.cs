@@ -1,6 +1,6 @@
 namespace Norristown.Semantics;
 
-/// <summary>Which part of the processor state a state item is about.</summary>
+/// <summary>Specifies which part of the processor state a state item is about.</summary>
 public enum StatePart
 {
     /// <summary>The accumulator's width: <c>a8</c>, <c>a16</c>, <c>a?</c>, <c>a*</c>.</summary>
@@ -15,7 +15,7 @@ public enum StatePart
     /// <summary>How a routine is called and left: <c>near</c> or <c>far</c>.</summary>
     Distance,
 
-    /// <summary>Data written after each call: <c>inline n</c>.</summary>
+    /// <summary>Data placed after each call: <c>inline n</c>.</summary>
     Inline,
 
     /// <summary>The direct page: <c>dp = e</c>, <c>dp?</c>, <c>dp*</c>.</summary>
@@ -27,18 +27,23 @@ public enum StatePart
     /// <summary>What the caller pushes before the call: <c>args n</c>.</summary>
     Arguments,
 
-    /// <summary>A routine the processor enters on an interrupt, and that leaves by <c>rti</c>: <c>interrupt</c>.</summary>
+    /// <summary>
+    /// A routine the processor enters on an interrupt, and that leaves by <c>rti</c>:
+    /// <c>interrupt</c>.
+    /// </summary>
     Interrupt,
 
     /// <summary>A routine that never returns: <c>noreturn</c>.</summary>
     NoReturn,
 
-    /// <summary>The registers a routine hands back as it was entered with them: <c>keeps a, x</c>.</summary>
+    /// <summary>
+    /// The registers a routine returns with the values they had at entry: <c>keeps a, x</c>.
+    /// </summary>
     Keeps,
 
     /// <summary>
-    /// Every tracked part of the state unknown, written <c>?</c> on its own: what a routine
-    /// reached from outside nt65 assumes, and what an extern proc or an import usually declares.
+    /// Every tracked part of the state unknown, written as <c>?</c> on its own. A routine reached
+    /// from outside nt65 assumes this, and an extern proc or an import usually declares it.
     /// </summary>
     AllUnknown,
 

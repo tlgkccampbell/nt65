@@ -7,15 +7,15 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What the editor is working on: every <c>nt65.json</c> in the folders the client opened, the
-/// program each describes, and the documents the client has open. An open document's text lives
-/// here rather than on disk, and an edit re-parses it incrementally, so the lines a change did
-/// not touch keep the green nodes they already had.
+/// Represents what the editor is working on, which is every <c>nt65.json</c> in the folders the
+/// client opened, the program each describes, and the documents the client has open. An open
+/// document's text lives here rather than on disk, and an edit re-parses it incrementally, so the
+/// lines a change did not touch keep the green nodes they already had.
 /// <para>
 /// A file is not analyzed on its own, because a name it uses may be one another file exports.
 /// A document belongs to the project whose <c>files</c> name it; the open documents no project
 /// names together form one more program. A program is analyzed the first time anything asks,
-/// and again after a change, starting from the previous analysis: an edit that does not change
+/// and again after a change, starting from the previous analysis. An edit that does not change
 /// what other files can see of a file re-analyzes only that file.
 /// </para>
 /// </summary>
@@ -24,10 +24,10 @@ internal sealed class Workspace
     private readonly Lock gate = new();
     private readonly Dictionary<string, Document> open = new(StringComparer.Ordinal);
 
-    // How the client spells the URI of each file it has named, by logical path. VS Code
-    // escapes a drive's colon and nt65 does not, so a file the client has opened keeps the
-    // client's spelling for the rest of the session: two spellings of one file would list its
-    // diagnostics in the Problems panel twice.
+    // The URI the client uses for each file it has named, by logical path. VS Code escapes a
+    // drive's colon and nt65 does not, so a file the client has opened keeps the client's form of
+    // its URI for the rest of the session. Two forms of one file's URI would list its diagnostics
+    // in the Problems panel twice.
     private readonly Dictionary<string, string> named = new(StringComparer.Ordinal);
     private readonly List<WorkspaceProject> projects = [];
     private IReadOnlyList<string> roots = [];
@@ -39,8 +39,8 @@ internal sealed class Workspace
     private ProgramAnalysis? loosePrevious;
 
     /// <summary>
-    /// The logical path a URI names, with <c>/</c> separators, which is what diagnostics and
-    /// output carry. A URI that is not a file keeps its own spelling.
+    /// Returns the logical path a URI names, with <c>/</c> separators, which is the form that
+    /// diagnostics and output carry. A URI that is not a file is returned unchanged.
     /// </summary>
     public static string PathOf(string uri)
     {
@@ -54,7 +54,7 @@ internal sealed class Workspace
         return path.Length >= 3 && path[0] == '/' && char.IsAsciiLetter(path[1]) && path[2] == ':' ? path[1..] : path;
     }
 
-    /// <summary>A file's text, or null when it cannot be read.</summary>
+    /// <summary>Returns a file's text, or null when it cannot be read.</summary>
     public static string? Read(string path)
     {
         // A file that moved or is being written while the editor asks is not a crash; the
@@ -71,9 +71,9 @@ internal sealed class Workspace
 
     /// <summary>
     /// Finds the projects in the folders the client opened and every folder beneath them, and
-    /// builds each as the named <paramref name="active"/> configuration, which the editor's
-    /// setting chooses, where the project has it. Their files are read from disk when first
-    /// needed; open documents take their place as the client sends them.
+    /// builds each in the named <paramref name="active"/> configuration, which the editor's
+    /// setting chooses, when the project has it. Their files are read from disk when first
+    /// needed, and open documents replace them as the client sends them.
     /// </summary>
     public void Load(IReadOnlyList<string> rootUris, string? active = null)
     {
@@ -89,7 +89,10 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>The same, for a client that opened one folder, or none.</summary>
+    /// <summary>
+    /// Finds the projects in the one folder the client opened, or in none, and builds each in the
+    /// named <paramref name="active"/> configuration when the project has it.
+    /// </summary>
     public void Load(string? rootUri, string? active = null) => Load(rootUri is null ? [] : [rootUri], active);
 
     /// <summary>
@@ -112,7 +115,10 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>Builds every project as the named configuration from here on, or as its own settings for null.</summary>
+    /// <summary>
+    /// Builds every project in the named configuration from now on, or with its own settings for
+    /// null.
+    /// </summary>
     public void Configure(string? active)
     {
         lock (gate)
@@ -122,7 +128,7 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>The named configurations the projects have, for a client to offer.</summary>
+    /// <summary>Returns the named configurations the projects have, for a client to offer.</summary>
     public IReadOnlyList<string> Configurations()
     {
         lock (gate)
@@ -146,8 +152,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Applies <paramref name="changes"/> in order, or null when the client changed a
-    /// document it never opened, which is the client's mistake and not worth a crash.
+    /// Applies <paramref name="changes"/> in order and returns the updated document. Returns null
+    /// when the client changed a document it never opened, which is the client's mistake and not
+    /// worth a crash.
     /// </summary>
     public Document? Change(VersionedTextDocumentIdentifier id, IReadOnlyList<TextDocumentContentChangeEvent> changes)
     {
@@ -161,7 +168,7 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>Forgets a document; from now on the file's contents are taken from disk.</summary>
+    /// <summary>Forgets a document. From now on the file's contents are taken from disk.</summary>
     public void Close(string uri)
     {
         lock (gate)
@@ -172,9 +179,10 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// An open document, or null when it is not open. A URI spelled another way than the client
-    /// spelled it at <c>didOpen</c> names the same file and finds the same document: a link the
-    /// server wrote into a hover comes back spelled the server's way, not the client's.
+    /// Returns an open document, or null when it is not open. A URI in a different form from the
+    /// one the client used at <c>didOpen</c> names the same file and finds the same document. For
+    /// example, a link the server wrote into a hover comes back in the server's form, not the
+    /// client's.
     /// </summary>
     public Document? Find(string uri)
     {
@@ -187,7 +195,7 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Handles files that changed on disk: a project file, a source, or a binary an
+    /// Handles files that changed on disk, such as a project file, a source, or a binary an
     /// <c>.incbin</c> includes. Returns whether any of them is a file the workspace reads, and so
     /// whether diagnostics may have changed.
     /// </summary>
@@ -235,8 +243,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The analysis of the program <paramref name="path"/> belongs to, built once and kept until
-    /// something changes. Documents the client has open take the place of the files on disk.
+    /// Returns the analysis of the program that <paramref name="path"/> belongs to, built once and
+    /// kept until something changes. Documents the client has open replace the files on disk.
     /// </summary>
     public ProgramAnalysis AnalysisFor(string path)
     {
@@ -247,7 +255,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The binaries <c>.incbin</c> directives include, across every program, as logical paths.
+    /// Returns the binaries that <c>.incbin</c> directives include, across every program, as
+    /// logical paths.
     /// The editor has to be asked to watch these in addition to the sources and project files,
     /// because only the program says which files it includes.
     /// </summary>
@@ -263,7 +272,7 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>The projects the workspace holds, as they stand.</summary>
+    /// <summary>Returns the projects the workspace holds, as they currently stand.</summary>
     public IReadOnlyList<WorkspaceProject> Projects()
     {
         lock (gate)
@@ -273,9 +282,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Every program the workspace holds: one per project, and the one of the open documents no
-    /// project names. Each is built once and kept, so this normally reuses the analyses that
-    /// publishing already built.
+    /// Returns every program the workspace holds, which is one per project plus the program of the
+    /// open documents that no project names. Each is built once and kept, so this normally reuses
+    /// the analyses that publishing already built.
     /// </summary>
     public IReadOnlyList<ProgramAnalysis> Programs()
     {
@@ -290,8 +299,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The settings a file is built with: its project's, or the default settings for a file no
-    /// project names. They determine where its output would go.
+    /// Returns the settings a file is built with, which are its project's settings, or the default
+    /// settings for a file that no project names. They determine where its output would go.
     /// </summary>
     public ProjectSettings SettingsFor(string path)
     {
@@ -302,7 +311,7 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The analysis of the open documents no project names. Each open document supplies its own
+    /// Returns the analysis of the open documents that no project names. Each open document supplies its own
     /// tree in place of the file on disk, and an edit re-parsed only the lines it touched.
     /// </summary>
     private ProgramAnalysis Loose()
@@ -313,14 +322,14 @@ internal sealed class Workspace
         return loose = loosePrevious = Compiler.Analyze([.. sources], ProjectSettings.None, loosePrevious);
     }
 
-    /// <summary>The open document for a logical path, or null when it is not open.</summary>
+    /// <summary>Returns the open document for a logical path, or null when it is not open.</summary>
     private Document? Opened(string path) =>
         open.Values.FirstOrDefault(document => document.Tree.Path == path);
 
     /// <summary>
-    /// The URI the client uses for a file: the client's own spelling where it has given one.
-    /// Every URI the server sends goes through this, so that the editor sees one URI per file
-    /// however differently the client and the server would spell its path.
+    /// Returns the URI the client uses for a file, which is the client's own form when it has given
+    /// one. Every URI the server sends goes through this method, so that the editor sees one URI
+    /// per file even when the client and the server would format its path differently.
     /// </summary>
     public string UriOf(string path)
     {
@@ -330,7 +339,10 @@ internal sealed class Workspace
         }
     }
 
-    /// <summary>The revision the client holds of a document, or null for one it has not opened.</summary>
+    /// <summary>
+    /// Returns the version of a document that the client holds, or null for a document it has not
+    /// opened.
+    /// </summary>
     public int? VersionOf(string uri)
     {
         lock (gate)
@@ -340,9 +352,10 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The diagnostics of one open document, the file the client has just opened or edited. They
-    /// come from the whole program's analysis, so they include problems another file causes in
-    /// this one; the other files' diagnostics are published separately.
+    /// Returns the diagnostics of one open document, which is the file the client has just opened
+    /// or edited, or null when the document is not open. They come from the whole program's
+    /// analysis, so they include problems another file causes in this one; the other files'
+    /// diagnostics are published separately.
     /// </summary>
     public Published? ToPublish(string uri)
     {
@@ -359,9 +372,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Whether the last analysis of the program <paramref name="path"/> belongs to had to
-    /// re-analyze more than that one file, which is exactly when what names in other files refer
-    /// to, and so those files' semantic colouring and lenses, can have changed.
+    /// Returns whether the last analysis of the program that <paramref name="path"/> belongs to had
+    /// to re-analyze more than that one file. That is exactly when what names in other files refer
+    /// to can have changed, and with it those files' semantic colouring and lenses.
     /// </summary>
     public bool ReachedOtherFiles(string path)
     {
@@ -370,10 +383,10 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Every file whose diagnostics are published, with those diagnostics: each file of each
-    /// project, each project file, and each open document that belongs to no project. A file two
-    /// projects share is reported by the nearer project, which is the one every other answer
-    /// about the file comes from.
+    /// Returns every file whose diagnostics are published, with those diagnostics. The files are
+    /// each file of each project, each project file, and each open document that belongs to no
+    /// project. A file two projects share is reported by the nearer project, which is the one
+    /// every other answer about the file comes from.
     /// </summary>
     public IReadOnlyList<Published> ToPublish()
     {
@@ -411,8 +424,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Every file of every program, as the editor has it: open documents, and the files the
-    /// projects name, for a search across the workspace.
+    /// Returns every file of every program as the editor has it, for a search across the
+    /// workspace. The files are the open documents and the files the projects name.
     /// </summary>
     public IReadOnlyList<SyntaxTree> Files()
     {
@@ -428,7 +441,7 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The project a file belongs to, or null for none. A library two projects share is part of
+    /// Returns the project a file belongs to, or null for none. A library two projects share is part of
     /// both, but for what the editor shows about it, it belongs to the project whose root is
     /// nearest.
     /// </summary>
@@ -437,7 +450,7 @@ internal sealed class Workspace
             .OrderByDescending(project => Within(project.Root, path) ? project.Root.Length : -1)
             .FirstOrDefault();
 
-    /// <summary>A file changed, so every program that names it is marked to be analyzed again.</summary>
+    /// <summary>Marks every program that names a changed file to be analyzed again.</summary>
     private void Invalidate(string path)
     {
         var owned = false;
@@ -451,7 +464,7 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Builds each project as the active configuration. A project that lacks it builds with its
+    /// Builds each project in the active configuration. A project that lacks it builds with its
     /// own settings, unless no project has it at all, in which case every project reports the
     /// unknown name.
     /// </summary>
@@ -472,9 +485,9 @@ internal sealed class Workspace
             : null;
 
     /// <summary>
-    /// Every project file in <paramref name="root"/> and the folders beneath it, as logical paths.
-    /// Folders whose names start with <c>.</c>, and <c>node_modules</c> folders, are skipped,
-    /// since they hold no projects of the programmer's.
+    /// Returns every project file in <paramref name="root"/> and the folders beneath it, as logical
+    /// paths. Folders whose names start with <c>.</c>, and <c>node_modules</c> folders, are
+    /// skipped, because they hold no projects of the programmer's.
     /// </summary>
     private static IEnumerable<string> ProjectFiles(string root)
     {
@@ -513,10 +526,10 @@ internal sealed class Workspace
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     /// <summary>
-    /// <paramref name="tree"/> with the edits of one notification applied in order. They are
-    /// converted to text changes together and the tree is rebuilt once: each edit's range refers
-    /// to the text as the previous edit left it, and only the lines between the first and the
-    /// last edit can have been touched.
+    /// Returns <paramref name="tree"/> with the edits of one notification applied in order. The
+    /// edits are converted to text changes together and the tree is rebuilt once. Each edit's range
+    /// refers to the text as the previous edit left it, and only the lines between the first and
+    /// the last edit can have been touched.
     /// </summary>
     private static SyntaxTree Applied(SyntaxTree tree, IReadOnlyList<TextDocumentContentChangeEvent> changes)
     {
@@ -546,9 +559,9 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// The offset of a 0-based line and character in <paramref name="text"/>, clamped to it, as
-    /// <see cref="SyntaxTree.GetPosition"/> clamps. An editor may name a position past the end
-    /// of a line or of the file, and that is not an error here.
+    /// Returns the offset of a zero-based line and character in <paramref name="text"/>, clamped to
+    /// the text in the same way that <see cref="SyntaxTree.GetPosition"/> clamps. An editor may
+    /// name a position past the end of a line or of the file, and that is not an error here.
     /// </summary>
     private static int Position(string text, ImmutableArray<int> starts, int line, int character)
     {

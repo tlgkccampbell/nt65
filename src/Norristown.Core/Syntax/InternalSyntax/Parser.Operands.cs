@@ -1,7 +1,7 @@
 namespace Norristown.Syntax.InternalSyntax;
 
-// An instruction and the operand forms. Which forms each CPU and mnemonic allow is checked
-// later, during layout; the parser only reads them.
+// Parses an instruction and its operand forms. Which forms each CPU and mnemonic allow is
+// checked later, during layout, because the parser only reads them.
 internal sealed partial class Parser
 {
     private InstructionStatementSyntax ParseInstruction()
@@ -10,13 +10,16 @@ internal sealed partial class Parser
         return new InstructionStatementSyntax(mnemonic, AtEnd ? null : ParseOperand());
     }
 
-    /// <summary>The operand forms. Which ones each CPU and mnemonic allow is checked during layout.</summary>
+    /// <summary>
+    /// Parses an operand in any of its forms. Which forms each CPU and mnemonic allow is checked
+    /// during layout.
+    /// </summary>
     private OperandSyntax ParseOperand()
     {
         if (Kind == SyntaxKind.Hash)
             return ParseImmediate();
 
-        // `asl a` is the accumulator; `a:` is an address-size prefix on what follows.
+        // In `asl a` the `a` is the accumulator, while `a:` is an address-size prefix on what follows.
         if (Kind == SyntaxKind.Register && Next != SyntaxKind.Colon
             && Current.Text.Equals("a", StringComparison.OrdinalIgnoreCase))
         {
@@ -35,16 +38,17 @@ internal sealed partial class Parser
         var hash = Advance();
         var value = ParseExpression();
 
-        // `mvn #src, #dst` and `mvp` take two bank bytes, written as immediates.
+        // `mvn #src, #dst` and `mvp` take two bank bytes, given as immediates.
         return Kind == SyntaxKind.Comma && Next == SyntaxKind.Hash
             ? new ImmediateOperandSyntax(hash, value, Advance(), Advance(), ParseExpression())
             : new ImmediateOperandSyntax(hash, value, null, null, null);
     }
 
     /// <summary>
-    /// <c>(expr)</c>, <c>(expr),y</c>, <c>(expr,x)</c> and <c>(expr,s),y</c>, or null when the
-    /// parentheses turn out to be an ordinary expression: <c>lda (a + b) * 2</c> is not
-    /// indirect. Only a whole operand in parentheses is, which is how ca65 reads it too.
+    /// Parses <c>(expr)</c>, <c>(expr),y</c>, <c>(expr,x)</c> or <c>(expr,s),y</c>, or returns
+    /// null when the parentheses turn out to be an ordinary expression, as in
+    /// <c>lda (a + b) * 2</c>. Only a whole operand in parentheses is indirect, which is how ca65
+    /// reads it too.
     /// </summary>
     private OperandSyntax? TryParseIndirect()
     {
@@ -105,16 +109,16 @@ internal sealed partial class Parser
             return new AbsoluteOperandSyntax(prefix, address, null, null, null);
         var comma = Advance();
 
-        // `,x`, `,y` and `,s` index; a second expression is what `bbr`/`bbs` take.
+        // `,x`, `,y` and `,s` index, and a second expression is what `bbr`/`bbs` take.
         return Kind == SyntaxKind.Register
             ? new AbsoluteOperandSyntax(prefix, address, comma, Advance(), null)
             : new AbsoluteOperandSyntax(prefix, address, comma, null, ParseExpression());
     }
 
     /// <summary>
-    /// <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c>. The lexer emits a name and a <c>:</c>
-    /// and the parser decides by position; here, in operand position, nothing else can
-    /// be written, so a name followed by <c>:</c> is a prefix.
+    /// Parses a <c>z:</c>, <c>a:</c>, <c>f:</c> or <c>d:</c> prefix, or returns null if there is
+    /// none. The lexer emits a name and a <c>:</c>, and the parser decides by position. In operand
+    /// position nothing else can appear there, so a name followed by <c>:</c> is a prefix.
     /// </summary>
     private AddressPrefixSyntax? TryAddressPrefix()
     {

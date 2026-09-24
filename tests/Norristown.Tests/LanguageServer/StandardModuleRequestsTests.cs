@@ -3,9 +3,9 @@ using StreamJsonRpc;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The modules that come with nt65, in the editor: no file holds them, so a location in one
-/// has an <c>nt65:</c> URI whose text the server supplies, and what they declare is theirs to
-/// name, not the program's to rename.
+/// Tests how the modules that come with nt65 behave in the editor. No file holds them, so a
+/// location in one has an <c>nt65:</c> URI whose text the server supplies. The names they declare
+/// belong to them, so the program cannot rename them.
 /// </summary>
 public sealed class StandardModuleRequestsTests
 {
@@ -16,7 +16,10 @@ public sealed class StandardModuleRequestsTests
         ".module main\n.use nt65::cbm::screen\n.use nt65::cbm::petscii as text\n.segment RODATA\n"
         + ".data title: .byte screen(\"HI\"), text(\"HI\")\n";
 
-    /// <summary>A definition in a module that comes with nt65 is at its <c>nt65:</c> URI, and the server gives that URI's text.</summary>
+    /// <summary>
+    /// A definition in a module that comes with nt65 is at its <c>nt65:</c> URI, and the server
+    /// supplies that URI's text.
+    /// </summary>
     [Fact]
     public async Task ADefinitionLeadsToTheModulesOwnText()
     {

@@ -3,7 +3,8 @@ using Norristown.Processor;
 namespace Norristown.Flow;
 
 /// <summary>
-/// What each register may hold at one point in a routine, and what the routine has pushed.
+/// Represents what each register may hold at one point in a routine, and what the routine has
+/// pushed.
 /// </summary>
 /// <param name="A">What the accumulator may hold.</param>
 /// <param name="X">What X may hold.</param>
@@ -13,29 +14,32 @@ namespace Norristown.Flow;
 public sealed record RegisterState(
     RegisterValue A, RegisterValue X, RegisterValue Y, RegisterValue C, SavedStack? Stack)
 {
-    /// <summary>What a routine holds when it is entered: each register its own entry value, nothing pushed.</summary>
+    /// <summary>
+    /// Gets the state of a routine when it is entered, in which each register holds its own entry
+    /// value and nothing is pushed.
+    /// </summary>
     public static RegisterState Entered { get; } = new(
         RegisterValue.Of(Registers.A), RegisterValue.Of(Registers.X),
         RegisterValue.Of(Registers.Y), RegisterValue.Of(Registers.C), SavedStack.Empty);
 
     /// <summary>
-    /// What is held where the analysis never saw control arrive: nothing known, of any
-    /// register or of the stack.
+    /// Gets the state where the analysis never saw control arrive, in which nothing is known
+    /// about any register or about the stack.
     /// </summary>
     public static RegisterState Unknown { get; } = new(
         RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, null);
 
     /// <summary>
-    /// The starting state at a label that another routine may jump into: nothing known about
-    /// the registers, and an empty stack. Code that jumps in arrives as a call would, and has
-    /// pushed none of the saves this routine makes.
+    /// Gets the starting state at a label that another routine may jump into, in which nothing is
+    /// known about the registers and the stack is empty. Code that jumps in arrives as a call
+    /// would, and has pushed none of the saves this routine makes.
     /// </summary>
     public static RegisterState Outside { get; } = Unknown with { Stack = SavedStack.Empty };
 
-    /// <summary>Why the stack is unknown, when it is unknown and the analysis can tell why.</summary>
+    /// <summary>Gets why the stack is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyStack { get; init; }
 
-    /// <summary>What <paramref name="register"/> may hold.</summary>
+    /// <summary>Returns what <paramref name="register"/> may hold.</summary>
     public RegisterValue Of(Registers register) => register switch
     {
         Registers.A => A,
@@ -44,7 +48,7 @@ public sealed record RegisterState(
         _ => C,
     };
 
-    /// <summary>The same state with <paramref name="register"/> holding <paramref name="value"/>.</summary>
+    /// <summary>Returns this state with <paramref name="register"/> holding <paramref name="value"/>.</summary>
     public RegisterState With(Registers register, RegisterValue value) => register switch
     {
         Registers.A => this with { A = value },
@@ -53,7 +57,10 @@ public sealed record RegisterState(
         _ => this with { C = value },
     };
 
-    /// <summary>The same state with every register of <paramref name="registers"/> holding <paramref name="value"/>.</summary>
+    /// <summary>
+    /// Returns this state with every register of <paramref name="registers"/> holding
+    /// <paramref name="value"/>.
+    /// </summary>
     public RegisterState WithEach(Registers registers, RegisterValue value)
     {
         var state = this;
@@ -62,7 +69,7 @@ public sealed record RegisterState(
         return state;
     }
 
-    /// <summary>The registers that hold exactly their own entry value here.</summary>
+    /// <summary>Gets the registers that hold exactly their own entry value here.</summary>
     public Registers Kept
     {
         get
@@ -77,7 +84,10 @@ public sealed record RegisterState(
         }
     }
 
-    /// <summary>What two paths arriving at one place agree on: what either of them may have left.</summary>
+    /// <summary>
+    /// Returns what two paths arriving at one place agree on, which is what either of them may
+    /// have left.
+    /// </summary>
     public static RegisterState Merge(RegisterState? known, RegisterState arriving)
     {
         if (known is null)

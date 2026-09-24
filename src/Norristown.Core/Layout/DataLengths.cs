@@ -5,28 +5,29 @@ using Norristown.Syntax;
 namespace Norristown.Layout;
 
 /// <summary>
-/// What a data directive must satisfy for ca65 to accept it, and how many bytes it comes
-/// to. How much room a directive takes is a question about what the program means, so it is
-/// answered once, by the semantic model; what is left here is what the assembler will
-/// refuse: a value too wide for the directive holding it, text that is not bytes, a
-/// reservation whose count nt65 cannot work out, and an element count that does not match the
-/// number of values given.
+/// Checks what a data directive must satisfy for ca65 to accept it, and computes how many bytes
+/// it comes to. How much room a directive takes is a question about what the program means, so
+/// the semantic model answers it once. What is left here is checking for what the assembler
+/// will refuse. That includes a value too wide for the directive holding it, text that is not
+/// bytes, a reservation whose count nt65 cannot work out, and an element count that does not
+/// match the number of values given.
 /// </summary>
 public static class DataLengths
 {
     /// <summary>
-    /// A line whose length depends on where it lands rather than on what it says. An
-    /// <c>.align</c> generates however many bytes it takes to reach the next boundary, so
-    /// nt65 writes it out and makes no claim about its length.
+    /// The length given for a line whose length depends on where it lands rather than on what it
+    /// contains. An <c>.align</c> generates as many bytes as it takes to reach the next boundary,
+    /// so nt65 emits it and makes no claim about its length.
     /// </summary>
     public const int Unpredictable = -1;
 
     /// <summary>
-    /// The length of <paramref name="directive"/>, a data directive or a line of a data body,
-    /// <see cref="Unpredictable"/> for one whose length only the assembler settles, or null for
-    /// one nt65 cannot write at all. An array whose values are in the body it opens takes no
-    /// bytes on its own line: the lines of the body do. Anything wrong with its values goes to
-    /// <paramref name="diagnostics"/>, which callers that have already reported pass as null.
+    /// Returns the length of <paramref name="directive"/>, a data directive or a line of a data
+    /// body. Returns <see cref="Unpredictable"/> for a directive whose length only the assembler
+    /// determines, or null for a directive nt65 cannot emit at all. An array whose values are in
+    /// the body it opens takes no bytes on its own line, because the lines of the body take them.
+    /// Problems with its values go to <paramref name="diagnostics"/>, which callers that have
+    /// already reported pass as null.
     /// </summary>
     public static int? Of(
         StatementSyntax directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on = null)
@@ -49,13 +50,13 @@ public static class DataLengths
             : null;
     }
 
-    /// <summary>The bytes an operand becomes: a literal, or text a charmap maps.</summary>
+    /// <summary>Returns the bytes an operand becomes, as a literal or as text that a charmap maps.</summary>
     public static IReadOnlyList<long>? Bytes(SyntaxNode argument, SemanticModel model, Expansion? on = null) =>
         model.BytesOf(argument, on);
 
     /// <summary>
-    /// The values a directive or a line of a body gives, one element each: its operands, the
-    /// values of a braced list, or a line's values. A record is one element.
+    /// Returns the values a directive or a line of a body gives, one element each. These are its
+    /// operands, the values of a braced list, or a line's values. A record is one element.
     /// </summary>
     public static SeparatedSyntaxList<SyntaxNode> ElementsOf(StatementSyntax directive) => directive switch
     {
@@ -66,9 +67,10 @@ public static class DataLengths
     };
 
     /// <summary>
-    /// What one element of a data directive holds, or null for one that is not an element type.
-    /// A number slot takes a signed or an unsigned value of its width, and is written as the
-    /// two's complement; an address slot takes only an address, which is not negative.
+    /// Returns the range of values one element of a data directive holds, or null for a directive
+    /// that is not an element type. A number slot takes a signed or an unsigned value of its
+    /// width, and is emitted as the two's complement. An address slot takes only an address,
+    /// which is not negative.
     /// </summary>
     public static (long Low, long High)? Holds(string directive) => directive.ToLowerInvariant() switch
     {
@@ -81,7 +83,7 @@ public static class DataLengths
         _ => null,
     };
 
-    /// <summary>What the assembler would refuse about a directive's values.</summary>
+    /// <summary>Reports what the assembler would refuse about a directive's values.</summary>
     private static void Check(
         StatementSyntax directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
@@ -135,7 +137,7 @@ public static class DataLengths
                 }
                 break;
 
-            // A far address in a 16-bit slot is not the address meant: in an `.addr`, ca65
+            // A far address in a 16-bit slot is not the address meant. In an `.addr`, ca65
             // would silently keep only its low 16 bits.
             case ".word":
             case ".beword":
@@ -173,9 +175,9 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// <c>.strz</c> writes one text and the zero that ends it, so it takes exactly one text,
-    /// and a zero inside the text would end it early: whatever reads the text, a routine
-    /// declared <c>inline .strz</c> among them, would stop there.
+    /// Checks a <c>.strz</c>, which emits one text and the zero that ends it. It therefore takes
+    /// exactly one text, and a zero inside the text would end it early. Any code that reads the
+    /// text would stop there, including a routine declared <c>inline .strz</c>.
     /// </summary>
     private static void Terminated(
         StatementSyntax directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
@@ -201,8 +203,9 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// The text an operand is: a string or a string constant, or the text a charmap is applied
-    /// to. Null for anything else, including a character literal, which is a number.
+    /// Returns the text an operand is, which is a string or a string constant, or the text a
+    /// charmap is applied to. Returns null for anything else, including a character literal,
+    /// which is a number.
     /// </summary>
     private static string? TextOf(SyntaxNode operand, SemanticModel model, Expansion? on)
     {
@@ -215,8 +218,8 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// Checks an array's element count: it must be a constant, and when values are given it
-    /// must match how many there are. A short table is exactly the mistake a count is there to
+    /// Checks an array's element count. The count must be a constant, and when values are given
+    /// it must match the number of values. A short table is exactly the mistake a count is there to
     /// catch, so values are never padded out to it, except for a single text, which is padded
     /// with zeros to the declared count.
     /// </summary>
@@ -246,9 +249,9 @@ public static class DataLengths
     private static string Elements(long count) => count == 1 ? "element" : "elements";
 
     /// <summary>
-    /// Checks the records given for an element type <c>.type T</c>: each value must be one
-    /// braced record, or a single record written over several lines as the block the
-    /// directive's line opens.
+    /// Checks the records given for an element type <c>.type T</c>. Each value must be one braced
+    /// record, or a single record spread over several lines as the block the directive's line
+    /// opens.
     /// </summary>
     private static void Records(
         Symbol type, StatementSyntax directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model,
@@ -300,11 +303,11 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// The values a record gives its members, each of which must fit the room the member has:
-    /// a one-element member takes one value, an array member a braced list of as many, a
-    /// record member a braced record, and a member reserved with <c>.res</c> text no longer
-    /// than its room. Anything else would be written past the member, or cut short, with
-    /// nothing said.
+    /// Checks the values a record gives its members, each of which must fit the room the member
+    /// has. A one-element member takes one value, and an array member takes a braced list of as
+    /// many values as it holds. A record member takes a braced record, and a member reserved with
+    /// <c>.res</c> takes text no longer than its room. Anything else would be emitted past the
+    /// member, or cut short, without a diagnostic.
     /// </summary>
     private static void Initialized(
         Symbol type, IEnumerable<MemberValueSyntax> values, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
@@ -356,7 +359,10 @@ public static class DataLengths
         }
     }
 
-    /// <summary>An array member's value: a braced list, of exactly as many elements as the member holds.</summary>
+    /// <summary>
+    /// Checks an array member's value, which must be a braced list of exactly as many elements as
+    /// the member holds.
+    /// </summary>
     private static void ArrayMember(
         Symbol member, DataDirectiveSyntax element, SyntaxNode given, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
@@ -390,7 +396,7 @@ public static class DataLengths
         }
     }
 
-    /// <summary>One value for a one-element member, or for one element of an array member.</summary>
+    /// <summary>Checks one value for a one-element member, or for one element of an array member.</summary>
     private static void Scalar(
         Symbol member, string element, SyntaxNode given, string name, SemanticModel model, List<Diagnostic>? diagnostics,
         Expansion? on)
@@ -416,9 +422,10 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// Why an operand that is an address, or an address plus or minus a constant, does not fit
-    /// a slot of <paramref name="bytes"/> bytes, or null when it does or is no such address.
-    /// ca65 refuses the fragment with a range error, so nt65 says so first, with the fix.
+    /// Returns why an operand that is an address, or an address plus or minus a constant, does
+    /// not fit a slot of <paramref name="bytes"/> bytes, or null when it fits or is not such an
+    /// address. ca65 refuses the fragment with a range error, so nt65 reports it first, with the
+    /// fix.
     /// </summary>
     public static DiagnosticMessage? TooWide(
         SyntaxNode operand, int bytes, string slot, SemanticModel model, Expansion? on)
@@ -435,8 +442,8 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// The name an operand consists of, or the name it adds a constant to or subtracts one
-    /// from; null when it is neither.
+    /// Returns the name an operand consists of, or the name it adds a constant to or subtracts a
+    /// constant from, or null when it is neither.
     /// </summary>
     private static NameExpressionSyntax? AddressIn(SyntaxNode operand, SemanticModel model, Expansion? on)
     {
@@ -451,11 +458,11 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// A far address in a 16-bit slot. ca65 keeps the low 16 bits of one in an <c>.addr</c>
-    /// and refuses one in a <c>.word</c>, so either way what was written is not what is meant.
-    /// Only an address, or an address plus or minus a constant, is checked: anything else,
-    /// such as <c>.loword(far)</c> or the difference of two addresses, already states
-    /// explicitly which bits it keeps.
+    /// Reports a far address in a 16-bit slot. ca65 keeps the low 16 bits of a far address in an
+    /// <c>.addr</c> and refuses it in a <c>.word</c>, so in either case the source does not say
+    /// what is meant. Only an address, or an address plus or minus a constant, is checked.
+    /// Anything else, such as <c>.loword(far)</c> or the difference of two addresses, already
+    /// states explicitly which bits it keeps.
     /// </summary>
     private static void NoFarAddresses(
         string directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
@@ -473,8 +480,8 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// <c>.res n</c> or <c>.res n, fill</c>: checks that the count is a constant in range and
-    /// the fill is a byte.
+    /// Checks a <c>.res n</c> or <c>.res n, fill</c>, verifying that the count is a constant in
+    /// range and that the fill is a byte.
     /// </summary>
     private static void Reserved(
         SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
@@ -484,9 +491,9 @@ public static class DataLengths
         if (operands.Count > 1)
             CheckRange(operands[1], model, diagnostics, Holds(".byte")!.Value, on);
 
-        // `.res` is padding, written straight through to ca65's own, which reserves at most
-        // $ffff bytes: padding of more than a bank's worth is not padding. A declaration is
-        // not limited that way — one bigger than this is written as several directives.
+        // `.res` is padding, passed straight through to ca65's own `.res`, which reserves at
+        // most $ffff bytes, so padding of more than a bank's worth is not padding. A declaration
+        // is not limited that way, because one bigger than this is emitted as several directives.
         var count = model.ValueOf(operands[0], on).AsNumber();
         if (count is null)
             Report(operands[0], model, diagnostics, on, Catalogue.ResCountNotConstant);
@@ -495,8 +502,8 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// An alignment is a constant power of two, which is what ca65 will take, and the fill it
-    /// pads with is a byte, as a <c>.res</c> fill is.
+    /// Checks an <c>.align</c>. The alignment must be a constant power of two, which is what ca65
+    /// will take, and the fill it pads with must be a byte, as a <c>.res</c> fill is.
     /// </summary>
     private static void Alignment(
         SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
@@ -513,8 +520,9 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// Outside a charmap, text is ASCII and <c>\xHH</c> writes any byte, so a character
-    /// typed directly above <c>$7f</c> is an error rather than a byte of some encoding.
+    /// Checks that text typed directly is ASCII. Outside a charmap, text is ASCII and
+    /// <c>\xHH</c> emits any byte, so a character typed directly above <c>$7f</c> is an error
+    /// rather than a byte of some encoding.
     /// </summary>
     private static void CheckAscii(SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {

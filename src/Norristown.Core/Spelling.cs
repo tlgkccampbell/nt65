@@ -1,19 +1,19 @@
 namespace Norristown;
 
 /// <summary>
-/// How near one name is to another, so that a message about a name nothing declares can say
-/// what was probably meant: <c>`COUNTR` is not declared; `COUNTER` is</c>. The editor's fix
-/// and the message come from the same answer, so a CLI or CI user is told what an editor
+/// Measures how near one name is to another, so that a message about a name nothing declares can
+/// say what was probably meant, as in <c>`COUNTR` is not declared; `COUNTER` is</c>. The editor's
+/// fix and the message come from the same result, so a CLI or CI user is told what an editor
 /// would have offered.
 /// </summary>
 public static class Spelling
 {
     /// <summary>
-    /// The candidate in <paramref name="candidates"/> that <paramref name="written"/> most nearly
-    /// matches, or null: one that differs from it by a letter or two. A short name has to match
-    /// more closely than a long one, because most short names are within two letters of each
-    /// other. Where two are equally near, the ordinally earlier one wins, so the same file always
-    /// gives the same suggestion.
+    /// Returns the candidate in <paramref name="candidates"/> that <paramref name="written"/> most
+    /// nearly matches, or null when no candidate differs from it by only a letter or two. A short
+    /// name has to match more closely than a long one, because most short names are within two
+    /// letters of each other. When two candidates are equally near, the ordinally earlier one
+    /// wins, so the same file always gives the same suggestion.
     /// </summary>
     public static string? Nearest(string written, IEnumerable<string> candidates)
     {
@@ -38,9 +38,9 @@ public static class Spelling
     }
 
     /// <summary>
-    /// How many single-letter changes apart two names are, counted no further than
-    /// <paramref name="bound"/>: past that they are not near each other, and how far past
-    /// makes no difference.
+    /// Returns how many single-letter changes apart two names are, counting no further than
+    /// <paramref name="bound"/>. Past that bound the names are not near each other, and how far
+    /// past it they are makes no difference.
     /// </summary>
     public static int Distance(string a, string b, int bound)
     {

@@ -3,7 +3,7 @@ using Norristown.Project;
 
 namespace Norristown.Tests.Project;
 
-/// <summary>Reading <c>nt65.json</c> and the command line that adds to it.</summary>
+/// <summary>Checks reading <c>nt65.json</c> and the command line that adds to it.</summary>
 public sealed class ProjectFileTests
 {
     [Fact]
@@ -44,7 +44,9 @@ public sealed class ProjectFileTests
         Assert.Empty(project.Files);
     }
 
-    /// <summary>A value of the wrong shape is reported where it is written, and the rest is still read.</summary>
+    /// <summary>
+    /// A value of the wrong shape is reported where it appears, and the rest is still read.
+    /// </summary>
     [Theory]
     [InlineData("""{ "cpu": 6502 }""", "`cpu` must be a string")]
     [InlineData("""{ "cpu": "z80" }""", "`z80` is not a supported `cpu`: use `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`")]
@@ -91,7 +93,7 @@ public sealed class ProjectFileTests
 
     /// <summary>
     /// A named configuration overrides the project's defines by name, and can set its own output
-    /// directory; with no configuration chosen, the project's own settings are used.
+    /// directory. With no configuration chosen, the project's own settings are used.
     /// </summary>
     [Fact]
     public void AConfigurationOverridesTheDefinesAndTheOutput()
@@ -129,7 +131,7 @@ public sealed class ProjectFileTests
         Assert.Equal(message, Assert.Single(configured.Diagnostics).Message);
     }
 
-    /// <summary>A define a configuration gets wrong is reported where the configuration writes it.</summary>
+    /// <summary>A define a configuration gets wrong is reported where the configuration gives it.</summary>
     [Fact]
     public void AConfigurationsDefineIsReportedWhereItIsWritten()
     {
@@ -149,7 +151,7 @@ public sealed class ProjectFileTests
             project.Diagnostics.Select(diagnostic => (diagnostic.Span.Line, diagnostic.Message)).Order());
     }
 
-    /// <summary><c>-D NAME=value</c> takes a number in nt65's syntax; a bare name is a flag.</summary>
+    /// <summary><c>-D NAME=value</c> takes a number in nt65's syntax. A bare name is a flag.</summary>
     [Theory]
     [InlineData("DEBUG=1", "DEBUG", 1L)]
     [InlineData("DEBUG=$ff", "DEBUG", 255L)]
@@ -213,9 +215,9 @@ public sealed class ProjectFileTests
     }
 
     /// <summary>
-    /// A warning set to off is dropped, and one set to error becomes an error; a diagnostic
-    /// reported as an error is never changed, so a construct that is an error here, even if only a
-    /// warning on another processor, cannot be switched off.
+    /// A warning set to off is dropped, and one set to error becomes an error. A diagnostic
+    /// reported as an error is never changed, so a construct that is an error here, even if only
+    /// a warning on another processor, cannot be switched off.
     /// </summary>
     [Fact]
     public void WhatTheProjectSaysIsWhatEachDiagnosticIsReportedAs()

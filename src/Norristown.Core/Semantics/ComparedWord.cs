@@ -3,33 +3,44 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// A word a macro body's condition compares with what a parameter stands for: a mode, in
-/// <c>.mode(src) == imm</c>, or a word a <c>one(...)</c> lists, in <c>reg == x</c> or, over a
-/// <c>list(one(...))</c>, in <c>.each regs, r { .if r == a }</c>. The word is never looked up as
-/// a name, so a misspelling is not reported as an unknown name; instead, the values the
-/// parameter can take decide whether the comparison can ever hold.
+/// Represents a word that a condition in a macro body compares with the value of a parameter.
+/// The word is either a mode, as in <c>.mode(src) == imm</c>, or a word that a <c>one(...)</c>
+/// lists, as in <c>reg == x</c>. Over a <c>list(one(...))</c> parameter, it can also appear as in
+/// <c>.each regs, r { .if r == a }</c>. The word is never looked up as a name, so a misspelling
+/// is not reported as an unknown name. Instead, the values the parameter can take decide whether
+/// the comparison can ever hold.
 /// </summary>
-/// <param name="Word">The word, as the condition writes it.</param>
-/// <param name="Compared">What it is compared with, as the condition writes it: <c>.mode(src)</c> or <c>reg</c>.</param>
-/// <param name="Name">The parameter, or the repetition's binding, it is compared with.</param>
-/// <param name="Accepts">What that takes: the <c>operand</c> or the <c>one</c> kind.</param>
+/// <param name="Word">The word, as it appears in the condition.</param>
+/// <param name="Compared">
+/// The expression the word is compared with, as it appears in the condition, such as
+/// <c>.mode(src)</c> or <c>reg</c>.
+/// </param>
+/// <param name="Name">The parameter, or the repetition's binding, that the word is compared with.</param>
+/// <param name="Accepts">The kind that the parameter accepts, which is an <c>operand</c> or a <c>one</c> kind.</param>
 /// <param name="IsMode">Whether the word is compared with <c>.mode</c>, and so is a mode.</param>
 public sealed record ComparedWord(SyntaxToken Word, string Compared, string Name, ArgumentKind Accepts, bool IsMode)
 {
-    /// <summary>The modes <c>.mode</c> gives: those an <c>operand(...)</c> may list, except the three direct-page ones.</summary>
+    /// <summary>
+    /// Gets the modes <c>.mode</c> returns, which are those an <c>operand(...)</c> may list except
+    /// the three direct-page modes.
+    /// </summary>
     public static IReadOnlyList<string> Modes { get; } =
         [.. ArgumentKind.OperandModes.Where(mode => !mode.StartsWith("zp", StringComparison.Ordinal))];
 
-    /// <summary>What the word may be for the comparison ever to hold.</summary>
+    /// <summary>Gets the words for which the comparison can hold.</summary>
     public IReadOnlyList<string> Choices => ChoicesFor(Accepts, IsMode);
 
-    /// <summary>Whether the parameter may ever be the word, so that the comparison may hold.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the parameter can ever equal the word, so that the
+    /// comparison can hold.
+    /// </summary>
     public bool CanHold => Choices.Contains(Word.Text, IsMode ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
     /// <summary>
-    /// What a word compared with a parameter that takes <paramref name="accepts"/> may be: the
-    /// modes <c>.mode</c> may give for an operand, those of the modes it lists when it lists them,
-    /// or the words a <c>one</c> lists.
+    /// Returns the values a word may have when it is compared with a parameter that accepts
+    /// <paramref name="accepts"/>. For an operand, these are the modes <c>.mode</c> may return,
+    /// limited to the modes the operand lists when it lists any. For a <c>one</c>, they are the
+    /// words it lists.
     /// </summary>
     public static IReadOnlyList<string> ChoicesFor(ArgumentKind accepts, bool isMode)
     {
@@ -45,8 +56,9 @@ public sealed record ComparedWord(SyntaxToken Word, string Compared, string Name
     }
 
     /// <summary>
-    /// The words <paramref name="symbol"/> may stand for, when a condition may compare it with one:
-    /// a <c>one(...)</c> parameter, or a repetition's binding over a <c>list(one(...))</c> parameter.
+    /// Returns the kind listing the words <paramref name="symbol"/> may stand for, or null when a
+    /// condition cannot compare it with a word. Only a <c>one(...)</c> parameter, or a repetition's
+    /// binding over a <c>list(one(...))</c> parameter, can be compared with a word.
     /// </summary>
     public static ArgumentKind? WordsOf(Symbol symbol, Func<NameExpressionSyntax, Symbol?> symbolOf)
     {
@@ -59,9 +71,12 @@ public sealed record ComparedWord(SyntaxToken Word, string Compared, string Name
                 : null;
     }
 
-    /// <summary>Every word the conditions in <paramref name="node"/> compare with a parameter.</summary>
-    /// <param name="node">What to look in: a macro's definition, or a whole file.</param>
-    /// <param name="symbolOf">What a name refers to, or null for a word nothing is declared as.</param>
+    /// <summary>Returns every word that the conditions in <paramref name="node"/> compare with a parameter.</summary>
+    /// <param name="node">The node to search, which is a macro's definition or a whole file.</param>
+    /// <param name="symbolOf">
+    /// A function that returns the symbol a name refers to, or null for a word that nothing is
+    /// declared as.
+    /// </param>
     public static IEnumerable<ComparedWord> In(SyntaxNode node, Func<NameExpressionSyntax, Symbol?> symbolOf)
     {
         foreach (var comparison in node.DescendantNodes().OfType<BinaryExpressionSyntax>())
@@ -74,9 +89,10 @@ public sealed record ComparedWord(SyntaxToken Word, string Compared, string Name
     }
 
     /// <summary>
-    /// The compared word <paramref name="side"/> of <paramref name="comparison"/> is, or null when it
-    /// is no bare word, the comparison is not <c>==</c> or <c>!=</c>, or the other side stands for
-    /// no parameter a word is compared with.
+    /// Returns the compared word that <paramref name="side"/> of <paramref name="comparison"/>
+    /// forms. Returns null when the side is not a bare word, when the comparison is not <c>==</c>
+    /// or <c>!=</c>, or when the other side does not refer to a parameter that a word can be
+    /// compared with.
     /// </summary>
     public static ComparedWord? Of(
         BinaryExpressionSyntax comparison, ExpressionSyntax side, Func<NameExpressionSyntax, Symbol?> symbolOf)

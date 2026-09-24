@@ -5,24 +5,24 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// The items of a list-valued child, with nothing between them: a file's or a block's
-/// members. The list is a view over the node the items hang from, so asking a node for one
-/// costs nothing, and the red item nodes are made on first use and kept on that node.
+/// Represents the items of a list-valued child that has no separators, such as the members of a
+/// file or a block. The list is a view over the node that holds the items, so getting a list from
+/// a node costs nothing. The red item nodes are created on first use and cached on that node.
 /// <para>
-/// A default list is the empty one, which is what a slot with nothing in it reads as.
+/// A default list is empty, and an empty slot is read as a default list.
 /// </para>
 /// </summary>
-/// <typeparam name="T">What the items are.</typeparam>
+/// <typeparam name="T">The type of the items.</typeparam>
 public readonly struct SyntaxList<T> : IReadOnlyList<T> where T : SyntaxNode
 {
     private readonly SyntaxNode? list;
 
     internal SyntaxList(SyntaxNode? list) => this.list = list;
 
-    /// <summary>How many items the list has.</summary>
+    /// <summary>Gets the number of items in the list.</summary>
     public int Count => list?.Green.SlotCount ?? 0;
 
-    /// <summary>The item at <paramref name="index"/>, from 0 to <see cref="Count"/> − 1.</summary>
+    /// <summary>Gets the item at <paramref name="index"/>, from 0 to <see cref="Count"/> − 1.</summary>
     public T this[int index]
     {
         get
@@ -33,12 +33,15 @@ public readonly struct SyntaxList<T> : IReadOnlyList<T> where T : SyntaxNode
         }
     }
 
-    /// <summary>The green list the items hang from, or null for a list with nothing in it.</summary>
+    /// <summary>Gets the green list that holds the items, or null if the list is empty.</summary>
     internal GreenList? Green => list?.Green as GreenList;
 
-    /// <summary>The <paramref name="length"/> items from <paramref name="start"/>; C# slice patterns call this.</summary>
-    /// <param name="start">The first item to take.</param>
-    /// <param name="length">How many to take.</param>
+    /// <summary>
+    /// Returns the <paramref name="length"/> items starting at <paramref name="start"/>. C# slice
+    /// patterns call this method.
+    /// </summary>
+    /// <param name="start">The index of the first item to take.</param>
+    /// <param name="length">The number of items to take.</param>
     public ImmutableArray<T> Slice(int start, int length)
     {
         var builder = ImmutableArray.CreateBuilder<T>(length);
@@ -47,7 +50,7 @@ public readonly struct SyntaxList<T> : IReadOnlyList<T> where T : SyntaxNode
         return builder.MoveToImmutable();
     }
 
-    /// <summary>Walks the items in source order.</summary>
+    /// <summary>Returns an enumerator over the items in source order.</summary>
     public IEnumerator<T> GetEnumerator()
     {
         for (var i = 0; i < Count; i++)

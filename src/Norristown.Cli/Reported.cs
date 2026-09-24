@@ -5,13 +5,13 @@ using System.Text.Json.Serialization;
 namespace Norristown.Cli;
 
 /// <summary>
-/// A diagnostic as the command line prints it: one line for the person running nt65, or one JSON
-/// object for a tool other than an editor that reads nt65's output.
+/// Formats a diagnostic as the command line prints it, either as one line for the person running
+/// nt65 or as one JSON object for a tool other than an editor that reads nt65's output.
 /// <para>
-/// Both say the same things, and the line is the one an editor's problem matcher reads
+/// Both forms say the same things, and the line is the one an editor's problem matcher reads
 /// (<c>file:line:column: severity: message</c>), so the JSON is for tools that would otherwise
-/// have to parse it. A related span is a second place a diagnostic points at; the line form
-/// leaves those to the editor, which can show both ends, and the JSON form carries them.
+/// have to parse the line. A related span is a second place a diagnostic points at. The line form
+/// leaves related spans to the editor, which can show both ends, and the JSON form includes them.
 /// </para>
 /// </summary>
 internal static class Reported
@@ -29,11 +29,11 @@ internal static class Reported
     };
 
     /// <summary>
-    /// The diagnostic as one line. <paramref name="colour"/> marks what it is when the terminal
-    /// can show it; everything else on the line is left plain, so the position stays selectable
-    /// and the message is not competing with it. The catalogue name goes last, in brackets,
-    /// where compilers put it: it is the name a project file uses to change the diagnostic's
-    /// severity and the name CI matches on, and nobody needs to read it first.
+    /// Formats the diagnostic as one line. <paramref name="colour"/> marks its severity when the
+    /// terminal can show colour. Everything else on the line is left plain, so the position stays
+    /// selectable and the message does not compete with it. The catalogue name goes last, in
+    /// brackets, where compilers put it. It is the name a project file uses to change the
+    /// diagnostic's severity and the name CI matches on, and nobody needs to read it first.
     /// </summary>
     public static string Line(Diagnostic diagnostic, string file, bool colour)
     {
@@ -50,8 +50,8 @@ internal static class Reported
     }
 
     /// <summary>
-    /// The diagnostic as one JSON object, on one line, so that a stream of them is read a line
-    /// at a time. <paramref name="named"/> gives the file name to print for a span.
+    /// Formats the diagnostic as one JSON object on one line, so that a stream of them can be read
+    /// a line at a time. <paramref name="named"/> gives the file name to print for a span.
     /// </summary>
     public static string Object(Diagnostic diagnostic, Func<Span, string> named) =>
         JsonSerializer.Serialize(

@@ -3,22 +3,22 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The two directives that tell the analysis what it cannot see for itself: <c>.next</c>,
-/// which replaces where flow goes after a statement, and <c>.patch</c>, which acknowledges
-/// a store into the instruction stream.
+/// Provides queries about the two annotation directives, which tell the analysis what it cannot
+/// see for itself. The <c>.next</c> directive replaces where flow goes after a statement, and
+/// <c>.patch</c> acknowledges a store into the instruction stream.
 /// <para>
-/// Each applies to the statement above it and comes before any following label, so finding
-/// the statement an annotation applies to means looking at its sibling lines: only code that
-/// walks the whole list of siblings can answer it.
+/// Each annotation applies to the statement above it and comes before any following label.
+/// Finding the statement an annotation applies to therefore means looking at its sibling lines,
+/// so only code that walks the whole list of siblings can find it.
 /// </para>
 /// </summary>
 public static class Annotations
 {
-    /// <summary>Whether a statement is one of the two annotations.</summary>
+    /// <summary>Determines whether a statement is one of the two annotations.</summary>
     public static bool Is(StatementSyntax statement) =>
         statement is NextDirectiveSyntax or PatchDirectiveSyntax;
 
-    /// <summary>Whether a statement is something an annotation can be about.</summary>
+    /// <summary>Determines whether a statement is one that an annotation can apply to.</summary>
     public static bool IsAnnotatable(StatementSyntax statement) => statement switch
     {
         InstructionStatementSyntax or DataDirectiveSyntax
@@ -27,7 +27,7 @@ public static class Annotations
         _ => false,
     };
 
-    /// <summary>The labels an annotation names, each as it was written.</summary>
+    /// <summary>Returns the labels an annotation names, as they appear in the source.</summary>
     public static IReadOnlyList<NameExpressionSyntax> TargetsOf(StatementSyntax directive) => directive switch
     {
         NextDirectiveSyntax next => [.. next.Targets],
@@ -36,10 +36,11 @@ public static class Annotations
     };
 
     /// <summary>
-    /// The statement the annotation on <paramref name="line"/> is about: the nearest one
-    /// above it among its siblings, with blank lines and the other annotations of the same
-    /// statement passed over. A macro call that opens a block argument is a block among the
-    /// siblings rather than a line, and the call is its first line.
+    /// Returns the statement that the annotation on <paramref name="line"/> applies to. This is
+    /// the nearest statement above the annotation among its siblings, skipping blank lines and
+    /// the other annotations of the same statement. A macro call that opens a block argument
+    /// appears among the siblings as a block rather than a line, and the call is the block's
+    /// first line.
     /// </summary>
     public static LineSyntax? Annotated(LineSyntax line)
     {
@@ -61,14 +62,14 @@ public static class Annotations
     }
 
     /// <summary>
-    /// Why an annotation is misplaced, or null when it is not. The statement it applies to must
-    /// be above it, because a label below it takes the address where that statement ends; an
-    /// annotation with no statement above it has nothing to apply to.
+    /// Returns the reason an annotation is misplaced, or null when it is not. The statement it
+    /// applies to must be above it, because a label below it takes the address where that
+    /// statement ends. An annotation with no statement above it has nothing to apply to.
     /// </summary>
     public static DiagnosticMessage? Misplaced(LineSyntax line, StatementSyntax directive) =>
         Annotated(line) is not null ? null : (DiagnosticMessage?)Catalogue.AnnotationAboutNothing.Says(Spell(directive));
 
-    /// <summary>The directive as it is written, for a message that names it.</summary>
+    /// <summary>Returns the directive's name as it appears in the source, for a message that names it.</summary>
     public static string Spell(StatementSyntax directive) =>
         directive is PatchDirectiveSyntax ? ".patch" : ".next";
 }

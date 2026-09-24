@@ -4,17 +4,20 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The quick fixes the diagnostics in a range carry, turned into edits. Each applies what its
-/// message already suggests: the long branch that reaches the target, the return instruction an
-/// interrupt handler must end with, the nt65 spelling of a ca65 directive, the declared name
-/// closest to a misspelling, the storage a <c>.res</c> reserves, an export wide enough for what
-/// it exports, and removing or exporting a declaration nothing refers to. Where a line has two
-/// plausible readings, both are offered and neither is preferred, since only the programmer
-/// knows which was meant.
+/// Turns the quick fixes that the diagnostics in a range carry into edits. Each fix applies what
+/// its message already suggests. The fixes include the long branch that reaches the target, the
+/// return instruction an interrupt handler must end with, and the nt65 form of a ca65 directive.
+/// They also include the declared name closest to a misspelling, the storage a <c>.res</c>
+/// reserves, an export wide enough for what it exports, and removing or exporting a declaration
+/// nothing refers to. Where a line has two plausible readings, both are offered and neither is
+/// preferred, since only the programmer knows which was meant.
 /// </summary>
 internal static class Fixes
 {
-    /// <summary>The fixes for the diagnostics of <paramref name="model"/>'s file on the lines <paramref name="range"/> covers.</summary>
+    /// <summary>
+    /// Returns the fixes for the diagnostics of <paramref name="model"/>'s file on the lines
+    /// <paramref name="range"/> covers.
+    /// </summary>
     public static IEnumerable<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
     {
         foreach (var diagnostic in analysis.DiagnosticsFor(model.Tree.Path))
@@ -102,7 +105,7 @@ internal static class Fixes
                 break;
 
             case FixKind.Rename:
-                // No edit is made: only the programmer can choose the new name, so the editor
+                // No edit is made. Only the programmer can choose the new name, so the editor
                 // puts the caret on the name and starts a rename.
                 var named = Edits.SpanOf(tree, diagnostic.Span);
                 yield return new Change(
@@ -178,13 +181,16 @@ internal static class Fixes
         }
     }
 
-    /// <summary>A fix for <paramref name="diagnostic"/>, preferred unless it is one of several readings.</summary>
+    /// <summary>
+    /// Creates a fix for <paramref name="diagnostic"/>, preferred unless it is one of several
+    /// readings.
+    /// </summary>
     private static Change Fix(Diagnostic diagnostic, string title, IReadOnlyList<Edit> edits, bool preferred = true) =>
         new(title, CodeActionKinds.QuickFix, edits, diagnostic, preferred);
 
     /// <summary>
-    /// The line's mnemonic replaced by <paramref name="mnemonic"/>, in upper case where the line
-    /// wrote it in upper case; null for a line that has no mnemonic.
+    /// Returns an edit that replaces the line's mnemonic with <paramref name="mnemonic"/>, in
+    /// upper case where the line has it in upper case, or null for a line that has no mnemonic.
     /// </summary>
     private static Edit? Written(SyntaxTree tree, int line, string mnemonic)
     {
@@ -198,12 +204,12 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// <paramref name="piece"/> inserted where the line is missing it. The position comes from the
-    /// syntax tree rather than the text: a missing token in the slot marks the piece as absent,
-    /// and its diagnostic's span says where the piece belongs, which is the end of the last token
-    /// the line does have, not wherever the missing token sits after a trailing comment. Null
-    /// when no missing token on the line owns the diagnostic, meaning it is not about a missing
-    /// piece.
+    /// Returns an edit that inserts <paramref name="piece"/> where the line is missing it. The
+    /// position comes from the syntax tree rather than the text. A missing token marks the piece
+    /// as absent, and that token's diagnostic span gives where the piece belongs. That is the end
+    /// of the last token the line does have, not wherever the missing token sits after a trailing
+    /// comment. Returns null when no missing token on the line owns the diagnostic, which means
+    /// the diagnostic is not about a missing piece.
     /// </summary>
     private static Edit? Piece(SyntaxTree tree, Diagnostic diagnostic, string piece)
     {
@@ -213,8 +219,8 @@ internal static class Fixes
             if (!token.IsMissing || !token.GetDiagnostics().Contains(diagnostic))
                 continue;
 
-            // A `{` opens a block and is set off by a space as a word of its own; a closing piece
-            // is written directly after what it closes.
+            // A `{` opens a block and is set off by a space as a word of its own. A closing piece
+            // goes directly after what it closes.
             var at = Edits.SpanOf(tree, diagnostic.Span).Start;
             var space = piece == "{" && at > 0 && tree.Text[at - 1] is not (' ' or '\t' or '\n' or '\r') ? " " : "";
             return new Edit(tree, new TextSpan(at, 0), space + piece);
@@ -222,11 +228,17 @@ internal static class Fixes
         return null;
     }
 
-    /// <summary>An <c>.export</c> of <paramref name="name"/>, under the <c>.module</c> of the file that declares it.</summary>
+    /// <summary>
+    /// Returns an edit that adds an <c>.export</c> of <paramref name="name"/> under the
+    /// <c>.module</c> of the file that declares it.
+    /// </summary>
     private static Edit Exported(SemanticModel declaring, string name) =>
         Edits.InsertAfter(declaring.Tree, Edits.LastLine<ModuleDirectiveSyntax>(declaring.Tree), $".export {name}");
 
-    /// <summary>A <c>.use</c> of <paramref name="path"/>, under the last one, or under the <c>.module</c>.</summary>
+    /// <summary>
+    /// Returns an edit that adds a <c>.use</c> of <paramref name="path"/> under the last
+    /// <c>.use</c>, or under the <c>.module</c> if there is none.
+    /// </summary>
     private static Edit Used(SyntaxTree tree, string path)
     {
         var after = Edits.LastLine<UseDirectiveSyntax>(tree) is var use and >= 0
@@ -236,8 +248,9 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// A <c>.state</c> after a label, giving the processor state the analysis finds on entry to
-    /// the line below it, or the routine's entry state where the analysis found nothing.
+    /// Returns a fix that adds a <c>.state</c> after a label. The <c>.state</c> gives the
+    /// processor state the analysis finds on entry to the line below the label, or the routine's
+    /// entry state where the analysis found nothing.
     /// </summary>
     private static (string Title, IReadOnlyList<Edit> Edits)? StateAfter(
         ProgramAnalysis analysis, SemanticModel model, Span label)
@@ -273,9 +286,9 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// A label outside every routine, together with the data lines under it, rewritten as one
-    /// <c>.data</c> declaration: a single directive goes on the declaration's own line, and
-    /// several go in a block.
+    /// Returns a fix that rewrites a label outside every routine, together with the data lines
+    /// under it, as one <c>.data</c> declaration. A single directive goes on the declaration's
+    /// own line, and several go in a block.
     /// </summary>
     private static (string Title, IReadOnlyList<Edit> Edits)? DataDeclaration(SyntaxTree tree, int line)
     {
@@ -315,8 +328,8 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// ca65's assertion level, taken out with the comma that separated it from the message, or
-    /// with the one before it where the level was written last.
+    /// Returns an edit that removes ca65's assertion level along with the comma that separated it
+    /// from the message, or with the comma before it where the level comes last.
     /// </summary>
     private static Edit? WithoutLevel(SyntaxTree tree, Span at)
     {
@@ -328,15 +341,18 @@ internal static class Fixes
         var before = level > 0 && tokens[level - 1].Kind == SyntaxKind.Comma ? tokens[level - 1] : default;
         if (level + 1 < tokens.Count && tokens[level + 1].Kind == SyntaxKind.Comma)
         {
-            // Keep the comma before the level: remove from just after that comma through the
-            // comma after the level.
+            // The comma before the level is kept, so the edit removes everything from just after
+            // that comma through the comma after the level.
             var start = before.Text is null ? span.Start : before.Start + 1;
             return new Edit(tree, new TextSpan(start, tokens[level + 1].Start + 1 - start), "");
         }
         return before.Text is null ? null : new Edit(tree, new TextSpan(before.Start, span.End - before.Start), "");
     }
 
-    /// <summary>The <c>.res n</c> of a declaration, as the <c>.byte[n]</c> that reserves the same room.</summary>
+    /// <summary>
+    /// Returns an edit that replaces a declaration's <c>.res n</c> with the <c>.byte[n]</c> that
+    /// reserves the same space.
+    /// </summary>
     private static Edit? Storage(SyntaxTree tree, Span at)
     {
         var span = Edits.SpanOf(tree, at);
@@ -347,7 +363,10 @@ internal static class Fixes
         return count.Length == 0 ? null : new Edit(tree, span, $".byte[{count}]");
     }
 
-    /// <summary>The fixes for a label in mixed data: make it a member of the data, or a position (<c>@name</c>) in it.</summary>
+    /// <summary>
+    /// Returns the fixes for a label in mixed data. One makes the label a member of the data, and
+    /// the other makes it a position (<c>@name</c>) in the data.
+    /// </summary>
     private static IEnumerable<Change> DataMember(ProgramModel program, SemanticModel model, Diagnostic diagnostic)
     {
         var tree = model.Tree;
@@ -357,7 +376,7 @@ internal static class Fixes
         var colon = tokens.FindIndex(token => token.Start == span.Start) + 1;
 
         // A member is a name plus what it holds, so it is offered only when a directive follows
-        // the label on the line; a bare name can only be a position.
+        // the label on the line. A bare name can only be a position.
         if (colon > 0 && colon + 1 < tokens.Count && tokens[colon + 1].Kind == SyntaxKind.Directive)
         {
             yield return Fix(diagnostic, $"Make `{name}` a member of the data",
@@ -371,7 +390,10 @@ internal static class Fixes
         yield return Fix(diagnostic, $"Make `{name}` a position, `@{name}`", edits, preferred: false);
     }
 
-    /// <summary>The address size an <c>.export</c> gives, written as <paramref name="size"/>.</summary>
+    /// <summary>
+    /// Returns an edit that replaces the address size an <c>.export</c> gives with
+    /// <paramref name="size"/>.
+    /// </summary>
     private static Edit? ExportSize(SyntaxTree tree, Span at, string size)
     {
         var span = Edits.SpanOf(tree, at);
@@ -383,9 +405,9 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// The two readings of an expression that needs parentheses: the one the language's
-    /// precedence would give, and the other. Each fix only inserts an opening and a closing
-    /// parenthesis, so nothing else on the line changes.
+    /// Returns fixes for the two readings of an expression that needs parentheses, which are the
+    /// reading the language's precedence would give and the other one. Each fix only inserts an
+    /// opening and a closing parenthesis, so nothing else on the line changes.
     /// </summary>
     private static IEnumerable<Change> Parenthesized(SyntaxTree tree, Diagnostic diagnostic)
     {
@@ -420,7 +442,10 @@ internal static class Fixes
         }
     }
 
-    /// <summary>The unary expression at the right edge of an operand, which is what a byte operator applies to.</summary>
+    /// <summary>
+    /// Returns the unary expression at the right edge of an operand, which is what a byte
+    /// operator applies to, or null if the operand does not end in one.
+    /// </summary>
     private static UnaryExpressionSyntax? Rightmost(ExpressionSyntax node)
     {
         while (node is BinaryExpressionSyntax binary)
@@ -429,8 +454,8 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// The fixes for a declaration nothing refers to: remove it along with its body, or export
-    /// it so that another module may refer to it.
+    /// Returns the fixes for a declaration nothing refers to. One removes it along with its body,
+    /// and the other exports it so that another module may refer to it.
     /// </summary>
     private static IEnumerable<Change> Unused(SemanticModel model, Diagnostic diagnostic, string name)
     {
@@ -439,7 +464,7 @@ internal static class Fixes
         var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
 
         // Removal deletes whole lines, which is only safe where the line starts with the
-        // declaration; a label with an instruction after it shares its line with code.
+        // declaration. A label with an instruction after it shares its line with code.
         var tokens = LineContext.TokensOf(tree, line);
         if (tokens.Count > 0 && tokens[0].Start == tree.LineStarts[line] + Edits.IndentOf(tree, line).Length)
             yield return Fix(diagnostic, $"Remove `{name}`", [Edits.RemoveLines(tree, line, Edits.BlockEnd(tree, line))], preferred: false);

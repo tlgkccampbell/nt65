@@ -4,34 +4,38 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What the other files of a program can see of one file, symbol by symbol, written out so that
-/// two versions of it can be compared. A change to a symbol's entry matters only to the files
-/// that looked its name up.
+/// Builds a text description, symbol by symbol, of what the other files of a program can see of
+/// one file, so that two versions of it can be compared. A change to a symbol's entry matters
+/// only to the files that looked its name up.
 /// <para>
-/// Every name a path can reach is in it, exported or not, because another file resolving a
-/// name finds a private one too, to say that it is not exported. Each entry says what the
-/// symbol means — its value, its sizes, its signature, a macro's body — and almost nothing is
-/// a position: a line added above a declaration moves it without changing what it is. The one
-/// exception is where a macro's body is: an expansion names each call it writes out by file
-/// and line, and a problem with a body line is reported at the call with the line beside it,
-/// so the body's location is part of every caller's output and diagnostics.
+/// The interface includes every name a path can reach, exported or not, because another file
+/// resolving a name also finds a private one, in order to report that it is not exported. Each
+/// entry describes what the symbol means, such as its value, its sizes, its signature or a
+/// macro's body. Almost nothing in an entry is a position, because a line added above a
+/// declaration moves it without changing what it is.
 /// </para>
 /// <para>
-/// A body is read where it is used rather than where it is written: a macro expands, and a
-/// function or a list is evaluated, in the file that names it. So an entry with a body also
-/// says what every name in the body means, since a change to one of those is a change to what
-/// the body does wherever it lands, even when the file using it never wrote the name. A type
-/// is laid out where it is used in the same way, and written out member by member, so its
-/// entry says what each of its members is.
+/// The one exception is the location of a macro's body. An expansion names each call it emits by
+/// file and line, and a problem with a body line is reported at the call with the body line
+/// beside it. The body's location is therefore part of every caller's output and diagnostics.
+/// </para>
+/// <para>
+/// A body is interpreted where it is used, not where it is declared: a macro expands, and a
+/// function or a list is evaluated, in the file that names it. An entry with a body therefore
+/// also describes what every name in the body means. A change to one of those names changes what
+/// the body does wherever it lands, even when the file using the body never names it. A type is
+/// likewise laid out where it is used, and described member by member, so its entry describes
+/// each of its members.
 /// </para>
 /// </summary>
 internal static class FileInterface
 {
     /// <summary>
-    /// The interface of <paramref name="module"/>, a file that declares <paramref name="symbols"/>,
-    /// by qualified name. <paramref name="resolved"/> says what the names written in it mean.
-    /// The module's name and what it re-exports are entries too, whose names start with a space
-    /// so that no symbol's can be the same.
+    /// Returns the interface of <paramref name="module"/>, a file that declares
+    /// <paramref name="symbols"/>, keyed by qualified name. <paramref name="resolved"/> maps each
+    /// name in the file to the symbol it refers to. The module's name and its re-exports are
+    /// entries too. Their keys start with a space so that no symbol's qualified name can match
+    /// them.
     /// </summary>
     public static Dictionary<string, string> Of(
         ProgramSymbols.Module module,
@@ -51,14 +55,15 @@ internal static class FileInterface
     }
 
     /// <summary>
-    /// Whether an entry that changed changes what every path in the program may mean, rather
-    /// than what one name does: the module's name, or a name it re-exports.
+    /// Returns a value indicating whether a change to <paramref name="entry"/> can change what
+    /// every path in the program means, not just what one name means. Such entries are the
+    /// module's name and the names it re-exports.
     /// </summary>
     public static bool IsModuleWide(string entry) => entry.StartsWith(' ');
 
     /// <summary>
-    /// The names whose entries differ between <paramref name="before"/> and
-    /// <paramref name="after"/>, including those only one of them has.
+    /// Returns the names whose entries differ between <paramref name="before"/> and
+    /// <paramref name="after"/>, including names that only one of them has.
     /// </summary>
     public static IEnumerable<string> Changed(
         IReadOnlyDictionary<string, string> before, IReadOnlyDictionary<string, string> after) =>
@@ -73,8 +78,9 @@ internal static class FileInterface
         HashSet<Symbol> described,
         string indent)
     {
-        // Each symbol is described once in an entry, wherever else it is named again: two bodies
-        // that name each other are still one finite entry, and so is a long chain of constants.
+        // Each symbol is described only once in an entry, even if it is named again. Two bodies
+        // that name each other still produce one finite entry, and so does a long chain of
+        // constants.
         if (!described.Add(symbol))
             return;
 
@@ -116,8 +122,8 @@ internal static class FileInterface
         {
             foreach (var token in node.ChildTokens)
             {
-                // A missing token starts where the token after it does, so looking one up would
-                // find whatever is named there.
+                // A missing token starts where the token after it does, so looking up a missing
+                // token would find the name at that position.
                 if (token.IsMissing
                     || !resolved.TryGetValue((node.Tree, token.Span.Start), out var named) || named == symbol)
                 {

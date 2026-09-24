@@ -15,10 +15,10 @@ Console.CancelKeyPress += (_, stopping) =>
     interrupted.Cancel();
 };
 
-// The top-level exception handler. An exception that reaches here is a bug in nt65 rather
-// than a problem with the program being built, and the report says so: what threw, which
-// program nt65 was building, and the stack trace to include in a bug report. 70 is EX_SOFTWARE,
-// the conventional exit code for an internal software error.
+// This is the top-level exception handler. An exception that reaches here is a bug in nt65
+// rather than a problem with the program being built, and the report says so. It names what
+// threw and which program nt65 was building, and prints the stack trace to include in a bug
+// report. 70 is EX_SOFTWARE, the conventional exit code for an internal software error.
 try
 {
     return Commands.Run(args, Environment.CurrentDirectory, Console.Out, Console.Error, colour, interrupted.Token);

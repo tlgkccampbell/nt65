@@ -1,6 +1,6 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>What to show about the thing under the pointer.</summary>
-/// <param name="Contents">The text.</param>
-/// <param name="Range">What the text is about, which the client highlights.</param>
+/// <summary>Represents the information shown about the item under the pointer.</summary>
+/// <param name="Contents">The text to show.</param>
+/// <param name="Range">The range the text is about, which the client highlights.</param>
 internal sealed record Hover(MarkupContent Contents, Range? Range);

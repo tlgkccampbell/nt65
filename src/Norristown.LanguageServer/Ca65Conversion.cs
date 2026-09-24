@@ -7,19 +7,19 @@ namespace Norristown.LanguageServer;
 /// <summary>
 /// Converts ca65 source in a selection to nt65, using only rewrites that concern a single line
 /// and keep its meaning. A block opened and closed by directives (<c>.proc</c> ...
-/// <c>.endproc</c>) is opened and closed by braces instead, segment and data directives take
-/// their nt65 spellings, ca65's operator words become symbols, and directives only ca65 needed
-/// are dropped.
+/// <c>.endproc</c>) is opened and closed by braces instead, segment and data directives are
+/// renamed to their nt65 forms, ca65's operator words become symbols, and directives that only
+/// ca65 needed are dropped.
 /// <para>
-/// A line it cannot convert is left exactly as it was: an unnamed label, a macro call, an
-/// <c>.include</c> and anything else that needs a decision rather than a spelling stays for the
-/// programmer, and the diagnostics say so. Converting most of a paste and saying which lines are
-/// still ca65 beats guessing at the rest.
+/// A line that cannot be converted is left exactly as it was. An unnamed label, a macro call, an
+/// <c>.include</c> and anything else that needs a decision rather than a textual rewrite is left
+/// for the programmer, and the diagnostics report it. Converting most of a pasted block and
+/// reporting which lines are still ca65 is better than guessing at the rest.
 /// </para>
 /// </summary>
 internal static partial class Ca65Conversion
 {
-    /// <summary>The directives that close a block, which a <c>}</c> closes instead.</summary>
+    /// <summary>The directives that close a block, each of which is replaced by a <c>}</c>.</summary>
     private static readonly HashSet<string> closers = new(StringComparer.OrdinalIgnoreCase)
     {
         ".endproc", ".endscope", ".endmacro", ".endmac", ".endstruct", ".endunion", ".endenum",
@@ -32,7 +32,7 @@ internal static partial class Ca65Conversion
         ".macpack", ".feature", ".smart", ".autoimport", ".case", ".debuginfo", ".linecont",
     };
 
-    /// <summary>ca65's segment directives, each naming the segment it puts things in.</summary>
+    /// <summary>ca65's segment directives, each mapped to the name of the segment it selects.</summary>
     private static readonly Dictionary<string, string> segments = new(StringComparer.OrdinalIgnoreCase)
     {
         [".zeropage"] = "ZEROPAGE",
@@ -42,7 +42,10 @@ internal static partial class Ca65Conversion
         [".rodata"] = "RODATA",
     };
 
-    /// <summary>ca65's words for the operators nt65 writes as symbols, and the ca65 directive spellings nt65 renames.</summary>
+    /// <summary>
+    /// ca65's operator words, mapped to the symbols nt65 uses for them, and the ca65 directive
+    /// names that nt65 renames, mapped to their nt65 names.
+    /// </summary>
     private static readonly Dictionary<string, string> operators = new(StringComparer.OrdinalIgnoreCase)
     {
         [".bitand"] = "&",
@@ -59,7 +62,10 @@ internal static partial class Ca65Conversion
         [".tag"] = ".type",
     };
 
-    /// <summary>The change that rewrites the selection as nt65, offered only when at least one line of it changes.</summary>
+    /// <summary>
+    /// Returns the change that rewrites the selection as nt65, or nothing when no line of the
+    /// selection would change.
+    /// </summary>
     public static IEnumerable<Change> In(SemanticModel model, Protocol.Range range)
     {
         var tree = model.Tree;
@@ -89,8 +95,8 @@ internal static partial class Ca65Conversion
     }
 
     /// <summary>
-    /// One line converted to nt65: unchanged where nothing in it is specific to ca65, or null
-    /// for a line only ca65 needed, which is removed.
+    /// Returns one line converted to nt65. A line with nothing specific to ca65 is returned
+    /// unchanged, and a line that only ca65 needed returns null so that it is removed.
     /// </summary>
     private static string? Converted(string line)
     {
@@ -113,7 +119,7 @@ internal static partial class Ca65Conversion
         return indent + Operators(written) + comment;
     }
 
-    /// <summary>The line with its leading directive rewritten in nt65's form.</summary>
+    /// <summary>Returns the line with its leading directive rewritten in nt65's form.</summary>
     private static string Renamed(string code, string first)
     {
         var rest = Rest(code, first);
@@ -156,8 +162,8 @@ internal static partial class Ca65Conversion
     }
 
     /// <summary>
-    /// A line that opens a block in ca65, rewritten to open it with a brace: the text after the
-    /// directive stays as it is, and a macro's parameters are put in parentheses.
+    /// Rewrites a line that opens a block in ca65 so that it opens the block with a brace. The
+    /// text after the directive stays as it is, and a macro's parameters are put in parentheses.
     /// </summary>
     private static string Opened(string code, string first)
     {
@@ -184,7 +190,9 @@ internal static partial class Ca65Conversion
         }
     }
 
-    /// <summary>A label in front of a data directive, rewritten as a <c>.data</c> declaration of that name.</summary>
+    /// <summary>
+    /// Rewrites a label in front of a data directive as a <c>.data</c> declaration of that name.
+    /// </summary>
     private static string LabelledData(string code)
     {
         var match = Labelled().Match(code);
@@ -198,7 +206,7 @@ internal static partial class Ca65Conversion
             : $".data {name}: {directive}{(rest.Length > 0 ? " " + rest : "")}";
     }
 
-    /// <summary>ca65's operator words and directive spellings, written as nt65 writes them.</summary>
+    /// <summary>Replaces ca65's operator words and directive names with their nt65 forms.</summary>
     private static string Operators(string code)
     {
         var written = new StringBuilder();
@@ -241,7 +249,10 @@ internal static partial class Ca65Conversion
         return written.ToString();
     }
 
-    /// <summary>A line split into its indent, its code, and everything after the code, comment included.</summary>
+    /// <summary>
+    /// Splits a line into its indent, its code, and everything after the code, including the
+    /// comment.
+    /// </summary>
     private static (string Indent, string Code, string Comment) Split(string line)
     {
         var start = 0;
@@ -252,11 +263,17 @@ internal static partial class Ca65Conversion
         return (line[..start], code, line[(start + code.Length)..]);
     }
 
-    /// <summary>What follows a line's code: the whitespace and the comment, if any.</summary>
+    /// <summary>
+    /// Returns the comment at the end of a line, from its <c>;</c> on, or an empty string if the
+    /// line has none.
+    /// </summary>
     private static string Comment(string line) =>
         LineComments.Start(line) is var at and >= 0 ? line[at..] : "";
 
-    /// <summary>The first word of a line's code: a directive, a mnemonic or a name.</summary>
+    /// <summary>
+    /// Returns the first word of a line's code, which is a directive, a mnemonic or a name, or
+    /// null if the code does not start with a word.
+    /// </summary>
     private static string? Word(string code)
     {
         var at = 0;
@@ -268,10 +285,15 @@ internal static partial class Ca65Conversion
         return at > start ? code[..at] : null;
     }
 
-    /// <summary>The rest of a line's code after <paramref name="first"/>, without leading whitespace.</summary>
+    /// <summary>
+    /// Returns the rest of a line's code after <paramref name="first"/>, without leading
+    /// whitespace.
+    /// </summary>
     private static string Rest(string code, string first) => code[first.Length..].TrimStart();
 
-    /// <summary>A name in front of a data directive, which nt65 declares rather than labels.</summary>
+    /// <summary>
+    /// Matches a name in front of a data directive, which nt65 declares rather than labels.
+    /// </summary>
     [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?<directive>\.(?:byte|word|dword|addr|faraddr|res|asciiz|strz|byt|dbyt|lobytes|hibytes|bankbytes|incbin))\b(?<rest>.*)$")]
     private static partial Regex Labelled();
 }

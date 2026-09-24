@@ -4,20 +4,20 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The paths in a file that name another file: the binaries an <c>.incbin</c> includes. A path
-/// is relative to the file that writes it, which is how the build resolves it too, so what the
-/// editor opens is the file the program reads.
+/// Finds the paths in a file that name another file, which are the binaries an <c>.incbin</c>
+/// includes. A path is relative to the file that contains it, which is also how the build
+/// resolves it, so the file the editor opens is the file the program reads.
 /// </summary>
 internal static class DocumentLinks
 {
-    /// <summary>The links in the file <paramref name="model"/> is of, in position order.</summary>
+    /// <summary>Returns the links in <paramref name="model"/>'s file, in position order.</summary>
     public static IReadOnlyList<Protocol.DocumentLink> In(SemanticModel model)
     {
         var links = new List<Protocol.DocumentLink>();
         foreach (var node in model.Tree.Root.DescendantNodes())
         {
-            // Only a written path is a link. A path a constant names is a name, and a name is
-            // already a link to where it is declared.
+            // Only a literal path is a link. A path that a constant names is a name, and a name
+            // already links to where it is declared.
             if (node is not DataDirectiveSyntax data
                 || !data.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
                 || data.Tail is not InlineDataSyntax { Values: [StringExpressionSyntax written, ..] }

@@ -4,25 +4,29 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Semantic tokens: every name in a file, classified by what it refers to. The TextMate grammar
-/// colours what the lexer knows, and these are drawn over it where the analysis knows more, so a
-/// member spelled like a register, <c>Joy::A</c> or an enum's <c>X</c>, is coloured as the member
-/// it is. A name that refers to nothing keeps the grammar's colour.
+/// Computes the semantic tokens of a file, which classify every name by what it refers to. The
+/// TextMate grammar colours what the lexer knows, and these tokens are drawn over it where the
+/// analysis knows more. A member spelled like a register, such as <c>Joy::A</c> or an enum's
+/// <c>X</c>, is therefore coloured as the member it is. A name that refers to nothing keeps the
+/// grammar's colour.
 /// </summary>
 internal static class NameHighlighting
 {
     private const int Declaration = 1;
     private const int ReadOnly = 2;
 
-    /// <summary>The token types and modifiers, as the client is told them; the numbers index these.</summary>
+    /// <summary>
+    /// The token types and modifiers as the client is told them. The numbers in the tokens index
+    /// these.
+    /// </summary>
     public static readonly Protocol.SemanticTokensLegend Legend = new(
         ["namespace", "type", "enum", "struct", "enumMember", "property", "function", "macro", "parameter", "variable", "label"],
         ["declaration", "readonly"]);
 
     /// <summary>
-    /// The names written in <paramref name="model"/>'s file, encoded as the protocol wants
-    /// them, or those of the lines <paramref name="first"/> to <paramref name="last"/> where
-    /// the client asked about part of a long file.
+    /// Returns the tokens for the names in <paramref name="model"/>'s file, encoded as the protocol
+    /// requires. When the client asked about part of a long file, only the names on lines
+    /// <paramref name="first"/> to <paramref name="last"/> are included.
     /// </summary>
     public static Protocol.SemanticTokens In(SemanticModel model, int first = 0, int last = int.MaxValue)
     {
@@ -40,8 +44,8 @@ internal static class NameHighlighting
             return (reference.Span, Type: type, Modifiers: modifiers | (reference.IsDeclaration ? Declaration : 0));
         });
 
-        // A module is not a symbol, but the module path a `.place` writes is still coloured as
-        // a namespace.
+        // A module is not a symbol, but the module path in a `.place` is still coloured as a
+        // namespace.
         var modules = tree.Root.DescendantNodes().OfType<PlaceDirectiveSyntax>()
             .SelectMany(place => place.Name.Names)
             .Where(part => !part.IsMissing)
@@ -66,14 +70,16 @@ internal static class NameHighlighting
     }
 
     /// <summary>
-    /// The difference between the tokens the client holds and the current ones, as the single
-    /// run of numbers that changed, found by trimming the common prefix and suffix. An edit in
-    /// one place changes a handful of numbers in a file of thousands, and not resending the
-    /// thousands is the point of the delta form.
+    /// Returns the difference between the tokens the client holds and the current ones, as the
+    /// single run of numbers that changed, found by trimming the common prefix and suffix. An edit
+    /// in one place changes a handful of numbers in a file of thousands, and the delta form exists
+    /// so that the thousands are not resent.
     /// </summary>
-    /// <param name="id">The result id of the new answer, which the client quotes when asking for the next delta.</param>
+    /// <param name="id">
+    /// The result id of the new result, which the client quotes when requesting the next delta.
+    /// </param>
     /// <param name="before">The numbers the client holds.</param>
-    /// <param name="after">The numbers it would be given now.</param>
+    /// <param name="after">The numbers the client would be given now.</param>
     public static Protocol.SemanticTokensDelta Changed(
         string id, IReadOnlyList<int> before, IReadOnlyList<int> after)
     {

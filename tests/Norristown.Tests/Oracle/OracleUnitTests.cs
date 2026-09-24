@@ -1,6 +1,6 @@
 namespace Norristown.Tests.Oracle;
 
-/// <summary>Oracle logic that needs no ca65, so it runs in the fast suite.</summary>
+/// <summary>Tests the oracle logic that needs no ca65, so that it runs in the fast suite.</summary>
 public sealed class OracleUnitTests
 {
     private const string Pin = "e11fb5c39371046ebe25485f984f644c5a0d65d3";

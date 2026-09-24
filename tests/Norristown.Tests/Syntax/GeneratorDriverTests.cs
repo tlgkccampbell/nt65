@@ -6,8 +6,8 @@ using Norristown.SyntaxGenerator;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// The generator as the compiler runs it: given the repository's table it writes one file per
-/// type and reports nothing, and given a table it cannot read it reports a diagnostic at the
+/// Checks the generator as the compiler runs it. Given the repository's table, it writes one file
+/// per type and reports nothing. Given a table it cannot read, it reports a diagnostic at the
 /// problem instead of throwing and taking the build down.
 /// </summary>
 public sealed class GeneratorDriverTests
@@ -81,9 +81,9 @@ public sealed class GeneratorDriverTests
     }
 
     /// <summary>
-    /// An edit to the project that is not an edit to the table regenerates nothing: the pipeline
-    /// depends only on the table's text, which is what keeps an editor from regenerating a
-    /// hundred classes on every keystroke.
+    /// An edit to the project that is not an edit to the table regenerates nothing. The pipeline
+    /// depends only on the table's text, and that keeps an editor from regenerating a hundred
+    /// classes on every keystroke.
     /// </summary>
     [Fact]
     public void AnEditThatIsNotToTheTableRegeneratesNothing()

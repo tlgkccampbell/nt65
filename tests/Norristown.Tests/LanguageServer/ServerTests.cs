@@ -60,7 +60,7 @@ public sealed class ServerTests
         Assert.Null(diagnostic.RelatedInformation);
     }
 
-    /// <summary>Typing the missing operand clears the error: the basic edit-and-republish loop.</summary>
+    /// <summary>Typing the missing operand clears the error, exercising the basic edit-and-republish loop.</summary>
     [Fact]
     public async Task EditingAwayAnErrorClearsIt()
     {
@@ -131,8 +131,8 @@ public sealed class ServerTests
         await client.OpenAsync(Uri, Fixed);
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
-        // The second edit is past the end of what the first one wrote, so it is only where it
-        // is meant to be once the first has been applied.
+        // The second edit's position is past the end of the text the first one inserts, so it
+        // lands where it is meant to only once the first has been applied.
         var calling = Locate.At(Fixed.Replace("rts", "jsr reset"), "jsr reset|");
         await client.ChangeAsync(Uri, 2,
             new TextDocumentContentChangeEvent(Locate.Span(Fixed, "rts"), "jsr reset"),

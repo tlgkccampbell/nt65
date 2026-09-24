@@ -8,10 +8,10 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Inlay hints: the few words drawn in a line to state what the line does not show and what a
-/// reader would otherwise misread it without. There are five kinds and no more: the analysis
-/// works out far more than anyone wants in front of them, and a hint on every line turns a
-/// listing into a dashboard.
+/// Provides inlay hints, which are the few words drawn in a line to state what the line does not
+/// show and without which a reader would misread it. There are five kinds and no more, because
+/// the analysis works out far more than anyone wants in front of them, and a hint on every line
+/// turns a listing into a dashboard.
 /// <para>
 /// Three rules shape them. A hint marks a change, not a state, so a width is hinted where it
 /// becomes sixteen and not on the forty lines after. A line carries at most one hint at its
@@ -20,27 +20,31 @@ namespace Norristown.LanguageServer;
 /// decided it where there is one, because the hint itself is too short to say so.
 /// </para>
 /// <para>
-/// Hints are computed only for the lines the editor asks about: clients fetch them as a file is
-/// scrolled, and a keystroke should not pay for lines nobody is looking at.
+/// Hints are computed only for the lines the editor asks about, because clients fetch them as a
+/// file is scrolled, and a keystroke should not pay for lines nobody is looking at.
 /// </para>
 /// </summary>
 internal static class InlayHints
 {
     /// <summary>
-    /// How long a hint may be. Past about this it stops reading as a note in the margin and
-    /// starts pushing the line it is about off the screen; what will not fit is in the tooltip.
+    /// The maximum length of a hint. Beyond about this length a hint stops reading as a note in
+    /// the margin and starts pushing the line it is about off the screen. Whatever does not fit is
+    /// in the tooltip.
     /// </summary>
     private const int MostCharacters = 12;
 
     /// <summary>
-    /// The hints for the lines <paramref name="first"/> to <paramref name="last"/>, inclusive.
+    /// Returns the hints for the lines <paramref name="first"/> to <paramref name="last"/>,
+    /// inclusive.
     /// </summary>
     /// <param name="analysis">The analysis of the whole program.</param>
     /// <param name="model">The file being hinted.</param>
     /// <param name="settings">Which kinds the editor shows.</param>
     /// <param name="first">The first line the editor is showing.</param>
     /// <param name="last">The last line the editor is showing.</param>
-    /// <param name="cancellation">Checked between lines, since a range may be a screenful or a whole file.</param>
+    /// <param name="cancellation">
+    /// The token checked between lines, since a range may be a screenful or a whole file.
+    /// </param>
     public static IReadOnlyList<Protocol.InlayHint> In(
         ProgramAnalysis analysis, SemanticModel model, HintSettings settings,
         int first, int last, CancellationToken cancellation)
@@ -70,8 +74,8 @@ internal static class InlayHints
     }
 
     /// <summary>
-    /// Every hint that could go at the end of one line, most surprising first. Only the first is
-    /// shown and the rest go in its tooltip, because with two notes at the end of one line
+    /// Returns every hint that could go at the end of one line, most surprising first. Only the
+    /// first is shown and the rest go in its tooltip, because with two notes at the end of one line
     /// neither gets read.
     /// </summary>
     private static IEnumerable<Mark> Ending(
@@ -95,8 +99,8 @@ internal static class InlayHints
     }
 
     /// <summary>
-    /// The single hint shown at a line's end, with the other hints that would have gone there
-    /// appended to its tooltip.
+    /// Builds the single hint shown at a line's end, with the other hints that would have gone
+    /// there appended to its tooltip.
     /// </summary>
     private static Protocol.InlayHint Ended(SyntaxTree tree, int line, IReadOnlyList<Mark> marks)
     {
@@ -110,16 +114,20 @@ internal static class InlayHints
             PaddingLeft: true);
     }
 
-    /// <summary>A label, cut to what fits with an ellipsis where it did not; the tooltip has it whole.</summary>
+    /// <summary>
+    /// Cuts a label to what fits, ending it with an ellipsis where it did not fit. The tooltip
+    /// has the whole label.
+    /// </summary>
     private static string Shortened(string label) =>
         label.Length <= MostCharacters ? label : label[..(MostCharacters - 1)].TrimEnd() + "…";
 
     /// <summary>
-    /// What runs after each statement: the next step of its basic block, or, for the statement
-    /// that ends a block, the first step of the block control falls through into. A call ends a
-    /// block and returns into the next one, and a branch not taken falls through into it. A
-    /// statement control never falls through — a return, a jump — has no entry, because the
-    /// code written below it is reached by some other path, not by running on from this line.
+    /// Maps each statement to what runs after it. That is the next step of its basic block, or,
+    /// for the statement that ends a block, the first step of the block that control falls
+    /// through into. A call ends a block and returns into the next one, and a branch not taken
+    /// falls through into it. A statement that control never falls through — a return or a jump —
+    /// has no entry, because the code below it is reached by some other path, not by running on
+    /// from this line.
     /// </summary>
     private static Dictionary<int, SyntaxNode> Following(ControlFlow? flow)
     {
@@ -143,9 +151,9 @@ internal static class InlayHints
     }
 
     /// <summary>
-    /// The register widths, emulation flag, D or B that the line changes, listing only the
-    /// parts that differ. An <c>.ensure</c> or a <c>.state</c> already states its effect, so
-    /// neither is hinted.
+    /// Returns a hint listing the register widths, emulation flag, D or B that the line changes,
+    /// with only the parts that differ. An <c>.ensure</c> or a <c>.state</c> already states its
+    /// effect, so neither is hinted.
     /// </summary>
     private static Mark? Changed(
         StateAnalysis states, IReadOnlyDictionary<int, SyntaxNode> following, StatementSyntax statement)
@@ -181,8 +189,8 @@ internal static class InlayHints
     }
 
     /// <summary>
-    /// A conditional branch whose target is out of reach of the two-byte form, so layout
-    /// emitted it as the opposite branch around a <c>jmp</c>.
+    /// Returns a hint for a conditional branch whose target is out of reach of the two-byte form,
+    /// so that layout emitted it as the opposite branch around a <c>jmp</c>.
     /// </summary>
     private static Mark? Lengthened(InstructionStatementSyntax branch, LineLayout laid)
     {
@@ -198,9 +206,9 @@ internal static class InlayHints
     }
 
     /// <summary>
-    /// A value a declaration does not write: the value an enum member takes from the one before
-    /// it, a struct or union member's offset, and what a constant written as an expression
-    /// works out to.
+    /// Returns a hint for a value a declaration does not give explicitly. Such a value is the
+    /// value an enum member takes from the one before it, a struct or union member's offset, or
+    /// the value a constant defined by an expression works out to.
     /// </summary>
     private static Mark? Implied(SemanticModel model, StatementSyntax statement)
     {
@@ -228,8 +236,8 @@ internal static class InlayHints
                 Protocol.InlayHintKind.Type);
         }
 
-        // A constant written as a literal already shows its value; one written as an expression
-        // over other names does not, and the resulting value is what it was written to compute.
+        // A constant defined by a literal already shows its value. One defined by an expression
+        // over other names does not, and the resulting value is what the expression computes.
         if (statement is ConstantDeclarationSyntax { Value: not LiteralExpressionSyntax } constant
             && model.SymbolAt(constant.Name) is { Value.IsKnown: true } value)
         {
@@ -242,9 +250,9 @@ internal static class InlayHints
     }
 
     /// <summary>
-    /// A line's cycle count: for an instruction, its own count; for a label on a line of its
-    /// own, the count of the basic block it starts, which is the run of lines under it that
-    /// always execute together.
+    /// Returns a hint giving a line's cycle count. For an instruction, it is the instruction's own
+    /// count. For a label on a line of its own, it is the count of the basic block the label
+    /// starts, which is the run of lines under it that always execute together.
     /// </summary>
     private static Mark? Counted(
         SemanticModel model, ControlFlow? flow, LineLayout? laid, StatementSyntax statement)
@@ -271,10 +279,10 @@ internal static class InlayHints
     }
 
     /// <summary>
-    /// Hints naming the parameter each positional argument of a call is for. None is given for
-    /// an argument that is itself the parameter's name, for a macro call that uses named
-    /// arguments, or for a callee with fewer than two parameters, where there is nothing to
-    /// wonder about.
+    /// Adds hints naming the parameter each positional argument of a call is for. No hint is given
+    /// for an argument that is itself the parameter's name, for a macro call that uses named
+    /// arguments, or for a callee with fewer than two parameters, where there is nothing to wonder
+    /// about.
     /// </summary>
     private static void Arguments(SemanticModel model, LineSyntax line, List<Protocol.InlayHint> hints)
     {
@@ -298,7 +306,10 @@ internal static class InlayHints
         }
     }
 
-    /// <summary>The arguments of a macro call that get a parameter-name hint, each with its parameter's name.</summary>
+    /// <summary>
+    /// Returns the arguments of a macro call that get a parameter-name hint, each with its
+    /// parameter's name.
+    /// </summary>
     private static IReadOnlyList<(string Parameter, SyntaxNode Argument)> Given(
         SemanticModel model, MacroCallSyntax call)
     {
@@ -321,7 +332,10 @@ internal static class InlayHints
         ];
     }
 
-    /// <summary>The same for a call to a <c>.func</c>, whose arguments are always positional.</summary>
+    /// <summary>
+    /// Returns the arguments of a call to a <c>.func</c> that get a parameter-name hint, each
+    /// with its parameter's name. A <c>.func</c> call's arguments are always positional.
+    /// </summary>
     private static IReadOnlyList<(string Parameter, SyntaxNode Argument)> Given(
         SemanticModel model, CallExpressionSyntax call)
     {
@@ -341,11 +355,17 @@ internal static class InlayHints
         return given;
     }
 
-    /// <summary>Whether an argument is just the name of its parameter, so that a hint would only repeat it.</summary>
+    /// <summary>
+    /// Checks whether an argument is just the name of its parameter, so that a hint would only
+    /// repeat it.
+    /// </summary>
     private static bool Matches(SyntaxNode argument, string parameter) =>
         argument is NameExpressionSyntax { SimpleName: { } word } && word.Text == parameter;
 
-    /// <summary>The instruction a line holds, a labelled one included; null for a line holding none.</summary>
+    /// <summary>
+    /// Returns the instruction a statement holds, including one after a label, or null for a
+    /// statement that holds none.
+    /// </summary>
     private static InstructionStatementSyntax? Instruction(StatementSyntax? statement) => statement switch
     {
         InstructionStatementSyntax instruction => instruction,
@@ -353,7 +373,10 @@ internal static class InlayHints
         _ => null,
     };
 
-    /// <summary>A value as a tooltip sentence shows it: nt65's own spelling, with the decimal from 10 upward, where it differs.</summary>
+    /// <summary>
+    /// Formats a value as a tooltip sentence shows it, in nt65's own form, followed by its
+    /// decimal value from 10 upward, where the two differ.
+    /// </summary>
     private static string Spell(Value value) => value.AsNumber() is { } number && number >= 10
         ? $"`{value}`, which is {number.ToString(CultureInfo.InvariantCulture)}"
         : $"`{value}`";
@@ -362,11 +385,13 @@ internal static class InlayHints
         $"{count.ToString(CultureInfo.InvariantCulture)} {what}{(count == 1 ? "" : "s")}";
 
     /// <summary>
-    /// One hint that could go at the end of a line: its label, what it means, and which of the
-    /// protocol's two hint kinds it is, if either.
+    /// Represents one hint that could go at the end of a line, with its label, its meaning, and
+    /// which of the protocol's two hint kinds it is, if either.
     /// </summary>
     /// <param name="Label">The few characters the editor draws.</param>
-    /// <param name="Tooltip">What they mean, in a sentence.</param>
-    /// <param name="Kind">What it is, or null where the protocol has no name for it.</param>
+    /// <param name="Tooltip">What the label means, in a sentence.</param>
+    /// <param name="Kind">
+    /// The protocol's kind for the hint, or null where the protocol has no name for it.
+    /// </param>
     private sealed record Mark(string Label, string Tooltip, Protocol.InlayHintKind? Kind = null);
 }

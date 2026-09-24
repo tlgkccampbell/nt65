@@ -4,6 +4,6 @@ namespace Norristown.Syntax;
 // summary, are generated.
 public sealed partial class InstructionStatementSyntax
 {
-    /// <summary>The instruction <see cref="Mnemonic"/> names.</summary>
+    /// <summary>Gets the instruction that <see cref="Mnemonic"/> names.</summary>
     public MnemonicKind MnemonicKind => Mnemonic.MnemonicKind;
 }

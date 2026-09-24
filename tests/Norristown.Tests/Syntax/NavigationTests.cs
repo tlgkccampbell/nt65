@@ -4,14 +4,15 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// Finding a place in the tree: the token a caret is in, the node a range names, and stepping
-/// from one token to the next. The sweep is every source in the repository, whole and with each
-/// line cut short, because an editor asks these of a file nobody has finished typing.
+/// Checks finding a place in the tree. That covers finding the token a caret is in and the node a
+/// range names, and stepping from one token to the next. The sweep covers every source in the
+/// repository, whole and with each line cut short, because an editor asks these questions of a
+/// file nobody has finished typing.
 /// </summary>
 public sealed class NavigationTests
 {
     /// <summary>
-    /// The most problems each check reports for one variant; beyond that, more reports would
+    /// The most problems each check reports for one variant. Beyond that, more reports would
     /// only repeat the same failure.
     /// </summary>
     private const int Most = 5;
@@ -47,7 +48,7 @@ public sealed class NavigationTests
 
     /// <summary>
     /// A caret in the whitespace before a token, or in the comment after one, finds the token the
-    /// trivia is written beside, and the trivia itself is found by the same position.
+    /// trivia sits beside, and the trivia itself is found by the same position.
     /// </summary>
     [Fact]
     public void ACaretInTriviaFindsTheTokenItIsWrittenBeside()
@@ -76,8 +77,8 @@ public sealed class NavigationTests
     }
 
     /// <summary>
-    /// A line's children are the pieces it is written in, and its tokens hang from the nodes they
-    /// are part of, so a walk of the file meets each of them once.
+    /// A line's children are its child elements, and its tokens hang from the nodes they are part
+    /// of, so a walk of the file meets each of them once.
     /// </summary>
     [Fact]
     public void ALineShowsThePiecesItIsWrittenIn()
@@ -92,7 +93,8 @@ public sealed class NavigationTests
         Assert.Same(opener.Statement, tree.Root.FindToken(opener.Statement.Span.Start).Parent);
         Assert.Same(opener, tree.Root.FindToken(opener.Position).Parent);
 
-        // Tokens the statement could not take are a separate piece of the line, after the statement.
+        // Tokens the statement could not take are a separate child element of the line, after the
+        // statement.
         var skipped = (LineSyntax)((SyntaxNode)tree.Root).ChildNodes[1];
         Assert.Equal(
             [SyntaxKind.InstructionStatement, SyntaxKind.SkippedTokens, SyntaxKind.EndOfLine],
@@ -102,8 +104,8 @@ public sealed class NavigationTests
     }
 
     /// <summary>
-    /// The first and last tokens of a node, with and without the ones that write nothing: a
-    /// missing token stands in the tree where a piece belongs and has no text.
+    /// A node's first and last tokens are found both with and without the tokens that have no
+    /// text. A missing token stands in the tree where a child element belongs and has no text.
     /// </summary>
     [Fact]
     public void TheFirstAndLastTokensSkipWhatWritesNothing()
@@ -116,13 +118,15 @@ public sealed class NavigationTests
         Assert.Equal(SyntaxKind.OpenBrace, proc.GetLastToken(includeZeroWidth: true)?.Kind);
         Assert.True(proc.GetLastToken(includeZeroWidth: true)?.IsMissing);
 
-        // A file's last line is the empty one after its last break, and it writes nothing at all.
+        // A file's last line is the empty one after its last break, and it has no text at all.
         var last = tree.GetLine(tree.LineCount - 1);
         Assert.Null(last.GetFirstToken());
         Assert.Equal(SyntaxKind.EndOfLine, last.GetLastToken(includeZeroWidth: true)?.Kind);
     }
 
-    /// <summary>The nodes holding a node, and the nearest one of a kind, innermost first.</summary>
+    /// <summary>
+    /// A node's ancestors are found innermost first, and so is the nearest one of a kind.
+    /// </summary>
     [Fact]
     public void AncestorsAreTheNodesHoldingANode()
     {
@@ -144,7 +148,7 @@ public sealed class NavigationTests
         Assert.Same(tree.GetLine(1), number.FirstAncestorOrSelf<LineSyntax>());
     }
 
-    /// <summary>Stepping over a line break and over the end of the file.</summary>
+    /// <summary>Stepping from token to token crosses a line break and stops at the end of the file.</summary>
     [Fact]
     public void SteppingCrossesLinesAndStopsAtTheEnds()
     {
@@ -156,7 +160,7 @@ public sealed class NavigationTests
         Assert.Equal("lda", first.GetNextToken()?.GetNextToken()?.Text);
         Assert.Equal("nop", first.GetNextToken()?.GetNextToken()?.GetPreviousToken()?.GetPreviousToken()?.Text);
 
-        // The file ends with the empty line after its last break, whose own break writes nothing.
+        // The file ends with the empty line after its last break, whose own break has no text.
         var end = tree.Root.GetLastToken(includeZeroWidth: true)!.Value;
         Assert.Equal(SyntaxKind.EndOfLine, end.Kind);
         Assert.Equal("", end.Text);
@@ -164,8 +168,9 @@ public sealed class NavigationTests
     }
 
     /// <summary>
-    /// Every position of the file finds a token: the one whose text or trivia holds it, never a
-    /// missing one, and the same token the walk over the tree's tokens has at that place.
+    /// Every position of the file finds a token. It is the token whose text or trivia holds the
+    /// position, never a missing one, and the same token the walk over the tree's tokens has at
+    /// that place.
     /// </summary>
     private static void EveryPositionFindsTheTokenWrittenThere(SyntaxTree tree, List<string> problems)
     {
@@ -188,15 +193,15 @@ public sealed class NavigationTests
                 problems.Add($"{position} finds {Told(found)}, and the walk has {Told(tokens[at])}");
         }
 
-        // Nothing is written at the end of the file, and the last token is the answer there.
+        // The end of the file has no text, and the last token is the answer there.
         var end = tree.Root.FindToken(tree.Text.Length);
         if (end.Position != tokens[^1].Position)
             problems.Add($"the end of the file finds {Told(end)}, not the last token {Told(tokens[^1])}");
     }
 
     /// <summary>
-    /// The tokens under the root are the file: each of them once, in source order, and their text
-    /// with their trivia is the file's own text back.
+    /// The tokens under the root make up the file. Each of them appears once, in source order,
+    /// and their text with their trivia is the file's own text.
     /// </summary>
     private static void TheTokensOfTheRootAreTheFile(SyntaxTree tree, List<string> problems)
     {
@@ -259,12 +264,14 @@ public sealed class NavigationTests
         }
     }
 
-    /// <summary>Whether two answers are the same token, or both no token at all.</summary>
+    /// <summary>Returns whether two answers are the same token, or both no token at all.</summary>
     private static bool Same(SyntaxToken? left, SyntaxToken? right) =>
         (left is null && right is null)
         || (left is { } one && right is { } other && one.Position == other.Position && one.Kind == other.Kind);
 
-    /// <summary>A token as a failure message names it, or "nothing" where there is no token.</summary>
+    /// <summary>
+    /// Returns a token's name as a failure message gives it, or "nothing" where there is no token.
+    /// </summary>
     private static string Told(SyntaxToken? token) =>
         token is { } written ? $"`{written.Text}` ({written.Kind} at {written.FullSpan})" : "nothing";
 }

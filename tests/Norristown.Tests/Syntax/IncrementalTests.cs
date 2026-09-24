@@ -39,9 +39,9 @@ public sealed class IncrementalTests
     }
 
     /// <summary>
-    /// A broken line's diagnostics are part of the nodes its parse hands back, so an edit
-    /// somewhere else keeps them without parsing the line again, and their spans move with the
-    /// line, because a green node holds a diagnostic's offset relative to itself.
+    /// A broken line's diagnostics are part of the nodes its parse returns, so an edit somewhere
+    /// else keeps them without parsing the line again. Their spans move with the line, because a
+    /// green node holds a diagnostic's offset relative to itself.
     /// </summary>
     [Fact]
     public void AnEditElsewhereKeepsABrokenLineAndItsDiagnostics()
@@ -51,8 +51,8 @@ public sealed class IncrementalTests
             [new Span("main.nt65", 2, 8, 8)],
             tree.Diagnostics.Select(d => d.Span));
 
-        // A line inserted above it: the statement is the same object, and the diagnostic has
-        // moved down a line and nowhere else.
+        // When a line is inserted above it, the statement is the same object, and the diagnostic
+        // has moved down a line and nowhere else.
         var edited = tree.WithChange(new TextChange(0, 0, "  sei\n"));
         Assert.Same(tree.Lines[1], edited.Lines[2]);
         Assert.Same(tree.Parsed(1).Node, edited.Parsed(2).Node);
@@ -60,8 +60,8 @@ public sealed class IncrementalTests
             [new Span("main.nt65", 3, 8, 8)],
             edited.Diagnostics.Select(d => d.Span));
 
-        // And text inserted on the line above it, which leaves the diagnostic's line and column
-        // as they were.
+        // Text inserted on the line above it leaves the diagnostic's line and column as they
+        // were.
         var indented = tree.WithChange(new TextChange(0, 0, "    "));
         Assert.Same(tree.Parsed(1).Node, indented.Parsed(1).Node);
         Assert.Equal(tree.Diagnostics, indented.Diagnostics);
@@ -141,8 +141,8 @@ public sealed class IncrementalTests
     /// <summary>
     /// The edits of one keystroke arrive together, and applying them in one pass gives the same
     /// tree as applying them one at a time. The changes are random, in runs of up to five, and
-    /// each one's position refers to the text the earlier ones in its run left, which is how a
-    /// client sends them.
+    /// each one's position refers to the text the earlier ones in its run left, as a client sends
+    /// them.
     /// </summary>
     [Fact]
     public void ChangesTogetherMatchTheSameChangesOneAtATime()
@@ -208,7 +208,7 @@ public sealed class IncrementalTests
             Assert.Fail(failures[0]);
     }
 
-    /// <summary>What is wrong with one step of the replay, if anything.</summary>
+    /// <summary>Returns what is wrong with one step of the replay, if anything.</summary>
     private static IEnumerable<string> Problems(Step step)
     {
         var (index, change, before, after) = step;
@@ -234,6 +234,8 @@ public sealed class IncrementalTests
         }
     }
 
-    /// <summary>One edit of the replay: the tree it was made on, and the tree it gave.</summary>
+    /// <summary>
+    /// Represents one edit of the replay, with the tree it was made on and the tree it produced.
+    /// </summary>
     private readonly record struct Step(int Index, TextChange Change, SyntaxTree Before, SyntaxTree After);
 }

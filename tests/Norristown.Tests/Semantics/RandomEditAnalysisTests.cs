@@ -1,14 +1,15 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// Random edits replayed both ways, incrementally and from scratch, and compared after each.
+/// Replays random edits both ways, incrementally and from scratch, and compares the results after
+/// each.
 /// They are a class of their own so that they run beside the scripted edits rather than after
 /// them.
 /// </summary>
 public sealed class RandomEditAnalysisTests(ITestOutputHelper output)
 {
     /// <summary>
-    /// Edits at random places, most of which leave a file that does not parse. Whatever the
+    /// Makes edits at random places, most of which leave a file that does not parse. Whatever the
     /// edit breaks, the analysis that starts from the one before it has to break the same way.
     /// </summary>
     [Theory]

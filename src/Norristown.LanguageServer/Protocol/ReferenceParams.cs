@@ -1,9 +1,9 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary><c>textDocument/references</c>.</summary>
+/// <summary>Parameters of the <c>textDocument/references</c> request.</summary>
 /// <param name="TextDocument">The document.</param>
-/// <param name="Position">The name to look for.</param>
-/// <param name="Context">What to include.</param>
+/// <param name="Position">The position of the name to find references to.</param>
+/// <param name="Context">Which references to include.</param>
 internal sealed record ReferenceParams(
     TextDocumentIdentifier TextDocument,
     Position Position,

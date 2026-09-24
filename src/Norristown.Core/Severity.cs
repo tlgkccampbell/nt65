@@ -1,6 +1,6 @@
 namespace Norristown;
 
-/// <summary>How much a diagnostic matters.</summary>
+/// <summary>Specifies how much a diagnostic matters.</summary>
 public enum Severity
 {
     /// <summary>The program is wrong, and no output is produced for it.</summary>

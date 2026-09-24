@@ -3,28 +3,37 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a macro's syntax says: the pieces of a definition and of a call, and the items a
-/// body may not hold. Reading them is shared, because binding, expansion and the editor
-/// all ask the same questions of the same lines.
+/// Reads a macro's syntax, including the parts of a definition and of a call and the statements a
+/// body may not contain. Binding, expansion and the editor all ask the same questions of the
+/// same lines, so they share these methods.
 /// </summary>
 public static class Macros
 {
-    /// <summary>What a call that leaves the parameter out gets, or null when it has no default.</summary>
+    /// <summary>
+    /// Returns the value <paramref name="parameter"/> gets when a call leaves it out, or null when
+    /// it has no default.
+    /// </summary>
     public static SyntaxNode? DefaultOf(MacroParameterSyntax parameter) =>
         parameter.Default is { } written and not EmptyBlockSyntax ? written : null;
 
-    /// <summary>One parameter as the analysis reads it, given the symbol its name declares.</summary>
+    /// <summary>
+    /// Returns <paramref name="parameter"/> as the analysis sees it, given the symbol its name
+    /// declares.
+    /// </summary>
     public static MacroParameter Describe(MacroParameterSyntax parameter, Symbol symbol) =>
         new(symbol,
             ArgumentKind.Read(parameter.ParameterKind),
             DefaultOf(parameter),
             parameter.Default is EmptyBlockSyntax);
 
-    /// <summary>The macro a call names.</summary>
+    /// <summary>Returns the name of the macro <paramref name="call"/> calls, or null if it has none.</summary>
     public static SyntaxToken? CalleeOf(MacroCallSyntax call) =>
         call.Name is { Kind: SyntaxKind.Identifier or SyntaxKind.Mnemonic } name ? name : null;
 
-    /// <summary>The call a line holds, whether it stands alone or follows a label.</summary>
+    /// <summary>
+    /// Returns the macro call <paramref name="statement"/> contains, whether it stands alone or
+    /// follows a label, or null if there is none.
+    /// </summary>
     public static MacroCallSyntax? CallIn(StatementSyntax? statement) => statement switch
     {
         MacroCallSyntax call => call,
@@ -33,14 +42,14 @@ public static class Macros
     };
 
     /// <summary>
-    /// The blocks a call opens, in order: the one its own line opens, and each
-    /// <c>} name {</c> after it, which the block layer makes a sibling rather than a child.
-    /// Empty when the call takes no block.
+    /// Returns the blocks <paramref name="call"/> opens, in order. These are the block its own
+    /// line opens and each <c>} name {</c> block after it, which the block layer makes a sibling
+    /// rather than a child. The list is empty when the call takes no block.
     /// </summary>
     public static IReadOnlyList<BlockSyntax> BlocksOf(MacroCallSyntax call)
     {
-        // The block around the call's line is the call's only when that line opens it: a call
-        // written inside another call's block argument is in that block, and opens none.
+        // The block around the call's line belongs to the call only when that line opens it. A
+        // call inside another call's block argument is in that block and opens none.
         if (call.FirstAncestorOrSelf<LineSyntax>() is not { Parent: BlockSyntax { BlockKind: BlockKind.MacroBlock, Parent: { } container } block } line
             || block.Opener != line)
         {
@@ -57,33 +66,36 @@ public static class Macros
         return blocks;
     }
 
-    /// <summary>The lines of a block argument: everything between the braces around it.</summary>
+    /// <summary>
+    /// Returns the lines of a block argument, which are everything between the braces around it.
+    /// </summary>
     public static IReadOnlyList<SyntaxNode> LinesOf(BlockSyntax block)
     {
         var lines = block.ChildNodes;
         var last = lines.Length;
 
-        // The line that opens the block is its first; the `}` that closes it is a line of its
-        // own, and a `} name {` belongs to the block it opens rather than to this one.
+        // The line that opens the block is its first line. The `}` that closes it is a line of
+        // its own, and a `} name {` belongs to the block it opens, not to this one.
         if (last > 1 && lines[last - 1] is LineSyntax { Statement: BlockCloseLineSyntax })
             last--;
         return [.. lines.Take(last).Skip(1)];
     }
 
     /// <summary>
-    /// Reports any macro that can reach itself, directly or through others. nt65 checks this
-    /// from the names its bodies resolved to, without expanding anything, which is what makes
-    /// every expansion bounded.
+    /// Reports a diagnostic for each macro that can reach itself, directly or through others.
+    /// nt65 checks this from the names the bodies resolved to, without expanding anything, and
+    /// this check guarantees that every expansion is bounded.
     /// <para>
-    /// Macros that reach one another are one problem, reported once, for whichever of them
-    /// comes first in the program by file and position, at the first call on the path back to
-    /// it. Which macro the check starts from does not change what is reported or where, so a
-    /// program checked a few files at a time gets the same report as one checked whole.
+    /// Macros that reach one another form one problem, which is reported once. It is reported for
+    /// the macro that comes first in the program by file and position, at the first call on the
+    /// path back to it. The macro the check starts from does not change what is reported or
+    /// where, so a program checked a few files at a time gets the same report as one checked
+    /// whole.
     /// </para>
     /// <para>
-    /// <paramref name="current"/> maps a callee to its symbol now: a macro of a file that was
-    /// not read again may still name an earlier version of another file's macro.
-    /// <paramref name="report"/> is given the macro each problem is reported for.
+    /// <paramref name="current"/> maps a callee to its current symbol, because a macro in a file
+    /// that was not read again may still name an earlier version of another file's macro.
+    /// <paramref name="report"/> receives the macro each problem is reported for.
     /// </para>
     /// </summary>
     public static void CheckRecursion(
@@ -116,8 +128,8 @@ public static class Macros
             if (cycle.Any(other => First(other, macro)))
                 continue;
 
-            // The cycle is named by what it goes through, so a reader can see which call to
-            // break rather than only that something is circular.
+            // The message lists the macros the cycle goes through, so a reader can see which call
+            // to break rather than only that something is circular.
             var path = new List<Symbol>();
             var visited = new HashSet<Symbol>();
             if (Back(macro) is { } at)
@@ -128,7 +140,8 @@ public static class Macros
                     through.Count == 0 ? "" : $" through {string.Join(", ", through)}")));
             }
 
-            // The first call, in the order the bodies are written, that leads back to the macro.
+            // Finds the first call, in source order across the bodies, that leads back to the
+            // macro.
             Span? Back(Symbol from)
             {
                 visited.Add(from);
@@ -152,8 +165,9 @@ public static class Macros
     }
 
     /// <summary>
-    /// Every macro an expansion of <paramref name="called"/> can reach, the ones they call
-    /// included. What all of their bodies use is what a file that calls them has to bring in.
+    /// Returns every macro an expansion of <paramref name="called"/> can reach, including the
+    /// macros in <paramref name="called"/> themselves. A file that calls them must bring in
+    /// everything that all of their bodies use.
     /// </summary>
     public static IReadOnlyList<Symbol> Reachable(IEnumerable<Symbol> called)
     {
@@ -175,8 +189,9 @@ public static class Macros
     }
 
     /// <summary>
-    /// A symbol an exported macro uses without being given it must itself be exported: the
-    /// expansion lands in another file, where an unexported name means nothing.
+    /// Reports a diagnostic for each symbol of its own file that an exported macro uses without
+    /// being given it, when that symbol is not exported. The expansion lands in another file,
+    /// where an unexported name means nothing.
     /// </summary>
     public static void CheckExportedUses(
         IEnumerable<Symbol> macros, Func<Symbol, bool> isExported, List<Diagnostic> diagnostics)
@@ -197,15 +212,19 @@ public static class Macros
     }
 
     /// <summary>
-    /// Why a macro body may not hold this statement, or null when it may. Each of these
-    /// would either declare a name in the caller or make something program-wide depend on
-    /// how many times the macro is called.
+    /// Returns the message explaining why a macro body may not contain
+    /// <paramref name="statement"/>, or null when it may. Each forbidden statement would either
+    /// declare a name in the caller or make something program-wide depend on how many times the
+    /// macro is called.
     /// </summary>
     public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
         ? Catalogue.DeclarationInAMacroBody.Says(why.What, why.Because)
         : (DiagnosticMessage?)null;
 
-    /// <summary>The two halves of that message, what is refused and why, or null when the statement is allowed.</summary>
+    /// <summary>
+    /// Returns the two halves of the <see cref="Forbidden"/> message, what is refused and why, or
+    /// null when the statement is allowed.
+    /// </summary>
     private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
     {
         { IsExported: true } or ExportDirectiveSyntax =>

@@ -1,16 +1,19 @@
 namespace Norristown.Cli;
 
 /// <summary>
-/// The record nt65 keeps, under an output directory, of the files it wrote there. An output
-/// whose module has gone from the program is deleted on the next build, and only a file the
-/// record names is ever deleted, so nothing nt65 did not write is touched.
+/// Maintains the record nt65 keeps, under an output directory, of the files it wrote there. An
+/// output whose module has gone from the program is deleted on the next build, and only a file
+/// the record names is ever deleted, so nothing nt65 did not write is touched.
 /// </summary>
 public static class OutputManifest
 {
-    /// <summary>What the record is called, in the output directory.</summary>
+    /// <summary>The name of the record's file in the output directory.</summary>
     public const string Name = ".nt65-outputs";
 
-    /// <summary>How the file system tells two paths apart, which is not how nt65 tells two names apart.</summary>
+    /// <summary>
+    /// The comparer the file system uses to tell two paths apart, which is not how nt65 tells two
+    /// names apart.
+    /// </summary>
     private static readonly StringComparer Names = FilePaths.Comparer;
 
     /// <summary>
@@ -28,9 +31,9 @@ public static class OutputManifest
         var now = written.Order(StringComparer.Ordinal).ToList();
 
         // Whether a recorded path is one of these is a question about files rather than about
-        // names, so it is asked the way the file system would answer it: a module renamed
+        // names, so it is asked the way the file system would answer it. A module renamed from
         // `Gfx` to `gfx` writes the same file on Windows and a different one elsewhere, and
-        // deleting the one just written would be the worst answer either way.
+        // deleting the file just written would be the worst answer either way.
         var kept = now.ToHashSet(Names);
 
         var deleted = new List<string>();

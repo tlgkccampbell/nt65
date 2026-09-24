@@ -3,8 +3,8 @@ using Norristown.Cli;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// <c>nt65 fmt</c> on real directories: what it writes, what <c>--check</c> says without
-/// writing, and what it formats when it is named nothing.
+/// Tests <c>nt65 fmt</c> on real directories. The tests cover what it writes, what
+/// <c>--check</c> reports without writing, and what it formats when no file is named.
 /// </summary>
 public sealed class FormatCommandTests : IDisposable
 {
@@ -28,8 +28,9 @@ public sealed class FormatCommandTests : IDisposable
     }
 
     /// <summary>
-    /// <c>--check</c> writes nothing and lists what it would have written, which is what a gate
-    /// wants: the exit code says whether the tree is formatted and the list says where it is not.
+    /// <c>--check</c> writes nothing and lists the files it would have written, which is what a
+    /// gate wants. The exit code shows whether the tree is formatted, and the list shows where it
+    /// is not.
     /// </summary>
     [Fact]
     public void CheckListsWhatIsNotFormattedAndWritesNothing()
@@ -48,7 +49,7 @@ public sealed class FormatCommandTests : IDisposable
 
     /// <summary>
     /// Given no files, it formats the files of the nearest project at or above the directory it
-    /// runs in, which is how a whole repository is formatted.
+    /// runs in. This is how a whole repository is formatted.
     /// </summary>
     [Fact]
     public void NamedNothingItFormatsWhatTheProjectNames()
@@ -68,9 +69,9 @@ public sealed class FormatCommandTests : IDisposable
     }
 
     /// <summary>
-    /// Formatting needs no program, so a named file that belongs to no project still formats; but
-    /// with no file named and no project to take files from, there is nothing to format, and nt65
-    /// says so before printing the usage text.
+    /// Formatting needs no program, so a named file that belongs to no project still formats.
+    /// With no file named and no project to take files from, there is nothing to format, and nt65
+    /// reports that before printing the usage text.
     /// </summary>
     [Fact]
     public void WithNothingToFormatItSaysSo()

@@ -4,21 +4,24 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The comment above a declaration, which is what an editor shows about it beyond what the
-/// analysis worked out. There is no doc-comment syntax of its own: the <c>;</c> lines directly
-/// above a declaration, each on a line of its own, are the comment, and a blank line or any
-/// code between ends it. That is how assembly is commented already.
+/// Reads the comment above a declaration, which an editor shows in addition to what the analysis
+/// worked out. The language has no doc-comment syntax of its own. The <c>;</c> lines directly
+/// above a declaration, each on a line of its own, form the comment, and a blank line or any code
+/// between them ends it. That is how assembly is already commented.
 /// </summary>
 internal static class DocComments
 {
     /// <summary>
-    /// The comment above what <paramref name="symbol"/> declares, or null when it has none.
-    /// Every instance of a family (the declarations a repetition makes) is declared on the
-    /// family's line, so each instance shows the family's comment.
+    /// Returns the comment above the declaration of <paramref name="symbol"/>, or null when it
+    /// has none. Every instance of a <see cref="Family"/> (the declarations a repetition makes)
+    /// is declared on the family's line, so each instance shows the family's comment.
     /// </summary>
     public static string? Of(Symbol symbol) => Above(symbol.Tree, symbol.NameSpan.Start);
 
-    /// <summary>The comment on the lines directly above the one <paramref name="position"/> is on.</summary>
+    /// <summary>
+    /// Returns the comment on the lines directly above the line <paramref name="position"/> is
+    /// on, or null if there is none.
+    /// </summary>
     public static string? Above(SyntaxTree tree, int position)
     {
         var lines = new List<string>();
@@ -37,7 +40,7 @@ internal static class DocComments
         return text.Length == 0 ? null : text;
     }
 
-    /// <summary>One line of the file, without its line break.</summary>
+    /// <summary>Returns one line of the file, without its line break.</summary>
     private static string Text(SyntaxTree tree, int line)
     {
         var start = tree.LineStarts[line];
@@ -46,9 +49,9 @@ internal static class DocComments
     }
 
     /// <summary>
-    /// A comment line as it is read: the <c>;</c> that marks it and the one space that
-    /// usually follows come off, and whatever else the line was indented by stays, so a list
-    /// or an example keeps its shape.
+    /// Returns the text of a comment line. The <c>;</c> that marks it and the single space that
+    /// usually follows are removed, and any further indentation is kept, so that a list or an
+    /// example keeps its shape.
     /// </summary>
     private static string Stripped(string written)
     {

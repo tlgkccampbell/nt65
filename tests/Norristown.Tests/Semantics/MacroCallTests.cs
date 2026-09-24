@@ -1,8 +1,9 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// What a call is checked for: each argument against its parameter's kind, the arguments
-/// against the parameters as a whole, and the macro against calling itself, directly or not.
+/// Checks what a call is checked for. Each argument is checked against its parameter's kind, the
+/// arguments against the parameters as a whole, and the macro against calling itself, directly
+/// or not.
 /// </summary>
 public sealed class MacroCallTests
 {
@@ -110,7 +111,10 @@ public sealed class MacroCallTests
         Assert.Equal([$"9: {message}"], model.Problems());
     }
 
-    /// <summary>A <c>one</c> argument is a word checked against the list and never looked up as a name, so a register is fine.</summary>
+    /// <summary>
+    /// A <c>one</c> argument is a word checked against the list and never looked up as a name, so
+    /// a register is fine.
+    /// </summary>
     [Fact]
     public void AOneArgumentIsAWordRatherThanAName()
     {
@@ -328,7 +332,7 @@ public sealed class MacroCallTests
         Assert.Equal(["main.nt65:11: `s` is a register name and cannot be used as a name"], program.Problems());
     }
 
-    /// <summary>Two calls to the same macro are not a cycle, however many there are.</summary>
+    /// <summary>Two calls to the same macro are not a cycle, no matter how many there are.</summary>
     [Fact]
     public void CallingTheSameMacroTwiceIsNotRecursion()
     {

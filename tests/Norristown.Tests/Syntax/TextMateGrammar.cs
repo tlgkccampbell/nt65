@@ -8,16 +8,18 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// The VS Code grammar, editors/vscode/syntaxes/nt65.tmLanguage.json, is generated from the
-/// lexer's tables and checked against the parser's reading of each line.
+/// Generates the VS Code grammar, editors/vscode/syntaxes/nt65.tmLanguage.json, from the lexer's
+/// tables, and scopes lines with it so that tests can check it against the parser's reading of
+/// each line.
 /// <para>
-/// The language server colours every name by what it refers to, and the client draws that over
-/// the grammar once the server answers. So that a name does not change colour then, the grammar
-/// gives each declaration the scope VS Code maps the server's token type to: the name after
-/// <c>.proc</c> is <c>entity.name.function</c>, as a <c>function</c> token is. A declaration is
-/// known from its own line, or from the block it is in: the members of an enum, a struct or a
-/// union, and the member names of a record. A use, <c>jsr init</c> or <c>Joy::A</c>, names
-/// something only the server can see, and keeps the plain scope.
+/// The language server colours every name by what it refers to, and the client draws that
+/// colour over the grammar once the server answers. So that a name does not change colour at that
+/// point, the grammar gives each declaration the scope that VS Code maps the server's token type
+/// to. For example, the name after <c>.proc</c> is <c>entity.name.function</c>, as a
+/// <c>function</c> token is. A declaration is recognized from its own line, or from the block it
+/// is in, as the members of an enum, a struct or a union and the member names of a record are. A
+/// use, such as <c>jsr init</c> or <c>Joy::A</c>, names something only the server can see, so it
+/// keeps the plain scope.
 /// </para>
 /// </summary>
 internal static class TextMateGrammar
@@ -77,12 +79,13 @@ internal static class TextMateGrammar
 
     private static readonly Lazy<Dictionary<string, IReadOnlyList<Rule>>> repository = new(Build);
 
-    /// <summary>The rules every line is scoped with, and the blocks that reach past a line.</summary>
+    /// <summary>Gets the rules every line is scoped with, and the blocks that reach past a line.</summary>
     private static Dictionary<string, IReadOnlyList<Rule>> Repository => repository.Value;
 
-    /// <summary>The top level of the grammar: every line's rules.</summary>
+    /// <summary>Gets the top level of the grammar, which includes every line's rules.</summary>
     private static IReadOnlyList<Rule> Root => [Rule.Including(LineRules)];
 
+    /// <summary>Returns the text of the grammar file.</summary>
     public static string Generate()
     {
         var stream = new MemoryStream();
@@ -111,7 +114,7 @@ internal static class TextMateGrammar
     /// <summary>
     /// Scopes each character of each line the way a TextMate tokenizer runs the grammar. From the
     /// current position, the end of the innermost open block and every rule it holds are tried.
-    /// The leftmost match wins; on a tie the rule listed earlier wins, and the block's end beats
+    /// The leftmost match wins. On a tie the rule listed earlier wins, and the block's end beats
     /// every rule. A block's end may be <c>$</c>, which matches at the end of a line.
     /// </summary>
     public static string?[][] Scope(IReadOnlyList<string> lines)
@@ -167,8 +170,8 @@ internal static class TextMateGrammar
     }
 
     /// <summary>
-    /// The scope the grammar should give a token, or null for none (punctuation), from what the
-    /// parser reads the line as and the block it is in.
+    /// Returns the scope the grammar should give a token, or null for punctuation, which gets no
+    /// scope. The scope follows from how the parser reads the line and from the block it is in.
     /// </summary>
     public static string? Expected(LineSyntax line, int index, BlockKind body)
     {
@@ -195,8 +198,8 @@ internal static class TextMateGrammar
     }
 
     /// <summary>
-    /// The scope of a name the parser reads as a declaration, a member or a parameter, or null
-    /// for a name the grammar cannot place.
+    /// Returns the scope of a name the parser reads as a declaration, a member or a parameter, or
+    /// null for a name whose role the grammar cannot recognize.
     /// </summary>
     private static string? NameScope(List<SyntaxToken> tokens, int index, BlockKind body)
     {
@@ -208,8 +211,9 @@ internal static class TextMateGrammar
         var first = !token.Parent.ChildTokens.TakeWhile(earlier => earlier != token).Any(IsName);
         return token.Parent switch
         {
-            // What a macro parameter takes: the kind's word, the modes an `operand` lists and the
-            // words a `one` does. The enum an enum kind names is a use, which only the server can see.
+            // These are the parts of what a macro parameter takes: the kind's word, the modes an
+            // `operand` lists and the words a `one` lists. The enum that an enum kind names is a
+            // use, which only the server can see.
             ParameterKindSyntax kind when token == kind.Keyword => Kind,
             ModuleDirectiveSyntax module when token == module.Placement => Kind,
             IdentifierNameSyntax { Parent: ParameterKindSyntax { Keyword.Text: var keyword } }
@@ -240,10 +244,10 @@ internal static class TextMateGrammar
     }
 
     /// <summary>
-    /// Every token of a line in source order, taken from the pieces it is written in: the
-    /// <c>.export</c> that exports what it declares, its statement, whatever the statement could
-    /// not take, and the line break that ends it. A missing token has no text, so the grammar
-    /// has nothing to scope for it and it is left out.
+    /// Returns every token of a line in source order, taken from the line's child elements. Those
+    /// are the <c>.export</c> that exports what the line declares, its statement, the tokens the
+    /// statement could not take, and the line break that ends it. A missing token has no text, so
+    /// the grammar has nothing to scope for it, and it is left out.
     /// </summary>
     private static List<SyntaxToken> Tokens(LineSyntax line)
     {
@@ -291,9 +295,10 @@ internal static class TextMateGrammar
         // that their `)` does not end the header or the call.
         var parentheses = new Rule(Begin: @"\(", End: @"\)", Patterns: [include]);
 
-        // What a macro parameter takes, from its `:` to the `,`, `)` or `=` after the kind: the
-        // kind's word, the modes an `operand(...)` lists, the words a `one(...)` does, what each
-        // item of a `list(...)` is, or the range of a `const(...)`. An enum's name is a use.
+        // These rules scope what a macro parameter takes, from its `:` to the `,`, `)` or `=`
+        // after the kind. That text holds the kind's word, the modes an `operand(...)` lists, the
+        // words a `one(...)` lists, the kind of each item of a `list(...)`, or the range of a
+        // `const(...)`. An enum's name is a use.
         var kind = Rule.Including("kind");
         rules["kind"] =
         [
@@ -306,9 +311,10 @@ internal static class TextMateGrammar
             include,
         ];
 
-        // A record's values, on the directive's line or the lines after it. A `{` inside one is a
-        // record or a list of its own. A member's match starts with the space before it, so that
-        // it starts where a constant declaration's would and wins the tie.
+        // These rules scope a record's values, on the directive's line or the lines after it. A
+        // `{` inside a record opens a record or a list of its own. A member's match starts with
+        // the space before it, so that it starts where a constant declaration's would and wins
+        // the tie.
         var record = Rule.Including("record");
         rules["record"] = [new Rule(Begin: @"\{", End: @"\}",
             Patterns: [record, Rule.Scoped($@"\s*({Word})(?=\s*=(?!=))", Property), include])];
@@ -320,7 +326,7 @@ internal static class TextMateGrammar
         rules["members"] = [Rule.Block($@"(?i)(\.(?:if|elseif|else))\b", @"\}", [Directive],
             [members, Rule.Scoped($@"^\s*({Word})", EnumMember), include])];
 
-        // A struct or union body, which may hold anonymous ones.
+        // These rules scope a struct or union body, which may hold anonymous structs and unions.
         var layout = Rule.Including("layout");
         rules["layout"] = [Rule.Block($@"(?i)(\.(?:struct|union))(?:\s+({Word}))?\s*(\{{)", @"\}", [Directive, Struct],
             [layout, Rule.Scoped($@"^\s*(@?{Word})(?=\s*:(?!:))", Property), include])];
@@ -344,15 +350,15 @@ internal static class TextMateGrammar
             Rule.Block($@"(?i)(\.macro)\s+({Word})\s*(\()", @"\)", [Directive, Macro],
                 [new Rule(Begin: ":", End: @"(?=[,)=])", Patterns: [kind]), parentheses, Rule.Scoped($@"(?<=[(,])\s*({Word})(?=\s*[,):=])", Parameter), include]),
 
-            // The names an import declares, each first in its item: a constant given a value, or
-            // an address. A routine's signature is in brackets of its own. "First in its item" is
-            // a lookbehind, as a macro's parameters are, because `\G` means only "just after the
-            // block opened" to VS Code's tokenizer.
+            // An import declares names, each first in its item. Each name is a constant given a
+            // value, or an address. A routine's signature is in brackets of its own. "First in its
+            // item" is a lookbehind, as it is for a macro's parameters, because to VS Code's
+            // tokenizer `\G` means only "just after the block opened".
             Rule.Block($@"(?i)(\.import)\b", "$", [Directive],
                 [parentheses, Rule.Scoped($@"(?i)(?<=\.import\s|,)\s*({Word})(?=\s*=(?!=))", Constant),
                     Rule.Scoped($@"(?i)(?<=\.import\s|,)\s*({Word})", Variable), include]),
 
-            // Whether a module may be placed, the word after its name's `:`.
+            // The word after a module name's `:` says whether the module may be placed.
             Rule.Block($@"(?i)(\.module)\b", "$", [Directive],
                 [Rule.Scoped(@"(?i)(?<!:):(?!:)\s*\b(placed|placeable)\b", Kind), include]),
 
@@ -377,13 +383,13 @@ internal static class TextMateGrammar
             new Rule(Match: @"\.[A-Za-z_][A-Za-z0-9_]*", Name: Directive),
             Rule.Scoped($@"^\s*({Word})(?=\s*=(?!=))", Constant),
 
-            // A label at the start of a line; `name::` is a scoped name, not a label.
+            // A label sits at the start of a line. `name::` is a scoped name, not a label.
             Rule.Scoped($@"^\s*(@?{Word})(?=\s*:(?!:))", Label),
             new Rule(Match: "@" + Word, Name: CheapLocal),
             new Rule(Match: @"(?i)\b65c02\b", Name: Cpu),
             new Rule(Match: @"\$[A-Za-z0-9_]*|%[A-Za-z0-9_]*|\b[0-9][A-Za-z0-9_]*", Name: Number),
 
-            // After `::` a word is a member, however it is spelled.
+            // After `::` a word is a member, even one spelled like a mnemonic or a register.
             Rule.Scoped($@"::({Word})", Identifier),
             new Rule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Mnemonics.Select(SyntaxFacts.TextOf))})\b", Name: Mnemonic),
             new Rule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Registers)})\b", Name: Register),
@@ -440,8 +446,9 @@ internal static class TextMateGrammar
     }
 
     /// <summary>
-    /// One grammar rule: a <c>match</c> scoped by its name or by its groups, a <c>begin</c>/<c>end</c>
-    /// block with the rules inside it, or an include of the repository. <c>Captures</c> holds the
+    /// Represents one grammar rule. A rule is a <c>match</c> scoped by its name or by its groups,
+    /// a <c>begin</c>/<c>end</c> block with the rules inside it, or an include of the repository.
+    /// <c>Captures</c> holds the
     /// scope of each group by number, and its index 0 is unused.
     /// </summary>
     private sealed record Rule(

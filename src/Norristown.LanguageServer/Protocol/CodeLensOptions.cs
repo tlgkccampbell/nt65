@@ -1,5 +1,7 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>How the server answers with lenses.</summary>
-/// <param name="ResolveProvider">Whether a lens comes back without its command, to be asked for later.</param>
+/// <summary>Describes how the server provides code lenses.</summary>
+/// <param name="ResolveProvider">
+/// Whether a lens is returned without its command, which the client requests later.
+/// </param>
 internal sealed record CodeLensOptions(bool ResolveProvider);

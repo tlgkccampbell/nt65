@@ -1,6 +1,6 @@
 using Norristown.LanguageServer;
 
-// LSP over stdio. Stdout carries the protocol, so anything human-readable goes to stderr,
+// The server speaks LSP over stdio. Stdout carries the protocol, so anything human-readable goes to stderr,
 // which VS Code shows in the server's output channel. NT65_SERVER_LOG names a file that
 // receives the same lines, for looking at a server started by an editor.
 var logPath = Environment.GetEnvironmentVariable("NT65_SERVER_LOG");

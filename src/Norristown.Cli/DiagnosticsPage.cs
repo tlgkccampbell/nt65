@@ -3,13 +3,14 @@ using System.Text;
 namespace Norristown.Cli;
 
 /// <summary>
-/// The whole diagnostic catalogue as one Markdown page, which <c>nt65 explain --markdown</c>
-/// prints. None of the page is written by hand, so an entry added to the catalogue appears on it,
-/// and a reworded entry reads the same in the catalogue and on the page.
+/// Builds the whole diagnostic catalogue as one Markdown page, which
+/// <c>nt65 explain --markdown</c> prints. None of the page is written by hand, so an entry added
+/// to the catalogue appears on it, and a reworded entry reads the same in the catalogue and on the
+/// page.
 /// </summary>
 internal static class DiagnosticsPage
 {
-    /// <summary>The page, with <c>\n</c> line endings and a newline at the end of it.</summary>
+    /// <summary>Returns the page, with <c>\n</c> line endings and a newline at the end of it.</summary>
     public static string Text()
     {
         var page = new StringBuilder();
@@ -56,14 +57,18 @@ internal static class DiagnosticsPage
         return page.ToString();
     }
 
-    /// <summary>The entries in an area, in name order, which is the order the page prints them in.</summary>
+    /// <summary>
+    /// Returns the entries in an area, in name order, which is the order the page prints them in.
+    /// </summary>
     private static IReadOnlyList<DiagnosticDescriptor> Under(DiagnosticArea area) =>
         [.. Catalogue.All.Where(entry => entry.Area == area)];
 
-    /// <summary>The anchor a Markdown renderer gives a heading, used to link to it from the table.</summary>
+    /// <summary>
+    /// Returns the anchor a Markdown renderer gives a heading, which the table uses to link to it.
+    /// </summary>
     private static string Anchor(string heading) =>
         "#" + heading.ToLowerInvariant().Replace(' ', '-');
 
-    /// <summary>A severity in lower case, as the table and the headings print it.</summary>
+    /// <summary>Returns a severity in lower case, as the table and the headings print it.</summary>
     private static string Reported(Severity severity) => severity.ToString().ToLowerInvariant();
 }

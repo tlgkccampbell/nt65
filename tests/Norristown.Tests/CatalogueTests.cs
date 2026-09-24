@@ -4,7 +4,7 @@ namespace Norristown.Tests;
 
 /// <summary>
 /// Checks the catalogue's own invariants. The names are a compatibility promise, so they must
-/// all follow one naming style; the messages are composite format strings, so a brace in one that
+/// all follow one naming style. The messages are composite format strings, so a brace in one that
 /// is not a placeholder would otherwise throw only when the diagnostic is reported, not here.
 /// </summary>
 public sealed partial class CatalogueTests
@@ -18,7 +18,10 @@ public sealed partial class CatalogueTests
         Assert.Equal(Catalogue.All.Count, Catalogue.All.Select(d => d.Id).Distinct(StringComparer.Ordinal).Count());
     }
 
-    /// <summary>A name is what <c>nt65 explain</c> and the project file are given, so looking it up must find its entry.</summary>
+    /// <summary>
+    /// A name is what <c>nt65 explain</c> and the project file are given, so looking it up must
+    /// find its entry.
+    /// </summary>
     [Fact]
     public void EveryNameIsFound()
     {
@@ -28,7 +31,7 @@ public sealed partial class CatalogueTests
     }
 
     /// <summary>
-    /// Every message format can be formatted: each brace is a placeholder or an escaped brace,
+    /// Every message format can be formatted. Each brace is a placeholder or an escaped brace,
     /// and the placeholders are numbered from <c>{0}</c> with none skipped, so every argument a
     /// reporting site passes appears in the message.
     /// </summary>
@@ -45,7 +48,7 @@ public sealed partial class CatalogueTests
         }
     }
 
-    /// <summary>Every entry says something the message does not.</summary>
+    /// <summary>Every entry's explanation says something the message does not.</summary>
     [Fact]
     public void EveryEntryIsExplained()
     {
@@ -57,7 +60,10 @@ public sealed partial class CatalogueTests
         }
     }
 
-    /// <summary>How many placeholders a format has, taken as one more than the highest placeholder number.</summary>
+    /// <summary>
+    /// Returns the number of placeholders a format has, taken as one more than the highest
+    /// placeholder number.
+    /// </summary>
     private static int Holes(string format) =>
         Hole().Matches(format).Select(m => int.Parse(m.Groups[1].Value) + 1).DefaultIfEmpty(0).Max();
 

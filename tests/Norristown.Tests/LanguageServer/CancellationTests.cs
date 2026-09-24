@@ -78,13 +78,17 @@ public sealed class CancellationTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asked);
     }
 
-    /// <summary>A handler that does nothing but wait for the client to change its mind.</summary>
+    /// <summary>Represents a handler that does nothing but wait for the client to cancel the request.</summary>
     private sealed class Waiting
     {
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        /// <summary>The handshake the framing layer waits for before it passes anything else on.</summary>
-        /// <returns>Whether <c>waitForever</c> has been called yet, which at this point it has not.</returns>
+        /// <summary>
+        /// Answers the handshake that the framing layer waits for before it passes anything else on.
+        /// </summary>
+        /// <returns>
+        /// A value indicating whether <c>waitForever</c> has been called yet. At this point it has not.
+        /// </returns>
         [JsonRpcMethod("initialize")]
         public bool Initialize() => Started.Task.IsCompleted;
 

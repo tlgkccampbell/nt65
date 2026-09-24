@@ -3,9 +3,10 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// Which routines call a routine, and which routines it calls, across modules. The call edges
-/// come from the flow analysis: a <c>jsr</c> is one, and so is a tail jump, which passes control
-/// to a routine that then returns straight to the jumping routine's caller.
+/// Tests the call hierarchy, which shows the routines that call a routine and the routines it
+/// calls, across modules. The call edges come from the flow analysis. A <c>jsr</c> is a call
+/// edge, and so is a tail jump, which passes control to a routine that then returns straight to
+/// the jumping routine's caller.
 /// </summary>
 public sealed class CallHierarchyTests
 {
@@ -41,7 +42,10 @@ public sealed class CallHierarchyTests
         }
         """;
 
-    /// <summary>With the caret on a routine's name, the hierarchy starts at the routine's declaration, even in another file.</summary>
+    /// <summary>
+    /// With the caret on a routine's name, the hierarchy starts at the routine's declaration, even
+    /// in another file.
+    /// </summary>
     [Fact]
     public async Task APathToARoutineStartsAHierarchyAtWhereItIsDeclared()
     {
@@ -75,9 +79,9 @@ public sealed class CallHierarchyTests
     }
 
     /// <summary>
-    /// Everything that calls a routine, from every module: each caller is listed once, with every
-    /// call it makes. A tail jump counts as a call, because the routine jumped to returns to the
-    /// jumping routine's caller.
+    /// The incoming calls of a routine include every caller from every module. Each caller is
+    /// listed once, with every call it makes. A tail jump counts as a call, because the routine
+    /// jumped to returns to the jumping routine's caller.
     /// </summary>
     [Fact]
     public async Task IncomingCallsAreEveryCallerAcrossTheProgram()
@@ -95,7 +99,7 @@ public sealed class CallHierarchyTests
         Assert.Equal([10], callers[1].FromRanges.Select(range => range.Start.Line));
     }
 
-    /// <summary>What a routine calls: the same call edges, followed in the other direction.</summary>
+    /// <summary>The outgoing calls of a routine follow the same call edges in the other direction.</summary>
     [Fact]
     public async Task OutgoingCallsAreWhatTheRoutineItselfCalls()
     {

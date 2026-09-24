@@ -4,9 +4,10 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// How a macro call's expansion is shown: the body with the arguments substituted, written as
-/// nt65 rather than as the ca65 the emitter produces, one level of calls at a time. The tests
-/// use the macros fixture, which holds one of every kind of macro the language has.
+/// Tests how a macro call's expansion is shown. The expansion is the body with the arguments
+/// substituted, shown as nt65 rather than as the ca65 the emitter produces, one level of calls at
+/// a time. The tests use the macros fixture, which holds one of every kind of macro the language
+/// has.
 /// </summary>
 public sealed class ExpansionTests
 {
@@ -19,7 +20,10 @@ public sealed class ExpansionTests
             return (analysis, analysis.File("main.nt65"));
         });
 
-    /// <summary>An expansion reads as the programmer would have written it: an operand argument is substituted whole, index included.</summary>
+    /// <summary>
+    /// An expansion reads as the programmer would have written it, with an operand argument
+    /// substituted whole, index included.
+    /// </summary>
     [Fact]
     public void AnOperandArgumentGoesInWholeAndCarriesItsIndex()
     {
@@ -32,7 +36,7 @@ public sealed class ExpansionTests
             """,
             Written("set16!(ptr, SCREEN)"));
 
-        // `dest+1` given `{buf,x}` is `buf+1,x`: the offset goes on the address and the index
+        // `dest+1` given `{buf,x}` is `buf+1,x`. The offset goes on the address and the index
         // goes back after it, which is the line a person would have written.
         Assert.Equal(
             """
@@ -44,7 +48,10 @@ public sealed class ExpansionTests
             Written("set16!({buf,x}, $1234)"));
     }
 
-    /// <summary>A `.byteof` is written as the byte it selects: a byte of the value for an immediate, and of the address for a mode that has one.</summary>
+    /// <summary>
+    /// A `.byteof` is shown as the byte it selects, which is a byte of the value for an immediate
+    /// and a byte of the address for a mode that has one.
+    /// </summary>
     [Fact]
     public void ByteofIsWrittenAsTheByteItAsksFor()
     {
@@ -67,9 +74,9 @@ public sealed class ExpansionTests
     }
 
     /// <summary>
-    /// A `.each` over a `list` argument is written out one iteration at a time, because nt65 has
-    /// no syntax for a call's arguments as a list; each `.if` inside an iteration is replaced by
-    /// the branch it takes.
+    /// A `.each` over a `list` argument is shown one iteration at a time, because nt65 has no
+    /// syntax for a call's arguments as a list. Each `.if` inside an iteration is replaced by the
+    /// branch it takes.
     /// </summary>
     [Fact]
     public void ARepetitionOverTheArgumentsIsWrittenOut()
@@ -99,7 +106,10 @@ public sealed class ExpansionTests
             Written("times_x!(8)"));
     }
 
-    /// <summary>A macro call inside the body is left as a call, with a link that expands it one level further.</summary>
+    /// <summary>
+    /// A macro call inside the body is left as a call, with a link that expands it one level
+    /// further.
+    /// </summary>
     [Fact]
     public void ACallInsideABodyIsLeftAsACall()
     {
@@ -139,7 +149,7 @@ public sealed class ExpansionTests
         Assert.Equal(".byte E4, 1", Written("note!(E4)"));
     }
 
-    /// <summary>The summary says what the call becomes: how many lines, bytes and cycles it expands to.</summary>
+    /// <summary>The summary says how many lines, bytes and cycles the call expands to.</summary>
     [Fact]
     public void TheSummarySaysWhatTheCallBecomes()
     {
@@ -149,7 +159,7 @@ public sealed class ExpansionTests
         Assert.Equal("expands to 1 line · 2 bytes", At("note!(E4)").Summary());
     }
 
-    /// <summary>Every call in the fixture is written out, and what comes out re-parses as nt65.</summary>
+    /// <summary>Every call in the fixture is expanded, and what comes out re-parses as nt65.</summary>
     [Fact]
     public void EveryCallInTheFixtureIsWrittenOutAsNt65()
     {
@@ -157,8 +167,8 @@ public sealed class ExpansionTests
         var calls = 0;
         foreach (var node in model.Tree.Root.DescendantNodes().OfType<Norristown.Syntax.MacroCallSyntax>())
         {
-            // A call written inside a macro body is expanded as part of that body: on its own,
-            // its arguments are parameter names rather than values, so there is nothing to write out.
+            // A call inside a macro body is expanded as part of that body. On its own, its
+            // arguments are parameter names rather than values, so there is nothing to expand.
             if (InAMacroBody(node))
                 continue;
             calls++;
@@ -179,7 +189,10 @@ public sealed class ExpansionTests
         Assert.True(calls > 10, $"the fixture holds {calls} calls");
     }
 
-    /// <summary>Whether a call is written inside a macro body, where its arguments are not known.</summary>
+    /// <summary>
+    /// Returns a value indicating whether a call appears inside a macro body, where its arguments
+    /// are not known.
+    /// </summary>
     private static bool InAMacroBody(Norristown.Syntax.SyntaxNode call)
     {
         for (var at = call.Parent; at is not null; at = at.Parent)
@@ -190,11 +203,11 @@ public sealed class ExpansionTests
         return false;
     }
 
-    /// <summary>The expansion of the call written at <paramref name="find"/>, as one string.</summary>
+    /// <summary>Returns the expansion of the call at the text <paramref name="find"/>, as one string.</summary>
     private static string Written(string find, IReadOnlyList<int>? into = null) =>
         string.Join("\n", At(find, into).Lines);
 
-    /// <summary>The expansion of the call written at <paramref name="find"/>.</summary>
+    /// <summary>Returns the expansion of the call at the text <paramref name="find"/>.</summary>
     private static MacroExpansion At(string find, IReadOnlyList<int>? into = null)
     {
         var (analysis, model) = Macros.Value;

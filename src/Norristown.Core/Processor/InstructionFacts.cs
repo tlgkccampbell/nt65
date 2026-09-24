@@ -1,58 +1,68 @@
 namespace Norristown.Processor;
 
 /// <summary>
-/// What a mnemonic is, beyond which addressing modes it has: what it does to the path,
-/// what it moves on and off the stack, whether it writes the memory its operand names, and
-/// which registers it leaves changed. Every pass after layout needs some of this, and having
-/// each pass test the lowercase mnemonic itself is how two passes come to disagree.
+/// Describes what a mnemonic does, beyond which addressing modes it has. The facts cover how
+/// it affects control flow, what it moves on and off the stack, whether it writes the memory
+/// its operand names, and which registers it leaves changed. Every pass after layout needs
+/// some of these facts; if each pass tested the lowercase mnemonic itself, two passes could
+/// come to disagree.
 /// <para>
-/// It is the same table on every CPU: an instruction one CPU lacks is never asked about, and
-/// no CPU here spells one instruction two ways. What depends on the operand or the mode — a
-/// shift through the accumulator, the flags a <c>rep</c> names — is left to the code that
-/// knows the operand or mode, which takes the widest answer from here.
+/// The table is the same on every CPU, because an instruction one CPU lacks is never asked
+/// about, and no CPU here has two names for one instruction. Facts that depend on the operand
+/// or the mode, such as a shift through the accumulator or the flags a <c>rep</c> names, are
+/// left to the code that knows the operand or mode. That code starts from the widest answer
+/// given here.
 /// </para>
 /// </summary>
 public sealed record InstructionFacts
 {
-    /// <summary>The facts for a mnemonic with none of these properties.</summary>
+    /// <summary>Gets the facts for a mnemonic with none of these properties.</summary>
     public static InstructionFacts None { get; } = new();
 
-    /// <summary>What it does to the path running through it: branch, jump, call, return or stop.</summary>
+    /// <summary>
+    /// Gets how the mnemonic affects control flow: whether it branches, jumps, calls, returns or
+    /// stops.
+    /// </summary>
     public Control Control { get; init; }
 
-    /// <summary>Whether it writes the memory its operand names, read-modify-write among them.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the mnemonic writes the memory its operand names,
+    /// including by a read-modify-write.
+    /// </summary>
     public bool Stores { get; init; }
 
-    /// <summary>How much of the stack one of its pushes takes, or null when it pushes nothing.</summary>
+    /// <summary>Gets how much of the stack one of its pushes takes, or null if it pushes nothing.</summary>
     public PushSize? Pushes { get; init; }
 
-    /// <summary>The same for a pull, or null when it pulls nothing.</summary>
+    /// <summary>Gets how much of the stack one of its pulls takes, or null if it pulls nothing.</summary>
     public PushSize? Pulls { get; init; }
 
     /// <summary>
-    /// The register its push holds or its pull fills, or <see cref="Registers.None"/> where
-    /// what it moves is not one of them: the data bank, the direct page, the program bank.
+    /// Gets the register its push saves or its pull fills, or <see cref="Registers.None"/> if
+    /// what it moves is not one of those registers, as with the data bank, the direct page and
+    /// the program bank.
     /// </summary>
     public Registers Held { get; init; }
 
     /// <summary>
-    /// The registers it may leave changed, whatever its operand and mode. A write is any
-    /// change the caller cannot predict, so a transfer counts as one even though what lands in
-    /// the register came from another.
+    /// Gets the registers the mnemonic may leave changed, for any operand and mode. A write is
+    /// any change the caller cannot predict, so a transfer counts as one even though the value
+    /// it puts in the register came from another register.
     /// </summary>
     public Registers Writes { get; init; }
 
     /// <summary>
-    /// The register it copies and the one it copies to, for the transfers between the three
-    /// registers a value is held in; null for everything else. The stack pointer and the
-    /// 65816's D are not among them, so <c>tsx</c> and <c>tdc</c> are plain writes.
+    /// Gets the register the mnemonic copies and the register it copies to, for the transfers
+    /// among the three registers that hold values, or null for every other mnemonic. The stack
+    /// pointer and the 65816's D are not among the three, so <c>tsx</c> and <c>tdc</c> are plain
+    /// writes.
     /// </summary>
     public (Registers From, Registers To)? Copies { get; init; }
 
     /// <summary>
-    /// The register whose width sizes its immediate on the 65816, or null when its immediate
-    /// is always one byte. ca65 sizes exactly these from its <c>.a8</c>/<c>.a16</c> and
-    /// <c>.i8</c>/<c>.i16</c> settings.
+    /// Gets the register whose width sizes the mnemonic's immediate on the 65816, or null if
+    /// its immediate is always one byte. ca65 sizes exactly these immediates from its
+    /// <c>.a8</c>/<c>.a16</c> and <c>.i8</c>/<c>.i16</c> settings.
     /// </summary>
     public WidthRegister? SizedBy { get; init; }
 }

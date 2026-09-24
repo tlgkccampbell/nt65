@@ -4,17 +4,17 @@ using Norristown.Tests.Fixtures;
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// What a debugger is told, end to end: assemble nt65's output with the pinned <c>ca65 -g</c>,
-/// link it with <c>ld65 --dbgfile</c>, and remap the debug file from the line maps. nt65 writes
-/// no <c>.dbg</c> directives, so this is the only test that checks the bytes can be traced back
-/// to the <c>.nt65</c> they came from.
+/// Tests what a debugger is told, end to end. The tests assemble nt65's output with the pinned
+/// <c>ca65 -g</c>, link it with <c>ld65 --dbgfile</c>, and remap the debug file from the line
+/// maps. nt65 writes no <c>.dbg</c> directives, so this is the only test that checks that the
+/// bytes can be traced back to the <c>.nt65</c> they came from.
 /// </summary>
 [Trait("Category", "Oracle")]
 public sealed class DebugFileTests
 {
     /// <summary>
     /// Every line of a <c>.s</c> that its line map covers and that ld65 recorded bytes for is also
-    /// recorded, after remapping, as the source line it came from, with the same spans: nothing
+    /// recorded, after remapping, as the source line it came from, with the same spans. Nothing
     /// the assembler generated is lost on the way, and nothing is claimed for a line that
     /// generated none.
     /// </summary>
@@ -50,8 +50,8 @@ public sealed class DebugFileTests
                 yield break;
             }
 
-            // For each `.s` line: the spans ld65 recorded for it and the source line its map says
-            // it came from, checked against the spans the remapped file gives that source line.
+            // For each `.s` line, the spans ld65 recorded for it and the source line its map
+            // gives for it are checked against the spans the remapped file gives that source line.
             var files = Files(result.DebugFile);
             var after = Records(remapped, "line")
                 .Where(record => record.TryGetValue("type", out var type) && type == "1")
@@ -78,7 +78,10 @@ public sealed class DebugFileTests
         }
     }
 
-    /// <summary>Remapping an already remapped debug file changes nothing, so a build that repeats the step is safe.</summary>
+    /// <summary>
+    /// Remapping an already remapped debug file changes nothing, so a build that repeats the step
+    /// is safe.
+    /// </summary>
     [Fact]
     public void RemappingWhatIsAlreadyRemappedChangesNothing()
     {
@@ -105,7 +108,7 @@ public sealed class DebugFileTests
 
     /// <summary>
     /// A translation unit of several modules assembles to one object, which the remapped debug
-    /// file attributes to the root module's source; each placed module's lines still name its own
+    /// file attributes to the root module's source. Each placed module's lines still name its own
     /// source, so that stepping into a placed routine shows the file it was written in.
     /// </summary>
     [Fact]
@@ -132,7 +135,7 @@ public sealed class DebugFileTests
             Assert.Contains(lines, record => record["file"] == Id(remapped, source));
     }
 
-    /// <summary>The fixtures that hold a linker configuration, which are the ones that can link.</summary>
+    /// <summary>Returns the fixtures that hold a linker configuration, which are the ones that can link.</summary>
     private static IReadOnlyList<FixtureCase> Linkable() =>
         [.. FixtureCase.All().Where(fixture => File.Exists(LinkConfigPath(fixture)))];
 
@@ -141,25 +144,28 @@ public sealed class DebugFileTests
     private static string LinkConfigPath(FixtureCase fixture) =>
         Path.Combine(fixture.Directory, "link", "link.cfg");
 
-    /// <summary>The hand-written ca65 modules a fixture links its output against.</summary>
+    /// <summary>Returns the hand-written ca65 modules that a fixture links its output against.</summary>
     private static IReadOnlyList<(string Name, string Source)> HandWritten(FixtureCase fixture) =>
         [.. Directory.GetFiles(Path.Combine(fixture.Directory, "link"), "*.s")
             .Order(StringComparer.Ordinal)
             .Select(path => (Path.GetFileName(path), Repo.ReadText(path)))];
 
-    /// <summary>The <c>file</c> records of a debug file, by id.</summary>
+    /// <summary>Returns the <c>file</c> records of a debug file, mapping each id to its file name.</summary>
     private static Dictionary<string, string> Files(string text) =>
         Records(text, "file").ToDictionary(record => record["id"], record => record["name"]);
 
-    /// <summary>The id the debug file gives the file named <paramref name="name"/>.</summary>
+    /// <summary>Returns the id that the debug file gives the file named <paramref name="name"/>.</summary>
     private static string Id(string text, string name) =>
         Records(text, "file").First(record => record["name"] == name)["id"];
 
-    /// <summary>The span ids a <c>line</c> record carries, which may be none.</summary>
+    /// <summary>Returns the span ids that a <c>line</c> record carries, which may be none.</summary>
     private static HashSet<string> Spans(IReadOnlyDictionary<string, string> record) =>
         record.TryGetValue("span", out var spans) ? [.. spans.Split('+')] : [];
 
-    /// <summary>Every record of one kind, as its fields, with quotes taken off the values.</summary>
+    /// <summary>
+    /// Returns every record of one kind, each as a dictionary of its fields, with the quotes
+    /// removed from the values.
+    /// </summary>
     private static List<Dictionary<string, string>> Records(string text, string keyword) =>
         [.. text.ReplaceLineEndings("\n").Split('\n')
             .Where(line => line.StartsWith(keyword + "\t", StringComparison.Ordinal))

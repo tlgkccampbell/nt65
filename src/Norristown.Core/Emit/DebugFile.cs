@@ -4,23 +4,24 @@ using System.Text;
 namespace Norristown.Emit;
 
 /// <summary>
-/// Copies what the line maps say into ld65's debug file after the link; this is what
+/// Copies the contents of the line maps into ld65's debug file after the link, which is what
 /// <c>nt65 remap-dbg</c> does.
 /// <para>
 /// <c>ca65 -g</c> records the lines of the <c>.s</c> it assembles, and ld65 copies them into the
-/// file <c>--dbgfile</c> names. nt65 writes no <c>.dbg</c> directives, so the debug file that
-/// arrives here refers only to the generated ca65; this adds what the <c>.s.lines</c> files
-/// beside those <c>.s</c> files say, so that it also refers to the <c>.nt65</c> the person wrote.
+/// file that <c>--dbgfile</c> names. nt65 emits no <c>.dbg</c> directives, so the debug file
+/// that arrives here refers only to the generated ca65. This class adds the contents of the
+/// <c>.s.lines</c> files beside those <c>.s</c> files, so that the debug file also refers to the
+/// <c>.nt65</c> source the person maintains.
 /// </para>
 /// <para>
-/// Almost everything is added rather than changed: a <c>file</c> record for each source, a
-/// <c>line</c> record for each of its lines, and the new line id on each <c>sym</c> that was
-/// defined or used at a mapped line. The existing records stay, so a debugger that was showing
-/// the generated ca65 still can. The one change is a <c>mod</c> record's <c>file</c>, which is
-/// set to the source the module was written from, because a module names only one file and the
-/// source is the one worth naming. A <c>.s</c> with no map beside it — anything hand-written
-/// that the same program links — is left alone, which is also why running this a second time
-/// changes nothing.
+/// Almost everything is added rather than changed. The additions are a <c>file</c> record for
+/// each source, a <c>line</c> record for each of its lines, and the new line id on each
+/// <c>sym</c> that was defined or used at a mapped line. The existing records stay, so a
+/// debugger that was showing the generated ca65 still can. The one change is a <c>mod</c>
+/// record's <c>file</c>, which is set to the source the module was compiled from, because a
+/// module names only one file and the source is the one worth naming. A <c>.s</c> with no map
+/// beside it, such as hand-written ca65 that the same program links, is left alone, which is
+/// also why running this a second time changes nothing.
 /// </para>
 /// </summary>
 public static class DebugFile
@@ -29,8 +30,8 @@ public static class DebugFile
     private const string Version = "version\tmajor=2,minor=0";
 
     /// <summary>
-    /// <paramref name="text"/> with every mapped <c>.s</c> line also named as the source line it
-    /// came from, or null with <paramref name="problem"/> saying what is wrong.
+    /// Returns <paramref name="text"/> with every mapped <c>.s</c> line also named as the source
+    /// line it came from, or null with <paramref name="problem"/> describing what is wrong.
     /// <paramref name="map"/> returns the text of the line map beside the <c>.s</c> at the path it
     /// is given, or null when there is none.
     /// </summary>
@@ -53,7 +54,7 @@ public static class DebugFile
         var nextFile = Next(records, "file", files);
         var nextLine = Next(records, "line", records.Where(record => record.Keyword == "line"));
 
-        // For each `.s` file record that has a line map: the map, and the new ids given to the
+        // For each `.s` file record that has a line map, the map and the new ids given to the
         // sources it names.
         var sources = new Dictionary<int, (SourceLines Map, int[] Ids)>();
         var added = new List<string>();
@@ -85,9 +86,9 @@ public static class DebugFile
         if (sources.Count == 0)
             return text;
 
-        // One new line record per source line, however many lines of the `.s` came from it, with
-        // the spans of all of them: ld65 attaches a span to whichever line was in effect, and two
-        // records for one source line would only say the same thing twice.
+        // There is one new line record per source line, regardless of how many lines of the `.s`
+        // came from it, with the spans of all of them. ld65 attaches a span to the line in effect,
+        // and two records for one source line would only say the same thing twice.
         var merged = new Dictionary<(int File, int Line), (int Id, List<string> Spans)>();
         var replaced = new Dictionary<int, int>();
         foreach (var record in records.Where(record => record.Keyword == "line"))
@@ -112,14 +113,14 @@ public static class DebugFile
                 + Spanned(entry.Value.Spans))
             .ToList();
 
-        // ld65 writes the file in text mode, so on Windows it arrives with CRLF; the result is
+        // ld65 writes the file in text mode, so on Windows it arrives with CRLF. The result is
         // written with the same line endings, even though the tools that read it hardly care.
         var written = Written(records, sources, replaced, added, lineRecords);
         return text.Contains("\r\n", StringComparison.Ordinal)
             ? written.Replace("\n", "\r\n", StringComparison.Ordinal) : written;
     }
 
-    /// <summary>The debug file with the added records in place and the counts to match.</summary>
+    /// <summary>Returns the debug file with the added records in place and the counts updated to match.</summary>
     private static string Written(
         IReadOnlyList<Record> records, IReadOnlyDictionary<int, (SourceLines Map, int[] Ids)> sources,
         IReadOnlyDictionary<int, int> replaced, IReadOnlyList<string> files, IReadOnlyList<string> lines)
@@ -147,7 +148,7 @@ public static class DebugFile
         return text.ToString().TrimEnd('\n') + "\n";
     }
 
-    /// <summary>One record as it is written back; most records are written back unchanged.</summary>
+    /// <summary>Returns one record as it is written back. Most records are written back unchanged.</summary>
     private static string Rewritten(
         Record record, IReadOnlyDictionary<int, (SourceLines Map, int[] Ids)> sources,
         IReadOnlyDictionary<int, int> replaced, int files, int lines)
@@ -158,7 +159,7 @@ public static class DebugFile
             case "info":
                 return record.With(("file", field => Count(field, files)), ("line", field => Count(field, lines)));
 
-            // A module names one file, and the one worth naming is what it was written from.
+            // A module names one file, and the one worth naming is the source it was compiled from.
             case "mod" when Number(record["file"]) is { } file && sources.TryGetValue(file, out var source):
                 return record.With(("file", _ => source.Ids[0].ToString(CultureInfo.InvariantCulture)));
 
@@ -171,7 +172,9 @@ public static class DebugFile
         }
     }
 
-    /// <summary>A <c>+</c>-separated list of line ids, with the ones they were mapped to added.</summary>
+    /// <summary>
+    /// Returns a <c>+</c>-separated list of line ids with the ids they were mapped to added.
+    /// </summary>
     private static string Also(string field, IReadOnlyDictionary<int, int> replaced)
     {
         var ids = field.Split('+').Select(id => Number(id) ?? -1).ToList();
@@ -179,17 +182,19 @@ public static class DebugFile
         return string.Join('+', ids.Concat(also).Distinct().Select(id => id.ToString(CultureInfo.InvariantCulture)));
     }
 
-    /// <summary>A count field with <paramref name="more"/> added to it.</summary>
+    /// <summary>Returns a count field with <paramref name="more"/> added to it.</summary>
     private static string Count(string field, int more) =>
         ((Number(field) ?? 0) + more).ToString(CultureInfo.InvariantCulture);
 
-    /// <summary>The <c>span</c> field of a line record, or nothing when it covers no bytes.</summary>
+    /// <summary>
+    /// Returns the <c>span</c> field of a line record, or an empty string when it covers no bytes.
+    /// </summary>
     private static string Spanned(IReadOnlyList<string> spans) =>
         spans.Count == 0 ? "" : ",span=" + string.Join('+', spans.Distinct(StringComparer.Ordinal));
 
     /// <summary>
-    /// The first unused id for <paramref name="keyword"/> records: past every id in
-    /// <paramref name="of"/>, and no lower than the count the <c>info</c> record gives.
+    /// Returns the first unused id for <paramref name="keyword"/> records, which is past every id
+    /// in <paramref name="of"/> and no lower than the count the <c>info</c> record gives.
     /// </summary>
     private static int Next(IReadOnlyList<Record> records, string keyword, IEnumerable<Record> of)
     {
@@ -197,7 +202,10 @@ public static class DebugFile
         return of.Aggregate(counted, (next, record) => Math.Max(next, (Number(record["id"]) ?? -1) + 1));
     }
 
-    /// <summary>The index of the last <paramref name="keyword"/> record, or of the last record when there is none.</summary>
+    /// <summary>
+    /// Returns the index of the last <paramref name="keyword"/> record, or of the last record when
+    /// there is none.
+    /// </summary>
     private static int Last(IReadOnlyList<Record> records, string keyword)
     {
         for (var i = records.Count - 1; i >= 0; i--)
@@ -208,14 +216,15 @@ public static class DebugFile
         return records.Count - 1;
     }
 
-    /// <summary>A field as a number, or null when it is not one.</summary>
+    /// <summary>Returns a field as a number, or null when it is not a number.</summary>
     private static int? Number(string? field) =>
         field is not null && int.TryParse(field, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
             ? value : null;
 
     /// <summary>
-    /// One line of a debug file: a keyword and a tab, then <c>name=value</c> fields separated by
-    /// commas, where a value may be quoted and so may itself hold a comma.
+    /// Represents one line of a debug file, which is a keyword and a tab followed by
+    /// <c>name=value</c> fields separated by commas. A value may be quoted, and so may itself hold
+    /// a comma.
     /// </summary>
     private sealed class Record
     {
@@ -227,10 +236,15 @@ public static class DebugFile
             Keyword = keyword;
         }
 
-        /// <summary>The line as it arrived, which is what is written back for all but a few.</summary>
+        /// <summary>
+        /// Gets the line as it arrived, which is what is written back for all but a few records.
+        /// </summary>
         public string Line { get; }
 
-        /// <summary>What the line is about: <c>file</c>, <c>line</c>, <c>sym</c> and the rest.</summary>
+        /// <summary>
+        /// Gets the keyword that says what the line describes, such as <c>file</c>, <c>line</c> or
+        /// <c>sym</c>.
+        /// </summary>
         public string Keyword { get; }
 
         public string? this[string name] =>
@@ -253,7 +267,7 @@ public static class DebugFile
             return record;
         }
 
-        /// <summary>The record with <paramref name="changes"/> applied to the fields they name.</summary>
+        /// <summary>Returns the record with <paramref name="changes"/> applied to the fields they name.</summary>
         public string With(params (string Name, Func<string, string> Change)[] changes)
         {
             var text = new StringBuilder(Keyword).Append('\t');
@@ -267,7 +281,7 @@ public static class DebugFile
             return text.ToString();
         }
 
-        /// <summary>The comma-separated fields of a record, keeping a comma inside quotes.</summary>
+        /// <summary>Returns the comma-separated fields of a record, keeping a comma inside quotes.</summary>
         private static IEnumerable<string> Split(string body)
         {
             var start = 0;

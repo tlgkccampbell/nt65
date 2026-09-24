@@ -1,5 +1,8 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary><c>client/registerCapability</c>: what the server now asks the client to do.</summary>
-/// <param name="Registrations">Each thing it asks for.</param>
+/// <summary>
+/// Parameters of the <c>client/registerCapability</c> request, which lists the capabilities the
+/// server now registers.
+/// </summary>
+/// <param name="Registrations">The registrations.</param>
 internal sealed record RegistrationParams(IReadOnlyList<Registration> Registrations);

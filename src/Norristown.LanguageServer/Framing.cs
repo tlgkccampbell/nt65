@@ -7,22 +7,22 @@ using StreamJsonRpc.Protocol;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The transport: LSP's <c>Content-Length</c> frames over a pair of streams, and the single
-/// place that decides which messages get through. StreamJsonRpc's own handler reads a frame and hands it straight to
-/// the formatter, and anything the formatter dislikes — a body that is not JSON, a
-/// <c>"params": null</c> its request type cannot count the arguments of — comes out of the read
-/// loop as an exception and ends the connection. Nothing a client sends should end a server, so
-/// the frames are read here instead:
+/// Implements the transport, which carries LSP's <c>Content-Length</c> frames over a pair of
+/// streams and is the single place that decides which messages get through. StreamJsonRpc's own
+/// handler reads a frame and hands it straight to the formatter. Anything the formatter rejects
+/// comes out of the read loop as an exception and ends the connection. Examples are a body that
+/// is not JSON, and a <c>"params": null</c> whose arguments the request type cannot count.
+/// Nothing a client sends should end a server, so the frames are read here instead, as follows.
 /// <list type="bullet">
-/// <item>a body that is not JSON is answered <c>-32700</c> and the next frame is read;</item>
-/// <item><c>"params": null</c> is the same as no parameters at all, and is taken off;</item>
-/// <item>a request before <c>initialize</c> is answered <c>-32002</c> and one after
-/// <c>shutdown</c> <c>-32600</c>, and a notification at either point is dropped, which is what
-/// the protocol asks for.</item>
+/// <item>A body that is not JSON is answered with <c>-32700</c>, and the next frame is read.</item>
+/// <item><c>"params": null</c> is treated the same as no parameters at all, and is removed.</item>
+/// <item>A request before <c>initialize</c> is answered with <c>-32002</c>, and one after
+/// <c>shutdown</c> with <c>-32600</c>. A notification at either point is dropped, as the
+/// protocol requires.</item>
 /// </list>
-/// A frame says how long it is, so the frame after a bad one starts where the headers said it
-/// would: the only thing that cannot be recovered from is headers that give no length, and
-/// there the connection ends.
+/// A frame states its own length, so the frame after a bad one starts where the headers said it
+/// would. The only unrecoverable case is headers that give no length, and there the connection
+/// ends.
 /// </summary>
 internal sealed class Framing : MessageHandlerBase
 {
@@ -31,10 +31,13 @@ internal sealed class Framing : MessageHandlerBase
 
     private const string ContentLength = "Content-Length:";
 
-    /// <summary>What <see cref="NextLengthAsync"/> returns for a stream that has ended.</summary>
+    /// <summary>The value <see cref="NextLengthAsync"/> returns for a stream that has ended.</summary>
     private const int StreamOver = -1;
 
-    /// <summary>What it returns for headers that give no length, after which the stream cannot be resynchronized.</summary>
+    /// <summary>
+    /// The value <see cref="NextLengthAsync"/> returns for headers that give no length, after
+    /// which the stream cannot be resynchronized.
+    /// </summary>
     private const int NoLength = -2;
 
     private readonly Stream input;
@@ -48,7 +51,7 @@ internal sealed class Framing : MessageHandlerBase
 
     /// <param name="input">Where the client's frames arrive.</param>
     /// <param name="output">Where the server's frames go.</param>
-    /// <param name="formatter">What turns a frame's bytes into a message and back.</param>
+    /// <param name="formatter">The formatter that converts a frame's bytes to a message and back.</param>
     public Framing(Stream input, Stream output, IJsonRpcMessageFormatter formatter)
         : base(formatter)
     {
@@ -56,7 +59,10 @@ internal sealed class Framing : MessageHandlerBase
         this.output = output;
     }
 
-    /// <summary>The server's lifecycle phase, advanced by the <c>initialize</c> and <c>shutdown</c> messages that pass through.</summary>
+    /// <summary>
+    /// Gets the server's lifecycle phase, which the <c>initialize</c> and <c>shutdown</c> messages
+    /// that pass through advance.
+    /// </summary>
     public ServerPhase Phase { get; private set; }
 
     public override bool CanRead => true;
@@ -102,7 +108,10 @@ internal sealed class Framing : MessageHandlerBase
 
     protected override void DisposeWriter() => output.Dispose();
 
-    /// <summary>The id a message carries, or null for a notification and for one that names none.</summary>
+    /// <summary>
+    /// Returns the id a message carries, or null for a notification and for a message whose id is
+    /// not a number, a string or null.
+    /// </summary>
     private static RequestId? IdOf(JsonElement message) =>
         !message.TryGetProperty("id", out var id) ? null : id.ValueKind switch
         {
@@ -113,7 +122,7 @@ internal sealed class Framing : MessageHandlerBase
         };
 
     /// <summary>
-    /// <paramref name="content"/> with a null <c>params</c> removed. A client may send
+    /// Returns <paramref name="content"/> with a null <c>params</c> removed. A client may send
     /// <c>"params": null</c> for a request that takes none, which the formatter's request type
     /// cannot read. The frame is returned unchanged when there is nothing to remove.
     /// </summary>
@@ -137,8 +146,8 @@ internal sealed class Framing : MessageHandlerBase
     }
 
     /// <summary>
-    /// The frame to pass on, or null for one this layer has answered itself. Only the messages
-    /// passed on advance the server's lifecycle, so the phase is tracked here.
+    /// Returns the frame to pass on, or null for a frame this layer has answered itself. Only the
+    /// messages passed on advance the server's lifecycle, so the phase is tracked here.
     /// </summary>
     private async ValueTask<byte[]?> PassedAsync(byte[] content, CancellationToken cancellationToken)
     {
@@ -191,11 +200,11 @@ internal sealed class Framing : MessageHandlerBase
         }
     }
 
-    /// <summary>Why <paramref name="method"/> may not be handled now, or null when it may.</summary>
+    /// <summary>Returns why <paramref name="method"/> may not be handled now, or null when it may.</summary>
     private (JsonRpcErrorCode Code, string Why)? Refusal(string method) => (Phase, method) switch
     {
-        // Cancellation is never refused, in any phase: a client that has stopped waiting for a
-        // request has stopped waiting whatever state the server is in.
+        // Cancellation is never refused, in any phase. A client that has stopped waiting for a
+        // request has stopped waiting regardless of the server's state.
         (_, "$/cancelRequest") => null,
         (ServerPhase.Starting, not ("initialize" or "exit")) =>
             (ServerNotInitialized, "the server has not been initialized"),
@@ -206,7 +215,10 @@ internal sealed class Framing : MessageHandlerBase
         _ => null,
     };
 
-    /// <summary>Answers a frame this layer will not hand on. It goes out through the same lock every reply does.</summary>
+    /// <summary>
+    /// Answers a frame this layer will not pass on. The answer goes out through the same lock as
+    /// every reply.
+    /// </summary>
     private ValueTask RefuseAsync(
         RequestId id, JsonRpcErrorCode code, string why, CancellationToken cancellationToken) =>
         WriteAsync(
@@ -218,9 +230,9 @@ internal sealed class Framing : MessageHandlerBase
             cancellationToken);
 
     /// <summary>
-    /// How long the next frame's body is, from its headers; <see cref="StreamOver"/> at the end
-    /// of the stream and <see cref="NoLength"/> for headers that give no length. Other headers
-    /// are read and ignored.
+    /// Returns the length of the next frame's body, read from its headers. Returns
+    /// <see cref="StreamOver"/> at the end of the stream and <see cref="NoLength"/> for headers
+    /// that give no length. Other headers are read and ignored.
     /// </summary>
     private async ValueTask<int> NextLengthAsync(CancellationToken cancellationToken)
     {
@@ -250,7 +262,7 @@ internal sealed class Framing : MessageHandlerBase
         }
     }
 
-    /// <summary>The next byte of the stream, or -1 once it has ended.</summary>
+    /// <summary>Returns the next byte of the stream, or -1 once it has ended.</summary>
     private async ValueTask<int> NextByteAsync(CancellationToken cancellationToken)
     {
         if (at == have && !await ReadMoreAsync(cancellationToken).ConfigureAwait(false))
@@ -258,7 +270,10 @@ internal sealed class Framing : MessageHandlerBase
         return buffer[at++];
     }
 
-    /// <summary>Fills <paramref name="content"/> from the stream; false when it ended first.</summary>
+    /// <summary>
+    /// Fills <paramref name="content"/> from the stream, and returns false if the stream ended
+    /// first.
+    /// </summary>
     private async ValueTask<bool> FillAsync(byte[] content, CancellationToken cancellationToken)
     {
         var written = 0;

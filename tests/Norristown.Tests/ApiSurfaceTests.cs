@@ -4,11 +4,11 @@ using Norristown.Syntax;
 namespace Norristown.Tests;
 
 /// <summary>
-/// The boundary around the green tree (the internal syntax nodes), checked on the compiled
+/// Tests the boundary around the green tree (the internal syntax nodes), checked on the compiled
 /// assembly rather than on the source. Everything in <c>Norristown.Syntax.InternalSyntax</c>
 /// belongs to the syntax layer alone, and analyzers and editor features are written against the
-/// red tree (the public syntax API); the compiler catches most ways of leaking an internal type,
-/// but not one that has been made public again, so this test does.
+/// red tree (the public syntax API). The compiler catches most ways of leaking an internal type,
+/// but not a type that has been made public again, so this test catches that.
 /// </summary>
 public sealed class ApiSurfaceTests
 {
@@ -27,9 +27,9 @@ public sealed class ApiSurfaceTests
     }
 
     /// <summary>
-    /// No signature a consumer can see names a type it cannot: not a green node, and not anything
-    /// else the assembly keeps to itself. A member that returns or takes one has to be internal,
-    /// or the type it names has to become part of the API deliberately.
+    /// No signature a consumer can see names a type the consumer cannot name, whether a green node
+    /// or anything else the assembly keeps to itself. A member that returns or takes such a type
+    /// has to be internal, or the type it names has to become part of the API deliberately.
     /// </summary>
     [Fact]
     public void NoPublicSignatureNamesATypeTheConsumerCannot()
@@ -49,9 +49,10 @@ public sealed class ApiSurfaceTests
 
     /// <summary>
     /// The compiler, the language server and the CLI read the red tree. The syntax layer owns the
-    /// green one, and everything above it — binding, layout, flow, emission — is written against
-    /// the API a consumer has, so this reads the source of every file in <c>Norristown.Core</c>
-    /// outside <c>Syntax/</c> and <c>Generated/</c>, and fails if one of them uses the green tree.
+    /// green tree, and everything above it, including binding, layout, flow and emission, is
+    /// written against the API a consumer has. This test therefore reads the source of every file
+    /// in <c>Norristown.Core</c> outside <c>Syntax/</c> and <c>Generated/</c>, and fails if one of
+    /// them uses the green tree.
     /// </summary>
     [Fact]
     public void NothingAboveTheSyntaxLayerReadsTheGreenTree()
@@ -74,7 +75,7 @@ public sealed class ApiSurfaceTests
     }
 
     /// <summary>
-    /// A token, a trivia and a list are values: reading the same one twice gives two equal copies,
+    /// A token, a trivia and a list are values. Reading the same one twice gives two equal copies,
     /// and reading a different one gives an unequal copy. The green token a token wraps is not part
     /// of its public surface, but it is still part of what makes two of them the same token.
     /// </summary>
@@ -89,8 +90,8 @@ public sealed class ApiSurfaceTests
         Assert.Equal(proc.ChildTokens[0].GetHashCode(), proc.ChildTokens[0].GetHashCode());
         Assert.NotEqual(proc.ChildTokens[0], proc.ChildTokens[1]);
 
-        // The node a token was reached through is part of its value, which is what lets two missing
-        // tokens at the same position be told apart.
+        // The node a token was reached through is part of its value, so two missing tokens at the
+        // same position can be told apart.
         var nop = tree.GetLine(1).Tokens[0];
         Assert.Equal(nop, tree.GetLine(1).Tokens[0]);
         var read = tree.Root.FindToken(nop.Span.Start);
@@ -100,15 +101,19 @@ public sealed class ApiSurfaceTests
         Assert.IsType<InstructionStatementSyntax>(read.Parent);
     }
 
-    /// <summary>Every member a type declares, at every accessibility, so that each can be judged.</summary>
+    /// <summary>
+    /// Gets the binding flags that select every member a type declares, at every accessibility,
+    /// so that each member can be judged.
+    /// </summary>
     private static BindingFlags Everything =>
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
         | BindingFlags.DeclaredOnly;
 
     /// <summary>
-    /// Whether <paramref name="member"/> should be checked on its own: the accessor methods of a
-    /// property or an event are covered by checking the property or event, so only that is
-    /// reported, whereas an operator or a conversion has no other member that covers it.
+    /// Determines whether <paramref name="member"/> should be checked on its own. The accessor
+    /// methods of a property or an event are covered by checking the property or event, so only
+    /// the property or event is reported. An operator or a conversion has no other member that
+    /// covers it.
     /// </summary>
     private static bool Own(MemberInfo member) => member is not MethodInfo { IsSpecialName: true } method
         || !(method.Name.StartsWith("get_", StringComparison.Ordinal)
@@ -116,7 +121,7 @@ public sealed class ApiSurfaceTests
             || method.Name.StartsWith("add_", StringComparison.Ordinal)
             || method.Name.StartsWith("remove_", StringComparison.Ordinal));
 
-    /// <summary>Whether a consumer of the assembly can see <paramref name="member"/> at all.</summary>
+    /// <summary>Determines whether a consumer of the assembly can see <paramref name="member"/> at all.</summary>
     private static bool Visible(MemberInfo member) => member switch
     {
         Type nested => (nested.IsNestedPublic || nested.IsNestedFamily || nested.IsNestedFamORAssem)
@@ -128,7 +133,7 @@ public sealed class ApiSurfaceTests
         _ => false,
     };
 
-    /// <summary>The types <paramref name="member"/>'s signature names.</summary>
+    /// <summary>Returns the types that the signature of <paramref name="member"/> names.</summary>
     private static IEnumerable<Type> Mentioned(MemberInfo member) => member switch
     {
         Type nested => [],
@@ -140,7 +145,10 @@ public sealed class ApiSurfaceTests
         _ => [],
     };
 
-    /// <summary>Records a problem for each of <paramref name="types"/>, or type they are built from, that a consumer cannot name.</summary>
+    /// <summary>
+    /// Records a problem for each type in <paramref name="types"/>, or type they are built from,
+    /// that is a green type or that a consumer cannot name.
+    /// </summary>
     private static void Check(string where, List<string> problems, IEnumerable<Type> types)
     {
         foreach (var type in types.SelectMany(Unwrapped).Distinct())
@@ -153,8 +161,10 @@ public sealed class ApiSurfaceTests
     }
 
     /// <summary>
-    /// <paramref name="type"/> and the types it is built out of: what an array, a by-reference or
-    /// a pointer is of, and the arguments a generic type is closed over.
+    /// Returns the types a signature naming <paramref name="type"/> depends on. For an array, a
+    /// by-reference or a pointer, these are the types its element is built from. For a
+    /// constructed generic type, they are its generic definition and the types its arguments are
+    /// built from. A generic parameter yields nothing, and any other type yields itself.
     /// </summary>
     private static IEnumerable<Type> Unwrapped(Type type)
     {
@@ -176,7 +186,7 @@ public sealed class ApiSurfaceTests
         yield return type;
     }
 
-    /// <summary>Whether a consumer of the assembly can name <paramref name="type"/>.</summary>
+    /// <summary>Determines whether a consumer of the assembly can name <paramref name="type"/>.</summary>
     private static bool Public(Type type) => type.IsNested
         ? type.IsNestedPublic && Public(type.DeclaringType!)
         : type.IsPublic;

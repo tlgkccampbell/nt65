@@ -4,8 +4,8 @@ using Norristown.Syntax;
 
 namespace Norristown.Layout;
 
-// Address spaces: whether a segment may hold code, and what code may do with a name whose
-// segment is in a different address space from the code's own.
+// This part checks address spaces. It decides whether a segment may hold code, and what code
+// may do with a name whose segment is in a different address space from the code's own.
 public sealed partial class CodeLayout
 {
     // The (routine, segment) pairs already reported for putting code in a data-only segment,
@@ -15,10 +15,10 @@ public sealed partial class CodeLayout
 
     /// <summary>
     /// Checks an instruction against the address spaces. A segment whose space holds data may
-    /// not hold instructions. A name in a different space from the code's is only usable as a
-    /// value: an immediate may take it and data may hold it, but a jump, branch or call to it,
-    /// or any other operand that addresses memory through it, is reported, because that
-    /// address belongs to another processor's memory and not to the memory this code runs in.
+    /// not hold instructions. A name in a different space from the code's is usable only as a
+    /// value. An immediate may take it and data may hold it, but a jump, branch or call to it, or
+    /// any other operand that addresses memory through it, is reported. That address belongs to
+    /// another processor's memory, not to the memory this code runs in.
     /// </summary>
     private void CheckSpaces(SyntaxToken mnemonic, SyntaxNode? operand, AddressingMode mode)
     {
@@ -60,9 +60,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// The addresses an expression refers to, each with the segment it is in: every placed
-    /// symbol the expression names, and every <c>.runof(SEGMENT)</c> call, whose run address
-    /// is in SEGMENT.
+    /// Returns the addresses an expression refers to, each with the segment it is in. They are
+    /// every symbol with a segment that the expression names, and every <c>.runof(SEGMENT)</c>
+    /// call, whose run address is in SEGMENT.
     /// </summary>
     private IEnumerable<(string Name, string Segment)> Named(SyntaxNode expression)
     {

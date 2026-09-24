@@ -1,22 +1,25 @@
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Which directives may begin a line in each kind of context, and what each of them is for. A
-/// directive the binder would reject at the caret is not offered there, so what comes back is
-/// what could actually be written, not merely every directive the language has.
+/// Lists the directives that may begin a line in each kind of context, and describes what each
+/// is for. A directive the binder would reject at the caret is not offered there, so the result
+/// is what could actually be used there, not merely every directive the language has.
 /// </summary>
 internal static class Directives
 {
-    /// <summary>The element types a declaration, a member or a line of data is written with.</summary>
+    /// <summary>The element types that a declaration, a member or a line of data may use.</summary>
     public static readonly string[] Elements =
     [
         ".byte", ".word", ".long", ".dword", ".beword", ".belong", ".bedword", ".addr", ".faraddr", ".type",
     ];
 
-    /// <summary>How wide an address is, where a declaration says so.</summary>
+    /// <summary>The address widths a declaration may specify.</summary>
     public static readonly string[] Sizes = ["zp", "abs", "far"];
 
-    /// <summary>Everything that may stand where data goes: the element types, and the rest of the bytes.</summary>
+    /// <summary>
+    /// The directives that may appear where data goes, which are the element types and the other
+    /// directives that produce bytes.
+    /// </summary>
     public static readonly string[] Data =
     [
         .. Elements, ".res", ".align", ".incbin", ".strz", ".lobytes", ".hibytes", ".bankbytes",
@@ -30,18 +33,27 @@ internal static class Directives
         ".each", ".assert", ".error", ".warning", ".res", ".align", ".place",
     ];
 
-    /// <summary>The directives only code may hold: those that state the processor state or where control goes.</summary>
+    /// <summary>
+    /// The directives that only code may hold, which declare the processor state or where control
+    /// goes.
+    /// </summary>
     private static readonly string[] CodeOnly = [".state", ".ensure", ".frame", ".next", ".fallthrough", ".patch"];
 
-    /// <summary>What a macro body may not declare, because a macro body is expanded at every call rather than assembled once.</summary>
+    /// <summary>
+    /// The directives a macro body may not contain, because a macro body is expanded at every call
+    /// rather than assembled once.
+    /// </summary>
     private static readonly string[] NotInMacro =
         [".cpu", ".export", ".import", ".segment", ".proc", ".multiproc", ".macro", ".func", ".signature"];
 
-    /// <summary>What a repetition may not declare, because every iteration would declare it again.</summary>
+    /// <summary>
+    /// The directives a repetition may not contain, because every iteration would declare the same
+    /// thing again.
+    /// </summary>
     private static readonly string[] NotInRepetition =
         [".cpu", ".config", ".export", ".import", ".segment", ".proc", ".multiproc", ".macro", ".func", ".signature"];
 
-    /// <summary>What a directive is for, in the few words a completion shows beside it.</summary>
+    /// <summary>The short description of each directive that a completion shows beside it.</summary>
     private static readonly Dictionary<string, string> details = new(StringComparer.Ordinal)
     {
         [".addr"] = "two-byte addresses",
@@ -98,16 +110,19 @@ internal static class Directives
     };
 
     /// <summary>
-    /// Every directive these lists may offer anywhere. Nothing in the code ties these lists to
-    /// what the binder accepts, so a test checks them against it through this.
+    /// Gets every directive these lists may offer anywhere. Nothing in the code ties these lists
+    /// to what the binder accepts, so a test uses this property to check them against the binder.
     /// </summary>
     public static IEnumerable<string> All => details.Keys;
 
-    /// <summary>What every directive in <paramref name="names"/> is for, ready to be offered.</summary>
+    /// <summary>
+    /// Pairs every directive in <paramref name="names"/> with a description of what it is for,
+    /// ready to be offered.
+    /// </summary>
     public static IEnumerable<(string Name, string Detail)> Described(IEnumerable<string> names) =>
         names.Select(name => (name, details.GetValueOrDefault(name, "directive")));
 
-    /// <summary>The directives that may begin the statement the caret is at the start of.</summary>
+    /// <summary>Returns the directives that may begin the statement the caret is at the start of.</summary>
     public static IEnumerable<(string Name, string Detail)> At(LineContext line)
     {
         string[] names = line.Place switch
@@ -127,17 +142,20 @@ internal static class Directives
     }
 
     /// <summary>
-    /// The directives a <c>.proc</c> body, a macro body or a block argument may hold: the
-    /// top-level ones except <c>.cpu</c>, <c>.config</c> and <c>.place</c>, the data directives,
-    /// and the code-only ones. In a block of unknown kind everything is offered, <c>.module</c>
-    /// included.
+    /// Returns the directives a <c>.proc</c> body, a macro body or a block argument may hold.
+    /// These are the top-level directives except <c>.cpu</c>, <c>.config</c> and <c>.place</c>,
+    /// the data directives, and the code-only directives. In a block of unknown kind every
+    /// directive is offered, including <c>.module</c>.
     /// </summary>
     private static string[] InCode(LineContext line) =>
         line.Place == Place.Unknown
             ? [.. Items, ".module", .. Data, .. CodeOnly]
             : [.. Items.Except([".cpu", ".config", ".place"], StringComparer.Ordinal), .. Data, .. CodeOnly];
 
-    /// <summary>What the blocks around the line rule out of <paramref name="names"/>.</summary>
+    /// <summary>
+    /// Removes from <paramref name="names"/> the directives that the blocks around the line rule
+    /// out.
+    /// </summary>
     private static IEnumerable<string> Without(IEnumerable<string> names, LineContext line)
     {
         if (line.Place == Place.Unknown)
@@ -149,20 +167,20 @@ internal static class Directives
         if (line.InProc || line.InMacro || line.InRepetition)
             barred.Add(".use");
 
-        // A `.config` declares a setting the build supplies, so it must be written where nothing
-        // decides whether it is read at all: outside every block, including an open `.segment`
-        // region, which counts as a block for any line under it.
+        // A `.config` declares a setting the build supplies, so it must appear where nothing
+        // decides whether it is read at all. That means outside every block, including an open
+        // `.segment` region, which counts as a block for any line under it.
         if (line.InBlock)
             barred.Add(".config");
 
         // Which modules share a translation unit is structural and read from the files alone,
-        // so a `.place` must be at file level; here, unlike for `.config`, an open `.segment`
-        // region does not count as a block.
+        // so a `.place` must be at file level. Unlike for `.config`, an open `.segment` region
+        // does not count as a block here.
         if (!line.AtFileLevel)
             barred.Add(".place");
 
         // A `.fallthrough` is the last line of a routine's own body, or of a branch of an `.if`
-        // chain that ends it; neither a macro body nor a repetition is a routine's body.
+        // chain that ends it. Neither a macro body nor a repetition is a routine's body.
         if (!line.InProc || line.InMacro || line.InRepetition)
             barred.Add(".fallthrough");
 

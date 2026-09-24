@@ -3,18 +3,18 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an editor gets through an instance of a routine family, written both in the compact
-/// <c>.multiproc</c> form and in the long <c>.each</c> form: where an instance is declared, what
-/// renaming it changes, what completion offers after the scope it is in, and where its cost is
-/// shown. None of this
-/// expands the family; it all comes from what the binder records about it.
+/// Tests what an editor is given for an instance of a routine family, declared both in the
+/// compact <c>.multiproc</c> form and in the long <c>.each</c> form. The tests cover where an
+/// instance is declared, what renaming it changes, what completion offers after the scope it is
+/// in, and where its cost is shown. None of this expands the family; it all comes from what the
+/// binder records about it.
 /// </summary>
 public sealed class FamilyRequestsTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
     /// <summary>
-    /// One family written each way, and a routine that calls an instance of each. The line
+    /// One family declared each way, and a routine that calls an instance of each. The line
     /// numbers below are this text's, counted from zero.
     /// </summary>
     private const string Source = """
@@ -48,7 +48,7 @@ public sealed class FamilyRequestsTests
         """;
 
     /// <summary>
-    /// An instance is declared where its family is written, so go to definition lands on the
+    /// An instance is declared where its family is declared, so go to definition lands on the
     /// line that declares every one of them.
     /// </summary>
     [Fact]
@@ -102,8 +102,8 @@ public sealed class FamilyRequestsTests
     }
 
     /// <summary>
-    /// The instances of a family are all declared on its one line, so it gets no lenses, which
-    /// would crowd it with one per instance; the hover there gives each instance's cost.
+    /// The instances of a family are all declared on its one line, so that line gets no lenses,
+    /// which would crowd it with one per instance. The hover there gives each instance's cost.
     /// </summary>
     [Fact]
     public async Task AFamilyGetsNoLensesAndItsHoverGivesTheCost()

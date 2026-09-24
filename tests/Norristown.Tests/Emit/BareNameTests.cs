@@ -20,9 +20,10 @@ public sealed class BareNameTests
     }
 
     /// <summary>
-    /// None of these is reported: the same names under a CPU whose ca65 instruction table lacks
-    /// them, a use of such a name rather than a definition, a name that merely starts with one,
-    /// and a file with no <c>.setcpu</c> header, such as a line map.
+    /// The check reports nothing for the same names under a CPU whose ca65 instruction table
+    /// lacks them, or for a use of such a name rather than a definition. It also reports nothing
+    /// for a name that merely starts with one, or for a file with no <c>.setcpu</c> header, such
+    /// as a line map.
     /// </summary>
     [Fact]
     public void AnythingCa65WouldNotMisreadIsLeftAlone()

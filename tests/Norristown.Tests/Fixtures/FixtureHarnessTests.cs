@@ -1,6 +1,9 @@
 namespace Norristown.Tests.Fixtures;
 
-/// <summary>The harness itself, run against a fake compiler so it can be checked before the real one does anything.</summary>
+/// <summary>
+/// Checks the harness itself, run against a fake compiler so it can be checked before the real
+/// one does anything.
+/// </summary>
 public sealed class FixtureHarnessTests : IDisposable
 {
     private readonly DirectoryInfo dir = Directory.CreateTempSubdirectory("nt65-fixture-");
@@ -38,7 +41,7 @@ public sealed class FixtureHarnessTests : IDisposable
     }
 
     /// <summary>
-    /// A diagnostic whose message in the fixture differs from what the compiler now says is
+    /// A diagnostic whose message in the fixture differs from what the compiler now reports is
     /// reported as its own kind of failure, rather than as one missing and one unexpected
     /// diagnostic, so that rewording a message changes only the fixture line holding its text.
     /// </summary>

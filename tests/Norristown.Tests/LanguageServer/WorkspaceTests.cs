@@ -8,7 +8,7 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 
 namespace Norristown.Tests.LanguageServer;
 
-/// <summary>The workspace as a document cache: what an edit costs, and where the text ends up.</summary>
+/// <summary>Tests the workspace as a document cache, including what an edit costs and where the text ends up.</summary>
 public sealed class WorkspaceTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
@@ -16,9 +16,9 @@ public sealed class WorkspaceTests
     private const string Source = ".module main\n.proc reset {\n    ldx #0\n@loop:\n    sta $0200,x\n    rts\n}\n";
 
     /// <summary>
-    /// <see cref="Uri"/> as a path, the same on every host: the workspace treats <c>c:</c> as a
-    /// drive wherever it runs, because to the analysis a path is only a name, and only the
-    /// editor's URI has to come back unchanged.
+    /// <see cref="Uri"/> as a path, which is the same on every host. The workspace treats
+    /// <c>c:</c> as a drive on any host, because to the analysis a path is only a name, and only
+    /// the editor's URI has to come back unchanged.
     /// </summary>
     private const string Named = "c:/work/main.nt65";
 
@@ -38,10 +38,11 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
-    /// And back again, the same way on every host. .NET does not read a rooted path as a URI
-    /// unless it starts with a drive letter, and on Linux every path a workspace carries starts
-    /// with a <c>/</c> — including one holding a Windows editor's drive letter — so a path the
-    /// analysis uses to name another file has to be written out as a URI rather than passed bare.
+    /// A path converts back to a URI the same way on every host. .NET does not read a rooted path
+    /// as a URI unless it starts with a drive letter, and on Linux every path a workspace holds
+    /// starts with a <c>/</c>, including a path that holds a Windows editor's drive letter. So a
+    /// path the analysis uses to name another file has to be converted to a URI rather than
+    /// passed bare.
     /// </summary>
     [Fact]
     public void ARootedPathComesBackAsAFileUriOnEveryHost()
@@ -49,18 +50,18 @@ public sealed class WorkspaceTests
         Assert.Equal("file:///home/u/p/main.nt65", Lsp.ToUri("/home/u/p/main.nt65"));
         Assert.Equal("file:///c:/work/main.nt65", Lsp.ToUri("/c:/work/main.nt65"));
 
-        // Characters a URI cannot hold are escaped, whatever the file is called.
+        // Characters a URI cannot hold are escaped in any file name.
         Assert.Equal("file:///home/u/my%20file.nt65", Lsp.ToUri("/home/u/my file.nt65"));
         Assert.Equal("file:///home/u/a%23b.nt65", Lsp.ToUri("/home/u/a#b.nt65"));
 
-        // Not a path: an untitled document, and a file the editor named relatively, come back
-        // as they went in.
+        // An untitled document and a file the editor named relatively are not paths, so they
+        // come back as they went in.
         Assert.Equal("untitled:Untitled-1", Lsp.ToUri("untitled:Untitled-1"));
         Assert.Equal("main.nt65", Lsp.ToUri("main.nt65"));
     }
 
     /// <summary>
-    /// The program is analyzed with the editor's active configuration: its defines override the
+    /// The program is analyzed with the editor's active configuration. Its defines override the
     /// project's, and a configuration name the project does not have is reported.
     /// </summary>
     [Fact]
@@ -92,8 +93,8 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
-    /// An edit re-lexes the lines it touches and no others: the lines above and below keep
-    /// the green nodes they had, which is the reuse the tree is built for.
+    /// An edit re-lexes the lines it touches and no others. The lines above and below keep the
+    /// green nodes they had, which is the reuse the tree is built for.
     /// </summary>
     [Fact]
     public void AnEditReusesTheGreenNodesItDidNotTouch()
@@ -114,7 +115,7 @@ public sealed class WorkspaceTests
         }
     }
 
-    /// <summary>However the edit arrived, the tree is the one a fresh parse would give.</summary>
+    /// <summary>After an incremental edit of any shape, the tree is the one a fresh parse would give.</summary>
     [Theory]
     [InlineData(3, 0, 3, 6, "@again:")]     // replacing a whole label
     [InlineData(6, 1, 6, 1, "\n    nop\n")] // appending lines past the last `}`
@@ -132,7 +133,10 @@ public sealed class WorkspaceTests
         Assert.Equal(SyntaxDump.Full(fresh), SyntaxDump.Full(changed.Tree));
     }
 
-    /// <summary>A change with no range replaces the whole document, the form a client falls back to without incremental edits.</summary>
+    /// <summary>
+    /// A change with no range replaces the whole document. A client falls back to that form when
+    /// it does not use incremental edits.
+    /// </summary>
     [Fact]
     public void AChangeWithNoRangeReplacesTheWholeDocument()
     {

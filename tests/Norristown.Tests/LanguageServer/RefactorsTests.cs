@@ -7,9 +7,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The refactorings offered at a selection, as opposed to fixes for reported diagnostics: each
-/// is requested where a programmer would request it, applied, and the resulting file is compared
-/// with what they would have written.
+/// Tests the refactorings offered at a selection, as opposed to fixes for reported diagnostics.
+/// Each is requested where a programmer would request it and then applied, and the resulting file
+/// is compared with what the programmer would have written.
 /// </summary>
 public sealed class RefactorsTests
 {
@@ -20,7 +20,10 @@ public sealed class RefactorsTests
     private const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n"
         + ".export .proc fill {\n    rts\n}\n";
 
-    /// <summary>A path written out in full is brought in with a <c>.use</c>, and every occurrence of it in the file is shortened.</summary>
+    /// <summary>
+    /// A path spelled out in full is brought in with a <c>.use</c>, and every occurrence of it in
+    /// the file is shortened.
+    /// </summary>
     [Fact]
     public void APathIsBroughtInWithAUse()
     {
@@ -34,7 +37,10 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
-    /// <summary>A name a <c>.use</c> brought in is written out in full, and the <c>.use</c> item that brought it in is removed.</summary>
+    /// <summary>
+    /// A name that a <c>.use</c> brought in is spelled out in full, and the <c>.use</c> item that
+    /// brought it in is removed.
+    /// </summary>
     [Fact]
     public void ABroughtNameIsWrittenOutInFull()
     {
@@ -61,7 +67,10 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
-    /// <summary>With the caret on a declaration it can be exported, and with the caret on an exported one it can stop being exported.</summary>
+    /// <summary>
+    /// With the caret on a declaration, the declaration can be exported, and with the caret on an
+    /// exported declaration, it can stop being exported.
+    /// </summary>
     [Fact]
     public void ADeclarationIsExportedAndUnexported()
     {
@@ -88,7 +97,10 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
-    /// <summary>A <c>rep</c> that only changes a width is written as the <c>.ensure</c> that says so, and back.</summary>
+    /// <summary>
+    /// A <c>rep</c> that only changes a width is converted to the <c>.ensure</c> that says so, and
+    /// back.
+    /// </summary>
     [Fact]
     public void WidthsAreWrittenAsAnEnsureAndBack()
     {
@@ -105,9 +117,9 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
-    /// Only an immediate sets the flags: <c>rep FLAGS</c> is another instruction altogether,
-    /// and writing it as the <c>.ensure</c> its value happens to spell would change what the
-    /// line does.
+    /// Only an immediate operand sets the flags. <c>rep FLAGS</c> is another instruction
+    /// altogether, and converting it to the <c>.ensure</c> that its value happens to match would
+    /// change what the line does.
     /// </summary>
     [Fact]
     public void OnlyAnImmediateRepIsWrittenAsAnEnsure()
@@ -121,7 +133,7 @@ public sealed class RefactorsTests
             action => action.Title.StartsWith("Write it as `.ensure", StringComparison.Ordinal));
     }
 
-    /// <summary>A number written in an operand is given a name at the top of the file.</summary>
+    /// <summary>A number in an operand is given a name at the top of the file.</summary>
     [Fact]
     public void ANumberIsGivenAName()
     {
@@ -182,8 +194,8 @@ public sealed class RefactorsTests
 
     /// <summary>
     /// The new routine is named after the label the selection starts with, which is the one
-    /// word the file already has about those lines, and the client is asked to rename it: the
-    /// position is where the name lands once the change has been applied.
+    /// word the file already has about those lines. The client is asked to rename it at the
+    /// position where the name lands once the change has been applied.
     /// </summary>
     [Fact]
     public void AnExtractedRoutineIsNamedAfterItsLabelAndOfferedForRenaming()
@@ -207,7 +219,10 @@ public sealed class RefactorsTests
         Assert.Equal("wait {", written.Split('\n')[line][character..]);
     }
 
-    /// <summary>A selection that returns from its routine part way through cannot be extracted into a routine.</summary>
+    /// <summary>
+    /// A selection that returns from its routine part way through cannot be extracted into a
+    /// routine.
+    /// </summary>
     [Fact]
     public void ASelectionThatReturnsIsNotExtracted()
     {
@@ -219,8 +234,8 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
-    /// A jump to a label the selection declares stays inside the new routine, whichever jump it
-    /// is, and so does a software interrupt, which comes back to the instruction after it.
+    /// A jump of any kind to a label the selection declares stays inside the new routine, and so
+    /// does a software interrupt, which comes back to the instruction after it.
     /// </summary>
     [Fact]
     public void AJumpThatStaysInsideIsExtracted()
@@ -269,10 +284,9 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
-    /// The rest of what a line-by-line translation can rewrite: a macro's parameters, a define
-    /// as the constant or the function it stood for, a condition on a define, and ca65's word
-    /// operators such as <c>.bitor</c>. What needs a decision, such as an unnamed label, is left
-    /// as it was.
+    /// A line-by-line translation also rewrites a macro's parameters, a define as the constant or
+    /// the function it stood for, a condition on a define, and ca65's word operators such as
+    /// <c>.bitor</c>. Anything that needs a decision, such as an unnamed label, is left as it was.
     /// </summary>
     [Fact]
     public void Ca65ThatIsOnlySpellingIsRewritten()
@@ -295,7 +309,11 @@ public sealed class RefactorsTests
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 
-    /// <summary>The one action with <paramref name="title"/> offered where <paramref name="at"/> is written.</summary>
+    /// <summary>
+    /// Returns the one action titled <paramref name="title"/> that is offered at the caret where
+    /// <paramref name="at"/> first appears in <paramref name="text"/>, moved by
+    /// <paramref name="offset"/> characters.
+    /// </summary>
     private static CodeAction Single(string text, string at, string title, int offset = 0)
     {
         var start = text.IndexOf(at, StringComparison.Ordinal) + offset;
@@ -305,7 +323,10 @@ public sealed class RefactorsTests
         return Assert.Single(Actions(text, new Range(caret, caret)), action => action.Title == title);
     }
 
-    /// <summary>The one action with <paramref name="title"/> offered over <paramref name="range"/>.</summary>
+    /// <summary>
+    /// Returns the one action titled <paramref name="title"/> that is offered over
+    /// <paramref name="range"/>.
+    /// </summary>
     private static CodeAction Single(string text, Range range, string title) =>
         Assert.Single(Actions(text, range), action => action.Title == title);
 

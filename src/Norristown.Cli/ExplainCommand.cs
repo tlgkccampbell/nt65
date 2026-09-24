@@ -3,10 +3,10 @@ using System.Globalization;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 explain &lt;name&gt;</c>: prints the full explanation of a diagnostic, which its
-/// one-line message has no room for. Given no name, it lists every diagnostic; given a name nt65
-/// does not know, it suggests the closest one. Given <c>--markdown</c>, it writes the whole
-/// catalogue as one Markdown page.
+/// Implements <c>nt65 explain &lt;name&gt;</c>, which prints the full explanation of a
+/// diagnostic that its one-line message has no room for. Given no name, it lists every
+/// diagnostic. Given a name nt65 does not know, it suggests the closest one. Given
+/// <c>--markdown</c>, it writes the whole catalogue as one Markdown page.
 /// </summary>
 internal static class ExplainCommand
 {
@@ -39,8 +39,8 @@ internal static class ExplainCommand
             return 2;
         }
 
-        // Print the entry: its name and default severity, its message with each placeholder
-        // shown as `...`, its explanation, and the project-file setting that changes it.
+        // Print the entry's name and default severity, its message with each placeholder shown
+        // as `...`, its explanation, and the project-file setting that changes it.
         output.WriteLine($"{descriptor.Id}, {Reported(descriptor.Severity)} by default");
         output.WriteLine();
         output.WriteLine($"  {Said(descriptor.Format)}");
@@ -63,14 +63,17 @@ internal static class ExplainCommand
             output.WriteLine($"  {descriptor.Id.PadRight(width)}  {Reported(descriptor.Severity)}");
     }
 
-    /// <summary>A severity with its article, as this command prints it: "an error", "a warning" or "a note".</summary>
+    /// <summary>
+    /// Returns a severity with its article, as this command prints it, which is "an error",
+    /// "a warning" or "a note".
+    /// </summary>
     private static string Reported(Severity severity) =>
         severity.ToString().ToLowerInvariant() is "info" ? "a note" : $"a{(severity == Severity.Error ? "n" : "")} "
             + severity.ToString().ToLowerInvariant();
 
     /// <summary>
-    /// The message format with each numbered placeholder (<c>{0}</c>, <c>{1}</c>, ...) shown as
-    /// <c>...</c>, since the numbers mean something to nt65 but nothing to a reader.
+    /// Returns the message format with each numbered placeholder (<c>{0}</c>, <c>{1}</c>, ...)
+    /// shown as <c>...</c>, since the numbers mean something to nt65 but nothing to a reader.
     /// </summary>
     private static string Said(string format)
     {
@@ -81,14 +84,16 @@ internal static class ExplainCommand
     }
 
     /// <summary>
-    /// The value for the example project-file line: <c>off</c> for a diagnostic that is not an
-    /// error, since turning it off is the likeliest change, and <c>error</c> for an error, which
-    /// cannot be turned down.
+    /// Returns the value for the example project-file line. The value is <c>off</c> for a
+    /// diagnostic that is not an error, since turning it off is the likeliest change, and
+    /// <c>error</c> for an error, which cannot be turned down.
     /// </summary>
     private static string Turned(DiagnosticDescriptor descriptor) =>
         descriptor.Severity == Severity.Error ? "error" : "off";
 
-    /// <summary>The explanation broken between words into lines of about 88 characters, to fit a terminal.</summary>
+    /// <summary>
+    /// Breaks the explanation between words into lines of about 88 characters, to fit a terminal.
+    /// </summary>
     private static IEnumerable<string> Wrapped(string text)
     {
         var line = "";

@@ -5,9 +5,9 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// One file's syntax: its lines, each lexed and parsed on its own, and the block structure
-/// over them. A tree is immutable; <see cref="WithChange"/> gives the tree for an edited
-/// text, reusing the green lines and statements the edit did not touch.
+/// Represents the syntax of one file. It holds the file's lines, each lexed and parsed on its
+/// own, and the block structure over them. A tree is immutable. <see cref="WithChange"/> returns
+/// the tree for an edited text, reusing the green lines and statements the edit did not touch.
 /// </summary>
 public sealed class SyntaxTree
 {
@@ -21,25 +21,25 @@ public sealed class SyntaxTree
     private readonly bool[] reported;
     private FileSyntax? root;
 
-    // For each line that an annotating rewrite reattached annotations to, the parse to use
-    // instead of parsing the line's tokens afresh; null for every other line, and default or
-    // empty when no line has one. An edit carries these over for every line that keeps its green
-    // node, which is what lets an annotation survive an edit elsewhere in the file, and what
-    // drops it when its own line is parsed again.
+    // For each line that an annotating rewrite reattached annotations to, this holds the parse to
+    // use instead of parsing the line's tokens afresh. It is null for every other line, and the
+    // array is default or empty when no line has such a parse. An edit keeps these entries for
+    // every line that keeps its green node. That lets an annotation survive an edit elsewhere in
+    // the file, and drops it when its own line is parsed again.
     private readonly ImmutableArray<Parser.Result?> carried;
 
-    // Which lines hold an annotation, allocated only once some line does. A green line holds the
-    // tokens the lexer read and not the statement they parse to, so, as with the diagnostics, a
-    // flag on the green line alone could not cover everything on the line.
+    // Records which lines hold an annotation, and is allocated only once some line does. A green
+    // line holds the tokens the lexer read and not the statement they parse to. So, as with the
+    // diagnostics, a flag on the green line alone could not cover everything on the line.
     private readonly bool[]? annotated;
 
     /// <summary>
-    /// The tree a node built by <see cref="SyntaxFactory"/> belongs to: the node's own text and
-    /// nothing else, so that its spans, its trivia and its diagnostics are read the same way as
-    /// a file node's. It has no lines and no <see cref="Root"/>; a rewrite that puts the node
-    /// into a file produces a tree of that file.
+    /// Initializes the tree that a node built by <see cref="SyntaxFactory"/> belongs to. The tree's
+    /// text is the node's own text and nothing else, so the node's spans, trivia and diagnostics
+    /// are read the same way as a file node's. The tree has no lines and no <see cref="Root"/>. A
+    /// rewrite that puts the node into a file produces a tree of that file.
     /// </summary>
-    /// <param name="built">The node the tree is of.</param>
+    /// <param name="built">The node the tree contains.</param>
     private SyntaxTree(GreenNode built)
     {
         Path = "";
@@ -78,7 +78,7 @@ public sealed class SyntaxTree
         ParseLines(green, BlockKind.None, parsed, carried, ref line);
         statements = ImmutableCollectionsMarshal.AsImmutableArray(parsed);
 
-        // Which lines have diagnostics is worked out once, here, so that a node asked whether it
+        // Which lines have diagnostics is computed once, here, so that a node asked whether it
         // holds a diagnostic answers by reading flags rather than by walking. A green line does
         // not hold what it parses to, so a flag on the green line alone could not cover the line.
         reported = new bool[lines.Length];
@@ -87,7 +87,7 @@ public sealed class SyntaxTree
             reported[i] = Said(parsed[i], lines[i]);
 
             // Annotations are rare — a file has none until a rewrite tags something — so the
-            // flags for them are not there at all until one does.
+            // flags for them are not allocated until some line has an annotation.
             if (Marked(parsed[i], lines[i]))
                 (annotated ??= new bool[lines.Length])[i] = true;
         }
@@ -96,21 +96,24 @@ public sealed class SyntaxTree
         diagnostics = new(() => CollectRange(0, lines.Length - 1));
     }
 
-    /// <summary>The file's logical path, as it appears in diagnostics.</summary>
+    /// <summary>Gets the file's logical path, as it appears in diagnostics.</summary>
     public string Path { get; }
 
-    /// <summary>The file's text.</summary>
+    /// <summary>Gets the file's text.</summary>
     public string Text { get; }
 
-    /// <summary>The offset in <see cref="Text"/> where each line starts.</summary>
+    /// <summary>Gets the offset in <see cref="Text"/> where each line starts.</summary>
     public ImmutableArray<int> LineStarts { get; }
 
-    /// <summary>One green line per source line. A text with n line breaks has n + 1 lines.</summary>
+    /// <summary>
+    /// Gets the green lines, one per source line. A text with n line breaks has n + 1 lines.
+    /// </summary>
     internal ImmutableArray<GreenLine> Lines { get; }
 
     /// <summary>
-    /// The root node, created on first use; every caller gets the same instance. A tree holding a
-    /// single node built by <see cref="SyntaxFactory"/> is not a file and has no root.
+    /// Gets the root node, which is created on first use; every caller gets the same instance. A
+    /// tree holding a single node built by <see cref="SyntaxFactory"/> is not a file and has no
+    /// root.
     /// </summary>
     public FileSyntax Root =>
         root ?? Interlocked.CompareExchange(
@@ -118,20 +121,22 @@ public sealed class SyntaxTree
             new FileSyntax(this, null, green ?? throw new InvalidOperationException("a built node is no file"), 0),
             null) ?? root;
 
-    /// <summary>Lexical, block-structure and parse errors, ordered by line and column.</summary>
+    /// <summary>
+    /// Gets the lexical, block-structure and parse errors, ordered by line and column.
+    /// </summary>
     public IReadOnlyList<Diagnostic> Diagnostics => diagnostics.Value;
 
-    /// <summary>How many lines the file has. A text with n line breaks has n + 1 lines.</summary>
+    /// <summary>Gets the number of lines in the file. A text with n line breaks has n + 1 lines.</summary>
     public int LineCount => LineStarts.Length;
 
     /// <summary>Parses a source file.</summary>
     public static SyntaxTree Parse(SourceFile file) => Parse(file.Path, file.Text);
 
     /// <summary>
-    /// Where each line of <paramref name="text"/> starts, without parsing it: what
-    /// <see cref="LineStarts"/> would hold, for a caller converting a line and column to an
-    /// offset in a text it has not parsed — such as an editor applying a batch of edits, each of
-    /// which names positions in the text the previous edit produced.
+    /// Returns the offset where each line of <paramref name="text"/> starts, without parsing it.
+    /// The result is what <see cref="LineStarts"/> would hold. It serves a caller converting a
+    /// line and column to an offset in a text it has not parsed, such as an editor applying a
+    /// batch of edits, each of which names positions in the text the previous edit produced.
     /// </summary>
     public static ImmutableArray<int> LineOffsets(string text) => SplitLines(text);
 
@@ -146,24 +151,25 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// The red node for <paramref name="built"/>, in a tree of that node alone. It is what
-    /// <see cref="SyntaxFactory"/> hands back and what an <c>Update</c> makes: a node with no
-    /// file around it, whose text is its own.
+    /// Returns the red node for <paramref name="built"/>, in a tree that contains only that node.
+    /// <see cref="SyntaxFactory"/> returns such nodes, and an <c>Update</c> creates them. The node
+    /// has no file around it, and its text is its own.
     /// </summary>
     /// <param name="built">The green node just built.</param>
     internal static SyntaxNode Detached(GreenNode built) => built.CreateRed(new SyntaxTree(built), null, 0);
 
     /// <summary>
-    /// The tree for this text with <paramref name="change"/> applied. Only the lines the
+    /// Returns the tree for this text with <paramref name="change"/> applied. Only the lines the
     /// change touches are lexed again; every other line keeps its green node.
     /// </summary>
     public SyntaxTree WithChange(TextChange change) => WithChanges([change]);
 
     /// <summary>
-    /// The tree for this text with <paramref name="changes"/> applied in order, each to what
-    /// the one before it left, which is how an editor sends the edits of one keystroke. The
-    /// text is split into lines and the tree rebuilt once for the lot, rather than once per
-    /// change: only the lines between the first and the last change are lexed again.
+    /// Returns the tree for this text with <paramref name="changes"/> applied in order, each to
+    /// the text the previous change produced. This is how an editor sends the edits of one
+    /// keystroke. The text is split into lines and the tree rebuilt once for all the changes,
+    /// rather than once per change, and only the lines between the first and the last change are
+    /// lexed again.
     /// </summary>
     public SyntaxTree WithChanges(IReadOnlyList<TextChange> changes)
     {
@@ -171,7 +177,7 @@ public sealed class SyntaxTree
             return this;
 
         // The first `head` characters and the last `tail` characters are the same in the new
-        // text as in this one, whatever the changes in between did, so they decide which lines
+        // text as in this one, regardless of the changes in between, so they decide which lines
         // keep their green nodes. A change reaching further out than the ones before it widens
         // the changed region between them.
         var text = Text;
@@ -223,14 +229,14 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// The annotated parses to carry into the tree an edit produces: a line that keeps its green
-    /// node keeps its annotated parse, wherever the edit moved it, and a line lexed again does
-    /// not. The statements follow the same rule, and it is why an annotation survives an edit
-    /// somewhere else in the file but is gone from a line that was typed over.
+    /// Returns the annotated parses to keep in the tree an edit produces. A line that keeps its
+    /// green node keeps its annotated parse, even if the edit moved it, and a line lexed again does
+    /// not. The statements follow the same rule. As a result, an annotation survives an edit
+    /// elsewhere in the file but is gone from a line that was typed over.
     /// </summary>
-    /// <param name="prefix">How many lines at the start of the file the edit left alone.</param>
-    /// <param name="suffix">How many lines at the end of it the edit left alone.</param>
-    /// <param name="newCount">How many lines the edited file has.</param>
+    /// <param name="prefix">The number of lines at the start of the file the edit left alone.</param>
+    /// <param name="suffix">The number of lines at the end of the file the edit left alone.</param>
+    /// <param name="newCount">The number of lines in the edited file.</param>
     private ImmutableArray<Parser.Result?> Carried(int prefix, int suffix, int newCount)
     {
         if (carried.IsDefaultOrEmpty)
@@ -245,30 +251,32 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// This tree with <paramref name="kept"/> used as the parse of each line that has an entry;
-    /// a rewrite uses this to put back the annotations it carried across a reparse. Nothing else
-    /// changes: the text and the lines are this tree's, and a kept parse is the line's own parse
-    /// with the annotations added.
+    /// Returns a copy of this tree that uses <paramref name="kept"/> as the parse of each line that
+    /// has an entry. A rewrite uses this method to restore the annotations it preserved across a
+    /// reparse. Nothing else changes. The text and the lines are this tree's, and a kept parse is
+    /// the line's own parse with the annotations added.
     /// </summary>
-    /// <param name="kept">One entry per line: a parse to keep, or null to read the line's own.</param>
+    /// <param name="kept">
+    /// One entry per line, holding either a parse to keep or null to use the line's own parse.
+    /// </param>
     internal SyntaxTree WithCarried(ImmutableArray<Parser.Result?> kept) =>
         new(Path, Text, LineStarts, Lines, kept);
 
     /// <summary>
-    /// Everything line <paramref name="line"/> parsed to, 0-based: its statement and the pieces
-    /// the line holds rather than the statement.
+    /// Returns everything the 0-based line <paramref name="line"/> parsed to. That is its
+    /// statement and the nodes and tokens the line holds outside the statement.
     /// </summary>
     internal Parser.Result Parsed(int line) => statements[line];
 
     /// <summary>
-    /// Line <paramref name="line"/> of the file, 0-based, as a node of the tree: what it parsed
-    /// to, and the tokens it is written with. It is the same node the walk down from
-    /// <see cref="Root"/> reaches, so it knows the blocks it is written in.
+    /// Returns the 0-based line <paramref name="line"/> of the file as a node of the tree, with
+    /// what it parsed to and the tokens it contains. It is the same node the walk down from
+    /// <see cref="Root"/> reaches, so it knows the blocks that contain it.
     /// </summary>
     /// <param name="line">The 0-based line.</param>
     public LineSyntax GetLine(int line) => Root.Lines[line];
 
-    /// <summary>The 0-based line holding <paramref name="position"/>.</summary>
+    /// <summary>Returns the 0-based line holding <paramref name="position"/>.</summary>
     public int GetLineIndex(int position)
     {
         var index = LineStarts.BinarySearch(position);
@@ -276,8 +284,8 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// The offset of a 0-based line and character, clamped to the text. An editor may name a
-    /// position past the end of a line or of the file, and that is not an error here.
+    /// Returns the offset of a 0-based line and character, clamped to the text. An editor may name
+    /// a position past the end of a line or of the file, and that is not an error here.
     /// </summary>
     public int GetPosition(int line, int character)
     {
@@ -290,7 +298,7 @@ public sealed class SyntaxTree
         return character <= 0 ? start : Math.Min(start + character, end);
     }
 
-    /// <summary>A diagnostic span for a range on one line.</summary>
+    /// <summary>Returns the diagnostic span for a range on one line.</summary>
     public Span GetSpan(TextSpan span)
     {
         var line = GetLineIndex(span.Start);
@@ -298,7 +306,10 @@ public sealed class SyntaxTree
         return new Span(Path, line + 1, column, column + span.Length);
     }
 
-    /// <summary>Line starts. <c>\r\n</c>, <c>\n</c> and a lone <c>\r</c> each end a line, as in LSP.</summary>
+    /// <summary>
+    /// Returns the offset where each line starts. <c>\r\n</c>, <c>\n</c> and a lone <c>\r</c> each
+    /// end a line, as in LSP.
+    /// </summary>
     private static ImmutableArray<int> SplitLines(string text)
     {
         var starts = ImmutableArray.CreateBuilder<int>();
@@ -317,7 +328,9 @@ public sealed class SyntaxTree
         return starts.ToImmutable();
     }
 
-    /// <summary>Parses every line under <paramref name="node"/>, each in the block kind around it.</summary>
+    /// <summary>
+    /// Parses every line under <paramref name="node"/>, each in the kind of the block around it.
+    /// </summary>
     private static void ParseLines(
         GreenNode node, BlockKind context, Parser.Result[] parsed, ImmutableArray<Parser.Result?> carried, ref int line)
     {
@@ -347,8 +360,9 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// The kind a block's lines read in: its own, unless it is a conditional or a repetition
-    /// inside a body with a line grammar of its own, whose lines are that body's.
+    /// Returns the block kind in which a block's lines are parsed. That is the block's own kind,
+    /// unless the block is a conditional or a repetition inside a body with its own line grammar.
+    /// Such a block's lines are parsed as that body's lines.
     /// </summary>
     private static BlockKind Within(BlockKind context, BlockKind block) => (context, block) switch
     {
@@ -364,9 +378,9 @@ public sealed class SyntaxTree
         text.AsSpan(starts[line], LineEnd(text, starts, line) - starts[line]);
 
     /// <summary>
-    /// Whether a parsed line has any diagnostic: a lexical error on one of its tokens, or a
-    /// parse error on one of the pieces they parse to. A green line holds the tokens the lexer
-    /// read and not those pieces, so both have to be checked.
+    /// Checks whether a parsed line has any diagnostic, either a lexical error on one of its
+    /// tokens or a parse error on one of the nodes they parse to. A green line holds the tokens
+    /// the lexer read and not those nodes, so both have to be checked.
     /// </summary>
     private static bool Said(Parser.Result parsed, GreenLine line) =>
         line.ContainsDiagnostics
@@ -375,8 +389,8 @@ public sealed class SyntaxTree
         || parsed.SkippedTokens is { ContainsDiagnostics: true };
 
     /// <summary>
-    /// Whether anything on a parsed line carries an annotation, which, as with the diagnostics,
-    /// is both the line's own tokens and what they parse to.
+    /// Checks whether anything on a parsed line has an annotation. As with the diagnostics, both
+    /// the line's own tokens and what they parse to are checked.
     /// </summary>
     private static bool Marked(Parser.Result parsed, GreenLine line) =>
         line.ContainsAnnotations
@@ -385,9 +399,9 @@ public sealed class SyntaxTree
         || parsed.SkippedTokens is { ContainsAnnotations: true };
 
     /// <summary>
-    /// The diagnostics <paramref name="green"/> and everything under it carry, as spans in the
-    /// file, where <paramref name="position"/> is where the node starts. Only a subtree that says
-    /// it holds one is walked at all.
+    /// Adds the diagnostics of <paramref name="green"/> and everything under it to
+    /// <paramref name="result"/>, as spans in the file. <paramref name="position"/> is the offset
+    /// where the node starts. Only subtrees whose flags show they hold a diagnostic are walked.
     /// </summary>
     internal void Collect(GreenNode green, int position, List<Diagnostic> result)
     {
@@ -408,9 +422,9 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// Whether any line from <paramref name="first"/> to <paramref name="last"/>, both 0-based and
-    /// inclusive, has a diagnostic on it; a line, a block and the file answer
-    /// <see cref="SyntaxNode.ContainsDiagnostics"/> with this.
+    /// Checks whether any line from <paramref name="first"/> to <paramref name="last"/>, both
+    /// 0-based and inclusive, has a diagnostic on it. A line, a block and the file use this method
+    /// to answer <see cref="SyntaxNode.ContainsDiagnostics"/>.
     /// </summary>
     internal bool LinesContainDiagnostics(int first, int last)
     {
@@ -423,9 +437,9 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// Whether any line from <paramref name="first"/> to <paramref name="last"/>, both 0-based and
-    /// inclusive, carries an annotation; a line, a block and the file answer
-    /// <see cref="SyntaxNode.ContainsAnnotations"/> with this.
+    /// Checks whether any line from <paramref name="first"/> to <paramref name="last"/>, both
+    /// 0-based and inclusive, has an annotation. A line, a block and the file use this method to
+    /// answer <see cref="SyntaxNode.ContainsAnnotations"/>.
     /// </summary>
     internal bool LinesContainAnnotations(int first, int last)
     {
@@ -440,16 +454,16 @@ public sealed class SyntaxTree
     }
 
     /// <summary>
-    /// The diagnostics of the lines from <paramref name="first"/> to <paramref name="last"/>, both
-    /// 0-based and inclusive, added to <paramref name="result"/> in source order.
+    /// Adds the diagnostics of the lines from <paramref name="first"/> to <paramref name="last"/>,
+    /// both 0-based and inclusive, to <paramref name="result"/> in source order.
     /// </summary>
     internal void CollectLines(int first, int last, List<Diagnostic> result) =>
         result.AddRange(CollectRange(first, last));
 
     /// <summary>
-    /// Every diagnostic on the lines from <paramref name="first"/> to <paramref name="last"/>,
-    /// ordered by line and column. Lines with no diagnostics are skipped, so collecting the
-    /// whole file's diagnostics walks only the subtrees that contain one.
+    /// Returns every diagnostic on the lines from <paramref name="first"/> to
+    /// <paramref name="last"/>, ordered by line and column. Lines with no diagnostics are skipped,
+    /// so collecting the whole file's diagnostics walks only the subtrees that contain one.
     /// </summary>
     private List<Diagnostic> CollectRange(int first, int last)
     {
@@ -459,9 +473,9 @@ public sealed class SyntaxTree
             if (!reported[i])
                 continue;
 
-            // The green line is not walked, because its tokens also belong to its pieces: between
-            // them the pieces hold every token of the line exactly once, and the statement also
-            // holds the missing tokens and the nodes that carry the parser's diagnostics.
+            // The green line is not walked, because its tokens also belong to the parsed nodes.
+            // Together those nodes hold every token of the line exactly once, and the statement
+            // also holds the missing tokens and the nodes that carry the parser's diagnostics.
             var line = Lines[i];
             var parsed = statements[i];
             var at = LineStarts[i];
@@ -479,8 +493,8 @@ public sealed class SyntaxTree
             Collect(end, LineStarts[i] + line.FullWidth - end.FullWidth, result);
         }
 
-        // A block error is about the brace structure rather than about anything inside a line,
-        // so it is recorded as a line and a token index on it, and turned into a span here.
+        // A block error concerns the brace structure rather than anything inside a line, so it is
+        // recorded as a line and a token index on it, and converted to a span here.
         result.AddRange(blockErrors
             .Where(error => error.Line >= first && error.Line <= last)
             .Select(error =>

@@ -1,14 +1,23 @@
 namespace Norristown.Semantics;
 
-/// <summary>What a module's declaration says about another module placing it.</summary>
+/// <summary>
+/// Specifies whether a module's declaration allows another module to place it with
+/// <c>.place</c>.
+/// </summary>
 public enum ModulePlacement
 {
-    /// <summary><c>.module m</c>: it stands alone, and placing it is an error.</summary>
+    /// <summary>Declared with <c>.module m</c>. The module stands alone, and placing it is an error.</summary>
     Alone,
 
-    /// <summary><c>.module m: placed</c>: exactly one module places it, and it has no output of its own.</summary>
+    /// <summary>
+    /// Declared with <c>.module m: placed</c>. Exactly one module places it, and it has no output
+    /// of its own.
+    /// </summary>
     Placed,
 
-    /// <summary><c>.module m: placeable</c>: at most one module places it, and it stands alone when none does.</summary>
+    /// <summary>
+    /// Declared with <c>.module m: placeable</c>. At most one module places it, and it stands
+    /// alone when no module does.
+    /// </summary>
     Placeable,
 }

@@ -8,9 +8,9 @@ using Norristown.Semantics;
 namespace Norristown.Tests.Editors;
 
 /// <summary>
-/// What the VS Code extension contributes, checked against what nt65 itself does: the schema
-/// for the project file against the reader, and the problem matcher against the lines
-/// <c>nt65 build</c> writes. Both are data files nothing compiles, so nothing else would
+/// Tests what the VS Code extension contributes against what nt65 itself does. The schema for
+/// the project file is checked against the reader, and the problem matcher against the lines
+/// <c>nt65 build</c> writes. Both are data files that nothing compiles, so nothing else would
 /// notice them drifting.
 /// </summary>
 public sealed class ExtensionTests : IDisposable
@@ -79,8 +79,8 @@ public sealed class ExtensionTests : IDisposable
     }
 
     /// <summary>
-    /// The <c>$nt65</c> problem matcher reads what the command writes: the file, the position
-    /// and the severity of every diagnostic, and nothing of the lines that are not diagnostics.
+    /// The <c>$nt65</c> problem matcher reads the file, the position and the severity of every
+    /// diagnostic the command writes, and nothing from the lines that are not diagnostics.
     /// </summary>
     [Fact]
     public void TheProblemMatcherReadsWhatTheCommandWrites()
@@ -126,8 +126,9 @@ public sealed class ExtensionTests : IDisposable
     }
 
     /// <summary>
-    /// Double-clicking selects a whole name: a cheap local label with its <c>@</c>, a qualified
-    /// name with its <c>::</c>, a directive with its <c>.</c> and a number with its <c>$</c>.
+    /// Double-clicking selects a whole name, which includes a cheap local label with its
+    /// <c>@</c>, a qualified name with its <c>::</c>, a directive with its <c>.</c> and a number
+    /// with its <c>$</c>.
     /// </summary>
     [Fact]
     public void TheWordPatternTakesANameWhole()
@@ -159,7 +160,8 @@ public sealed class ExtensionTests : IDisposable
         Assert.Equal("nt65", contributes.GetProperty("taskDefinitions").EnumerateArray().Single().GetProperty("type").GetString());
 
         // nt65 reads the project file with comments and trailing commas allowed, so the editor
-        // is told it is JSON with comments and not JSON, or it would report what nt65 accepts.
+        // is told that the file is JSON with comments, not plain JSON. Otherwise the editor would
+        // report errors in text that nt65 accepts.
         Assert.Equal(
             "jsonc",
             contributes.GetProperty("configurationDefaults").GetProperty("files.associations")
@@ -180,14 +182,16 @@ public sealed class ExtensionTests : IDisposable
         var registered = Registered().Where(name => name != "nt65.rename").Order(StringComparer.Ordinal);
         Assert.Equal(offered, registered);
 
-        // A lone file gets a server: the extension starts on the language and not only on a
-        // workspace that holds a project file.
+        // A lone file gets a server, because the extension starts on the language and not only
+        // on a workspace that holds a project file.
         Assert.Contains(
             "onLanguage:nt65",
             Package.RootElement.GetProperty("activationEvents").EnumerateArray().Select(e => e.GetString()));
     }
 
-    /// <summary>The commands the client's own code registers, from the calls that register them.</summary>
+    /// <summary>
+    /// Returns the commands the client's own code registers, found from the calls that register them.
+    /// </summary>
     private static IEnumerable<string> Registered() =>
         ClientFiles
             .SelectMany(file => Regex.Matches(
@@ -198,10 +202,11 @@ public sealed class ExtensionTests : IDisposable
             .Select(match => match.Groups["name"].Value);
 
     /// <summary>
-    /// The grammar that colours the grid in a hover, checked against the lines the server writes
-    /// into it. Markdown formatting does not apply inside a fenced block, so the grid is fenced as
-    /// a language of its own and this grammar is all that tells its parts apart; nothing compiles
-    /// the grammar or the server's text, so nothing else would notice them drifting apart.
+    /// The grammar that colours the grid in a hover is checked against the lines the server
+    /// writes into it. Markdown formatting does not apply inside a fenced block, so the grid is
+    /// fenced as a language of its own, and this grammar is the only thing that tells its parts
+    /// apart. Nothing compiles the grammar or the server's text, so nothing else would notice
+    /// them drifting apart.
     /// </summary>
     [Fact]
     public void TheHoverGrammarColoursTheGridTheServerWrites()
@@ -217,9 +222,10 @@ public sealed class ExtensionTests : IDisposable
         Assert.Equal("./syntaxes/nt65-hover.tmLanguage.json", grammar.GetProperty("path").GetString());
         Assert.Equal("source.nt65-hover", Hover.RootElement.GetProperty("scopeName").GetString());
 
-        // Coloured: the key of every row, whether it is one word, two, or a register; the block
-        // total and the reason on a cycles row, which are about more than the line; and anything
-        // the analysis could not work out. Everything else is left plain.
+        // The grammar colours the key of every row, whether it is one word, two, or a register.
+        // It also colours the block total and the reason on a cycles row, which are about more
+        // than the line, and anything the analysis could not work out. Everything else is left
+        // plain.
         foreach (var (line, text, scope) in (ReadOnlySpan<(string, string, string?)>)[
             ("cycles  4-5       block 8-11    +1 when taken", "cycles", "entity.name.tag.nt65-hover"),
             ("cycles  4-5       block 8-11    +1 when taken", "4-5", "constant.numeric.nt65-hover"),
@@ -247,9 +253,9 @@ public sealed class ExtensionTests : IDisposable
     }
 
     /// <summary>
-    /// What the grammar scopes the character at <paramref name="at"/> as, or null where it
-    /// leaves it plain. Like TextMate, it takes the leftmost match, and where two rules would match
-    /// at the same place, the one written first.
+    /// Returns the scope the grammar gives the character at <paramref name="at"/>, or null where
+    /// the grammar leaves it plain. Like TextMate, it takes the leftmost match, and where two
+    /// rules would match at the same place, it takes the one listed first.
     /// </summary>
     private static string? Scoped(string line, int at)
     {
@@ -296,7 +302,7 @@ public sealed class ExtensionTests : IDisposable
     private static IEnumerable<string> Enumeration(JsonElement element) =>
         element.GetProperty("enum").EnumerateArray().Select(value => value.GetString() ?? "");
 
-    /// <summary>One field of the matcher's pattern, as the manifest writes it.</summary>
+    /// <summary>Returns one field of the matcher's pattern, as text in the form the manifest gives it.</summary>
     private static string Pattern(string field)
     {
         var pattern = Package.RootElement.GetProperty("contributes")

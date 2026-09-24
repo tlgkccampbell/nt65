@@ -5,10 +5,10 @@ using System.Text.Json;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The server as an editor really starts it: the shipped executable, over its own standard
-/// input and output. The frames are written and read by hand rather than through a JSON-RPC
-/// library, because what is under test is what the server does with what it is sent, including
-/// what no library would send.
+/// Runs the server the way an editor really starts it, as the shipped executable over its own
+/// standard input and output. The frames are written and read by hand instead of through a
+/// JSON-RPC library, because the test is about what the server does with the messages it
+/// receives, including messages that no library would send.
 /// </summary>
 internal sealed class StdioServer : IDisposable
 {
@@ -23,10 +23,13 @@ internal sealed class StdioServer : IDisposable
         output = process.StandardOutput.BaseStream;
     }
 
-    /// <summary>The server's process id, so a test can give it to another server as the editor to watch.</summary>
+    /// <summary>
+    /// Gets the server's process id, so that a test can give it to another server as the editor
+    /// to watch.
+    /// </summary>
     public int Id => process.Id;
 
-    /// <summary>The process's exit code, once it has exited.</summary>
+    /// <summary>Gets the process's exit code, once it has exited.</summary>
     public int ExitCode => process.ExitCode;
 
     /// <summary>Starts the shipped executable over a pipe, as an editor does.</summary>
@@ -56,11 +59,11 @@ internal sealed class StdioServer : IDisposable
         await input.FlushAsync(cancellation);
     }
 
-    /// <summary>Sends a frame whose body is not JSON, which no library would.</summary>
+    /// <summary>Sends a frame whose body is not JSON, which no library would send.</summary>
     public Task SendBrokenAsync(CancellationToken cancellation) =>
         SendAsync("{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":", cancellation);
 
-    /// <summary>The next frame, read as JSON.</summary>
+    /// <summary>Reads the next frame and parses its body as JSON.</summary>
     public async Task<JsonDocument> ReceiveAsync(CancellationToken cancellation)
     {
         var length = -1;
@@ -93,7 +96,10 @@ internal sealed class StdioServer : IDisposable
         return JsonDocument.Parse(body);
     }
 
-    /// <summary>The next frame that answers <paramref name="id"/>, passing over notifications.</summary>
+    /// <summary>
+    /// Returns the next frame that answers <paramref name="id"/>, skipping notifications and any
+    /// other frame.
+    /// </summary>
     public async Task<JsonElement> AnswerToAsync(int id, CancellationToken cancellation)
     {
         while (true)
@@ -107,7 +113,10 @@ internal sealed class StdioServer : IDisposable
         }
     }
 
-    /// <summary>Waits up to <paramref name="within"/> for the process to exit; false if it is still running.</summary>
+    /// <summary>
+    /// Waits up to <paramref name="within"/> for the process to exit, and returns false if it is
+    /// still running.
+    /// </summary>
     public bool Left(TimeSpan within) => process.WaitForExit((int)within.TotalMilliseconds);
 
     /// <summary>Kills the process without warning, the way an editor that crashes stops.</summary>

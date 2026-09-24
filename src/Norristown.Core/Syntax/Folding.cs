@@ -1,14 +1,14 @@
 namespace Norristown.Syntax;
 
 /// <summary>
-/// The ranges of lines an editor can fold: one per block, from its opener line to its last
-/// line. The block layer already recovers from unbalanced braces, so a half-typed file
-/// still folds — a block left open by a missing <c>}</c> simply runs to wherever the block
-/// layer closed it.
+/// Computes the ranges of lines an editor can fold, one per block, from the block's opening line
+/// to its last line. The block layer already recovers from unbalanced braces, so a half-typed file
+/// still folds. A block left open by a missing <c>}</c> runs to the point where the block layer
+/// closed it.
 /// </summary>
 public static class Folding
 {
-    /// <summary>Every foldable range in <paramref name="tree"/>, outermost first.</summary>
+    /// <summary>Returns every foldable range in <paramref name="tree"/>, outermost first.</summary>
     public static IReadOnlyList<LineRange> Build(SyntaxTree tree)
     {
         var ranges = new List<LineRange>();

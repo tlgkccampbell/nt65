@@ -3,15 +3,18 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The ranges a selection steps through as it is expanded from the caret, and back through as
-/// it is shrunk. They come from the syntax tree alone: the operand under the caret, the instruction
-/// written around it, the block that holds the line, the routine that holds the block, and the
-/// file. A reader widening a selection is walking the shape of the program, and the shape of
-/// the program is what the tree already is.
+/// Computes the ranges a selection steps through as it is expanded from the caret, and back
+/// through as it is shrunk. They come from the syntax tree alone. The steps are the operand under
+/// the caret, the instruction that contains it, the block that holds the line, the routine that
+/// holds the block, and the file. A reader widening a selection is walking the shape of the
+/// program, and the tree already is that shape.
 /// </summary>
 internal static class SelectionRanges
 {
-    /// <summary>The chain at <paramref name="position"/>, innermost first, or null past the end of the file.</summary>
+    /// <summary>
+    /// Returns the chain of ranges at <paramref name="position"/>, innermost first, or null past
+    /// the end of the file.
+    /// </summary>
     public static Protocol.SelectionRange? At(SyntaxTree tree, int position)
     {
         if (position > tree.Text.Length)
@@ -37,7 +40,7 @@ internal static class SelectionRanges
     }
 
     /// <summary>
-    /// The smallest node containing <paramref name="position"/>, searching down from the line
+    /// Returns the smallest node containing <paramref name="position"/>, searching down from the line
     /// it is on. A caret in the whitespace between two child nodes stops at their parent, the
     /// deepest node whose span contains it.
     /// </summary>

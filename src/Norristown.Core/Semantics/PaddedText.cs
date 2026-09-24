@@ -3,18 +3,18 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// A counted <c>.byte</c> array whose only value is one text, <c>.data title: .byte[21] { "NT65" }</c>,
-/// which is filled out with zero to its count, as <c>char title[21] = "..."</c> is in C. A
-/// list with fewer values than the count is still an error: a count is there to catch a short
-/// table, and a text is not a table. A pad other than zero is what a structure's
-/// <c>.res n, pad</c> member is for.
+/// Handles a counted <c>.byte</c> array whose only value is one text, such as
+/// <c>.data title: .byte[21] { "NT65" }</c>. Such an array is padded with zeros to its count, as
+/// <c>char title[21] = "..."</c> is in C. A list with fewer values than the count is still an
+/// error, because a count exists to catch a short table, and a text is not a table. To pad with a
+/// value other than zero, use a structure's <c>.res n, pad</c> member.
 /// </summary>
 public static class PaddedText
 {
     /// <summary>
-    /// How many zero bytes the directive pads with and how many elements it declares, or null
-    /// when it is not one text in a counted <c>.byte</c> array, and also when the text is as
-    /// long as its count or longer.
+    /// Returns how many zero bytes the directive pads with and how many elements it declares.
+    /// Returns null when the directive is not one text in a counted <c>.byte</c> array, or when
+    /// the text is at least as long as its count.
     /// </summary>
     public static (long Zeros, long Count)? Padding(DataDirectiveSyntax directive, SemanticModel model, Expansion? on = null)
     {
@@ -31,8 +31,8 @@ public static class PaddedText
     }
 
     /// <summary>
-    /// The one value the directive holds, wherever it is written, or null when it holds any
-    /// other number of them.
+    /// Returns the directive's single value, whether it is in braces or in the body, or null when
+    /// the directive holds any other number of values.
     /// </summary>
     private static SyntaxNode? OnlyValueOf(DataDirectiveSyntax directive)
     {
@@ -43,8 +43,8 @@ public static class PaddedText
         SyntaxNode? only = null;
         foreach (var line in body.Members.Skip(1))
         {
-            // A conditional or a repetition in the body may write any number of values, however
-            // few lines it has, so a body holding one is never the one-text case.
+            // A conditional or a repetition in the body may produce any number of values, even
+            // with few lines, so a body that contains one is never the one-text case.
             if (line is BlockSyntax)
                 return null;
             if (line is not LineSyntax { Statement: DataValuesSyntax values })
@@ -57,8 +57,9 @@ public static class PaddedText
     }
 
     /// <summary>
-    /// Whether a value is text: a string, a text constant, or a character mapping applied to
-    /// one. A character literal is a number, and a single number is a table of one, not text.
+    /// Returns a value indicating whether <paramref name="value"/> is text, which is a string, a
+    /// text constant, or a character mapping applied to text. A character literal is a number,
+    /// and a single number is a table of one, not text.
     /// </summary>
     private static bool IsText(SyntaxNode value, SemanticModel model, Expansion? on)
     {

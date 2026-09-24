@@ -4,19 +4,20 @@ using Norristown.Semantics;
 namespace Norristown.Flow;
 
 /// <summary>
-/// Checks each <c>.fallthrough</c> claim that the file containing it cannot check on its own:
-/// one that runs into another module's routine, or across a <c>.place</c>. Within one
-/// translation unit nt65 lays out every byte, each segment's in the order the unit writes it,
-/// and the answer is read off that layout: bytes a placed module writes to other segments do
-/// not come between two routines of one segment. Across units the order of the bytes is
-/// decided by the linker, which nt65 does not know, so such a claim is an error.
+/// Checks each <c>.fallthrough</c> claim that the file containing it cannot check on its own,
+/// which is one that runs into another module's routine or across a <c>.place</c>. Within one
+/// translation unit nt65 lays out every byte, each segment's bytes in the order the unit emits
+/// them, and the answer is read off that layout. Bytes that a module emitted by <c>.place</c>
+/// writes to other segments do not come between two routines of one segment. Across units the
+/// linker decides the order of the bytes, which nt65 does not know, so such a claim is an error.
 /// </summary>
 internal static class RunningOnChecks
 {
     /// <summary>
-    /// What is wrong with the claims the files of <paramref name="program"/> made, with each
-    /// file's layout and flow at the same index in <paramref name="layouts"/> and
-    /// <paramref name="flows"/>.
+    /// Reports a diagnostic for each <c>.fallthrough</c> claim in the files of
+    /// <paramref name="program"/> whose routines are not adjacent, or that crosses from one
+    /// translation unit into another. Each file's layout and flow are at the same index in
+    /// <paramref name="layouts"/> and <paramref name="flows"/>.
     /// </summary>
     public static IReadOnlyList<Diagnostic> Check(
         ProgramModel program, IReadOnlyList<CodeLayout> layouts, IReadOnlyList<ControlFlow> flows, Placements placements)

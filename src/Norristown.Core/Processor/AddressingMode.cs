@@ -1,9 +1,9 @@
 namespace Norristown.Processor;
 
 /// <summary>
-/// An addressing mode, as ca65 spells it in an operand. The modes that differ only
-/// by how wide the address is — direct, absolute and long — are separate modes, because
-/// choosing between them is the whole of the address-size rule.
+/// Specifies an addressing mode, in the form ca65 uses for an operand. The direct, absolute
+/// and long modes differ only in how wide the address is, but they are separate modes,
+/// because choosing among them is all the address-size rule does.
 /// </summary>
 public enum AddressingMode
 {
@@ -64,7 +64,7 @@ public enum AddressingMode
     /// <summary>Through a three-byte direct-page pointer: <c>lda [ptr]</c>, on the 65816.</summary>
     DirectIndirectLong,
 
-    /// <summary>The same, indexed by Y: <c>lda [ptr],y</c>, on the 65816.</summary>
+    /// <summary>Through a three-byte direct-page pointer, indexed by Y: <c>lda [ptr],y</c>, on the 65816.</summary>
     DirectIndirectLongY,
 
     /// <summary>An offset from the stack pointer: <c>lda 3,s</c>, on the 65816.</summary>

@@ -3,8 +3,8 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// <c>.endof</c> and <c>.spanof</c>: the address just past something and how many bytes it
-/// takes. They describe layout rather than shape, so they are address expressions like any
+/// Checks <c>.endof</c> and <c>.spanof</c>, which give the address just past something and how
+/// many bytes it takes. They describe layout rather than shape, so they are address expressions like any
 /// label difference — resolved by ca65 and ld65 — and never nt65 constants.
 /// </summary>
 public sealed class ExtentTests
@@ -77,7 +77,7 @@ public sealed class ExtentTests
         Assert.Equal(["main.nt65:9: irq handler too big"], program.Problems());
     }
 
-    /// <summary>A span may be written before the thing it measures, as any constant may.</summary>
+    /// <summary>A span may be used before the thing it measures, as any constant may.</summary>
     [Fact]
     public void ASpanMayBeWrittenBeforeWhatItMeasures()
     {
@@ -97,7 +97,7 @@ public sealed class ExtentTests
     }
 
     /// <summary>
-    /// An <c>.align</c> generates however many bytes it takes to reach a boundary, so a span
+    /// An <c>.align</c> generates as many bytes as it takes to reach a boundary, so a span
     /// containing one is left to ld65 as a link-time assertion.
     /// </summary>
     [Fact]
@@ -117,7 +117,7 @@ public sealed class ExtentTests
     }
 
     /// <summary>
-    /// A routine's size is the bytes in its body, so <c>.sizeof</c> of one is its span; it has
+    /// A routine's size is the bytes in its body, so <c>.sizeof</c> of one is its span. It has
     /// no elements, so <c>.countof</c> of one is an error.
     /// </summary>
     [Fact]
@@ -151,10 +151,13 @@ public sealed class ExtentTests
             "main.nt65:4: `N` is a constant and takes no bytes of its own", StringComparison.Ordinal));
     }
 
-    /// <summary>The ca65 source written for <paramref name="text"/>, placed in the code segment.</summary>
+    /// <summary>
+    /// Returns the ca65 source written for <paramref name="text"/>, which is put in the code
+    /// segment.
+    /// </summary>
     private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
-    /// <summary>How many bytes layout worked out for the one thing the file measures.</summary>
+    /// <summary>Returns how many bytes layout worked out for the one thing the file measures.</summary>
     private static long? SpanOf(string text)
     {
         var analysis = Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text));

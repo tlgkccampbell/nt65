@@ -7,8 +7,8 @@ using Lexer = Norristown.Syntax.InternalSyntax.Lexer;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// A diagnostic belongs to the node or token it is about, and says where it is within that node
-/// rather than where it is in the file, so an edit anywhere else leaves it alone.
+/// A diagnostic belongs to the node or token it is about, and records its position within that
+/// node rather than in the file, so an edit anywhere else leaves it alone.
 /// </summary>
 public sealed class TreeDiagnosticsTests
 {
@@ -36,8 +36,8 @@ public sealed class TreeDiagnosticsTests
     }
 
     /// <summary>
-    /// A node contains a diagnostic whenever any of its descendants does, all the way up, which
-    /// is what lets a walk for diagnostics skip the subtrees that have none.
+    /// A node contains a diagnostic whenever any of its descendants does, all the way up, so a
+    /// walk for diagnostics can skip the subtrees that have none.
     /// </summary>
     [Fact]
     public void ContainsDiagnosticsRollsUpToTheParent()
@@ -72,7 +72,9 @@ public sealed class TreeDiagnosticsTests
         Assert.Equal(new Span("test.nt65", 1, 11, 14), diagnostic.Span);
     }
 
-    /// <summary>A lexical error stays on the token it covers, and the line says it holds one.</summary>
+    /// <summary>
+    /// A lexical error stays on the token it covers, and the line is marked as holding one.
+    /// </summary>
     [Fact]
     public void ALexicalErrorStaysOnItsToken()
     {
@@ -90,7 +92,7 @@ public sealed class TreeDiagnosticsTests
 
     /// <summary>
     /// A token with a diagnostic is always an instance of its own, never the shared one the cache
-    /// hands out for every place the same text is written.
+    /// hands out for every place the same text appears.
     /// </summary>
     [Fact]
     public void ATokenWithADiagnosticIsNeverShared()
@@ -163,9 +165,9 @@ public sealed class TreeDiagnosticsTests
     }
 
     /// <summary>
-    /// The root says it holds a diagnostic exactly when the file has one, over every source in the
-    /// repository and every way of cutting its lines short, and what it holds is what the tree
-    /// reports. Each line's flag agrees with its own diagnostics, and the lines' diagnostics
+    /// The root is marked as holding a diagnostic exactly when the file has one, over every source
+    /// in the repository and every way of cutting its lines short, and what it holds is what the
+    /// tree reports. Each line's flag agrees with its own diagnostics, and the lines' diagnostics
     /// together are the file's.
     /// </summary>
     [Fact]

@@ -4,21 +4,21 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What the modules of a program can see of one another. Every file is a module with a name,
-/// and its symbols are private unless exported. A name from another module is written with
-/// the module's path, <c>hw::vic::border</c>, or brought in with <c>.use</c>; nothing from
-/// another module is ever visible without one of those.
+/// Represents what the modules of a program can see of one another. Every file is a module with
+/// a name, and its symbols are private unless exported. A name from another module is written
+/// with the module's path, as in <c>hw::vic::border</c>, or brought in with <c>.use</c>. Nothing
+/// from another module is ever visible without one of those.
 /// <para>
-/// A module's name is only a name: <c>gfx::sprite</c> needs no module <c>gfx</c>, and the
-/// modules whose names start the same way are no closer to one another than any others. What
-/// the path does make is a tree of names, so <c>gfx</c> alone is a prefix a path may walk
-/// through on its way to a module.
+/// A module's name is only a name. <c>gfx::sprite</c> needs no module <c>gfx</c>, and modules
+/// whose names start the same way are no more related than any others. The paths do form a
+/// tree of names, however, so <c>gfx</c> alone is a prefix a path may pass through on its way to
+/// a module.
 /// </para>
 /// <para>
-/// Lookup finds a module's private names too, because a better diagnostic for one is that
-/// it exists and is not exported. Whether it may actually be used is checked on the whole name
-/// once it resolves: an interior label reached as <c>hw::outer::inner</c> needs <c>inner</c>
-/// to be exported, and <c>outer</c> itself need not be.
+/// Lookup also finds a module's private names, because the more useful diagnostic for such a
+/// name is that it exists and is not exported. Whether it may actually be used is checked on the
+/// whole name once it resolves. An interior label reached as <c>hw::outer::inner</c> needs
+/// <c>inner</c> to be exported, but <c>outer</c> itself need not be.
 /// </para>
 /// </summary>
 public sealed class ProgramSymbols
@@ -34,14 +34,14 @@ public sealed class ProgramSymbols
         this.defines = defines;
     }
 
-    /// <summary>A program of one file, which can see nothing beyond itself.</summary>
+    /// <summary>Gets the table for a program of one file, which can see nothing beyond itself.</summary>
     public static ProgramSymbols Empty { get; } = new([], [], []);
 
     /// <summary>
-    /// The table for a program whose files have been collected but not yet resolved. What is
-    /// wrong with the modules rather than with one file is reported here: two files that are
-    /// the same module, a name that is also the path of a module, and two exports that meet
-    /// under one linker name.
+    /// Builds the table for a program whose files have been collected but not yet resolved.
+    /// Problems with the modules, rather than with one file, are reported here. These are two
+    /// files that declare the same module, a name that is also the path of a module, and two
+    /// exports under one linker name.
     /// </summary>
     internal static ProgramSymbols Build(
         IReadOnlyList<Module> modules, IEnumerable<Symbol> defines, List<Diagnostic> diagnostics)
@@ -65,7 +65,7 @@ public sealed class ProgramSymbols
                 continue;
             }
             // A module's output is named after it, and a file system that ignores case would
-            // write two whose names differ only in case to one file.
+            // write two modules whose names differ only in case to the same file.
             if (byName.Values.FirstOrDefault(named => string.Equals(named.Name, name, StringComparison.OrdinalIgnoreCase)) is { } same)
             {
                 diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan),
@@ -77,8 +77,8 @@ public sealed class ProgramSymbols
                 prefixes.Add(name[..at]);
         }
 
-        // `hw::vic` cannot be both a module and a name module `hw` declares: a path to one of
-        // them would reach the other just as well.
+        // `hw::vic` cannot be both a module and a name that module `hw` declares, because a path
+        // to one of them would reach the other just as well.
         foreach (var module in byName.Values)
         {
             foreach (var symbol in module.FileScope.Symbols)
@@ -116,31 +116,43 @@ public sealed class ProgramSymbols
         return new ProgramSymbols(byName, prefixes, defined);
     }
 
-    /// <summary>Every module of the program, by name.</summary>
+    /// <summary>Gets every module of the program.</summary>
     public IEnumerable<Module> Modules => modules.Values;
 
-    /// <summary>Every define, which every file sees.</summary>
+    /// <summary>Gets every define, which every file sees.</summary>
     public IEnumerable<Symbol> Defines => defines.Values;
 
-    /// <summary>The module named <paramref name="name"/>, or null when no file is.</summary>
+    /// <summary>
+    /// Returns the module named <paramref name="name"/>, or null when no file declares that
+    /// module.
+    /// </summary>
     public Module? ModuleNamed(string name) => modules.GetValueOrDefault(name);
 
-    /// <summary>Whether <paramref name="path"/> is a module, or the start of one's name.</summary>
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="path"/> is a module or the start of a
+    /// module's name.
+    /// </summary>
     public bool IsModulePath(string path) => modules.ContainsKey(path) || prefixes.Contains(path);
 
-    /// <summary>The define named <paramref name="name"/>, which every file sees, or null.</summary>
+    /// <summary>
+    /// Returns the define named <paramref name="name"/>, which every file sees, or null if there
+    /// is none.
+    /// </summary>
     public Symbol? Define(string name) => defines.GetValueOrDefault(name);
 
     /// <summary>
-    /// What <paramref name="name"/> is in <paramref name="module"/>: a name its file declares at
-    /// its top level, exported or not, or a name it re-exports. <paramref name="touched"/> is
-    /// called with every name looked for and the module it was looked for in, including those
-    /// a re-export leads through.
+    /// Returns what <paramref name="name"/> means in <paramref name="module"/>, which is either a
+    /// name its file declares at its top level, exported or not, or a name it re-exports.
+    /// <paramref name="touched"/> is called with every name looked for and the module it was
+    /// looked for in, including those a re-export leads through.
     /// </summary>
     public Symbol? Member(Module module, string name, Action<string?, string>? touched = null) =>
         Member(module, name, touched, []);
 
-    /// <summary>The modules that export a top-level name <paramref name="name"/>, which is what a name no one declared may have meant.</summary>
+    /// <summary>
+    /// Returns the modules that export a top-level name <paramref name="name"/>. These are what an
+    /// undeclared name may have meant.
+    /// </summary>
     public IEnumerable<string> ModulesExporting(string name) =>
         modules.Values
             .Where(module => module.FileScope.FindMember(name) is { IsExported: true }
@@ -149,9 +161,9 @@ public sealed class ProgramSymbols
             .Order(StringComparer.Ordinal);
 
     /// <summary>
-    /// Whether an export is a symbol to the linker. A macro, a charmap, a function, a list and a
-    /// signature set are used by value, a scope and a type are only the way to their members, and an import
-    /// is defined by somebody else.
+    /// Returns a value indicating whether an export is a symbol to the linker. A macro, a charmap,
+    /// a function, a list and a signature set are used by value. A scope and a type only lead to
+    /// their members, and an import is defined elsewhere.
     /// </summary>
     internal static bool IsLinked(Symbol symbol) => symbol.Kind is not (SymbolKind.Macro or SymbolKind.Charmap
         or SymbolKind.Func or SymbolKind.List or SymbolKind.Scope or SymbolKind.Enum or SymbolKind.Struct
@@ -175,8 +187,8 @@ public sealed class ProgramSymbols
     }
 
     /// <summary>
-    /// The symbol a path written from the root of the modules leads to, or null. A re-export
-    /// is resolved the same way, and one that leads back to itself leads nowhere.
+    /// Returns the symbol that a path from the root of the modules leads to, or null. A re-export
+    /// is resolved the same way, and a re-export that leads back to itself resolves to nothing.
     /// </summary>
     private Symbol? Resolve(IReadOnlyList<string> path, Action<string?, string>? touched, HashSet<(string, string)> visiting)
     {
@@ -207,19 +219,19 @@ public sealed class ProgramSymbols
         return symbol;
     }
 
-    /// <summary>One file as the program sees it before its own names are resolved.</summary>
+    /// <summary>Represents one file as the program sees it before the file's own names are resolved.</summary>
     /// <param name="Tree">The file.</param>
-    /// <param name="Name">The module its <c>.module</c> names, or null when it names none.</param>
-    /// <param name="NameSpan">Where that name is written.</param>
-    /// <param name="FileScope">Its top-level scope, which is what another module can reach into.</param>
-    /// <param name="Exported">Every symbol it exports, members of what it exports included.</param>
-    /// <param name="Reexports">The names its <c>.export .use</c> items make part of it.</param>
+    /// <param name="Name">The module the file's <c>.module</c> names, or null when it names none.</param>
+    /// <param name="NameSpan">The span of that name.</param>
+    /// <param name="FileScope">The file's top-level scope, which another module can reach into.</param>
+    /// <param name="Exported">Every symbol the file exports, including members of what it exports.</param>
+    /// <param name="Reexports">The names the file's <c>.export .use</c> items make part of the module.</param>
     public sealed record Module(
         SyntaxTree Tree, string? Name, TextSpan NameSpan, Scope FileScope, IReadOnlyList<Symbol> Exported,
         IReadOnlyList<Reexport> Reexports);
 
-    /// <summary>A name a module re-exports: <c>.export .use hw::vic::border</c>.</summary>
-    /// <param name="Name">The name under which it becomes part of the module.</param>
-    /// <param name="Path">The path it was brought in from, from the root of the modules.</param>
+    /// <summary>Represents a name a module re-exports, as in <c>.export .use hw::vic::border</c>.</summary>
+    /// <param name="Name">The name under which the re-exported symbol becomes part of the module.</param>
+    /// <param name="Path">The path the symbol was brought in from, starting at the root of the modules.</param>
     public sealed record Reexport(string Name, IReadOnlyList<string> Path);
 }

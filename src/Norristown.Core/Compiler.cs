@@ -10,7 +10,7 @@ using Norristown.Syntax;
 namespace Norristown;
 
 /// <summary>
-/// The whole pipeline, from a set of source files to ca65 output and diagnostics. The
+/// Runs the whole pipeline, from a set of source files to ca65 output and diagnostics. The
 /// order of <c>files</c> must not affect the result.
 /// </summary>
 public static class Compiler
@@ -21,7 +21,7 @@ public static class Compiler
 
     /// <summary>
     /// Compiles <paramref name="files"/> for <paramref name="cpu"/>, the processor the command
-    /// line names, if it names one; a <c>.cpu</c> item in the source must agree with it.
+    /// line names, if it names one. A <c>.cpu</c> directive in the source must agree with it.
     /// </summary>
     public static Compilation Compile(IReadOnlyCollection<SourceFile> files, Cpu? cpu) =>
         Compile(files, ProjectSettings.None with { Cpu = cpu });
@@ -31,9 +31,11 @@ public static class Compiler
         Compile(files, project, BinaryLengthOnDisk);
 
     /// <summary>
-    /// The same, with <paramref name="binaryLength"/> giving the length of each file an
-    /// <c>.incbin</c> names, for a caller whose files are not at the paths written, and with a C
-    /// header of what the program exports when <paramref name="cHeader"/> names one.
+    /// Compiles <paramref name="files"/> as the program <paramref name="project"/> describes,
+    /// calling <paramref name="binaryLength"/> to get the length of each file an <c>.incbin</c>
+    /// names. A caller whose files are not at the paths the source gives passes its own function.
+    /// When <paramref name="cHeader"/> names a file, the result also includes a C header of what
+    /// the program exports.
     /// </summary>
     public static Compilation Compile(
         IReadOnlyCollection<SourceFile> files, ProjectSettings project, Func<string, long?> binaryLength,
@@ -41,8 +43,8 @@ public static class Compiler
         Emit(Analyze([.. files.Select(SyntaxTree.Parse)], project, binaryLength), project, cHeader);
 
     /// <summary>
-    /// Writes out the program <paramref name="analysis"/> worked out, and a C header of what it
-    /// exports when <paramref name="cHeader"/> names the file it goes in.
+    /// Emits the program that <paramref name="analysis"/> describes, and a C header of what it
+    /// exports when <paramref name="cHeader"/> names the file for the header.
     /// </summary>
     public static Compilation Emit(ProgramAnalysis analysis, ProjectSettings project, string? cHeader = null)
     {
@@ -101,15 +103,16 @@ public static class Compiler
     }
 
     /// <summary>
-    /// The ca65 for one file of <paramref name="analysis"/>, whatever errors the rest of the
-    /// program has, or null when the program has no such file. A build writes nothing for a
-    /// program with errors; the editor shows what would have been written anyway, so that
-    /// seeing what a line became does not wait for the rest of the file to be right. For a
-    /// module that another module places, it is the output of the translation unit it is written in.
+    /// Returns the ca65 output for one file of <paramref name="analysis"/>, even when the rest of
+    /// the program has errors, or null when the program has no such file. A build writes nothing
+    /// for a program with errors. The editor shows what would have been written anyway, so that
+    /// seeing what a line became does not wait for the rest of the file to be correct. For a
+    /// module that another module places, this returns the output of the translation unit that
+    /// contains it.
     /// </summary>
     /// <param name="analysis">The program the file belongs to.</param>
     /// <param name="project">The project it is built as, whose <c>out</c> names where the file goes.</param>
-    /// <param name="path">The logical path of the source to write.</param>
+    /// <param name="path">The logical path of the source file to emit.</param>
     public static OutputFile? EmitFile(ProgramAnalysis analysis, ProjectSettings project, string path)
     {
         if (analysis.ModelFor(path) is not { } model || model.Tree == analysis.Defines
@@ -126,38 +129,44 @@ public static class Compiler
     }
 
     /// <summary>
-    /// Reads <paramref name="files"/> as one program and works out what it means, without
-    /// writing anything. This is what an editor asks for, and what <see cref="Compile(IReadOnlyCollection{SourceFile}, ProjectSettings)"/>
-    /// emits from.
+    /// Parses <paramref name="files"/> and analyzes them as one program, without emitting
+    /// anything. An editor calls this, and
+    /// <see cref="Compile(IReadOnlyCollection{SourceFile}, ProjectSettings)"/> emits from its result.
     /// </summary>
     public static ProgramAnalysis Analyze(IReadOnlyCollection<SourceFile> files, ProjectSettings project) =>
         Analyze([.. files.Select(SyntaxTree.Parse)], project);
 
     /// <summary>
-    /// The same, for files that are already parsed. An editor keeps its trees across edits
-    /// and re-parses only what changed, so analysis takes them rather than their text.
+    /// Analyzes already-parsed files as one program. An editor keeps its trees across edits
+    /// and reparses only what changed, so this overload takes the trees rather than their text.
     /// </summary>
     public static ProgramAnalysis Analyze(IReadOnlyCollection<SyntaxTree> files, ProjectSettings project) =>
         Analyze(files, project, BinaryLengthOnDisk);
 
     /// <summary>
-    /// The same, with <paramref name="binaryLength"/> answering how long the file an
-    /// <c>.incbin</c> names is. A test gives its own rather than writing files to disk.
+    /// Analyzes already-parsed files as one program, calling <paramref name="binaryLength"/> to
+    /// get the length of each file an <c>.incbin</c> names. Tests pass their own function so that
+    /// they need not write files to disk.
     /// </summary>
     public static ProgramAnalysis Analyze(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength) =>
         Analyze(files, project, binaryLength, previous: null);
 
     /// <summary>
-    /// The same, for a program <paramref name="previous"/> analyzed before an edit. When one
-    /// file changed and what the other files can see of it did not, only that file is analyzed
-    /// again and everything else is kept; otherwise the whole program is.
+    /// Analyzes already-parsed files as one program, reusing <paramref name="previous"/>, the
+    /// analysis from before an edit. When a file changed and what the other files can see of it
+    /// did not, only that file is analyzed again and everything else is kept. Otherwise the whole
+    /// program is analyzed again.
     /// </summary>
     public static ProgramAnalysis Analyze(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, ProgramAnalysis? previous) =>
         Analyze(files, project, BinaryLengthOnDisk, previous);
 
-    /// <summary>The same, with <paramref name="binaryLength"/> answering how long an <c>.incbin</c> file is.</summary>
+    /// <summary>
+    /// Analyzes already-parsed files as one program, reusing <paramref name="previous"/> when it
+    /// is not null, and calling <paramref name="binaryLength"/> to get the length of each file an
+    /// <c>.incbin</c> names.
+    /// </summary>
     public static ProgramAnalysis Analyze(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength,
         ProgramAnalysis? previous)
@@ -169,9 +178,9 @@ public static class Compiler
     }
 
     /// <summary>
-    /// One file of the program written out. <paramref name="measured"/> holds, for each file of
-    /// the program in order, the symbols it measures with <c>.endof</c> and <c>.spanof</c>: the
-    /// symbols of this file that other files measure are the ones its output has to label.
+    /// Emits one file of the program. <paramref name="measured"/> holds, for each file of the
+    /// program in order, the symbols that file measures with <c>.endof</c> and <c>.spanof</c>.
+    /// The symbols of this file that other files measure are the ones its output has to label.
     /// </summary>
     private static OutputFile Written(
         ProgramAnalysis analysis, ProjectSettings project, int i,
@@ -204,7 +213,10 @@ public static class Compiler
         return Emitter.Emit(members, analysis.Placements, diagnostics, project.Out);
     }
 
-    /// <summary>Where the file at <paramref name="path"/> is among the program's, or -1.</summary>
+    /// <summary>
+    /// Returns the index of the file at <paramref name="path"/> among the program's files, or -1
+    /// if the program has no such file.
+    /// </summary>
     private static int Index(ProgramAnalysis analysis, string path)
     {
         for (var i = 0; i < analysis.Program.Files.Count; i++)
@@ -218,15 +230,16 @@ public static class Compiler
     private static ProgramAnalysis AnalyzeAll(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength)
     {
-        // The modules that come with nt65 join a program that could name them. A caller that
-        // passes back the files of an earlier analysis passes them too, and they are not its own.
+        // The modules that come with nt65 are added to a program that could name them. A caller
+        // that passes back the files of an earlier analysis passes those modules too, so they are
+        // removed from the caller's files first.
         var trees = files.Where(tree => !StandardModules.IsStandard(tree.Path))
             .OrderBy(tree => tree.Path, StringComparer.Ordinal).ToList();
         if (StandardModules.Wanted(trees))
             trees.AddRange(StandardModules.Trees);
 
-        // How long each `.incbin` file was taken to be is kept, so that a later edit can tell
-        // whether one changed on disk since.
+        // The length taken for each `.incbin` file is kept, so that a later edit can tell whether
+        // the file has changed on disk since.
         var lengths = new ConcurrentDictionary<string, long?>(StringComparer.Ordinal);
         long? Length(string path) => lengths.GetOrAdd(path, binaryLength);
 
@@ -243,7 +256,7 @@ public static class Compiler
         var cpu = new List<Diagnostic>();
         var target = ProgramCpu.Resolve(trees, project.Cpu, cpu);
 
-        // Which `.if` branches the build takes is settled first: conditions test the
+        // Which `.if` branches the build takes is decided first. Conditions test the
         // configuration and nothing else, and which segments and declarations a program has
         // follows from the answers.
         var conditions = new List<Diagnostic>();
@@ -275,8 +288,8 @@ public static class Compiler
         Flow.CallCosts.Compose(flows);
         var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
 
-        // Which modules place which follows from the files alone; which routine a routine falls
-        // through into across a `.place` follows from the layouts of every file in its
+        // Which modules place which others follows from the files alone. Which routine a routine
+        // falls through into across a `.place` follows from the layouts of every file in its
         // translation unit.
         var placements = Placements.Of(trees, defines);
         var reuse = new ProgramAnalysis.Reuse(
@@ -294,10 +307,11 @@ public static class Compiler
     }
 
     /// <summary>
-    /// The program <paramref name="previous"/> analyzed, with some files changed, analyzing only
-    /// those files and the files the changes affect; or null, with the <paramref name="reason"/>,
-    /// when the whole program has to be analyzed again. That happens when anything decided for
-    /// the program as a whole changes: the files in it, the project, the CPU, the segments.
+    /// Reanalyzes the program that <paramref name="previous"/> analyzed after some of its files
+    /// changed, analyzing only those files and the files the changes affect. Returns null, and
+    /// sets <paramref name="reason"/>, when the whole program has to be analyzed again. That
+    /// happens when anything decided for the program as a whole changes, such as the files in it,
+    /// the project, the CPU or the segments.
     /// </summary>
     private static ProgramAnalysis? Reanalyze(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
@@ -416,7 +430,7 @@ public static class Compiler
         var registers = Flow.RegisterKeeps.Compose(program.Files, layouts, flows, states);
 
         // An edit to any module of a translation unit can change which routine the others fall
-        // through into, so the placements are worked out again whichever file changed.
+        // through into, so the placements are worked out again after any change.
         var placements = Placements.Of(trees, previous.Defines);
         var reused = new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths);
         return new ProgramAnalysis(
@@ -432,21 +446,21 @@ public static class Compiler
     }
 
     /// <summary>
-    /// What happens to one file once its names are known: its layout, where control goes and,
-    /// on the 65816, the processor state; and what they found wrong.
+    /// Analyzes one file once its names are resolved. Returns the file's layout, its control flow
+    /// and, on the 65816, its processor state, together with the diagnostics they found.
     /// </summary>
     private static (CodeLayout Layout, Flow.ControlFlow Flow, Flow.StateAnalysis? State, IReadOnlyList<Diagnostic> Found)
         AnalyzeFile(SemanticModel model, Cpu target, ProjectSettings project)
     {
-        // Where control goes is read off the order layout wrote the bytes in, so the macros
+        // Control flow is read from the order in which layout lays out the bytes, so the macros
         // are expanded and the repetitions unrolled before anything is asked about the path.
         var layout = CodeLayout.Create(model, target);
         var flow = Flow.ControlFlow.Of(model, layout);
         var found = new List<Diagnostic>();
 
-        // On the 65816 an immediate is as wide as the register it goes to, which is what the
-        // processor-state analysis says. No edge depends on a length, so the analysis runs
-        // over the first layout, and the file is laid out again with what it found.
+        // On the 65816 an immediate is as wide as the register it goes to, and the
+        // processor-state analysis determines that width. No edge depends on a length, so the
+        // analysis runs over the first layout, and the file is laid out again with its results.
         Flow.StateAnalysis? state = null;
         if (target == Cpu.Wdc65816)
         {
@@ -458,8 +472,8 @@ public static class Compiler
         found.AddRange(layout.Diagnostics);
         found.AddRange(flow.Diagnostics);
 
-        // A family's body is written out once per instance, so a mistake in it is found once
-        // per instance; a diagnostic that every instance reports is collapsed into one.
+        // A family's body is emitted once per instance, so a mistake in it is found once per
+        // instance. A diagnostic that every instance reports is collapsed into one.
         var collapsed = new List<Diagnostic>(Family.Collapsed(model.Families, found));
         var entries = flow.Regions.SelectMany(region => region.Blocks)
             .Where(block => block.IsDeclared)
@@ -469,9 +483,10 @@ public static class Compiler
     }
 
     /// <summary>
-    /// Everything wrong with the program, from what each part of the analysis found.
-    /// <paramref name="composed"/> is what was found after every file had been analyzed on its
-    /// own: which registers routines preserve across calls, and the translation-unit checks.
+    /// Returns every diagnostic for the program, collected from what each part of the analysis
+    /// found. <paramref name="composed"/> holds the diagnostics found after every file had been
+    /// analyzed on its own, which come from working out which registers routines preserve across
+    /// calls and from the translation-unit checks.
     /// </summary>
     private static IReadOnlyList<Diagnostic> Collected(
         ProjectSettings project, Cpu target, IReadOnlyList<Diagnostic> cpu, ProgramModel program,
@@ -490,7 +505,7 @@ public static class Compiler
         return Diagnostics.Ordered(Diagnostics.WithSeverities(diagnostics, project.Severities));
     }
 
-    /// <summary>Diagnostics grouped by the file they are in.</summary>
+    /// <summary>Groups diagnostics by the file they are in.</summary>
     private static Dictionary<string, IReadOnlyList<Diagnostic>> ByFile(
         IEnumerable<SyntaxTree> trees, IEnumerable<Diagnostic> diagnostics)
     {
@@ -506,10 +521,20 @@ public static class Compiler
     }
 
     /// <summary>
-    /// The files a file's output depends on, by logical path: its own source; the sources of the
-    /// modules whose interfaces it uses, and of the ones those use in turn; the files that
-    /// declare segments or settings, which any file's meaning may follow from; and the files an
-    /// <c>.incbin</c> in any of them names, whose lengths determine the addresses that follow.
+    /// Returns the logical paths of the files that a file's output depends on.
+    /// <list type="bullet">
+    /// <item><description>The file's own source.</description></item>
+    /// <item><description>
+    /// The sources of the modules whose interfaces it uses, and of the modules those use in turn.
+    /// </description></item>
+    /// <item><description>
+    /// The files that declare segments or settings, because any file's meaning may follow from them.
+    /// </description></item>
+    /// <item><description>
+    /// The files an <c>.incbin</c> in any of those sources names, because their lengths determine
+    /// the addresses that follow.
+    /// </description></item>
+    /// </list>
     /// <paramref name="direct"/> caches the files each file names directly, for later calls to reuse.
     /// </summary>
     private static IReadOnlyList<string> Dependencies(
@@ -539,7 +564,7 @@ public static class Compiler
         found.RemoveWhere(StandardModules.IsStandard);
         return [.. found];
 
-        // The other sources a file names, and the binaries it includes.
+        // Returns the other sources a file names, and the binaries it includes.
         HashSet<string> Named(SemanticModel file)
         {
             if (direct.TryGetValue(file.Tree, out var named))
@@ -563,7 +588,9 @@ public static class Compiler
         }
     }
 
-    /// <summary>How long the file at <paramref name="path"/> is, or null when it cannot be read.</summary>
+    /// <summary>
+    /// Returns the length of the file at <paramref name="path"/>, or null when it cannot be read.
+    /// </summary>
     private static long? BinaryLengthOnDisk(string path)
     {
         try
@@ -577,10 +604,11 @@ public static class Compiler
     }
 
     /// <summary>
-    /// A far address is a bank and an offset, which only the 65816 has: ca65 refuses
-    /// <c>far</c> on any earlier processor, and nt65 output that ca65 refuses is an nt65 bug.
-    /// A segment or an import declared far on a 6502 or a CMOS variant is therefore reported
-    /// where it is written, rather than written out for ca65 to reject.
+    /// Reports a diagnostic for each segment or import declared far on a 6502 or a CMOS variant.
+    /// A far address is a bank and an offset, which only the 65816 has. ca65 refuses <c>far</c>
+    /// on any earlier processor, and nt65 output that ca65 refuses is an nt65 bug. Such a
+    /// declaration is therefore reported where it is declared, rather than emitted for ca65 to
+    /// reject.
     /// </summary>
     private static IEnumerable<Diagnostic> FarNeedsA65816(SegmentTable segments, ProgramModel program)
     {

@@ -3,7 +3,7 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What a completion inserts, and the order of the list. A directive that opens a block is
+/// Tests what a completion inserts and how the list is ordered. A directive that opens a block is
 /// inserted as a snippet of the whole block, closing brace included; an instruction is inserted
 /// as a plain word, because a snippet such as <c>lda ${1:operand}</c> gets in the way of someone
 /// who knows what they are typing. The list is ordered by how close each name is to the caret,
@@ -44,9 +44,9 @@ public sealed class CompletionStructureTests
         """;
 
     /// <summary>
-    /// The block openers are snippets and nothing else is: the name is the first tab stop and
-    /// the body the last, and on the 65816 a routine also has a stop for its signature, filled
-    /// in with the one most of the program's other routines declare.
+    /// Only the block openers are snippets. The name is the first tab stop and the body the last.
+    /// On the 65816 a routine also has a stop for its signature, filled in with the signature
+    /// that most of the program's other routines declare.
     /// </summary>
     [Fact]
     public async Task ABlockOpenerIsWrittenAsTheBlock()
@@ -84,10 +84,10 @@ public sealed class CompletionStructureTests
     }
 
     /// <summary>
-    /// The list is ordered by nearness rather than by spelling: the labels of the routine the
-    /// caret is in, then the file's names, then the modules, then the language's own words, and
-    /// the instructions last, since every CPU has far more of those than anyone could mean at
-    /// one caret.
+    /// The list is ordered by nearness to the caret rather than alphabetically. The labels of the
+    /// routine the caret is in come first, then the file's names, then the modules, then the
+    /// language's own words. The instructions come last, since every CPU has far more of those
+    /// than anyone could mean at one caret.
     /// </summary>
     [Fact]
     public async Task TheListIsOrderedByNearness()
@@ -95,14 +95,14 @@ public sealed class CompletionStructureTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        // Where a name goes: the labels of the routine the caret is in, then the file's names,
-        // then the prefixes, such as `$`, that start a number that is not written in decimal.
+        // Where a name goes, the labels of the routine the caret is in come first, then the
+        // file's names, then the prefixes, such as `$`, that start a number not in decimal.
         var named = await CompletionAsync(client, Locate.At(Source, "bne |@again"), timeout);
         var reached = (string label) => One(named, label).SortText!;
         Assert.True(string.CompareOrdinal(reached("@again"), reached("SCREEN")) < 0, "this routine's labels first");
         Assert.True(string.CompareOrdinal(reached("SCREEN"), reached("$")) < 0, "the file's names before the marks");
 
-        // Where a statement goes: the language's directives first, and the instructions last.
+        // Where a statement goes, the language's directives come first and the instructions last.
         var starting = await CompletionAsync(client, Locate.At(Source, "rts", 2), timeout);
         var order = (string label) => One(starting, label).SortText!;
         Assert.True(string.CompareOrdinal(order(".byte"), order("lda")) < 0, "the words before the instructions");

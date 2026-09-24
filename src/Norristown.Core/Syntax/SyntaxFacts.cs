@@ -2,13 +2,16 @@ using System.Collections.Frozen;
 
 namespace Norristown.Syntax;
 
-/// <summary>The reserved words of the language, and what a line's tokens mean.</summary>
+/// <summary>
+/// Provides the reserved words of the language and the facts that determine what a line's tokens
+/// mean.
+/// </summary>
 public static class SyntaxFacts
 {
     // Static field initializers run in text order, so each field here is declared after the
     // fields its initializer reads.
 
-    // How each mnemonic kind is written, indexed by the kind; None is written as nothing.
+    // The text of each mnemonic kind, indexed by the kind. The text of None is empty.
     private static readonly string[] mnemonicTexts =
         [.. Enum.GetValues<MnemonicKind>().Select(kind => kind == MnemonicKind.None ? "" : kind.ToString().ToLowerInvariant())];
 
@@ -42,13 +45,15 @@ public static class SyntaxFacts
 
     /// <summary>
     /// The CPU names, lower case, in the order nt65 lists them. Which processors exist is not
-    /// the lexer's concern, but how their names are spelled is: <c>.cpu</c> and <c>.target</c>
-    /// take one of these names and nothing else, and the names that start with a digit but are
-    /// not numbers are lexed as CPU-name tokens, which no other rule would produce.
+    /// the lexer's concern, but the text of their names is. <c>.cpu</c> and <c>.target</c> take
+    /// one of these names and nothing else. The names that start with a digit but are not numbers
+    /// are lexed as CPU-name tokens, which no other rule would produce.
     /// </summary>
     public static readonly IReadOnlyList<string> CpuNames = ["6502", "6502x", "65sc02", "r65c02", "65c02", "65816"];
 
-    /// <summary>The names, as a message lists them: <c>`6502`, `6502x`, … or `65816`</c>.</summary>
+    /// <summary>
+    /// The CPU names formatted as a message lists them, such as <c>`6502`, `6502x`, … or `65816`</c>.
+    /// </summary>
     public static readonly string ListedCpuNames =
         string.Join(", ", CpuNames.SkipLast(1).Select(name => $"`{name}`")) + $" or `{CpuNames[^1]}`";
 
@@ -62,10 +67,10 @@ public static class SyntaxFacts
 
     private static readonly FrozenSet<string> cpuNameSet = CpuNames.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    // Every directive that may begin a line, one row each, so that adding a directive is one
+    // Every directive that may begin a line, one row each, so that adding a directive takes one
     // line here and one case in the parser. Directives are case-insensitive, like mnemonics
-    // and registers. `.segment` parses to one of three kinds and `.proc` to one of two,
-    // decided by the rest of the line.
+    // and registers. `.segment` parses to one of three kinds and `.proc` to one of two; the rest
+    // of the line decides which.
     private static readonly FrozenDictionary<string, Directive> lineDirectives = new Dictionary<string, Directive>
     {
         [".cpu"] = new(SyntaxKind.CpuDirective),
@@ -123,7 +128,8 @@ public static class SyntaxFacts
 
     // The element types of data declarations and struct members, mapped to the size of one
     // element. `.type T` is the only other element type, and its size is that of T. Every
-    // multi-byte integer width has a big-endian partner, so there is no asking which do.
+    // multi-byte integer width has a big-endian partner, so no lookup of which widths have one
+    // is needed.
     private static readonly FrozenDictionary<string, int> elementTypes = new Dictionary<string, int>
     {
         [".byte"] = 1,
@@ -140,8 +146,9 @@ public static class SyntaxFacts
     private static readonly FrozenSet<string> builtinFunctions =
         BuiltinFunctions.Concat(MacroBuiltinFunctions).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    // The processor-state items, by the suffix that follows the name: a point item stands
-    // alone, `*` keeps a part of the state unchanged, `?` forgets it and `=` gives a value.
+    // The processor-state items, grouped by the suffix that follows the name. A point item
+    // stands alone. The suffix `*` keeps a part of the state unchanged, `?` forgets it, and `=`
+    // gives it a value.
     private static readonly FrozenSet<string> pointStateItems =
         new[]
         {
@@ -155,27 +162,37 @@ public static class SyntaxFacts
     private static readonly FrozenSet<string> valuedStateParts =
         new[] { "dp", "dbr" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The kinds of argument a macro parameter may take, as they are written.</summary>
+    /// <summary>The kinds of argument a macro parameter may take, as they appear in source.</summary>
     private static readonly FrozenSet<string> parameterKinds =
         new[] { "expr", "const", "ident", "operand", "block", "one", "list" }
             .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Whether <paramref name="text"/> is a mnemonic, whatever its case.</summary>
+    /// <summary>Checks whether <paramref name="text"/> is a mnemonic, in any letter case.</summary>
     public static bool IsMnemonic(ReadOnlySpan<char> text) => MnemonicKindOf(text) != MnemonicKind.None;
 
-    /// <summary>The mnemonic <paramref name="text"/> names, whatever its case, or <see cref="MnemonicKind.None"/>.</summary>
+    /// <summary>
+    /// Returns the mnemonic <paramref name="text"/> names, in any letter case, or
+    /// <see cref="MnemonicKind.None"/>.
+    /// </summary>
     public static MnemonicKind MnemonicKindOf(ReadOnlySpan<char> text) =>
         mnemonicKinds.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(text, out var kind) ? kind : MnemonicKind.None;
 
-    /// <summary>How <paramref name="kind"/> is written, lower case; empty for <see cref="MnemonicKind.None"/>.</summary>
+    /// <summary>
+    /// Returns the lower-case text of <paramref name="kind"/>, or an empty string for
+    /// <see cref="MnemonicKind.None"/>.
+    /// </summary>
     public static string TextOf(MnemonicKind kind) => mnemonicTexts[(int)kind];
 
-    /// <summary>Whether <paramref name="kind"/> is one of the long branches, which reach any near target.</summary>
+    /// <summary>
+    /// Checks whether <paramref name="kind"/> is one of the long branches, which reach any near
+    /// target.
+    /// </summary>
     public static bool IsLongBranch(MnemonicKind kind) => kind is >= MnemonicKind.Jeq and <= MnemonicKind.Jvc;
 
     /// <summary>
-    /// The family and bit number of a Rockwell bit instruction: <c>bbr3</c> is
-    /// <see cref="MnemonicKind.Bbr0"/> and 3. Null for every other mnemonic.
+    /// Returns the instruction group and bit number of a Rockwell bit instruction, or null for
+    /// every other mnemonic. The group is named by its bit-0 member, so <c>bbr3</c> gives
+    /// <see cref="MnemonicKind.Bbr0"/> and 3.
     /// </summary>
     public static (MnemonicKind Family, int Bit)? BitOf(MnemonicKind kind)
     {
@@ -185,58 +202,61 @@ public static class SyntaxFacts
         return (MnemonicKind.Bbr0 + (offset / 8 * 8), offset % 8);
     }
 
-    /// <summary>Whether <paramref name="text"/> is a register name, whatever its case.</summary>
+    /// <summary>Checks whether <paramref name="text"/> is a register name, in any letter case.</summary>
     public static bool IsRegister(ReadOnlySpan<char> text) => registerSet.GetAlternateLookup<ReadOnlySpan<char>>().Contains(text);
 
-    /// <summary>Whether <paramref name="text"/> is a register a <c>keeps</c> item may name.</summary>
+    /// <summary>Checks whether <paramref name="text"/> is a register a <c>keeps</c> item may name.</summary>
     public static bool IsKeptRegister(string text) => keptRegisterSet.Contains(text);
 
     /// <summary>
-    /// Whether <paramref name="text"/> is a word a state item is spelled with, whatever
-    /// follows it, and so cannot name a signature set.
+    /// Checks whether <paramref name="text"/> is a word that begins a state item, with any
+    /// suffix. Such a word cannot name a signature set.
     /// </summary>
     public static bool IsStateWord(string text) => pointStateItems.Contains(text) || trackedStateParts.Contains(text);
 
-    /// <summary>Whether <paramref name="text"/> names a kind of macro parameter.</summary>
+    /// <summary>Checks whether <paramref name="text"/> names a kind of macro parameter.</summary>
     public static bool IsParameterKind(string text) => parameterKinds.Contains(text);
 
-    /// <summary>Whether an identifier may start with <paramref name="c"/>.</summary>
+    /// <summary>Checks whether an identifier may start with <paramref name="c"/>.</summary>
     public static bool IsIdentifierStart(char c) => char.IsAsciiLetter(c) || c == '_';
 
-    /// <summary>Whether an identifier may continue with <paramref name="c"/>.</summary>
+    /// <summary>Checks whether an identifier may continue with <paramref name="c"/>.</summary>
     public static bool IsIdentifierPart(char c) => char.IsAsciiLetterOrDigit(c) || c == '_';
 
-    /// <summary>The kind of block a directive opens when its line ends in <c>{</c>.</summary>
+    /// <summary>Returns the kind of block a directive opens when its line ends in <c>{</c>.</summary>
     public static BlockKind BlockKindOfDirective(string directive) =>
         lineDirectives.TryGetValue(directive, out var row) ? row.Block : BlockKind.Unknown;
 
-    /// <summary>The kind of node a directive at the start of a line parses to, or <see cref="SyntaxKind.None"/>.</summary>
+    /// <summary>
+    /// Returns the kind of node a directive at the start of a line parses to, or
+    /// <see cref="SyntaxKind.None"/>.
+    /// </summary>
     public static SyntaxKind LineDirectiveKind(string directive) =>
         lineDirectives.TryGetValue(directive, out var row) ? row.Kind : SyntaxKind.None;
 
     /// <summary>
-    /// Whether <c>.export</c> may go before <paramref name="directive"/>, which is whether it
-    /// declares a name for the linker to know: a routine, data, a scope, a type, a constant of
-    /// the language, or what another module brings in.
+    /// Checks whether <c>.export</c> may precede <paramref name="directive"/>. That is the case
+    /// when the directive declares a name the linker must know. Such a name is a routine, data, a
+    /// scope, a type, a constant of the language, or something another module brings in.
     /// </summary>
     public static bool IsExportable(string directive) =>
         lineDirectives.TryGetValue(directive, out var row) && row.Exportable;
 
     /// <summary>
-    /// The size of one element of <paramref name="directive"/>, when it is an element type:
-    /// <c>.byte</c>, <c>.word</c>, <c>.long</c>, <c>.dword</c>, their big-endian partners
-    /// <c>.beword</c>, <c>.belong</c> and <c>.bedword</c>, and the addresses <c>.addr</c> and
-    /// <c>.faraddr</c>.
+    /// Returns the size of one element of <paramref name="directive"/> when it is an element
+    /// type, or null otherwise. The element types are <c>.byte</c>, <c>.word</c>, <c>.long</c>
+    /// and <c>.dword</c>, their big-endian partners <c>.beword</c>, <c>.belong</c> and
+    /// <c>.bedword</c>, and the addresses <c>.addr</c> and <c>.faraddr</c>.
     /// </summary>
     public static int? ElementSize(string directive) =>
         elementTypes.TryGetValue(directive, out var size) ? size : null;
 
-    /// <summary>Whether <paramref name="directive"/> names a built-in function.</summary>
+    /// <summary>Checks whether <paramref name="directive"/> names a built-in function.</summary>
     public static bool IsBuiltinFunction(string directive) => builtinFunctions.Contains(directive);
 
     /// <summary>
-    /// Whether <paramref name="text"/> is a level a ca65 <c>.assert</c> reports at, which an nt65
-    /// one does not take: nt65 decides when a check can be made.
+    /// Checks whether <paramref name="text"/> is a level a ca65 <c>.assert</c> reports at. An nt65
+    /// <c>.assert</c> does not take a level, because nt65 decides when a check can be made.
     /// </summary>
     public static bool IsAssertLevel(string text) =>
         text.Equals("warning", StringComparison.OrdinalIgnoreCase)
@@ -244,26 +264,29 @@ public static class SyntaxFacts
         || text.Equals("ldwarning", StringComparison.OrdinalIgnoreCase)
         || text.Equals("lderror", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Whether <paramref name="text"/> is one of the CPU names.</summary>
+    /// <summary>Checks whether <paramref name="text"/> is one of the CPU names.</summary>
     public static bool IsCpuName(string text) => cpuNameSet.Contains(text);
 
-    /// <summary>Whether <paramref name="text"/> is an address size: <c>zp</c>, <c>abs</c> or <c>far</c>.</summary>
+    /// <summary>
+    /// Checks whether <paramref name="text"/> is an address size, which is <c>zp</c>, <c>abs</c> or
+    /// <c>far</c>.
+    /// </summary>
     public static bool IsAddressSize(string text) =>
         text.Equals("zp", StringComparison.OrdinalIgnoreCase)
         || text.Equals("abs", StringComparison.OrdinalIgnoreCase)
         || text.Equals("far", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Whether <paramref name="text"/> names an address-size prefix, which is written before
+    /// Checks whether <paramref name="text"/> names an address-size prefix, which appears before
     /// a <c>:</c> in operand position. <c>z</c>, <c>f</c> and <c>d</c> are ordinary identifiers
-    /// elsewhere, but nothing else can be written in that position, so reading them as prefixes
+    /// elsewhere, but nothing else can appear in that position, so reading them as prefixes
     /// there is safe. Case is ignored.
     /// </summary>
     public static bool IsAddressPrefix(string text) =>
         text.Length == 1 && char.ToLowerInvariant(text[0]) is 'z' or 'a' or 'f' or 'd';
 
     /// <summary>
-    /// Whether <paramref name="name"/> followed by <paramref name="suffix"/> is a state item.
+    /// Checks whether <paramref name="name"/> followed by <paramref name="suffix"/> is a state item.
     /// <paramref name="suffix"/> is <see cref="SyntaxKind.Star"/>,
     /// <see cref="SyntaxKind.Question"/>, <see cref="SyntaxKind.Equals"/>, or
     /// <see cref="SyntaxKind.None"/> when the name stands alone.
@@ -275,18 +298,18 @@ public static class SyntaxFacts
         _ => pointStateItems.Contains(name),
     };
 
-    /// <summary>Whether a token of this kind may begin an expression as a prefix operator.</summary>
+    /// <summary>Checks whether a token of this kind may begin an expression as a prefix operator.</summary>
     public static bool IsUnaryOperator(SyntaxKind kind) => kind is SyntaxKind.Plus or SyntaxKind.Minus
         or SyntaxKind.Tilde or SyntaxKind.Bang or SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret;
 
     /// <summary>
-    /// The precedence level of a binary operator, 3 to 13 with 3 binding tightest, or 0
-    /// when the token is not one. <c>.mod</c> is a directive rather than a punctuation token,
-    /// because <c>%</c> begins a binary number, so the text is needed to tell it from other
-    /// directives.
+    /// Returns the precedence level of a binary operator, from 3 to 13 with 3 binding tightest,
+    /// or 0 when the token is not a binary operator. <c>.mod</c> is a directive rather than a
+    /// punctuation token, because <c>%</c> begins a binary number, so the text is needed to tell
+    /// it from other directives.
     /// </summary>
-    /// <param name="kind">What the token is.</param>
-    /// <param name="text">The token's text, which tells one directive from another.</param>
+    /// <param name="kind">The kind of the token.</param>
+    /// <param name="text">The token's text, which distinguishes one directive from another.</param>
     public static int BinaryPrecedence(SyntaxKind kind, string text) => kind switch
     {
         SyntaxKind.Star or SyntaxKind.Slash => 3,
@@ -305,25 +328,31 @@ public static class SyntaxFacts
     };
 
     /// <summary>
-    /// The shifts and the bitwise operators, whose operands must be parenthesized when they use
-    /// a different binary operator.
+    /// Checks whether <paramref name="kind"/> is a shift or a bitwise operator. The operands of
+    /// these operators must be parenthesized when they use a different binary operator.
     /// </summary>
     public static bool IsBitwiseOperator(SyntaxKind kind) => kind is SyntaxKind.LessLess
         or SyntaxKind.GreaterGreater or SyntaxKind.Ampersand or SyntaxKind.Caret or SyntaxKind.Bar;
 
-    /// <summary>The logical operators, which may not be mixed without parentheses.</summary>
+    /// <summary>
+    /// Checks whether <paramref name="kind"/> is a logical operator. Logical operators may not be
+    /// mixed without parentheses.
+    /// </summary>
     public static bool IsLogicalOperator(SyntaxKind kind) =>
         kind is SyntaxKind.AmpersandAmpersand or SyntaxKind.CaretCaret or SyntaxKind.BarBar;
 
     /// <summary>
-    /// The unary operators that take one byte of an address. One at the right end of a binary
-    /// operator's left operand must be parenthesized, since <c>&lt;label + 1</c> looks as if the
-    /// <c>&lt;</c> applied to the whole sum.
+    /// Checks whether <paramref name="kind"/> is a unary operator that takes one byte of an
+    /// address. Such an operator at the right end of a binary operator's left operand must be
+    /// parenthesized, since <c>&lt;label + 1</c> looks as if the <c>&lt;</c> applied to the whole
+    /// sum.
     /// </summary>
     public static bool IsByteOperator(SyntaxKind kind) =>
         kind is SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret;
 
-    /// <summary>Fixed token texts, for punctuation and operators.</summary>
+    /// <summary>
+    /// Returns the fixed text of a punctuation or operator token kind, or null for any other kind.
+    /// </summary>
     public static string? FixedText(SyntaxKind kind) => kind switch
     {
         SyntaxKind.ColonColon => "::",
@@ -364,12 +393,12 @@ public static class SyntaxFacts
     };
 
     /// <summary>
-    /// What a directive at the start of a line is: the node it parses to, the block it opens
-    /// where its line ends in <c>{</c>, and whether <c>.export</c> may go before it. One row
-    /// says all three, so the three questions cannot drift apart.
+    /// Describes a directive at the start of a line. A row gives the node it parses to, the block
+    /// it opens when its line ends in <c>{</c>, and whether <c>.export</c> may precede it. One row
+    /// holds all three facts, so they cannot drift apart.
     /// </summary>
-    /// <param name="Kind">The node the line parses to.</param>
-    /// <param name="Block">The block it opens, or <see cref="BlockKind.Unknown"/> where it opens none.</param>
+    /// <param name="Kind">The kind of node the line parses to.</param>
+    /// <param name="Block">The block it opens, or <see cref="BlockKind.Unknown"/> when it opens none.</param>
     /// <param name="Exportable">Whether <c>.export</c> before it exports what it declares.</param>
     private readonly record struct Directive(
         SyntaxKind Kind, BlockKind Block = BlockKind.Unknown, bool Exportable = false);

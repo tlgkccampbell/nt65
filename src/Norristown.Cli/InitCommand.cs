@@ -4,9 +4,9 @@ using Norristown.Project;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 init</c>: writes the two files a minimal program consists of, an <c>nt65.json</c>
-/// and a <c>src/main.nt65</c>, so that a newcomer's first build works without them having to
-/// copy a project file out of the documentation.
+/// Implements <c>nt65 init</c>, which writes the two files a minimal program consists of, an
+/// <c>nt65.json</c> and a <c>src/main.nt65</c>, so that a newcomer's first build works without
+/// them having to copy a project file out of the documentation.
 /// <para>
 /// It refuses to overwrite either file, and writes neither if one already exists, so running it
 /// in a directory that already holds a program leaves that program alone.
@@ -30,8 +30,8 @@ public static class InitCommand
 
     /// <summary>
     /// Writes a project into the directory <paramref name="arguments"/> names, or into
-    /// <paramref name="directory"/>, and returns the exit code: 0 when it wrote them, 1 when one
-    /// was there already, 2 when the command is wrong.
+    /// <paramref name="directory"/>, and returns the exit code. The code is 0 when it wrote both
+    /// files, 1 when one of them was there already, and 2 when the command is wrong.
     /// </summary>
     public static int Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
     {
@@ -90,7 +90,9 @@ public static class InitCommand
         return 0;
     }
 
-    /// <summary>The project file as <c>init</c> writes it: the three keys a program needs.</summary>
+    /// <summary>
+    /// Returns the project file as <c>init</c> writes it, with the three keys a program needs.
+    /// </summary>
     private static string Describing(Cpu cpu) => $$"""
         {
           "cpu": "{{CpuNames.Spell(cpu)}}",

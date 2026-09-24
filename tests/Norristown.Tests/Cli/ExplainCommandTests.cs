@@ -3,8 +3,9 @@ using Norristown.Cli;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// <c>nt65 explain</c>: what a diagnostic is about, for someone who has its name from the
-/// brackets after a message and wants the paragraph the line had no room for.
+/// Tests <c>nt65 explain</c>, which describes what a diagnostic is about. It is for someone who
+/// has the diagnostic's name from the brackets after a message and wants the paragraph the line
+/// had no room for.
 /// </summary>
 public sealed class ExplainCommandTests
 {
@@ -23,7 +24,7 @@ public sealed class ExplainCommandTests
         Assert.Contains("\"diagnostics\": { \"unused-symbol\": \"off\" }", said, StringComparison.Ordinal);
     }
 
-    /// <summary>Every entry can be explained, whatever its message format contains.</summary>
+    /// <summary>Every entry can be explained, no matter what its message format contains.</summary>
     [Fact]
     public void EveryNameIsExplained()
     {

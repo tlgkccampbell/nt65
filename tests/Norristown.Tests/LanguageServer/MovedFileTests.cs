@@ -3,10 +3,11 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What moving a file requires the program to change. A module's name comes from its
-/// <c>.module</c> line and its output is named after that, so moving a source changes less than
-/// it might seem: only a <c>files</c> entry that names it, and the <c>.incbin</c> paths that are
-/// resolved relative to whichever file moved, the including source or the binary.
+/// Tests what moving a file requires the program to change. A module's name comes from its
+/// <c>.module</c> line and its output is named after the module, so moving a source changes less
+/// than it might seem. Only a <c>files</c> entry that names the file changes, along with the
+/// <c>.incbin</c> paths resolved relative to the file that moved, whether that is the including
+/// source or the binary.
 /// </summary>
 public sealed class MovedFileTests : IDisposable
 {
@@ -15,9 +16,9 @@ public sealed class MovedFileTests : IDisposable
     public void Dispose() => root.Delete(recursive: true);
 
     /// <summary>
-    /// A <c>files</c> entry naming the file literally is rewritten; the <c>.incbin</c> paths in
-    /// a file that went to another folder are rewritten to reach the same binaries from it; and
-    /// a glob that stops matching is reported in a warning rather than rewritten.
+    /// A <c>files</c> entry naming the file literally is rewritten, and the <c>.incbin</c> paths
+    /// in a file that moved to another folder are rewritten to reach the same binaries from there.
+    /// A glob that stops matching is reported in a warning rather than rewritten.
     /// </summary>
     [Fact]
     public async Task WhatMovesWithAFileIsWrittenAndWhatCannotBeIsSaid()
@@ -48,9 +49,10 @@ public sealed class MovedFileTests : IDisposable
         Assert.Equal("\"src/app/main.nt65\"", project.NewText);
         Assert.Equal(3, project.Range.Start.Line);
 
-        // The file that writes an `.incbin` goes a folder deeper, so the path it writes has to
-        // reach the same file from there. The glob that named it no longer matches, and only the
-        // programmer can say which glob should cover it now, so the server warns and edits nothing.
+        // The file that contains an `.incbin` moves a folder deeper, so the path in it has to
+        // reach the same file from there. The glob that matched the file no longer does, and only
+        // the programmer can decide which glob should cover it now, so the server warns and edits
+        // nothing.
         var included = await RenameAsync(client, timeout, ("gfx/sprite.nt65", "gfx/tiles/sprite.nt65"));
         Assert.NotNull(included);
         var path = Assert.Single(included.Changes[Folder("gfx/sprite.nt65")]);
@@ -69,7 +71,10 @@ public sealed class MovedFileTests : IDisposable
             Assert.Single(binary.Changes[Folder("gfx/sprite.nt65")]).NewText);
     }
 
-    /// <summary>A client that does not declare <c>willRename</c> support is not registered for it; one that does is registered for every file.</summary>
+    /// <summary>
+    /// A client that does not declare <c>willRename</c> support is not registered for it, and a
+    /// client that does is registered for every file.
+    /// </summary>
     [Fact]
     public async Task AClientThatDoesNotAskIsNotRegisteredFor()
     {

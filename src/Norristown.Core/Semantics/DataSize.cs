@@ -1,10 +1,10 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// How much room a data directive takes: the bytes it generates, and how many elements
-/// those bytes are. A label written on it gets both, which is what <c>.sizeof</c> and
-/// <c>.countof</c> answer.
+/// Represents how much room a data directive takes, as the number of bytes it generates and the
+/// number of elements those bytes form. A label on the directive gets both values, which
+/// <c>.sizeof</c> and <c>.countof</c> return.
 /// </summary>
-/// <param name="Bytes">The bytes generated.</param>
-/// <param name="Elements">How many elements they are: one per value, or one per byte for text.</param>
+/// <param name="Bytes">The number of bytes generated.</param>
+/// <param name="Elements">The number of elements, which is one per value, or one per byte for text.</param>
 public readonly record struct DataSize(long Bytes, long Elements);

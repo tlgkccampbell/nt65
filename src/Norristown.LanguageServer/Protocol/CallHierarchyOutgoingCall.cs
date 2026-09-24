@@ -1,6 +1,6 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>One routine called by the routine asked about.</summary>
-/// <param name="To">The callee.</param>
-/// <param name="FromRanges">Where in the caller each of the calls is written.</param>
+/// <summary>Represents a routine that the routine a request asked about calls.</summary>
+/// <param name="To">The called routine.</param>
+/// <param name="FromRanges">The ranges in the caller where each call to it appears.</param>
 internal sealed record CallHierarchyOutgoingCall(CallHierarchyItem To, IReadOnlyList<Range> FromRanges);

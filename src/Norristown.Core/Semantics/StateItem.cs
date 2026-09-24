@@ -3,32 +3,42 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// One item of a signature or a <c>.state</c>, read: which part of the state it is about and
-/// what it says of it. The items share one grammar wherever they are written, so they are
-/// read in one place.
+/// Represents one parsed item of a signature or a <c>.state</c>: which part of the state it is
+/// about and what it states about that part. The items share one grammar wherever they appear,
+/// so they are read in one place.
 /// </summary>
-/// <param name="Node">The item as it is written.</param>
-/// <param name="Part">Which part of the state it is about.</param>
-/// <param name="Width">What it says of a width; meaningless for the other parts.</param>
-/// <param name="Mode">What it says of the emulation flag; meaningless for the other parts.</param>
-/// <param name="IsFar">Whether a <see cref="StatePart.Distance"/> item says <c>far</c>.</param>
-/// <param name="IsUnchanged">Whether it is a <c>*</c> item, which describes a routine rather than a point in it.</param>
+/// <param name="Node">The item's syntax.</param>
+/// <param name="Part">The part of the state the item is about.</param>
+/// <param name="Width">The width the item gives; meaningless for the other parts.</param>
+/// <param name="Mode">The emulation-flag value the item gives; meaningless for the other parts.</param>
+/// <param name="IsFar">Whether a <see cref="StatePart.Distance"/> item is <c>far</c>.</param>
+/// <param name="IsUnchanged">
+/// Whether the item is a <c>*</c> item, which describes a routine rather than a point in it.
+/// </param>
 public readonly record struct StateItem(
     StateItemSyntax Node, StatePart Part, Width Width, ProcessorMode Mode, bool IsFar, bool IsUnchanged)
 {
-    /// <summary>The item as it is written, for a message that names it.</summary>
+    /// <summary>Gets the item's source text, for a message that names it.</summary>
     public string Text => Node.GetText().Trim();
 
-    /// <summary>The expression after the item's name: the <c>n</c> of <c>inline n</c>, the <c>e</c> of <c>dp = e</c>.</summary>
+    /// <summary>
+    /// Gets the expression after the item's name, such as the <c>n</c> of <c>inline n</c> or the
+    /// <c>e</c> of <c>dp = e</c>.
+    /// </summary>
     public ExpressionSyntax? Expression => Node is StateValueItemSyntax valued ? valued.Value : null;
 
-    /// <summary>Whether the item gives its part a set of banks, <c>dbr = [$00..$3f, $80..$bf]</c>, rather than one value.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the item gives its part a set of banks, as in
+    /// <c>dbr = [$00..$3f, $80..$bf]</c>, rather than one value.
+    /// </summary>
     public bool IsBankSet => Node is StateBanksItemSyntax;
 
-    /// <summary>Whether an <c>inline</c> item says <c>inline .strz</c>.</summary>
+    /// <summary>Gets a value indicating whether an <c>inline</c> item is <c>inline .strz</c>.</summary>
     public bool IsStrz => Node is StateInlineItemSyntax;
 
-    /// <summary>The registers a <see cref="StatePart.Keeps"/> item names; none for every other item.</summary>
+    /// <summary>
+    /// Gets the registers a <see cref="StatePart.Keeps"/> item names, or none for every other item.
+    /// </summary>
     public Processor.Registers Registers
     {
         get
@@ -45,7 +55,7 @@ public readonly record struct StateItem(
         }
     }
 
-    /// <summary>The items of a state list, or of a <c>.state</c>, in the order they are written.</summary>
+    /// <summary>Reads the items of a state list, or of a <c>.state</c>, in source order.</summary>
     public static IEnumerable<StateItem> Read(SyntaxNode? list)
     {
         foreach (var node in list?.ChildNodes ?? [])
@@ -62,14 +72,15 @@ public readonly record struct StateItem(
         }
     }
 
-    /// <summary>The name of the signature set a <see cref="StatePart.Set"/> item names.</summary>
+    /// <summary>Gets the name of the signature set a <see cref="StatePart.Set"/> item names.</summary>
     public NameExpressionSyntax? SetName =>
         Part == StatePart.Set && Node is StateSetItemSyntax set ? set.Name : null;
 
     /// <summary>
-    /// Whether a list says something and every item of it is a <c>keeps</c>. Such a list says
-    /// what a register holds and nothing about the processor state, so it neither declares a
-    /// label's state nor counts as the declaration a routine with no body needs.
+    /// Returns a value indicating whether a list has items and every item is a <c>keeps</c>. Such
+    /// a list states what a register holds and nothing about the processor state. It therefore
+    /// neither declares a label's state nor counts as the declaration a routine with no body
+    /// needs.
     /// </summary>
     public static bool OnlyKeeps(SyntaxNode? list)
     {
@@ -78,9 +89,10 @@ public readonly record struct StateItem(
     }
 
     /// <summary>
-    /// The banks a <c>dbr = [...]</c> item names, each evaluated with <paramref name="valueOf"/>.
-    /// When they do not make a set, null, with <paramref name="invalid"/> set to the range that
-    /// is not a bank or a run of banks, or to the item itself when it names no ranges.
+    /// Returns the banks a <c>dbr = [...]</c> item names, each evaluated with
+    /// <paramref name="valueOf"/>. When they do not form a set, returns null and sets
+    /// <paramref name="invalid"/> to the range that is not a bank or a run of banks, or to the
+    /// item itself when it names no ranges.
     /// </summary>
     public BankSet? BanksOf(Func<ExpressionSyntax, long?> valueOf, out SyntaxNode? invalid)
     {
@@ -104,7 +116,7 @@ public readonly record struct StateItem(
         return banks;
     }
 
-    /// <summary>One item, or null when its line did not parse into one.</summary>
+    /// <summary>Reads one item, or returns null when its syntax did not parse into an item.</summary>
     private static StateItem? Of(StateItemSyntax node) => node switch
     {
         StateUnknownItemSyntax =>
@@ -121,8 +133,8 @@ public readonly record struct StateItem(
     };
 
     /// <summary>
-    /// The item a state word and the <c>*</c>, <c>?</c> or <c>=</c> after it are about, or null
-    /// for a word that names no part of the state.
+    /// Returns the item that a state word and the <c>*</c>, <c>?</c> or <c>=</c> after it form, or
+    /// null for a word that names no part of the state.
     /// </summary>
     private static StateItem? Worded(StateItemSyntax node, SyntaxToken word, SyntaxKind suffix)
     {

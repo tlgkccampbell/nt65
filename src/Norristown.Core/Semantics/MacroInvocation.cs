@@ -3,12 +3,12 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// One call, with each parameter matched to what it was given. Binding and expansion both
-/// ask the same question of the same line, so both work it out here, the same way, and
-/// neither keeps the answer.
+/// Represents one macro call, with each parameter matched to the argument it was given. Binding
+/// and expansion both need this matching for the same line, so both compute it here in the same
+/// way, and neither keeps the result.
 /// <para>
-/// A diagnostic goes where the fix belongs: everything here is about one call's arguments,
-/// so everything here is reported at the call.
+/// A diagnostic goes where the fix belongs. Everything here concerns one call's arguments, so
+/// every diagnostic here is reported at the call.
 /// </para>
 /// </summary>
 public sealed class MacroInvocation
@@ -21,16 +21,21 @@ public sealed class MacroInvocation
         Call = call;
     }
 
-    /// <summary>The macro being called.</summary>
+    /// <summary>Gets the macro being called.</summary>
     public Symbol Macro { get; }
 
-    /// <summary>The call itself.</summary>
+    /// <summary>Gets the call itself.</summary>
     public MacroCallSyntax Call { get; }
 
-    /// <summary>What each parameter was given, in the order the parameters are declared.</summary>
+    /// <summary>
+    /// Gets the argument each parameter was given, in the order the parameters are declared.
+    /// </summary>
     public IReadOnlyList<MacroArgument> Arguments { get; private set; } = [];
 
-    /// <summary>What one parameter was given, or null when the call gave it nothing.</summary>
+    /// <summary>
+    /// Returns the argument <paramref name="parameter"/> was given, or null when the call gave it
+    /// nothing.
+    /// </summary>
     public MacroArgument? For(Symbol parameter) => byParameter.GetValueOrDefault(parameter);
 
     /// <summary>
@@ -68,9 +73,9 @@ public sealed class MacroInvocation
             BindPositional(argument);
         }
 
-        // A block is written after the parentheses, so the blocks a call opens are matched to
-        // the block parameters separately: the first by position, the rest by the name on
-        // each `} name {`.
+        // A block comes after the parentheses, so the blocks a call opens are matched to the
+        // block parameters separately. The first is matched by position, and each later one by
+        // the name on its `} name {`.
         BindBlocks();
         Finish();
         return invocation;
@@ -106,8 +111,8 @@ public sealed class MacroInvocation
             }
             var parameter = positional[next];
 
-            // A `list` takes every remaining positional argument, so it stays the one being
-            // filled rather than moving the next one along.
+            // A `list` takes every remaining positional argument, so it remains the parameter
+            // being filled and the position does not advance.
             if (parameter.Kind == ParameterKind.List)
             {
                 Check(parameter.Accepts.Element ?? ArgumentKind.Expression, parameter, argument);
@@ -139,8 +144,8 @@ public sealed class MacroInvocation
             var parameters = macro.Parameters.Where(parameter => parameter.IsBlock).ToList();
             for (var i = 0; i < blocks.Count; i++)
             {
-                // The first block binds by position; each `} name {` after it says which
-                // parameter it is, because a macro may take several and none may be skipped
+                // The first block binds by position. Each `} name {` after it names its
+                // parameter, because a macro may take several blocks and none may be skipped
                 // silently.
                 MacroParameter? parameter;
                 if (blocks[i].Opener.Statement is BlockContinuationSyntax continuation)
@@ -215,8 +220,8 @@ public sealed class MacroInvocation
             switch (accepts.Kind)
             {
                 case ParameterKind.Operand:
-                    // Only a braced argument is an operand; an unbraced `(ptr)` reads as
-                    // indirect addressing and so can only be a mistake here.
+                    // Only a braced argument is an operand. An unbraced `(ptr)` reads as
+                    // indirect addressing, so it can only be a mistake here.
                     if (value is ParenthesizedExpressionSyntax)
                     {
                         Report(value.Span, Catalogue.OperandArgumentParenthesized.Says(
@@ -228,8 +233,8 @@ public sealed class MacroInvocation
                     var word = value is NameExpressionSyntax { SimpleName: { } only } ? only.Text : null;
 
                     // A word may be passed on from a `one` parameter of the macro whose body
-                    // writes the call. Which word it is is not known until there is an
-                    // expansion, so this list has to hold every word that parameter allows.
+                    // contains the call. The word is not known until there is an expansion, so
+                    // this parameter's list must hold every word that the outer parameter allows.
                     if (word is not null && lookup?.Invoke(word) is
                         { Kind: SymbolKind.MacroParameter, Parameter.Accepts: { Kind: ParameterKind.One } passed })
                     {
@@ -276,7 +281,10 @@ public sealed class MacroInvocation
         }
     }
 
-    /// <summary>How many arguments a macro takes, as the message for a call that gives more.</summary>
+    /// <summary>
+    /// Returns the message for a call that gives <paramref name="macro"/> more arguments than it
+    /// takes, stating how many it takes.
+    /// </summary>
     private static DiagnosticMessage Count(Symbol macro)
     {
         var positional = macro.Parameters.Count(parameter => !parameter.IsBlock);
@@ -286,7 +294,10 @@ public sealed class MacroInvocation
             positional == least ? $"{positional} argument(s)" : $"{least} to {positional} arguments");
     }
 
-    /// <summary>The name a call writes, which is where a diagnostic about the call as a whole goes.</summary>
+    /// <summary>
+    /// Returns the span of the macro name in <paramref name="call"/>, where a diagnostic about the
+    /// call as a whole is reported.
+    /// </summary>
     private static TextSpan NameSpan(MacroCallSyntax call) =>
         Macros.CalleeOf(call) is { } callee ? callee.Span : call.Span;
 }

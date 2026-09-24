@@ -4,14 +4,15 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Signature help for the call the caret is in: a macro's parameters as its declaration writes
-/// them, a function's, or the parameters of a built-in such as <c>.select</c> or <c>.strsub</c>,
-/// with the parameter whose argument the caret is in marked active.
+/// Provides signature help for the call the caret is in. The call may be to a macro, whose
+/// parameters are shown as its declaration gives them, to a function, or to a built-in such as
+/// <c>.select</c> or <c>.strsub</c>. The parameter whose argument contains the caret is marked
+/// active.
 /// </summary>
 internal static class CallHelp
 {
     // The built-in functions that get signature help, with their parameter names and a
-    // description of what each returns. A parameter written `...` stands for any number of
+    // description of what each returns. A parameter named `...` stands for any number of
     // further arguments.
     private static readonly Dictionary<string, (string[] Parameters, string Documentation)> builtins =
         new(StringComparer.OrdinalIgnoreCase)
@@ -24,7 +25,10 @@ internal static class CallHelp
             [".strcat"] = (["part", "..."], "the parts joined into one text: a text's bytes, and a number as one byte, 0 to 255"),
         };
 
-    /// <summary>The call at <paramref name="position"/>, or null when the caret is in none.</summary>
+    /// <summary>
+    /// Returns signature help for the call at <paramref name="position"/>, or null when the caret
+    /// is not in a call.
+    /// </summary>
     public static Protocol.SignatureHelp? At(ProgramModel program, SemanticModel model, int position)
     {
         var line = LineContext.At(model.Tree, position);
@@ -63,22 +67,26 @@ internal static class CallHelp
     }
 
     /// <summary>
-    /// The parameter of <paramref name="macro"/> that the caret's argument is for: the one it
-    /// names when written as <c>name = value</c>, and otherwise the one at its position. A
-    /// <c>block</c> parameter takes the block after the parentheses, not a place in them.
+    /// Returns the parameter of <paramref name="macro"/> that the caret's argument is for. An
+    /// argument of the form <c>name = value</c> is for the parameter it names, and any other
+    /// argument is for the parameter at its position. A <c>block</c> parameter takes the block
+    /// after the parentheses, not a position inside them.
     /// </summary>
     /// <param name="macro">The macro called.</param>
     /// <param name="before">The tokens of the line before the caret.</param>
-    /// <param name="open">Where among them the call's <c>(</c> is.</param>
-    /// <param name="end">Where the argument the caret is in ends, exclusive.</param>
-    /// <param name="argument">How many arguments come before it.</param>
+    /// <param name="open">The index of the call's <c>(</c> among those tokens.</param>
+    /// <param name="end">The index where the argument containing the caret ends, exclusive.</param>
+    /// <param name="argument">The number of arguments before the one containing the caret.</param>
     public static MacroParameter? ParameterAt(
         Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument) =>
         Active(macro, before, open, end, argument) is var active && active >= 0 && active < macro.Parameters.Count
             ? macro.Parameters[active]
             : null;
 
-    /// <summary>A macro's parameters as it writes them, with the one the caret's argument is for.</summary>
+    /// <summary>
+    /// Returns signature help that shows a macro's parameters as its declaration gives them and
+    /// marks the one the caret's argument is for.
+    /// </summary>
     private static Protocol.SignatureHelp ForMacro(
         Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
     {
@@ -89,7 +97,10 @@ internal static class CallHelp
         return Help($"{macro.Name}!(", written, ")", macro.KindText, Math.Max(0, Active(macro, before, open, end, argument)));
     }
 
-    /// <summary>The index among <paramref name="macro"/>'s parameters of the one the caret's argument is for; -1 for none.</summary>
+    /// <summary>
+    /// Returns the index among <paramref name="macro"/>'s parameters of the one the caret's
+    /// argument is for, or -1 if there is none.
+    /// </summary>
     private static int Active(
         Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
     {
@@ -115,7 +126,10 @@ internal static class CallHelp
         return argument < inParentheses.Count ? inParentheses[argument] : inParentheses.Count > 0 ? inParentheses[^1] : -1;
     }
 
-    /// <summary>A signature written as <paramref name="opening"/>, the parameters with <c>, </c> between them, and <paramref name="closing"/>.</summary>
+    /// <summary>
+    /// Builds signature help whose label is <paramref name="opening"/>, then the parameters
+    /// separated by <c>, </c>, then <paramref name="closing"/>.
+    /// </summary>
     private static Protocol.SignatureHelp Help(
         string opening, IReadOnlyList<string> parameters, string closing, string? documentation, int active)
     {

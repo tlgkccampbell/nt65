@@ -1,6 +1,6 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>Something a server asked for and is taking back.</summary>
-/// <param name="Id">What it was called when it was asked for.</param>
-/// <param name="Method">The message it was about.</param>
+/// <summary>Represents a registration the server is removing.</summary>
+/// <param name="Id">The identifier the registration was given.</param>
+/// <param name="Method">The method the registration was for.</param>
 internal sealed record Unregistration(string Id, string Method);

@@ -4,8 +4,8 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Layout;
 
 /// <summary>
-/// The lines of a macro body declared in another file and expanded in this one. A position
-/// means something only in the file it was written in, so facts about such a line must never
+/// Checks the lines of a macro body declared in another file and expanded in this one. A position
+/// means something only in the file it belongs to, so facts about such a line must never
 /// be looked up by position among this file's own lines, where an unrelated line may sit at
 /// the same offset.
 /// </summary>

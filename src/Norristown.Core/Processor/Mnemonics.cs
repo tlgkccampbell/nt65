@@ -4,15 +4,15 @@ using static Norristown.Syntax.MnemonicKind;
 namespace Norristown.Processor;
 
 /// <summary>
-/// What each instruction is called, and which of the processor's flags it writes. Neither is
-/// anything nt65 works out: they are datasheet facts, in WDC's words, kept here because the
-/// only place they are needed is beside an instruction the editor is showing. The names are
-/// trimmed of the tail that says what the instruction works on, since the line already says
-/// that: <c>load accumulator</c> rather than <c>load accumulator with memory</c>.
+/// Provides each instruction's name and the processor flags it writes. nt65 does not work out
+/// either of these. They are datasheet facts, in WDC's words, kept here because they are needed
+/// only beside an instruction the editor is showing. Each name drops the tail that says what the
+/// instruction works on, since the line already shows that, so the name is
+/// <c>load accumulator</c> rather than <c>load accumulator with memory</c>.
 /// <para>
 /// The undocumented opcodes of the NMOS 6502 have no datasheet to take a name from, so each is
-/// named after the two documented instructions it performs at once; the ones whose result
-/// varies from part to part say so, since that is what a reader most needs to know about them.
+/// named after the two documented instructions it performs at once. The name of an opcode whose
+/// result varies from part to part says so, since that is what a reader most needs to know.
 /// </para>
 /// </summary>
 public static class Mnemonics
@@ -29,8 +29,9 @@ public static class Mnemonics
     ];
 
     /// <summary>
-    /// What <paramref name="mnemonic"/> is called, or null for one no supported CPU has. The
-    /// eight forms of each bit instruction share a name, because the bit number is already on the line.
+    /// Returns the name of <paramref name="mnemonic"/>, or null if no supported CPU has it. The
+    /// eight forms of each bit instruction share a name, because the bit number is already on
+    /// the line.
     /// </summary>
     public static string? Name(MnemonicKind mnemonic) => Bare(mnemonic) switch
     {
@@ -153,11 +154,11 @@ public static class Mnemonics
     };
 
     /// <summary>
-    /// The flags <paramref name="mnemonic"/> writes, in the order the status register holds
-    /// them, or null where it writes none. An instruction that writes the register whole is
-    /// <c>all</c> rather than a list of every flag there is; <paramref name="constant"/> is
-    /// the value of the immediate when it is known, which is what turns a <c>rep</c> or a
-    /// <c>sep</c> from <c>all</c> into the flags its mask names.
+    /// Returns the flags <paramref name="mnemonic"/> writes, in the order the status register
+    /// holds them, or null if it writes none. An instruction that writes the whole register gets
+    /// <c>all</c> rather than a list of every flag. <paramref name="constant"/> is the value of
+    /// the immediate when it is known. It lets a <c>rep</c> or a <c>sep</c> get the flags its
+    /// mask names instead of <c>all</c>.
     /// </summary>
     public static string? Flags(Cpu cpu, MnemonicKind mnemonic, AddressingMode mode, long? constant)
     {
@@ -200,12 +201,15 @@ public static class Mnemonics
     }
 
     /// <summary>
-    /// The mnemonic without the bit a bit instruction names, since the eight forms of each are
-    /// one instruction as far as its name and its flags go.
+    /// Returns the mnemonic without the bit number a bit instruction names, since the eight
+    /// forms of each are one instruction as far as the name and the flags go.
     /// </summary>
     private static MnemonicKind Bare(MnemonicKind mnemonic) => SyntaxFacts.BitOf(mnemonic)?.Family ?? mnemonic;
 
-    /// <summary>The flags a <c>rep</c> or <c>sep</c> mask names, in the register's own order.</summary>
+    /// <summary>
+    /// Formats the flags a <c>rep</c> or <c>sep</c> mask names, in the status register's own
+    /// order.
+    /// </summary>
     private static string Spell(long mask) =>
         string.Join(" ", Status.Where(flag => (mask & flag.Bit) != 0).Select(flag => flag.Name));
 }

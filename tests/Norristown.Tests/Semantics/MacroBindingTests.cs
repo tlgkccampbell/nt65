@@ -3,8 +3,8 @@ using Norristown.Semantics;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// What a macro definition declares, what its body may say, and what the two scopes around
-/// an expansion — the body's own and the caller's — each hold.
+/// Checks what a macro definition declares, what its body may contain, and what the two scopes
+/// around an expansion, the body's own and the caller's, each hold.
 /// </summary>
 public sealed class MacroBindingTests
 {
@@ -24,11 +24,11 @@ public sealed class MacroBindingTests
         Assert.Equal(SymbolKind.Macro, macro.Kind);
         Assert.Equal(["dest", "value"], macro.Parameters.Select(p => p.Name));
 
-        // A parameter with no kind written takes an expression, the kind that accepts the most.
+        // A parameter with no kind given takes an expression, the kind that accepts the most.
         Assert.Equal(ParameterKind.Operand, macro.Parameters[0].Kind);
         Assert.Equal(ParameterKind.Expr, macro.Parameters[1].Kind);
 
-        // The body's names are the parameters, resolved where they are written.
+        // The body's names are the parameters, resolved where they appear.
         Assert.Same(macro.Parameters[1].Symbol, model.SymbolAt("value", 2));
         Assert.Same(macro.Parameters[0].Symbol, model.SymbolAt("dest", 2));
     }
@@ -49,13 +49,13 @@ public sealed class MacroBindingTests
             ["const", "ident", "one(eq, ne)", "list(one(x, y))", "block", "block"],
             parameters.Select(p => p.Accepts.ToString()));
 
-        // The `list` and the parameter with a default may be left out; that block then stands for
-        // an empty one.
+        // The `list` and the parameter with a default may be left out. The block parameter with
+        // the default then stands for an empty block.
         Assert.Equal([false, false, false, true, false, true], parameters.Select(p => p.IsOptional));
         Assert.True(parameters[5].Empty);
     }
 
-    /// <summary>A default is written in the header, so its names resolve where the macro is declared.</summary>
+    /// <summary>A default is given in the header, so its names resolve where the macro is declared.</summary>
     [Fact]
     public void ADefaultResolvesWhereTheMacroIsDeclared()
     {
@@ -106,7 +106,7 @@ public sealed class MacroBindingTests
         Assert.Equal(ScopeKind.Macro, model.SymbolAt("@loop:").Scope.Kind);
         Assert.Equal(ScopeKind.Proc, model.SymbolAt("@loop:", 2).Scope.Kind);
 
-        // A body reads the scope it is written in, which is how it names a file's constants.
+        // A body reads the scope it is declared in, so it can name a file's constants.
         Assert.Same(model.Symbol("SCREEN"), model.SymbolAt("SCREEN", 2));
     }
 
@@ -165,7 +165,10 @@ public sealed class MacroBindingTests
         Assert.Equal("gfx::m", model.Symbol("m").QualifiedName);
     }
 
-    /// <summary>A body may not declare the name an <c>ident</c> parameter stands for, since that would declare it in the caller.</summary>
+    /// <summary>
+    /// A body may not declare the name an <c>ident</c> parameter stands for, since that would
+    /// declare it in the caller.
+    /// </summary>
     [Fact]
     public void AnIdentParameterCannotBeDeclaredInTheBody()
     {
@@ -185,7 +188,7 @@ public sealed class MacroBindingTests
             model.Problems());
     }
 
-    /// <summary>A block is written after the parentheses, so nothing in them may follow one.</summary>
+    /// <summary>A block argument comes after the parentheses, so nothing in them may follow one.</summary>
     [Fact]
     public void ABlockParameterComesAfterTheOthers()
     {

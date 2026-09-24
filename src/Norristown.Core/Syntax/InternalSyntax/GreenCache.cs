@@ -8,18 +8,18 @@ namespace Norristown.Syntax.InternalSyntax;
 /// Shares tokens and whitespace that recur often (mnemonics, registers, punctuation with
 /// common trivia), as Roslyn's green-node cache does.
 /// <para>
-/// Each thread keeps its own tables. They are small and direct-mapped, so one shared set
-/// would have threads lexing different files evicting each other, and the whitespace table
-/// — which every indented line uses — would churn worst of all. A token's slot is hashed
-/// from the identity of its trivia list, so evicting a whitespace entry also strands every
-/// cached token that shared that list: the next lookup builds a new list, and those tokens no
-/// longer match it. Sharing across threads would save one token object per thread and cost
-/// all of that, so it is not worth having; per-thread tables also need no locks, and what the
-/// cache holds never depends on what another thread is doing.
+/// Each thread keeps its own tables. They are small and direct-mapped, so with one shared set,
+/// threads lexing different files would evict each other's entries, and the whitespace table,
+/// which every indented line uses, would churn worst of all. A token's slot is hashed from the
+/// identity of its trivia list, so evicting a whitespace entry also strands every cached token
+/// that shared that list. The next lookup builds a new list, and those tokens no longer match
+/// it. Sharing across threads would save one token object per thread and cost all of that, so
+/// it is not worth having. Per-thread tables also need no locks, and what the cache holds never
+/// depends on what another thread is doing.
 /// </para>
 /// <para>
 /// Only the lexer puts tokens in here, so no token changed after lexing can come back out of
-/// it: a token with a diagnostic is never cached, and a token with a
+/// it. A token with a diagnostic is never cached, and a token with a
 /// <see cref="SyntaxAnnotation"/> is a copy made after the lexer has finished with the line.
 /// </para>
 /// </summary>
@@ -39,7 +39,9 @@ internal static class GreenCache
 
     private static GreenTrivia[]?[] Whitespaces => whitespaceTable ??= new GreenTrivia[]?[1 << WhitespaceBits];
 
-    /// <summary>A trivia list holding one whitespace trivia; equal short texts share one array.</summary>
+    /// <summary>
+    /// Returns a trivia list holding one whitespace trivia. Equal short texts share one array.
+    /// </summary>
     public static ImmutableArray<GreenTrivia> Whitespace(ReadOnlySpan<char> text)
     {
         if (text.IsEmpty)
@@ -56,8 +58,9 @@ internal static class GreenCache
     }
 
     /// <summary>
-    /// A token, shared when it has no error, short text and trivia from <see cref="Whitespace"/>
-    /// (or none). Trivia lists are compared by reference, which is exact for shared lists.
+    /// Returns a token, which is shared when it has no error, short text, and either no trivia or
+    /// trivia from <see cref="Whitespace"/>. Trivia lists are compared by reference, which is exact
+    /// for shared lists.
     /// </summary>
     public static GreenToken Token(SyntaxKind kind, ReadOnlySpan<char> text, ImmutableArray<GreenTrivia> leading,
         ImmutableArray<GreenTrivia> trailing, IReadOnlyList<DiagnosticMessage>? errors)

@@ -4,23 +4,24 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// The labels, constants, macros and types a file declares and nothing names. An export
-/// names what it exports, so what another file can use is never reported, and neither is
-/// one another file names without the export, which is already reported there.
+/// Finds the labels, constants, macros and types a file declares that nothing names. An export
+/// names what it exports, so a symbol another file can use is never reported. Neither is a
+/// symbol another file names without the export, because that is already reported there.
 /// <para>
-/// A name written in a branch this build leaves out counts as used: the other build uses it,
-/// and a warning that comes and goes with a define is noise. A file with errors gets none
-/// of these, because a name may look unused only because the broken lines that were meant to
-/// use it did not parse or resolve.
+/// A name that appears in a branch this build leaves out counts as used, because the other
+/// build uses it, and a warning that comes and goes with a define is noise. A file with errors
+/// gets none of these warnings, because a name may look unused only because the broken lines
+/// meant to use it did not parse or resolve.
 /// </para>
 /// </summary>
 public static class UnusedSymbols
 {
     /// <summary>
-    /// What <paramref name="model"/> declares and never names. <paramref name="found"/> is what
-    /// the rest of the file's analysis reported: a label it already called never reached is
-    /// not reported a second time. <paramref name="entries"/> are the labels a <c>.state</c>
-    /// declares entry points, which are reached from somewhere nt65 cannot see.
+    /// Reports a diagnostic for each symbol <paramref name="model"/> declares and never names.
+    /// <paramref name="found"/> holds what the rest of the file's analysis reported, so a label
+    /// already reported as never reached is not reported a second time.
+    /// <paramref name="entries"/> are the labels a <c>.state</c> declares as entry points, which
+    /// are reached from somewhere nt65 cannot see.
     /// </summary>
     public static IEnumerable<Diagnostic> Of(
         SemanticModel model, IReadOnlyList<Diagnostic> found, IEnumerable<Symbol> entries)
@@ -34,13 +35,14 @@ public static class UnusedSymbols
         named.UnionWith(entries);
         named.UnionWith(model.Symbols.Where(symbol => symbol.IsExported));
 
-        // A name another file writes without this one exporting it is used, wrongly: that file
-        // is told it is not exported, and saying here that nothing uses it is the same mistake
-        // twice, with the fix for one the opposite of the fix for the other.
+        // A name another file uses without this one exporting it is used, though wrongly. That
+        // file reports that the name is not exported. Reporting here that nothing uses it would
+        // report the same mistake twice, with the fix for one the opposite of the fix for the
+        // other.
         named.UnionWith(model.Symbols.Where(symbol => model.NamedUnexported.Contains(symbol.QualifiedName)));
 
-        // `actions::c`, where `c` walks an enum, names a member of `actions` on every turn,
-        // so what that scope holds counts as named.
+        // `actions::c`, where `c` iterates over an enum, names a different member of `actions`
+        // in every iteration, so everything that scope holds counts as named.
         for (var i = 1; i < model.References.Count; i++)
         {
             if (model.References[i] is { IsDeclaration: false, Symbol.Kind: SymbolKind.Binding } through
@@ -51,8 +53,8 @@ public static class UnusedSymbols
             }
         }
 
-        // A family declares one name per member of an enum, and a member is one of a set: it
-        // is worth saying only when nothing names any instance, and then only once.
+        // A family declares one name per member of an enum, and each instance is one of a set.
+        // It is worth reporting only when nothing names any instance, and then only once.
         foreach (var family in model.Families)
             named.UnionWith(family.Instances.Any(named.Contains) ? family.Instances : family.Instances.Skip(1));
 
@@ -80,13 +82,15 @@ public static class UnusedSymbols
     }
 
     /// <summary>
-    /// The <c>.use</c> items that bring in a name the file never writes. A <c>.export .use</c>
-    /// re-exports rather than uses, and whether anything uses the name is up to other modules;
-    /// a <c>.use module::*</c> brings in whatever that module exports, and which of those names
+    /// Reports a diagnostic for each <c>.use</c> item that brings in a name the file never uses.
+    /// A <c>.export .use</c> is not reported, because it re-exports rather than uses, and whether
+    /// anything uses the name is up to other modules. A <c>.use module::*</c> is not reported
+    /// either, because it brings in everything that module exports, and which of those names
     /// this file wanted cannot be told from the file.
     /// <para>
-    /// A name written in a branch this build leaves out counts as used, as a declaration's does,
-    /// because the lines of that branch are in the file and are what the other build writes.
+    /// A name that appears in a branch this build leaves out counts as used, as for a
+    /// declaration, because the lines of that branch are in the file and the other build emits
+    /// them.
     /// </para>
     /// </summary>
     private static IEnumerable<Diagnostic> Unused(SemanticModel model)
@@ -114,17 +118,18 @@ public static class UnusedSymbols
     }
 
     /// <summary>
-    /// Every name the file writes outside the <c>.use</c> items themselves, and on its own
-    /// rather than as a step on a path, which is how a name brought in is written. One pass
-    /// over the file serves every item, since all of a file's items are checked together.
+    /// Returns every name the file contains outside the <c>.use</c> items themselves, standing
+    /// on its own rather than as a later part of a path, which is how a name brought in is used.
+    /// One pass over the file serves every item, because all of a file's items are checked
+    /// together.
     /// <para>
-    /// It reads each line's own tokens rather than the nodes they parse to, and it is lexical on
-    /// purpose. Binding cannot answer this: it returns at a branch the build leaves out without
-    /// reading a line of it, and a name written there counts as used; a name written where a bare
-    /// word may stand is never looked up; a <c>.defined</c> asks about a name without naming it;
-    /// and a reference records the symbol it reached rather than the spelling it was written as,
-    /// so it cannot tell <c>b</c> written as <c>a::b</c> from the <c>c</c> that
-    /// <c>.use a::b as c</c> brought in. The tokens are what every one of those has in common.
+    /// This method reads each line's own tokens rather than the nodes they parse to, and is
+    /// lexical on purpose, because binding cannot answer the question. Binding stops at a branch
+    /// the build leaves out without reading any of its lines, yet a name there counts as used. A
+    /// name in a position where a bare word may stand is never looked up. A <c>.defined</c> asks
+    /// about a name without naming it. A reference records the symbol it reached rather than the
+    /// spelling used, so it cannot tell <c>b</c> written as <c>a::b</c> from the <c>c</c> that
+    /// <c>.use a::b as c</c> brought in. The tokens are what all of these cases have in common.
     /// </para>
     /// </summary>
     private static HashSet<string> Written(SyntaxTree tree)
@@ -136,7 +141,7 @@ public static class UnusedSymbols
             if (line.Statement.Kind == SyntaxKind.UseDirective)
                 continue;
 
-            // A token counts as a name written on its own unless the token before it is `::`,
+            // A token counts as a name standing on its own unless the token before it is `::`,
             // which makes it a later part of a path.
             var reached = false;
             foreach (var token in line.Tokens)
@@ -149,7 +154,10 @@ public static class UnusedSymbols
         return names;
     }
 
-    /// <summary>Whether the text before <paramref name="position"/> ends in <c>::</c>.</summary>
+    /// <summary>
+    /// Returns a value indicating whether the text before <paramref name="position"/>, ignoring
+    /// whitespace, ends in <c>::</c>.
+    /// </summary>
     private static bool AfterColonColon(string text, int position)
     {
         var i = position - 1;
@@ -159,16 +167,17 @@ public static class UnusedSymbols
     }
 
     /// <summary>
-    /// Whether an unused symbol of this kind is worth reporting. A member of a named enum is one
-    /// of a set, so it is not. Data that holds values may be there for where it lands — a header,
-    /// the vectors, a load address — so only storage that holds nothing is reported.
+    /// Returns a value indicating whether an unused symbol like <paramref name="symbol"/> is worth
+    /// reporting. A member of a named enum is one of a set, so it is not. Data that holds values
+    /// may exist for where it lands, such as a header, the vectors or a load address, so only
+    /// storage that holds nothing is reported.
     /// <para>
-    /// A routine is reported like anything else a file declares: an unexported <c>.proc</c>
-    /// nothing calls, jumps to, names in data or names in a <c>.next</c> or a
-    /// <c>.fallthrough</c> is a routine the program has left behind, which is what someone
-    /// finishing a port most wants to find. A handler is the exception the language already
-    /// knows about: the processor reaches it through a vector this program may not even hold,
-    /// so an <c>interrupt</c> signature counts as naming it.
+    /// A routine is reported like anything else a file declares. An unexported <c>.proc</c> that
+    /// nothing calls, jumps to, or names in data, a <c>.next</c> or a <c>.fallthrough</c> is a
+    /// routine the program has left behind, which is what someone finishing a port most wants to
+    /// find. An interrupt handler is the exception the language already knows about. The
+    /// processor reaches it through a vector this program may not even contain, so an
+    /// <c>interrupt</c> signature counts as naming it.
     /// </para>
     /// </summary>
     private static bool IsChecked(Symbol symbol) => !symbol.IsDefine && symbol.Kind switch

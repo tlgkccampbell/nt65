@@ -1,7 +1,7 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary><c>textDocument/selectionRange</c>.</summary>
+/// <summary>Parameters of the <c>textDocument/selectionRange</c> request.</summary>
 /// <param name="TextDocument">The document the carets are in.</param>
-/// <param name="Positions">Each caret, which is answered with a chain of its own.</param>
+/// <param name="Positions">The carets, each of which is answered with its own chain of ranges.</param>
 internal sealed record SelectionRangeParams(
     TextDocumentIdentifier TextDocument, IReadOnlyList<Position> Positions);

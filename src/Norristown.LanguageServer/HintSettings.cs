@@ -3,16 +3,22 @@ using System.Text.Json;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Which kinds of inlay hint the editor shows, one switch each, named for what the switch shows.
-/// A file opened for the first time should look like its source rather than be crowded with
-/// hints, so the hints on by default are the rare and surprising ones; a hint that would appear
-/// on nearly every line is off until asked for.
+/// Represents which kinds of inlay hint the editor shows, with one switch for each kind, named
+/// for what the switch shows. A file opened for the first time should look like its source rather
+/// than be crowded with hints, so the hints on by default are the rare and surprising ones. A hint
+/// that would appear on nearly every line is off until the programmer turns it on.
 /// </summary>
-/// <param name="StateChanges">A line after which a register width, the emulation flag, D or B changes.</param>
-/// <param name="LongBranches">A branch that layout had to emit in its five-byte long form.</param>
-/// <param name="ImpliedValues">A value the declaration does not write explicitly.</param>
-/// <param name="ParameterNames">Which parameter a positional argument is for.</param>
-/// <param name="Cycles">The cycle cost of every instruction; the only hint off by default.</param>
+/// <param name="StateChanges">
+/// Whether to mark a line after which a register width, the emulation flag, D or B changes.
+/// </param>
+/// <param name="LongBranches">
+/// Whether to mark a branch that layout had to emit in its five-byte long form.
+/// </param>
+/// <param name="ImpliedValues">Whether to show a value the declaration does not give explicitly.</param>
+/// <param name="ParameterNames">Whether to show which parameter a positional argument is for.</param>
+/// <param name="Cycles">
+/// Whether to show the cycle cost of every instruction. This is the only hint off by default.
+/// </param>
 internal sealed record HintSettings(
     bool StateChanges,
     bool LongBranches,
@@ -20,15 +26,18 @@ internal sealed record HintSettings(
     bool ParameterNames,
     bool Cycles)
 {
-    /// <summary>What an editor that has said nothing gets.</summary>
+    /// <summary>Gets the settings for an editor that has not specified any.</summary>
     public static HintSettings Default { get; } = new(true, true, true, true, false);
 
-    /// <summary>Whether any hint is shown at all, so that a request can return nothing without computing anything.</summary>
+    /// <summary>
+    /// Gets a value indicating whether any hint is shown at all, so that a request can return
+    /// nothing without computing anything.
+    /// </summary>
     public bool Any => StateChanges || LongBranches || ImpliedValues || ParameterNames || Cycles;
 
     /// <summary>
-    /// What the <c>nt65</c> settings of an editor say, whether they arrived with the
-    /// <c>initialize</c> request or in a later <c>didChangeConfiguration</c>. A switch the
+    /// Returns the settings that an editor's <c>nt65</c> settings specify, whether they arrived
+    /// with the <c>initialize</c> request or in a later <c>didChangeConfiguration</c>. A switch the
     /// editor does not mention keeps its default.
     /// </summary>
     public static HintSettings Of(JsonElement? settings)

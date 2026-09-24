@@ -6,45 +6,47 @@ using Norristown.Syntax;
 namespace Norristown.Layout;
 
 /// <summary>
-/// What every line of a file assembles to: the addressing mode each instruction gets, how
-/// long each instruction and data directive is, and what is wrong with them on the target CPU.
+/// Represents what every line of a file assembles to. It records the addressing mode each
+/// instruction gets and the length of each instruction and data directive, and reports what is
+/// wrong with them on the target CPU.
 /// <para>
-/// Syntax does not depend on the CPU, so every operand form parses for every CPU; this is the
+/// Syntax does not depend on the CPU, so every operand form parses for every CPU. This is the
 /// layer that decides whether the target CPU supports a given instruction and operand form.
 /// </para>
 /// </summary>
 public sealed partial class CodeLayout
 {
     /// <summary>
-    /// How many statements one file's expansions may lay out before nt65 gives up. The
-    /// recursion check bounds each expansion on its own, but a chain of macros over long
-    /// lists is not bounded by it, and neither is a program that simply asks for too
-    /// much.
+    /// The number of statements one file's expansions may lay out before nt65 gives up. The
+    /// recursion check bounds each expansion on its own, but it does not bound a chain of macros
+    /// over long lists, nor a program that simply asks for too much.
     /// </summary>
     private const int MaximumStatements = 65536;
 
-    // What laying out a statement dispatches through: one method per kind of statement.
+    // The visitor that laying out a statement dispatches through, with one method per kind of
+    // statement.
     private readonly Statements statements;
     private readonly SemanticModel model;
     private readonly Cpu cpu;
 
-    // What the processor-state analysis found reaching each statement, which sizes a 65816
-    // immediate and times its instructions. Null on the first walk, before there is any.
+    // The processor state the analysis found reaching each statement, which sizes a 65816
+    // immediate and times its instructions. It is null on the first walk, before any analysis
+    // has run.
     private readonly IProcessorStates? states;
     private readonly Dictionary<(int Position, Expansion? On), LineLayout> lines = [];
     private readonly Dictionary<(SyntaxTree Tree, int Position), LineLayout> anyWriting = [];
     private readonly List<Diagnostic> diagnostics = [];
 
-    // Where every line's bytes land, and where every label falls among them. A distance
-    // between two positions is known only when both are in the same run of bytes, and branch
+    // These record where every line's bytes land and where every label falls among them. A
+    // distance between two positions is known only when both are in the same run of bytes, and branch
     // range checks and long-branch sizing use these distances.
     private readonly Dictionary<(int Position, Expansion? On), Placement> placements = [];
     private readonly Dictionary<(Symbol Symbol, Expansion? At), Placement> labels = [];
     private readonly Dictionary<int, int> filled = [];
     private readonly List<Branch> branches = [];
 
-    // Every statement in the order its bytes are written, which is what the flow analysis
-    // reads: it is this walk that expands the macros and unrolls the repetitions.
+    // Every statement in the order its bytes are emitted. The flow analysis reads this list,
+    // because this walk is the one that expands the macros and unrolls the repetitions.
     private readonly List<Step> steps = [];
 
     // The position of each `.place` among the steps; another module's bytes go at that point.
@@ -52,39 +54,41 @@ public sealed partial class CodeLayout
 
     // The routines holding an instruction this CPU does not have, or does not take that
     // operand for. Such a line is reported and left out of the stream, so nothing downstream
-    // sees it at all, and a cycle count for the routine would silently omit it; the routine is
-    // recorded here so that its cost is treated as unknown.
+    // sees it, and a cycle count for the routine would silently omit it. The routine is recorded
+    // here so that its cost is treated as unknown.
     private readonly HashSet<Symbol> unlaid = [];
 
-    // The long branches already found out of reach, which is what carries between walks:
-    // lengthening one moves everything after it, so the file is laid out again.
+    // The long branches already found out of reach. This set is passed from one walk to the
+    // next, because lengthening a branch moves everything after it, so the file is laid out
+    // again.
     private readonly HashSet<(int Position, Expansion? On)> lengthened;
 
-    // How many bytes each measured routine or data declaration takes. A `.spanof` may
-    // be written before the thing it measures, so what one walk works out is what the next
-    // one answers with; only what the file actually measures is tracked.
+    // The number of bytes each measured routine or data declaration takes. A `.spanof` may
+    // appear before the thing it measures, so the spans one walk works out are the values the
+    // next walk answers with. Only what the file actually measures is tracked.
     private readonly IReadOnlySet<Symbol> measured;
     private readonly Dictionary<Symbol, long> settled;
     private readonly Dictionary<Symbol, long> extents = [];
 
-    // The streams the walk is inside, innermost last: each region and each segment block is
-    // one, which is how the flow analysis tells a detour from the code around it. A nested
-    // segment block is a detour, so the stream around it resumes where it left off.
+    // The streams the walk is inside, innermost last. Each region and each segment block is a
+    // stream of its own, so that the flow analysis can tell a detour from the code around it. A
+    // nested segment block is a detour, so the stream around it resumes where it left off.
     private readonly List<int> streams = [0];
     private int nextStream = 1;
 
-    // The run of known distances each segment's bytes are in, which is where a line's bytes are
-    // placed. ca65 writes a segment's bytes in the order the file writes them, whichever region
-    // or block they are in, so a segment's regions and blocks are one run of bytes: only an
-    // `.align` or a `.place` ends one. Run numbers are taken from the same count as the streams.
+    // The run of known distances that each segment's bytes are in, which is the run each line's
+    // Placement refers to. ca65 emits a segment's bytes in the order they appear in the file,
+    // regardless of the region or block they are in, so a segment's regions and blocks form one
+    // run of bytes. Only an `.align` or a `.place` ends a run. Run numbers are taken from the
+    // same count as the streams.
     private readonly Dictionary<string, int> runs = new(StringComparer.Ordinal);
 
-    // For bytes outside every segment: the run each stream's distances are measured in, when
-    // an `.align` or `.place` has ended the stream's first run. Such bytes have already been
-    // reported, and are placed only so that the rest of the layout can proceed.
+    // For bytes outside every segment, the run in which each stream's distances are measured
+    // once an `.align` or `.place` has ended the stream's first run. Such bytes have already
+    // been reported, and are recorded only so that the rest of the layout can proceed.
     private readonly Dictionary<int, int> measuredIn = [];
 
-    // The segment the walk is placing bytes in, or null before any region or block names one.
+    // The segment the walk is laying out bytes in, or null before any region or block names one.
     private string? segment;
 
     // The routine the walk is inside, which every statement of it belongs to.
@@ -94,22 +98,23 @@ public sealed partial class CodeLayout
     // being laid out belong to a declaration, not to loose data outside a routine.
     private int inData;
 
-    // Which turn of which repetitions, and which expansion of which macros, the walk is
-    // inside. A body is laid out once per writing, and the same line can be a different
-    // length on each of them.
+    // The expansion the walk is inside, which identifies the iteration of each enclosing
+    // repetition and the expansion of each enclosing macro. A body is laid out once per
+    // expansion, and the same line can have a different length in each.
     private Expansion? expansion;
 
     // How many statements the expansions have laid out. An expansion is bounded by the
     // recursion check, but a chain of macros over long lists is not, so it is counted too.
     private int expanded;
 
-    // The settled steps of the walk before this one, which is what a cycle span is counted
-    // over: a span may be written before the code it measures, so it cannot be counted from a
-    // walk that is still going. Null on every walk before the lengths stop moving.
+    // The steps of the previous walk, once the lengths have reached a fixed point. A cycle span
+    // is counted over these steps, because a span may appear before the code it measures and so
+    // cannot be counted from a walk that is still in progress. It is null on every walk before
+    // the lengths stop changing.
     private readonly IReadOnlyList<Step>? counted;
 
-    // Whether anything asked for a cycle span while there was no settled walk to count over.
-    // When set, Create lays the file out once more, passing the settled walk in.
+    // Whether anything asked for a cycle span while there was no completed walk to count over.
+    // When it is set, Create lays the file out once more, passing the completed walk in.
     private bool wantsCycles;
 
     private CodeLayout(
@@ -127,56 +132,60 @@ public sealed partial class CodeLayout
         this.settled = settled;
     }
 
-    /// <summary>The CPU this file was laid out for.</summary>
+    /// <summary>Gets the CPU this file was laid out for.</summary>
     public Cpu Cpu => cpu;
 
-    /// <summary>The diagnostics found while laying out the file, ordered by line and column.</summary>
+    /// <summary>Gets the diagnostics found while laying out the file, ordered by line and column.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
 
-    /// <summary>Whether the file's expansions went past the most nt65 lays out, which is an error.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the file's expansions went past the number of statements
+    /// nt65 lays out, which is an error.
+    /// </summary>
     public bool ExpansionsExceeded => expanded > MaximumStatements;
 
-    /// <summary>Every statement of the file, in the order its bytes are written.</summary>
+    /// <summary>Gets every statement of the file, in the order its bytes are emitted.</summary>
     public IReadOnlyList<Step> Steps => steps;
 
     /// <summary>
-    /// Every <c>.place</c> of the file that places anything, in the order they are written,
-    /// with where each stands among <see cref="Steps"/>.
+    /// Gets every <c>.place</c> of the file that places a module, in the order they appear, with
+    /// the position of each among <see cref="Steps"/>.
     /// </summary>
     public IReadOnlyList<PlacePoint> PlacePoints => placePoints;
 
     /// <summary>
-    /// The routines containing an instruction that could not be laid out. What such a routine
-    /// costs is not known: the line is not in the stream, so counting the other instructions
+    /// Gets the routines containing an instruction that could not be laid out. The cost of such a
+    /// routine is not known. The line is not in the stream, so counting the other instructions
     /// would report the routine as faster than any version of it that could actually be built.
     /// </summary>
     public IReadOnlySet<Symbol> Unlaid => unlaid;
 
     /// <summary>
-    /// How many bytes <paramref name="symbol"/> takes in the output, which is what
-    /// <c>.spanof</c> is worth, or null when nt65 cannot say — a span with an
+    /// Returns the number of bytes <paramref name="symbol"/> takes in the output, which is the
+    /// value of <c>.spanof</c>, or null when nt65 cannot tell. For example, a span with an
     /// <c>.align</c> in it depends on an address.
     /// </summary>
     public long? SpanOf(Symbol symbol) => settled.TryGetValue(symbol, out var span) ? span : null;
 
     /// <summary>
-    /// What one pass from <paramref name="from"/> to <paramref name="to"/> costs: the fewest
-    /// cycles, or with <paramref name="most"/> the most. The two must be positions in one
-    /// routine, and the span counts the instructions from the first up to, but not including,
-    /// the second: <paramref name="to"/> is where the pass arrives, not an instruction it runs.
+    /// Returns the cost in cycles of one pass from <paramref name="from"/> to
+    /// <paramref name="to"/>, as the lower bound or, when <paramref name="most"/> is true, the
+    /// upper bound. The two must be positions in one routine. The span counts the instructions
+    /// from the first up to, but not including, the second, because <paramref name="to"/> is
+    /// where the pass arrives rather than an instruction it runs.
     /// <para>
-    /// Summing a run of instructions bounds one pass only when the run executes straight
-    /// through once: a call takes however long the called routine takes, and a loop runs its
-    /// body as many times as it iterates. So a span that contains a call or a loop has no
-    /// count, and the result gives the reason instead.
+    /// Summing a run of instructions bounds one pass only when the run executes straight through
+    /// once. A call takes as long as the called routine takes, and a loop runs its body as many
+    /// times as it iterates. A span that contains a call or a loop therefore has no count, and
+    /// the result gives the reason instead.
     /// </para>
     /// </summary>
     public CycleSpan CyclesOf(Symbol from, Symbol to, bool most)
     {
         if (counted is null)
         {
-            // The walk this is being asked during has not reached the code yet. Saying so puts
-            // the file through one more walk, where the whole of it is there to count.
+            // The walk in progress has not necessarily reached the code yet. Setting the flag
+            // puts the file through one more walk, in which the whole file is there to count.
             wantsCycles = true;
             return default;
         }
@@ -212,10 +221,10 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Why the transfer at step <paramref name="i"/> turns the span into a loop, or null when it
-    /// does not. A branch or jump back to a point between the span's start and itself runs
-    /// the code between them again, and a transfer whose target nt65 cannot follow might go
-    /// to any such point, so it is treated the same way.
+    /// Returns why the transfer at step <paramref name="i"/> turns the span into a loop, or null
+    /// when it does not. A branch or jump back to a point between the span's start and itself
+    /// runs the code between them again. A transfer whose target nt65 cannot follow might go to
+    /// any such point, so it is treated the same way.
     /// </summary>
     private string? Backwards(InstructionStatementSyntax instruction, Step step, int start, int i)
     {
@@ -234,8 +243,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Which settled step a symbol stands at: the step that declares it as a label, or the
-    /// routine's first step for a routine's own name. Null for a symbol the walk did not place.
+    /// Returns the index of the completed walk's step at which a symbol stands. That is the step
+    /// that declares it as a label or, for a routine's own name, the routine's first step. Returns
+    /// null for a symbol the walk did not reach.
     /// </summary>
     private int? At(Symbol symbol)
     {
@@ -249,16 +259,16 @@ public sealed partial class CodeLayout
 
     /// <summary>
     /// Lays out <paramref name="model"/>'s file for <paramref name="cpu"/>. On the 65816,
-    /// <paramref name="states"/> says what state reaches each statement, which is what sizes
-    /// its immediates, its <c>.ensure</c> directives and its frame slots; without it the
-    /// immediates are laid out a byte wide and every <c>.ensure</c> writes all it could, which
+    /// <paramref name="states"/> gives the state reaching each statement, which sizes the file's
+    /// immediates, its <c>.ensure</c> directives and its frame slots. Without it, the immediates
+    /// are laid out a byte wide and every <c>.ensure</c> emits every instruction it could. That
     /// is enough to find where control goes, since no edge depends on a length.
     /// </summary>
     public static CodeLayout Create(SemanticModel model, Cpu cpu, IProcessorStates? states = null)
     {
-        // Every long branch starts short, and those found out of reach are lengthened until
-        // none changes, which terminates because a branch only ever grows. Only the last
-        // walk is kept: the ones before it laid out a file that is not the one written.
+        // Every long branch starts short, and those found out of reach are lengthened until none
+        // changes. This terminates because a branch only ever grows. Only the last walk is kept,
+        // because the walks before it laid out a file that differs from the one emitted.
         var lengthened = new HashSet<(int Position, Expansion? On)>();
         var measured = Extents.MeasuredIn(model);
         var settled = new Dictionary<Symbol, long>();
@@ -271,8 +281,8 @@ public sealed partial class CodeLayout
         while (layout.Lengthen() | layout.Settle());
 
         // A cycle span is counted over a walk that has finished, because the code it measures
-        // may be written after the expression that measures it. Only a file that asks for one
-        // is laid out again, so nothing else pays for it.
+        // may appear after the expression that measures it. Only a file that asks for a span is
+        // laid out again, so no other file pays for it.
         if (layout.wantsCycles)
         {
             layout = new CodeLayout(model, cpu, states, lengthened, measured, settled, layout.steps);
@@ -284,20 +294,20 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// What a statement assembles to on the turn <paramref name="on"/> of the repetitions
-    /// around it, or null when it generates no bytes.
+    /// Returns what a statement assembles to in the <see cref="Expansion"/> <paramref name="on"/>,
+    /// or null when it generates no bytes.
     /// </summary>
     public LineLayout? Of(SyntaxNode statement, Expansion? on = null) =>
         lines.GetValueOrDefault((statement.Position, on));
 
-    /// <summary>Where a statement's bytes land, or null when it generates none.</summary>
+    /// <summary>Returns where a statement's bytes land, or null when it generates none.</summary>
     public Placement? Placed(SyntaxNode statement, Expansion? on = null) =>
         placements.TryGetValue((statement.Position, on), out var placement) ? placement : null;
 
     /// <summary>
-    /// Where <paramref name="label"/> stands in the stream around it, or null when nothing
-    /// placed it. A label a macro body declares stands somewhere different at every
-    /// expansion, so which writing is being asked about is part of the question.
+    /// Returns where <paramref name="label"/> stands in the stream around it, or null when the
+    /// walk did not record it. A label that a macro body declares stands somewhere different in
+    /// every expansion, so the expansion being asked about is part of the question.
     /// </summary>
     public Placement? Placed(Symbol label, Expansion? on = null) =>
         labels.TryGetValue((label, Expansion.Owning(on, label)), out var placement) ? placement : null;
@@ -327,14 +337,14 @@ public sealed partial class CodeLayout
 
     private void WalkBlock(BlockSyntax block, BlockKind kind)
     {
-        // A macro body generates nothing where it is written: it is laid out at every call
-        // that expands it, and in the segment that call is in. A type's members are room in
-        // whatever is declared with the type, and generate nothing where they are written.
+        // A macro body generates nothing where it is declared. It is laid out at every call that
+        // expands it, in the segment that call is in. A type's members reserve room in each
+        // declaration made with the type, and generate nothing where they are declared.
         if (kind is BlockKind.Macro or BlockKind.Struct or BlockKind.Union or BlockKind.Enum)
             return;
 
-        // A block argument is the call's: the line that opens it is the call, which is laid
-        // out here, and its lines are laid out wherever the body splices them.
+        // A block argument belongs to the call. The line that opens it is the call, which is
+        // laid out here, and its lines are laid out where the body splices them.
         if (kind == BlockKind.MacroBlock)
         {
             if (Macros.CallIn(block.Opener.Statement) is not null)
@@ -342,15 +352,15 @@ public sealed partial class CodeLayout
             return;
         }
 
-        // A repetition's body is laid out once per turn: what `.res n` reserves and how wide
-        // an address `lda n` reaches both follow from the turn.
+        // A repetition's body is laid out once per iteration, because both what `.res n`
+        // reserves and how wide an address `lda n` reaches depend on the iteration.
         if (Constructs.Repeats(kind))
         {
             var outerTurn = expansion;
             var turns = Repetitions.Of(model, block, outerTurn, diagnostics);
 
-            // A repetition inside an expansion writes its body out once per turn, and every
-            // turn counts towards the bound, which is checked before any of them is laid out.
+            // A repetition inside an expansion emits its body once per iteration, and every
+            // iteration counts towards the bound, which is checked before any is laid out.
             if (outerTurn?.NearestCall is { } call && Exceeds(turns.Count * (block.Members.Length - 1), call))
                 return;
             foreach (var turn in turns)
@@ -362,7 +372,7 @@ public sealed partial class CodeLayout
             return;
         }
 
-        // `.multiproc` is a repetition whose body is one routine's: it is laid out once per
+        // `.multiproc` is a repetition whose body is one routine. It is laid out once per
         // member, as the `.each` around a `.proc` that it stands for would lay it out.
         if (kind == BlockKind.MultiProc)
         {
@@ -384,8 +394,9 @@ public sealed partial class CodeLayout
         if (kind == BlockKind.Proc && opener is ProcDeclarationSyntax or MultiProcDeclarationSyntax)
             routine = NameOf(opener);
 
-        // What a routine or data takes is the bytes between the two ends of its block, in its
-        // own segment's run: a nested segment block is somewhere else and does not count.
+        // The span of a routine or data declaration is the bytes between the two ends of its
+        // block, in its own segment's run. A nested segment block is somewhere else and does not
+        // count.
         var spanning = kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody or BlockKind.RecordInitializer
             && NameOf(opener) is { } named && measured.Contains(named)
             ? named
@@ -425,9 +436,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// A call, laid out as the body it expands to. The body belongs to whichever file
-    /// declares the macro, and is read there and laid out here, in this call's segment and
-    /// with this call's arguments.
+    /// Lays out a macro call as the body it expands to. The body belongs to the file that
+    /// declares the macro. It is read there and laid out here, in this call's segment and with
+    /// this call's arguments.
     /// </summary>
     private void Expand(MacroCallSyntax call)
     {
@@ -436,8 +447,8 @@ public sealed partial class CodeLayout
         if (Exceeds(definition.Members.Length, call))
             return;
 
-        // An argument the parameter refuses is reported at the call, and a body laid out with it
-        // would only say the same thing again from inside.
+        // An argument the parameter rejects is reported at the call, and laying out the body
+        // with it would only report the same problem again from inside.
         if (!ArgumentChecks.Check(model, call, expansion, segment, (node, message) => Report(node, message)))
             return;
 
@@ -455,8 +466,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// Counts <paramref name="statements"/> more laid out by expansions, and whether that
-    /// takes the file past the bound. The bound is reported once, at <paramref name="call"/>.
+    /// Adds <paramref name="statements"/> to the count laid out by expansions, and returns
+    /// whether that takes the file past the bound. The bound is reported once, at
+    /// <paramref name="call"/>.
     /// </summary>
     private bool Exceeds(int statements, SyntaxNode call)
     {
@@ -470,10 +482,10 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// A line naming a <c>block</c> parameter, which stands for the lines the call wrote.
-    /// Those are the caller's own code, so they are laid out outside the expansion that
-    /// spliced them, at a level of their own: the same block may be spliced more than once,
-    /// and each splice writes the lines out again.
+    /// Lays out a line naming a <c>block</c> parameter, which stands for the lines the call
+    /// supplied. Those lines are the caller's own code, so they are laid out outside the
+    /// expansion that spliced them, at a level of their own. The same block may be spliced more
+    /// than once, and each splice emits the lines again.
     /// </summary>
     private void Splice(BlockSpliceSyntax statement)
     {
@@ -498,7 +510,7 @@ public sealed partial class CodeLayout
 
     private void Statement(StatementSyntax statement) => statements.Visit(statement);
 
-    /// <summary>Marks the routine being walked as one an instruction could not be laid out in.</summary>
+    /// <summary>Marks the routine being walked as one in which an instruction could not be laid out.</summary>
     private void Unlayable()
     {
         if (routine is not null)
@@ -506,10 +518,10 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// One instruction, laid out in the addressing mode it calls for: the narrowest the
-    /// instruction offers that is at least as wide as the operand, with the choice written
-    /// into the output as a prefix when the instruction offers more than one width for that
-    /// shape.
+    /// Lays out one instruction in the addressing mode it calls for, which is the narrowest mode
+    /// the instruction offers that is at least as wide as the operand. When the instruction
+    /// offers more than one width for that operand shape, the choice is emitted into the output
+    /// as a prefix.
     /// </summary>
     private void Instruction(InstructionStatementSyntax statement)
     {
@@ -524,7 +536,8 @@ public sealed partial class CodeLayout
         }
 
         // An instruction outside a routine is code nothing runs, and is not laid out. Binding has
-        // said so where it was written; what a macro expands there, binding could not see.
+        // already reported it where it appears in the source, but binding could not see what a
+        // macro expands there.
         if (routine is null)
         {
             if (expansion?.NearestCall is not null)
@@ -538,8 +551,8 @@ public sealed partial class CodeLayout
             var having = CpuNames.All.Where(other => Instructions.Has(other, statement.MnemonicKind)).ToList();
             var spelled = having.Select(CpuNames.Spell).ToList();
 
-            // The only CPU with it is the 6502 and its undocumented opcodes, so what the reader
-            // is looking at is one of those rather than an instruction they have misplaced.
+            // The only CPU with it is the 6502 with its undocumented opcodes, so the reader is
+            // looking at one of those rather than at an instruction they have misplaced.
             var undocumented = having is [Cpu.Mos6502X];
             Report(mnemonic, Catalogue.InstructionNotOnCpu.Says(
                 mnemonic.Text,
@@ -554,14 +567,14 @@ public sealed partial class CodeLayout
             return;
         }
 
-        // In a macro body an `operand` parameter stands as a whole operand, so the mode and
-        // the address size come from what the call gave rather than from what the body wrote.
+        // In a macro body an `operand` parameter stands as a whole operand, so the mode and the
+        // address size come from the argument the call passed rather than from the body's text.
         var written = statement.Operand;
         var substituted = Operands.Substituted(model, written, expansion);
         CheckSubstitution(substituted);
 
-        // What an operand's expressions are worth is checked here, as a data directive's
-        // are, since no symbol holds them and nothing else evaluates them with anything to say.
+        // The values of an operand's expressions are checked here, as a data directive's are,
+        // because no symbol holds them and no other pass evaluates them and reports problems.
         foreach (var expression in written?.ChildNodes.OfType<ExpressionSyntax>() ?? [])
             model.Check(expression, diagnostics, expansion, SpanOf, CyclesOf);
         var operand = substituted?.Operand ?? written;
@@ -590,7 +603,7 @@ public sealed partial class CodeLayout
             : null;
 
         // An unknown width has already been reported, so a value too large for a byte is not
-        // reported as a second error: nobody knows the immediate really is one byte.
+        // reported as a second error, because nobody knows the immediate really is one byte.
         var sizeUnknown = cpu == Cpu.Wdc65816 && Instructions.SizedBy(statement.MnemonicKind) is { } sized
             && state?.Of(sized) is not (Width.Eight or Width.Sixteen);
 
@@ -624,7 +637,7 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// A long branch, which branches like its short form but reaches any near target. It is
+    /// Lays out a long branch, which branches like its short form but reaches any near target. It is
     /// laid out short and lengthened only where the target turns out to be out of reach, so
     /// a forward branch to a near target keeps the short form. ca65's own long-branch macro
     /// package can choose the short form only for a target it has already seen, so its
@@ -663,9 +676,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// An assertion, checked here because this is the pass that walks every statement of a
-    /// file with the whole program worked out. An assertion nt65 can evaluate is checked here;
-    /// one it cannot is left for ca65 and ld65, which know the final addresses nt65 never sees.
+    /// Checks an assertion. Assertions are checked here because this is the pass that walks every
+    /// statement of a file with the whole program worked out. An assertion nt65 cannot evaluate
+    /// is left for ca65 and ld65, which know the final addresses nt65 never sees.
     /// </summary>
     private void Assertion(AssertDirectiveSyntax directive)
     {
@@ -682,16 +695,17 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// An <c>.ensure</c>, which writes the <c>rep</c> and <c>sep</c> the analysis found it
-    /// needs. Before the analysis has run, it is laid out writing all it could.
+    /// Lays out an <c>.ensure</c>, which emits the <c>rep</c> and <c>sep</c> the analysis found
+    /// it needs. Before the analysis has run, it is laid out as emitting every instruction it
+    /// could.
     /// </summary>
     private void Ensure(EnsureDirectiveSyntax directive)
     {
         var state = states?.Before(directive, expansion);
 
         // On the 6502 and its CMOS variants there is no processor state to set, and no `rep` or
-        // `sep` to set it with, so an `.ensure` is accepted and writes nothing. That is what
-        // lets one routine be written for both CPUs.
+        // `sep` to set it with, so an `.ensure` is accepted and emits nothing. This lets one
+        // routine be written for both CPUs.
         var ensured = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
         var cycles = new CycleCount(0);
         foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != 0))
@@ -702,8 +716,9 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// An <c>.error</c> the build reached, a configuration the file refuses to be built in, or a
-    /// <c>.warning</c>, which is reported as a warning and does not stop the build.
+    /// Reports an <c>.error</c> the build reached, which marks a configuration the file refuses
+    /// to be built in, or a <c>.warning</c>, which is reported as a warning and does not stop the
+    /// build.
     /// </summary>
     private void Refuse(ErrorDirectiveSyntax directive)
     {
@@ -718,8 +733,9 @@ public sealed partial class CodeLayout
             return;
         if (routine is null && inData == 0 && directive is DataDirectiveSyntax { Parent: not DataDeclarationSyntax } loose)
         {
-            // Bytes a macro expands outside a routine belong to a declaration as much as bytes
-            // written there do, which binding could not see where the body was written.
+            // Bytes that a macro expands outside a routine need a declaration as much as bytes in
+            // the source there do. Binding could not see them, because it sees only the macro body
+            // as declared.
             if (expansion?.NearestCall is not null && DataSyntax.NameOf(loose) is not (".res" or ".align"))
                 Report(directive, Catalogue.PaddingOutsideARoutine.Says(loose.Directive.Text, ""));
             else if (segment is null && length != 0)
@@ -731,15 +747,15 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// What a statement assembles to, whichever writing of it is asked about. An editor asks
-    /// about a line rather than about one expansion of it, so it is shown the first writing.
+    /// Returns what a statement assembles to in its first expansion. An editor asks about a line
+    /// rather than about one expansion of it, so it is shown the first.
     /// </summary>
     public LineLayout? AnyOf(StatementSyntax statement) => anyWriting.GetValueOrDefault((statement.Tree, statement.Position));
 
     /// <summary>
-    /// The symbol a declaration declares at this point of the walk. For a family declaration
-    /// that is the instance the current turn of the repetition writes; any other declaration
-    /// has only one symbol.
+    /// Returns the symbol a declaration declares at this point of the walk. For a
+    /// <see cref="Family"/> declaration, that is the instance the current iteration of the
+    /// repetition emits. Any other declaration has only one symbol.
     /// </summary>
     private Symbol? NameOf(SyntaxNode declaration) => model.DeclaredBy(declaration, expansion);
 
@@ -753,9 +769,9 @@ public sealed partial class CodeLayout
         diagnostics.Add(Expansion.Problem(model.Tree, tree, span, expansion, severity, message));
 
     /// <summary>
-    /// Something wrong with a line that may have been written in another file's macro body.
-    /// A body's line is reported at the call, which is in this file and is the side that
-    /// chose the arguments; the body line is named beside it.
+    /// Reports a problem with a line that may come from another file's macro body. A body's line
+    /// is reported at the call, which is in this file and is the side that chose the arguments,
+    /// and the body line is named beside it.
     /// </summary>
     private void ReportOnLine(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null)
     {
@@ -771,10 +787,11 @@ public sealed partial class CodeLayout
     }
 
     /// <summary>
-    /// What laying out one statement does, a method per kind. The work is the layout's own;
-    /// this says which of it each kind asks for. A kind with no method here writes no bytes and
-    /// says nothing about the state: a declaration that only names something, a directive read
-    /// where its block is walked, a blank or a closing line.
+    /// Dispatches the layout of one statement by kind, with one method per kind. The work itself
+    /// is done by the layout, and this visitor chooses which part of it each kind calls for. A
+    /// kind with no method here emits no bytes and has no effect on the processor state. Such
+    /// kinds include a declaration that only names something, a directive read where its block is
+    /// walked, and a blank or closing line.
     /// </summary>
     /// <param name="layout">The layout being built.</param>
     private sealed class Statements(CodeLayout layout) : SyntaxVisitor
@@ -790,8 +807,8 @@ public sealed partial class CodeLayout
         public override void VisitDataValues(DataValuesSyntax node) => layout.Data(node);
 
         /// <summary>
-        /// A data declaration's name stands where its first byte does. What it holds is laid out
-        /// on its own line, or in the body it opens.
+        /// Records a data declaration's name where its first byte stands, and lays out what it
+        /// holds. The data is laid out on the declaration's own line, or in the body it opens.
         /// </summary>
         /// <param name="node">The declaration.</param>
         public override void VisitDataDeclaration(DataDeclarationSyntax node)
@@ -830,9 +847,9 @@ public sealed partial class CodeLayout
         }
 
         /// <summary>
-        /// A routine's name stands where its first byte does, which is what a branch to it
-        /// reaches. One turn of a <c>.multiproc</c> is a routine, and the member it is named
-        /// after stands there.
+        /// Records a routine's name where its first byte stands, which is the address a branch
+        /// to it reaches. One iteration of a <c>.multiproc</c> is a routine, and the member it
+        /// is named after stands there.
         /// </summary>
         /// <param name="node">The declaration.</param>
         public override void VisitProcDeclaration(ProcDeclarationSyntax node) => layout.Mark(node);
@@ -841,10 +858,10 @@ public sealed partial class CodeLayout
         public override void VisitMultiProcDeclaration(MultiProcDeclarationSyntax node) => layout.Mark(node);
 
         /// <summary>
-        /// A directive that generates no bytes but is recorded as a step for the flow analysis:
-        /// an annotation such as <c>.next</c> or <c>.patch</c>, which applies to the statement
-        /// above it, a <c>.state</c>, which declares the processor state at that point, or a
-        /// <c>.frame</c>.
+        /// Records, as a step for the flow analysis, a directive that generates no bytes. Such a
+        /// directive is an annotation such as <c>.next</c> or <c>.patch</c>, which applies to the
+        /// statement above it; a <c>.state</c>, which declares the processor state at that
+        /// point; or a <c>.frame</c>.
         /// </summary>
         /// <param name="node">The directive.</param>
         public override void VisitNextDirective(NextDirectiveSyntax node) => NoBytes(node);
@@ -853,8 +870,9 @@ public sealed partial class CodeLayout
         public override void VisitPatchDirective(PatchDirectiveSyntax node) => NoBytes(node);
 
         /// <summary>
-        /// The end of a routine's body, where the routine a <c>.fallthrough</c> names has to start.
-        /// A <c>.fallthrough</c> anywhere else has already been reported, and is ignored here.
+        /// Records the end of a routine's body, where the routine a <c>.fallthrough</c> names has
+        /// to start. A <c>.fallthrough</c> anywhere else has already been reported, and is ignored
+        /// here.
         /// </summary>
         /// <param name="node">The directive.</param>
         public override void VisitFallthroughDirective(FallthroughDirectiveSyntax node)
@@ -876,7 +894,7 @@ public sealed partial class CodeLayout
         public override void VisitPlaceDirective(PlaceDirectiveSyntax node) => layout.PlaceModule(node);
 
         /// <summary>
-        /// Records a statement that writes no bytes as a step, so the flow analysis still sees it.
+        /// Records a statement that emits no bytes as a step, so that the flow analysis still sees it.
         /// </summary>
         private void NoBytes(StatementSyntax statement) => layout.steps.Add(
             new Step(statement, layout.expansion, layout.routine, layout.Stream, layout.segment, null));

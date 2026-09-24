@@ -7,8 +7,8 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// Semantic tokens: the names in a document, classified by what they refer to, which the client
-/// draws over the TextMate grammar's colours.
+/// Tests semantic tokens, which classify the names in a document by what they refer to. The
+/// client draws them over the TextMate grammar's colours.
 /// </summary>
 public sealed class SemanticTokensTests
 {
@@ -65,7 +65,7 @@ public sealed class SemanticTokensTests
     }
 
     /// <summary>
-    /// Every name is classified by what it refers to, a member spelled like a register included,
+    /// Every name is classified by what it refers to, including a member spelled like a register,
     /// with its declarations marked and its constants read-only. Registers, mnemonics and
     /// directives are not names, and are left to the grammar to colour.
     /// </summary>
@@ -157,8 +157,9 @@ public sealed class SemanticTokensTests
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(new Range(routine, routine), "\n"));
         await client.NextDiagnosticsAsync(timeout);
 
-        // A line added above the routine changes one number: how many lines the routine's first
-        // name is below the name before it. The other hundred and forty-nine are not sent again.
+        // A line added above the routine changes one number, which is how many lines the
+        // routine's first name sits below the name before it. The other hundred and forty-nine
+        // numbers are not sent again.
         var changed = await client.SemanticTokensDeltaAsync(Uri, whole.ResultId!, timeout);
         var edit = Assert.Single(changed.Edits);
         Assert.Equal(1, edit.DeleteCount);
@@ -170,7 +171,7 @@ public sealed class SemanticTokensTests
         Assert.NotEmpty(again.Data);
     }
 
-    /// <summary>Each token as its text, its type and its modifiers.</summary>
+    /// <summary>Returns each token as its text, its type and its modifiers.</summary>
     private static List<string> Decode(SemanticTokensLegend legend, string source, SemanticTokens tokens)
     {
         var lines = source.ReplaceLineEndings("\n").Split('\n');

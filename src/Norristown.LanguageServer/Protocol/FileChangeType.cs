@@ -1,14 +1,14 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>What happened to a file on disk.</summary>
+/// <summary>Specifies what happened to a file on disk.</summary>
 internal enum FileChangeType
 {
-    /// <summary>It was created.</summary>
+    /// <summary>The file was created.</summary>
     Created = 1,
 
-    /// <summary>Its contents changed.</summary>
+    /// <summary>The file's contents changed.</summary>
     Changed = 2,
 
-    /// <summary>It was deleted.</summary>
+    /// <summary>The file was deleted.</summary>
     Deleted = 3,
 }

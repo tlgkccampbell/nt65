@@ -9,8 +9,8 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Conversions from the analysis to protocol types. Everything the server sends is built here, so
-/// the analysis stays free of LSP and this file holds all of the 0-based counting.
+/// Converts analysis results to protocol types. Everything the server sends is built here, so the
+/// analysis stays free of LSP and this file holds all of the 0-based counting.
 /// <para>
 /// Protocol types are written out in full, because several of them share a name with
 /// something in the analysis core (<c>Diagnostic</c>, <c>SymbolKind</c>) or in the framework
@@ -19,13 +19,13 @@ namespace Norristown.LanguageServer;
 /// </summary>
 internal static class Lsp
 {
-    /// <summary>What the client shows as the origin of every diagnostic nt65 reports.</summary>
+    /// <summary>The name the client shows as the origin of every diagnostic nt65 reports.</summary>
     private const string SourceName = "nt65";
 
     /// <summary>
     /// The language tag on the fenced code block that holds a hover's key/value grid. Markdown
     /// formatting does not apply inside a fenced block, so the only way to style the grid's
-    /// parts is to give it a grammar of its own; an editor without that grammar renders it as
+    /// parts is to give it a grammar of its own. An editor without that grammar renders it as
     /// plain monospace.
     /// </summary>
     private const string Grid = "nt65-hover";
@@ -37,35 +37,38 @@ internal static class Lsp
     private const int ReasonColumn = 14;
 
     /// <summary>
-    /// How many pushes a hover lists before it says how many more there are. A reader cares
+    /// The number of pushes a hover lists before it says how many more there are. A reader cares
     /// most about the top of the stack, which holds what the routine will pull next.
     /// </summary>
     private const int MostPushes = 6;
 
     /// <summary>
-    /// The rows that lead an instruction's hover, being what a reader hovers an instruction to
-    /// learn: its cycle count, and the processor state on entry that sized its operand. The
-    /// flags it writes, the register contents and the stack are supporting detail and go below
-    /// the rule.
+    /// The keys of the rows that lead an instruction's hover, which give what a reader hovers an
+    /// instruction to learn. These are its cycle count and the processor state on entry, which
+    /// sized its operand. The flags it changes, the register contents and the stack are
+    /// supporting detail and go below the rule.
     /// </summary>
     private static readonly IReadOnlySet<string> TimingAsked =
         new HashSet<string>(["cycles", "state"], StringComparer.Ordinal);
 
     /// <summary>
-    /// The same for an <c>.ensure</c>, which a reader hovers to see what it became: the line
-    /// states the requirement, not the instructions it writes.
+    /// The keys of the rows that lead an <c>.ensure</c>'s hover, which a reader hovers to see
+    /// what it became. The line states the requirement, not the instructions it emits.
     /// </summary>
     private static readonly IReadOnlySet<string> EnsureAsked =
         new HashSet<string>(["writes", "state"], StringComparer.Ordinal);
 
-    /// <summary>The rows that lead an inline <c>.scope</c>'s hover, which are the only rows it has.</summary>
+    /// <summary>
+    /// The keys of the rows that lead an inline <c>.scope</c>'s hover, which are the only rows it
+    /// has.
+    /// </summary>
     private static readonly IReadOnlySet<string> ScopeAsked =
         new HashSet<string>(["cost", "excluding", "preserves"], StringComparer.Ordinal);
 
     /// <summary>
-    /// Everything wrong with one file, and the branches this build leaves out. An omitted
-    /// branch is not a problem, so it is a hint the client renders faded rather than
-    /// anything that appears in a problem list.
+    /// Converts everything wrong with one file to protocol diagnostics, together with the
+    /// branches this build leaves out. An omitted branch is not a problem, so it is a hint the
+    /// client renders faded rather than anything that appears in a problem list.
     /// </summary>
     public static IReadOnlyList<Protocol.Diagnostic> ToDiagnostics(
         IEnumerable<Diagnostic> diagnostics, SyntaxTree? tree, Configuration configuration) =>
@@ -83,11 +86,11 @@ internal static class Lsp
 
     /// <summary>
     /// Adds an <c>in the output</c> row with the symbol's name in the ca65 output, where that
-    /// differs from its name in the source. Only two kinds of name differ: ca65 reads a word of
+    /// differs from its name in the source. Only two kinds of name differ. ca65 reads a word of
     /// its own instruction table at the start of a line as an instruction, so the emitter
-    /// prefixes such a name with its module; and a module that another module places has every
-    /// name it does not export prefixed the same way. Every other name keeps its spelling, so no
-    /// row is added for it.
+    /// prefixes such a name with its module. A module that another module places has every name
+    /// it does not export prefixed the same way. Every other name is unchanged, so no row is
+    /// added for it.
     /// </summary>
     private static void Written(Card card, ProgramAnalysis analysis, Symbol symbol)
     {
@@ -98,7 +101,7 @@ internal static class Lsp
             return;
         }
 
-        // A module placed by another module writes each name it does not export with the
+        // A module placed by another module emits each name it does not export with the
         // module's name in front.
         if (symbol is { IsReachableByPath: true, LinkerName: null, Module: { } module }
             && analysis.Placements.PlacerOf(symbol.Tree) is not null)
@@ -107,23 +110,23 @@ internal static class Lsp
         }
     }
 
-    /// <summary>The file's outline, nested the way its blocks are.</summary>
+    /// <summary>Returns the file's outline, nested the way its blocks are.</summary>
     public static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree) =>
         ToSymbols(tree, Outline.Build(tree));
 
-    /// <summary>One foldable range per block.</summary>
+    /// <summary>Returns one foldable range per block.</summary>
     public static IReadOnlyList<Protocol.FoldingRange> ToFoldingRanges(SyntaxTree tree) =>
         [.. Folding.Build(tree).Select(range => new Protocol.FoldingRange(range.StartLine, range.EndLine))];
 
     /// <summary>
-    /// What to show at <paramref name="position"/>: the name under the caret, or, where there
-    /// is none, the <c>.scope</c> block the line opens or the instruction written on it.
+    /// Returns what to show at <paramref name="position"/>. That is the name under the caret or,
+    /// where there is none, the <c>.scope</c> block the line opens or the instruction on it.
     /// <para>
-    /// Every hover reads from the top down, and each section is omitted when it is empty: the
-    /// line under the caret in nt65 syntax, the comment its author left above it, the one or two
-    /// facts most often wanted for that kind of thing, a horizontal rule, and below it everything
-    /// else the analysis worked out. Nothing is dropped for being far down; the first screenful
-    /// answers the question and the rest is supporting detail.
+    /// Every hover reads from the top down, and each section is omitted when it is empty. The
+    /// sections are the line under the caret in nt65 syntax, the comment its author left above
+    /// it, the one or two facts most often wanted for that kind of thing, a horizontal rule, and
+    /// below it everything else the analysis worked out. Nothing is dropped for being far down.
+    /// The first screenful answers the question and the rest is supporting detail.
     /// </para>
     /// </summary>
     public static Protocol.Hover? ToHover(ProgramAnalysis analysis, SemanticModel model, int position)
@@ -137,9 +140,10 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The name of a family's <c>.proc</c> inside an <c>.each</c>, as the declaration of the
-    /// binding it is written with: the name declares every instance, so what it answers is what
-    /// the <c>.multiproc</c> form answers on its binding. Null anywhere else.
+    /// Returns a reference that treats the name of a <see cref="Family"/>'s <c>.proc</c> inside an
+    /// <c>.each</c> as the declaration of the family's binding, or null anywhere else. The name
+    /// declares every instance, so its hover answers what the <c>.multiproc</c> form answers on
+    /// its binding.
     /// </summary>
     private static SymbolReference? InstanceAt(SemanticModel model, int position)
     {
@@ -155,8 +159,9 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// Where the module a <c>.place</c> names is declared, with the caret on its path. A module
-    /// is not a symbol, so there is no symbol reference there to answer from.
+    /// Returns where the module a <c>.place</c> names is declared, when the caret is on its
+    /// path, or null otherwise. A module is not a symbol, so there is no symbol reference there
+    /// to answer from.
     /// </summary>
     public static Protocol.Location? ToPlacedDefinition(ProgramAnalysis analysis, SemanticModel model, int position) =>
         PlacedAt(analysis, model, position) is { Tree: var tree } && Placements.Declaration(tree) is { } declared
@@ -164,8 +169,9 @@ internal static class Lsp
             : null;
 
     /// <summary>
-    /// The module a <c>.place</c> names, with the caret on its path: its file, what its
-    /// declaration says about placing it, and which translation unit it is written in.
+    /// Returns the hover for the module a <c>.place</c> names, when the caret is on its path.
+    /// The hover gives the module's file, what its declaration says about placing it, and which
+    /// translation unit's output contains it.
     /// </summary>
     private static Protocol.Hover? ToPlaced(ProgramAnalysis analysis, SemanticModel model, int position)
     {
@@ -188,7 +194,10 @@ internal static class Lsp
         return new Protocol.Hover(Protocol.MarkupContent.Markdown(card.ToString()), ToRange(model.Tree, placed.Span));
     }
 
-    /// <summary>The module whose path a <c>.place</c> writes at <paramref name="position"/>, or null.</summary>
+    /// <summary>
+    /// Returns the module whose path a <c>.place</c> gives at <paramref name="position"/>, or null
+    /// if there is none.
+    /// </summary>
     private static (SyntaxTree Tree, string Path, TextSpan Span)? PlacedAt(
         ProgramAnalysis analysis, SemanticModel model, int position)
     {
@@ -204,10 +213,10 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The hover for a bare word that a condition compares a parameter's argument with, such as
-    /// <c>imm</c> in <c>.mode(src) == imm</c> or <c>x</c> in <c>reg == x</c>: what the word is,
-    /// what it is compared with and what that parameter accepts, and, when the parameter can
-    /// never take that value, that the comparison never holds.
+    /// Returns the hover for a bare word that a condition compares a parameter's argument with,
+    /// such as <c>imm</c> in <c>.mode(src) == imm</c> or <c>x</c> in <c>reg == x</c>. The hover
+    /// says what the word is, what it is compared with and what that parameter accepts. When the
+    /// parameter can never take that value, it also says that the comparison never holds.
     /// </summary>
     private static Protocol.Hover? ToComparedWord(SemanticModel model, int position)
     {
@@ -230,11 +239,11 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The hover for the kind written after a macro parameter's <c>:</c>, wherever in the kind
-    /// the caret is: the parameter's own hover, which says what the kind accepts, plus, for a
-    /// mode listed in <c>operand(...)</c>, how an operand in that mode is written. A kind is made
-    /// of keywords rather than names, so there is no symbol reference there to answer from; the
-    /// exception is the enum an enum kind names, which is a reference and gets its own hover.
+    /// Returns the hover for the kind after a macro parameter's <c>:</c>, wherever in the kind
+    /// the caret is. It is the parameter's own hover, which says what the kind accepts, plus, for
+    /// a mode listed in <c>operand(...)</c>, how an operand in that mode is written. A kind is
+    /// made of keywords rather than names, so there is no symbol reference there to answer from.
+    /// The exception is the enum an enum kind names, which is a reference and gets its own hover.
     /// </summary>
     private static Protocol.Hover? ToParameterKind(ProgramAnalysis analysis, SemanticModel model, int position)
     {
@@ -255,8 +264,8 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// What an editor shows about a name: the line that declares it, the facts the analysis
-    /// worked out, and the comment written above it. What a routine costs and which registers
+    /// Returns what an editor shows about a name, which is the line that declares it, the facts
+    /// the analysis worked out, and the comment above it. What a routine costs and which registers
     /// it preserves are shown wherever it is named, not only at its declaration, because the
     /// cost of a call is what a reader wants to know at the call.
     /// </summary>
@@ -275,8 +284,8 @@ internal static class Lsp
         if (symbol.Tree != model.Tree)
             card.Row("from", symbol.Tree.Path[(symbol.Tree.Path.LastIndexOf('/') + 1)..]);
 
-        // A name that no qualified path can reach is shown unqualified, so say which routine or
-        // scope it is private to instead.
+        // A name that no qualified path can reach is shown unqualified, so the hover names the
+        // routine or scope it is private to instead.
         if (!symbol.IsReachableByPath && symbol.Scope.NearestNamed()?.Name is { } owner)
             card.Row("private to", owner);
 
@@ -325,8 +334,8 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The keys of the rows most wanted for this kind of name, which lead the hover; every other
-    /// row goes below the rule, in the order the hover writes them. A reader hovers a constant
+    /// Returns the keys of the rows most wanted for this kind of name, which lead the hover. Every
+    /// other row goes below the rule, in the order the hover adds them. A reader hovers a constant
     /// for its value, a member for its offset, a routine for what a call to it costs and which
     /// registers it preserves, and a name from another module to find out which module.
     /// </summary>
@@ -339,8 +348,8 @@ internal static class Lsp
 
             // At a call, a reader hovers a function to see the value of the call.
             SymbolKind.Func => ["value"],
-            // A reader hovers a macro to see what the call expands to, so that row leads; it is
-            // listed even where the row is not written, as at the declaration.
+            // A reader hovers a macro to see what the call expands to, so that row leads. The key
+            // is listed even where the row is absent, as at the declaration.
             SymbolKind.Macro => ["expands to"],
             // A family's binding is where its routines' costs are shown, since they get no lens.
             SymbolKind.Binding => ["declares", "cost", "excluding", "preserves"],
@@ -354,7 +363,7 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The value of the call a function's name appears in, which may be text, or an unknown
+    /// Returns the value of the call a function's name appears in, which may be text, or an unknown
     /// value when the name is not called there or nt65 cannot evaluate the call, as in a macro
     /// body whose parameters have no arguments yet.
     /// </summary>
@@ -366,9 +375,9 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The line a name is declared on, as written in the source, with the name replaced by the
-    /// one a reader would write for it. Where the declaration is not a line of its own (a member
-    /// of a layout, a macro parameter, the name a repetition binds and the instances it
+    /// Returns the line a name is declared on, as it appears in the source, with the name replaced
+    /// by the one a reader would write for it. Where the declaration is not a line of its own (a
+    /// member of a layout, a macro parameter, the name a repetition binds and the instances it
     /// declares), there is no line to show, so the kind and the name are shown instead.
     /// </summary>
     private static string Headline(Symbol symbol, SyntaxTree asked)
@@ -384,9 +393,9 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The declaring line as it is written, with the name on it replaced by
-    /// <paramref name="named"/>, since outside the declaring scope or module a reader has to
-    /// write a longer, qualified name than the one on the line.
+    /// Returns the declaring line with the name on it replaced by <paramref name="named"/>, since
+    /// outside the declaring scope or module a reader has to write a longer, qualified name than
+    /// the one on the line.
     /// </summary>
     private static string Declaring(Symbol symbol, string named)
     {
@@ -397,7 +406,7 @@ internal static class Lsp
         var line = tree.Text[start..end].TrimEnd('\n', '\r');
         var at = symbol.NameSpan.Start - start;
 
-        // A cheap local is written with an `@` that its symbol name lacks, so it is not
+        // A cheap local appears with an `@` that its symbol name lacks, so it is not
         // replaced; the line already shows it the way a reader would write it.
         if (!symbol.IsCheapLocal && at >= 0 && at + symbol.NameSpan.Length <= line.Length
             && line.AsSpan(at, symbol.NameSpan.Length).SequenceEqual(symbol.Name.AsSpan()))
@@ -408,8 +417,8 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// A line as a headline shows it: without the indentation before it, the comment at the
-    /// end of it or the brace that opens the block it heads, none of which is what was asked
+    /// Returns a line as a headline shows it, without the indentation before it, the comment at
+    /// the end of it or the brace that opens the block it heads. None of these is what was asked
     /// about.
     /// </summary>
     private static string Written(string line)
@@ -420,19 +429,19 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// Adds the cost and preserved-register rows for a routine, wherever its name is written. A
-    /// code lens shows the same above the declaration, but an editor can be told to hide lenses,
-    /// and a lens is nowhere near a call anyway, and a family's routines get no lens at all, so
-    /// for the name a family binds these are the rows of each of its instances. The control
-    /// flow used is the declaring file's, since a call from another file is not part of it.
+    /// Adds the cost and preserved-register rows for a routine, wherever its name appears. A code
+    /// lens shows the same above the declaration, but an editor can be told to hide lenses, and a
+    /// lens is nowhere near a call anyway. A family's routines get no lens at all, so for the name
+    /// a family binds these are the rows of each of its instances. The control flow used is the
+    /// declaring file's, since a call from another file is not part of it.
     /// </summary>
     private static void Routine(Card card, ProgramAnalysis analysis, Symbol symbol)
     {
         if (analysis.FlowFor(symbol.Tree.Path) is not { } flow)
             return;
-        // Routines are matched by name, not by where the name is written: every instance of a
-        // family is declared at the one binding, so a position would match them all, where one
-        // instance named at a call means that instance alone.
+        // Routines are matched by name, not by position. Every instance of a family is declared
+        // at the one binding, so a position would match them all, whereas one instance named at
+        // a call means that instance alone.
         var names = symbol.Kind == SymbolKind.Binding
             ? (analysis.ModelFor(symbol.Tree.Path)?.Families ?? [])
                 .Where(family => family.Binding.Tree == symbol.Tree && family.Binding.NameSpan == symbol.NameSpan)
@@ -450,8 +459,8 @@ internal static class Lsp
             .ToList();
         Rows(card, "cost", found.Select(region => (region.Name, region.Cost)));
 
-        // What the cost with calls leaves out, each once however many instances leave it out,
-        // with why, which the lens has no room for.
+        // Each item the cost with calls leaves out is listed once, however many instances leave
+        // it out, with the reason, which the lens has no room for.
         var excluded = found.SelectMany(region => region.Excluded).DistinctBy(exclusion => exclusion.What).ToList();
         for (var i = 0; i < excluded.Count; i++)
             card.Row(i == 0 ? "excluding" : "", $"{excluded[i].What}: {excluded[i].Why}");
@@ -459,7 +468,7 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// One row of the grid, or one row per instance where the instances of a family (the
+    /// Adds one row to the grid, or one row per instance where the instances of a family (the
     /// routines a repetition declares) differ. Every instance is declared on the family's single
     /// line, so where they all agree the row is shown once.
     /// </summary>
@@ -477,8 +486,8 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// At the declaration of the name a repetition binds: the family instances it declares,
-    /// which is what a reader wants to know about that line.
+    /// Adds, at the declaration of the name a repetition binds, a row listing the family
+    /// instances it declares, which is what a reader wants to know about that line.
     /// </summary>
     private static void Declares(Card card, SemanticModel model, SymbolReference reference)
     {
@@ -494,9 +503,9 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// What an inline <c>.scope</c> block costs and which registers it preserves, where the
-    /// caret is on the line that opens it. The block has no name to hover, so apart from the
-    /// lens this is the only place that shows it.
+    /// Returns a hover giving what an inline <c>.scope</c> block costs and which registers it
+    /// preserves, where the caret is on the line that opens it. The block has no name to hover, so
+    /// apart from the lens this is the only place that shows it.
     /// </summary>
     private static Protocol.Hover? ToScope(SemanticModel model, ControlFlow? flow, int position)
     {
@@ -519,11 +528,11 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The instruction at <paramref name="position"/>: how long it takes and how long the
-    /// block around it takes, and, where the analysis followed control to it, the processor
-    /// state that reaches it, what each register holds and what the routine has pushed. The
-    /// count is an interval wherever it depends on something the program does not say, such
-    /// as whether an indexed read crosses a page.
+    /// Returns the hover for the instruction at <paramref name="position"/>. It gives how long
+    /// the instruction takes and how long the block around it takes. Where the analysis followed
+    /// control to it, it also gives the processor state that reaches it, what each register
+    /// holds and what the routine has pushed. The count is an interval wherever it depends on
+    /// something the program does not say, such as whether an indexed read crosses a page.
     /// </summary>
     private static Protocol.Hover? ToTiming(
         ProgramAnalysis analysis, SemanticModel model, ControlFlow? flow, int position)
@@ -548,8 +557,8 @@ internal static class Lsp
             laid.Ensured is null ? TimingAsked : EnsureAsked);
 
         // The line's cycles, the enclosing basic block's cycles and, where the line's count is
-        // an interval, what causes the higher figure: three views of one question, read across
-        // one row rather than down three.
+        // an interval, what causes the higher figure. These are three views of one question,
+        // read across one row rather than down three.
         card.Row("cycles", Cost(cycles, Around(flow, statement)?.Cycles, laid.Causes));
 
         // An `.ensure` emits whatever `rep`/`sep` the analysis found it needs; show what that is.
@@ -591,9 +600,10 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The text of the <c>cycles</c> row: the line's own count, the count of the enclosing
-    /// basic block, and the reason the line's own count is an interval. The reason belongs to the instruction,
-    /// so a line whose own count is exact shows none even where its block's is not.
+    /// Builds the text of the <c>cycles</c> row, which is the line's own count, the count of the
+    /// enclosing basic block, and the reason the line's own count is an interval. The reason
+    /// belongs to the instruction, so a line whose own count is exact shows none even where its
+    /// block's is not.
     /// </summary>
     private static string Cost(CycleCount cycles, CycleCount? block, IReadOnlyList<string>? causes)
     {
@@ -606,8 +616,8 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The value of the immediate a line is written with, or null where it has none or none
-    /// nt65 can work out. It determines which flags a <c>rep</c> or a <c>sep</c> changes.
+    /// Returns the value of a line's immediate operand, or null where it has none or nt65 cannot
+    /// compute it. The value determines which flags a <c>rep</c> or a <c>sep</c> changes.
     /// </summary>
     private static long? Immediate(SemanticModel model, StatementSyntax statement, LineLayout laid) =>
         laid.Mode == AddressingMode.Immediate
@@ -616,13 +626,13 @@ internal static class Lsp
             : null;
 
     /// <summary>
-    /// The statement on the line <paramref name="position"/> is in, or null past the end of the
-    /// file, where there is no line and so nothing to say anything about.
+    /// Returns the statement on the line <paramref name="position"/> is in, or null past the end of
+    /// the file, where there is no line and so nothing to say anything about.
     /// </summary>
     private static StatementSyntax? Statement(SyntaxTree tree, int position) =>
         position < tree.Text.Length ? tree.GetLine(tree.GetLineIndex(position)).Statement : null;
 
-    /// <summary>The block a statement is in, wherever in the file it was written.</summary>
+    /// <summary>Returns the basic block a statement is in, wherever in the file the statement is.</summary>
     private static BasicBlock? Around(ControlFlow? flow, StatementSyntax statement) =>
         flow?.Regions
             .SelectMany(region => region.Blocks)
@@ -630,8 +640,8 @@ internal static class Lsp
                 step.Statement.Tree == statement.Tree && step.Statement.Position == statement.Position));
 
     /// <summary>
-    /// What the routine has pushed, top of the stack first, one row per push. Two models of the
-    /// stack are combined: the saved-register stack says which register's entry value a push
+    /// Adds what the routine has pushed, top of the stack first, one row per push. Two models of
+    /// the stack are combined: the saved-register stack says which register's entry value a push
     /// holds, and the processor-state analysis's stack says what a <c>php</c> saved, what a
     /// constant push holds and where a <c>.frame</c> is. Each knows things the other cannot see.
     /// </summary>
@@ -662,10 +672,10 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// One row per push, top first, from whichever of the two stacks knows about it. The
-    /// processor-state stack can name a push that the saved-register stack can only call new,
-    /// so its name is used where it has one; a push neither stack knows about is shown as
-    /// unknown rather than left out.
+    /// Returns one row per push, top first, from whichever of the two stacks knows about it. The
+    /// processor-state stack can name a push that the saved-register stack can only call new, so
+    /// its name is used where it has one. A push neither stack knows about is shown as unknown
+    /// rather than left out.
     /// </summary>
     private static IReadOnlyList<string> Pushes(ProgramAnalysis analysis, SavedStack? saved, AnalysisStack? bytes)
     {
@@ -693,8 +703,8 @@ internal static class Lsp
                 covered += more;
             }
 
-            // Use the saved-register stack's description only when this row covers exactly one
-            // of its pushes.
+            // The saved-register stack's description is used only when this row covers exactly
+            // one of its pushes.
             var push = i == first + 1 && first < pushes.Count ? pushes[first] : (SavedPush?)null;
             var text = group.Name ?? (push is { } held ? Held(held.Value, null) : "unknown");
 
@@ -710,7 +720,9 @@ internal static class Lsp
         return rows;
     }
 
-    /// <summary>How many bytes a push took, or null where the width it goes by is not known.</summary>
+    /// <summary>
+    /// Returns how many bytes a push took, or null where the width it depends on is not known.
+    /// </summary>
     private static int? Bytes(SavedPush push) => push.Size switch
     {
         PushSize.OneByte => 1,
@@ -724,8 +736,9 @@ internal static class Lsp
     };
 
     /// <summary>
-    /// The push whose top byte is <paramref name="top"/>: how many bytes it took, and what the
-    /// processor-state analysis knows it holds, or a null name where it knows nothing.
+    /// Returns the push whose top byte is <paramref name="top"/>, as how many bytes it took and
+    /// what the processor-state analysis knows it holds. The name is null where the analysis
+    /// knows nothing.
     /// <paramref name="hint"/> is how many bytes the saved-register stack says the push took,
     /// which is used as the size of a push the processor-state stack knows nothing about.
     /// </summary>
@@ -743,9 +756,9 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The <c>.frame</c> the byte at <paramref name="top"/> belongs to, as one push however
-    /// many bytes it covers; null when it belongs to none. A frame is marked on its lowest byte
-    /// only; how far up it extends is the size of the type it was declared with.
+    /// Returns the <c>.frame</c> the byte at <paramref name="top"/> belongs to, as one push
+    /// however many bytes it covers, or null when it belongs to none. A frame is marked on its
+    /// lowest byte only, and how far up it extends is the size of the type it was declared with.
     /// </summary>
     private static (int Bytes, string? Name)? Framed(
         ProgramAnalysis analysis, IReadOnlyList<StackEntry> entries, int top)
@@ -760,9 +773,10 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// How many bytes a <c>.frame</c> covers: the size of the type it was declared with. The
-    /// symbol may not carry its resolved type, since nothing else asks for it, so when it does
-    /// not the size is looked up in the model of the file that declares the frame.
+    /// Returns how many bytes a <c>.frame</c> covers, which is the size of the type it was
+    /// declared with. The symbol may not carry its resolved type, since nothing else asks for it,
+    /// so when it does not the size is looked up in the model of the file that declares the
+    /// frame.
     /// </summary>
     private static long? Room(ProgramAnalysis analysis, Symbol frame) => frame.Type?.Size
         ?? (frame.TypeExpression is { } named
@@ -770,10 +784,10 @@ internal static class Lsp
             : null);
 
     /// <summary>
-    /// What one register, or one push, may hold. It is a set rather than one answer: a place
-    /// two paths reach may hold the entry value on one of them and something loaded on the
-    /// other, and a reader told only that it is not known cannot see the save that is still
-    /// good. The words are joined rather than collapsed, in that order:
+    /// Describes what one register, or one push, may hold. The description is a set rather than
+    /// one answer. A place two paths reach may hold the entry value on one of them and something
+    /// loaded on the other, and a reader told only that it is not known cannot see the save that
+    /// is still good. The words are joined rather than collapsed, in this order:
     /// <code>
     /// A  X as entered
     /// X  as entered, or new
@@ -782,12 +796,14 @@ internal static class Lsp
     /// </code>
     /// <para>
     /// A 6502 saves X through the accumulator, so the entry value is named by the register it
-    /// came from rather than the one holding it: after <c>txa</c> the accumulator holds what X
+    /// came from rather than the one holding it. After <c>txa</c> the accumulator holds what X
     /// was entered with, and so does the byte a <c>pha</c> puts on the stack.
     /// </para>
     /// </summary>
     /// <param name="value">What may be held.</param>
-    /// <param name="own">The register holding it, whose own entry value needs no naming; null for a push.</param>
+    /// <param name="own">
+    /// The register holding it, whose own entry value needs no naming, or null for a push.
+    /// </param>
     private static string Held(RegisterValue value, Registers? own)
     {
         var words = new List<string>();
@@ -806,13 +822,14 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// The registers a routine or a block preserves, formatted as both the lens and the hover
-    /// show them: <c>A, X, Y, C</c>, <c>X, Y</c>, <c>none</c>. It is a bare list rather than a
-    /// sentence, because it is read at a glance. A lens writes <c>preserves</c> in front of it;
-    /// a hover has a key beside it that says as much.
+    /// Formats the registers a routine or a block preserves as both the lens and the hover show
+    /// them, such as <c>A, X, Y, C</c>, <c>X, Y</c> or <c>none</c>. It is a bare list rather than
+    /// a sentence, because it is read at a glance. A lens puts <c>preserves</c> in front of it,
+    /// and a hover has a key beside it that says as much.
     /// <para>
-    /// What nt65 works out is a lower bound, so where a call could not be followed the list ends with
-    /// <c>?</c>: those registers and perhaps more, which is what <c>?</c> means everywhere else.
+    /// What nt65 computes is a lower bound, so where a call could not be followed the list ends
+    /// with <c>?</c>. That means those registers and perhaps more, which is what <c>?</c> means
+    /// everywhere else.
     /// </para>
     /// </summary>
     internal static string Spell(Registers kept, bool complete)
@@ -823,12 +840,12 @@ internal static class Lsp
         return names.Count == 0 ? "none" : string.Join(", ", names);
     }
 
-    /// <summary>A cycle count as it is shown: <c>4 cycles</c>, or <c>4-5 cycles</c>.</summary>
+    /// <summary>Formats a cycle count as it is shown, such as <c>4 cycles</c> or <c>4-5 cycles</c>.</summary>
     internal static string Spell(CycleCount cycles) =>
         cycles is { IsExact: true, Least: 1 } ? "1 cycle" : $"{cycles} cycles";
 
     /// <summary>
-    /// Where the name at <paramref name="position"/> is declared, or null. The declaration
+    /// Returns where the name at <paramref name="position"/> is declared, or null. The declaration
     /// may be in another file of the program, so the location carries its own URI.
     /// </summary>
     public static Protocol.Location? ToDefinition(ProgramModel program, SemanticModel model, int position) =>
@@ -836,7 +853,7 @@ internal static class Lsp
             ? new Protocol.Location(ToUri(symbol.Tree.Path), ToRange(symbol.Tree, symbol.NameSpan))
             : null;
 
-    /// <summary>Every place the name at <paramref name="position"/> is written, in every file.</summary>
+    /// <summary>Returns every place the name at <paramref name="position"/> appears, in every file.</summary>
     public static IReadOnlyList<Protocol.Location> ToReferences(
         ProgramModel program, SemanticModel model, int position, bool includeDeclaration) =>
         model.ReferenceAt(position) is not { } asked
@@ -846,37 +863,45 @@ internal static class Lsp
                 .Select(found => new Protocol.Location(
                     ToUri(found.File.Tree.Path), ToRange(found.File.Tree, found.Reference.Span)))];
 
-    /// <summary>The same places, for a client to mark while the caret is on one of them.</summary>
+    /// <summary>
+    /// Returns every place in this file where the name at <paramref name="position"/> appears,
+    /// for a client to mark while the caret is on one of them.
+    /// </summary>
     public static IReadOnlyList<Protocol.DocumentHighlight> ToHighlights(SemanticModel model, int position) =>
         [.. Occurrences(model, position).Select(reference => new Protocol.DocumentHighlight(
             ToRange(model.Tree, reference.Span),
             reference.IsDeclaration ? Protocol.DocumentHighlightKind.Write : Protocol.DocumentHighlightKind.Read))];
 
     /// <summary>
-    /// Lines <paramref name="first"/> to <paramref name="last"/> laid out as nt65 writes them,
-    /// one edit per line that changes. Layout is computed over the whole file, but only edits
-    /// for these lines are returned, which is what a client formatting a selection wants.
+    /// Returns the edits that format lines <paramref name="first"/> to <paramref name="last"/> in
+    /// nt65's layout, one edit per line that changes. Layout is computed over the whole file, but
+    /// only edits for these lines are returned, which is what a client formatting a selection
+    /// wants.
     /// </summary>
     public static IReadOnlyList<Protocol.TextEdit> ToFormatting(SyntaxTree tree, int first, int last) =>
         [.. Formatter.Changes(tree, first, last).Select(change => new Protocol.TextEdit(
             ToRange(tree, new TextSpan(change.Start, change.Length)), change.NewText))];
 
-    /// <summary>The name at <paramref name="position"/>, which is what a rename would replace.</summary>
+    /// <summary>
+    /// Returns the range of the name at <paramref name="position"/>, which is what a rename would
+    /// replace, or null where there is no name that can be renamed.
+    /// </summary>
     public static Protocol.Range? ToRenameRange(SemanticModel model, int position) =>
         model.ReferenceAt(position) is { } reference && !IsStandard(reference)
             ? ToRange(model.Tree, reference.Span)
             : null;
 
     /// <summary>
-    /// Whether a reference names what a module that comes with nt65 declares, which no edit can
-    /// rename. An alias written with <c>as</c> is the program's own, and can be.
+    /// Checks whether a reference names something that a module that comes with nt65 declares,
+    /// which no edit can rename. An alias given with <c>as</c> is the program's own, and can be
+    /// renamed.
     /// </summary>
     private static bool IsStandard(SymbolReference reference) =>
         !reference.IsAlias && StandardModules.IsStandard(reference.Symbol.Tree.Path);
 
     /// <summary>
-    /// Renaming every occurrence of the name at <paramref name="position"/>, or the reason
-    /// it cannot be renamed to <paramref name="newName"/>.
+    /// Returns the edit that renames every occurrence of the name at <paramref name="position"/>,
+    /// or the reason it cannot be renamed to <paramref name="newName"/>.
     /// </summary>
     public static (Protocol.WorkspaceEdit? Edit, string? Problem) ToRename(
         ProgramModel program, SemanticModel model, int position, string newName)
@@ -888,7 +913,7 @@ internal static class Lsp
         if (CheckNewName(program.Current(reference.Symbol), newName, reference.IsAlias ? model.FileScope : null) is { } problem)
             return (null, problem);
 
-        // An exported name is written in every file that uses it, so the edit spans the
+        // An exported name appears in every file that uses it, so the edit spans the
         // program rather than the file the caret is in.
         var edits = new Dictionary<string, IReadOnlyList<Protocol.TextEdit>>(StringComparer.Ordinal);
         foreach (var byFile in Renamed(program, model, reference).GroupBy(found => found.File))
@@ -901,10 +926,10 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// Why <paramref name="newName"/> will not do, or null when it will: a rename
-    /// that leaves the file not compiling is not a rename. <paramref name="alias"/> is the
-    /// top level of the module whose <c>.use ... as</c> name is being renamed, where the new
-    /// name has to be free instead.
+    /// Returns why <paramref name="newName"/> is not acceptable, or null when it is, since a
+    /// rename that leaves the file not compiling is not a rename. <paramref name="alias"/> is the
+    /// top level of the module whose <c>.use ... as</c> name is being renamed, where the new name
+    /// must be free instead.
     /// </summary>
     private static string? CheckNewName(Symbol symbol, string newName, Scope? alias)
     {
@@ -931,15 +956,15 @@ internal static class Lsp
         return taken is null || taken == symbol ? null : $"`{newName}` is already declared in this scope";
     }
 
-    /// <summary>Everywhere the symbol at <paramref name="position"/> is written in this file.</summary>
+    /// <summary>Returns every reference in this file to the symbol at <paramref name="position"/>.</summary>
     private static IReadOnlyList<SymbolReference> Occurrences(SemanticModel model, int position) =>
         model.ReferenceAt(position) is { } reference ? model.ReferencesTo(reference.Symbol) : [];
 
     /// <summary>
-    /// The names a rename of <paramref name="reference"/> writes over. An alias from
-    /// <c>.use ... as</c> is written in place of the symbol's own name, so it is renamed
-    /// separately: renaming the symbol leaves aliases alone, and renaming an alias renames only
-    /// the uses in this file written with that same alias.
+    /// Returns the references a rename of <paramref name="reference"/> replaces. An alias from
+    /// <c>.use ... as</c> appears in place of the symbol's own name, so it is renamed separately.
+    /// Renaming the symbol leaves aliases alone, and renaming an alias renames only the uses in
+    /// this file that use that same alias.
     /// </summary>
     private static IEnumerable<(SemanticModel File, SymbolReference Reference)> Renamed(
         ProgramModel program, SemanticModel model, SymbolReference reference)
@@ -970,15 +995,15 @@ internal static class Lsp
     }
 
     /// <summary>
-    /// A value as the hover grid shows it. A number is written in hexadecimal, which is how an
-    /// address or a mask is read; since it may also be a count, the decimal is shown beside it
-    /// from ten upward, below which the two are the same digit.
+    /// Formats a value as the hover grid shows it. A number is shown in hexadecimal, which is how
+    /// an address or a mask is read. Since it may also be a count, the decimal is shown beside it
+    /// from ten upward, because below ten the two are the same digit.
     /// </summary>
     private static string Spell(Value value) => value.AsNumber() is { } number && number >= 10
         ? $"{value} ({number.ToString(CultureInfo.InvariantCulture)})"
         : value.ToString();
 
-    /// <summary>An address size as the language writes it.</summary>
+    /// <summary>Formats an address size in the language's syntax.</summary>
     private static string Spell(AddressSize size) => size switch
     {
         AddressSize.ZeroPage => "zp",
@@ -1007,7 +1032,7 @@ internal static class Lsp
             ToRange(tree, item.NameSpan),
             item.Children.Count == 0 ? null : ToSymbols(tree, item.Children)))];
 
-    /// <summary>A diagnostic span, which is 1-based and on one line, as a 0-based range.</summary>
+    /// <summary>Converts a diagnostic span, which is 1-based and on one line, to a 0-based range.</summary>
     private static Protocol.Range ToRange(Span span) => new(
         new Protocol.Position(span.Line - 1, span.StartColumn - 1),
         new Protocol.Position(span.Line - 1, span.EndColumn - 1));
@@ -1042,20 +1067,24 @@ internal static class Lsp
     };
 
     /// <summary>
-    /// What the URI of a module that comes with nt65 starts with. No file holds one, so the
-    /// client asks the server for its text (<c>nt65/standardModule</c>) and shows it read-only.
+    /// The prefix of the URI of a module that comes with nt65. No file holds such a module, so
+    /// the client asks the server for its text (<c>nt65/standardModule</c>) and shows it
+    /// read-only.
     /// </summary>
     internal const string StandardScheme = "nt65:/";
 
-    /// <summary>The logical path of the module that comes with nt65 at <paramref name="uri"/>, or null for any other URI.</summary>
+    /// <summary>
+    /// Returns the logical path of the module that comes with nt65 at <paramref name="uri"/>, or
+    /// null for any other URI.
+    /// </summary>
     internal static string? StandardPath(string uri) =>
         uri.StartsWith(StandardScheme, StringComparison.Ordinal) ? StandardModules.PathOf(uri[StandardScheme.Length..]) : null;
 
     /// <summary>
-    /// A logical path converted back to a URI, as for a diagnostic that points into another
-    /// file. A Windows path parses as an absolute URI, drive letter and all, wherever nt65 is
-    /// running; a rooted Unix path does not parse as a URI on any host, so a file URI is built
-    /// for it. A relative path is one the editor supplied and is returned unchanged.
+    /// Converts a logical path back to a URI, as for a diagnostic that points into another file.
+    /// A Windows path parses as an absolute URI, drive letter and all, wherever nt65 is running.
+    /// A rooted Unix path does not parse as a URI on any host, so a file URI is built for it. A
+    /// relative path is one the editor supplied and is returned unchanged.
     /// </summary>
     internal static string ToUri(string path) =>
         StandardModules.IsStandard(path) ? StandardScheme + StandardModules.FileOf(path)
@@ -1065,41 +1094,43 @@ internal static class Lsp
                 : path;
 
     /// <summary>
-    /// One hover's text, in the order it is read: the line under the caret in the language's
-    /// own syntax, the comment its author left above it, the facts that kind of thing is asked
-    /// about most, a rule, and everything else the analysis worked out under it. A zone with
-    /// nothing in it is left out, and where nothing leads there is no rule either.
+    /// Builds one hover's text, in the order it is read. The text is the line under the caret in
+    /// the language's own syntax, the comment its author left above it, the facts that kind of
+    /// thing is asked about most, a rule, and everything else the analysis worked out under it. A
+    /// zone with nothing in it is left out, and where nothing leads there is no rule either.
     /// <para>
-    /// The caller decides which keys lead. Rows keep the order they were written in on both
-    /// sides of the rule, so a fact appears in the same relative place from one hover to the
-    /// next. Both grids pad their keys to the same width, so the values line up across the rule.
+    /// The caller decides which keys lead. Rows keep the order they were added in on both sides
+    /// of the rule, so a fact appears in the same relative place from one hover to the next. Both
+    /// grids pad their keys to the same width, so the values line up across the rule.
     /// </para>
     /// <para>
-    /// A row whose fact is not known is left out rather than written as unknown, so the grid
-    /// is only what is known.
+    /// A row whose fact is not known is left out rather than shown as unknown, so the grid holds
+    /// only what is known.
     /// </para>
     /// </summary>
-    /// <param name="headline">The line under the caret, as the language writes it.</param>
+    /// <param name="headline">The line under the caret, in the language's syntax.</param>
     /// <param name="asked">The keys of the rows that stand above the rule.</param>
     private sealed class Card(string headline, IReadOnlySet<string> asked)
     {
-        /// <summary>How many spaces separate the longest key from the values.</summary>
+        /// <summary>The number of spaces that separate the longest key from the values.</summary>
         private const int Gutter = 2;
 
         /// <summary>
-        /// The rows, a null standing for a blank line between two groups of them, each marked
-        /// with whether it leads.
+        /// The rows, each marked with whether it leads, where a null row stands for a blank line
+        /// between two groups of rows.
         /// </summary>
         private readonly List<((string Key, string Value)? Row, bool Leads)> rows = [];
 
         private string? prose;
 
-        /// <summary>Whether the last row written leads; a following row with an empty key inherits this.</summary>
+        /// <summary>
+        /// Whether the last row added leads. A following row with an empty key inherits this.
+        /// </summary>
         private bool leading;
 
         /// <summary>
-        /// One row of the grid, left out when there is nothing to say. A row with an empty key
-        /// continues the row above it, which is how one fact spans several lines.
+        /// Adds one row to the grid, or nothing when there is nothing to say. A row with an empty
+        /// key continues the row above it, which is how one fact spans several lines.
         /// </summary>
         public void Row(string key, string? value)
         {
@@ -1110,10 +1141,12 @@ internal static class Lsp
             rows.Add(((key, value), leading));
         }
 
-        /// <summary>A blank line between two groups of rows, which keeps them in the same columns.</summary>
+        /// <summary>
+        /// Adds a blank line between two groups of rows, which keeps them in the same columns.
+        /// </summary>
         public void Gap() => rows.Add((null, leading));
 
-        /// <summary>The comment written above the declaration, which is what its author had to say.</summary>
+        /// <summary>Sets the comment above the declaration, which is what its author had to say.</summary>
         public void Prose(string? written) => prose = written;
 
         /// <inheritdoc/>

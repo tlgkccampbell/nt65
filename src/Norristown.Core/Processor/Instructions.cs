@@ -5,9 +5,9 @@ using static Norristown.Syntax.MnemonicKind;
 namespace Norristown.Processor;
 
 /// <summary>
-/// Which addressing modes each mnemonic has, on each CPU, and how long each one is. Syntax
-/// does not depend on the CPU, so every form parses everywhere and this table is what says
-/// whether the target actually has it.
+/// Records which addressing modes each mnemonic has on each CPU, and how many bytes each mode
+/// takes. Syntax does not depend on the CPU, so every form parses on every CPU, and this table
+/// decides whether the target actually has it.
 /// </summary>
 public static class Instructions
 {
@@ -26,23 +26,31 @@ public static class Instructions
     private static readonly FrozenDictionary<MnemonicKind, InstructionFacts> facts = BuildFacts();
 
     /// <summary>
-    /// What <paramref name="mnemonic"/> is, beyond which modes it has: what it does to the
-    /// path, what it pushes or pulls, and which registers it leaves changed.
+    /// Returns the facts about <paramref name="mnemonic"/> beyond which modes it has, including
+    /// how it affects control flow, what it pushes or pulls, and which registers it leaves
+    /// changed.
     /// </summary>
     public static InstructionFacts Facts(MnemonicKind mnemonic) =>
         facts.GetValueOrDefault(mnemonic, InstructionFacts.None);
 
-    /// <summary>Whether <paramref name="cpu"/> has <paramref name="mnemonic"/> at all.</summary>
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="cpu"/> has <paramref name="mnemonic"/>
+    /// at all.
+    /// </summary>
     public static bool Has(Cpu cpu, MnemonicKind mnemonic) => Modes(cpu, mnemonic).Count > 0;
 
     /// <summary>
-    /// Whether a program built for <paramref name="cpu"/> may write <paramref name="mnemonic"/>:
-    /// the CPU's own instructions, and the long branches, which nt65 writes on every CPU.
+    /// Returns a value indicating whether a program built for <paramref name="cpu"/> may use
+    /// <paramref name="mnemonic"/>. A program may use the CPU's own instructions and the long
+    /// branches, which nt65 emits on every CPU.
     /// </summary>
     public static bool Writable(Cpu cpu, MnemonicKind mnemonic) =>
         Has(cpu, mnemonic) || SyntaxFacts.IsLongBranch(mnemonic);
 
-    /// <summary>The modes <paramref name="mnemonic"/> has on <paramref name="cpu"/>, empty if it has none.</summary>
+    /// <summary>
+    /// Returns the modes <paramref name="mnemonic"/> has on <paramref name="cpu"/>, or an empty
+    /// set if it has none.
+    /// </summary>
     public static IReadOnlySet<AddressingMode> Modes(Cpu cpu, MnemonicKind mnemonic)
     {
         var table = cpu switch
@@ -58,9 +66,10 @@ public static class Instructions
     }
 
     /// <summary>
-    /// How many bytes an instruction in <paramref name="mode"/> takes: the opcode and its
-    /// operand. An immediate is one byte here; on the 65816 the immediate of an instruction
-    /// <see cref="SizedBy"/> names a register for is as wide as that register.
+    /// Returns how many bytes an instruction in <paramref name="mode"/> takes, counting the
+    /// opcode and its operand. An immediate counts as one byte here. On the 65816, the immediate
+    /// of an instruction for which <see cref="SizedBy"/> names a register is as wide as that
+    /// register.
     /// </summary>
     public static int Length(AddressingMode mode) => mode switch
     {
@@ -74,14 +83,15 @@ public static class Instructions
     };
 
     /// <summary>
-    /// The register whose width sizes <paramref name="mnemonic"/>'s immediate on the 65816,
-    /// or null when its immediate is always one byte.
+    /// Returns the register whose width sizes <paramref name="mnemonic"/>'s immediate on the
+    /// 65816, or null if its immediate is always one byte.
     /// </summary>
     public static WidthRegister? SizedBy(MnemonicKind mnemonic) => Facts(mnemonic).SizedBy;
 
     /// <summary>
-    /// How wide the address in an operand of this mode is, or null where the mode carries no
-    /// address to size: one byte for the direct page, two for absolute and three for long.
+    /// Returns how wide the address in an operand of <paramref name="mode"/> is, or null if the
+    /// mode has no address to size. The width is one byte for the direct page, two for absolute
+    /// and three for long.
     /// </summary>
     public static AddressSize? Width(AddressingMode mode) => mode switch
     {
@@ -96,7 +106,10 @@ public static class Instructions
         _ => null,
     };
 
-    /// <summary>The <c>z:</c>, <c>a:</c> or <c>f:</c> that makes a mode's width explicit.</summary>
+    /// <summary>
+    /// Returns the <c>z:</c>, <c>a:</c> or <c>f:</c> prefix that makes the width of
+    /// <paramref name="mode"/> explicit, or null if the mode has no address to size.
+    /// </summary>
     public static string? Prefix(AddressingMode mode) => Width(mode) switch
     {
         AddressSize.ZeroPage => "z:",
@@ -106,16 +119,18 @@ public static class Instructions
     };
 
     /// <summary>
-    /// Whether a mnemonic's operand names a place to reach rather than an address to size, so
-    /// what it takes is a near or a far target: every jump, call and branch, and <c>per</c>,
-    /// which reaches its target the way <c>brl</c> does and pushes it.
+    /// Returns a value indicating whether <paramref name="mnemonic"/>'s operand names a place to
+    /// reach rather than an address to size, so that it takes a near or a far target. This is
+    /// true of every jump, call and branch, and of <c>per</c>, which reaches its target the way
+    /// <c>brl</c> does and pushes it.
     /// </summary>
     public static bool IsControlTransfer(MnemonicKind mnemonic) =>
         Facts(mnemonic).Control is Control.Branches or Control.Jumps or Control.Calls || mnemonic == Per;
 
     /// <summary>
-    /// The two short branches a long branch is written with: the one it takes when the
-    /// target is in reach, and its opposite, which skips the <c>jmp</c> when it is not.
+    /// Returns the two short branches a long branch is emitted with. <c>Taken</c> is the branch
+    /// used when the target is in reach, and <c>Skipped</c> is its opposite, which skips over the
+    /// <c>jmp</c> when the target is out of reach.
     /// </summary>
     public static (MnemonicKind Taken, MnemonicKind Skipped) FormsOf(MnemonicKind mnemonic) => mnemonic switch
     {
@@ -131,8 +146,9 @@ public static class Instructions
     };
 
     /// <summary>
-    /// The long branch that takes the place of <paramref name="mnemonic"/> where its target is
-    /// out of reach, or null for anything that is not one of the eight conditional branches.
+    /// Returns the long branch that replaces <paramref name="mnemonic"/> where its target is out
+    /// of reach, or null if <paramref name="mnemonic"/> is not one of the eight conditional
+    /// branches.
     /// </summary>
     public static MnemonicKind? LongFormOf(MnemonicKind mnemonic) => mnemonic switch
     {
@@ -148,17 +164,18 @@ public static class Instructions
     };
 
     /// <summary>
-    /// What each mnemonic is. The groups follow the questions later passes ask: what
-    /// writes which register, what moves one to another, what it does to the path, what stores, what
-    /// the stack instructions move, and what the 65816 sizes by a width.
+    /// Builds a set of facts describing each mnemonic's behavior, shaped to enable the analyses
+    /// performed by later passes. Includes which registers each mnemonic writes, which transfer
+    /// one register to another, how each affects control flow, which store to memory, what the
+    /// stack instructions move, and which immediates the 65816 sizes by a register's width.
     /// </summary>
     private static FrozenDictionary<MnemonicKind, InstructionFacts> BuildFacts()
     {
         var table = new Dictionary<MnemonicKind, InstructionFacts>();
 
-        // A shift or an increment through the accumulator writes it and one through memory
-        // does not, and which flags a `rep` or a `sep` names is in its operand; this is the
-        // widest each of them can write, and the mode and the operand narrow it.
+        // A shift or an increment through the accumulator writes it, and one through memory
+        // does not. Which flags a `rep` or a `sep` names depends on its operand. These entries
+        // are the widest set each can write, and the mode and the operand narrow it.
         Fact(table, [Lda, Pla, Txa, Tya, Tdc, Tsc, Xba, And, Ora, Eor], f => f with { Writes = Registers.A });
         Fact(table, [Adc, Sbc, Asl, Lsr, Rol, Ror], f => f with { Writes = Registers.A | Registers.C });
         Fact(table, [Inc, Dec], f => f with { Writes = Registers.A });
@@ -179,8 +196,8 @@ public static class Instructions
         Fact(table, [Txy], f => f with { Copies = (Registers.X, Registers.Y) });
         Fact(table, [Tyx], f => f with { Copies = (Registers.Y, Registers.X) });
 
-        // A software interrupt is not among these: `brk` and `cop` come back to the instruction
-        // after them, whatever the handler did to the registers on the way.
+        // A software interrupt is not among these, because `brk` and `cop` return to the
+        // instruction after them, no matter what the handler did to the registers.
         Fact(table, [Bcc, Bcs, Beq, Bmi, Bne, Bpl, Bvc, Bvs], f => f with { Control = Control.Branches });
         Fact(table, [Jeq, Jne, Jcs, Jcc, Jmi, Jpl, Jvs, Jvc], f => f with { Control = Control.Branches });
         for (var bit = 0; bit < 8; bit++)
@@ -269,23 +286,24 @@ public static class Instructions
     }
 
     /// <summary>
-    /// The NMOS 6502's undocumented opcodes, in ca65's spellings and its forms, which is what
-    /// the output has to assemble as. They are not a documented instruction set: no datasheet
-    /// lists them, and which of them a given part runs the same way is a fact about its silicon.
-    /// What nt65 takes from ca65 is the names, the modes and the encodings; what each does, and
-    /// what it costs, is taken from how NMOS parts behave, and left out where parts disagree.
+    /// Builds the table for the 6502X, which adds the NMOS 6502's undocumented opcodes with
+    /// ca65's names and forms, because the output has to assemble under ca65. They are not a
+    /// documented instruction set. No datasheet lists them, and which of them a given part runs
+    /// the same way is a fact about its silicon. nt65 takes the names, the modes and the
+    /// encodings from ca65. It takes what each opcode does, and what it costs, from how NMOS
+    /// parts behave, and leaves out anything on which parts disagree.
     /// <para>
-    /// One documented instruction also gains modes: <c>nop</c> takes the operands its
-    /// undocumented encodings read, so <c>nop $12</c> and <c>nop abs,x</c> are valid here and
-    /// on no other CPU.
+    /// One documented instruction also gains modes. <c>nop</c> takes the operands its
+    /// undocumented encodings read, so <c>nop $12</c> and <c>nop abs,x</c> are valid on this CPU
+    /// and on no other.
     /// </para>
     /// </summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build6502X()
     {
         var table = Copy(mos6502);
 
-        // The read-modify-write pairs, each an official instruction folded into another: they
-        // take every mode the store they are built on takes.
+        // The read-modify-write pairs, each an official instruction folded into another. They
+        // take every mode that the store they are built on takes.
         Add(table, [Slo, Rla, Sre, Rra, Dcp, Isc],
             AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX,
             AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
@@ -295,7 +313,8 @@ public static class Instructions
         Add(table, [Sax],
             AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute, AddressingMode.DirectIndirectX);
 
-        // The immediate-only ones, which pass A through an operation and the carry or the flags.
+        // The opcodes that take only an immediate, which pass A through an operation and the
+        // carry or the flags.
         Add(table, [Alr, Anc, Ane, Arr, Axs], AddressingMode.Immediate);
 
         // The unstable stores, which mix the high byte of their own address into what they write.
@@ -303,7 +322,8 @@ public static class Instructions
         Add(table, [Shx, Tas, Las], AddressingMode.AbsoluteY);
         Add(table, [Shy], AddressingMode.AbsoluteX);
 
-        // The several opcodes that stop the processor share one mnemonic, `jam`, as ca65 spells it.
+        // The several opcodes that stop the processor share one mnemonic, `jam`, which is ca65's
+        // name for them.
         Add(table, [Jam], AddressingMode.Implied);
         Add(table, [Nop],
             AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
@@ -326,7 +346,10 @@ public static class Instructions
         return Freeze(table);
     }
 
-    /// <summary>The Rockwell bit instructions, which the 65SC02 and the 65816 do not have.</summary>
+    /// <summary>
+    /// Builds the table for the Rockwell 65C02, which adds the bit instructions that the 65SC02
+    /// and the 65816 do not have.
+    /// </summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> BuildRockwell()
     {
         var table = Copy(cmos65SC02);
@@ -338,11 +361,11 @@ public static class Instructions
         return Freeze(table);
     }
 
-    /// <summary>WDC's 65C02 adds <c>wai</c> and <c>stp</c> to Rockwell's.</summary>
+    /// <summary>Builds the table for WDC's 65C02, which adds <c>wai</c> and <c>stp</c> to Rockwell's.</summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build65C02()
     {
-        // WDC's own 65C02 also has `jsr (abs,x)` at $fc, and ca65 does not take it before the
-        // 65816, so neither does nt65: what nt65 writes has to be what ca65 assembles.
+        // WDC's own 65C02 also has `jsr (abs,x)` at $fc, but ca65 does not accept it before the
+        // 65816, so neither does nt65, because what nt65 writes has to be what ca65 assembles.
         var table = Copy(rockwell65C02);
         Add(table, [Stp, Wai], AddressingMode.Implied);
         return Freeze(table);
@@ -364,7 +387,7 @@ public static class Instructions
         Add(table, [Pea], AddressingMode.Absolute);
         Add(table, [Pei], AddressingMode.DirectIndirect);
 
-        // `cop` takes a signature byte as `brk` does, and `wdm` the byte an emulator hooks on.
+        // `cop` takes a signature byte as `brk` does, and `wdm` takes the byte an emulator hooks on.
         Add(table, [Rep, Sep, Cop, Wdm], AddressingMode.Immediate);
         Add(table, [Phb, Phd, Phk, Plb, Pld, Rtl, Tcd, Tcs, Tdc, Tsc, Txy, Tyx, Xba, Xce], AddressingMode.Implied);
         return Freeze(table);

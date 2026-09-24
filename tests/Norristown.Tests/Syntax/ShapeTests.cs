@@ -8,11 +8,11 @@ using GreenToken = Norristown.Syntax.InternalSyntax.GreenToken;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// Every node the parser builds has the shape its row in the node table describes: it is its
-/// kind's own green class, it has a slot for each piece in source order, a required slot holds
-/// something, and what a slot holds is the type or one of the kinds the table names. The check
-/// runs over every source in the repository and every way of cutting its lines short, so a node
-/// the parser builds only from a half-written line is checked too.
+/// Checks that every node the parser builds has the shape its row in the node table describes.
+/// The node is its kind's own green class and has a slot for each child element in source order.
+/// A required slot holds something, and what a slot holds is the type or one of the kinds the
+/// table names. The check runs over every source in the repository and every way of cutting its
+/// lines short, so a node the parser builds only from a half-written line is checked too.
 /// </summary>
 public sealed class ShapeTests
 {
@@ -36,7 +36,7 @@ public sealed class ShapeTests
 
     /// <summary>
     /// Records in <paramref name="problems"/> what is wrong with <paramref name="green"/>, if
-    /// anything, keyed by its kind; only the first problem found for a kind is kept.
+    /// anything, keyed by its kind. Only the first problem found for a kind is kept.
     /// </summary>
     private static void Check(NodeTree table, GreenNode green, SortedDictionary<string, string> problems)
     {
@@ -72,7 +72,10 @@ public sealed class ShapeTests
         }
     }
 
-    /// <summary>What <paramref name="held"/> is, when it is not what <paramref name="slot"/> takes.</summary>
+    /// <summary>
+    /// Returns a description of <paramref name="held"/> when it is not what
+    /// <paramref name="slot"/> takes, or null when it is.
+    /// </summary>
     private static string? Wrong(NodeTree table, NodeSlot slot, GreenNode held)
     {
         switch (slot.List)
@@ -100,7 +103,10 @@ public sealed class ShapeTests
         return Wrong(table, held, slot.BareType);
     }
 
-    /// <summary>What <paramref name="held"/> is, when it is not a <paramref name="wanted"/>.</summary>
+    /// <summary>
+    /// Returns a description of <paramref name="held"/> when it is not a
+    /// <paramref name="wanted"/>, or null when it is.
+    /// </summary>
     private static string? Wrong(NodeTree table, GreenNode held, string wanted)
     {
         if (wanted == "SyntaxNode")

@@ -9,21 +9,27 @@ namespace Norristown.Tests.Emit;
 /// start of a line as an instruction, so a bare definition with that name is output ca65
 /// rejects, and output ca65 rejects is always an nt65 bug.
 /// <para>
-/// It runs over what a caller has already compiled — every fixture, every corpus program —
-/// rather than compiling anything of its own, so it adds no compilation to the suite.
+/// The check runs over output a caller has already compiled, such as every fixture and every
+/// corpus program. It compiles nothing of its own, so it adds no compilation to the suite.
 /// </para>
 /// </summary>
 internal static partial class BareNames
 {
-    /// <summary>A name defined at the start of a line: a label, an assignment, or the <c>z := *</c> nt65 writes for a label named <c>z</c>.</summary>
+    /// <summary>
+    /// Matches a name defined at the start of a line. The definition is a label, an assignment,
+    /// or the <c>z := *</c> that nt65 writes for a label named <c>z</c>.
+    /// </summary>
     [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*(?::=|:|=)")]
     private static partial Regex Defined();
 
-    /// <summary>The <c>.setcpu</c> the output's own header writes.</summary>
+    /// <summary>Matches the <c>.setcpu</c> line that the output's own header writes.</summary>
     [GeneratedRegex(@"^\.setcpu\s+""(?<cpu>[^""]+)""")]
     private static partial Regex SetCpu();
 
-    /// <summary>Every way <paramref name="text"/> defines a name ca65 would read as an instruction.</summary>
+    /// <summary>
+    /// Returns a problem for each line of <paramref name="text"/> that defines a name ca65 would
+    /// read as an instruction.
+    /// </summary>
     public static IEnumerable<string> Problems(string label, string path, string text)
     {
         var lines = text.ReplaceLineEndings("\n").Split('\n');
@@ -41,7 +47,10 @@ internal static partial class BareNames
         }
     }
 
-    /// <summary>The CPU the output says it is for, or null for a file with no header, such as a line map.</summary>
+    /// <summary>
+    /// Returns the CPU that the output's header names, or null if the file has no header. A line
+    /// map, for example, has none.
+    /// </summary>
     private static Cpu? Cpu(string[] lines)
     {
         foreach (var line in lines)

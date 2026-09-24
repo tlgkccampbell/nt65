@@ -2,7 +2,7 @@ using Norristown.Semantics;
 
 namespace Norristown.Tests.Semantics;
 
-/// <summary>The scoping rules, one test per rule.</summary>
+/// <summary>Checks the scoping rules, one test per rule.</summary>
 public sealed class BindingTests
 {
     [Fact]
@@ -103,7 +103,10 @@ public sealed class BindingTests
         Assert.Equal(ScopeKind.Proc, model.Symbol("@done").Scope.Kind);
     }
 
-    /// <summary>Code in a nested scope can branch to a cheap local of its enclosing proc: cheap locals are looked up outward.</summary>
+    /// <summary>
+    /// Code in a nested scope can branch to a cheap local of its enclosing proc, because cheap
+    /// locals are looked up outward.
+    /// </summary>
     [Fact]
     public void ACheapLocalIsFoundOutwardThroughScopes()
     {
@@ -323,8 +326,8 @@ public sealed class BindingTests
     }
 
     /// <summary>
-    /// Every bank range of a <c>mirrors</c> names constants, not only the first: each of them
-    /// is resolved where the segment is declared.
+    /// Every bank range of a <c>mirrors</c> names constants, not only the first. Each of them is
+    /// resolved where the segment is declared.
     /// </summary>
     [Fact]
     public void EveryBankRangeOfAMirrorsNamesConstants()

@@ -1,13 +1,13 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// <c>.repeat</c> and <c>.each</c>: how many turns (iterations) a body stands for, what its
-/// bound name's value is on each of them, and what is written out.
+/// Checks <c>.repeat</c> and <c>.each</c>, including how many iterations a body stands for, what
+/// its bound name's value is on each of them, and what is written out.
 /// </summary>
 public sealed class RepetitionTests
 {
     /// <summary>
-    /// The index counts from zero, so this table is the eight single-bit values. Every turn
+    /// The index counts from zero, so this table is the eight single-bit values. Every iteration
     /// came out as the same line in terms of the index, so the output writes it once, inside a
     /// ca65 <c>.repeat</c> whose counter also counts from zero.
     /// </summary>
@@ -96,8 +96,8 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// Each turn can change how much room a line takes, not just what it says, so each turn's
-    /// line is sized on its own.
+    /// Each iteration can change how much room a line takes, not just what it says, so each
+    /// iteration's line is sized on its own.
     /// </summary>
     [Fact]
     public void ATurnDecidesHowMuchRoomALineTakes()
@@ -109,7 +109,10 @@ public sealed class RepetitionTests
             Lines(main, ".res").Select(line => line[".res".Length..].Split(';')[0].Trim()));
     }
 
-    /// <summary>A count nt65 cannot work out, a negative count, and an <c>.each</c> over something that is neither a list nor an enum.</summary>
+    /// <summary>
+    /// A count nt65 cannot work out, a negative count, and an <c>.each</c> over something that is
+    /// neither a list nor an enum are each reported.
+    /// </summary>
     [Theory]
     [InlineData(".data here: .byte 0\n.data t: .byte[] {\n.repeat here, i {\n    i\n}\n}\n", "a `.repeat` count must be a constant")]
     [InlineData("SIZE = -1\n.data t: .byte[] {\n.repeat SIZE, i {\n    i\n}\n}\n", "a `.repeat` count cannot be negative, and this one is -1")]
@@ -121,7 +124,7 @@ public sealed class RepetitionTests
 
     /// <summary>
     /// A block whose opener is no repetition at all — a <c>.repeat</c> written after a label,
-    /// which the parser refuses — stands for no turns, and nothing is reported beyond the
+    /// which the parser refuses — stands for no iterations, and nothing is reported beyond the
     /// parser's error.
     /// </summary>
     [Fact]
@@ -133,8 +136,8 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// What a repetition declares is its own on every turn, as a macro expansion's is, so each
-    /// turn's label gets a name of its own in the output.
+    /// What a repetition declares is its own on every iteration, as a macro expansion's is, so
+    /// each iteration's label gets a name of its own in the output.
     /// </summary>
     [Fact]
     public void ANameDeclaredInsideARepetitionIsOneNamePerTurn()
@@ -148,8 +151,8 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// A repetition whose turns all came out as the same lines is written once, however many turns
-    /// there are; the clearest case is a table of the index values themselves.
+    /// A repetition whose iterations all came out as the same lines is written once, no matter how
+    /// many iterations there are. The clearest case is a table of the index values themselves.
     /// </summary>
     [Fact]
     public void ARepetitionSaidOnceIsThreeLinesHoweverManyTurnsItRuns()
@@ -161,9 +164,9 @@ public sealed class RepetitionTests
     }
 
     /// <summary>
-    /// A repetition is unrolled first, and is written once only if every turn came out the same:
-    /// turns that differ in a decision nt65 made — here how much room each line takes — are all
-    /// written out, because a ca65 <c>.repeat</c> could not express them.
+    /// A repetition is unrolled first, and is written once only if every iteration came out the
+    /// same. Iterations that differ in a decision nt65 made, here how much room each line takes,
+    /// are all written out, because a ca65 <c>.repeat</c> could not express them.
     /// </summary>
     [Fact]
     public void TurnsThatCameOutDifferentlyAreAllWrittenOut()
@@ -174,7 +177,10 @@ public sealed class RepetitionTests
         Assert.DoesNotContain(".endrep", main);
     }
 
-    /// <summary>Two turns read no better as a <c>.repeat</c> than written out, so it takes three turns to be written once.</summary>
+    /// <summary>
+    /// Two iterations read no better as a <c>.repeat</c> than unrolled, so a repetition needs
+    /// three iterations to be written once.
+    /// </summary>
     [Fact]
     public void TwoTurnsAreWrittenOut()
     {
@@ -184,7 +190,7 @@ public sealed class RepetitionTests
         Assert.Equal(["nop", "nop"], Lines(main, "nop"));
     }
 
-    /// <summary>The output for <paramref name="text"/>, which is placed in the code segment.</summary>
+    /// <summary>Returns the output for <paramref name="text"/>, which is put in the code segment.</summary>
     private static string Output(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     private static IReadOnlyList<string> Lines(string output, string directive) =>

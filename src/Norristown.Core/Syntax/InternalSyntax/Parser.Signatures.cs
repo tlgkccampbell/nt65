@@ -2,11 +2,11 @@ using System.Collections.Immutable;
 
 namespace Norristown.Syntax.InternalSyntax;
 
-// The processor state a signature is written in, which a proc, an extern proc, a macro, an
+// Parses the processor state that a signature gives, which a proc, an extern proc, a macro, an
 // import and the `.state` and `.ensure` directives all take.
 internal sealed partial class Parser
 {
-    /// <summary>The <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
+    /// <summary>Parses the <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
     private ProcSignatureSyntax ParseSignature()
     {
         var colon = Advance();
@@ -80,12 +80,12 @@ internal sealed partial class Parser
         }
         else if (name.Text.Equals("args", StringComparison.OrdinalIgnoreCase))
         {
-            // `args n`: how many bytes the caller pushes before the call.
+            // `args n` gives how many bytes the caller pushes before the call.
             return new StateValueItemSyntax(name, null, ParseExpression());
         }
         else if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))
         {
-            // `inline n` or `inline .strz`: how much data follows each call.
+            // `inline n` or `inline .strz` gives how much data follows each call.
             return Kind == SyntaxKind.Directive && Current.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase)
                 ? new StateInlineItemSyntax(name, Advance())
                 : new StateValueItemSyntax(name, null, ParseExpression());
@@ -98,7 +98,7 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The registers of a <c>keeps a, x</c>. A bare register name is not an item anywhere else
+    /// Parses the registers of a <c>keeps a, x</c>. A bare register name is not an item anywhere else
     /// in a signature, so the list continues through the commas that also separate the
     /// signature's own items, and stops at the first comma followed by anything else.
     /// </summary>
@@ -119,7 +119,10 @@ internal sealed partial class Parser
         return new GreenSeparatedList(pieces.ToImmutable());
     }
 
-    /// <summary>Whether the token at <paramref name="at"/> names a register a <c>keeps</c> may take.</summary>
+    /// <summary>
+    /// Returns a value indicating whether the token at <paramref name="at"/> names a register that
+    /// a <c>keeps</c> may take.
+    /// </summary>
     private bool AtKeptRegister(int at) =>
         at < tokens.Length && tokens[at].Kind is SyntaxKind.Identifier or SyntaxKind.Register
         && SyntaxFacts.IsKeptRegister(tokens[at].Text);

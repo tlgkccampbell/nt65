@@ -6,18 +6,17 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// The 65816's register widths, emulation flag, direct page and data bank, tracked through
-/// each routine. 65816 code cannot be written without them: the widths decide how wide an
-/// immediate is, and D and B what memory an operand reaches. The analysis stays small because
-/// the language keeps it inside one routine: every routine declares its state at entry and
-/// exit, and control either stays in the routine or goes to another routine's entry.
+/// Tracks the 65816's register widths, emulation flag, direct page and data bank through each
+/// routine. 65816 code cannot be written without them. The widths decide how wide an immediate
+/// is, and D and B decide what memory an operand reaches. The analysis stays small because the
+/// language keeps it inside one routine. Every routine declares its state at entry and exit, and
+/// control either stays in the routine or goes to another routine's entry.
 /// <para>
-/// Each region's blocks are run to a fixed point over a lattice of known values and
-/// unknown, starting from the routine's signature and from every label a <c>.state</c>
-/// declares. What is reported comes from one pass over the converged states: a merge never
-/// reports, and an unknown value is an error only where it is used. What this type works out
-/// is what each statement does to the state; <see cref="StateChecks"/> is what says what is
-/// wrong with it.
+/// Each region's blocks are run to a fixed point over a lattice of known values and unknown,
+/// starting from the routine's signature and from every label a <c>.state</c> declares. What is
+/// reported comes from one pass over the converged states. A merge never reports, and an unknown
+/// value is an error only where it is used. This type works out what each statement does to the
+/// state, and <see cref="StateChecks"/> reports what is wrong with it.
 /// </para>
 /// </summary>
 public sealed class StateAnalysis : IProcessorStates
@@ -31,7 +30,7 @@ public sealed class StateAnalysis : IProcessorStates
     private readonly Dictionary<(int Position, Expansion? On), int> slots = [];
 
     // The state at the start of each expansion of a macro with a signature, and of each block
-    // spliced into one: a spliced block's end is checked against it, and a macro's exit state
+    // spliced into one. A spliced block's end is checked against it, and a macro's exit state
     // takes its unchanged parts from it.
     private readonly Dictionary<(int Position, Expansion? On), ProcessorState> started = [];
 
@@ -44,12 +43,12 @@ public sealed class StateAnalysis : IProcessorStates
         outside = new OutsideEntries(model, layout);
     }
 
-    /// <summary>What is wrong with the widths, the mode and the calls in this file.</summary>
+    /// <summary>Gets what is wrong with the widths, the mode and the calls in this file.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
 
     /// <summary>
-    /// The most times any one block was walked before its region settled, counting the walk
-    /// that found nothing had changed. This is what measures how quickly the analysis
+    /// Gets the most times any one block was walked before its region reached a fixed point,
+    /// counting the walk that found nothing had changed. This measures how quickly the analysis
     /// converges.
     /// </summary>
     public int MostWalks { get; private set; }
@@ -73,35 +72,35 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// The state reaching <paramref name="statement"/> on the writing <paramref name="on"/>,
-    /// or null where nothing reaches it or it is in no routine.
+    /// Returns the state reaching <paramref name="statement"/> in the expansion
+    /// <paramref name="on"/>, or null where nothing reaches it or it is in no routine.
     /// </summary>
     public FlowState? Before(SyntaxNode statement, Expansion? on = null) =>
         reaching.GetValueOrDefault((statement.Position, on));
 
     /// <summary>
-    /// The <c>n</c> of <c>n,s</c> that the frame slot in <paramref name="statement"/>'s operand
-    /// comes to on the writing <paramref name="on"/>, or null where it names no slot or the
-    /// slot is not known.
+    /// Returns the <c>n</c> of <c>n,s</c> that the frame slot in <paramref name="statement"/>'s
+    /// operand comes to in the expansion <paramref name="on"/>. It returns null where the operand
+    /// names no slot or the slot is not known.
     /// </summary>
     public int? SlotAt(SyntaxNode statement, Expansion? on = null) =>
         slots.TryGetValue((statement.Position, on), out var slot) ? slot : null;
 
     /// <summary>
-    /// The same as <see cref="Before"/>, narrowed to the processor's own state, which is all
+    /// Returns the processor's own part of the state <see cref="Before"/> returns, which is all
     /// layout asks of the analysis.
     /// </summary>
     /// <param name="statement">The statement.</param>
-    /// <param name="on">The writing of it being asked about.</param>
+    /// <param name="on">The expansion of it being asked about.</param>
     /// <returns>The processor state reaching it, or null.</returns>
     ProcessorState? IProcessorStates.Before(SyntaxNode statement, Expansion? on) =>
         Before(statement, on)?.Processor;
 
     /// <summary>
-    /// The state reaching a statement, whichever writing of it is asked about. An editor asks
-    /// about a line, and is shown the state that reaches its first writing. A writing's line
-    /// belongs to the file that contains the body it writes out, which for a macro declared in
-    /// another file is that other file, so the same position in two files is two lines.
+    /// Returns the state reaching a statement in any <see cref="Expansion"/> of it. An editor asks
+    /// about a line, and is shown the state that reaches the first expansion found. An expansion's
+    /// line belongs to the file that contains the body it expands. For a macro declared in another
+    /// file that is the other file, so the same position in two files is two lines.
     /// </summary>
     public FlowState? AnyBefore(SyntaxNode statement) =>
         reaching.Where(pair => pair.Key.Position == statement.Position
@@ -110,8 +109,9 @@ public sealed class StateAnalysis : IProcessorStates
             .FirstOrDefault();
 
     /// <summary>
-    /// What a routine's state is when it is entered: its declared entry, with nothing pushed but,
-    /// for a routine that takes <c>args n</c>, the arguments and the return address above them.
+    /// Returns a routine's state when it is entered. That is its declared entry, with nothing pushed
+    /// except, for a routine that takes <c>args n</c>, the arguments and the return address above
+    /// them.
     /// </summary>
     private static FlowState Entry(Signature signature, Symbol routine) => new(signature.Entry, EntryStack(signature))
     {
@@ -120,7 +120,7 @@ public sealed class StateAnalysis : IProcessorStates
     };
 
     /// <summary>
-    /// What is on the analysis stack where a routine is entered: nothing, but, for a routine
+    /// Returns the analysis stack where a routine is entered. It is empty except, for a routine
     /// that takes <c>args n</c>, the arguments and the return address above them.
     /// </summary>
     private static AnalysisStack EntryStack(Signature signature) => signature.Arguments > 0
@@ -131,7 +131,10 @@ public sealed class StateAnalysis : IProcessorStates
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
         : new($"`{routine.DisplayName}` says `{item}` at entry", "an `.ensure` sets it");
 
-    /// <summary>How many bytes a push or pull of a register this wide moves, or null when that is not known.</summary>
+    /// <summary>
+    /// Returns how many bytes a push or pull of a register this wide moves, or null when that is
+    /// not known.
+    /// </summary>
     private static int? Bytes(Width width) => width switch
     {
         Width.Eight => 1,
@@ -140,8 +143,8 @@ public sealed class StateAnalysis : IProcessorStates
     };
 
     /// <summary>
-    /// What a <c>dp = e</c>, <c>dbr = e</c> or <c>dbr = [...]</c> item says, or unknown for
-    /// <c>dp?</c> and for a value nt65 cannot work out.
+    /// Returns the value a <c>dp = e</c>, <c>dbr = e</c> or <c>dbr = [...]</c> item gives, or
+    /// unknown for <c>dp?</c> and for a value nt65 cannot work out.
     /// </summary>
     private static StateValue ValueOf(StateItem item, SemanticModel model)
     {
@@ -158,9 +161,9 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// What is known where control arrives from outside the routine's own paths: nothing,
-    /// except that a part the routine's signature leaves unchanged is assumed to be unchanged
-    /// on the way there too. So a label needs to declare a part only where the routine's
+    /// Returns what is known where control arrives from outside the routine's own paths. Nothing
+    /// is known, except that a part the routine's signature leaves unchanged is assumed to be
+    /// unchanged on the way there too. So a label needs to declare a part only where the routine's
     /// signature gives that part a specific value.
     /// </summary>
     private static ProcessorState Outside(Signature signature)
@@ -175,7 +178,7 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// Which parts of the state a declared label's <c>.state</c> gives. These are the parts a
+    /// Returns which parts of the state a declared label's <c>.state</c> gives. These are the parts a
     /// jump into the label is checked against, and so the only parts the code after the label
     /// may rely on. <c>?</c> gives them all, as unknown.
     /// </summary>
@@ -197,7 +200,10 @@ public sealed class StateAnalysis : IProcessorStates
         return given;
     }
 
-    /// <summary>Why a width at a declared label is unknown: the declaration does not say.</summary>
+    /// <summary>
+    /// Returns the cause for a width at a declared label being unknown, which is that the
+    /// declaration does not say.
+    /// </summary>
     private static Cause Undeclared(Symbol label, Symbol routine, string register, string item) => new(
         $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and its `.state` does not "
             + $"say the width of {register}",
@@ -210,9 +216,9 @@ public sealed class StateAnalysis : IProcessorStates
         bytes is { } count ? stack?.Pull(count) : null;
 
     /// <summary>
-    /// One region to a fixed point, then once more to report. Blocks are taken lowest index
-    /// first, which is the order their bytes are written in, so most of a routine settles in
-    /// a single pass.
+    /// Runs one region to a fixed point, then once more to report. Blocks are taken lowest index
+    /// first, which is the order their bytes are emitted in, so most of a routine reaches its
+    /// fixed point in a single pass.
     /// </summary>
     private void Analyze(FlowRegion region)
     {
@@ -232,9 +238,9 @@ public sealed class StateAnalysis : IProcessorStates
         // A label a `.state` declares is an entry point in its own right. If no path reaches
         // it, it starts from what the directive says, over an otherwise unknown state and the
         // stack a call to the routine leaves, since a jump in arrives as a call would. If some
-        // path already reaches it, the directive is checked against that path, and where the
-        // label can also be entered from outside the routine, only the parts the declaration
-        // gives are kept: what the paths inside leave is no promise to code that jumps in.
+        // path already reaches it, the directive is checked against that path. Where the label
+        // can also be entered from outside the routine, only the parts the declaration gives
+        // are kept, because what the paths inside leave is no promise to code that jumps in.
         foreach (var block in blocks)
         {
             if (!block.IsDeclared)
@@ -289,9 +295,10 @@ public sealed class StateAnalysis : IProcessorStates
             }
         }
 
-        // The edges the state after a block flows along. A call's edge is to the routine it
-        // calls, which is checked against its signature rather than walked into, and so is a
-        // jump to a routine's entry, the routine's own included: that is a tail call.
+        // Returns the blocks the state after a block flows to. A call's edge is to the routine
+        // it calls, which is checked against its signature rather than walked into. A jump to a
+        // routine's entry, the routine's own included, is treated the same way, because it is a
+        // tail call.
         IEnumerable<int> Carried(BasicBlock block)
         {
             var calls = block.Steps.Count > 0
@@ -308,12 +315,12 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// The state at a declared label that can be entered from outside the routine: the parts
-    /// its <c>.state</c> gives keep what reaches the label, which the directive itself then
-    /// checks, and every part it leaves out becomes unknown, because a jump from outside is
-    /// checked for the parts the declaration gives and for nothing else. The stack is what a
-    /// call to the routine leaves, since that is what a jump in arrives with, or unknown where
-    /// the path above the label has pushed something else: a declaration cannot say what is on
+    /// Returns the state at a declared label that can be entered from outside the routine. The
+    /// parts its <c>.state</c> gives keep what reaches the label, which the directive itself then
+    /// checks. Every part it leaves out becomes unknown, because a jump from outside is checked
+    /// for the parts the declaration gives and for nothing else. The stack is what a call to the
+    /// routine leaves, since that is what a jump in arrives with. It is unknown where the path
+    /// above the label has pushed something else, because a declaration cannot say what is on
     /// the stack, so nothing can reconcile the two.
     /// </summary>
     private static FlowState Entered(
@@ -347,7 +354,7 @@ public sealed class StateAnalysis : IProcessorStates
         static Width Met(Width here, Width outside) => here == outside ? here : Width.Unknown;
     }
 
-    /// <summary>The state through one block, from the state that reaches it.</summary>
+    /// <summary>Returns the state after one block, from the state that reaches it.</summary>
     private FlowState Walk(BasicBlock block, FlowState state, FlowRegion region)
     {
         var routine = region.Routine;
@@ -364,8 +371,8 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// The state after <paramref name="step"/>, with a cause for each width it made unknown and
-    /// the cause carried on for each it left unknown.
+    /// Returns the state after <paramref name="step"/>, with a cause for each width it made
+    /// unknown, and the earlier cause kept for each width it left unknown.
     /// </summary>
     private FlowState Explained(Step step, NextDirectiveSyntax? next, FlowState before, FlowState after) => after with
     {
@@ -389,7 +396,7 @@ public sealed class StateAnalysis : IProcessorStates
         var written = $"`{statement.GetText().Trim()}`";
         return statement.MnemonicKind switch
         {
-            // A `plp` that finds no saved P because the stack itself is not known says what
+            // A `plp` that finds no saved P because the stack itself is not known reports what
             // lost the stack, which is nearer the mistake than the `php` above it.
             MnemonicKind.Plp when state.Stack is null && state.WhyStack is { } lost => lost,
             MnemonicKind.Plp => new($"{written} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
@@ -404,7 +411,7 @@ public sealed class StateAnalysis : IProcessorStates
         };
     }
 
-    /// <summary>What one statement does to the state.</summary>
+    /// <summary>Returns what one statement does to the state.</summary>
     private FlowState Through(Step step, Step? previous, NextDirectiveSyntax? next, FlowState state, Symbol routine)
     {
         if (step.Statement is StateDirectiveSyntax)
@@ -474,8 +481,8 @@ public sealed class StateAnalysis : IProcessorStates
                         : processor with { A = Width.Unknown, Index = Width.Unknown, E = ProcessorMode.Unknown },
                 };
 
-            // The direct page is loaded from a constant by `lda #c` then `tcd` with A 16 bits;
-            // any other `tcd` leaves D unknown.
+            // The direct page is loaded from a constant by `lda #c` then `tcd` with A 16 bits.
+            // Any other `tcd` leaves D unknown.
             case MnemonicKind.Tcd:
                 return state with
                 {
@@ -494,8 +501,8 @@ public sealed class StateAnalysis : IProcessorStates
 
             case MnemonicKind.Php:
                 return state with { Stack = stack?.Push(new StackEntry(true, processor.A, processor.Index)) };
-            // A constant loaded into A just before it is pushed is a value a pull can get back:
-            // `lda #c`, `pha`, `plb` loads the data bank.
+            // A constant loaded into A just before it is pushed is a value a pull can get back,
+            // so `lda #c`, `pha`, `plb` loads the data bank.
             case MnemonicKind.Pha:
                 return state with
                 {
@@ -525,15 +532,15 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Plx:
             case MnemonicKind.Ply:
                 return state with { Stack = Pull(stack, Bytes(processor.Index)) };
-            // A pull that finds a value the routine pushed gets it back: a saved D or B, a
-            // constant, or the program bank. Any other pull leaves the register unknown.
+            // A pull that finds a value the routine pushed gets it back. That value may be a saved D
+            // or B, a constant, or the program bank. Any other pull leaves the register unknown.
             case MnemonicKind.Plb:
                 return new FlowState(processor with { B = stack?.PulledValue(1) ?? StateValue.Unknown }, Pull(stack, 1));
             case MnemonicKind.Pld:
                 return new FlowState(processor with { D = stack?.PulledValue(2) ?? StateValue.Unknown }, Pull(stack, 2));
 
             // A pull that finds the status register a `php` saved restores the widths saved
-            // with it; any other leaves them unknown. The emulation flag is not in it.
+            // with it. Any other pull leaves them unknown. The emulation flag is not in it.
             case MnemonicKind.Plp:
                 var restored = stack?.Top is { IsStatus: true } saved
                     ? processor.E == ProcessorMode.Emulation
@@ -568,7 +575,10 @@ public sealed class StateAnalysis : IProcessorStates
         }
     }
 
-    /// <summary>What a call or a jump does: a call becomes its routine's exit, and a jump to a routine is checked as a tail call.</summary>
+    /// <summary>
+    /// Returns what a call or a jump does to the state. After a call the state becomes the called
+    /// routine's exit, and a jump to a routine is checked as a tail call.
+    /// </summary>
     private FlowState Transferred(
         Step step, MnemonicKind mnemonic, AddressingMode? mode, NextDirectiveSyntax? next, FlowState state, Symbol routine)
     {
@@ -593,10 +603,10 @@ public sealed class StateAnalysis : IProcessorStates
                 RelativelyCalled(step, mnemonic, relative, state.Processor), Pull(state.Stack, relative.Pushed));
         }
 
-        // Where an indirect call goes is what its `.next` says, and it returns with whatever
-        // the routines it names return with. With nothing named, nothing is known after it.
-        // With no `.next` at all, that has been reported, and the state is left alone so the
-        // one mistake is not reported again wherever the state is used.
+        // An indirect call goes where its `.next` says, and it returns with what any of the
+        // routines it names return with. With nothing named, nothing is known after it. With no
+        // `.next` at all, that has been reported, and the state is left alone so the one
+        // mistake is not reported again wherever the state is used.
         if (calls)
         {
             if (next is null)
@@ -628,8 +638,8 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// What a <c>.next</c> names, each a jump from here: to a routine's start a tail call, and to
-    /// a label inside another routine a jump into it.
+    /// Checks each place a <c>.next</c> names as a jump from here. A jump to a routine's start is
+    /// checked as a tail call, and a jump to a label inside another routine as a jump into it.
     /// </summary>
     private void CheckNamed(Step step, NextDirectiveSyntax next, FlowState state, Symbol routine)
     {
@@ -642,29 +652,33 @@ public sealed class StateAnalysis : IProcessorStates
         }
     }
 
-    /// <summary>The routines a <c>.next</c> names, leaving out the labels, which are handled as edges.</summary>
+    /// <summary>
+    /// Returns the routines a <c>.next</c> names, leaving out the labels, which are handled as
+    /// edges.
+    /// </summary>
     private IEnumerable<Symbol> Routines(NextDirectiveSyntax next, Expansion? on) =>
         flow.Named(next, on).Select(named => named.Symbol).Where(symbol => symbol.Signature is not null);
 
     /// <summary>
-    /// The routine a target's label is inside, where the target is a label in another routine
-    /// and so a jump into that routine's interior; null for every other target. Another
-    /// instance of the same family does not count as another routine: all the instances share
-    /// one written body.
+    /// Returns the routine a target's label is inside, where the target is a label in another
+    /// routine and so a jump into that routine's interior. It returns null for every other target.
+    /// Another instance of the same <see cref="Family"/> does not count as another routine,
+    /// because all the instances share one body in the source.
     /// </summary>
     private static Symbol? Interior(Symbol target, Symbol routine) =>
         target is { Kind: SymbolKind.Label, Routine: { } owner } && owner != routine && !owner.IsSiblingOf(routine)
             ? owner
             : null;
 
-    /// <summary>Whether a statement calls, directly or through a pointer.</summary>
+    /// <summary>Returns whether a statement calls, directly or through a pointer.</summary>
     private static bool IsCallOrIndirectCall(Step step) =>
         step.Statement is InstructionStatementSyntax instruction
         && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
 
     /// <summary>
-    /// A call: the state here must be what the routine expects, and becomes what it returns
-    /// with, except for the parts it declares unchanged, which keep what they were.
+    /// Checks a call and returns the state after it. The state here must be what the routine
+    /// expects, and becomes what it returns with, except for the parts it declares unchanged,
+    /// which keep what they were.
     /// </summary>
     private ProcessorState Called(Step step, MnemonicKind mnemonic, Symbol? target, ProcessorState state)
     {
@@ -676,8 +690,8 @@ public sealed class StateAnalysis : IProcessorStates
         {
             checks.CheckCallTarget(step, mnemonic, target);
 
-            // Nothing says what it returns with, and once the call is fixed its signature will;
-            // leaving the state alone keeps one mistake to one diagnostic.
+            // Nothing says what it returns with, and once the call is fixed its signature will.
+            // Leaving the state alone keeps one mistake to one diagnostic.
             return state;
         }
 
@@ -688,8 +702,8 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// A call written as <c>per</c> and a branch, checked as <c>jsr</c> or, with a <c>phk</c>
-    /// before it, as <c>jsl</c>.
+    /// Checks a call made with <c>per</c> and a branch, and returns the state after it. The call is
+    /// checked as <c>jsr</c> or, with a <c>phk</c> before it, as <c>jsl</c>.
     /// </summary>
     private ProcessorState RelativelyCalled(Step step, MnemonicKind mnemonic, RelativeCall call, ProcessorState state)
     {
@@ -701,8 +715,8 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// What a <c>.state</c> declares at a label inside another routine, which a jump into that
-    /// routine has to meet; null when the label declares nothing. Only the parts it gives are
+    /// Returns what a <c>.state</c> declares at a label inside another routine, which a jump into
+    /// that routine has to meet, or null when the label declares nothing. Only the parts it gives are
     /// checked. The declaration is read off the label, so the routine may be in another file.
     /// </summary>
     private ProcessorState? DeclaredElsewhere(Symbol label)
@@ -726,15 +740,15 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// <c>rep #c</c> or <c>sep #c</c>. In native mode the widths it names become known; in
-    /// emulation mode the widths are pinned at 8 and nothing changes; where the mode is not
-    /// known, a <c>sep</c> still makes them 8, which they are in either mode.
+    /// Returns the state after <c>rep #c</c> or <c>sep #c</c>. In native mode the widths it names
+    /// become known. In emulation mode the widths are pinned at 8 and nothing changes. Where the
+    /// mode is not known, a <c>sep</c> still makes them 8, which they are in either mode.
     /// </summary>
     private ProcessorState Flags(Step step, bool reset, ProcessorState state)
     {
-        // Emulation mode pins both widths at 8 whatever the operand says, so an operand nt65
-        // cannot work out changes nothing there. That is asked first: forgetting the widths and
-        // then finding the mode would throw away what the mode already said.
+        // Emulation mode pins both widths at 8 regardless of the operand, so an operand nt65
+        // cannot work out changes nothing there. The mode is checked first, because forgetting
+        // the widths and then finding the mode would throw away what the mode already said.
         if (state.E == ProcessorMode.Emulation)
             return state;
         if (Constant(step) is not { } flags)
@@ -750,13 +764,19 @@ public sealed class StateAnalysis : IProcessorStates
         };
     }
 
-    /// <summary>The value of an instruction's operand, such as the <c>#c</c> of <c>rep #c</c> or the <c>c</c> of <c>pea c</c>, or null when it is not a constant.</summary>
+    /// <summary>
+    /// Returns the value of an instruction's operand, such as the <c>#c</c> of <c>rep #c</c> or the
+    /// <c>c</c> of <c>pea c</c>, or null when it is not a constant.
+    /// </summary>
     private long? Constant(Step step) =>
         checks.OperandOf(step) is { } operand && CodeLayout.Expression(operand) is { } expression
             ? model.ValueOf(expression, step.On).AsNumber()
             : null;
 
-    /// <summary>The constant <paramref name="step"/> loads into A, for an <c>lda #c</c>; null for anything else.</summary>
+    /// <summary>
+    /// Returns the constant <paramref name="step"/> loads into A, for an <c>lda #c</c>, or null for
+    /// anything else.
+    /// </summary>
     private long? Loaded(Step step) =>
         step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Lda }
         && layout.Of(step.Statement, step.On)?.Mode == AddressingMode.Immediate
@@ -764,8 +784,9 @@ public sealed class StateAnalysis : IProcessorStates
             : null;
 
     /// <summary>
-    /// The destination bank of <c>mvn #src, #dst</c>, which is where it leaves the data bank: a
-    /// constant, or <c>^sym</c>, the bank of a symbol whose segment declares one.
+    /// Returns the destination bank of <c>mvn #src, #dst</c>, which is where it leaves the data
+    /// bank. The destination is a constant, or <c>^sym</c>, the bank of a symbol whose segment
+    /// declares one.
     /// </summary>
     private StateValue MovedTo(Step step)
     {
@@ -780,9 +801,10 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// A <c>.state</c>: each item both asserts and sets a part of the state. Where the part is
-    /// known and differs, that is an error; where it is unknown, the item sets it; an item with
-    /// <c>?</c> makes it unknown.
+    /// Returns the state after a <c>.state</c>, reporting where it disagrees with the state here.
+    /// Each item both asserts and sets a part of the state. Where the part is known and differs,
+    /// that is an error. Where it is unknown, the item sets it, and an item with <c>?</c> makes it
+    /// unknown.
     /// </summary>
     private FlowState Asserted(Step step, FlowState state)
     {
@@ -894,8 +916,9 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// <c>.ensure a16, i8</c>: the widths it names hold after it, whatever it writes to make
-    /// them. A 16-bit width needs native mode, and is reported unless native mode is known here.
+    /// Returns the state after an <c>.ensure</c> such as <c>.ensure a16, i8</c>. The widths it
+    /// names hold after it, whatever it emits to make them. A 16-bit width needs native mode, and
+    /// is reported unless native mode is known here.
     /// </summary>
     private FlowState Ensured(Step step, FlowState state)
     {
@@ -915,7 +938,7 @@ public sealed class StateAnalysis : IProcessorStates
                         ? "the processor is in emulation mode here, where both widths are 8 bits"
                         : "the mode is not known here"));
             }
-            // Emulation mode pins both widths at 8, whatever is written to change them.
+            // Emulation mode pins both widths at 8, whatever is emitted to change them.
             if (processor.E == ProcessorMode.Emulation)
                 continue;
             processor = item.Part == StatePart.A
@@ -926,9 +949,9 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// <c>.frame name: T</c>: the top <c>.sizeof(T)</c> bytes of the analysis stack become the
-    /// frame. Where the stack is not known, as after <c>tcs</c>, it becomes those bytes with
-    /// nothing known beneath them.
+    /// Returns the state after <c>.frame name: T</c>, in which the top <c>.sizeof(T)</c> bytes of
+    /// the analysis stack become the frame. Where the stack is not known, as after <c>tcs</c>, it
+    /// becomes those bytes with nothing known beneath them.
     /// </summary>
     private FlowState Framed(Step step, FrameDirectiveSyntax directive, FlowState state)
     {
@@ -949,8 +972,9 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// A frame's member named in an operand, which is only a place on the stack: it is a
-    /// stack-relative operand, and its offset counts every byte pushed since the frame.
+    /// Records the stack offset of a frame member named in an operand, and reports a member that
+    /// cannot be resolved. A member is only a place on the stack, so it must be a stack-relative
+    /// operand, and its offset counts every byte pushed since the frame.
     /// </summary>
     private void Slot(Step step, AddressingMode? mode, FlowState state)
     {
@@ -991,11 +1015,11 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// Where an expansion of a macro with a state signature, or a block spliced into one,
-    /// starts or ends. A call is checked the way <c>jsr</c> is: the state must match the
-    /// entry, the body starts from it, its end must match the exit, and the state after the
-    /// call is the exit with its <c>*</c> items kept from the call. A block given to such a
-    /// macro has to leave the state as it found it.
+    /// Returns the state where an expansion of a macro with a state signature, or a block spliced
+    /// into one, starts or ends. A call is checked the way <c>jsr</c> is. The state must match the
+    /// entry, the body starts from it, and its end must match the exit. The state after the call
+    /// is the exit with its <c>*</c> items kept from the call. A block given to such a macro has to
+    /// leave the state as it found it.
     /// </summary>
     private FlowState Marked(Step step, FlowState state)
     {

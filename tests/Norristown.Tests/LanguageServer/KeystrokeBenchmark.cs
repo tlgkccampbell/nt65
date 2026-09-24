@@ -2,17 +2,18 @@ using System.Diagnostics;
 using Norristown.LanguageServer;
 using Norristown.LanguageServer.Protocol;
 
-// The protocol has a Range of its own, which is the one these tests mean.
+// The protocol defines its own Range type, and these tests use that one.
 using Range = Norristown.LanguageServer.Protocol.Range;
 
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an edit costs, in the two stages the server publishes diagnostics in: what the typist
-/// waits for — applying the edit, the analysis, and the edited file's diagnostics, which are sent
-/// at once — and the whole program's diagnostics, which are sent once typing has stopped. Not
-/// part of the everyday test run; <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers
-/// mean most from a Release build.
+/// Measures what an edit costs, in the two stages in which the server publishes diagnostics.
+/// The first stage is what the typist waits for. It covers applying the edit, the analysis and
+/// the edited file's diagnostics, which are sent at once. The second stage is the whole
+/// program's diagnostics, which are sent once typing has stopped. The benchmark is not part of
+/// the everyday test run. <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers mean most
+/// from a Release build.
 /// </summary>
 public sealed class KeystrokeBenchmark(ITestOutputHelper output)
 {
@@ -31,10 +32,10 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         output.WriteLine($"{Files} files, first analysis: {watch.Elapsed.TotalMilliseconds:0} ms");
         Assert.Empty(first.Diagnostics);
 
-        // In the middle file: `lda #0` becomes `lda #1` and back; a line is added above it and
-        // taken away; and the file's exported size changes, which the file after it uses. Then
-        // the last file's size changes, which the first file's `M000_LIMIT` is worked out from, and
-        // every file uses that.
+        // In the middle file, `lda #0` becomes `lda #1` and back, a line is added above it and
+        // removed, and the file's exported size changes, which the file after it uses. Then the
+        // last file's size changes. The first file's `M000_LIMIT` is computed from it, and every
+        // file uses that constant.
         var uri = GeneratedProject.Uri(Files / 2);
         var version = 1;
         Time(workspace, uri, ref version, "keystroke in a routine body", Line(workspace, uri, "lda #0"), 9, 10, "1", "0");
@@ -45,13 +46,17 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         Time(workspace, uri, ref version, "constant every file uses changed", Line(workspace, uri, "_SIZE = "), 12, 14, "17", "27");
     }
 
-    /// <summary>A single file of many routines: the case that reanalyzing only the edited routine would speed up.</summary>
+    /// <summary>
+    /// Measures a keystroke in a single file of many routines, which is the case that
+    /// reanalyzing only the edited routine would speed up.
+    /// </summary>
     [Fact]
     [Trait("Category", "Benchmark")]
     public void AKeystrokeInALargeFile()
     {
-        // Each routine is exported, as a real module's routines are: a routine that nothing calls
-        // or exports gets a warning, and this measures the cost of the file's size, not of that.
+        // Each routine is exported, as a real module's routines are. A routine that nothing calls
+        // or exports gets a warning, and this benchmark measures the cost of the file's size, not
+        // the cost of that warning.
         var text = GeneratedProject.Text(0, 1) + string.Concat(Enumerable.Range(0, 200).Select(i => $$"""
             .export .proc big{{i}}: a8, i8 {
                 ldx #0
@@ -86,9 +91,10 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Thirty edits, timed. The even ones write <paramref name="text"/> over the columns given;
-    /// the odd ones undo it, putting back <paramref name="undo"/>, or joining the line up again
-    /// when there is none.
+    /// Times thirty edits. Each even-numbered edit replaces the given columns with
+    /// <paramref name="text"/>. Each odd-numbered edit undoes it by putting back
+    /// <paramref name="undo"/>, or by joining the line up again when <paramref name="undo"/> is
+    /// null.
     /// </summary>
     private void Time(
         Workspace workspace, string uri, ref int version, string what, int line, int start, int end, string text, string? undo)
@@ -107,8 +113,8 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
             workspace.Change(new VersionedTextDocumentIdentifier(uri, ++version),
                 [new TextDocumentContentChangeEvent(range, written)]);
 
-            // What the caret waits for: the edited file's own diagnostics, from the analysis
-            // the edit asked for.
+            // The typist waits for the edited file's own diagnostics, from the analysis the edit
+            // requested.
             var own = workspace.ToPublish(uri)!.Value;
             _ = Lsp.ToDiagnostics(own.Diagnostics, own.Tree, own.Configuration);
             atOnce.Add(watch.Elapsed.TotalMilliseconds);

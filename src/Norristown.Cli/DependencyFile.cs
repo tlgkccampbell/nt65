@@ -3,13 +3,16 @@ using System.Text;
 namespace Norristown.Cli;
 
 /// <summary>
-/// Make-style dependencies, as <c>--depfile</c> writes them: one rule per output naming the
-/// files it depends on, and an empty rule for each of those, so that make does not stop when a
-/// source is deleted.
+/// Formats make-style dependencies, as <c>--depfile</c> writes them. There is one rule per output
+/// naming the files it depends on, and an empty rule for each of those files, so that make does
+/// not stop when a source is deleted.
 /// </summary>
 public static class DependencyFile
 {
-    /// <summary>The rules for <paramref name="targets"/>, each with the files it depends on, in the order given.</summary>
+    /// <summary>
+    /// Returns the rules for <paramref name="targets"/>, each with the files it depends on, in the
+    /// order given.
+    /// </summary>
     public static string Write(IEnumerable<(string Target, IEnumerable<string> Dependencies)> targets)
     {
         var text = new StringBuilder();
@@ -29,7 +32,9 @@ public static class DependencyFile
         return text.ToString();
     }
 
-    /// <summary>A path as make reads it: a space, a <c>#</c> and a <c>$</c> escaped.</summary>
+    /// <summary>
+    /// Returns a path in the form make reads, with each space, <c>#</c> and <c>$</c> escaped.
+    /// </summary>
     private static string Escaped(string path) =>
         path.Replace(" ", "\\ ", StringComparison.Ordinal)
             .Replace("#", "\\#", StringComparison.Ordinal)

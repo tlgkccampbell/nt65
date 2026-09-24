@@ -3,16 +3,16 @@ using System.Collections.Immutable;
 namespace Norristown.SyntaxGenerator;
 
 /// <summary>
-/// One property of a node, as the table writes it: either a slot in the node's fixed layout,
-/// which the property reads, or a property computed from other ones, whose expression is given
+/// Represents one property of a node, as the table describes it. The property either reads a
+/// slot in the node's fixed layout, or is computed from other properties by the expression given
 /// in <see cref="Read"/>.
 /// </summary>
 /// <param name="Name">The property's name.</param>
-/// <param name="Type">The slot's type; a trailing <c>?</c> marks the slot optional.</param>
+/// <param name="Type">The slot's type. A trailing <c>?</c> marks the slot optional.</param>
 /// <param name="Summary">The property's summary, one string per line.</param>
-/// <param name="Read">What a derived property returns, or the empty string for a slot.</param>
-/// <param name="Role">Whether it is a slot of the node or a property derived from other ones.</param>
-/// <param name="Kinds">The kinds a token slot may hold; empty for a slot that is not a token.</param>
+/// <param name="Read">The expression a derived property returns, or the empty string for a slot.</param>
+/// <param name="Role">Whether the property is a slot of the node or derived from other properties.</param>
+/// <param name="Kinds">The kinds a token slot may hold, or empty for a slot that is not a token.</param>
 public sealed record NodeSlot(
     string Name,
     string Type,
@@ -32,20 +32,31 @@ public sealed record NodeSlot(
         "ushort", "using", "void", "while",
     };
 
-    /// <summary>Whether the property is a piece of the node rather than derived from other ones.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the property is a slot of the node rather than derived from
+    /// other properties.
+    /// </summary>
     public bool IsPiece => Role == SlotRole.Slot;
 
-    /// <summary>Whether the slot must hold a node or a token, missing or not, in every node of its kind.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the slot must hold a node or a token, missing or not, in
+    /// every node of its kind.
+    /// </summary>
     public bool IsRequired => !Type.EndsWith("?", StringComparison.Ordinal);
 
-    /// <summary>What kind of list the slot holds, or <see cref="ListShape.None"/> for a single piece.</summary>
+    /// <summary>
+    /// Gets the kind of list the slot holds, or <see cref="ListShape.None"/> for a single node or
+    /// token.
+    /// </summary>
     public ListShape List =>
         Type.StartsWith("SyntaxList<", StringComparison.Ordinal) ? ListShape.Nodes
         : Type.StartsWith("SeparatedSyntaxList<", StringComparison.Ordinal) ? ListShape.Separated
         : Type == "SyntaxTokenList" ? ListShape.Tokens
         : ListShape.None;
 
-    /// <summary>The item type of a list slot, or null when it is not one.</summary>
+    /// <summary>
+    /// Gets the item type of a node list or separated list slot, or null for any other slot.
+    /// </summary>
     public string? ListItemType => List switch
     {
         ListShape.Nodes => Inside(Type, "SyntaxList<"),
@@ -53,15 +64,17 @@ public sealed record NodeSlot(
         _ => null,
     };
 
-    /// <summary>Whether the slot holds a token rather than a node or a list.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the slot holds a single token rather than a node or a list.
+    /// </summary>
     public bool IsToken => Type is "SyntaxToken" or "SyntaxToken?";
 
-    /// <summary>The type without its trailing <c>?</c>.</summary>
+    /// <summary>Gets the type without its trailing <c>?</c>.</summary>
     public string BareType => Type.TrimEnd('?');
 
     /// <summary>
-    /// The constructor parameter name for the slot: the property's name with its first letter
-    /// lowered, prefixed with <c>@</c> when that is a C# keyword.
+    /// Gets the constructor parameter name for the slot, which is the property's name with its
+    /// first letter lowered, prefixed with <c>@</c> when that is a C# keyword.
     /// </summary>
     public string Field
     {
@@ -72,10 +85,13 @@ public sealed record NodeSlot(
         }
     }
 
-    /// <summary>The parameter's name as a <c>param</c> tag writes it, which is without the <c>@</c>.</summary>
+    /// <summary>Gets the parameter's name as a <c>param</c> tag gives it, without the <c>@</c>.</summary>
     public string DocName => Field.TrimStart('@');
 
-    /// <summary>What <paramref name="type"/> holds between <paramref name="opening"/> and its <c>&gt;</c>.</summary>
+    /// <summary>
+    /// Returns the text of <paramref name="type"/> between <paramref name="opening"/> and its
+    /// closing <c>&gt;</c>.
+    /// </summary>
     private static string Inside(string type, string opening) =>
         type.Substring(opening.Length, type.Length - opening.Length - 1);
 }

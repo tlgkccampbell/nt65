@@ -4,25 +4,26 @@ using Norristown.Project;
 namespace Norristown.Tests.Fixtures;
 
 /// <summary>
-/// A fixture is a directory under <c>tests/fixtures</c>:
+/// Represents one build of a fixture. A fixture is a directory under <c>tests/fixtures</c> that
+/// holds the following files.
 /// <list type="bullet">
-/// <item><c>**/*.nt65</c>, the program, with expected diagnostics written inline as trailing
-/// comments: <c>;! error[unused-symbol]: message</c> on the line the diagnostic is reported on.
-/// A diagnostic is matched on its line, its severity and its catalogue name; the message is a
-/// second expectation, so that rewording one is one line to change and <c>NT65_UPDATE=1</c>
-/// writes it;</item>
-/// <item><c>nt65.json</c>, optional. Its own expected diagnostics are written in
-/// <c>//</c> comments, which the reader skips;</item>
-/// <item><c>expected/**</c>, the output snapshot, one file per generated file, at the
-/// output's path: the ca65 of each module and the line map beside it.</item>
+/// <item><c>**/*.nt65</c> is the program. Expected diagnostics are written inline as trailing
+/// comments, such as <c>;! error[unused-symbol]: message</c>, on the line the diagnostic is
+/// reported on. A diagnostic is matched on its line, its severity and its catalogue name. The
+/// message is a second expectation, so that rewording a message is one line to change, and
+/// <c>NT65_UPDATE=1</c> writes it.</item>
+/// <item><c>nt65.json</c> is optional. Its own expected diagnostics are written in <c>//</c>
+/// comments, which the reader skips.</item>
+/// <item><c>expected/**</c> is the output snapshot, with one file per generated file at the
+/// output's path. It holds the ca65 of each module and the line map beside it.</item>
 /// </list>
 /// <para>
-/// A fixture may also be built more than one way: each named configuration in its project
-/// file, and each <c>nt65.<em>label</em>.json</c> beside it — for what a configuration cannot
-/// change, such as the CPU — is another build of the same sources, with its snapshot under
-/// <c>expected.<em>label</em></c>. What differs between two builds of one program is then
-/// two snapshots to read side by side. All of them must be clean, because an inline
-/// <c>;!</c> says nothing about which configuration reports it.
+/// A fixture may also be built more than one way. Each named configuration in its project file
+/// is another build of the same sources, and so is each <c>nt65.<em>label</em>.json</c> beside
+/// it, which covers what a configuration cannot change, such as the CPU. Each build has its
+/// snapshot under <c>expected.<em>label</em></c>, so the differences between two builds of one
+/// program can be read side by side in two snapshots. Every build must be clean, because an
+/// inline <c>;!</c> does not say which configuration reports it.
 /// </para>
 /// </summary>
 internal sealed partial record FixtureCase(
@@ -35,7 +36,10 @@ internal sealed partial record FixtureCase(
 {
     public const string DefaultExpectedDirectory = "expected";
 
-    /// <summary>Held while updated annotations are written back to a fixture's files, which several cases may do at once.</summary>
+    /// <summary>
+    /// The lock held while updated annotations are written back to a fixture's files, which
+    /// several cases may do at once.
+    /// </summary>
     private static readonly Lock Writing = new();
 
     public static IReadOnlyList<FixtureCase> All()
@@ -53,7 +57,10 @@ internal sealed partial record FixtureCase(
             .SelectMany(name => Load(System.IO.Path.Combine(root, name)))];
     }
 
-    /// <summary>Every way <paramref name="directory"/> is built: one per configuration it holds.</summary>
+    /// <summary>
+    /// Returns every build of the fixture in <paramref name="directory"/>, one per configuration
+    /// it holds.
+    /// </summary>
     public static IReadOnlyList<FixtureCase> Load(string directory)
     {
         var sources = System.IO.Directory.GetFiles(directory, "*.nt65", SearchOption.AllDirectories)
@@ -120,16 +127,19 @@ internal sealed partial record FixtureCase(
         }
     }
 
-    /// <summary>The expectation that matches a reported diagnostic. Columns are not checked.</summary>
+    /// <summary>Returns the expectation that matches a reported diagnostic. Columns are not checked.</summary>
     public static Expectation Of(Diagnostic d) =>
         new(d.Span.File, d.Span.Line, d.Severity.ToString().ToLowerInvariant(), d.Id, d.Message);
 
-    /// <summary>A diagnostic as a string, for checks that only ask whether two sets of diagnostics are the same.</summary>
+    /// <summary>
+    /// Formats a diagnostic as a string, for checks that only ask whether two sets of diagnostics
+    /// are the same.
+    /// </summary>
     public static string Format(Diagnostic d) => Of(d).ToString();
 
     /// <summary>
-    /// The length of a file an <c>.incbin</c> names, found in the fixture's directory: a
-    /// fixture's binaries sit beside its sources, wherever the tests happen to be run from.
+    /// Returns the length of a file an <c>.incbin</c> names, found in the fixture's directory. A
+    /// fixture's binaries sit beside its sources, no matter where the tests are run from.
     /// </summary>
     public long? BinaryLength(string path)
     {
@@ -138,15 +148,15 @@ internal sealed partial record FixtureCase(
     }
 
     /// <summary>
-    /// Every <c>.bin</c> file in the fixture, at its path relative to the fixture, which is where
-    /// the generated file looks for it relative to its own path.
+    /// Returns every <c>.bin</c> file in the fixture, at its path relative to the fixture. The
+    /// generated file looks for it at that same path relative to its own.
     /// </summary>
     public IReadOnlyList<(string Name, byte[] Content)> Binaries() =>
         [.. System.IO.Directory.GetFiles(Directory, "*.bin", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal)
             .Select(path => (RelativePath(Directory, path), File.ReadAllBytes(path)))];
 
-    /// <summary>Expected output, keyed by output path.</summary>
+    /// <summary>Returns the expected output, keyed by output path.</summary>
     public SortedDictionary<string, string> ExpectedOutputs()
     {
         var dir = System.IO.Path.Combine(Directory, ExpectedDirectory);
@@ -159,7 +169,7 @@ internal sealed partial record FixtureCase(
         return outputs;
     }
 
-    /// <summary>The diagnostics the inline <c>;!</c> comments say the program should report.</summary>
+    /// <summary>Returns the diagnostics that the inline <c>;!</c> comments expect the program to report.</summary>
     public List<Expectation> ExpectedDiagnostics() =>
         [.. Annotated().SelectMany(ParseInlineDiagnostics)];
 
@@ -167,7 +177,7 @@ internal sealed partial record FixtureCase(
     /// Writes the messages in <paramref name="actual"/> into the existing annotations that match
     /// them, so that rewording a message needs no hand edit to the fixture. An annotation is
     /// rewritten only where exactly one diagnostic on its line is reported with its severity and
-    /// name; any other mismatch is a difference the fixture should fail on.
+    /// name. Any other mismatch is a difference the fixture should fail on.
     /// </summary>
     public List<Expectation> UpdateInlineDiagnostics(IReadOnlyList<Expectation> actual)
     {
@@ -199,7 +209,7 @@ internal sealed partial record FixtureCase(
                 continue;
 
             // A fixture built more than one way is several cases over the same files, run in
-            // parallel, and each of them writes the same text back, so the writes take a lock.
+            // parallel. Each of them writes the same text back, so the writes take a lock.
             var path = System.IO.Path.Combine(Directory, file.Path);
             var whole = string.Join('\n', lines);
             lock (Writing)
@@ -211,30 +221,35 @@ internal sealed partial record FixtureCase(
         return expected;
     }
 
-    /// <summary>The files a fixture may write annotations in: its sources, and its project file.</summary>
+    /// <summary>
+    /// Returns the files a fixture may contain annotations in, which are its sources and its
+    /// project file.
+    /// </summary>
     private IEnumerable<SourceFile> Annotated() =>
         Sources.Concat(ProjectFileText is null ? [] : [ProjectFileText]);
 
-    // A line may carry more than one annotation, so a message runs to the next `;!` rather
-    // than to the end of the line. It is the marker that delimits them, not a bare `;`, so a
-    // message may hold one: "`COUNTR` is not declared; `COUNTER` is".
+    // A line may hold more than one annotation, so a message runs to the next `;!` rather than
+    // to the end of the line. The `;!` marker delimits them, not a bare `;`, so a message may
+    // contain a `;`, as in "`COUNTR` is not declared; `COUNTER` is".
     [GeneratedRegex(@";!\s*(?<severity>error|warning|info)\s*\[(?<id>[a-z0-9-]+)\]\s*:(?<message>(?:(?!;!).)*)")]
     private static partial Regex InlineDiagnostic();
 
     /// <summary>
-    /// One diagnostic as a fixture expects it: where it is, the name it is reported under, and
-    /// what it says. The name and the place are what a diagnostic is matched on; the message is a
+    /// Represents one diagnostic as a fixture expects it: its location, the name it is reported
+    /// under, and its message. A diagnostic is matched on its name and location. The message is a
     /// second expectation, so that a reworded message fails as one difference, not as one missing
     /// and one unexpected diagnostic.
     /// </summary>
-    /// <param name="File">The file it is reported in.</param>
-    /// <param name="Line">The 1-based line it is reported on.</param>
+    /// <param name="File">The file the diagnostic is reported in.</param>
+    /// <param name="Line">The 1-based line the diagnostic is reported on.</param>
     /// <param name="Severity">The severity, in lower case as the annotation writes it.</param>
     /// <param name="Id">The catalogue name.</param>
-    /// <param name="Message">What it says.</param>
+    /// <param name="Message">The diagnostic's message.</param>
     internal readonly record struct Expectation(string File, int Line, string Severity, string Id, string Message)
     {
-        /// <summary>Everything but the message, which is what a diagnostic is matched on.</summary>
+        /// <summary>
+        /// Gets everything but the message, which is the part a diagnostic is matched on.
+        /// </summary>
         public string Where => $"{File}:{Line}: {Severity}[{Id}]";
 
         public override string ToString() => $"{Where}: {Message}";

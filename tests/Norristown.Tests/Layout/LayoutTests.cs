@@ -6,7 +6,7 @@ using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Layout;
 
-/// <summary>Addressing-mode selection and instruction and data lengths.</summary>
+/// <summary>Checks addressing-mode selection and instruction and data lengths.</summary>
 public sealed class LayoutTests
 {
     /// <summary>
@@ -48,7 +48,7 @@ public sealed class LayoutTests
 
     /// <summary>
     /// The choice is written into the output only where the instruction offers more than one
-    /// width for that shape; where there is nothing to choose, nothing is written.
+    /// width for that shape. Where there is nothing to choose, nothing is written.
     /// </summary>
     [Theory]
     [InlineData("lda ptr", "z:")]
@@ -125,9 +125,9 @@ public sealed class LayoutTests
     }
 
     /// <summary>
-    /// The CMOS variants differ only in whole instructions: the 65SC02 has neither the Rockwell
-    /// bit instructions nor <c>wai</c> and <c>stp</c>, the R65C02 adds the bit instructions,
-    /// the WDC 65C02 has both, and the 65816 keeps <c>wai</c> and drops the bit instructions.
+    /// The CMOS variants differ only in whole instructions. The 65SC02 has neither the Rockwell
+    /// bit instructions nor <c>wai</c> and <c>stp</c>, and the R65C02 adds the bit instructions.
+    /// The WDC 65C02 has both, and the 65816 keeps <c>wai</c> and drops the bit instructions.
     /// </summary>
     [Theory]
     [InlineData(Cpu.Cmos65SC02, "phx", true)]
@@ -171,7 +171,7 @@ public sealed class LayoutTests
 
     /// <summary>
     /// A data directive with no name in front of it opens its body just as a named one does:
-    /// its own line takes no bytes, and the lines of the body carry them.
+    /// its own line takes no bytes, and the lines of the body hold them.
     /// </summary>
     [Fact]
     public void ADirectiveWithNoNameOpensItsBody()

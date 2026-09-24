@@ -3,13 +3,16 @@ using Norristown.Semantics;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// What a macro parameter's kind takes, in words, and what each mode an <c>operand(...)</c> may
-/// list is: what hover says of a parameter and of the kind written after its <c>:</c>, and what
-/// completion says beside a kind or a mode it offers.
+/// Describes in words what a macro parameter's kind accepts, and what each mode that an
+/// <c>operand(...)</c> kind may list means. Hover shows these phrases for a parameter and for the
+/// kind after its <c>:</c>, and completion shows them beside a kind or a mode it offers.
 /// </summary>
 internal static class ParameterKinds
 {
-    /// <summary>The kinds a parameter may be, written as completion writes them, with what each takes.</summary>
+    /// <summary>
+    /// Gets the kinds a parameter may have, as completion inserts them, each with a description of
+    /// what it accepts.
+    /// </summary>
     public static IReadOnlyList<(string Written, string Takes)> Written { get; } =
     [
         ("expr", "an expression, constant or address"),
@@ -21,7 +24,7 @@ internal static class ParameterKinds
         ("list(", "every remaining argument, each of the kind given"),
     ];
 
-    /// <summary>What an argument for <paramref name="kind"/> may be, as a phrase.</summary>
+    /// <summary>Returns a phrase that describes what an argument for <paramref name="kind"/> may be.</summary>
     public static string Takes(ArgumentKind kind) => kind.Kind switch
     {
         ParameterKind.Const when kind is { Low: { } low, High: { } high } =>
@@ -38,7 +41,10 @@ internal static class ParameterKinds
         _ => "an expression, constant or address",
     };
 
-    /// <summary>What an operand in <paramref name="mode"/> is written as, or null for a word that names no mode.</summary>
+    /// <summary>
+    /// Returns a phrase that describes how an operand in <paramref name="mode"/> is written, or
+    /// null for a word that names no mode.
+    /// </summary>
     public static string? Mode(string mode) => mode.ToLowerInvariant() switch
     {
         "imm" => "an immediate, {#value}",
@@ -59,7 +65,10 @@ internal static class ParameterKinds
         _ => null,
     };
 
-    /// <summary><c>a</c>, <c>a or b</c>, or <c>a, b or c</c>.</summary>
+    /// <summary>
+    /// Joins the items into a phrase such as <c>a</c>, <c>a or b</c>, or <c>a, b or c</c>, with
+    /// <paramref name="last"/> before the final item.
+    /// </summary>
     private static string Listed(IEnumerable<string> items, string last)
     {
         var all = items.ToList();

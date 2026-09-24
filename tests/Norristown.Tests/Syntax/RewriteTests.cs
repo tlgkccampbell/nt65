@@ -4,11 +4,12 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// Rewriting a tree: <c>Update</c> and the <c>With</c>s, <see cref="SyntaxFactory"/>,
-/// <see cref="SyntaxRewriter"/> and the replacements on a node. Two rules hold everything else
-/// up: a rewrite that changes nothing gives back what it was given, the same objects and all,
-/// and a rewrite of one piece leaves every other character of the file where it was. Both are
-/// checked over every nt65 source in the repository.
+/// Checks rewriting a tree with <c>Update</c> and the <c>With</c> methods, with
+/// <see cref="SyntaxFactory"/> and <see cref="SyntaxRewriter"/>, and with the replacement methods
+/// on a node. Two rules hold everything else up. A rewrite that changes nothing returns what it
+/// was given, down to the same objects. A rewrite of one child element leaves every other
+/// character of the file where it was. Both rules are checked over every nt65 source in the
+/// repository.
 /// </summary>
 public sealed class RewriteTests
 {
@@ -66,8 +67,8 @@ public sealed class RewriteTests
     }
 
     /// <summary>
-    /// Every name in the file replaced by a new token with the same text: the tree is rebuilt
-    /// from end to end and reads back as the file it came from, byte for byte.
+    /// When every name in the file is replaced by a new token with the same text, the tree is
+    /// rebuilt from end to end and reads back as the file it came from, byte for byte.
     /// </summary>
     [Fact]
     public void RebuildingEveryNameWritesTheSameFile()
@@ -124,7 +125,7 @@ public sealed class RewriteTests
         Assert.IsType<BlockSyntax>(root.Tree.GetLine(1).Parent);
     }
 
-    /// <summary>A node written over another, and a line taken out of the file it is on.</summary>
+    /// <summary>A node replaces another, and a line is removed from the file it is on.</summary>
     [Fact]
     public void ANodeIsReplacedAndALineIsRemoved()
     {
@@ -141,7 +142,7 @@ public sealed class RewriteTests
         Assert.Equal(".proc main {\n    lda #1\n    rts\n}\n", tree.Root.RemoveNode(nop).ToFullString());
     }
 
-    /// <summary>An item taken out of a separated list goes with the comma written after it.</summary>
+    /// <summary>An item removed from a separated list takes the comma after it along.</summary>
     [Fact]
     public void AListItemIsRemovedWithItsSeparator()
     {
@@ -152,7 +153,7 @@ public sealed class RewriteTests
         Assert.Equal(".proc main: a8, i8 {\n    rts\n}\n", tree.Root.RemoveNode(items[2]).ToFullString());
     }
 
-    /// <summary>A node built out of bare tokens, and the spacing put on it afterwards.</summary>
+    /// <summary>A node is built out of bare tokens, and spacing is added to it afterwards.</summary>
     [Fact]
     public void ABuiltNodeIsWrittenWithTheSpacingItNeeds()
     {
@@ -162,7 +163,7 @@ public sealed class RewriteTests
                 SyntaxFactory.Token(SyntaxKind.Hash),
                 SyntaxFactory.NumberExpression(SyntaxFactory.Number("0"))));
 
-        // The factory invents no whitespace, so what it builds is written tight.
+        // The factory invents no whitespace, so what it builds has no spaces.
         Assert.Equal("lda#0", instruction.ToFullString());
         Assert.Equal("lda #0", instruction.NormalizeWhitespace().ToFullString());
 
@@ -174,7 +175,7 @@ public sealed class RewriteTests
     }
 
     /// <summary>
-    /// A normalized file reads back as the tokens it was written with. The spacing is not the
+    /// A normalized file reads back as the tokens it was made of. The spacing is not the
     /// file's own — <see cref="Formatter"/> is what lays a line out — but nothing runs together
     /// and nothing is lost.
     /// </summary>
@@ -196,14 +197,17 @@ public sealed class RewriteTests
     }
 
     /// <summary>
-    /// The text of every token under a node, leaving out missing tokens and line breaks.
+    /// Returns the text of every token under a node, leaving out missing tokens and line breaks.
     /// </summary>
     private static List<string> Written(SyntaxNode node) =>
         [.. node.DescendantTokens()
             .Where(token => !token.IsMissing && token.Kind != SyntaxKind.EndOfLine)
             .Select(token => token.Text)];
 
-    /// <summary>A rewrite that overrides nothing, which is the one that must change nothing.</summary>
+    /// <summary>
+    /// Represents a rewrite that overrides nothing, which is the one rewrite that must change
+    /// nothing.
+    /// </summary>
     private sealed class Untouched : SyntaxRewriter
     {
     }

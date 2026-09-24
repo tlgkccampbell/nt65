@@ -13,8 +13,8 @@ internal static class TestTimeout
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Returns a token that is cancelled when the test run is cancelled or when the time limit
-    /// has passed, whichever comes first.
+    /// Returns a token that is cancelled as soon as the test run is cancelled or the time limit
+    /// passes.
     /// </summary>
     public static CancellationToken Token()
     {

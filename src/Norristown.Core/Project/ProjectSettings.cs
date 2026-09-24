@@ -4,21 +4,23 @@ using Norristown.Semantics;
 namespace Norristown.Project;
 
 /// <summary>
-/// What <c>nt65.json</c> says about a program. A single file built without one uses
-/// <see cref="None"/>, so nothing downstream has to ask whether there is a project.
+/// Represents what <c>nt65.json</c> says about a program. A single file built without a project
+/// file uses <see cref="None"/>, so nothing downstream has to ask whether there is a project.
 /// </summary>
-/// <param name="Cpu">The processor the program is built for; a <c>.cpu</c> item must agree.</param>
+/// <param name="Cpu">The processor the program is built for. A <c>.cpu</c> item must agree with it.</param>
 /// <param name="Files">Globs naming the source files. Their order is not significant.</param>
 /// <param name="Out">
 /// The output directory, under which each module's <c>.s</c> is written at a path made from its
-/// module name, wherever its source is; null writes under the project root.
+/// module name, regardless of where its source is. When null, output is written under the
+/// project root.
 /// </param>
-/// <param name="Defines">The build configuration, and whatever <c>-D</c> added or overrode.</param>
+/// <param name="Defines">The build configuration's defines, together with any that <c>-D</c> added or overrode.</param>
 /// <param name="Segments">Segments declared by the project rather than by a file.</param>
 /// <param name="Diagnostics">
-/// What was wrong with reading the project, and with the command line that added to it. A
-/// project that cannot be read is reported as a problem with the program rather than failing
-/// the reader, so these travel with the settings and are reported alongside everything else.
+/// The problems found while reading the project and the command line that added to it. A
+/// project that cannot be read is reported as a problem with the program rather than making the
+/// reader fail, so these diagnostics travel with the settings and are reported alongside all
+/// the others.
 /// </param>
 public sealed record ProjectSettings(
     Cpu? Cpu,
@@ -28,33 +30,37 @@ public sealed record ProjectSettings(
     IReadOnlyList<Segment> Segments,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
-    /// <summary>The severities of a project that overrides no diagnostic: an empty map.</summary>
+    /// <summary>The severities of a project that overrides no diagnostic, which is an empty map.</summary>
     public static readonly IReadOnlyDictionary<string, Severity?> NoSeverities =
         new SortedDictionary<string, Severity?>(StringComparer.Ordinal);
 
-    /// <summary>The address spaces other than the host's, ordered by name.</summary>
+    /// <summary>Gets the address spaces other than the host's, ordered by name.</summary>
     public IReadOnlyList<AddressSpace> Spaces { get; init; } = [];
 
-    /// <summary>The banks an absolute constant address in each range may be reached from, ordered by address.</summary>
+    /// <summary>
+    /// Gets the ranges, ordered by address, each with the banks from which an absolute constant
+    /// address in it may be reached.
+    /// </summary>
     public IReadOnlyList<AccessRange> Ranges { get; init; } = [];
 
     /// <summary>
-    /// The severity each named diagnostic is reported at, overriding the one the catalogue
-    /// gives it; a name mapped to null is not reported at all. An error is never lowered, and
-    /// a project file that asks for that gets an error at the entry that asks.
+    /// Gets the severity at which each named diagnostic is reported, overriding the one the
+    /// catalogue gives it. A name mapped to null is not reported at all. An error is never
+    /// lowered, and a project file that asks for that gets an error at the entry that asks.
     /// </summary>
     public IReadOnlyDictionary<string, Severity?> Severities { get; init; } = NoSeverities;
 
-    /// <summary>No project: what <c>nt65 build main.nt65</c> works from.</summary>
+    /// <summary>Gets the settings for no project, which <c>nt65 build main.nt65</c> works from.</summary>
     public static ProjectSettings None { get; } = new(null, [], null, [], [], []);
 
-    /// <summary>The named configurations, in name order, of which a build chooses one or none.</summary>
+    /// <summary>Gets the named configurations in name order. A build chooses one of them or none.</summary>
     public IReadOnlyList<BuildConfiguration> Configurations { get; init; } = [];
 
     /// <summary>
-    /// The settings the configuration named <paramref name="name"/> builds with: its defines over
-    /// the project's, and its <c>out</c> if it gives one. A name the project does not have is
-    /// reported at <paramref name="given"/>, and the project's own settings are used.
+    /// Returns the settings that the configuration named <paramref name="name"/> builds with,
+    /// which are its defines over the project's, and its <c>out</c> if it gives one. If the
+    /// project has no configuration with that name, reports an error at <paramref name="given"/>
+    /// and uses the project's own settings.
     /// </summary>
     public ProjectSettings Configured(string name, Span given)
     {
@@ -76,7 +82,10 @@ public sealed record ProjectSettings(
         return this with { Diagnostics = [.. Diagnostics, new Diagnostic(given, message)] };
     }
 
-    /// <summary>The project's severity for each diagnostic, with <paramref name="over"/>'s taking precedence.</summary>
+    /// <summary>
+    /// Returns the project's severity for each diagnostic, with the entries in
+    /// <paramref name="over"/> taking precedence.
+    /// </summary>
     private IReadOnlyDictionary<string, Severity?> Reported(IReadOnlyDictionary<string, Severity?> over)
     {
         if (over.Count == 0)
@@ -87,7 +96,10 @@ public sealed record ProjectSettings(
         return said;
     }
 
-    /// <summary>The same settings with <paramref name="defines"/> added, overriding by name.</summary>
+    /// <summary>
+    /// Returns these settings with <paramref name="defines"/> added, each replacing any existing
+    /// define with the same name.
+    /// </summary>
     public ProjectSettings With(IReadOnlyList<Define> defines)
     {
         if (defines.Count == 0)

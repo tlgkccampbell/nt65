@@ -3,8 +3,8 @@ namespace Norristown.Tests.Fixtures;
 public sealed class FixtureTests
 {
     /// <summary>
-    /// Every fixture in one test, run in parallel. Failures from all fixtures are reported
-    /// together; select one with NT65_FIXTURE.
+    /// Runs every fixture in one test, in parallel. Failures from all fixtures are reported
+    /// together. Select one fixture with NT65_FIXTURE.
     /// </summary>
     [Fact]
     public void Fixtures()

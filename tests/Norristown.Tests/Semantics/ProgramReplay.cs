@@ -9,8 +9,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// The program as an editor holds it: trees edited in place, analyzed from the analysis
-/// before, and compared after each edit with the program parsed and analyzed afresh.
+/// Represents a program as an editor holds it. The trees are edited in place and reanalyzed
+/// incrementally from the previous analysis. After each edit, the result is compared with the
+/// program parsed and analyzed from scratch.
 /// </summary>
 internal sealed class ProgramReplay
 {
@@ -21,8 +22,9 @@ internal sealed class ProgramReplay
 
     public static readonly Dictionary<string, string> Sources = new(StringComparer.Ordinal)
     {
-        // Read before every other file, so a cycle through `BASE` is reached from here first
-        // when the whole program is analyzed, and from elsewhere when only part of it is.
+        // This file is read before every other file. So when the whole program is analyzed, a
+        // cycle through `BASE` is reached from here first, and when only part of it is analyzed,
+        // the cycle is reached from elsewhere.
         ["app.nt65"] = """
             .module app
             .cpu 65816
@@ -259,15 +261,17 @@ internal sealed class ProgramReplay
         return analysis;
     }
 
-    /// <summary>Everything an analysis answers, written out so two analyses can be compared.</summary>
+    /// <summary>
+    /// Renders everything an analysis answers as text, so that two analyses can be compared.
+    /// </summary>
     private static string Snapshot(ProgramAnalysis analysis)
     {
         var text = new StringBuilder();
         foreach (var d in analysis.Diagnostics)
             text.Append($"{Spell(d)}\n");
 
-        // Every file is written out, whatever is wrong with the program: the program has
-        // mistakes in it on purpose, and a compilation of a wrong program writes nothing.
+        // Every file is emitted even though the program has errors. The program contains
+        // mistakes on purpose, and compiling a program with errors writes nothing.
         var emitted = new List<Diagnostic>();
         for (var i = 0; i < analysis.Layouts.Count; i++)
         {

@@ -7,9 +7,10 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The two views shown beside a source: the ca65 output the file compiles to, and what a macro
-/// call expands to. Each is a single request, so the client only has to show and highlight the
-/// result, and both describe the program as the editor holds it rather than as it is on disk.
+/// Tests the two views shown beside a source, which are the ca65 output the file compiles to and
+/// the expansion of a macro call. Each is a single request, so the client only has to show and
+/// highlight the result. Both describe the program as the editor holds it rather than as it is on
+/// disk.
 /// </summary>
 public sealed class ViewRequestsTests
 {
@@ -38,8 +39,8 @@ public sealed class ViewRequestsTests
         """;
 
     /// <summary>
-    /// The output is the ca65 the build writes, and every line of it that a source line wrote
-    /// says which one, so a caret in either can point at the other.
+    /// The output is the ca65 that the build writes, and every output line that a source line
+    /// emitted names that source line, so a caret in either can point at the other.
     /// </summary>
     [Fact]
     public async Task TheOutputIsTheCa65WithTheLinesItCameFrom()
@@ -55,7 +56,7 @@ public sealed class ViewRequestsTests
         Assert.Null(output.Note);
         Assert.Contains("lda #<SCREEN", output.Text, StringComparison.Ordinal);
 
-        // The header is the `.feature` block ca65 needs; a view opens scrolled past it.
+        // The header is the `.feature` block ca65 needs, and a view opens scrolled past it.
         Assert.True(output.Header > 0);
         Assert.All(output.Lines, run => Assert.True(run.First >= output.Header));
 
@@ -68,8 +69,8 @@ public sealed class ViewRequestsTests
     }
 
     /// <summary>
-    /// The output follows the editor and not the disk, and a file with errors shows what could
-    /// be written under a first line saying that it is incomplete and why.
+    /// The output follows the editor and not the disk. A file with errors shows the output that
+    /// could be written, under a first line that says the output is incomplete and why.
     /// </summary>
     [Fact]
     public async Task TheOutputFollowsTheEditorAndSaysWhenItIsIncomplete()
@@ -78,13 +79,13 @@ public sealed class ViewRequestsTests
         await using var client = await OpenAsync(timeout);
         Assert.NotNull(await OutputAsync(client, timeout));
 
-        // An unsaved edit: the call is given a name nothing declares.
+        // An unsaved edit gives the call a name that nothing declares.
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(
             Locate.Span(Source, "ptr, |SCREEN"), "MISSING"));
         _ = await client.NextDiagnosticsAsync(Uri, timeout);
 
-        // Once the output has been requested, the server says when the program has settled after
-        // each edit.
+        // Once the output has been requested, the server reports when the program has finished
+        // being analyzed after each edit.
         var said = await client.NextOutputChangedAsync(timeout);
         Assert.Equal(Uri, said.GetProperty("uri").GetString());
 
@@ -98,8 +99,8 @@ public sealed class ViewRequestsTests
     }
 
     /// <summary>
-    /// A call is written out as the nt65 the programmer would have written, with what it becomes
-    /// said first, and a hover over it says the same thing.
+    /// A call's expansion is shown as the nt65 the programmer would have written, preceded by a
+    /// summary of what the call becomes. A hover over the call shows the same thing.
     /// </summary>
     [Fact]
     public async Task ACallIsWrittenOutAsNt65()
@@ -161,7 +162,8 @@ public sealed class ViewRequestsTests
         Assert.Contains("[Show expansion](command:nt65.showExpansion?", said, StringComparison.Ordinal);
         Assert.Contains("— 2 more lines", said, StringComparison.Ordinal);
 
-        // Eight lines and no more: the listing is the detail, and the summary line is the answer.
+        // The hover shows eight lines and no more, because the listing is the detail and the
+        // summary line is the answer.
         var listing = said.Split("```nt65")[^1].Split("```")[0].Trim().Split('\n');
         Assert.Equal(8, listing.Length);
         Assert.Equal("lda #0", listing[0].Trim());
@@ -169,8 +171,9 @@ public sealed class ViewRequestsTests
 
     /// <summary>
     /// The hover's link is followed with exactly what the link carries. An editor that escapes
-    /// the drive's colon opened the file under one spelling while the link may name it under the
-    /// server's, and the two must be treated as one file, or the link finds no call at the caret.
+    /// the drive's colon opened the file under its own form of the URI, while the link may name it
+    /// under the server's form. The two must be treated as one file, or the link finds no call at
+    /// the caret.
     /// </summary>
     [Fact]
     public async Task TheHoversLinkOpensTheExpansionHoweverTheEditorSpellsTheFile()
@@ -210,7 +213,7 @@ public sealed class ViewRequestsTests
         Assert.Equal("clear!(5)", expansion.Title);
     }
 
-    /// <summary>A call can be inlined: the action replaces it with its expansion in the source.</summary>
+    /// <summary>A call can be inlined by an action that replaces it with its expansion in the source.</summary>
     [Fact]
     public async Task ACallIsInlinedWhereThatChangesNothingButTheText()
     {
@@ -233,7 +236,7 @@ public sealed class ViewRequestsTests
     }
 
     /// <summary>
-    /// A call written inside a macro body is expanded as part of that body and cannot be inlined
+    /// A call inside a macro body is expanded as part of that body and cannot be inlined
     /// on its own, so the action is offered disabled, with the reason, rather than quietly left out.
     /// </summary>
     [Fact]

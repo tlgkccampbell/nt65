@@ -4,11 +4,10 @@ using System.Text;
 namespace Norristown.Syntax.InternalSyntax;
 
 /// <summary>
-/// Lexes one line at a time, with no state carried between lines. Whitespace before
-/// the first token is its leading trivia; whitespace and a comment after a token, up to the
-/// line break, are its trailing trivia; the line break is the text of the final
-/// <see cref="SyntaxKind.EndOfLine"/> token, which carries the trivia of a line with no
-/// other tokens.
+/// Lexes one line at a time, keeping no state between lines. Whitespace before the first token
+/// is its leading trivia. Whitespace and a comment after a token, up to the line break, are its
+/// trailing trivia. The line break is the text of the final <see cref="SyntaxKind.EndOfLine"/>
+/// token, which also holds the trivia of a line with no other tokens.
 /// </summary>
 internal static class Lexer
 {
@@ -42,7 +41,7 @@ internal static class Lexer
             leading = ImmutableArray<GreenTrivia>.Empty;
         }
 
-        // A line with no tokens: its whitespace and comment belong to the end-of-line token.
+        // On a line with no tokens, the whitespace and comment belong to the end-of-line token.
         if (pos < content.Length)
             leading = leading.Add(new GreenTrivia(SyntaxKind.CommentTrivia, content[pos..].ToString()));
         tokens.Add(GreenCache.Token(SyntaxKind.EndOfLine, line[contentEnd..], leading, ImmutableArray<GreenTrivia>.Empty, null));
@@ -79,7 +78,7 @@ internal static class Lexer
             var word = text[pos..SkipWord(text, pos)];
             pos += word.Length;
 
-            // A CPU name that is not a valid number — `65c02`, `65sc02` — is a token of its own.
+            // A CPU name that is not a valid number, such as `65c02` or `65sc02`, is a token of its own.
             // `6502` and `65816` are numbers, and the places that take a CPU name take either.
             var wrong = Digits(word, '\0', "decimal", char.IsAsciiDigit);
             if (wrong is not null && SyntaxFacts.IsCpuName(word.ToString()))
@@ -179,7 +178,10 @@ internal static class Lexer
         return (SyntaxKind.BadToken, One(Catalogue.UnexpectedCharacter.Says(rune)));
     }
 
-    /// <summary>A single error wrapped in the list a token takes its errors as, or null for none.</summary>
+    /// <summary>
+    /// Wraps a single error in the list a token takes its errors as, or returns null if there is
+    /// no error.
+    /// </summary>
     private static IReadOnlyList<DiagnosticMessage>? One(DiagnosticMessage? error) =>
         error is { } one ? [one] : null;
 
@@ -191,11 +193,12 @@ internal static class Lexer
     }
 
     /// <summary>
-    /// What is wrong with the digits of a number, or null when nothing is. <c>_</c> between two
-    /// digits is a separator, in any base: <c>$7f_ff</c>, <c>%1010_1010</c> and <c>1_000</c>
-    /// are the numbers their digits spell. <paramref name="prefix"/> is the <c>$</c> or <c>%</c>
-    /// the digits follow, or <c>\0</c> for a decimal number, so that a message names the number
-    /// as it was written; the message text is built only once there is an error to report.
+    /// Returns what is wrong with the digits of a number, or null if nothing is. A <c>_</c>
+    /// between two digits is a separator in any base, so <c>$7f_ff</c>, <c>%1010_1010</c> and
+    /// <c>1_000</c> are the numbers their digits spell. <paramref name="prefix"/> is the <c>$</c>
+    /// or <c>%</c> the digits follow, or <c>\0</c> for a decimal number, so that a message names
+    /// the number as it appears in the source. The message text is built only once there is an
+    /// error to report.
     /// </summary>
     private static DiagnosticMessage? Digits(ReadOnlySpan<char> digits, char prefix, string radix, Func<char, bool> isDigit)
     {
@@ -217,11 +220,11 @@ internal static class Lexer
     }
 
     /// <summary>
-    /// A character or string literal, up to its closing quote or the end of the line. The
-    /// escapes are <c>\n \r \t \0 \\ \" \' \xHH</c> in both. Every unreadable escape is reported,
-    /// since each needs its own correction. A character literal that does not hold exactly one
-    /// character is reported only when every escape was readable, since otherwise a bad escape
-    /// is the likely cause.
+    /// Scans a character or string literal, up to its closing quote or the end of the line, and
+    /// returns its errors, or null if it has none. Both kinds of literal take the escapes
+    /// <c>\n \r \t \0 \\ \" \' \xHH</c>. Every unreadable escape is reported, since each needs its
+    /// own correction. A character literal that does not hold exactly one character is reported
+    /// only when every escape was readable, since otherwise a bad escape is the likely cause.
     /// </summary>
     private static IReadOnlyList<DiagnosticMessage>? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
     {

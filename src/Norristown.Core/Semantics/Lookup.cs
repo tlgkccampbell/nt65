@@ -1,22 +1,24 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a name means where it is written, in one place. The binder resolves a file with this
-/// and a <see cref="SemanticModel"/> answers an editor with it, so what is offered at the
-/// caret and what the name will bind to can never be worked out two different ways.
+/// Decides, in one place, what a name means where it appears. The binder resolves a file with
+/// this class and a <see cref="SemanticModel"/> answers an editor with it, so the names offered
+/// at the caret and the symbol a name binds to can never be computed two different ways.
 /// <para>
-/// Nothing here reads the tree or reports anything: it is given the scope a name is written
-/// in, the file's <c>.use</c> items and the program's table, and answers with the
-/// <see cref="Place"/> the name reaches. Whoever asks decides what to say about the answer.
+/// Nothing here reads the tree. The class is given the scope a name appears in, the file's
+/// <c>.use</c> items and the program's table, and returns the <see cref="Place"/> the name
+/// reaches. It reports a diagnostic only through the callback a caller passes, and the caller
+/// decides what to report about the result.
 /// </para>
 /// </summary>
 internal static class Lookup
 {
     /// <summary>
-    /// What a name the scopes around it do not declare means: what a <c>.use</c> brought in, a
-    /// define, the first part of a module's path, or what a <c>.use module::*</c> brought in.
-    /// <paramref name="last"/> says the name is the whole of what is written rather than a
-    /// step on a path, because a module is the start of a path and never a value.
+    /// Returns what a name means when the scopes around it do not declare it. The name can be
+    /// something a <c>.use</c> brought in, a define, the first part of a module's path, or
+    /// something a <c>.use module::*</c> brought in. <paramref name="last"/> indicates that the
+    /// name is the whole reference, not a step on a path, because a module is the start of a path
+    /// and never a value.
     /// </summary>
     public static Place? Outside(
         string name,
@@ -34,9 +36,9 @@ internal static class Lookup
         if (!last && program.IsModulePath(name))
             return new Place(null, name);
 
-        // A module on its own is not a value, so a name written alone means what a `*` brought
-        // in, if anything; only when nothing else matches is it the module, which the caller
-        // reports as a module used as a name.
+        // A module on its own is not a value, so a name that appears alone means what a `*`
+        // brought in, if anything. Only when nothing else matches is it the module, which the
+        // caller reports as a module used as a name.
         Place? chosen = null;
         foreach (var module in globs)
         {
@@ -55,7 +57,10 @@ internal static class Lookup
         return chosen ?? (last && program.IsModulePath(name) ? new Place(null, name) : null);
     }
 
-    /// <summary>The first part of a path written from the root of the modules.</summary>
+    /// <summary>
+    /// Returns the place that the first part of a path from the root of the modules reaches, or
+    /// reports a diagnostic and returns null when no module path starts with that name.
+    /// </summary>
     public static Place? ModuleRoot(
         string name, ProgramSymbols program, Action<DiagnosticMessage, DiagnosticFix?>? report = null)
     {
@@ -66,8 +71,9 @@ internal static class Lookup
     }
 
     /// <summary>
-    /// The part after <paramref name="prefix"/>, which is a module or the start of one's name.
-    /// Whether what it reaches may be named from outside its module is for the caller to check.
+    /// Returns the place that <paramref name="name"/> reaches after <paramref name="prefix"/>,
+    /// which is a module or the start of a module's name. The caller checks whether the result
+    /// may be named from outside its module.
     /// </summary>
     public static Place? InModule(
         string name,
@@ -95,38 +101,45 @@ internal static class Lookup
         return new Place(member);
     }
 
-    /// <summary>The names a path may write after a scope's <c>::</c>, which a misspelling could have meant.</summary>
+    /// <summary>
+    /// Returns the names a path may contain after a scope's <c>::</c>, which are the names a
+    /// misspelling could have meant.
+    /// </summary>
     public static IEnumerable<string> Members(Scope container) =>
         container.Symbols.Where(symbol => !symbol.IsCheapLocal).Select(symbol => symbol.Name);
 
-    /// <summary>The same for a module: what its file declares at the top level, and what it re-exports.</summary>
+    /// <summary>
+    /// Returns the names a path may contain after a module's <c>::</c>, which are the names its
+    /// file declares at the top level and the names it re-exports.
+    /// </summary>
     public static IEnumerable<string> Members(ProgramSymbols.Module module) =>
         Members(module.FileScope).Concat(module.Reexports.Select(reexport => reexport.Name));
 
     /// <summary>
-    /// A near miss as a message writes it, <c>; `count` is</c>, or nothing at all when the
-    /// name is nothing like anything declared there.
+    /// Returns a near miss formatted for a message, such as <c>; did you mean `count`?</c>, or
+    /// an empty string when the name resembles nothing declared there.
     /// </summary>
     public static string Suggesting(string? near) => near is null ? "" : $"; did you mean `{near}`?";
 
     /// <summary>
-    /// The scope that <c>::</c> after a symbol looks in: its own scope, or the scope of the type
-    /// it names, which is what makes the fields of <c>.type T</c> data reachable through it. A
-    /// macro has a body but is excluded: what a body declares is local to each
-    /// expansion, so there is no one symbol to name from outside.
+    /// Returns the scope that <c>::</c> after <paramref name="symbol"/> looks in. This is the
+    /// symbol's own scope, or else the scope of the type it names, so the fields of data declared
+    /// with <c>.type T</c> are reachable through it. A macro has a body but is excluded, because
+    /// what its body declares is local to each <see cref="Expansion"/>, so there is no single
+    /// symbol to name from outside.
     /// </summary>
     public static Scope? BodyOf(Symbol symbol) =>
         symbol.Kind == SymbolKind.Macro ? null : symbol.Body ?? symbol.Type?.Body;
 
     /// <summary>
-    /// Every name that may be written alone in <paramref name="at"/>, in the order a lookup
-    /// tries them: what the scopes from here out to the file declare, the nearest first, what
-    /// <c>.use</c> brought in, the defines, and what a <c>.use module::*</c> brings in. Where
-    /// two entries share a name the first is what the name means, which is the one rule
-    /// <see cref="Outside"/> follows.
+    /// Returns every name that may appear alone in <paramref name="at"/>, in the order a lookup
+    /// tries them. The order is what the scopes from here out to the file declare, nearest
+    /// first, then what <c>.use</c> brought in, then the defines, and then what a
+    /// <c>.use module::*</c> brings in. Where two entries share a name, the first is what the
+    /// name means, which is the same rule <see cref="Outside"/> follows.
     /// <para>
-    /// A module is not among them: it is the start of a path rather than a name that refers
-    /// to something, and the program is what lists the modules a path may start with.
+    /// Modules are not included. A module is the start of a path, not a name that refers to
+    /// something, and the program lists the modules a path may start with.
     /// </para>
     /// </summary>
     public static IEnumerable<(string Name, Place Means)> InScope(

@@ -5,60 +5,67 @@ using Norristown.Processor;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What an expression evaluates to: a number, a string, or nothing when the expression
-/// names an address or needs something only a later stage knows, such as layout.
+/// Represents what an expression evaluates to: a number, a string, or nothing when the
+/// expression names an address or needs something only a later stage knows, such as layout.
 /// <para>
-/// Arithmetic is 64-bit and signed while nt65 computes, and what the output carries has to
-/// fit ca65's 32 bits. Where a value fits is a question about the place it is written — a
-/// slot, an immediate, a declaration — so every range check belongs to the stage that writes
-/// it rather than here.
+/// Arithmetic is 64-bit and signed while nt65 computes, and values in the output must fit
+/// ca65's 32 bits. Whether a value fits depends on where it is emitted, such as a data
+/// field, an immediate or a declaration, so every range check belongs to the stage that emits
+/// the value rather than here.
 /// </para>
 /// </summary>
-/// <param name="Kind">What the value holds.</param>
+/// <param name="Kind">The kind of value held.</param>
 /// <param name="Number">The number, when the kind is <see cref="ValueKind.Number"/>.</param>
 /// <param name="Text">The text, when the kind is <see cref="ValueKind.String"/>.</param>
 public readonly record struct Value(ValueKind Kind, long Number, string? Text)
 {
-    /// <summary>No value.</summary>
+    /// <summary>Represents no value.</summary>
     public static readonly Value Unknown;
 
-    /// <summary>Whether the value is known at all.</summary>
+    /// <summary>Gets a value indicating whether the value is known at all.</summary>
     public bool IsKnown => Kind != ValueKind.Unknown;
 
-    /// <summary>Whether the value is a number.</summary>
+    /// <summary>Gets a value indicating whether the value is a number.</summary>
     public bool IsNumber => Kind == ValueKind.Number;
 
-    /// <summary>Whether the value is a string.</summary>
+    /// <summary>Gets a value indicating whether the value is a string.</summary>
     public bool IsString => Kind == ValueKind.String;
 
-    /// <summary>Whether the value is a bare word, which only <c>==</c> and <c>!=</c> accept.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the value is a bare word, which only <c>==</c> and
+    /// <c>!=</c> accept.
+    /// </summary>
     public bool IsWord => Kind == ValueKind.Word;
 
-    /// <summary>A number.</summary>
+    /// <summary>Returns a number value.</summary>
     public static Value Of(long number) => new(ValueKind.Number, number, null);
 
-    /// <summary>A string.</summary>
+    /// <summary>Returns a string value.</summary>
     public static Value Of(string text) => new(ValueKind.String, 0, text);
 
-    /// <summary>A condition, as the 1 or 0 that a comparison or a logical operator yields.</summary>
+    /// <summary>
+    /// Returns a condition as the 1 or 0 that a comparison or a logical operator yields.
+    /// </summary>
     public static Value Of(bool condition) => Of(condition ? 1L : 0L);
 
-    /// <summary>A bare word, such as the <c>a</c> of <c>push!(a, x, y)</c>.</summary>
+    /// <summary>Returns a bare word value, such as the <c>a</c> of <c>push!(a, x, y)</c>.</summary>
     public static Value Word(string word) => new(ValueKind.Word, 0, word);
 
-    /// <summary>The number, or null when the value is not one.</summary>
+    /// <summary>Returns the number, or null when the value is not a number.</summary>
     public long? AsNumber() => IsNumber ? Number : null;
 
     /// <summary>
-    /// The address size a constant value implies: below <c>$100</c> zero page, below
-    /// <c>$10000</c> absolute, otherwise far. A negative number is written to fill the width
-    /// it is used at, so it says nothing about a size.
+    /// Returns the address size a constant value implies: zero page below <c>$100</c>, absolute
+    /// below <c>$10000</c>, and far otherwise. A negative number is emitted to fill the width it
+    /// is used at, so it implies no size.
     /// </summary>
     public AddressSize? ImpliedAddressSize() => Kind == ValueKind.Number && Number >= 0
         ? Number < 0x100 ? AddressSize.ZeroPage : Number < 0x10000 ? AddressSize.Absolute : AddressSize.Far
         : null;
 
-    /// <summary>The value as a programmer reads it: numbers in hexadecimal, strings quoted.</summary>
+    /// <summary>
+    /// Returns the value as a programmer reads it, with numbers in hexadecimal and strings quoted.
+    /// </summary>
     public override string ToString() => Kind switch
     {
         ValueKind.Number => Format(Number),
@@ -68,9 +75,10 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
     };
 
     /// <summary>
-    /// A number as nt65 spells it: hexadecimal, padded to a byte, a word or a long, since
-    /// every value a programmer hovers over is an address, a mask or a small count. Decimal
-    /// where hexadecimal would not help, and negative numbers as themselves.
+    /// Formats a number as nt65 displays it. Numbers are in hexadecimal, padded to a byte, a word
+    /// or a long, because every value a programmer hovers over is an address, a mask or a small
+    /// count. Small numbers, where hexadecimal would not help, and negative numbers are in
+    /// decimal.
     /// </summary>
     private static string Format(long number) => number switch
     {
@@ -82,10 +90,10 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
     };
 
     /// <summary>
-    /// Text as a literal would write it: a byte that is not a printable ASCII character, such as
-    /// one with bit 7 set that a function built, is written <c>\xHH</c>, so what is shown can be
-    /// written back. A character above <c>$ff</c>, which only a charmap can map, is kept as it
-    /// was typed.
+    /// Formats text as a string literal. A byte that is not a printable ASCII character, such as
+    /// one with bit 7 set that a function built, is shown as <c>\xHH</c>, so that what is shown
+    /// can be typed back in. A character above <c>$ff</c>, which only a charmap can map, is kept
+    /// as it was typed.
     /// </summary>
     private static string Quoted(string text)
     {

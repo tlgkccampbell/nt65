@@ -5,25 +5,28 @@ using Norristown.Syntax;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 import-inc</c>: converts a ca65 include file of constants into an nt65 module, once.
-/// A person runs it by hand, and the file it writes is maintained as ordinary nt65 source from
-/// then on: nt65 reads no ca65 at build time, and this command does not change that.
+/// Implements <c>nt65 import-inc</c>, which converts a ca65 include file of constants into an
+/// nt65 module, once. A person runs it by hand, and the file it writes is maintained as ordinary
+/// nt65 source from then on. nt65 reads no ca65 at build time, and this command does not change
+/// that.
 /// <para>
-/// A line it understands — <c>NAME = expr</c> or <c>NAME := expr</c>, with its comment — becomes
-/// a constant; a comment line is carried over as it stands. Anything else is written out as a
-/// comment saying it was not converted, and counted on standard error, so that nothing in the
+/// A line it understands, which is <c>NAME = expr</c> or <c>NAME := expr</c> with its comment,
+/// becomes a constant. A comment line is copied over as it stands. Anything else is written out as
+/// a comment saying it was not converted, and counted on standard error, so that nothing in the
 /// file is dropped silently and a person can see what is left to do by hand.
 /// </para>
 /// </summary>
 public static class ImportIncCommand
 {
-    /// <summary>The longest an <c>.export</c> line may get before the names continue on another one.</summary>
+    /// <summary>
+    /// The maximum length of an <c>.export</c> line before the names continue on another line.
+    /// </summary>
     private const int ExportWidth = 92;
 
     /// <summary>
-    /// Converts the file <paramref name="arguments"/> names and returns the exit code: 0 when it
-    /// wrote a module, 1 when the file could not be read or the output could not be written, 2
-    /// when the command is wrong. Lines it could not convert are notes, not failures.
+    /// Converts the file <paramref name="arguments"/> names and returns the exit code. The code is
+    /// 0 when it wrote a module, 1 when the file could not be read or the output could not be
+    /// written, and 2 when the command is wrong. Lines it could not convert are notes, not failures.
     /// </summary>
     public static int Run(IReadOnlyList<string> arguments, string directory, TextWriter output, TextWriter error)
     {
@@ -164,8 +167,8 @@ public static class ImportIncCommand
     }
 
     /// <summary>
-    /// The name, the expression and the comment of a <c>NAME = expr</c> or <c>NAME := expr</c>
-    /// line; the name is empty where the line is neither.
+    /// Returns the name, the expression and the comment of a <c>NAME = expr</c> or
+    /// <c>NAME := expr</c> line. The name is empty when the line is neither.
     /// </summary>
     private static (string Name, string Value, string? Comment) Constant(string line)
     {
@@ -175,7 +178,7 @@ public static class ImportIncCommand
             return ("", "", null);
         var name = code[..at].TrimEnd();
 
-        // ca65 also accepts `:=` for this definition; nt65 spells it only as `=`, so the colon is
+        // ca65 also accepts `:=` for this definition, but nt65 uses only `=`, so the colon is
         // dropped.
         if (name.EndsWith(':'))
             name = name[..^1].TrimEnd();
@@ -184,9 +187,9 @@ public static class ImportIncCommand
     }
 
     /// <summary>
-    /// The code and the comment of a line, split at the <c>;</c> that is not inside a literal.
-    /// The comment keeps the spacing before it, so comments aligned in a column stay aligned
-    /// unless the formatter moves them.
+    /// Splits a line into its code and its comment at the first <c>;</c> that is not inside a
+    /// literal. The comment keeps the spacing before it, so comments aligned in a column stay
+    /// aligned unless the formatter moves them.
     /// </summary>
     private static (string Code, string? Comment) SplitComment(string line)
     {
@@ -214,10 +217,11 @@ public static class ImportIncCommand
     }
 
     /// <summary>
-    /// Whether nt65's own parser reads <paramref name="line"/>, without errors, as a constant
-    /// declaration. A ca65 spelling nt65 does not have — <c>.LOBYTE</c>, <c>.SHL</c>, a local
-    /// label — and an expression nt65 requires parentheses in to make its order explicit are both
-    /// rejected here, rather than written out as source that will not build.
+    /// Returns a value indicating whether nt65's own parser reads <paramref name="line"/>, without
+    /// errors, as a constant declaration. A ca65 construct that nt65 does not have, such as
+    /// <c>.LOBYTE</c>, <c>.SHL</c> or a local label, is rejected here. So is an expression in
+    /// which nt65 requires parentheses to make its order explicit. Both are rejected rather than
+    /// written out as source that will not build.
     /// </summary>
     private static bool Reads(string line)
     {
@@ -226,7 +230,9 @@ public static class ImportIncCommand
             && tree.GetLine(0).Statement is ConstantDeclarationSyntax;
     }
 
-    /// <summary>The reason reported for a line left as a comment, as best it can be determined.</summary>
+    /// <summary>
+    /// Returns the reason reported for a line left as a comment, as far as it can be determined.
+    /// </summary>
     private static string Why(string line)
     {
         var (code, _) = SplitComment(line);
@@ -241,9 +247,9 @@ public static class ImportIncCommand
     }
 
     /// <summary>
-    /// The <c>.export</c> lines that make the constants part of the module, one line each while
-    /// they fit. Every name is exported, since a constant no other module can name would be of no
-    /// use to the rest of the program.
+    /// Returns the <c>.export</c> lines that make the constants part of the module, with as many
+    /// names on each line as fit. Every name is exported, since a constant no other module can
+    /// name would be of no use to the rest of the program.
     /// </summary>
     private static IEnumerable<string> Exports(IReadOnlyList<string> names)
     {
@@ -264,13 +270,17 @@ public static class ImportIncCommand
         yield return "";
     }
 
-    /// <summary>The module reformatted in nt65's standard layout, the one <c>nt65 fmt</c> writes.</summary>
+    /// <summary>
+    /// Returns the module reformatted in nt65's standard layout, which is the one
+    /// <c>nt65 fmt</c> writes.
+    /// </summary>
     private static string Laid(string text) => Formatter.Format(SyntaxTree.Parse(new SourceFile("import.nt65", text)));
 
     /// <summary>
-    /// The module name used when the command line does not give one: the file's name without its
-    /// extension, with each character other than a letter, digit or <c>_</c> replaced by <c>_</c>,
-    /// and <c>_</c> put in front when that is empty or starts with a digit.
+    /// Returns the module name used when the command line does not give one. The name is the
+    /// file's name without its extension, with each character other than a letter, digit or
+    /// <c>_</c> replaced by <c>_</c>, and with <c>_</c> put in front when the result is empty or
+    /// starts with a digit.
     /// </summary>
     private static string ModuleName(string path)
     {

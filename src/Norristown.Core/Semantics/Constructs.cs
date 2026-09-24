@@ -3,17 +3,21 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Questions about block openers and directives that binding, layout and emission all ask.
-/// They walk the same lines and must agree on the answers, so the answers live in one place.
+/// Answers the questions about block openers and directives that binding, layout and emission
+/// all ask. These passes walk the same lines and must agree on the answers, so the answers live
+/// in one place.
 /// </summary>
 public static class Constructs
 {
-    /// <summary>Whether a block repeats its contents, so that they are read once and written many times.</summary>
+    /// <summary>
+    /// Determines whether a block repeats its contents, so that they are read once and emitted
+    /// many times.
+    /// </summary>
     public static bool Repeats(BlockKind kind) => kind is BlockKind.Repeat or BlockKind.Each;
 
     /// <summary>
-    /// What an <c>.assert</c> or an <c>.error</c> says: the expression that has to hold (none,
-    /// for an <c>.error</c>), and the message written with it.
+    /// Returns the condition and the message of an <c>.assert</c> or an <c>.error</c>. The
+    /// condition is the expression that has to hold, and it is null for an <c>.error</c>.
     /// </summary>
     public static Assertion AssertionOf(StatementSyntax directive) => directive switch
     {
@@ -23,19 +27,21 @@ public static class Constructs
     };
 
     /// <summary>
-    /// The segment a segment block or a region line names, or null when the line is neither or
-    /// names none. A name written in quotes has been reported, and still names its segment.
+    /// Returns the segment that a segment block or a region line names, or null when the line is
+    /// neither or names no segment. A name in quotes has already been reported, but it still
+    /// names its segment.
     /// </summary>
     public static string? SegmentOf(StatementSyntax opener) =>
         opener is SegmentStatementSyntax segment ? SegmentNames.Of(segment.Name) : null;
 
-    // A message the line does not write is null: an `.assert` without one leaves the slot
-    // empty, and an `.error` without one holds a missing token where the string belongs.
+    // The message is null when the line has none. An `.assert` without a message leaves that
+    // child position empty, and an `.error` without one holds a missing token where the string
+    // belongs.
     private static string? MessageOf(SyntaxToken? message) =>
         message is { IsMissing: false } written ? Literals.Text(written.Text) : null;
 
-    /// <summary>What an <c>.assert</c> or an <c>.error</c> asks for.</summary>
-    /// <param name="Condition">What has to hold, or null for an <c>.error</c>.</param>
-    /// <param name="Message">What to say about it, or null when none was written.</param>
+    /// <summary>Represents what an <c>.assert</c> or an <c>.error</c> requires.</summary>
+    /// <param name="Condition">The expression that has to hold, or null for an <c>.error</c>.</param>
+    /// <param name="Message">The message to report, or null when the directive has none.</param>
     public readonly record struct Assertion(ExpressionSyntax? Condition, string? Message);
 }

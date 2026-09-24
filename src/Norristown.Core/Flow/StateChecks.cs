@@ -6,14 +6,14 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// What the processor-state analysis reports, and the words its messages are written in.
-/// <see cref="StateAnalysis"/> works out what each statement does to the state; this says what
-/// is wrong with the state it found, at a call, a return, a jump into another routine, a
-/// width-dependent immediate, and an operand that reaches memory through D or B.
+/// Reports what the processor-state analysis finds wrong, in the words its messages use.
+/// <see cref="StateAnalysis"/> works out what each statement does to the state. This class
+/// reports what is wrong with the state it found at a call, a return, a jump into another
+/// routine, a width-dependent immediate, and an operand that reaches memory through D or B.
 /// <para>
-/// Nothing is reported until the states have settled: a walk that is not the final one runs
-/// the same checks and throws their messages away, so a state on its way to a fixed point is
-/// never reported on.
+/// Nothing is reported until the states have reached a fixed point. A walk that is not the
+/// final one runs the same checks and discards their messages, so a state on its way to a fixed
+/// point is never reported on.
 /// </para>
 /// </summary>
 internal sealed class StateChecks
@@ -33,33 +33,33 @@ internal sealed class StateChecks
         this.ranges = ranges;
     }
 
-    /// <summary>What the checks have found, in the order they were reported.</summary>
+    /// <summary>Gets what the checks have found, in the order they were reported.</summary>
     public IReadOnlyList<Diagnostic> Found => diagnostics;
 
     /// <summary>
-    /// Whether the walk is the last one, over converged states, which is the only one that
-    /// reports.
+    /// Gets or sets a value indicating whether the walk is the last one, over converged states.
+    /// Only the last walk reports.
     /// </summary>
     public bool Final { get; set; }
 
-    /// <summary>A known width as a message says it.</summary>
+    /// <summary>Returns a known width in the words a message uses.</summary>
     public static string Spell(Width width) => width == Width.Sixteen ? "16-bit" : "8-bit";
 
-    /// <summary>The register an immediate's width comes from, as a message names it.</summary>
+    /// <summary>Returns the register an immediate's width comes from, as a message names it.</summary>
     public static string Spell(WidthRegister register) => register == WidthRegister.A ? "A" : "X and Y";
 
-    /// <summary>A known mode as a message says it.</summary>
+    /// <summary>Returns a known mode in the words a message uses.</summary>
     public static string Mode(ProcessorMode mode) => mode == ProcessorMode.Native ? "native" : "emulation";
 
-    /// <summary>Whether a width is one a message can name, rather than unknown or unchanged.</summary>
+    /// <summary>Returns whether a width is one a message can name, rather than unknown or unchanged.</summary>
     public static bool IsKnown(Width width) => width is Width.Eight or Width.Sixteen;
 
-    /// <summary>The same for the emulation flag.</summary>
+    /// <summary>Returns whether a mode is one a message can name, rather than unknown or unchanged.</summary>
     public static bool IsKnown(ProcessorMode mode) => mode is ProcessorMode.Native or ProcessorMode.Emulation;
 
     /// <summary>
-    /// The state a routine returns with: its declared exit, with the parts it declares unchanged
-    /// taken from <paramref name="state"/>.
+    /// Returns the state a routine returns with. That is its declared exit, with the parts it
+    /// declares unchanged taken from <paramref name="state"/>.
     /// </summary>
     public static ProcessorState Exited(Signature callee, ProcessorState state)
     {
@@ -77,27 +77,34 @@ internal sealed class StateChecks
             : exited;
     }
 
-    /// <summary>The operand an instruction has on this writing of it: what a call gave, where the body names an <c>operand</c> parameter.</summary>
+    /// <summary>
+    /// Returns the operand an instruction has in this expansion of it. Where the body names an
+    /// <c>operand</c> parameter, that is the operand the call gave.
+    /// </summary>
     public SyntaxNode? OperandOf(Step step)
     {
         var written = (step.Statement as InstructionStatementSyntax)?.Operand;
         return Operands.Substituted(model, written, step.On)?.Operand ?? written;
     }
 
-    /// <summary>Whether <paramref name="target"/> is in another address space than the code at <paramref name="step"/>.</summary>
+    /// <summary>
+    /// Returns whether <paramref name="target"/> is in another address space than the code at
+    /// <paramref name="step"/>.
+    /// </summary>
     public bool InAnotherSpace(Step step, Symbol? target) =>
         target?.Segment is { } placed && model.Segments.SpaceOf(placed)?.Name != model.Segments.SpaceOf(step.Segment)?.Name;
 
-    /// <summary>The segment a placed symbol is in, as the program's table declares it.</summary>
+    /// <summary>Returns the segment a symbol is in, as the program's table declares it.</summary>
     public Segment? SegmentOf(Symbol symbol) => symbol.Segment is { } name ? model.Segments.Find(name) : null;
 
-    /// <summary>The bank a segment declares it lives in, which is the program bank for code in it.</summary>
+    /// <summary>Returns the bank a segment declares it lives in, which is the program bank for code in it.</summary>
     public StateValue BankOf(string? segment) =>
         segment is not null && model.Segments.Find(segment)?.Bank is { } bank ? StateValue.Of(bank) : StateValue.Unknown;
 
     /// <summary>
-    /// Checks a width-dependent immediate. ca65 sizes such an immediate from the width it is
-    /// told, and it is this analysis that tells it, so the width has to be known here.
+    /// Reports a diagnostic for a width-dependent immediate whose width is not known here, or that
+    /// is 16-bit in emulation mode. ca65 sizes such an immediate from the width it is told, and it
+    /// is this analysis that tells it, so the width has to be known here.
     /// </summary>
     public void CheckImmediate(
         Step step, MnemonicKind mnemonic, WidthRegister register, ProcessorState state, Cause? why, Symbol routine)
@@ -129,9 +136,10 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// What memory an operand reaches through the direct page or the data bank, checked
-    /// against what the segments and the project's <c>ranges</c> declare. Where either side is
-    /// not declared or not known, nothing is reported: the checks are opt-in by declaration.
+    /// Reports a diagnostic where the memory an operand reaches through the direct page or the
+    /// data bank disagrees with what the segments and the project's <c>ranges</c> declare. It also
+    /// reports a near transfer to a segment in another bank. Where either side is not declared or
+    /// not known, nothing is reported, because the checks are opt-in by declaration.
     /// </summary>
     public void CheckMemory(Step step, MnemonicKind mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
     {
@@ -170,7 +178,7 @@ internal sealed class StateChecks
             return;
         }
 
-        // Only an absolute operand of an instruction that reads or writes data uses B: a long
+        // Only an absolute operand of an instruction that reads or writes data uses B. A long
         // operand names its bank, `jmp` and `jsr` use the program bank, and `pea` and `per`
         // access no memory at all.
         if (chosen is not (AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY)
@@ -198,7 +206,10 @@ internal sealed class StateChecks
         }
     }
 
-    /// <summary>Checks that the state here matches what a routine's entry declares.</summary>
+    /// <summary>
+    /// Reports a diagnostic for each part of the state here that does not match what a routine's
+    /// entry declares.
+    /// </summary>
     public void CheckEntry(Step step, string what, Signature callee, ProcessorState state)
     {
         Width("a", "A", callee.Entry.A, state.A);
@@ -238,7 +249,10 @@ internal sealed class StateChecks
         }
     }
 
-    /// <summary>Checks that <paramref name="state"/> is what the routine or macro <paramref name="name"/> declares it returns with.</summary>
+    /// <summary>
+    /// Reports a diagnostic for each part of <paramref name="state"/> that is not what the routine
+    /// or macro <paramref name="name"/> declares it returns with.
+    /// </summary>
     /// <remarks><paramref name="where"/> says where <paramref name="state"/> holds, as the message puts it.</remarks>
     public void CheckExit(
         Step step, string what, string where, ProcessorState exit, ProcessorState state, string name)
@@ -314,7 +328,10 @@ internal sealed class StateChecks
         }
     }
 
-    /// <summary>A return: it has to leave the way the routine is called, in the state it declares.</summary>
+    /// <summary>
+    /// Reports a diagnostic where a return does not leave the way the routine is called, or leaves
+    /// in a state other than the one the routine declares.
+    /// </summary>
     public void CheckReturn(Step step, MnemonicKind mnemonic, ProcessorState state, Symbol routine)
     {
         var signature = routine.Signature ?? Signature.Default;
@@ -326,15 +343,18 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// Reports a call whose target is not a routine with a signature, which is what would say
-    /// what state it takes and what it hands back.
+    /// Reports a diagnostic for a call whose target is not a routine with a signature. A signature
+    /// is what would say what state the target takes and what it hands back.
     /// </summary>
     public void CheckCallTarget(Step step, MnemonicKind mnemonic, Symbol? target) =>
         Report(step, target is null
             ? Catalogue.CallTargetUnknown.Says(SyntaxFacts.TextOf(mnemonic))
             : Catalogue.CallTargetNotARoutine.Says(target.DisplayName));
 
-    /// <summary>A call: it is made the way the routine is reached, in the state the routine expects.</summary>
+    /// <summary>
+    /// Reports a diagnostic where a call is not made the way the routine is reached, or not in the
+    /// state the routine expects.
+    /// </summary>
     public void CheckCall(Step step, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state)
     {
         if (mnemonic == MnemonicKind.Jsr && callee.IsFar)
@@ -347,8 +367,8 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// A call written as <c>per</c> and a branch, checked as <c>jsr</c> or, with a <c>phk</c>
-    /// before it, as <c>jsl</c>.
+    /// Reports a diagnostic where a call made with <c>per</c> and a branch does not suit the routine
+    /// it calls. The call is checked as <c>jsr</c> or, with a <c>phk</c> before it, as <c>jsl</c>.
     /// </summary>
     public void CheckRelativeCall(Step step, MnemonicKind mnemonic, RelativeCall call, ProcessorState state)
     {
@@ -362,12 +382,13 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// A jump to a routine's entry. The routine returns to this routine's caller, so it has to
-    /// take the state here, return the way this routine returns, and hand back what this
-    /// routine promises. Where nothing returns — this routine never does, or leaves by
-    /// <c>rti</c>, or the target never returns — only the target's entry is checked.
-    /// <paramref name="via"/> is what the source wrote to make the jump: the mnemonic, or the
-    /// <c>.next</c> or <c>.fallthrough</c> that says where the path goes, for which
+    /// Reports a diagnostic where a jump to a routine's entry does not suit that routine. The
+    /// routine returns to this routine's caller, so it has to take the state here, return the way
+    /// this routine returns, and hand back what this routine promises. Where nothing returns, only
+    /// the target's entry is checked. That is the case when this routine never returns or leaves by
+    /// <c>rti</c>, or when the target never returns.
+    /// <paramref name="via"/> is the source text that makes the jump. It is the mnemonic, or the
+    /// <c>.next</c> or <c>.fallthrough</c> that says where the path goes, in which case
     /// <paramref name="mnemonic"/> is <see cref="MnemonicKind.None"/>.
     /// </summary>
     public void CheckTailCall(
@@ -377,8 +398,8 @@ internal sealed class StateChecks
         var what = $"`{via} {target.DisplayName}`";
         var returns = !own.HasNoCaller && !callee.NeverReturns;
 
-        // A long jump to a near routine is how code enters another bank, and the routine's own
-        // `rts` then returns within that bank, so it is only valid when nothing returns.
+        // A long jump to a near routine is how code enters another bank. The routine's own `rts`
+        // then returns within that bank, so the jump is only valid when nothing returns.
         if (mnemonic == MnemonicKind.Jml && !callee.IsFar && !callee.IsInterrupt)
         {
             if (!EntersAnotherBank(step, target))
@@ -412,10 +433,10 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// A jump into a label inside another routine. That routine returns to this routine's
-    /// caller, so it has to return the way this one does and hand back what this one declares,
-    /// exactly as a tail call to it does. What the state has to be at the label is given by the
-    /// label's own declaration, which is checked separately.
+    /// Reports a diagnostic where a jump into a label inside another routine does not suit this
+    /// routine. That routine returns to this routine's caller, so it has to return the way this one
+    /// does and hand back what this one declares, exactly as a tail call to it does. The label's
+    /// own declaration gives what the state has to be at the label, and is checked separately.
     /// </summary>
     public void CheckJumpInto(
         Step step, string via, Symbol label, Symbol owner, ProcessorState state, Symbol routine)
@@ -440,8 +461,8 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// A long transfer to a routine's address in a bank of its choosing, which has to be the bank
-    /// the routine's segment lives in or one of its mirrors.
+    /// Reports a diagnostic for a long transfer to a routine's address in a bank of its choosing,
+    /// where that bank is neither the bank the routine's segment lives in nor one of its mirrors.
     /// </summary>
     public void CheckMirror(Step step, AddressingMode? mode)
     {
@@ -455,9 +476,10 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// A call to a routine that takes <c>args n</c>: the caller pushes those bytes first, so where
-    /// what this routine pushed is known there have to be at least that many, beneath the
-    /// <paramref name="pushed"/> bytes a relative call pushes for itself.
+    /// Reports a diagnostic for a call to a routine that takes <c>args n</c> when too few bytes are
+    /// pushed. The caller pushes those bytes first. Where what this routine pushed is known, there
+    /// have to be at least that many beneath the <paramref name="pushed"/> bytes a relative call
+    /// pushes for itself.
     /// </summary>
     public void CheckArguments(Step step, Symbol? target, AnalysisStack? stack, int pushed)
     {
@@ -476,9 +498,10 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// Outside any routine there is no processor state, so a directive that describes a point
-    /// in one describes nothing. An instruction there has been reported already: code belongs
-    /// in a proc.
+    /// Reports each processor-state or <c>.frame</c> directive outside any routine. Outside a
+    /// routine there is no processor state, so a directive that describes a point in a routine
+    /// describes nothing. An instruction there has been reported already, because code belongs in
+    /// a proc.
     /// </summary>
     public void CheckOutsideRoutines()
     {
@@ -500,8 +523,9 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// A block no path from the routine's entry reaches, and no <c>.state</c> declares. Its
-    /// immediates cannot be sized, because nothing says how wide anything is there.
+    /// Reports each width-dependent immediate and each <c>d:</c> operand in a block that no path
+    /// from the routine's entry reaches and no <c>.state</c> declares. The block's immediates
+    /// cannot be sized, because nothing says how wide anything is there.
     /// </summary>
     public void Unreached(BasicBlock block, FlowRegion region)
     {
@@ -528,10 +552,16 @@ internal sealed class StateChecks
         }
     }
 
-    /// <summary>Reports a problem with <paramref name="step"/>'s statement, on that writing of it.</summary>
+    /// <summary>
+    /// Reports a problem with <paramref name="step"/>'s statement, in the expansion the step
+    /// belongs to.
+    /// </summary>
     public void Report(Step step, DiagnosticMessage message) => ReportAt(step.Statement, step, message);
 
-    /// <summary>The same, with the fix its message names.</summary>
+    /// <summary>
+    /// Reports a problem with <paramref name="step"/>'s statement, in the expansion the step
+    /// belongs to, and attaches the fix its message names.
+    /// </summary>
     public void Report(Step step, DiagnosticMessage message, DiagnosticFix? fix)
     {
         var count = diagnostics.Count;
@@ -541,11 +571,11 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// Reports a problem with <paramref name="node"/>, on the writing of it that
+    /// Reports a problem with <paramref name="node"/>, in the expansion that
     /// <paramref name="step"/> belongs to. A line of a macro body is wrong only for the call that
-    /// expanded it, so it is reported at that call, which is the side that can change, with the
-    /// body line named beside it. A line a call gave as a block argument is the caller's own,
-    /// and is reported where it is written.
+    /// expanded it. It is reported at that call, which is the side that can change, with the body
+    /// line named beside it. A line a call gave as a block argument is the caller's own, and is
+    /// reported where it appears.
     /// </summary>
     public void ReportAt(SyntaxNode node, Step step, DiagnosticMessage message)
     {
@@ -576,8 +606,8 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// <c>jsr</c>, <c>jmp</c> or a branch to a label or a routine whose segment declares a bank
-    /// other than the one the code around it declares. Both sides have to declare a bank.
+    /// Reports a <c>jsr</c>, <c>jmp</c> or branch to a label or a routine whose segment declares a
+    /// bank other than the one the code around it declares. Both sides have to declare a bank.
     /// </summary>
     private void CheckNearBank(Step step, MnemonicKind mnemonic, AddressingMode mode)
     {
@@ -605,8 +635,8 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// <c>d:</c> on a constant address, which reaches it through the direct page: D has to be
-    /// known here, and the address has to lie in the 256 bytes starting at D.
+    /// Reports a diagnostic for <c>d:</c> on a constant address, which reaches it through the
+    /// direct page, unless D is known here and the address lies in the 256 bytes starting at D.
     /// </summary>
     private void CheckThroughDirectPage(Step step, SyntaxNode expression, ProcessorState state, Symbol routine)
     {
@@ -634,9 +664,9 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// Whether a long jump lands in a bank other than the one the code making it is taken to run
-    /// in: the routine's home bank, or the mirror bank its address is written in. Both have to
-    /// be declared.
+    /// Returns whether a long jump lands in a bank other than the one the code making it is taken
+    /// to run in. The landing bank is the mirror bank the target's address names, or else the
+    /// target's home bank. Both banks have to be declared.
     /// </summary>
     private bool EntersAnotherBank(Step step, Symbol target)
     {
@@ -647,8 +677,8 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// The name of whatever declares the <c>*</c> items in force at a step: the innermost macro
-    /// with a signature that the step was expanded from, or else the routine.
+    /// Returns the name of whatever declares the <c>*</c> items in force at a step. That is the
+    /// innermost macro with a signature that the step was expanded from, or else the routine.
     /// </summary>
     private string Owner(Step step, Symbol routine)
     {
@@ -661,24 +691,29 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// An <c>.ensure</c> of <paramref name="item"/>'s width before the statement, where it is
-    /// written in this file. Which width to ensure is the programmer's choice, so the fix names
-    /// only the register and an editor offers both widths.
+    /// Returns a fix that adds an <c>.ensure</c> of <paramref name="item"/>'s width before the
+    /// statement, where the statement is in this file and outside any expansion. Which width to
+    /// ensure is the programmer's choice, so the fix names only the register and an editor offers
+    /// both widths.
     /// </summary>
     private DiagnosticFix? Ensure(Step step, string item) =>
         step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.Width, item) : null;
 
     /// <summary>
-    /// The width written into the routine's signature, which is where a routine that assumes
-    /// nothing about it says what it assumes. The routine has to be one this file declares,
-    /// because its signature is what a caller anywhere reads.
+    /// Returns a fix that adds the width to the routine's signature, which is where a routine that
+    /// assumes nothing about it says what it assumes. The routine has to be one this file declares,
+    /// because its signature is what a caller anywhere reads. Otherwise the fix is an
+    /// <c>.ensure</c>.
     /// </summary>
     private DiagnosticFix? Declares(Step step, string item, Symbol routine) =>
         step.On is null && step.Statement.Tree == model.Tree && routine.Tree == model.Tree
             ? new DiagnosticFix(FixKind.Signature, item, routine.DeclarationSpan)
             : Ensure(step, item);
 
-    /// <summary>The statement's mnemonic written as <paramref name="mnemonic"/>, where it is written in this file.</summary>
+    /// <summary>
+    /// Returns a fix that replaces the statement's mnemonic with <paramref name="mnemonic"/>,
+    /// where the statement is in this file and outside any expansion.
+    /// </summary>
     private DiagnosticFix? Mnemonic(Step step, string mnemonic) =>
         step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.Mnemonic, mnemonic) : null;
 }

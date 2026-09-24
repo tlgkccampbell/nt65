@@ -3,9 +3,9 @@ using Norristown.Processor;
 namespace Norristown.Tests.Oracle;
 
 /// <summary>
-/// The corpus and the examples: realistic programs, built, assembled and linked as their own build scripts
-/// do. Fixtures test each construct in its own form; these catch the combinations real code
-/// uses. They are part of the oracle suite, not the edit loop.
+/// Tests the corpus and the examples, which are realistic programs built, assembled and linked
+/// as their own build scripts do. Fixtures test each construct in its own form, and these tests
+/// catch the combinations real code uses. They are part of the oracle suite, not the edit loop.
 /// </summary>
 [Trait("Category", "Oracle")]
 public sealed class CorpusTests
@@ -47,9 +47,9 @@ public sealed class CorpusTests
 
     /// <summary>
     /// A debug build and a release build of the C64 program differ only in what <c>DEBUG</c>
-    /// guards, however the guard is indented: the state check in <c>dispatch</c>
-    /// (<c>cpx #</c>, <c>bcc</c>, <c>brk #</c>) and the two border flashes of <c>trace!</c>
-    /// (<c>lda #</c>, <c>sta</c> absolute) in <c>main_loop</c>.
+    /// guards, regardless of how the guard is indented. The guarded code is the state check in
+    /// <c>dispatch</c> (<c>cpx #</c>, <c>bcc</c>, <c>brk #</c>) and the two border flashes of
+    /// <c>trace!</c> (<c>lda #</c>, <c>sta</c> absolute) in <c>main_loop</c>.
     /// </summary>
     [Fact]
     public void TheC64ProgramBuiltWithoutDebugHasNoDebugCode()

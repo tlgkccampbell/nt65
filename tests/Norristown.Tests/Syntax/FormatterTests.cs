@@ -3,9 +3,9 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// The formatter's single layout: what a block holds indented once, cheap locals at their
-/// routine's margin, a run of named data lines on one column, and nothing after the last token
-/// of a line.
+/// Checks the formatter's single layout. What a block holds is indented once, and cheap locals
+/// sit at their routine's margin. A run of named data lines lines up on one column, and nothing
+/// follows the last token of a line.
 /// </summary>
 public sealed class FormatterTests
 {
@@ -36,7 +36,7 @@ public sealed class FormatterTests
 
     /// <summary>
     /// A <c>.segment NAME</c> region opens a block with no brace, holding the rest of the file,
-    /// so what follows one is written where the region line is.
+    /// so what follows one is laid out at the region line's margin.
     /// </summary>
     [Fact]
     public void ARegionIndentsNothing()
@@ -62,7 +62,7 @@ public sealed class FormatterTests
 
     /// <summary>
     /// A cheap local names a place in the routine around it, not another instruction, so it is
-    /// written at the margin of whatever holds the instructions it points into.
+    /// laid out at the margin of the block that holds the instructions it points into.
     /// </summary>
     [Fact]
     public void ACheapLocalSitsAtItsRoutinesMargin()
@@ -130,7 +130,7 @@ public sealed class FormatterTests
 
     /// <summary>
     /// A comment line does not end a run, so a comment about the next declaration can sit inside
-    /// the run; an empty line, or any other line that is not a named data line, ends it.
+    /// the run. An empty line, or any other line that is not a named data line, ends it.
     /// </summary>
     [Fact]
     public void ACommentCarriesARunThroughAndAnEmptyLineEndsIt()
@@ -252,7 +252,7 @@ public sealed class FormatterTests
         Assert.Equal(once, Formatter.Format(tree));
     }
 
-    /// <summary>Every line keeps its own break, whatever the file is written with.</summary>
+    /// <summary>Every line keeps its own break, whichever line breaks the file uses.</summary>
     [Fact]
     public void LineBreaksAreLeftAsTheyAre()
     {

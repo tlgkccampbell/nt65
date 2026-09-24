@@ -5,20 +5,32 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The refactorings offered at a selection, independent of any diagnostic: a name switched
-/// between its full path and a <c>.use</c>, the <c>.use</c> items organized, a declaration
-/// exported or unexported, a routine's exit state declared, a width change rewritten as an
-/// <c>.ensure</c> or an <c>.ensure</c> written out, a number given a name, a label given an
-/// ordinary name or made a cheap local, a declaration moved into a segment block, a macro call
-/// inlined, code extracted into a routine, and ca65 converted to nt65.
+/// Provides the refactorings offered at a selection, independent of any diagnostic.
+/// <list type="bullet">
+/// <item>Switch a name between its full path and a <c>.use</c>.</item>
+/// <item>Organize the <c>.use</c> items.</item>
+/// <item>Export a declaration, or stop exporting it.</item>
+/// <item>Declare a routine's exit state.</item>
+/// <item>Rewrite a width change as an <c>.ensure</c>, or write an <c>.ensure</c> out as
+/// instructions.</item>
+/// <item>Give a number a name.</item>
+/// <item>Give a label an ordinary name, or make it a cheap local.</item>
+/// <item>Move a declaration into a segment block.</item>
+/// <item>Inline a macro call.</item>
+/// <item>Extract code into a routine.</item>
+/// <item>Convert ca65 to nt65.</item>
+/// </list>
 /// <para>
-/// Each is offered only where it would change something, and each is worked out from the
-/// analysis rather than from the text alone, so a rewrite keeps the line's meaning.
+/// Each is offered only where it would change something, and each is computed from the analysis
+/// rather than from the text alone, so that a rewrite keeps the line's meaning.
 /// </para>
 /// </summary>
 internal static class Refactors
 {
-    /// <summary>The rewrites offered over <paramref name="range"/> of <paramref name="model"/>'s file.</summary>
+    /// <summary>
+    /// Returns the refactorings offered over <paramref name="range"/> of <paramref name="model"/>'s
+    /// file.
+    /// </summary>
     public static IReadOnlyList<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
     {
         var tree = model.Tree;
@@ -46,10 +58,10 @@ internal static class Refactors
     }
 
     /// <summary>
-    /// Switches how a name declared in another module is written: one written as a full path
-    /// is shortened and brought in with a <c>.use</c>, and one a <c>.use</c> brought in is
-    /// written out as its full path, with the <c>.use</c> item removed since nothing then
-    /// needs it.
+    /// Offers to switch how a name declared in another module is written. A name written as a
+    /// full path is shortened and brought in with a <c>.use</c>. A name that a <c>.use</c> brought
+    /// in is written out as its full path, and the <c>.use</c> item is removed because nothing
+    /// then needs it.
     /// </summary>
     private static IEnumerable<Change> Paths(SemanticModel model, int caret)
     {
@@ -64,8 +76,8 @@ internal static class Refactors
         var name = tree.Text[reference.Span.Start..reference.Span.End];
         if (Edits.IsQualified(tree, reference.Span))
         {
-            // Shorten every use of the path in this file, so that the file writes the name one
-            // way; the one `.use` covers them all.
+            // Shorten every use of the path in this file, so that the file refers to the name in
+            // one way; the one `.use` covers them all.
             var edits = new List<Edit>();
             foreach (var other in model.ReferencesTo(symbol))
             {
@@ -101,8 +113,8 @@ internal static class Refactors
     }
 
     /// <summary>
-    /// The reference to the name at the end of the path under the caret. The caret may be on
-    /// any part of the path: the steps before the last are only how the name is reached, not
+    /// Returns the reference to the name at the end of the path under the caret. The caret may be
+    /// on any part of the path. The steps before the last are only how the name is reached, not
     /// what it refers to, and a module part of the path is not a symbol at all.
     /// </summary>
     private static SymbolReference? PathAt(SemanticModel model, int caret)
@@ -119,8 +131,9 @@ internal static class Refactors
     }
 
     /// <summary>
-    /// The whole path a name is the end of, <c>hw::vic::border</c> for its <c>border</c>, so
-    /// that shortening it takes the steps away too.
+    /// Returns the whole path that a name ends, such as <c>hw::vic::border</c> for its
+    /// <c>border</c>, so that shortening the name removes the steps too. Returns null when no path
+    /// precedes the name.
     /// </summary>
     private static TextSpan? PathOf(SyntaxTree tree, TextSpan name)
     {
@@ -143,7 +156,10 @@ internal static class Refactors
         return start == name.Start ? null : new TextSpan(start, name.End - start);
     }
 
-    /// <summary>A declaration exported, or no longer exported, where the caret is on one.</summary>
+    /// <summary>
+    /// Offers to export a declaration, or to stop exporting it, when <paramref name="line"/>
+    /// declares one.
+    /// </summary>
     private static IEnumerable<Change> Exported(SemanticModel model, int line)
     {
         var tree = model.Tree;
@@ -185,9 +201,9 @@ internal static class Refactors
     }
 
     /// <summary>
-    /// Declares a routine's exit state: the processor state the analysis finds at every one of
-    /// its returns, offered where all the returns agree and the routine does not already
-    /// declare that state.
+    /// Offers to declare a routine's exit state, which is the processor state the analysis finds
+    /// at every one of its returns. It is offered when all the returns agree and the routine does
+    /// not already declare that state.
     /// </summary>
     private static IEnumerable<Change> Leaves(ProgramAnalysis analysis, SemanticModel model, int line)
     {
@@ -229,8 +245,8 @@ internal static class Refactors
     }
 
     /// <summary>
-    /// A <c>rep</c> or <c>sep</c> that only changes the register widths, rewritten as the
-    /// <c>.ensure</c> that states its purpose, and an <c>.ensure</c> written out as the
+    /// Offers to rewrite a <c>rep</c> or <c>sep</c> that only changes the register widths as the
+    /// <c>.ensure</c> that states its purpose, and to write an <c>.ensure</c> out as the
     /// instructions it assembles to.
     /// </summary>
     private static IEnumerable<Change> Widths(ProgramAnalysis analysis, SemanticModel model, int line)
@@ -277,8 +293,8 @@ internal static class Refactors
     }
 
     /// <summary>
-    /// A number in a statement replaced by a named constant, declared near the top of the file
-    /// after its <c>.module</c>, <c>.cpu</c> and <c>.use</c> lines.
+    /// Offers to replace a number in a statement with a named constant, declared near the top of
+    /// the file after its <c>.module</c>, <c>.cpu</c> and <c>.use</c> lines.
     /// </summary>
     private static IEnumerable<Change> Named(SemanticModel model, int caret, int line)
     {
@@ -309,8 +325,8 @@ internal static class Refactors
     }
 
     /// <summary>
-    /// A cheap-local label given an ordinary name, or an ordinary label made a cheap local. A
-    /// cheap local is private to its enclosing routine, so a label can become one only if every
+    /// Offers to give a cheap-local label an ordinary name, or to make an ordinary label a cheap
+    /// local. A cheap local is private to its enclosing routine, so a label can become one only if every
     /// reference to it is inside that routine.
     /// </summary>
     private static IEnumerable<Change> Labels(ProgramModel program, SemanticModel model, int caret)
@@ -344,8 +360,8 @@ internal static class Refactors
     }
 
     /// <summary>
-    /// A data declaration inside a routine, moved into a segment block of its own, which is where
-    /// data a routine owns but does not execute belongs.
+    /// Offers to move a data declaration inside a routine into a segment block of its own, which
+    /// is where data that a routine owns but does not execute belongs.
     /// </summary>
     private static IEnumerable<Change> Segments(SemanticModel model, int line)
     {
@@ -362,8 +378,8 @@ internal static class Refactors
 
         // The editor has no way to ask which segment, so each choice is its own change. A
         // program may declare many segments, and a menu of all of them would be no easier than
-        // writing the line by hand, so at most four are offered: those this file already puts
-        // something in first, then the rest alphabetically.
+        // writing the line by hand, so at most four are offered. Segments this file already puts
+        // something in come first, then the rest alphabetically.
         var named = model.Symbols.Select(symbol => symbol.Segment).OfType<string>().ToHashSet(StringComparer.Ordinal);
         foreach (var segment in model.Segments.Segments.Select(segment => segment.Name)
             .Where(name => name != data.Segment)
@@ -377,11 +393,17 @@ internal static class Refactors
         }
     }
 
-    /// <summary>The symbol declared on <paramref name="line"/>, or null for a line that declares none.</summary>
+    /// <summary>
+    /// Returns the symbol declared on <paramref name="line"/>, or null for a line that declares
+    /// none.
+    /// </summary>
     private static Symbol? DeclaredOn(SemanticModel model, int line) =>
         model.Symbols.FirstOrDefault(symbol => symbol.Tree == model.Tree && symbol.DeclarationSpan.Line - 1 == line);
 
-    /// <summary>The statement parsed from <paramref name="line"/>, or null where the file has no such line.</summary>
+    /// <summary>
+    /// Returns the statement parsed from <paramref name="line"/>, or null when the file has no such
+    /// line.
+    /// </summary>
     private static StatementSyntax? StatementOn(SyntaxTree tree, int line) =>
         line >= 0 && line < tree.LineCount ? tree.GetLine(line).Statement : null;
 }

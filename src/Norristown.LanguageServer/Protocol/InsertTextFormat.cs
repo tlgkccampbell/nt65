@@ -1,11 +1,13 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>How the text a completion writes is read.</summary>
+/// <summary>Specifies how a client interprets the text a completion inserts.</summary>
 internal enum InsertTextFormat
 {
-    /// <summary>As it is written, which is what a client that declares nothing gets.</summary>
+    /// <summary>The text is inserted as it is. A client that declares nothing gets this format.</summary>
     PlainText = 1,
 
-    /// <summary>With <c>${1:name}</c> stops in it, for a client that declared it takes them.</summary>
+    /// <summary>
+    /// The text contains <c>${1:name}</c> tab stops, for a client that declared it supports them.
+    /// </summary>
     Snippet = 2,
 }

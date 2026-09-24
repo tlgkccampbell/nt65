@@ -7,43 +7,53 @@ using static Norristown.Syntax.MnemonicKind;
 namespace Norristown.Layout;
 
 /// <summary>
-/// How long each instruction takes on each CPU. The count is an interval, because some of
-/// what it depends on is not in the program: whether an indexed read crosses a page,
-/// whether a branch is taken and crosses one, and on the 65C02 whether the decimal flag
-/// is set. Every count that is an interval carries the causes of the extra cycles at its top,
-/// so a reader never has to guess what decides where in the interval their line falls.
+/// Provides the cycle count of each instruction on each CPU. The count is an interval, because
+/// some of what it depends on is not in the program. That includes whether an indexed read
+/// crosses a page, whether a branch is taken and crosses one, and, on the 65C02, whether the
+/// decimal flag is set. Every count that is an interval carries the causes of the extra cycles
+/// at its top, so a reader never has to guess what decides where in the interval their line
+/// falls.
 /// <para>
-/// On the 65816 most counts depend on the widths and the mode, so they are worked out from
-/// the state the analysis found reaching the instruction; where it does not know a width,
-/// the interval covers both.
+/// On the 65816 most counts depend on the register widths and the processor mode, so they are
+/// worked out from the state the analysis found reaching the instruction. Where the analysis
+/// does not know a width, the interval covers both widths.
 /// </para>
 /// </summary>
 public static class Cycles
 {
-    /// <summary>An indexed or indirect-indexed operand whose address carries into the high byte.</summary>
+    /// <summary>
+    /// The cause shown for an indexed or indirect-indexed operand whose address carries into the
+    /// high byte.
+    /// </summary>
     private const string Crossing = "+1 when the read crosses a page";
 
-    /// <summary>A branch whose condition holds.</summary>
+    /// <summary>The cause shown for a branch whose condition holds.</summary>
     private const string Taken = "+1 when taken";
 
     /// <summary>
-    /// A taken branch whose target is on another page, for a conditional branch, where whether
-    /// the branch is taken at all is also unknown.
+    /// The cause shown for a taken conditional branch whose target is on another page, where
+    /// whether the branch is taken at all is also unknown.
     /// </summary>
     private const string TakenCrossing = "+1 when that crosses a page";
 
-    /// <summary>The same, for a branch that is always taken, where only the page crossing is unknown.</summary>
+    /// <summary>
+    /// The cause shown for a branch that is always taken and whose target is on another page,
+    /// where only the page crossing is unknown.
+    /// </summary>
     private const string Crosses = "+1 when it crosses a page";
 
-    /// <summary>A direct-page operand on a 65816 whose D the analysis could not follow.</summary>
+    /// <summary>The cause shown for a direct-page operand on a 65816 whose D the analysis could not follow.</summary>
     private const string DirectPage = "+1 when the low byte of D is not zero";
 
-    /// <summary>Arithmetic on a 65C02, where the program does not say whether the decimal flag is set.</summary>
+    /// <summary>
+    /// The cause shown for arithmetic on a 65C02, where the program does not say whether the
+    /// decimal flag is set.
+    /// </summary>
     private const string Decimal = "+1 in decimal mode";
 
     /// <summary>
-    /// An interrupt or its return, where the analysis could not tell whether the 65816 is in
-    /// native or emulation mode.
+    /// The cause shown for an interrupt or its return, where the analysis could not tell whether
+    /// the 65816 is in native or emulation mode.
     /// </summary>
     private const string NativeMode = "+1 in native mode";
 
@@ -69,7 +79,7 @@ public static class Cycles
     private static readonly FrozenDictionary<(MnemonicKind Mnemonic, AddressingMode Mode), Timing> wdc65C02 = Build65C02();
 
     /// <summary>
-    /// How long <paramref name="mnemonic"/> takes in <paramref name="mode"/>, or null when
+    /// Returns how long <paramref name="mnemonic"/> takes in <paramref name="mode"/>, or null when
     /// nt65 has no count for it. A branch is counted both taken and not taken, so its
     /// interval covers everything it can cost.
     /// </summary>
@@ -87,7 +97,7 @@ public static class Cycles
     }
 
     /// <summary>
-    /// What a long branch costs in the form it was laid out in. The short form costs what the
+    /// Returns what a long branch costs in the form it was laid out in. The short form costs what the
     /// branch costs. In the long form the branch is inverted to skip over a <c>jmp</c>: when
     /// the original condition holds, execution falls through into the <c>jmp</c>, and when it
     /// does not, the inverted branch is taken over it.
@@ -97,11 +107,11 @@ public static class Cycles
         : new CycleCount(2, 4);
 
     /// <summary>
-    /// A 65816 instruction. The table counts the 8-bit form; a 16-bit register adds a cycle
-    /// for each extra byte read or written, two for a read-modify-write, and a 16-bit index
-    /// always pays the page-crossing cycle an 8-bit one pays only sometimes. A direct operand
-    /// costs one more when the low byte of D is not zero, which is known wherever the analysis
-    /// knows D.
+    /// Returns the timing of a 65816 instruction. The table counts the 8-bit form. A 16-bit
+    /// register adds a cycle for each extra byte read or written, or two for a read-modify-write,
+    /// and a 16-bit index always pays the page-crossing cycle that an 8-bit index pays only
+    /// sometimes. A direct operand costs one more when the low byte of D is not zero, which is
+    /// known wherever the analysis knows D.
     /// </summary>
     private static Timing? Of65816(MnemonicKind mnemonic, AddressingMode mode, ProcessorState state)
     {
@@ -141,9 +151,9 @@ public static class Cycles
             if (cost is not { } least)
                 return null;
 
-            // The terms are added in the order the processor pays them: the direct page while
-            // the address is formed, the page crossing while it is indexed, and the second
-            // byte of a 16-bit register last of all.
+            // The terms are added in the order the processor pays them. The direct-page cycle
+            // comes while the address is formed, the page crossing while it is indexed, and the
+            // second byte of a 16-bit register last of all.
             var total = new Timing(least) + direct;
 
             // An indexed read takes an extra cycle when it crosses a page, and always takes it
@@ -193,7 +203,7 @@ public static class Cycles
             (Rep or Sep or Stp or Wai or Xba, _) => new Timing(3),
             (Wdm, _) => new Timing(2),
 
-            // A block move takes seven cycles for every byte it moves, and how many that is
+            // A block move takes seven cycles for every byte it moves, and the number of bytes
             // is in A when it runs.
             (Mvn or Mvp, _) => null,
             (_, AddressingMode.Implied) => new Timing(2),
@@ -202,9 +212,10 @@ public static class Cycles
     }
 
     /// <summary>
-    /// What <paramref name="register"/> being 16 bits adds, given its <paramref name="width"/>:
-    /// <paramref name="cycles"/> if it is 16 bits, none if it is 8, and anywhere from none up
-    /// to <paramref name="cycles"/> where the analysis does not know the width.
+    /// Returns what <paramref name="register"/> being 16 bits adds, given its
+    /// <paramref name="width"/>. That is <paramref name="cycles"/> if it is 16 bits, none if it
+    /// is 8, and anywhere from none up to <paramref name="cycles"/> where the analysis does not
+    /// know the width.
     /// </summary>
     private static Timing Wider(Width width, int cycles, string register) => width switch
     {
@@ -213,7 +224,7 @@ public static class Cycles
         _ => new Timing(new CycleCount(0, cycles), $"+{cycles} when {register} is 16-bit"),
     };
 
-    /// <summary>What native mode adds to an interrupt or a return from one.</summary>
+    /// <summary>Returns what native mode adds to an interrupt or a return from one.</summary>
     private static Timing Native(ProcessorMode mode) => mode switch
     {
         ProcessorMode.Native => new Timing(1),
@@ -225,7 +236,7 @@ public static class Cycles
     {
         var table = new Dictionary<(MnemonicKind, AddressingMode), Timing>();
 
-        // The addressing modes that cost the same whatever instruction uses them.
+        // These addressing modes cost the same for every instruction that uses them.
         Add(table, [.. Reads, .. Writes], AddressingMode.Direct, 3);
         Add(table, [.. Reads, .. Writes], AddressingMode.DirectX, 4);
         Add(table, [.. Reads, .. Writes], AddressingMode.DirectY, 4);
@@ -233,8 +244,8 @@ public static class Cycles
         Add(table, Reads, AddressingMode.Immediate, 2);
         Add(table, [.. Reads, .. Writes], AddressingMode.DirectIndirectX, 6);
 
-        // An indexed read pays one more only when it crosses a page; a write always does,
-        // because it cannot begin until the address is settled.
+        // An indexed read pays one more only when it crosses a page. A write always does,
+        // because it cannot begin until the address is final.
         Add(table, Reads, AddressingMode.AbsoluteX, new Timing(new CycleCount(4, 5), Crossing));
         Add(table, Reads, AddressingMode.AbsoluteY, new Timing(new CycleCount(4, 5), Crossing));
         Add(table, Reads, AddressingMode.DirectIndirectY, new Timing(new CycleCount(5, 6), Crossing));
@@ -277,15 +288,17 @@ public static class Cycles
     }
 
     /// <summary>
-    /// The 6502's counts, and the undocumented opcodes' on top of them. Each of those is two
-    /// documented instructions in one, and costs what the pair costs: a read-modify-write pays
-    /// the index cycle whatever it does, and a read pays it only when it crosses a page.
+    /// Builds the 6502's counts with the undocumented opcodes' counts added. Each undocumented
+    /// opcode is two documented instructions in one, and costs what the pair costs. A
+    /// read-modify-write always pays the index cycle, and a read pays it only when it crosses a
+    /// page.
     /// <para>
-    /// What these opcodes leave behind is another matter — <c>ane</c>, <c>lax #</c> and the
-    /// stores that mix in the high byte of their own address depend on the part and on what the
-    /// bus was last driven with — but how long each takes does not, so each is counted and the
-    /// instruction says on hover what is unstable about it. <c>jam</c> is the one with no count:
-    /// it stops the processor, and there is no next cycle to reach.
+    /// What these opcodes leave behind is another matter. The results of <c>ane</c>,
+    /// <c>lax #</c> and the stores that mix in the high byte of their own address depend on the
+    /// part and on what the bus was last driven with. How long each takes does not, so each is
+    /// counted, and hovering over the instruction shows what is unstable about it. <c>jam</c> is
+    /// the one opcode with no count, because it stops the processor and there is no next cycle
+    /// to reach.
     /// </para>
     /// </summary>
     private static FrozenDictionary<(MnemonicKind, AddressingMode), Timing> Build6502X()
@@ -309,8 +322,8 @@ public static class Cycles
 
         Add(table, [Alr, Anc, Ane, Arr, Axs], AddressingMode.Immediate, 2);
 
-        // The stores that mix the high byte of their own address into what they write settle
-        // the address before they write, as every indexed store does, so each is exact.
+        // The stores that mix the high byte of their own address into what they write finish
+        // forming the address before they write, as every indexed store does, so each is exact.
         Add(table, [Sha, Shx, Tas], AddressingMode.AbsoluteY, 5);
         Add(table, [Shy], AddressingMode.AbsoluteX, 5);
         Add(table, [Sha], AddressingMode.DirectIndirectY, 6);

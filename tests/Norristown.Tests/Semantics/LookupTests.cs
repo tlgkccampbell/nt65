@@ -4,14 +4,18 @@ using Norristown.Project;
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// What a name would mean at a position, asked of the model directly rather than found by
-/// binding a name already written there. An editor asks this about a line being typed, and the
-/// answers must be the ones the line will get once it is written: the binder and the model run
-/// the same lookup, and these are the programs where two separate lookups could have differed.
+/// Checks what a name would mean at a position, asked of the model directly rather than found by
+/// binding a name already in the source there. An editor asks this about a line being typed, and
+/// the answers must be the ones the line will get once it is complete. The binder and the model
+/// run the same lookup, and these are the programs where two separate lookups could have
+/// differed.
 /// </summary>
 public sealed class LookupTests
 {
-    /// <summary>A build that gives every file the define <c>LIMIT</c>, which a name brought in by a glob must lose to.</summary>
+    /// <summary>
+    /// Gets a build that gives every file the define <c>LIMIT</c>, which a name brought in by a
+    /// glob must lose to.
+    /// </summary>
     private static ProjectSettings WithDefine => ProjectSettings.None with
     {
         Defines = [new Define("LIMIT", 7, default)],
@@ -41,8 +45,8 @@ public sealed class LookupTests
     }
 
     /// <summary>
-    /// A module and a name a <c>.use module::*</c> brings in, spelled the same: a path through
-    /// it is the module's, because a module is what a path starts at.
+    /// When a module and a name that a <c>.use module::*</c> brings in are spelled the same, a
+    /// path through that name is the module's, because a module is what a path starts at.
     /// </summary>
     [Fact]
     public void AModulePathBeatsWhatAGlobBringsIn()
@@ -58,14 +62,14 @@ public sealed class LookupTests
         Assert.Equal("hw", bound.Module);
         Assert.Equal(bound, model.GetSymbolInfo(written, ["hw", "BORDER"]).Symbol);
 
-        // Written alone, `hw` is the constant: a module is not a value, so it means the name the
-        // `*` brought in. Whether a part of a path means the module depends on the part after it.
+        // On its own, `hw` is the constant. A module is not a value, so it means the name the `*`
+        // brought in. Whether a part of a path means the module depends on the part after it.
         Assert.Equal("other", model.GetSymbolInfo(written, ["hw"]).Symbol?.Module);
     }
 
     /// <summary>
-    /// Every name a lookup at a position tries, in the order it tries them: the innermost scope
-    /// first, so a name declared twice over is answered by the nearer of them.
+    /// A lookup at a position tries every name in order, innermost scope first, so a name
+    /// declared twice over is answered by the nearer of them.
     /// </summary>
     [Fact]
     public void ANameIsLookedUpFromTheInnermostScopeOutward()
@@ -95,7 +99,10 @@ public sealed class LookupTests
         Assert.Empty(model.LookupSymbols(outside, "@loop"));
     }
 
-    /// <summary>A name brought in under an alias with <c>.use ... as</c> is offered and resolved under the alias only.</summary>
+    /// <summary>
+    /// A name brought in under an alias with <c>.use ... as</c> is offered and resolved under the
+    /// alias only.
+    /// </summary>
     [Fact]
     public void AUseAsNameStandsForWhatItBroughtIn()
     {
@@ -148,7 +155,9 @@ public sealed class LookupTests
         Assert.Equal(new DiagnosticFix(FixKind.NearestName, "SCREEN"), problem.Fix);
     }
 
-    /// <summary>Every place a name is written, in every file, which is what a rename writes over.</summary>
+    /// <summary>
+    /// Every reference to a name is found, in every file, and those are what a rename replaces.
+    /// </summary>
     [Fact]
     public void ReferencesToANameSpanTheProgram()
     {

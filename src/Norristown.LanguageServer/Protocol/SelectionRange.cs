@@ -1,9 +1,9 @@
 namespace Norristown.LanguageServer.Protocol;
 
 /// <summary>
-/// One step of what a caret grows to take in when the selection is widened: an operand, then
-/// the instruction written around it, then the block, then the routine, then the file.
+/// Represents one step in widening a selection from the caret. The steps go from an operand to
+/// the instruction that contains it, then to the block, the routine and the file.
 /// </summary>
-/// <param name="Range">What this step selects.</param>
-/// <param name="Parent">The step that takes it in, or null at the file.</param>
+/// <param name="Range">The range this step selects.</param>
+/// <param name="Parent">The next wider step, or null at the file.</param>
 internal sealed record SelectionRange(Range Range, SelectionRange? Parent);

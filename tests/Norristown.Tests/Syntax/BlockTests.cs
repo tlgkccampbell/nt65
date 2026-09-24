@@ -161,8 +161,8 @@ public sealed class BlockTests
     [Fact]
     public void BalancedBracesKeepANestedProcNested()
     {
-        // Procs do not nest, but with balanced braces the structure is as written, so the
-        // parser can say that rather than the block layer guessing.
+        // Procs do not nest, but with balanced braces the structure follows the source, so the
+        // parser can report that structure rather than the block layer guessing.
         var tree = Parse(".proc a {", "    .proc b {", "    }", "}");
         Assert.Equal("Proc 1-4\n  Proc 2-3\n", SyntaxDump.Blocks(tree));
         Assert.Empty(tree.Diagnostics);

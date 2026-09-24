@@ -3,21 +3,21 @@ using Norristown.Syntax;
 namespace Norristown.Processor;
 
 /// <summary>
-/// Which registers each instruction writes, and which instructions copy one register's value
-/// into another rather than producing a new value. The instruction tables give the widest
-/// answer; this narrows it where the mode or the operand decides.
+/// Determines which registers each instruction writes, and which instructions copy one
+/// register's value into another rather than producing a new value. The instruction tables give
+/// the widest answer, and this class narrows it where the mode or the operand decides.
 /// <para>
-/// A write is any change the caller cannot predict, so a transfer counts as one even though
-/// the new value came from another register: where the value came from is what
-/// <see cref="Moved"/> says, and <see cref="Written"/> only says the register was written at all.
+/// A write is any change the caller cannot predict, so a transfer counts as one even though the
+/// new value came from another register. <see cref="Moved"/> reports where the value came from,
+/// and <see cref="Written"/> reports only that the register was written.
 /// </para>
 /// </summary>
 public static class RegisterEffects
 {
     /// <summary>
-    /// The registers <paramref name="mnemonic"/> writes. <paramref name="constant"/> is the
-    /// value of an immediate operand where it is known, which is what says whether a
-    /// <c>rep</c> or a <c>sep</c> touches the carry.
+    /// Returns the registers <paramref name="mnemonic"/> writes. <paramref name="constant"/> is
+    /// the value of an immediate operand when it is known, and it decides whether a <c>rep</c> or
+    /// a <c>sep</c> changes the carry.
     /// </summary>
     public static Registers Written(MnemonicKind mnemonic, AddressingMode? mode, long? constant) => mnemonic switch
     {
@@ -34,14 +34,14 @@ public static class RegisterEffects
     };
 
     /// <summary>
-    /// The register a transfer copies, and the one it copies to, for the transfers between the
-    /// three registers a value is held in; null for every other instruction.
+    /// Returns the register a transfer copies and the register it copies to, for the transfers
+    /// among the three registers that hold values, or null for every other instruction.
     /// </summary>
     public static (Registers From, Registers To)? Moved(MnemonicKind mnemonic) => Instructions.Facts(mnemonic).Copies;
 
     /// <summary>
-    /// The registers as a message or a code lens names them, separated by commas: <c>A</c>,
-    /// <c>X</c>, <c>Y</c>, <c>C</c>.
+    /// Formats <paramref name="registers"/> as a message or a code lens names them, as the names
+    /// <c>A</c>, <c>X</c>, <c>Y</c> and <c>C</c> separated by commas.
     /// </summary>
     public static string Spell(Registers registers) =>
         string.Join(", ", Each(registers).Select(register => register switch
@@ -52,7 +52,7 @@ public static class RegisterEffects
             _ => "C",
         }));
 
-    /// <summary>The registers of <paramref name="registers"/>, one at a time, in a fixed order.</summary>
+    /// <summary>Returns each register in <paramref name="registers"/>, one at a time, in a fixed order.</summary>
     public static IEnumerable<Registers> Each(Registers registers)
     {
         foreach (var register in new[] { Registers.A, Registers.X, Registers.Y, Registers.C })
@@ -62,7 +62,10 @@ public static class RegisterEffects
         }
     }
 
-    /// <summary>The register a <c>keeps</c> item's register name stands for, or null when it is not one.</summary>
+    /// <summary>
+    /// Returns the register that a register name in a <c>keeps</c> item stands for, or null if
+    /// <paramref name="name"/> is not a register name.
+    /// </summary>
     public static Registers? Named(string name) => name.ToLowerInvariant() switch
     {
         "a" => Registers.A,

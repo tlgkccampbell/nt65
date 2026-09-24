@@ -13,9 +13,9 @@ namespace Norristown.Tests.Semantics;
 public sealed class ModelReadingTests
 {
     /// <summary>
-    /// A program with everything a question could walk into: types laid out from other types,
-    /// data declared as one of those types, a macro whose body names another file's constant, and a
-    /// repetition that writes a body out once per member.
+    /// Gets a program with everything a question could walk into. It has types laid out from other
+    /// types, data declared as one of those types, a macro whose body names another file's
+    /// constant, and a repetition that writes a body out once per member.
     /// </summary>
     private static (string Path, string Text)[] Files =>
     [
@@ -76,7 +76,8 @@ public sealed class ModelReadingTests
     /// <summary>
     /// Every declared type is laid out, and every <c>.type T</c> resolved, when the program's
     /// symbols are evaluated, whether or not anything names them. A query made later only reads
-    /// those results; it is never the first to work one out, which is what would write.
+    /// those results. It is never the first to work one out, because that would write to a
+    /// symbol.
     /// </summary>
     [Fact]
     public void EveryTypeIsLaidOutBeforeAnythingIsAsked()
@@ -114,21 +115,27 @@ public sealed class ModelReadingTests
         Assert.Equal(before, Snapshot(program));
     }
 
-    /// <summary>The program as the model alone builds it, before any layout has run or any query has been made.</summary>
+    /// <summary>
+    /// Returns the program as the model alone builds it, before any layout has run or any query
+    /// has been made.
+    /// </summary>
     private static ProgramModel Fresh()
     {
         var trees = Files.Select(file => SyntaxTree.Parse(file.Path, file.Text.ReplaceLineEndings("\n"))).ToList();
         return ProgramModel.Create(trees, SegmentTable.Build(trees, []));
     }
 
-    /// <summary>Everything held on a program's symbols that working something out later would change.</summary>
+    /// <summary>
+    /// Returns everything held on a program's symbols that working something out later would
+    /// change.
+    /// </summary>
     private static string Snapshot(ProgramModel program) =>
         string.Join("\n", program.Files
             .SelectMany(file => file.Symbols)
             .Select(symbol => $"{symbol.PathName} {symbol.Kind} {symbol.Value} {symbol.Size} {symbol.Count} "
                 + $"{symbol.AddressSize} {symbol.Type} {symbol.IsExported} {symbol.Calls.Count} {symbol.Uses.Count}"));
 
-    /// <summary>Everything a model answers, asked of every place in every file.</summary>
+    /// <summary>Returns everything a model answers, asked of every place in every file.</summary>
     private static string Everything(ProgramModel program)
     {
         var text = new StringBuilder();

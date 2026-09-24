@@ -1,12 +1,13 @@
 namespace Norristown.Syntax;
 
 /// <summary>
-/// A line's kind, from its first one or two tokens. What a kind means inside a particular
-/// block (an enum member, a list item, a splice) is the parser's business.
+/// Specifies a line's kind, which is determined by its first one or two tokens. The parser
+/// decides what a kind means inside a particular block, such as an enum member, a list item or a
+/// splice.
 /// </summary>
 public enum LineKind
 {
-    /// <summary>No tokens: whitespace and comments only.</summary>
+    /// <summary>A line with no tokens, only whitespace and comments.</summary>
     Blank,
     /// <summary><c>.word</c>, or any other directive, including block openers.</summary>
     Directive,
@@ -20,7 +21,7 @@ public enum LineKind
     BareIdentifier,
     /// <summary>A mnemonic.</summary>
     Instruction,
-    /// <summary>Anything else; list items inside <c>.list</c>, an error elsewhere.</summary>
+    /// <summary>Any other line; a list item inside <c>.list</c>, and an error elsewhere.</summary>
     Expression,
     /// <summary><c>}</c>, optionally continuing with <c>.else {</c>, <c>.elseif expr {</c> or <c>name {</c>.</summary>
     BlockClose,

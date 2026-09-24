@@ -1,12 +1,12 @@
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What the analysis knows of the 65816 at one point: the widths and the mode, which decide
-/// how an immediate is sized, and the direct page and the data bank, which decide what memory
-/// a direct or an absolute operand reaches.
+/// Represents what the analysis knows of the 65816 at one point. The register widths and the
+/// mode decide how an immediate is sized. The direct page and the data bank decide what memory a
+/// direct or an absolute operand reaches.
 /// </summary>
-/// <param name="A">How wide the accumulator is.</param>
-/// <param name="Index">How wide X and Y are.</param>
+/// <param name="A">The width of the accumulator.</param>
+/// <param name="Index">The width of X and Y.</param>
 /// <param name="E">Whether the processor is in emulation mode.</param>
 /// <param name="D">The direct page.</param>
 /// <param name="B">The data bank.</param>
@@ -14,30 +14,32 @@ public readonly record struct ProcessorState(
     Width A, Width Index, ProcessorMode E, StateValue D = default, StateValue B = default)
 {
     /// <summary>
-    /// What a signature that says nothing declares: <c>a*, i*, native, dp*, dbr*</c>. The widths
-    /// are unchanged rather than 8 because assuming a width would claim something the author
-    /// never said: a body that depends on one must say which, and one that does not can be
-    /// called whatever the caller's widths are.
+    /// Gets the state a signature declares when it states nothing, which is
+    /// <c>a*, i*, native, dp*, dbr*</c>. The widths are unchanged rather than 8, because assuming
+    /// a width would claim something the author never stated. A body that depends on a width must
+    /// state it, and a body that does not can be called with any widths.
     /// </summary>
     public static ProcessorState Default => new(Width.Unchanged, Width.Unchanged, ProcessorMode.Native);
 
-    /// <summary>Nothing known about any part.</summary>
+    /// <summary>Gets a state in which nothing is known about any part.</summary>
     public static ProcessorState Unknown => new(
         Width.Unknown, Width.Unknown, ProcessorMode.Unknown, StateValue.Unknown, StateValue.Unknown);
 
-    /// <summary>The width of <paramref name="register"/>.</summary>
+    /// <summary>Returns the width of <paramref name="register"/>.</summary>
     public Width Of(Processor.WidthRegister register) => register == Processor.WidthRegister.A ? A : Index;
 
     /// <summary>
-    /// The state as a signature writes it: <c>a16, i8, native</c>, with the direct page and the
-    /// data bank where they are anything other than unchanged.
+    /// Returns the state formatted as in a signature, such as <c>a16, i8, native</c>. The direct
+    /// page and the data bank are included when they are anything other than unchanged.
     /// </summary>
     public override string ToString() =>
         $"{Spell("a", A)}, {Spell("i", Index)}, {Spell(E)}"
         + (D.Kind == StateValueKind.Unchanged ? "" : ", " + D.Spell("dp"))
         + (B.Kind == StateValueKind.Unchanged ? "" : ", " + B.Spell("dbr"));
 
-    /// <summary>One width as an item: <c>a8</c>, <c>a16</c>, <c>a?</c> or <c>a*</c>.</summary>
+    /// <summary>
+    /// Formats one width as a signature item: <c>a8</c>, <c>a16</c>, <c>a?</c> or <c>a*</c>.
+    /// </summary>
     public static string Spell(string register, Width width) => width switch
     {
         Width.Eight => register + "8",
@@ -46,7 +48,9 @@ public readonly record struct ProcessorState(
         _ => register + "*",
     };
 
-    /// <summary>The mode as an item: <c>native</c>, <c>emu</c>, <c>e?</c> or <c>e*</c>.</summary>
+    /// <summary>
+    /// Formats the mode as a signature item: <c>native</c>, <c>emu</c>, <c>e?</c> or <c>e*</c>.
+    /// </summary>
     public static string Spell(ProcessorMode mode) => mode switch
     {
         ProcessorMode.Native => "native",

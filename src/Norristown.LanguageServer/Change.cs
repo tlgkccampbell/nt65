@@ -1,12 +1,12 @@
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// A change an editor may offer, before it is converted to the protocol's code action: its
-/// title, which menu it belongs in and what it writes.
+/// Represents a change an editor may offer, before it is converted to the protocol's code
+/// action. A change has a title, belongs in one menu and makes a set of edits.
 /// </summary>
-/// <param name="Title">What the client offers it as.</param>
+/// <param name="Title">The text the client shows when it offers the change.</param>
 /// <param name="Kind">Which menu it belongs in, one of <see cref="CodeActionKinds"/>.</param>
-/// <param name="Edits">What it writes, in any order and across any files.</param>
+/// <param name="Edits">The edits it makes, in any order and across any files.</param>
 /// <param name="For">The diagnostic it fixes, or null for a change not tied to any diagnostic.</param>
 /// <param name="Preferred">
 /// Whether a client may apply it without asking the programmer to choose: false where it is one
@@ -14,12 +14,12 @@ namespace Norristown.LanguageServer;
 /// meant.
 /// </param>
 /// <param name="Names">
-/// The placeholder name it writes for the programmer to replace, or null for a change that
-/// writes none.
+/// The placeholder name it inserts for the programmer to replace, or null for a change that
+/// inserts none.
 /// </param>
 /// <param name="Renames">
-/// For a change that makes no edits and exists only to prompt a rename: the span of the
-/// existing name for the programmer to replace. The editor puts the caret there and starts a
+/// The span of the existing name for the programmer to replace, used by a change that makes no
+/// edits and exists only to prompt a rename. The editor puts the caret there and starts a
 /// rename.
 /// </param>
 /// <param name="Refused">
@@ -38,10 +38,10 @@ internal sealed record Change(
     string? Refused = null)
 {
     /// <summary>
-    /// A placeholder name a change has to write even though only the programmer knows what it
-    /// should be: which edit's text holds it, and where in that text it starts. It is converted
-    /// to a position in the file as it will be after the change, so that the editor can put the
-    /// caret on the name and start a rename.
+    /// Represents a placeholder name that a change must insert even though only the programmer
+    /// knows what it should be. It records which edit's text holds the name and where in that
+    /// text the name starts. That offset is converted to a position in the file as it will be
+    /// after the change, so that the editor can put the caret on the name and start a rename.
     /// </summary>
     /// <param name="In">The edit whose text holds the name.</param>
     /// <param name="At">Where the name starts in that edit's text.</param>

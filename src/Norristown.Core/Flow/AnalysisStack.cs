@@ -4,15 +4,16 @@ using Norristown.Semantics;
 namespace Norristown.Flow;
 
 /// <summary>
-/// What a routine has pushed, one entry per byte, top last: a known top over a base. The base
-/// is where the routine was entered, until a <c>txs</c> or <c>tcs</c> moves the stack somewhere
-/// nothing is known of, or a pull takes more than is known; after that pushes are still
-/// tracked on top of an unknown base, and a pull still finds what they pushed. A saved status
-/// register is kept with the widths it saved, so a <c>php</c> … <c>plp</c> pair restores them
-/// across calls and labels without either needing an annotation.
+/// Represents the bytes a routine has pushed, one entry per byte, with the top of the stack
+/// last. The entries sit on a base, which starts as the stack pointer at routine entry. The base
+/// stays there until a <c>txs</c> or <c>tcs</c> moves the stack to an unknown place, or a pull
+/// takes more than is known. After that, pushes are still tracked on top of an unknown base, and
+/// a pull still finds what they pushed. A saved status register is kept with the widths it
+/// saved, so a <c>php</c> … <c>plp</c> pair restores them across calls and labels without
+/// either needing an annotation.
 /// <para>
-/// Two stacks are equal when they hold the same bytes over the same kind of base, which is what
-/// a merge compares.
+/// Two stacks are equal when they hold the same bytes over the same kind of base. A merge
+/// compares stacks this way.
 /// </para>
 /// </summary>
 public sealed class AnalysisStack : IEquatable<AnalysisStack>
@@ -25,32 +26,35 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
         IsAnchored = isAnchored;
     }
 
-    /// <summary>What a routine has pushed when it is entered: nothing.</summary>
+    /// <summary>Gets the stack of a routine when it is entered, which holds nothing.</summary>
     public static AnalysisStack Empty { get; } = new([], true);
 
-    /// <summary>A stack of which nothing is known, but on which pushes can be tracked: where <c>txs</c> leaves it.</summary>
+    /// <summary>
+    /// Gets a stack about which nothing is known, but on which pushes can be tracked. A
+    /// <c>txs</c> leaves the stack in this state.
+    /// </summary>
     public static AnalysisStack Unanchored { get; } = new([], false);
 
     /// <summary>
-    /// Whether the base is where the routine was entered, so the stack holds everything pushed
-    /// since then and nothing beneath it is the routine's.
+    /// Gets a value indicating whether the base is the stack pointer at routine entry. The stack
+    /// then holds everything pushed since entry, and nothing beneath it is the routine's.
     /// </summary>
     public bool IsAnchored { get; }
 
-    /// <summary>How many bytes are on it.</summary>
+    /// <summary>Gets how many bytes are on the stack.</summary>
     public int Depth => entries.Length;
 
-    /// <summary>The byte on top, or null when there is none.</summary>
+    /// <summary>Gets the byte on top, or null when there is none.</summary>
     public StackEntry? Top => entries.IsEmpty ? null : entries[^1];
 
     /// <summary>
-    /// The bytes on it, deepest first, for an editor that lists what a routine is holding. The
-    /// <see cref="SavedStack"/> has one entry per push and this one has one per byte, so a
-    /// reader that wants pushes groups these by each entry's size.
+    /// Gets the bytes on the stack, deepest first, for an editor that lists what a routine is
+    /// holding. The <see cref="SavedStack"/> has one entry per push and this one has one per
+    /// byte, so a reader that wants pushes groups these by each entry's size.
     /// </summary>
     public IReadOnlyList<StackEntry> Entries => entries;
 
-    /// <summary>The stack with <paramref name="entry"/> pushed <paramref name="count"/> times.</summary>
+    /// <summary>Returns this stack with <paramref name="entry"/> pushed <paramref name="count"/> times.</summary>
     public AnalysisStack Push(StackEntry entry, int count = 1)
     {
         var builder = entries.ToBuilder();
@@ -60,8 +64,9 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
-    /// The stack with a value <paramref name="size"/> bytes wide pushed, high byte first as the
-    /// processor pushes it. A value the analysis does not know is pushed as bytes it knows nothing about.
+    /// Returns this stack with a value <paramref name="size"/> bytes wide pushed, high byte first
+    /// as the processor pushes it. A value the analysis does not know is pushed as bytes it knows
+    /// nothing about.
     /// </summary>
     public AnalysisStack PushValue(StateValue held, int size)
     {
@@ -74,8 +79,8 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
-    /// What a pull of <paramref name="size"/> bytes gets back: the value a push of the same size
-    /// left on top, or unknown when the top bytes are anything else.
+    /// Returns what a pull of <paramref name="size"/> bytes gets back. That is the value a push of
+    /// the same size left on top, or unknown when the top bytes are anything else.
     /// </summary>
     public StateValue PulledValue(int size)
     {
@@ -94,9 +99,9 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
-    /// What two paths arriving at one place agree the stack holds, or null when they do not
-    /// agree on its shape. A byte whose value differs between them is a byte nothing is known
-    /// about, which leaves the depth, the saved status registers and the frames known.
+    /// Returns what two paths arriving at one place agree the stack holds, or null when they do
+    /// not agree on its shape. A byte whose value differs between them becomes a byte nothing is
+    /// known about, which leaves the depth, the saved status registers and the frames known.
     /// </summary>
     public static AnalysisStack? Merge(AnalysisStack? a, AnalysisStack? b)
     {
@@ -118,10 +123,10 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
-    /// The stack with its top <paramref name="size"/> bytes named as <paramref name="frame"/>,
-    /// or null when fewer than that are pushed since the routine was entered. Over an unknown
-    /// base the frame reaches into bytes nothing is known of. A frame named again moves to where
-    /// it is named now.
+    /// Returns this stack with its top <paramref name="size"/> bytes named as
+    /// <paramref name="frame"/>, or null when fewer than that have been pushed since the routine
+    /// was entered. Over an unknown base the frame reaches into bytes nothing is known about. A
+    /// frame named again moves to where it is named now.
     /// </summary>
     public AnalysisStack? Framed(Symbol frame, int size)
     {
@@ -139,11 +144,17 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
         return new AnalysisStack(builder.ToImmutable(), IsAnchored);
     }
 
-    /// <summary>A stack of <paramref name="size"/> bytes named as <paramref name="frame"/>, with nothing known beneath them.</summary>
+    /// <summary>
+    /// Returns a stack of <paramref name="size"/> bytes named as <paramref name="frame"/>, with
+    /// nothing known beneath them.
+    /// </summary>
     public static AnalysisStack OnlyFrame(Symbol frame, int size) =>
         Unanchored.Framed(frame, size)!;
 
-    /// <summary>How many bytes are above the lowest byte of <paramref name="frame"/>, or null when it is not on the stack.</summary>
+    /// <summary>
+    /// Returns how many bytes are above the lowest byte of <paramref name="frame"/>, or null when
+    /// the frame is not on the stack.
+    /// </summary>
     public int? Above(Symbol frame)
     {
         for (var i = 0; i < entries.Length; i++)
@@ -155,8 +166,9 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
-    /// The stack with <paramref name="count"/> bytes pulled. A pull of more than is known takes
-    /// what is beneath, which is its caller's or unknown, and leaves a stack of which nothing is known.
+    /// Returns this stack with <paramref name="count"/> bytes pulled. A pull of more than is known
+    /// takes what is beneath, which belongs to the caller or is unknown, and leaves a stack about
+    /// which nothing is known.
     /// </summary>
     public AnalysisStack Pull(int count) =>
         count > entries.Length ? Unanchored : new AnalysisStack(entries[..^count], IsAnchored);

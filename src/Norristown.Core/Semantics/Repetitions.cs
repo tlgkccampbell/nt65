@@ -3,25 +3,26 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a <c>.repeat</c> or an <c>.each</c> unrolls to: one turn per count, per list item or
-/// per enum member. None of this is kept for the output, so layout and emission each ask for
-/// the turns and walk the body once per turn; whether the lines a counted repetition's turns
-/// produce can be written out once rather than per turn is for the emitter to decide from them.
+/// Unrolls a <c>.repeat</c> or an <c>.each</c> into its iterations, one per count, per list item
+/// or per enum member. None of this is kept for the output, so layout and emission each ask for
+/// the iterations and walk the body once per iteration. The emitter decides, from the
+/// iterations, whether the lines a counted repetition produces can be emitted once rather than
+/// once per iteration.
 /// </summary>
 public static class Repetitions
 {
     /// <summary>
-    /// The most turns a repetition is unrolled for. A body is written out once per turn, so
-    /// this is the same bound, with the same number, that already limits the statements a
-    /// file's expansions produce: past it nt65 stops rather than filling memory with turns
-    /// nobody could assemble.
+    /// The maximum number of iterations a repetition is unrolled for. A body is emitted once per
+    /// iteration, so this is the same bound, with the same number, that already limits the
+    /// statements a file's expansions produce. Past it, nt65 stops rather than filling memory
+    /// with iterations nobody could assemble.
     /// </summary>
     public const int MaximumTurns = 65536;
 
     /// <summary>
-    /// The turns of <paramref name="block"/>, inside <paramref name="outer"/>. A count or a
-    /// list nt65 cannot read is reported into <paramref name="diagnostics"/>, when it is not
-    /// null, and gives no turns at all.
+    /// Returns the iterations of <paramref name="block"/> inside <paramref name="outer"/>, one
+    /// <see cref="Expansion"/> each. A count or a list nt65 cannot read is reported into
+    /// <paramref name="diagnostics"/>, when it is not null, and gives no iterations at all.
     /// </summary>
     public static IReadOnlyList<Expansion> Of(
         SemanticModel model, BlockSyntax block, Expansion? outer, List<Diagnostic>? diagnostics)
@@ -35,18 +36,21 @@ public static class Repetitions
             MultiProcDeclarationSyntax family =>
                 Walked(model, block, family.Expression, binding, outer, diagnostics, folded: true),
 
-            // An opener that is none of them, such as a `.repeat` written after a label, opens
-            // no repetition and gives no turns. The parser has already reported what is wrong
-            // with it, and reading it as an `.each` would only report something else instead.
+            // Any other opener, such as a `.repeat` after a label, opens no repetition and gives
+            // no iterations. The parser has already reported its problem, and reading it as an
+            // `.each` would only report a different problem instead.
             _ => [],
         };
     }
 
-    /// <summary>The diagnostic for a repetition of <paramref name="count"/> turns, which is too many.</summary>
-    /// <param name="count">How many turns it runs.</param>
+    /// <summary>
+    /// Returns the diagnostic for a repetition of <paramref name="count"/> iterations, which is
+    /// too many.
+    /// </summary>
+    /// <param name="count">The number of iterations the repetition runs.</param>
     public static DiagnosticMessage Beyond(long count) => Catalogue.RepeatTooMany.Says(count, MaximumTurns);
 
-    /// <summary>The name a repetition binds, or null when it names none.</summary>
+    /// <summary>Returns the name a repetition binds, or null when it names none.</summary>
     public static Symbol? BindingOf(SemanticModel model, StatementSyntax opener)
     {
         var name = opener switch
@@ -55,15 +59,18 @@ public static class Repetitions
             MultiProcDeclarationSyntax family => family.Name,
             _ => null,
         };
-        // The name is looked up where it was written rather than at a position in the model's
-        // own file: a macro another module exports is expanded here, and its body's repetitions
+        // The name is looked up in the file that contains it, not at a position in the model's
+        // own file. A macro another module exports is expanded here, and its body's repetitions
         // bind names of that module's file.
         return name is { IsMissing: false } bound && model.SymbolAt(bound) is { Kind: SymbolKind.Binding } declared
             ? declared
             : null;
     }
 
-    /// <summary><c>.repeat count, i</c>: the name counts from zero, as an index does.</summary>
+    /// <summary>
+    /// Returns the iterations of <c>.repeat count, i</c>. The name counts from zero, as an index
+    /// does.
+    /// </summary>
     private static IReadOnlyList<Expansion> Counted(
         SemanticModel model, BlockSyntax block, SyntaxNode counted, Symbol? binding, Expansion? outer,
         List<Diagnostic>? diagnostics)
@@ -91,15 +98,15 @@ public static class Repetitions
     }
 
     /// <summary>
-    /// <c>.each what, h</c>: the name is each item of a list, or each member of an enum, in
-    /// the order they are written.
+    /// Returns the iterations of <c>.each what, h</c>. The name takes each item of a list, or
+    /// each member of an enum, in source order.
     /// </summary>
     private static IReadOnlyList<Expansion> Walked(
         SemanticModel model, BlockSyntax block, SyntaxNode walked, Symbol? binding, Expansion? outer,
         List<Diagnostic>? diagnostics, bool folded = false)
     {
-        // `.multiproc` names its routines after an enum's members, so a list gives no turns; the
-        // binder has already reported it where the family is declared.
+        // `.multiproc` names its routines after an enum's members, so a list gives no iterations.
+        // The binder has already reported the list where the family is declared.
         if (folded)
         {
             return model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } enumerated }
@@ -108,8 +115,8 @@ public static class Repetitions
                 : [];
         }
 
-        // A `list` parameter walks whatever the call gave it. Where its items are words, the
-        // binding is the word itself, which is all a condition can do with one.
+        // A `list` parameter iterates over the items the call gave it. Where its items are words,
+        // the binding is the word itself, because a condition can do nothing else with a word.
         if (model.SymbolOf(walked) is { Kind: SymbolKind.MacroParameter, Parameter: { } parameter }
             && parameter.Kind == ParameterKind.List)
         {
@@ -120,8 +127,8 @@ public static class Repetitions
                 outer, block, binding, words ? Value.Word(Word(item)) : Value.Unknown, words ? null : item, i))];
         }
 
-        // A list item is kept as it was written: the items may be labels, which have no
-        // value at all, and a name bound to one has to behave as that label.
+        // A list item is kept as it was written, because the items may be labels, which have no
+        // value at all, and a name bound to a label must behave as that label.
         if (model.ItemsOf(walked) is { } items)
             return [.. items.Select((item, i) => Expansion.Turn(outer, block, binding, Value.Unknown, item, i))];
 
@@ -134,15 +141,18 @@ public static class Repetitions
     }
 
     /// <summary>
-    /// Why a <c>.repeat</c> or <c>.each</c> body may not hold this statement, or null when it
-    /// may. What the body declares is a different name on every turn, and each of these is
-    /// one thing for the whole file.
+    /// Returns the message explaining why a <c>.repeat</c> or <c>.each</c> body may not contain
+    /// <paramref name="statement"/>, or null when it may. What the body declares is a different
+    /// name on every iteration, and each forbidden statement is one thing for the whole file.
     /// </summary>
     public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
         ? Catalogue.DeclarationInARepetition.Says(why.What, why.Because)
         : (DiagnosticMessage?)null;
 
-    /// <summary>The two halves of that message, what is refused and why, or null when the statement is allowed.</summary>
+    /// <summary>
+    /// Returns the two halves of the <see cref="Forbidden"/> message, what is refused and why, or
+    /// null when the statement is allowed.
+    /// </summary>
     private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
     {
         { IsExported: true } or ExportDirectiveSyntax or ImportDirectiveSyntax =>
@@ -163,7 +173,7 @@ public static class Repetitions
         _ => null,
     };
 
-    /// <summary>The word an item was written as, for a list of them.</summary>
+    /// <summary>Returns the word <paramref name="item"/> was written as, for a list of words.</summary>
     private static string Word(SyntaxNode item) =>
         item is NameExpressionSyntax { Names: [var name, ..] } ? name.Text
         : item.ChildTokens is [var first, ..] ? first.Text

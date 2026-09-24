@@ -4,8 +4,8 @@ using StreamJsonRpc;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What an editor gets within one file: hover, go to definition, find references, highlights and
-/// rename.
+/// Tests what an editor gets within one file, which is hover, go to definition, find references,
+/// highlights and rename.
 /// </summary>
 public sealed class SymbolRequestsTests
 {
@@ -71,8 +71,8 @@ public sealed class SymbolRequestsTests
         Assert.NotNull(constant);
         Assert.Contains("```nt65\nSCREEN = $0400\n```", constant.Contents.Value, StringComparison.Ordinal);
 
-        // A constant's value is what a reader hovers it for, so it comes above the rule; how
-        // wide an address it would make is supporting detail below it.
+        // A constant's value is what a reader hovers it for, so it comes above the rule. How
+        // wide an address it would make is supporting detail, so it comes below the rule.
         Assert.Contains("value    $0400 (1024)\n```\n---\n", constant.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("address  abs (2 bytes)", constant.Contents.Value, StringComparison.Ordinal);
     }
@@ -102,7 +102,8 @@ public sealed class SymbolRequestsTests
     /// <summary>
     /// The only names the output spells differently from the source are those ca65 would read as
     /// an instruction, which the emitter prefixes with the module's name. Hover mentions the output
-    /// name for those and no others: every other name keeps its spelling, so it would add nothing.
+    /// name for those names only, because every other name keeps its spelling in the output, so
+    /// mentioning it would add nothing.
     /// </summary>
     [Fact]
     public async Task HoverSaysWhatTheOutputCallsANameCa65WouldMisread()
@@ -121,7 +122,7 @@ public sealed class SymbolRequestsTests
 
     /// <summary>
     /// The distance between two places in one data declaration is a constant, and hover gives its
-    /// value, as it does for any other constant: an error number that is a message's offset in a
+    /// value, as it does for any other constant. An error number that is a message's offset in a
     /// table is a number, not an address.
     /// </summary>
     [Fact]
@@ -142,7 +143,7 @@ public sealed class SymbolRequestsTests
     /// <summary>
     /// A function whose body produces text evaluates to that text where it is called, and hover on
     /// the call shows it, with any byte that is not a printable character escaped as a string
-    /// literal would write it. A text constant defined by such a call is shown as text as well.
+    /// literal would show it. A text constant defined by such a call is shown as text as well.
     /// </summary>
     [Fact]
     public async Task HoverGivesTheTextACallIsWorth()
@@ -162,7 +163,7 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// Hover writes a value in hexadecimal, which is how an address or a mask is read. A value may
+    /// Hover shows a value in hexadecimal, which is how an address or a mask is read. A value may
     /// also be a count, so its decimal is put beside it, except below ten, where the two are the
     /// same digit and there is nothing to add.
     /// </summary>
@@ -180,7 +181,7 @@ public sealed class SymbolRequestsTests
         Assert.Contains("value    4\n", small?.Contents.Value, StringComparison.Ordinal);
     }
 
-    /// <summary>Hover shows a name inside a scope under the qualified path another file would write.</summary>
+    /// <summary>Hover shows a name inside a scope under the qualified path another file would use.</summary>
     [Fact]
     public async Task HoverQualifiesAScopedName()
     {
@@ -194,9 +195,9 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// What a routine costs and which registers it preserves are shown wherever its name is
-    /// written: a reader asks what a call costs at the call, not at the declaration, and the lens
-    /// that says it above the declaration may be far from the call.
+    /// What a routine costs and which registers it preserves are shown wherever its name appears.
+    /// A reader asks what a call costs at the call, not at the declaration, and the lens that
+    /// shows the cost above the declaration may be far from the call.
     /// </summary>
     [Fact]
     public async Task HoverOnACallSaysWhatTheRoutineCostsAndKeeps()
@@ -212,8 +213,8 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// Hover over a type and its members says what an editor needs of a layout: the offset a
-    /// member sits at, how much room it takes, and its type.
+    /// Hover over a type and its members shows what an editor needs to know about a layout, which
+    /// is the offset a member sits at, how much room it takes, and its type.
     /// </summary>
     [Fact]
     public async Task HoverOnALayoutShowsOffsetsAndSizes()
@@ -266,9 +267,10 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// Every hover is laid out to be read from the top down: the line that declares the thing, the
-    /// comment its author left above it, the one or two facts most often wanted about that kind
-    /// of name, a rule, and everything else under it. Nothing is left out for being far down.
+    /// Every hover is laid out to be read from the top down. It starts with the line that declares
+    /// the thing, then the comment its author left above it, then the one or two facts most often
+    /// wanted about that kind of name, and then a rule with everything else under it. Nothing is
+    /// left out for being far down.
     /// </summary>
     [Fact]
     public async Task HoverLeadsWithWhatThatKindOfNameIsAskedAbout()
@@ -404,8 +406,8 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
-    /// Hover shows an instruction with the name its datasheet gives it, written as a trailing
-    /// comment. A reader who already knows what `pea` stands for would not be hovering over it.
+    /// Hover shows an instruction with the name its datasheet gives it, as a trailing comment. A
+    /// reader who already knows what <c>pea</c> stands for would not be hovering over it.
     /// </summary>
     [Fact]
     public async Task HoverNamesTheInstructionOnTheHeadline()
@@ -445,8 +447,8 @@ public sealed class SymbolRequestsTests
         var add = await client.HoverAsync(Uri, Locate.At(Text, "adc #2"), timeout);
         var store = await client.HoverAsync(Uri, Locate.At(Text, "sta $10"), timeout);
 
-        // The line's cost is what a reader hovers an instruction for, so it comes above the rule;
-        // the flags it writes and what the registers hold are supporting detail below it. The
+        // The line's cost is what a reader hovers an instruction for, so it comes above the rule.
+        // The flags it writes and what the registers hold are supporting detail below it. The
         // grid is fenced as a language of its own so that an editor can tell one row from another.
         Assert.Contains("```nt65-hover\ncycles  2         block 13\n```\n---\n", load?.Contents.Value,
             StringComparison.Ordinal);

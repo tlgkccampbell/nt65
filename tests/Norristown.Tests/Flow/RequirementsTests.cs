@@ -6,10 +6,10 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Flow;
 
 /// <summary>
-/// Which annotation each construct the analysis cannot follow needs written beside it, and
-/// what the annotated forms do to the state. The fixtures hold one example of each; these
-/// tests cover what a fixture cannot show, such as the same program on another CPU, or the
-/// stack after a call.
+/// Checks which annotation each construct the analysis cannot follow needs beside it, and what
+/// the annotated forms do to the state. The fixtures hold one example of each. These tests cover
+/// what a fixture cannot show, such as the same program on another CPU, or the stack after a
+/// call.
 /// </summary>
 public sealed class RequirementsTests
 {
@@ -46,8 +46,8 @@ public sealed class RequirementsTests
     /// <summary>
     /// On CPUs other than the 65816 a routine that runs off its end is likely a mistake rather
     /// than something the analysis cannot follow, so it is a warning, and <c>.fallthrough</c>
-    /// says it was meant. The suggested fix is a <c>.fallthrough</c> naming the routine written
-    /// next.
+    /// says it was meant. The suggested fix is a <c>.fallthrough</c> naming the next routine in
+    /// the source.
     /// </summary>
     [Fact]
     public void RunningOffTheEndWarnsOnThe6502()
@@ -81,9 +81,8 @@ public sealed class RequirementsTests
 
     /// <summary>
     /// All the regions of a segment are laid out as one run of bytes, so the fix names the next
-    /// routine written in the same segment, even when a region of another segment is written in
-    /// between. An <c>.align</c> between the two routines breaks the run, and the fix then names
-    /// no routine.
+    /// routine in the same segment, even when a region of another segment comes between them. An
+    /// <c>.align</c> between the two routines breaks the run, and the fix then names no routine.
     /// </summary>
     [Fact]
     public void TheFixNamesTheRoutineNextInTheSegmentAcrossRegions()
@@ -114,7 +113,10 @@ public sealed class RequirementsTests
         Assert.Null(analysis.Diagnostics[1].Fix?.Text);
     }
 
-    /// <summary>A routine returns past its inline data whatever the processor, so the data is checked on every CPU.</summary>
+    /// <summary>
+    /// A routine returns past its inline data on every processor, so the data is checked on every
+    /// CPU.
+    /// </summary>
     [Fact]
     public void InlineDataIsCheckedOnEveryCpu()
     {
@@ -242,8 +244,8 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
-    /// A nested segment block is part of its routine: a jump into it and back carries the
-    /// state both ways, as a jump within one stream of bytes does.
+    /// A nested segment block is part of its routine. The state flows both ways along a jump into
+    /// it and back, as it does along a jump within one stream of bytes.
     /// </summary>
     [Fact]
     public void AJumpIntoANestedSegmentBlockCarriesTheState()
@@ -344,7 +346,9 @@ public sealed class RequirementsTests
 
     private static ProgramAnalysis Program(string text) => Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text));
 
-    /// <summary>The state reaching the first statement written as <paramref name="line"/>.</summary>
+    /// <summary>
+    /// Returns the state reaching the first statement whose text is <paramref name="line"/>.
+    /// </summary>
     private static FlowState StateAt(ProgramAnalysis analysis, string line)
     {
         var model = analysis.File("main.nt65");

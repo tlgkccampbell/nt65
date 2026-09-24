@@ -4,9 +4,10 @@ using Norristown.Semantics;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// The snippet a completion inserts for each directive that opens a block, for a client that
-/// accepts snippets. These are the only snippet completions: a block has a fixed shape with a
-/// brace to close, and inserting the whole shape is worth more than inserting the directive.
+/// Provides the snippet a completion inserts for each directive that opens a block, for a client
+/// that accepts snippets. These are the only snippet completions, because a block has a fixed
+/// shape with a brace to close, and inserting the whole shape is worth more than inserting the
+/// directive.
 /// The name is the first tab stop and the body is the last, so that choosing one leaves the
 /// caret where the name goes and tabbing to the end leaves it inside the body.
 /// <para>
@@ -23,8 +24,8 @@ internal static class Snippets
     private static readonly Dictionary<string, string> Written = new(StringComparer.Ordinal)
     {
         [".macro"] = ".macro ${1:name}(${2:parameters}) {\n    $0\n}",
-        // A `.func` is one line rather than a block, but is here because its shape — a name, a
-        // parameter list and the expression it evaluates — is just as worth inserting whole.
+        // A `.func` is one line rather than a block, but it is here because its shape (a name, a
+        // parameter list and the expression it evaluates) is just as worth inserting whole.
         [".func"] = ".func ${1:name}(${2:parameters}) = $0",
         [".struct"] = ".struct ${1:Name} {\n    $0\n}",
         [".union"] = ".union ${1:Name} {\n    $0\n}",
@@ -40,12 +41,14 @@ internal static class Snippets
     };
 
     /// <summary>
-    /// The snippet <paramref name="directive"/> inserts, or null for one that opens no block and
-    /// is inserted as plain text.
+    /// Returns the snippet that <paramref name="directive"/> inserts, or null for a directive that
+    /// opens no block and is inserted as plain text.
     /// </summary>
     /// <param name="directive">The directive, as the completion lists it.</param>
-    /// <param name="program">The program, for what its routines' signatures mostly start with.</param>
-    /// <param name="cpu">The processor, since only on the 65816 does the signature get a tab stop.</param>
+    /// <param name="program">
+    /// The program, used to find what its routines' signatures mostly start with.
+    /// </param>
+    /// <param name="cpu">The processor. Only on the 65816 does the signature get a tab stop.</param>
     public static string? Of(string directive, ProgramModel program, Cpu cpu)
     {
         if (directive != ".proc")
@@ -62,9 +65,10 @@ internal static class Snippets
     }
 
     /// <summary>
-    /// How most of the program's routines start their signature, or null where none of them
-    /// writes one. It is the first item as it is written rather than what it resolves to,
-    /// because a program that writes <c>std</c> wants <c>std</c> and not what <c>std</c> means.
+    /// Returns how most of the program's routines start their signature, or null when none of them
+    /// declares one. The result is the first item as the source spells it rather than what it
+    /// resolves to, because a program that writes <c>std</c> wants <c>std</c> and not what
+    /// <c>std</c> means.
     /// </summary>
     private static string? Usual(ProgramModel program)
     {
@@ -85,8 +89,8 @@ internal static class Snippets
     }
 
     /// <summary>
-    /// The first item of the signature a routine is declared with, as it is written, or null
-    /// where it is declared with none.
+    /// Returns the first item of the signature a routine is declared with, as the source spells
+    /// it, or null when the routine is declared with none.
     /// </summary>
     private static string? Starts(Symbol symbol)
     {

@@ -6,8 +6,9 @@ using Norristown.Tests.Semantics;
 namespace Norristown.Tests.Flow;
 
 /// <summary>
-/// The 65816's widths and emulation flag through a routine: what each instruction does to
-/// them, what a call and a return are checked against, and that the analysis settles.
+/// Checks how the 65816's widths and emulation flag flow through a routine. The tests cover what
+/// each instruction does to them and what a call and a return are checked against. They also
+/// check that the analysis reaches a fixed point.
 /// </summary>
 public sealed class StateAnalysisTests
 {
@@ -141,7 +142,7 @@ public sealed class StateAnalysisTests
 
     /// <summary>
     /// Once a routine pulls more than it pushed, reaching into what its caller pushed, the
-    /// analysis no longer knows where the stack's base is; it goes on tracking later pushes
+    /// analysis no longer knows where the stack's base is. It goes on tracking later pushes
     /// relative to that unknown base.
     /// </summary>
     [Fact]
@@ -197,7 +198,9 @@ public sealed class StateAnalysisTests
         Assert.Equal(Width.Unknown, StateAt(Text, "nop").Processor.A);
     }
 
-    /// <summary>A conditional branch to a routine is a tail call when taken, and carries on when not.</summary>
+    /// <summary>
+    /// A conditional branch to a routine is a tail call when taken, and continues when not.
+    /// </summary>
     [Fact]
     public void ABranchToARoutineIsATailCallThatCarriesOn()
     {
@@ -261,8 +264,8 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
-    /// Nothing is reported where two paths disagree, only where the disagreement is used; a
-    /// constant `rep` or `sep` makes the width known again whatever arrived.
+    /// Nothing is reported where two paths disagree, only where the disagreement is used. A
+    /// constant `rep` or `sep` makes the width known again, no matter what state arrived.
     /// </summary>
     [Fact]
     public void AMergeReportsNothing()
@@ -282,7 +285,7 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
-    /// A label that a `.state` declares is an entry point; when a path in the routine also
+    /// A label that a `.state` declares is an entry point. When a path in the routine also
     /// reaches it, the state along that path is checked against the declaration.
     /// </summary>
     [Fact]
@@ -304,18 +307,19 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
-    /// How quickly the analysis settles, measured rather than assumed. Blocks are taken in
-    /// the order their bytes are written, and a block is walked again only when what reaches
-    /// it changes, so a routine without loops settles in one walk per block, and a loop costs
-    /// its blocks one more walk for each part of the state its back edge makes unknown.
+    /// Measures how quickly the analysis reaches a fixed point, rather than assuming it. Blocks
+    /// are taken in the order their bytes are written, and a block is walked again only when what
+    /// reaches it changes. So a routine without loops reaches its fixed point in one walk per
+    /// block, and a loop costs its blocks one more walk for each part of the state its back edge
+    /// makes unknown.
     /// </summary>
     [Fact]
     public void TheAnalysisSettlesInAFewWalksPerBlock()
     {
         Assert.Equal(1, MostWalks(".proc p: a8, i8 {\n    rep #$20\n    lda #1\n    sep #$20\n    rts\n}\n"));
 
-        // A loop whose body does not change the state: what its back edge carries is what the
-        // head already has, so the head is not walked again.
+        // In a loop whose body does not change the state, the state along its back edge is what
+        // the head already has, so the head is not walked again.
         Assert.Equal(1, MostWalks("""
             .proc p: a8, i8 {
                 ldx #8
@@ -326,7 +330,7 @@ public sealed class StateAnalysisTests
             }
             """));
 
-        // A loop that changes a width: the back edge tells the loop head that A may be either
+        // In a loop that changes a width, the back edge tells the loop head that A may be either
         // width, and the head is walked once more with that.
         Assert.Equal(2, MostWalks("""
             .proc p: a8, i8 {
@@ -338,8 +342,8 @@ public sealed class StateAnalysisTests
             }
             """));
 
-        // Two nested loops, each pushing: the stack depth at each loop head becomes unknown on
-        // the first round, and nothing is left to change after that.
+        // With two nested loops, each pushing, the stack depth at each loop head becomes unknown
+        // on the first round, and nothing is left to change after that.
         Assert.Equal(2, MostWalks("""
             .proc p: a8, i8 {
                 php
@@ -358,7 +362,7 @@ public sealed class StateAnalysisTests
             """));
 
         // A bound of "at most two walks per block" does not hold once one part of the state
-        // becomes unknown only because another did. The first round loses the stack; with no
+        // becomes unknown only because another did. The first round loses the stack. With no
         // saved status to find, the second round's `plp` loses the index width too, which the
         // loop head learns only on a third walk. Each part can change at most twice, so the
         // bound is one walk more than the number of parts, not two.
@@ -400,7 +404,7 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
-    /// An <c>operand</c> argument written without braces is an expression, and the whole of
+    /// An <c>operand</c> argument without braces is an expression, and the whole of
     /// it is what the instruction is given: <c>pea slot</c> with <c>slot</c> bound to
     /// <c>BASE + 2</c> pushes that address, not the base it starts from.
     /// </summary>
@@ -438,8 +442,8 @@ public sealed class StateAnalysisTests
             .ToList();
 
     /// <summary>
-    /// The problem with its line number counted from the start of the test's own text, not
-    /// counting the <c>.module</c>, <c>.cpu</c> and <c>.segment</c> lines every test is
+    /// Returns the problem with its line number counted from the start of the test's own text,
+    /// not counting the <c>.module</c>, <c>.cpu</c> and <c>.segment</c> lines every test is
     /// compiled after.
     /// </summary>
     private static string Renumbered(string problem)
@@ -451,7 +455,9 @@ public sealed class StateAnalysisTests
     private static FlowState StateAt(string text, string line) =>
         StateAt(Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n" + text)), line);
 
-    /// <summary>The state reaching the first statement written as <paramref name="line"/>.</summary>
+    /// <summary>
+    /// Returns the state reaching the first statement whose text is <paramref name="line"/>.
+    /// </summary>
     private static FlowState StateAt(ProgramAnalysis analysis, string line)
     {
         var model = analysis.File("main.nt65");

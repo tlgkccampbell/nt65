@@ -3,7 +3,9 @@ using Norristown.Project;
 
 namespace Norristown.Tests.Emit;
 
-/// <summary>The C header of what a program exports, as <c>nt65 build --c-header</c> writes it.</summary>
+/// <summary>
+/// Checks the C header of what a program exports, as <c>nt65 build --c-header</c> writes it.
+/// </summary>
 public sealed class CHeaderTests
 {
     private const string Tables = """
@@ -48,9 +50,10 @@ public sealed class CHeaderTests
         """;
 
     /// <summary>
-    /// Structs and unions in cc65's types, with a static assertion of the size nt65 gives them;
-    /// enums; constants as <c>#define</c>; data sized by its element count; and routines as
-    /// <c>void name(void)</c>; all named by their linker names without cc65's leading <c>_</c>.
+    /// The header declares structs and unions in cc65's types, with a static assertion of the
+    /// size nt65 gives them. It also declares enums, constants as <c>#define</c>, data sized by its
+    /// element count, and routines as <c>void name(void)</c>. All are named by their linker names
+    /// without cc65's leading <c>_</c>.
     /// </summary>
     [Fact]
     public void WhatTheProgramExportsIsDeclaredInC()
@@ -131,7 +134,7 @@ public sealed class CHeaderTests
 
     /// <summary>
     /// cc65 puts <c>_</c> in front of the linker name of every C routine or data declaration, so an
-    /// export whose linker name does not start with one is left out with a warning; data whose
+    /// export whose linker name does not start with one is left out with a warning. Data whose
     /// type is not exported is declared as bytes, also with a warning.
     /// </summary>
     [Fact]

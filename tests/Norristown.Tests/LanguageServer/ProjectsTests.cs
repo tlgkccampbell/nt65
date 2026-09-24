@@ -4,9 +4,9 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The projects of a workspace: found beneath the folder the client opened, each its own
-/// program, built as the configuration the client chooses, and read again when a file they read
-/// changes on disk.
+/// Tests the projects of a workspace. Each project is found beneath the folder the client opened,
+/// is a program of its own, is built with the configuration the client chooses, and is read again
+/// when a file it reads changes on disk.
 /// </summary>
 public sealed class ProjectsTests : IDisposable
 {
@@ -17,7 +17,7 @@ public sealed class ProjectsTests : IDisposable
     public void Dispose() => root.Delete(recursive: true);
 
     /// <summary>
-    /// Two projects in subfolders, and a file in neither: each project's files see one another
+    /// With two projects in subfolders and a file in neither, each project's files see one another
     /// and nothing of the other project, and the file in neither is a program of its own.
     /// </summary>
     [Fact]
@@ -40,8 +40,8 @@ public sealed class ProjectsTests : IDisposable
     }
 
     /// <summary>
-    /// VS Code spells a Windows drive in lower case with its colon escaped,
-    /// <c>file:///c%3A/...</c>, and the project beneath the folder is found all the same.
+    /// VS Code gives a Windows drive in lower case with its colon escaped, as in
+    /// <c>file:///c%3A/...</c>, and the project beneath the folder is still found.
     /// </summary>
     [Fact]
     public async Task AFolderWithAnEscapedDriveFindsItsProject()
@@ -54,17 +54,17 @@ public sealed class ProjectsTests : IDisposable
             Regex.Replace(uri, "^file:///([A-Za-z]):", m => $"file:///{m.Groups[1].Value.ToLowerInvariant()}%3A");
         await using var client = await TestClient.StartAsync(AsVsCode(Uri("")), null, timeout);
 
-        // Once the client has opened a file under its own spelling of the URI, diagnostics are
-        // published under that spelling.
+        // Once the client has opened a file under its own form of the URI, diagnostics are
+        // published under that form.
         await client.OpenAsync(AsVsCode(Uri("src/main.nt65")), Read("src/main.nt65"));
         Assert.Empty((await client.NextDiagnosticsAsync(AsVsCode(Uri("src/main.nt65")), timeout)).Diagnostics);
     }
 
     /// <summary>
-    /// A change on disk to any file a program reads makes it publish again: the project file, a
-    /// source no one has open, and a file an <c>.incbin</c> includes. A change to a file nothing
-    /// reads publishes nothing. No file here is opened: every file of a project is reported on
-    /// regardless.
+    /// A change on disk to any file a program reads makes the program publish again. Such files
+    /// include the project file, a source no one has open, and a file an <c>.incbin</c> includes.
+    /// A change to a file nothing reads publishes nothing. No file here is opened, because every
+    /// file of a project is reported on regardless.
     /// </summary>
     [Fact]
     public async Task WhatAProgramReadsChangingOnDiskIsPublishedAgain()
@@ -158,8 +158,9 @@ public sealed class ProjectsTests : IDisposable
     }
 
     /// <summary>
-    /// What is published next for <paramref name="path"/>. Every file of every project is
-    /// published after any change, so what comes first is rarely the one a test is about.
+    /// Returns the next diagnostics published for <paramref name="path"/>. Every file of every
+    /// project is published after any change, so the first file published is rarely the one a
+    /// test is about.
     /// </summary>
     private Task<PublishDiagnosticsParams> NextForAsync(TestClient client, string path, CancellationToken timeout) =>
         client.NextDiagnosticsAsync(Uri(path), timeout);

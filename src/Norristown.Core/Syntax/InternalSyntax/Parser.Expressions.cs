@@ -2,12 +2,12 @@ using System.Collections.Immutable;
 
 namespace Norristown.Syntax.InternalSyntax;
 
-// Expressions: the operator levels, the names an expression is written with, and the places
-// where the language requires parentheses.
+// Parses expressions, including the operator levels, the names an expression uses, and the
+// places where the language requires parentheses.
 internal sealed partial class Parser
 {
     /// <summary>
-    /// An expression, at the loosest binding level. Every expression inside another is read
+    /// Parses an expression at the loosest binding level. Every expression inside another is read
     /// through here or through <see cref="ParseUnary"/>, so this is where the nesting is
     /// counted and where parsing stops when the nesting gets too deep.
     /// </summary>
@@ -114,9 +114,10 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// <c>::</c>-separated, as in <c>gfx::init</c>, <c>::top_level</c> and <c>Point::x</c>.
-    /// <paramref name="indexed"/> allows <c>[i]</c> after a component, which only an expression
-    /// does: after the <c>T</c> of a <c>.type T[n]</c> the brackets are the declaration's count.
+    /// Parses a <c>::</c>-separated name, as in <c>gfx::init</c>, <c>::top_level</c> and
+    /// <c>Point::x</c>. <paramref name="indexed"/> allows <c>[i]</c> after a component, which only
+    /// an expression does. After the <c>T</c> of a <c>.type T[n]</c>, the brackets are the
+    /// declaration's count.
     /// </summary>
     private NameExpressionSyntax ParseName(bool indexed = false)
     {
@@ -137,8 +138,8 @@ internal sealed partial class Parser
         {
             var separator = Advance();
 
-            // A member of a named struct, union or enum may be spelled like a register or a
-            // mnemonic: after `::` there is nothing else it could be.
+            // A member of a named struct, union or enum may have the same name as a register or a
+            // mnemonic, because after `::` it could be nothing else.
             if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic))
             {
                 parts.Add(separator);
@@ -151,7 +152,9 @@ internal sealed partial class Parser
         return new NameExpressionSyntax(global, new GreenSeparatedList(parts.ToImmutable()));
     }
 
-    /// <summary>One name of a path, with the <c>[i]</c> after it where an expression allows one.</summary>
+    /// <summary>
+    /// Parses one name of a path, with the <c>[i]</c> after it where an expression allows one.
+    /// </summary>
     private IdentifierNameSyntax ParseNamePart(bool indexed)
     {
         var name = Advance();
@@ -159,20 +162,24 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// A name part for a name the source does not write, reporting <paramref name="message"/>
-    /// on it; a null message reports nothing, for when another diagnostic already covers it.
+    /// Returns a name part for a name that is absent from the source, reporting
+    /// <paramref name="message"/> on it. A null message reports nothing, for when another
+    /// diagnostic already covers the absence.
     /// </summary>
     private IdentifierNameSyntax MissingPart(DiagnosticMessage? message) =>
         new(message is not { } said ? GreenToken.Missing(SyntaxKind.Identifier) : Missing(SyntaxKind.Identifier, said),
             null);
 
-    /// <summary>A path whose only part is a missing name.</summary>
+    /// <summary>Returns a path whose only part is a missing name.</summary>
     private GreenSeparatedList MissingParts(DiagnosticMessage? message) => new([MissingPart(message)]);
 
-    /// <summary>A name expression for a name the source does not write.</summary>
+    /// <summary>Returns a name expression for a name that is absent from the source.</summary>
     private NameExpressionSyntax MissingName(DiagnosticMessage? message) => new(null, MissingParts(message));
 
-    /// <summary><c>[i]</c> after a name: which element of a counted declaration the name refers to.</summary>
+    /// <summary>
+    /// Parses <c>[i]</c> after a name, which selects the element of a counted declaration that the
+    /// name refers to.
+    /// </summary>
     private ElementIndexSyntax ParseElementIndex()
     {
         var open = Advance();
@@ -191,9 +198,10 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The three places the language requires parentheses, which are the cases a reader misjudges:
-    /// a shift or bitwise operator next to a different operator, logical operators mixed,
-    /// and a byte operator that looks as if it applied to a whole expression.
+    /// Reports a diagnostic when a binary operation leaves out parentheses in one of the three
+    /// places where the language requires them. Those places, which are the cases a reader
+    /// misjudges, are a shift or bitwise operator next to a different operator, mixed logical
+    /// operators, and a byte operator that looks as if it applied to a whole expression.
     /// </summary>
     private void CheckRequiredParentheses(int operatorIndex, GreenToken op, GreenNode left, GreenNode right)
     {
@@ -204,8 +212,8 @@ internal sealed partial class Parser
                 if (OperatorOf(operand) is not { } inner || inner.Kind == op.Kind)
                     continue;
 
-                // Only the logical operators among themselves: `a && (b | c)` reads clearly
-                // enough that the language leaves `a && b | c` alone.
+                // A logical operator needs parentheses only next to another logical operator.
+                // `a && (b | c)` reads clearly enough that the language leaves `a && b | c` alone.
                 if (SyntaxFacts.IsLogicalOperator(op.Kind) && !SyntaxFacts.IsLogicalOperator(inner.Kind))
                     continue;
                 Report(operatorIndex, Catalogue.OperatorsNeedParentheses.Says(op.Text, inner.Text),
@@ -222,15 +230,18 @@ internal sealed partial class Parser
         }
     }
 
-    /// <summary>The operator of <paramref name="node"/> when it is a binary expression, or null.</summary>
+    /// <summary>
+    /// Returns the operator of <paramref name="node"/> if it is a binary expression, or null
+    /// otherwise.
+    /// </summary>
     private static GreenToken? OperatorOf(GreenNode node) =>
         node is BinaryExpressionSyntax binary ? binary.OperatorToken : null;
 
     /// <summary>
-    /// The <c>&lt;</c>, <c>&gt;</c> or <c>^</c> at the right edge of an operand, if any.
-    /// <c>&lt;label + 1</c> is <c>(&lt;label) + 1</c>, and in <c>1 + &lt;label + 2</c> the
-    /// unary sits at the end of the left operand rather than at its head, so follow the
-    /// right spine down.
+    /// Returns the <c>&lt;</c>, <c>&gt;</c> or <c>^</c> at the right edge of an operand, if any.
+    /// <c>&lt;label + 1</c> is <c>(&lt;label) + 1</c>, and in <c>1 + &lt;label + 2</c> the unary
+    /// operator sits at the end of the left operand rather than at its head, so the method follows
+    /// the right spine down.
     /// </summary>
     private static GreenToken? RightmostByteOperator(GreenNode node)
     {

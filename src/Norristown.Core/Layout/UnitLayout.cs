@@ -4,20 +4,23 @@ using Norristown.Syntax;
 namespace Norristown.Layout;
 
 /// <summary>
-/// Where the bytes of a translation unit land, across the modules in it: each file's runs of
-/// known distances, joined where placement puts one module's bytes directly after another's.
+/// Represents where the bytes of a translation unit land across the modules in it. Each file's
+/// runs of known distances are joined where placement puts one module's bytes directly after
+/// another's.
 /// <para>
-/// Each file is laid out on its own, and knows no distance across a <c>.place</c>. This walks
-/// the files in the order the unit writes them, the placed module's steps where its
-/// <c>.place</c> stands, and follows each segment's bytes as ca65 will write them: two lines
-/// of one segment with nothing of that segment between them are at a known distance, whichever
-/// files they are in. An <c>.align</c> ends what is known in its segment, as it does in a file.
+/// Each file is laid out on its own and knows no distance across a <c>.place</c>. This class
+/// walks the files in the order the unit emits them, with the placed module's steps where its
+/// <c>.place</c> stands, and follows each segment's bytes as ca65 will emit them. Two lines of
+/// one segment with nothing of that segment between them are at a known distance, even when they
+/// are in different files. An <c>.align</c> ends what is known in its segment, as it does in a
+/// file.
 /// </para>
 /// </summary>
 public sealed class UnitLayout
 {
-    // For each file's run, the pieces it is split into in the unit's runs: the offset in the
-    // file's run at which a piece starts, and the unit's run and offset that piece starts at.
+    // For each of a file's runs, the parts it is split into among the unit's runs. Each entry
+    // holds the offset in the file's run at which a part starts, and the unit's run and offset at
+    // which that part starts.
     private readonly Dictionary<(string File, int Run), List<(int From, int Run, int At)>> pieces = [];
 
     // Where each segment's bytes have reached, as the unit's run and the offset in it.
@@ -34,7 +37,8 @@ public sealed class UnitLayout
 
     /// <summary>
     /// Lays out <paramref name="unit"/> from the layouts <paramref name="layoutOf"/> gives for
-    /// each of its files, placing what <paramref name="placements"/> says each <c>.place</c> places.
+    /// each of its files, placing at each <c>.place</c> the module that <paramref name="placements"/>
+    /// assigns to it.
     /// </summary>
     public static UnitLayout Of(TranslationUnit unit, Func<SyntaxTree, CodeLayout?> layoutOf, Placements placements)
     {
@@ -45,8 +49,8 @@ public sealed class UnitLayout
 
     /// <summary>
     /// Translates <paramref name="placement"/>, a position in the layout of
-    /// <paramref name="tree"/>, to a position in the unit: the unit's run and the offset in it,
-    /// or null where nothing the unit laid out is at a known distance from it.
+    /// <paramref name="tree"/>, to a position in the unit. Returns the unit's run and the offset
+    /// in it, or null where nothing the unit laid out is at a known distance from it.
     /// </summary>
     public (int Run, int Offset)? Where(SyntaxTree tree, Placement placement)
     {
@@ -60,7 +64,10 @@ public sealed class UnitLayout
         return null;
     }
 
-    /// <summary>Follows one file's bytes, and each module it places where the <c>.place</c> stands.</summary>
+    /// <summary>
+    /// Follows one file's bytes, and the bytes of each module it places where the <c>.place</c>
+    /// stands.
+    /// </summary>
     private void Walk(SyntaxTree tree)
     {
         if (layoutOf(tree) is not { } layout)
@@ -88,9 +95,9 @@ public sealed class UnitLayout
     }
 
     /// <summary>
-    /// The module a <c>.place</c> places, laid out where it stands. The file's bytes after the
-    /// line start a run of its own, which goes on from wherever the placed module left the
-    /// segment the file is writing to.
+    /// Lays out the module a <c>.place</c> places where the directive stands. The file's bytes
+    /// after the directive start a run of their own, which continues from where the placed module
+    /// left the segment the file is emitting to.
     /// </summary>
     private void Splice(SyntaxTree tree, PlacePoint point)
     {
@@ -103,7 +110,10 @@ public sealed class UnitLayout
         }
     }
 
-    /// <summary>Where a segment's bytes have reached, starting a run for one nothing has written to yet.</summary>
+    /// <summary>
+    /// Returns where a segment's bytes have reached, starting a new run for a segment that nothing
+    /// has emitted to yet.
+    /// </summary>
     private (int Run, int At) Reached(string segment)
     {
         if (!reached.TryGetValue(segment, out var now))

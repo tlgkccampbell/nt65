@@ -8,8 +8,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What the editor says about a <c>.place</c>: the module its path names, where that module is
-/// declared, how the path is coloured, and the fix for placing a module not declared <c>placed</c>.
+/// Tests what the editor reports about a <c>.place</c>, including the module its path names,
+/// where that module is declared, how the path is coloured, and the fix for placing a module that
+/// is not declared <c>placed</c>.
 /// </summary>
 public sealed class PlacementRequestsTests
 {
@@ -19,9 +20,9 @@ public sealed class PlacementRequestsTests
     private const string Main = ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n\n.place part\n";
 
     /// <summary>
-    /// A module is not a symbol, so hover and go to definition handle the path a <c>.place</c>
-    /// writes themselves: what the module's declaration says, whose output it is written into,
-    /// and where it is declared.
+    /// A module is not a symbol, so hover and go to definition handle the path in a <c>.place</c>
+    /// themselves. Hover shows the module's declaration and whose output the module is written
+    /// into, and go to definition leads to where the module is declared.
     /// </summary>
     [Fact]
     public void ThePathAPlaceWritesNamesTheModule()
@@ -73,7 +74,10 @@ public sealed class PlacementRequestsTests
         Assert.Equal(".module part: placed\n" + Part[".module part\n".Length..], Editing.Apply(Part, action.Edit.Changes[PartUri]));
     }
 
-    /// <summary>A range covering the whole file, as a client sends when it asks for actions across all of it.</summary>
+    /// <summary>
+    /// Gets a range covering the whole file, as a client sends when it asks for actions across all
+    /// of it.
+    /// </summary>
     private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string main, string part)

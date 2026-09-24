@@ -3,9 +3,10 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// What a caret grows to take in as the selection is widened: the operand, the instruction, the
-/// block and the routine. Each step is a node of the syntax tree: widening a selection walks the
-/// structure of the program, which is what the tree already records.
+/// Tests how a selection grows from the caret as it is widened, taking in the operand, then the
+/// instruction, the block and the routine. Each step is a node of the syntax tree, because
+/// widening a selection walks the structure of the program, and the tree already records that
+/// structure.
 /// </summary>
 public sealed class SelectionRangesTests
 {
@@ -52,7 +53,7 @@ public sealed class SelectionRangesTests
             Selected(chain).Select(text => text.Length));
     }
 
-    /// <summary>Each step of the chain, as the text it selects.</summary>
+    /// <summary>Returns each step of the chain as the text it selects.</summary>
     private static IReadOnlyList<string> Selected(SelectionRange? chain)
     {
         var lines = Source.ReplaceLineEndings("\n").Split('\n');

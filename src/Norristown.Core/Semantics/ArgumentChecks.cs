@@ -4,20 +4,22 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What a call's arguments are checked for once constants have values and the call is being
-/// laid out at its place in a segment: that a <c>const</c> argument with a range is within
-/// it, that an enum kind is given a member of its enum, and that an <c>operand</c> that lists
-/// its modes is given one of them. The rest of a call is checked when names are resolved
-/// (<see cref="MacroInvocation"/>), and a macro's header where the macro is declared
-/// (<see cref="CheckHeader"/>).
+/// Checks the macro-call arguments that can only be validated once constants have values, which
+/// is when the call is laid out in its segment. Verifies that a <c>const</c> argument with a
+/// range falls within it, that an enum kind is given a member of its enum, and that an
+/// <c>operand</c> that lists its modes is given one of them. The rest of a call is checked when
+/// names are resolved (<see cref="MacroInvocation"/>), and a macro's header is checked where the
+/// macro is declared (<see cref="CheckHeader"/>).
 /// </summary>
 public static class ArgumentChecks
 {
     /// <summary>
-    /// Checks the arguments written in <paramref name="call"/>, evaluating them in the caller's
+    /// Checks the arguments given in <paramref name="call"/>, evaluating them in the caller's
     /// expansion <paramref name="caller"/> and in <paramref name="segment"/>.
     /// </summary>
-    /// <returns>Whether every argument passed, which is when the body is worth laying out.</returns>
+    /// <returns>
+    /// True if every argument passed its checks, which is when the body is worth laying out.
+    /// </returns>
     public static bool Check(
         SemanticModel model, MacroCallSyntax call, Expansion? caller, string? segment,
         Action<SyntaxNode, DiagnosticMessage> report)
@@ -83,9 +85,9 @@ public static class ArgumentChecks
     }
 
     /// <summary>
-    /// What a macro's header is checked for once constants have values: each <c>const</c>
-    /// range is two constants with the lower first, each enum kind names an enum, and each mode
-    /// an <c>operand</c> lists is one it can take.
+    /// Reports a diagnostic for each part of a macro's header that is invalid once constants
+    /// have values. Each <c>const</c> range must be two constants with the lower first, each enum
+    /// kind must name an enum, and each mode an <c>operand</c> lists must be one it can take.
     /// </summary>
     public static void CheckHeader(
         Symbol macro, Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> symbolOf,
@@ -128,10 +130,10 @@ public static class ArgumentChecks
     }
 
     /// <summary>
-    /// What a macro's conditions are checked for once names are resolved: that each word a
-    /// condition compares a parameter with is a value the parameter can take. A comparison with a
-    /// word the parameter can never be gives the same result for every argument, so it is a
-    /// mistake in the definition and is reported there rather than at a call.
+    /// Reports a diagnostic, once names are resolved, for each word that a macro's conditions
+    /// compare with a parameter when the parameter can never take that value. Such a comparison
+    /// gives the same result for every argument, so it is a mistake in the definition and is
+    /// reported there rather than at a call.
     /// </summary>
     public static void CheckComparisons(
         Symbol macro, Func<NameExpressionSyntax, Symbol?> symbolOf, Action<TextSpan, DiagnosticMessage> report)
@@ -152,7 +154,10 @@ public static class ArgumentChecks
         }
     }
 
-    /// <summary>The range a <c>const(low..high)</c> takes, or null when it names none or the header is wrong.</summary>
+    /// <summary>
+    /// Returns the range a <c>const(low..high)</c> takes, or null when it names no range or the
+    /// header is invalid.
+    /// </summary>
     private static (long Low, long High)? Range(SemanticModel model, ArgumentKind accepts) =>
         accepts is { Low: { } low, High: { } high }
         && model.ValueOf(low).AsNumber() is { } least && model.ValueOf(high).AsNumber() is { } most && least <= most
@@ -160,9 +165,10 @@ public static class ArgumentChecks
             : null;
 
     /// <summary>
-    /// The mode an operand argument is in, as <c>.mode</c> spells it, and for a plain address
-    /// that is a direct-page one, the matching <c>zp</c> mode as well. An argument that is
-    /// itself another <c>operand</c> parameter is followed to the operand that parameter was given.
+    /// Returns the mode of an operand argument in the form <c>.mode</c> uses. For a plain
+    /// address on the direct page, it also returns the matching <c>zp</c> mode. An argument that
+    /// is itself another <c>operand</c> parameter is followed to the operand that parameter was
+    /// given.
     /// </summary>
     private static (string Mode, string? Direct)? ModeOf(SemanticModel model, SyntaxNode operand, Expansion? at, string? segment)
     {
@@ -193,7 +199,10 @@ public static class ArgumentChecks
         return model.AddressSizeOf(expression, segment, at) == AddressSize.ZeroPage ? (mode, direct) : (mode, null);
     }
 
-    /// <summary>Words as a message lists them: <c>`imm`</c>, or <c>one of `imm`, `zp`, `abs`</c>.</summary>
+    /// <summary>
+    /// Formats words as a message lists them, such as <c>`imm`</c> or
+    /// <c>one of `imm`, `zp`, `abs`</c>.
+    /// </summary>
     private static string Spell(IReadOnlyList<string> words) =>
         words.Count == 1 ? $"`{words[0]}`" : "one of " + string.Join(", ", words.Select(word => $"`{word}`"));
 }

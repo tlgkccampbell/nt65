@@ -1,12 +1,12 @@
 namespace Norristown.Syntax;
 
 /// <summary>
-/// One child of a node: either a node or a token. It is what a node's children read as when
-/// both kinds are wanted together, as in <see cref="SyntaxNode.ChildNodesAndTokens"/> and a
-/// separated list's items and separators.
+/// Represents one child of a node, which is either a node or a token. A node's children take this
+/// form when both kinds are wanted together, as in <see cref="SyntaxNode.ChildNodesAndTokens"/>
+/// and in a separated list's items and separators.
 /// <para>
-/// A default value is neither a node nor a token: its kind is <see cref="SyntaxKind.None"/>
-/// and it has no text and no place in the file.
+/// A default value is neither a node nor a token. Its kind is <see cref="SyntaxKind.None"/>, and
+/// it has no text and no position in the file.
 /// </para>
 /// </summary>
 public readonly struct SyntaxNodeOrToken
@@ -26,50 +26,53 @@ public readonly struct SyntaxNodeOrToken
         this.token = token;
     }
 
-    /// <summary>Whether this is a node.</summary>
+    /// <summary>Gets a value indicating whether this is a node.</summary>
     public bool IsNode => node is not null;
 
-    /// <summary>Whether this is a token.</summary>
+    /// <summary>Gets a value indicating whether this is a token.</summary>
     public bool IsToken => node is null && token.Green is not null;
 
-    /// <summary>What the node or token is, or <see cref="SyntaxKind.None"/> for neither.</summary>
+    /// <summary>
+    /// Gets the kind of the node or token, or <see cref="SyntaxKind.None"/> if this is neither.
+    /// </summary>
     public SyntaxKind Kind => node is not null ? node.Kind : IsToken ? token.Kind : SyntaxKind.None;
 
-    /// <summary>The node this one is a child of, or null.</summary>
+    /// <summary>Gets the node that this node or token is a child of, or null if there is none.</summary>
     public SyntaxNode? Parent => node is not null ? node.Parent : IsToken ? token.Parent : null;
 
-    /// <summary>Where it starts in the file's text, trivia included.</summary>
+    /// <summary>Gets the offset in the file's text where the node or token starts, including trivia.</summary>
     public int Position => node is not null ? node.Position : IsToken ? token.Position : 0;
 
-    /// <summary>Its range in the file's text, trivia included.</summary>
+    /// <summary>Gets the range of the node or token in the file's text, including trivia.</summary>
     public TextSpan FullSpan => node is not null ? node.FullSpan : IsToken ? token.FullSpan : default;
 
-    /// <summary>Its range without the trivia around it.</summary>
+    /// <summary>Gets the range of the node or token without the trivia around it.</summary>
     public TextSpan Span => node is not null ? node.Span : IsToken ? token.Span : default;
 
-    /// <summary>The node as a child.</summary>
+    /// <summary>Converts a node to a child value.</summary>
     /// <param name="node">The node.</param>
     public static implicit operator SyntaxNodeOrToken(SyntaxNode node) => new(node);
 
-    /// <summary>The token as a child.</summary>
+    /// <summary>Converts a token to a child value.</summary>
     /// <param name="token">The token.</param>
     public static implicit operator SyntaxNodeOrToken(SyntaxToken token) => new(token);
 
-    /// <summary>The node, or null when this is a token.</summary>
+    /// <summary>Returns the node, or null if this is a token.</summary>
     public SyntaxNode? AsNode() => node;
 
-    /// <summary>The token, or a default token when this is a node.</summary>
+    /// <summary>Returns the token, or a default token if this is a node.</summary>
     public SyntaxToken AsToken() => token;
 
-    /// <summary>Its text, exactly as in the source.</summary>
+    /// <summary>Returns the full text of the node or token, exactly as in the source.</summary>
     public string ToFullString() => node is not null ? node.ToFullString() : IsToken ? token.ToFullString() : "";
 
     /// <summary>
-    /// Its text over <see cref="Span"/>: no surrounding trivia and no line break. This reads a
-    /// list's items and separators alike without checking which of the two each one is.
+    /// Returns the text over <see cref="Span"/>, without surrounding trivia or the line break.
+    /// This method reads a list's items and separators alike, without checking whether each child
+    /// is an item or a separator.
     /// </summary>
     public string GetText() => node is not null ? node.GetText() : IsToken ? token.Text : "";
 
-    /// <summary>Its kind and range, for debugging.</summary>
+    /// <summary>Returns the kind and range of the node or token, for debugging.</summary>
     public override string ToString() => node is not null ? node.ToString() : IsToken ? token.ToString() : "";
 }

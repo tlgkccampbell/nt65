@@ -6,13 +6,13 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// What the 65816's analysis needs written beside each construct it cannot follow. Each such
-/// trick can be recognised from its syntax — an indirect jump, a computed target, a label used
-/// as data, a store into code — and each needs an annotation that says what the analysis cannot
-/// see: a <c>.next</c> saying where flow goes, a <c>.state</c> declaring the state at a label,
-/// or a <c>.patch</c> acknowledging a store. On the 6502 and its CMOS variants nothing depends
-/// on the processor state, so none of this is required there, and a routine that runs off its
-/// end is only a warning.
+/// Checks that each construct the 65816's analysis cannot follow has the annotation it needs
+/// beside it. Each such construct can be recognised from its syntax, such as an indirect jump, a
+/// computed target, a label used as data, or a store into code. Each needs an annotation that
+/// says what the analysis cannot see. A <c>.next</c> says where flow goes, a <c>.state</c>
+/// declares the state at a label, and a <c>.patch</c> acknowledges a store. On the 6502 and its
+/// CMOS variants nothing depends on the processor state, so none of this is required there, and
+/// a routine that runs off its end is only a warning.
 /// </summary>
 internal sealed class Requirements
 {
@@ -21,15 +21,15 @@ internal sealed class Requirements
     private readonly ControlFlow flow;
     private readonly List<Diagnostic> diagnostics = [];
 
-    // How much running off the end of a routine matters: on the 65816 the analysis would
-    // carry the state into whatever comes next, and elsewhere it is only likely a mistake.
+    // The severity of running off the end of a routine. On the 65816 the analysis would pass
+    // the state on to whatever comes next, and elsewhere running off is only likely a mistake.
     private readonly Severity runningOff;
 
     // Every label that starts a block in some routine, with where it is and whether what it
     // labels is code rather than data.
     private readonly Dictionary<Symbol, Labelled> labels = [];
 
-    // The labels a `.next` names, by the routine the `.next` is written in.
+    // The labels a `.next` names, keyed by the routine the `.next` is in.
     private readonly HashSet<(Symbol Routine, Symbol Label)> named = [];
 
     private Requirements(SemanticModel model, CodeLayout layout, ControlFlow flow, Severity runningOff)
@@ -57,8 +57,9 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// Warns about each routine in <paramref name="flow"/>'s file that runs off its end, which is
-    /// all a CPU without the 65816's analysis asks for: <c>.fallthrough</c> says the routine meant it.
+    /// Reports a warning for each routine in <paramref name="flow"/>'s file that runs off its end,
+    /// which is the only check a CPU without the 65816's analysis needs. A <c>.fallthrough</c>
+    /// declares that the routine meant to run on.
     /// </summary>
     public static void CheckEnds(SemanticModel model, CodeLayout layout, ControlFlow flow, List<Diagnostic> diagnostics)
     {
@@ -68,10 +69,10 @@ internal sealed class Requirements
         diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
     }
 
-    /// <summary>The statement as it is written, for a message that quotes it.</summary>
+    /// <summary>Returns the statement's source text in backticks, for a message that quotes it.</summary>
     private static string Quoted(SyntaxNode statement) => $"`{statement.GetText().Trim()}`";
 
-    /// <summary>Which labels there are, and which labels each routine's <c>.next</c> names.</summary>
+    /// <summary>Records which labels there are, and which labels each routine's <c>.next</c> names.</summary>
     private void Collect()
     {
         foreach (var region in flow.Regions)
@@ -94,8 +95,8 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// Whether a label stands on code: the first thing after it, past any <c>.state</c> and
-    /// through any labels that run straight into the next, is an instruction.
+    /// Returns whether a label stands on code. It does when the first thing after it, past any
+    /// <c>.state</c> and through any labels that run straight into the next, is an instruction.
     /// </summary>
     private static bool IsCode(IReadOnlyList<BasicBlock> blocks, int index)
     {
@@ -116,9 +117,9 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// Checks what the last statement of a block needs: an indirect or computed transfer needs
-    /// a <c>.next</c>, a return used as a jump needs a <c>.next</c>, and a jump to a label that
-    /// has to be declared needs that declaration.
+    /// Reports a diagnostic where the last statement of a block lacks what it needs. An indirect
+    /// or computed transfer needs a <c>.next</c>, and so does a return used as a jump. A jump to a
+    /// label that has to be declared needs that declaration.
     /// </summary>
     private void CheckTail(FlowRegion region, BasicBlock block)
     {
@@ -155,14 +156,17 @@ internal sealed class Requirements
         }
     }
 
-    /// <summary>What a direct transfer needs of the place it names.</summary>
+    /// <summary>
+    /// Reports a diagnostic where a direct transfer's target is computed, is not a label, is
+    /// another routine's undeclared label, or is data the transfer is not declared to reach.
+    /// </summary>
     private void CheckTarget(FlowRegion region, Step step, InstructionStatementSyntax statement, AddressingMode? mode, bool calls)
     {
         if (Transfers.TargetOf(statement, mode) is not { } written)
             return;
         var target = Targets.Of(model, written, step.On);
 
-        // A name that resolves to nothing has been reported where it is written; a call to
+        // A name that resolves to nothing has already been reported where it appears. A call to
         // anything but a routine is reported by the state analysis, with the call's other checks.
         if (target is null)
         {
@@ -202,7 +206,7 @@ internal sealed class Requirements
         }
     }
 
-    /// <summary>The first data statement a data label labels, or null when it labels none.</summary>
+    /// <summary>Returns the first data statement a data label labels, or null when it labels none.</summary>
     private static Step? DataAt(Labelled labelled)
     {
         var first = labelled.Block.Steps.FirstOrDefault(step => step.Statement is not StateDirectiveSyntax);
@@ -210,8 +214,9 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// Whether a block pushes the address of code, which is what a return used as a jump
-    /// returns to: a push, and an operand in the block that names a label on code or a routine.
+    /// Returns whether a block pushes the address of code, which is what a return used as a jump
+    /// returns to. The block must contain a push, and an operand that names a label on code or a
+    /// routine.
     /// </summary>
     private bool PushesCode(BasicBlock block)
     {
@@ -239,9 +244,10 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// A routine that does not end in a transfer of control runs off its end into whatever is
-    /// written after it. A <c>.fallthrough</c> naming that routine declares that this is
-    /// intended, and the routine is then checked as a tail call.
+    /// Reports a diagnostic for each stream of an entered routine that runs off its end. A routine
+    /// that does not end in a transfer of control runs off its end into whatever is emitted after
+    /// it. A <c>.fallthrough</c> naming the routine it runs into declares that this is intended,
+    /// and the routine is then checked as a tail call.
     /// </summary>
     private void CheckEnd(FlowRegion region)
     {
@@ -252,9 +258,9 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// The end of one stream of a routine's bytes: its own, which runs into whatever is written
-    /// after the routine, or a nested segment block's, which runs into whatever that segment
-    /// holds next.
+    /// Reports a diagnostic where the end of one stream of a routine's bytes runs on. The stream
+    /// is either the routine's own, which runs into whatever is emitted after the routine, or a
+    /// nested segment block's, which runs into whatever that segment holds next.
     /// </summary>
     private void CheckEnd(FlowRegion region, BasicBlock last, bool own)
     {
@@ -269,8 +275,8 @@ internal sealed class Requirements
             : Catalogue.RoutineRunsOffTheEnd.Says(
                 routine, "the end of a segment block", "that segment holds next", "add a `.next` saying where flow goes");
 
-        // Where the routine written next is known, the fix names it; anywhere else the fix is
-        // a `.next ?`, which ends the path without claiming anything about what comes next.
+        // Where the routine emitted next is known, the fix names it. Anywhere else the fix is a
+        // `.next ?`, which ends the path without claiming anything about what comes next.
         var after = own ? flow.WrittenAfter(region) : null;
         var runsInto = after is { } next
             ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
@@ -299,16 +305,17 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// How <paramref name="routine"/> is written from inside <paramref name="from"/>: by its own
-    /// name where the two are declared in one scope, and by its path from anywhere else.
+    /// Returns how source inside <paramref name="from"/> names <paramref name="routine"/>. That is
+    /// its own name where the two are declared in one scope, and its qualified name anywhere else.
     /// </summary>
     private static string Named(Symbol routine, Symbol from) =>
         routine.Scope == from.Scope ? routine.Name : routine.QualifiedName;
 
     /// <summary>
-    /// Every place a label on code is named other than as the target of a branch, a jump or a
-    /// call: a store into it needs a <c>.patch</c>, and any other use means flow may arrive at
-    /// the label without the analysis seeing it, which needs a declaration or a <c>.next</c>.
+    /// Reports each place a label on code is named, other than as the target of a branch, a jump
+    /// or a call, without the annotation it needs. A store into the label needs a <c>.patch</c>.
+    /// Any other use means flow may arrive at the label without the analysis seeing it, which
+    /// needs a declaration or a <c>.next</c>.
     /// </summary>
     private void CheckUses()
     {
@@ -358,8 +365,8 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// Whether a name is only measured rather than used as an address: inside <c>.sizeof</c>,
-    /// <c>.endof</c> or <c>.spanof</c>.
+    /// Returns whether a name is only measured rather than used as an address, as it is inside
+    /// <c>.sizeof</c>, <c>.endof</c> or <c>.spanof</c>.
     /// </summary>
     private static bool Measured(NameExpressionSyntax name, SyntaxNode statement)
     {
@@ -374,13 +381,13 @@ internal sealed class Requirements
         return false;
     }
 
-    /// <summary>Whether an instruction writes to the memory its operand names.</summary>
+    /// <summary>Returns whether an instruction stores to the memory its operand names.</summary>
     private static bool Stores(SyntaxNode statement, AddressingMode? mode) =>
         mode is not (null or AddressingMode.Immediate or AddressingMode.Accumulator or AddressingMode.Implied)
         && Mnemonic(statement).Stores;
 
     /// <summary>
-    /// The facts about the statement's instruction, or <see cref="InstructionFacts.None"/>
+    /// Returns the facts about the statement's instruction, or <see cref="InstructionFacts.None"/>
     /// where the statement is not an instruction.
     /// </summary>
     private static InstructionFacts Mnemonic(SyntaxNode statement) =>
@@ -389,8 +396,9 @@ internal sealed class Requirements
             : InstructionFacts.None;
 
     /// <summary>
-    /// An exported label inside a routine lets other files jump into it, where this file's
-    /// analysis never sees them arrive, so the label has to be declared.
+    /// Reports each exported label inside a routine that is not declared. An exported label lets
+    /// other files jump into the routine, where this file's analysis never sees them arrive, so the
+    /// label has to be declared.
     /// </summary>
     private void CheckExports()
     {
@@ -413,12 +421,16 @@ internal sealed class Requirements
         diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
 
     /// <summary>
-    /// A <c>.next ?</c> after the step's statement, where the programmer writes it: in this file,
-    /// and not in a macro body, where one would end the path of every call.
+    /// Returns a fix that adds a <c>.next ?</c> after the step's statement, or null where the
+    /// programmer cannot add it there. The fix is offered only in this file and not in a macro body,
+    /// where a <c>.next ?</c> would end the path of every call.
     /// </summary>
     private DiagnosticFix? EndPath(Step step) =>
         step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.EndPath) : null;
 
-    /// <summary>A label that starts a block: the region and block it starts, and whether it labels code.</summary>
+    /// <summary>
+    /// Represents a label that starts a block, with the region and block it starts and whether it
+    /// labels code.
+    /// </summary>
     private readonly record struct Labelled(FlowRegion Region, BasicBlock Block, bool IsCode);
 }

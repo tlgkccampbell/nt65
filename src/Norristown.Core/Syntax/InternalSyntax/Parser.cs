@@ -7,31 +7,31 @@ namespace Norristown.Syntax.InternalSyntax;
 /// and the kind of block around it, so a line parses without looking at any other
 /// line and its statement survives an edit anywhere else in the file.
 /// <para>
-/// The parser never gives up on a line: whatever it cannot read becomes a
+/// The parser never gives up on a line. Whatever it cannot read becomes a
 /// <see cref="SyntaxKind.SkippedTokens"/> node with a diagnostic, which the line holds alongside
 /// its line break and any <c>.export</c> before a declaration. A statement therefore contains
-/// only its own tokens, wherever it is written. A node's shape does not depend on what the source
-/// wrote either: a required piece the source does not write fills its slot as a missing token,
-/// with no width and no text, so a required property is never null, and code reading the tree
-/// checks <see cref="GreenNode.IsMissing"/> where it cares. An optional part of the line that the
-/// source leaves out entirely — a signature, an operand, an <c>as</c> — is null, and null never
-/// means anything else.
+/// only its own tokens, wherever it appears. A node's shape does not depend on what the source
+/// contains either. A required piece that is absent from the source fills its slot as a missing
+/// token, with no width and no text, so a required property is never null, and code reading the
+/// tree checks <see cref="GreenNode.IsMissing"/> where it cares. An optional part of the line that
+/// the source leaves out entirely, such as a signature, an operand or an <c>as</c>, is null, and
+/// null never means anything else.
 /// </para>
 /// <para>
-/// A diagnostic covers the token the parser is looking at. If that is the end of the line —
-/// nothing is written there, because the piece the line wants was never typed — the diagnostic
-/// goes at the end of the last token the source does have, before the whitespace and comment
-/// after it: that is where the missing piece belongs, and a caret there neither drifts right as
-/// trailing spaces are typed nor lands past a trailing comment. This is the only placement rule,
-/// and <see cref="Caret"/> implements it. A diagnostic about a missing piece is carried by the
-/// missing token in its slot, reaching back over the trivia in between with a negative offset
-/// where necessary; any other diagnostic is reported over its token and attached to the
-/// innermost node the parser finishes that contains it.
+/// A diagnostic covers the token the parser is looking at. If that token is the end of the line,
+/// because the piece the line wants was never typed, the diagnostic goes at the end of the last
+/// token the source does have, before the whitespace and comment after it. That is where the
+/// missing piece belongs, and a caret there neither drifts right as trailing spaces are typed nor
+/// lands past a trailing comment. This is the only placement rule, and <see cref="Caret"/>
+/// implements it. A diagnostic about a missing piece is held by the missing token in its slot,
+/// reaching back over the trivia in between with a negative offset where necessary. Any other
+/// diagnostic is reported over its token and attached to the innermost node the parser finishes
+/// that contains it.
 /// </para>
 /// <para>
-/// The class is split into one file per area — declarations, data, directives, macros,
-/// signatures, operands, expressions — and this file holds what every area uses to read a line:
-/// the tokens, where a diagnostic goes, and the dispatch that picks the area.
+/// The class is split into one file per area (declarations, data, directives, macros,
+/// signatures, operands and expressions). This file holds what every area uses to read a line,
+/// which is the tokens, the placement of diagnostics, and the dispatch that picks the area.
 /// </para>
 /// </summary>
 internal sealed partial class Parser
@@ -54,9 +54,9 @@ internal sealed partial class Parser
     private readonly bool opensBlock;
 
     // The diagnostics reported over a token, positioned within the line and waiting to be
-    // attached to the node that contains them; and the total number of diagnostics the line has
-    // been given, missing tokens' included, which is how ReportOnce and Expect tell whether
-    // anything has been reported on this line yet.
+    // attached to the node that contains them. `reported` is the total number of diagnostics the
+    // line has been given, including those on missing tokens. ReportOnce and Expect use it to
+    // tell whether anything has been reported on this line yet.
     private readonly List<Pending> pending = [];
     private int reported;
     private int index;
@@ -91,19 +91,23 @@ internal sealed partial class Parser
 
     private bool AtEnd => Kind == SyntaxKind.EndOfLine;
 
-    /// <summary>Whether an operand has run out: the end of the line, or the <c>}</c> around it.</summary>
+    /// <summary>
+    /// Gets a value indicating whether an operand has run out, at the end of the line or at the
+    /// <c>}</c> around it.
+    /// </summary>
     private bool AtOperandEnd => AtEnd || (braced && Kind == SyntaxKind.CloseBrace);
 
     /// <summary>
-    /// Whether a declaration could write its name here. Register names and mnemonics are
-    /// reserved, but that rule belongs to name binding rather than to reading a line:
-    /// <c>.proc a</c> parses, and is reported where every other reserved-word use is.
+    /// Gets a value indicating whether a declaration's name could appear here. Register names and
+    /// mnemonics are reserved, but that rule belongs to name binding rather than to reading a
+    /// line, so <c>.proc a</c> parses, and is reported where every other reserved-word use is.
     /// </summary>
     private bool AtName => Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic;
 
     /// <summary>
-    /// Whether the current token is a contextual word such as <c>dp</c> or <c>proc</c>.
-    /// Those are matched without regard to case, as every other word the language fixes is.
+    /// Returns a value indicating whether the current token is the contextual word
+    /// <paramref name="word"/>, such as <c>dp</c> or <c>proc</c>. Those words are matched without
+    /// regard to case, as every other word the language fixes is.
     /// </summary>
     private bool AtWord(string word) =>
         Kind == SyntaxKind.Identifier && Current.Text.Equals(word, StringComparison.OrdinalIgnoreCase);
@@ -118,7 +122,7 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// Returns the current token and moves past it; the position stays on the end-of-line token
+    /// Returns the current token and moves past it. The position stays on the end-of-line token
     /// once it is reached.
     /// </summary>
     private GreenToken Advance()
@@ -129,13 +133,17 @@ internal sealed partial class Parser
         return token;
     }
 
-    /// <summary>Reports over the current token, with the change the message names as its fix.</summary>
+    /// <summary>
+    /// Reports <paramref name="message"/> over the current token, with the change the message
+    /// names as its fix.
+    /// </summary>
     private void Report(DiagnosticMessage message, DiagnosticFix? fix = null) => Report(index, message, fix);
 
     /// <summary>
-    /// Reports only when nothing has been said about this line yet. A half-typed
-    /// <c>m!({</c> runs out of tokens inside an argument, inside the braces and inside the
-    /// parentheses; the first report says what is missing, and the others would only repeat it.
+    /// Reports <paramref name="message"/> only if nothing has been reported on this line yet. A
+    /// half-typed <c>m!({</c> runs out of tokens inside an argument, inside the braces and inside
+    /// the parentheses. The first report says what is missing, and the others would only repeat
+    /// it.
     /// </summary>
     private void ReportOnce(DiagnosticMessage message, DiagnosticFix? fix = null)
     {
@@ -144,9 +152,9 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// An error expression to use in place of one nested deeper than
+    /// Returns an error expression to use in place of one nested deeper than
     /// <see cref="MaximumNesting"/>, or null while there is room for one more level. The rest of
-    /// the line is not parsed: the line keeps it as skipped tokens, so its text is still
+    /// the line is not parsed. The line keeps it as skipped tokens, so its text is still
     /// preserved, and the only thing reported about it is that it nests too deeply.
     /// </summary>
     private ExpressionSyntax? TooDeeplyNested()
@@ -157,7 +165,10 @@ internal sealed partial class Parser
         return new ErrorExpressionSyntax(null);
     }
 
-    /// <summary>Reports over the token at <paramref name="token"/>, wherever it sits in the line.</summary>
+    /// <summary>
+    /// Reports <paramref name="message"/> over the token at index <paramref name="token"/>,
+    /// wherever it sits in the line.
+    /// </summary>
     private void Report(int token, DiagnosticMessage message, DiagnosticFix? fix = null)
     {
         var (start, width) = Caret(token);
@@ -167,8 +178,8 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Attaches to <paramref name="node"/> the pending diagnostics that fall within its text. The
-    /// parser has just finished reading the node, so it ends at the parser's current position;
-    /// a pending diagnostic inside that range is about this node, since no inner node claimed it.
+    /// parser has just finished reading the node, so it ends at the parser's current position. A
+    /// pending diagnostic inside that range is about this node, since no inner node claimed it.
     /// </summary>
     private T Own<T>(T node) where T : GreenNode
     {
@@ -193,8 +204,9 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// Attaches to the statement every diagnostic no node claimed: one over a token of the
-    /// statement that no inner node contains, and the rare one about a place outside the statement.
+    /// Attaches every diagnostic that no node claimed to the statement. These are diagnostics
+    /// over a token of the statement that no inner node contains, and the rare diagnostic about a
+    /// place outside the statement.
     /// </summary>
     private void Settle(GreenNode statement)
     {
@@ -207,9 +219,10 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// Where a diagnostic about the token at <paramref name="at"/> goes, as an offset from the
-    /// start of the line and a width: over the token, or, if the line has run out, a zero-width
-    /// caret at the end of the last token it does have, which is where the missing piece belongs.
+    /// Returns where a diagnostic about the token at <paramref name="at"/> goes, as an offset from
+    /// the start of the line and a width. The diagnostic covers the token, or, if the line has run
+    /// out, is a zero-width caret at the end of the last token the line does have, which is where
+    /// the missing piece belongs.
     /// </summary>
     private (int Start, int Width) Caret(int at)
     {
@@ -221,12 +234,14 @@ internal sealed partial class Parser
             : (FullStart(at) + token.LeadingWidth, 0);
     }
 
-    /// <summary>Where token <paramref name="at"/> starts in the line, its leading trivia included.</summary>
+    /// <summary>
+    /// Returns where token <paramref name="at"/> starts in the line, including its leading trivia.
+    /// </summary>
     private int FullStart(int at)
     {
-        // Worked out for the whole line the first time a diagnostic wants one, and kept: a line
-        // with nothing to say never pays for it, and one with several things to say pays once
-        // rather than walking the tokens before each of them.
+        // The starts are computed for the whole line the first time a diagnostic needs one, and
+        // kept. A line with nothing to report never pays for them, and one with several things to
+        // report pays once rather than walking the tokens before each of them.
         if (starts is null)
         {
             starts = new int[tokens.Length + 1];
@@ -246,16 +261,17 @@ internal sealed partial class Parser
             return Finish(new BlankLineSyntax());
 
         // An unnamed label must be replaced by a named one, not merely respelled, so it is the
-        // only thing reported about its line: a line with `:` where a name belongs or `:+` in an
-        // operand is parsed no further, since anything else wrong with it is the same mistake.
+        // only thing reported about its line. A line with `:` where a name belongs, or with `:+`
+        // in an operand, is parsed no further, since anything else wrong with it is the same
+        // mistake.
         if (Lines.UnnamedLabel(tokens) is >= 0 and var colon)
         {
             Report(colon, Catalogue.UnnamedLabel);
             return Own(new ErrorLineSyntax(TakeRest()));
         }
 
-        // Blocks whose lines follow a grammar of their own. A struct or union member
-        // is written like a labelled data declaration and needs no rule of its own.
+        // These blocks' lines follow a grammar of their own. A struct or union member has the
+        // form of a labelled data declaration and needs no rule of its own.
         //
         // The line that opens a block belongs to that block, so it arrives here with the block's
         // own kind as its context; it is parsed as an opener, and only the lines after it are
@@ -284,15 +300,18 @@ internal sealed partial class Parser
             LineKind.Directive => ParseDirectiveLine(),
             LineKind.MacroCall => Finish(ParseMacroCall()),
 
-            // A name on its own splices a `block` parameter. Which blocks may hold one is not
-            // a question about this line — a splice inside an `.if` inside a body is still a
-            // splice — so it is read as one everywhere and the binder says where it belongs.
+            // A name on its own splices a `block` parameter. Which blocks may hold one is not a
+            // question about this line, since a splice inside an `.if` inside a body is still a
+            // splice. So it is read as a splice everywhere, and the binder decides where it
+            // belongs.
             LineKind.BareIdentifier => Finish(new BlockSpliceSyntax(Advance())),
             _ => ErrorLine(Catalogue.ExpectedStatement.Says("a label, a constant, an instruction or a directive")),
         };
     }
 
-    /// <summary>Returns the statement, after moving whatever is left on the line into its skipped tokens.</summary>
+    /// <summary>
+    /// Returns the statement, after moving whatever is left on the line into its skipped tokens.
+    /// </summary>
     private GreenNode Finish(GreenNode statement)
     {
         SkipRest();
@@ -300,7 +319,7 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// Anything the statement could not take, kept for the line as
+    /// Moves anything the statement could not take into the line's
     /// <see cref="SyntaxKind.SkippedTokens"/>.
     /// </summary>
     private void SkipRest()
@@ -308,12 +327,12 @@ internal sealed partial class Parser
         if (AtEnd)
             return;
 
-        // One diagnostic per line is enough: where the parser has already said what it
-        // wanted, the tokens it then walks past are the same problem said twice.
+        // One diagnostic per line is enough. Where the parser has already reported what it
+        // wanted, the tokens it then walks past are the same problem reported twice.
         //
-        // A block written on one line, `.data name { .byte 1 }`, gets its own message: the
-        // `{` was read as a block opener, and what follows it is the block's body written on
-        // the wrong line, rather than an unexpected token.
+        // A block on one line, such as `.data name { .byte 1 }`, gets its own message, because
+        // the `{` was read as a block opener, and what follows it is the block's body on the
+        // wrong line, rather than an unexpected token.
         if (reported == 0)
         {
             Report(!opensBlock && index > 0 && tokens[index - 1].Kind == SyntaxKind.OpenBrace
@@ -330,8 +349,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// Every token up to, but not including, the end-of-line token, as one list; null when
-    /// there are none, since an empty list is stored as null.
+    /// Returns every token up to, but not including, the end-of-line token, as one list, or null
+    /// if there are none, since an empty list is stored as null.
     /// </summary>
     private GreenList? TakeRest()
     {
@@ -361,14 +380,15 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The current token if it is of <paramref name="kind"/>; otherwise a missing token that
-    /// reports nothing, for a slot where some other problem on the line has already been
+    /// Returns the current token if it is of <paramref name="kind"/>, or otherwise a missing token
+    /// that reports nothing, for a slot where some other problem on the line has already been
     /// reported.
     /// </summary>
     private GreenToken Expect(SyntaxKind kind) => Kind == kind ? Advance() : GreenToken.Missing(kind);
 
     /// <summary>
-    /// Like <see cref="Expect(SyntaxKind)"/>, but the missing token carries
+    /// Returns the current token if it is of <paramref name="kind"/>, as
+    /// <see cref="Expect(SyntaxKind)"/> does, but the missing token it otherwise returns reports
     /// <paramref name="message"/> if nothing has been reported on this line yet.
     /// </summary>
     private GreenToken Expect(SyntaxKind kind, DiagnosticMessage message)
@@ -379,16 +399,17 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The name written here, or a missing identifier carrying <paramref name="message"/>. A name
-    /// may be lexed as an identifier, a register or a mnemonic, so it is not a single token kind
-    /// that <see cref="Expect(SyntaxKind, DiagnosticMessage)"/> could check for.
+    /// Returns the name at the current token, or a missing identifier that reports
+    /// <paramref name="message"/>. A name may be lexed as an identifier, a register or a mnemonic,
+    /// so it is not a single token kind that <see cref="Expect(SyntaxKind, DiagnosticMessage)"/>
+    /// could check for.
     /// </summary>
     private GreenToken ExpectName(DiagnosticMessage message) =>
         AtName ? Advance() : Missing(SyntaxKind.Identifier, message);
 
     /// <summary>
-    /// A missing token of <paramref name="kind"/> carrying <paramref name="message"/>, whether or
-    /// not anything has been reported on the line already. It is used instead of
+    /// Returns a missing token of <paramref name="kind"/> that reports <paramref name="message"/>,
+    /// whether or not anything has been reported on the line already. It is used instead of
     /// <see cref="Expect(SyntaxKind, DiagnosticMessage)"/> where a second missing piece on a line
     /// deserves a diagnostic of its own.
     /// <para>
@@ -405,10 +426,10 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// The fix for a missing piece, when the fix is simply to write it: a bracket has only one
-    /// possible text, and the missing token's slot already gives its place, so the editor can be
-    /// told to insert it there. Anything else — a name, a number, a message in quotes — has to be
-    /// written by the programmer, and has no fix.
+    /// Returns the fix for a missing piece when the fix is simply to insert it, or null otherwise.
+    /// A bracket has only one possible text, and the missing token's slot already gives its place,
+    /// so the editor can be told to insert it there. Anything else, such as a name, a number or a
+    /// message in quotes, has to be typed by the programmer, and has no fix.
     /// </summary>
     private static DiagnosticFix? Writes(SyntaxKind kind) =>
         kind is SyntaxKind.OpenBrace or SyntaxKind.CloseBrace or SyntaxKind.OpenParen
@@ -416,18 +437,24 @@ internal sealed partial class Parser
             ? new DiagnosticFix(FixKind.MissingPiece, SyntaxFacts.FixedText(kind))
             : null;
 
-    /// <summary>The <c>{</c> that opens a block: the one place the parser says a brace is wanted.</summary>
+    /// <summary>
+    /// Returns the <c>{</c> that opens a block. This is the one place the parser reports that a
+    /// brace is expected.
+    /// </summary>
     private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Says("`{`"));
 
     /// <summary>
-    /// The items of a comma-separated list and the commas between them, as one list; null for a
-    /// list with no items, since an empty slot is stored as null. Items and commas alternate, so
-    /// a comma is taken only after an item already in the list, and the first item that cannot
-    /// be read ends the list: the comma before it becomes the list's last piece, and the rest of
-    /// the line is left for the line to hold as skipped tokens. When items are expressions there
-    /// is always one to take — the expression parser leaves an empty expression where it could
-    /// read none — so <c>1, , 2</c> keeps all three; a list whose items are parsed some other way
-    /// stops at the gap instead. Either way, this method inserts nothing between two commas.
+    /// Parses the items of a comma-separated list and the commas between them as one list, or
+    /// returns null for a list with no items, since an empty slot is stored as null. Items and
+    /// commas alternate, so a comma is taken only after an item already in the list, and the first
+    /// item that cannot be read ends the list. The comma before it becomes the list's last piece,
+    /// and the rest of the line is left for the line to hold as skipped tokens.
+    /// <para>
+    /// When items are expressions there is always one to take, because the expression parser
+    /// leaves an empty expression where it could read none, so <c>1, , 2</c> keeps all three. A
+    /// list whose items are parsed some other way stops at the gap instead. Either way, this method
+    /// inserts nothing between two commas.
+    /// </para>
     /// </summary>
     private GreenSeparatedList? ParseSeparatedList(Func<GreenNode?> parseItem)
     {
@@ -446,24 +473,25 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// One line's parse, and the block kind it was parsed in, so a line whose surroundings have
-    /// not changed can keep the nodes it already has. The diagnostics are part of those nodes, so
-    /// a line kept across an edit keeps what was said about it.
+    /// Represents one line's parse, and the block kind it was parsed in, so a line whose
+    /// surroundings have not changed can keep the nodes it already has. The diagnostics are part
+    /// of those nodes, so a line kept across an edit keeps the diagnostics reported on it.
     /// </summary>
     /// <param name="Context">The kind of block the line was read in.</param>
     /// <param name="ExportKeyword">The <c>.export</c> before a declaration the line exports, or null.</param>
-    /// <param name="Node">What the line's own tokens parse to.</param>
-    /// <param name="SkippedTokens">What the statement could not take, or null when nothing was left.</param>
+    /// <param name="Node">The node the line's own tokens parse to.</param>
+    /// <param name="SkippedTokens">The tokens the statement could not take, or null if nothing was left.</param>
     public sealed record Result(
         BlockKind Context, GreenToken? ExportKeyword, GreenNode Node, GreenNode? SkippedTokens);
 
     /// <summary>
-    /// A diagnostic reported over a token and waiting for the node that holds it: where it sits in
-    /// the line, what it says, and the change the message names as its fix, where it names one.
+    /// Represents a diagnostic reported over a token and waiting for the node that holds it. It
+    /// records where the diagnostic sits in the line, its message, and the change the message
+    /// names as its fix, if it names one.
     /// </summary>
-    /// <param name="Start">Where it starts, from the start of the line.</param>
-    /// <param name="Width">How many characters it covers.</param>
-    /// <param name="Message">What to tell the programmer.</param>
+    /// <param name="Start">Where the diagnostic starts, relative to the start of the line.</param>
+    /// <param name="Width">How many characters the diagnostic covers.</param>
+    /// <param name="Message">The message for the programmer.</param>
     /// <param name="Fix">The change the message names as its fix, or null.</param>
     private readonly record struct Pending(int Start, int Width, DiagnosticMessage Message, DiagnosticFix? Fix);
 }

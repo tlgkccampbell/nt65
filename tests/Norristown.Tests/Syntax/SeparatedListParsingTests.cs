@@ -3,12 +3,12 @@ using Norristown.Syntax;
 namespace Norristown.Tests.Syntax;
 
 /// <summary>
-/// What a comma-separated list holds where the commas are not written as the grammar wants
-/// them. A separated list alternates an item and the comma after it, so the parser takes a
-/// comma only after an item it already has, and the first item it cannot read ends the list:
-/// the tokens past that become the line's skipped tokens, like any other leftovers. An item that
-/// is an expression is always there, because the parser puts an empty expression where it could
-/// read none, so a list of expressions keeps a place for every comma written.
+/// Checks what a comma-separated list holds where the commas are not where the grammar wants
+/// them. A separated list alternates an item and the comma after it, so the parser takes a comma
+/// only after an item it already has. The first item it cannot read ends the list, and the tokens
+/// past that become the line's skipped tokens, like any other leftovers. An item that is an
+/// expression is always present, because the parser inserts an empty expression where it could
+/// read none. So a list of expressions keeps a place for every comma in the source.
 /// </summary>
 public sealed class SeparatedListParsingTests
 {
@@ -35,7 +35,7 @@ public sealed class SeparatedListParsingTests
 
     /// <summary>
     /// A list whose items are not expressions has no empty item to put between two commas, so
-    /// it ends at the gap: the comma before the gap is its last piece, and the rest of the line
+    /// it ends at the gap. The comma before the gap is its last element, and the rest of the line
     /// becomes the line's skipped tokens, like any other leftovers.
     /// </summary>
     [Theory]

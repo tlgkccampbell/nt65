@@ -1,10 +1,10 @@
 namespace Norristown.Syntax.InternalSyntax;
 
-// Macros: the parameters a declaration takes, and the arguments a call passes.
+// Parses macros, including the parameters a declaration takes and the arguments a call passes.
 internal sealed partial class Parser
 {
     /// <summary>
-    /// <c>.macro name(params) {</c>, with the processor state it expects and leaves. The
+    /// Parses <c>.macro name(params) {</c>, with the processor state it expects and leaves. The
     /// body is ordinary nt65 and parses on its own, so only the opener is read here.
     /// </summary>
     private GreenNode ParseMacro()
@@ -28,7 +28,10 @@ internal sealed partial class Parser
             openParen, parameters, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`")));
     }
 
-    /// <summary><c>name</c>, <c>name: kind</c>, <c>name = default</c> or all three.</summary>
+    /// <summary>
+    /// Parses a macro parameter, which is <c>name</c>, <c>name: kind</c>, <c>name = default</c>
+    /// or all three.
+    /// </summary>
     private GreenNode? ParseMacroParameter()
     {
         if (!AtName)
@@ -51,7 +54,7 @@ internal sealed partial class Parser
         {
             equals = Advance();
 
-            // `= {}`: a block parameter a call may leave out, which is empty when it does.
+            // `= {}` gives a block parameter that a call may leave out, which is empty when it does.
             given = Kind == SyntaxKind.OpenBrace && Next == SyntaxKind.CloseBrace
                 ? new EmptyBlockSyntax(Advance(), Advance())
                 : ParseExpression();
@@ -60,9 +63,9 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// What a parameter takes: one of the fixed words, the listed words of a
-    /// <c>one(...)</c>, a <c>list(...)</c> of one of the others, a <c>const</c> with the range
-    /// it takes, an <c>operand</c> with the modes it takes, or the name of an enum.
+    /// Parses what a parameter takes, which is one of the fixed words, the listed words of a
+    /// <c>one(...)</c>, a <c>list(...)</c> of one of the others, a <c>const</c> with the range it
+    /// takes, an <c>operand</c> with the modes it takes, or the name of an enum.
     /// </summary>
     private ParameterKindSyntax ParseParameterKind()
     {
@@ -115,7 +118,10 @@ internal sealed partial class Parser
             Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Says("`)`")));
     }
 
-    /// <summary>One of the words a <c>one(...)</c> accepts, or one of the modes an <c>operand(...)</c> takes.</summary>
+    /// <summary>
+    /// Parses one of the words a <c>one(...)</c> accepts, or one of the modes an
+    /// <c>operand(...)</c> takes.
+    /// </summary>
     private GreenNode? ParseListedWord()
     {
         if (AtName)
@@ -125,7 +131,7 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// <c>name!(args)</c>, with the <c>{</c> of a trailing block argument when one follows.
+    /// Parses <c>name!(args)</c>, with the <c>{</c> of a trailing block argument when one follows.
     /// An argument's syntax never depends on the kind of the parameter it binds to, so every
     /// argument is read the same way and the kinds are checked once names are resolved.
     /// </summary>
@@ -150,8 +156,9 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// One argument: an expression, a braced operand, or a parameter named and then given
-    /// one of those. <c>=</c> appears in no expression, so a named argument is unambiguous.
+    /// Parses one argument, which is an expression, a braced operand, or a parameter's name
+    /// followed by <c>=</c> and one of those. <c>=</c> appears in no expression, so a named
+    /// argument is unambiguous.
     /// </summary>
     private GreenNode ParseArgument()
     {
@@ -161,8 +168,8 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// <c>{buf,x}</c>: a whole operand as an argument. Only a braced argument is parsed as an
-    /// operand, so an unbraced <c>(ptr)</c> remains an ordinary parenthesized expression.
+    /// Parses <c>{buf,x}</c>, a whole operand as an argument. Only a braced argument is parsed as
+    /// an operand, so an unbraced <c>(ptr)</c> remains an ordinary parenthesized expression.
     /// </summary>
     private BracedOperandSyntax ParseBracedOperand()
     {

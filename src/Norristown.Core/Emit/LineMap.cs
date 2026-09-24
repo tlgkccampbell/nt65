@@ -4,15 +4,15 @@ using System.Text;
 namespace Norristown.Emit;
 
 /// <summary>
-/// Where each line of a generated <c>.s</c> came from, written beside it as its own file:
-/// <c>gfx/sprite.s</c> is mapped by <c>gfx/sprite.s.lines</c>.
+/// Records where each line of a generated <c>.s</c> came from, in a file of its own emitted
+/// beside it. For example, <c>gfx/sprite.s</c> is mapped by <c>gfx/sprite.s.lines</c>.
 /// <para>
-/// ca65 has one way to say that a generated line came from somewhere else, a <c>.dbg line</c>
-/// directive before the line itself, and nt65 would need one before nearly every instruction it
-/// writes. That would be a third of the output, interleaved with every routine, and the point
-/// of writing ca65 rather than object code is that a person can read it. So the map is a file
-/// of its own, and <c>nt65 remap-dbg</c> copies what it says into ld65's debug file after the
-/// link, where a debugger reads it.
+/// ca65 has one way to say that a generated line came from somewhere else, which is a
+/// <c>.dbg line</c> directive before the line itself. nt65 would need one before nearly every
+/// instruction it emits. That would be a third of the output, interleaved with every routine,
+/// and the point of emitting ca65 rather than object code is that a person can read it. The map
+/// is therefore a file of its own, and <c>nt65 remap-dbg</c> copies its contents into ld65's
+/// debug file after the link, where a debugger reads it.
 /// </para>
 /// <para>
 /// The format is one record per line. <c>version</c> gives the format version, which is
@@ -28,10 +28,10 @@ public static class LineMap
     /// <summary>The format version this nt65 writes and reads.</summary>
     public const int Version = 1;
 
-    /// <summary>What is added to a <c>.s</c> path to name the map beside it.</summary>
+    /// <summary>The suffix added to a <c>.s</c> path to name the map beside it.</summary>
     public const string Extension = ".lines";
 
-    /// <summary>The map that goes with <paramref name="output"/>, or null when it maps nothing.</summary>
+    /// <summary>Returns the map that goes with <paramref name="output"/>, or null when it maps nothing.</summary>
     public static OutputFile? For(OutputFile output)
     {
         if (output.Source.Length == 0 || !output.LineSources.Any(line => line != 0))
@@ -57,7 +57,7 @@ public static class LineMap
     }
 
     /// <summary>
-    /// Reads a map, or returns null with <paramref name="problem"/> saying what is wrong with it.
+    /// Reads a map, or returns null with <paramref name="problem"/> describing what is wrong with it.
     /// Anything that is not in the form nt65 writes is rejected outright rather than partly read.
     /// </summary>
     public static SourceLines? Read(string text, out string? problem)
@@ -115,15 +115,15 @@ public static class LineMap
         return new SourceLines(sources, lines);
     }
 
-    /// <summary>The comma-separated fields of a record, trimmed.</summary>
+    /// <summary>Returns the comma-separated fields of a record, trimmed.</summary>
     private static IReadOnlyList<string> Fields(string rest) =>
         rest.Length == 0 ? [] : [.. rest.Split(',').Select(field => field.Trim())];
 
-    /// <summary>A field as a number, or null when it is not one.</summary>
+    /// <summary>Returns a field as a number, or null when it is not a number.</summary>
     private static int? Number(string field) =>
         int.TryParse(field, NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : null;
 
-    /// <summary>A field as the string it quotes, or null when it is not one.</summary>
+    /// <summary>Returns the string a field quotes, or null when the field is not quoted.</summary>
     private static string? Quoted(string field) =>
         field.Length >= 2 && field[0] == '"' && field[^1] == '"' ? field[1..^1] : null;
 }

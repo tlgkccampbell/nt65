@@ -4,18 +4,20 @@ using System.Text;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// A 65816 program of many modules, each shaped like a module of a real program: constants and
-/// data it exports, a macro, and routines that call the module before it and use that module's
-/// constants and macro, which it brings in with `.use`. Every module also uses the first module's
-/// `M000_LIMIT`, as a real program uses its shared definitions. It is used to measure what an
-/// edit costs, and as a program to replay edits against.
+/// Builds a 65816 program of many modules, each shaped like a module of a real program. Each
+/// module exports constants and data and declares a macro. Its routines call the module before
+/// it and use that module's constants and macro, which it brings in with <c>.use</c>. Every
+/// module also uses the first module's <c>M000_LIMIT</c>, as a real program uses its shared
+/// definitions. The program is used to measure what an edit costs and to replay edits against.
 /// </summary>
 internal static class GeneratedProject
 {
-    /// <summary>The URI of file <paramref name="index"/>.</summary>
+    /// <summary>Returns the URI of file <paramref name="index"/>.</summary>
     public static string Uri(int index) => $"file:///c:/generated/mod{index:D3}.nt65";
 
-    /// <summary>The text of file <paramref name="index"/> of a program of <paramref name="count"/> files.</summary>
+    /// <summary>
+    /// Returns the text of file <paramref name="index"/> in a program of <paramref name="count"/> files.
+    /// </summary>
     public static string Text(int index, int count)
     {
         var i = index.ToString("D3", CultureInfo.InvariantCulture);
@@ -90,7 +92,10 @@ internal static class GeneratedProject
         return text.ToString().ReplaceLineEndings("\n");
     }
 
-    /// <summary>What file <paramref name="index"/> brings in from the file before it and from the first file.</summary>
+    /// <summary>
+    /// Returns the <c>.use</c> lines by which file <paramref name="index"/> brings in names from
+    /// the file before it and from the first file.
+    /// </summary>
     private static string Uses(int index, int count)
     {
         var before = (index + count - 1) % count;

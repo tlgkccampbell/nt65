@@ -3,18 +3,22 @@ using System.Threading.Channels;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// The server's wait for typing to stop, controlled by the test rather than by a clock. Each
-/// wait the server asks for is queued, and the test releases one when it is ready for what
-/// follows it, so a test of the wait takes no real time and never depends on timing.
+/// Represents the server's wait for typing to stop, controlled by the test instead of by a
+/// clock. Each wait the server asks for is queued, and the test releases one when it is ready
+/// for the step that follows it. A test of the wait therefore takes no real time and never
+/// depends on timing.
 /// </summary>
 internal sealed class HeldDelay
 {
     private readonly Channel<TaskCompletionSource> waits = Channel.CreateUnbounded<TaskCompletionSource>();
 
-    /// <summary>How many waits are queued and not yet let go.</summary>
+    /// <summary>Gets the number of waits that are queued and not yet released.</summary>
     public int Waiting => waits.Reader.Count;
 
-    /// <summary>The delay the server is given in place of a real timer; <paramref name="quiet"/> is ignored.</summary>
+    /// <summary>
+    /// Returns the delay the server is given in place of a real timer. The
+    /// <paramref name="quiet"/> period is ignored.
+    /// </summary>
     public Task Wait(TimeSpan quiet)
     {
         var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -22,7 +26,10 @@ internal sealed class HeldDelay
         return held.Task;
     }
 
-    /// <summary>Releases the next queued wait, first waiting for the server to ask for one if it has not yet.</summary>
+    /// <summary>
+    /// Releases the next queued wait. If the server has not yet asked for a wait, this first
+    /// waits for it to ask.
+    /// </summary>
     public async Task ReleaseAsync(CancellationToken cancellation) =>
         (await waits.Reader.ReadAsync(cancellation)).TrySetResult();
 }

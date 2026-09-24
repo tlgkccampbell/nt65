@@ -2,7 +2,7 @@ using Norristown.Processor;
 
 namespace Norristown.Tests.Semantics;
 
-/// <summary>Where a symbol's address size comes from: its segment, or its value.</summary>
+/// <summary>Checks where a symbol's address size comes from, which is its segment or its value.</summary>
 public sealed class AddressSizeTests
 {
     [Theory]
@@ -37,7 +37,10 @@ public sealed class AddressSizeTests
         Assert.Equal(AddressSize.Far, model.Symbol("away").AddressSize);
     }
 
-    /// <summary>A <c>.segment</c> region places everything after it, up to the next one; before the first there is no default segment.</summary>
+    /// <summary>
+    /// A <c>.segment</c> region puts everything after it in its segment, up to the next region.
+    /// Before the first region there is no default segment.
+    /// </summary>
     [Fact]
     public void ARegionPlacesWhatFollowsIt()
     {
@@ -51,7 +54,7 @@ public sealed class AddressSizeTests
         Assert.Equal(AddressSize.Absolute, model.Symbol("main").AddressSize);
     }
 
-    /// <summary>Anything with an address must be in a segment; a constant need not be.</summary>
+    /// <summary>Anything with an address must be in a segment. A constant need not be.</summary>
     [Fact]
     public void BytesOutsideEverySegmentAreAnError()
     {
@@ -67,7 +70,7 @@ public sealed class AddressSizeTests
 
     /// <summary>
     /// A constant whose expression names addresses takes the widest of their address sizes,
-    /// whatever its own value would suggest.
+    /// regardless of what its own value would suggest.
     /// </summary>
     [Fact]
     public void AnAliasTakesTheWidestAddressItNames()
@@ -108,7 +111,7 @@ public sealed class AddressSizeTests
     }
 
     /// <summary>
-    /// The size is the word written after the <c>:</c> and nothing else, so an import or a
+    /// The size is the word after the <c>:</c> and nothing else, so an import or a
     /// segment whose own name happens to be <c>zp</c> or <c>abs</c> is only a name.
     /// </summary>
     [Fact]
@@ -121,7 +124,9 @@ public sealed class AddressSizeTests
         Assert.Equal(AddressSize.ZeroPage, model.Symbol("ptr").AddressSize);
     }
 
-    /// <summary>A block naming a segment nothing declares is an error, and sizes nothing.</summary>
+    /// <summary>
+    /// A block naming a segment nothing declares is an error, and gives nothing an address size.
+    /// </summary>
     [Fact]
     public void AnUndeclaredSegmentIsReported()
     {

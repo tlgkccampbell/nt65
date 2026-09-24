@@ -1,16 +1,16 @@
 namespace Norristown.Flow;
 
 /// <summary>
-/// The loops in a routine: the sets of blocks a path can cycle through. A loop is found from a
-/// back edge, which is an edge to a block (the header) that lies on every path from the entry
-/// to the edge's source (the latch). The loop holds the header and every block that can reach
+/// Finds the loops in a routine, which are the sets of blocks a path can cycle through. A loop is
+/// found from a back edge, which is an edge to a block (the header) that lies on every path from the entry
+/// to the edge's source (the latch). The loop contains the header and every block that can reach
 /// the latch without passing through the header.
 /// </summary>
 internal static class Loops
 {
     /// <summary>
-    /// Every loop in <paramref name="blocks"/>, the innermost first, so that a loop inside
-    /// another is settled before the cost of one iteration of the enclosing loop is worked out.
+    /// Returns every loop in <paramref name="blocks"/>, the innermost first. A loop inside another
+    /// is then handled before the cost of one iteration of the enclosing loop is worked out.
     /// </summary>
     public static List<Loop> In(IReadOnlyList<BasicBlock> blocks)
     {
@@ -35,14 +35,14 @@ internal static class Loops
     }
 
     /// <summary>
-    /// How many blocks a loop holds. Sorting by this puts a loop inside another before the loop
-    /// that contains it.
+    /// Returns how many blocks a loop contains. Sorting by this puts a loop inside another before
+    /// the loop that contains it.
     /// </summary>
     private static int Held(bool[] inside) => inside.Count(held => held);
 
     /// <summary>
-    /// Which blocks lie on every path from the routine's entry to each block (its dominators),
-    /// or null for a block no path reaches. Every reached block but the entry starts out
+    /// Returns, for each block, which blocks lie on every path from the routine's entry to it (its
+    /// dominators), or null for a block no path reaches. Every reached block but the entry starts out
     /// dominated by all blocks, and the sets are recomputed until they stop shrinking.
     /// </summary>
     private static bool[]?[] Dominators(IReadOnlyList<BasicBlock> blocks)
@@ -100,11 +100,11 @@ internal static class Loops
         return over;
     }
 
-    /// <summary>Whether a path can run from one block straight into another, ignoring call edges.</summary>
+    /// <summary>Returns whether a path can run from one block straight into another, ignoring call edges.</summary>
     private static bool Leads(BasicBlock block, int to) =>
         block.Successors.Any(edge => edge.Kind != EdgeKind.Call && edge.To == to);
 
-    /// <summary>Which blocks a path from the routine's entry reaches, ignoring call edges.</summary>
+    /// <summary>Returns which blocks a path from the routine's entry reaches, ignoring call edges.</summary>
     private static bool[] Reached(IReadOnlyList<BasicBlock> blocks)
     {
         var found = new bool[blocks.Count];
@@ -125,8 +125,8 @@ internal static class Loops
     }
 
     /// <summary>
-    /// The blocks a loop holds: its header, its latch, and everything the latch can be
-    /// reached from without running through the header again.
+    /// Returns the blocks a loop contains. They are its header, its latch, and every block the
+    /// latch can be reached from without running through the header again.
     /// </summary>
     private static bool[] Around(IReadOnlyList<BasicBlock> blocks, int header, int latch)
     {

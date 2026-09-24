@@ -3,14 +3,15 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// A declaration whose name is the binding of an <c>.each</c> over a named enum: one
-/// declaration per member, under the member's name, in the scope around the repetition.
-/// <c>.multiproc E, b: signature { }</c> is the same thing with the repetition and the routine
-/// folded into one line.
+/// Represents a family: the routines or data one <c>.each</c> declaration produces. The
+/// declaration's name is the binding of an <c>.each</c> over a named enum, and the family holds
+/// one declaration per member, named after that member, in the scope around the repetition.
+/// <c>.multiproc E, b: signature { }</c> declares a family too, with the repetition and the
+/// routine folded into one line.
 /// <para>
-/// The names come from two headers — the repetition's line and the enum's member list — and
-/// nothing is concatenated, so which names a family declares is read from the source without
-/// evaluating anything. What the body declares stays local to each turn, as in any
+/// The names come from two headers, the repetition's line and the enum's member list, and
+/// nothing is concatenated. The names a family declares can therefore be read from the source
+/// without evaluating anything. What the body declares stays local to each iteration, as in any
 /// repetition; only the instances become names in the file.
 /// </para>
 /// </summary>
@@ -33,39 +34,56 @@ public sealed class Family
     }
 
     /// <summary>
-    /// The statement that declares the instances: the <c>.proc b</c> or <c>.data b:</c> line, or
-    /// the <c>.multiproc</c> line, which is both that and the repetition's.
+    /// Gets the statement that declares the instances. This is the <c>.proc b</c> or
+    /// <c>.data b:</c> line, or the <c>.multiproc</c> line, which is both the declaration and the
+    /// repetition's line.
     /// </summary>
     public StatementSyntax Declaration { get; }
 
-    /// <summary>The block each turn writes out: the <c>.each</c>'s, or the <c>.multiproc</c>'s own.</summary>
+    /// <summary>
+    /// Gets the block each iteration emits, which is the <c>.each</c>'s block or the
+    /// <c>.multiproc</c>'s own.
+    /// </summary>
     public BlockSyntax Block { get; }
 
-    /// <summary>The name the repetition binds, which each instance is named from.</summary>
+    /// <summary>Gets the name the repetition binds, from which each instance is named.</summary>
     public Symbol Binding { get; }
 
-    /// <summary>The enum whose members the instances are named after.</summary>
+    /// <summary>Gets the enum whose members the instances are named after.</summary>
     public Symbol Enumeration { get; }
 
-    /// <summary>The declarations the family makes, in the order the enum lists its members.</summary>
+    /// <summary>Gets the declarations the family makes, in the order the enum lists its members.</summary>
     public IReadOnlyList<Symbol> Instances { get; }
 
-    /// <summary>The members they are named after, in the same order.</summary>
+    /// <summary>
+    /// Gets the enum members the instances are named after, in the same order as
+    /// <see cref="Instances"/>.
+    /// </summary>
     public IReadOnlyList<Symbol> Members { get; }
 
-    /// <summary>Whether it is written as <c>.multiproc</c> rather than as an <c>.each</c> with a body.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the family is declared with <c>.multiproc</c> rather than
+    /// with an <c>.each</c> that has a body.
+    /// </summary>
     public bool IsFolded => Declaration is MultiProcDeclarationSyntax;
 
-    /// <summary>What the family is called where a message names it, <c>.multiproc</c> or <c>.each</c>.</summary>
+    /// <summary>
+    /// Gets the directive that names the family in messages, either <c>.multiproc</c> or
+    /// <c>.each</c>.
+    /// </summary>
     public string Directive => IsFolded ? ".multiproc" : ".each";
 
-    /// <summary>The instance named after <paramref name="member"/>, or null when it declares none.</summary>
+    /// <summary>
+    /// Returns the instance named after <paramref name="member"/>, or null if the family declares
+    /// no instance for it.
+    /// </summary>
     public Symbol? InstanceFor(Symbol? member) =>
         member is not null && byMember.TryGetValue(member, out var instance) ? instance : null;
 
     /// <summary>
-    /// The instance being written out at <paramref name="on"/>: the one for the member of the
-    /// enclosing turn that writes this family's block, or null outside such a turn.
+    /// Returns the instance being emitted at <paramref name="on"/>. This is the instance for the
+    /// member of the enclosing iteration that emits this family's block, or null outside such an
+    /// iteration.
     /// </summary>
     public Symbol? InstanceAt(Expansion? on)
     {
@@ -78,11 +96,12 @@ public sealed class Family
     }
 
     /// <summary>
-    /// The same problem found on more than one instance, reported once. A family's body is
-    /// written once, so a mistake in it is found once per instance, and each report names the
-    /// instance it was found on. When two or more reports are otherwise identical — the same
-    /// place, the same severity, the same words apart from the instance named — they are
-    /// replaced by a single message that names the repetition's binding instead.
+    /// Returns <paramref name="found"/> with each problem found on more than one instance reported
+    /// once. A family's body appears once in the source, so a mistake in it is found once per
+    /// instance, and each report names the instance it was found on. Two or more reports that are
+    /// otherwise identical, with the same span, the same severity and the same words apart from
+    /// the instance named, are replaced by a single message that names the repetition's binding
+    /// instead.
     /// </summary>
     public static IReadOnlyList<Diagnostic> Collapsed(IReadOnlyList<Family> families, IReadOnlyList<Diagnostic> found)
     {
@@ -111,7 +130,10 @@ public sealed class Family
         return kept;
     }
 
-    /// <summary>The message with each instance's name written as the name its repetition binds.</summary>
+    /// <summary>
+    /// Returns <paramref name="message"/> with each instance's name replaced by the name its
+    /// repetition binds.
+    /// </summary>
     private static string Generalized(IReadOnlyList<Family> families, string message)
     {
         foreach (var family in families)
@@ -122,6 +144,6 @@ public sealed class Family
         return message;
     }
 
-    /// <summary>What the family declares, for debugging.</summary>
+    /// <summary>Returns a description of what the family declares, for debugging.</summary>
     public override string ToString() => $"{Directive} {Enumeration.Name}, {Binding.Name}: {Instances.Count} instances";
 }

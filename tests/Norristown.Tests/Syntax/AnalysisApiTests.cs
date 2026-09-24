@@ -9,7 +9,7 @@ namespace Norristown.Tests.Syntax;
 /// </summary>
 public sealed class AnalysisApiTests
 {
-    /// <summary>Parsing a file, and what a tree knows about the text it came from.</summary>
+    /// <summary>A file is parsed, and the tree knows the text it came from.</summary>
     [Fact]
     public void ParsingATree()
     {
@@ -24,7 +24,7 @@ public sealed class AnalysisApiTests
         Assert.Equal(".proc main: a8, i8 {\n    lda #2\n    rts\n}\n", edited.Text);
     }
 
-    /// <summary>Nodes, tokens and trivia: the three things a tree is made of.</summary>
+    /// <summary>A tree is made of three things, which are nodes, tokens and trivia.</summary>
     [Fact]
     public void NodesTokensAndTrivia()
     {
@@ -44,13 +44,13 @@ public sealed class AnalysisApiTests
         Assert.Equal("; the entry point", brace.TrailingTrivia[1].Text);
         Assert.Equal("    ", tree.GetLine(1).Tokens[0].LeadingTrivia.Single().Text);
 
-        // Span is the text; FullSpan takes in the trivia around it.
+        // Span covers the text. FullSpan also takes in the trivia around it.
         Assert.Equal(new TextSpan(11, 1), brace.Span);
         Assert.Equal(new TextSpan(11, 21), brace.FullSpan);
     }
 
     /// <summary>
-    /// A required token the source did not write is still in its slot, as a missing token.
+    /// A required token absent from the source is still in its slot, as a missing token.
     /// </summary>
     [Fact]
     public void FixedSlotsAndMissingTokens()
@@ -58,8 +58,8 @@ public sealed class AnalysisApiTests
         var tree = SyntaxTree.Parse("main.nt65", ".proc main\n    rts\n}\n");
         var proc = tree.Root.DescendantNodes().OfType<ProcDeclarationSyntax>().Single();
 
-        // The brace is required, so it is never null; it is missing, so it has no text and no
-        // width, and sits where it would have been written.
+        // The brace is required, so it is never null. It is missing, so it has no text and no
+        // width, and it sits where it would have been.
         Assert.True(proc.OpenBraceToken.IsMissing);
         Assert.Equal("", proc.OpenBraceToken.Text);
         Assert.Equal(new TextSpan(10, 0), proc.OpenBraceToken.Span);
@@ -68,12 +68,12 @@ public sealed class AnalysisApiTests
         Assert.Equal(new TextSpan(0, 10), proc.Span);
         Assert.Equal(".proc main", proc.ToFullString());
 
-        // An optional piece the source did not write is null instead, which is a different
+        // An optional child element absent from the source is null instead, which is a different
         // thing from a missing token.
         Assert.Null(proc.Signature);
     }
 
-    /// <summary>Lists, and the separators an editor needs as much as the items.</summary>
+    /// <summary>A list gives its items and its separators, which an editor needs as much as the items.</summary>
     [Fact]
     public void ListsAndSeparators()
     {
@@ -96,7 +96,7 @@ public sealed class AnalysisApiTests
         Assert.Equal(0, macro.Parameters!.Parameters.SeparatorCount);
     }
 
-    /// <summary>A name, which is a path of parts rather than one token.</summary>
+    /// <summary>A name is a path of parts rather than one token.</summary>
     [Fact]
     public void Names()
     {
@@ -111,7 +111,7 @@ public sealed class AnalysisApiTests
         Assert.Equal("count", names[1].SimpleName!.Value.Text);
     }
 
-    /// <summary>Finding a place in the tree, and stepping from one token to the next.</summary>
+    /// <summary>A caller finds a place in the tree, and steps from one token to the next.</summary>
     [Fact]
     public void Navigation()
     {
@@ -122,7 +122,7 @@ public sealed class AnalysisApiTests
         Assert.Equal(SyntaxKind.NumberLiteral, token.Kind);
         Assert.Equal("1", token.Text);
 
-        // Every token belongs to the node it is a piece of, and every node to the line it is on.
+        // Every token belongs to the node it is part of, and every node to the line it is on.
         Assert.IsType<NumberExpressionSyntax>(token.Parent);
         Assert.IsType<ProcDeclarationSyntax>(
             tree.Root.FindNode(new TextSpan(0, 5)).AncestorsAndSelf().OfType<StatementSyntax>().First());
@@ -131,7 +131,7 @@ public sealed class AnalysisApiTests
         Assert.Equal("lda", tree.GetLine(1).GetFirstToken()!.Value.Text);
     }
 
-    /// <summary>A visitor dispatches on what a node is; a walker goes on down the tree.</summary>
+    /// <summary>A visitor dispatches on what a node is. A walker goes on down the tree.</summary>
     [Fact]
     public void VisitorsAndWalkers()
     {
@@ -143,13 +143,13 @@ public sealed class AnalysisApiTests
         Assert.Equal(["lda", "sta", "rts"], counter.Found);
     }
 
-    /// <summary>What the tree says is wrong, and where.</summary>
+    /// <summary>The tree reports what is wrong, and where.</summary>
     [Fact]
     public void DiagnosticsOnTheTree()
     {
         var tree = SyntaxTree.Parse("main.nt65", ".proc main {\n    lda (1\n}\n");
 
-        // The root reports the diagnostics of the whole file, and ContainsDiagnostics says
+        // The root reports the diagnostics of the whole file, and ContainsDiagnostics tells
         // whether there are any without walking the tree.
         Assert.True(tree.Root.ContainsDiagnostics);
         Assert.Equal(tree.Diagnostics, tree.Root.GetDiagnostics());
@@ -166,23 +166,25 @@ public sealed class AnalysisApiTests
         Assert.Equal(reported, Assert.Single(missing.GetDiagnostics()));
     }
 
-    /// <summary>Changing a tree: a fix and a rename, written the way a consumer writes them.</summary>
+    /// <summary>
+    /// A tree is changed by a fix and by a rename, each coded the way a consumer would code it.
+    /// </summary>
     [Fact]
     public void ChangingATree()
     {
         const string written = ".proc main {\n    lda #16 ; the mask\n    sta mask\n}\n";
         var tree = SyntaxTree.Parse("main.nt65", written);
 
-        // A fix: every immediate written in decimal is written in hex instead.
+        // The fix changes every immediate in decimal to hex.
         var hex = new Hexadecimal().Visit(tree.Root)!;
         Assert.Equal(".proc main {\n    lda #$10 ; the mask\n    sta mask\n}\n", hex.ToFullString());
 
-        // A rename: every occurrence of one identifier replaced by another.
+        // The rename replaces every occurrence of one identifier with another.
         var named = hex.DescendantTokens().Where(token => token is { Kind: SyntaxKind.Identifier, Text: "mask" });
         var renamed = hex.ReplaceTokens(named, (old, _) => SyntaxFactory.Identifier("flags").WithTriviaFrom(old));
         Assert.Equal(".proc main {\n    lda #$10 ; the mask\n    sta flags\n}\n", renamed.ToFullString());
 
-        // A rewritten file is a new tree; the tree it came from is unchanged.
+        // A rewritten file is a new tree. The tree it came from is unchanged.
         Assert.NotSame(tree, renamed.Tree);
         Assert.Equal(written, tree.Text);
 
@@ -191,8 +193,9 @@ public sealed class AnalysisApiTests
     }
 
     /// <summary>
-    /// An annotation put on what a fix inserts, and found again in the tree the rewrite
-    /// returns. The annotation is the only reliable way to find where the inserted piece ended up.
+    /// An annotation is put on what a fix inserts, and found again in the tree the rewrite
+    /// returns. The annotation is the only reliable way to find where the inserted child element
+    /// ended up.
     /// </summary>
     [Fact]
     public void AnnotatingWhatAFixInserts()
@@ -203,8 +206,8 @@ public sealed class AnalysisApiTests
         var root = new Widen(widened).Visit(tree.Root)!;
         Assert.Equal(".proc main: a8, i8 {\n    rts\n}\n", root.ToFullString());
 
-        // Where `i8` ended up, which is where an editor would put the caret. Counting characters
-        // could not reliably say where that is; the annotation does.
+        // This is where `i8` ended up, which is where an editor would put the caret. Counting
+        // characters could not reliably find that place, but the annotation does.
         Assert.Equal(new TextSpan(16, 2), root.GetAnnotatedNodes(widened).Single().Span);
 
         // The annotation does not change the node's text, and it matches by identity: a new
@@ -237,10 +240,10 @@ public sealed class AnalysisApiTests
     }
 
     /// <summary>
-    /// A fix: a routine whose state list is only <c>a8</c> gets <c>i8</c> added, and the item it
-    /// adds carries an annotation so that whoever ran the fix can find it.
+    /// Represents a fix that adds <c>i8</c> to a routine whose state list is only <c>a8</c>. The
+    /// item it adds carries an annotation so that whoever ran the fix can find it.
     /// </summary>
-    /// <param name="tag">The tag to put on the item the fix writes.</param>
+    /// <param name="tag">The tag to put on the item the fix inserts.</param>
     private sealed class Widen(SyntaxAnnotation tag) : SyntaxRewriter
     {
         public override SyntaxNode? VisitStateList(StateListSyntax node)
@@ -260,7 +263,7 @@ public sealed class AnalysisApiTests
         }
     }
 
-    /// <summary>Every mnemonic a file writes, in source order.</summary>
+    /// <summary>Collects every mnemonic in a file, in source order.</summary>
     private sealed class Mnemonics : SyntaxWalker
     {
         public List<string> Found { get; } = [];
@@ -272,7 +275,7 @@ public sealed class AnalysisApiTests
         }
     }
 
-    /// <summary>Every immediate operand written in decimal, written in hexadecimal instead.</summary>
+    /// <summary>Rewrites every immediate operand in decimal as hexadecimal.</summary>
     private sealed class Hexadecimal : SyntaxRewriter
     {
         public override SyntaxNode? VisitNumberExpression(NumberExpressionSyntax node) =>

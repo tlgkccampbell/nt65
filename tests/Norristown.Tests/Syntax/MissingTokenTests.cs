@@ -39,7 +39,7 @@ public sealed class MissingTokenTests
         Assert.NotSame(GreenToken.Missing(SyntaxKind.OpenBrace), written);
 
         // The cache shares the tokens the lexer asks for, and never hands back a missing token,
-        // even for a written token with no text.
+        // even for a token that is present in the source but has no text.
         var empty = GreenCache.Token(SyntaxKind.Identifier, "", [], [], null);
         Assert.False(empty.IsMissing);
         Assert.NotSame(GreenToken.Missing(SyntaxKind.Identifier), empty);
@@ -91,7 +91,7 @@ public sealed class MissingTokenTests
 
     /// <summary>
     /// A <c>.use</c> that opens its braces has a place for the <c>}</c> that closes them, so the
-    /// missing token stands there; a <c>.use</c> written without braces has no place for one.
+    /// missing token stands there. A <c>.use</c> without braces has no place for one.
     /// </summary>
     [Fact]
     public void ABracedUseHoldsThePlaceForItsClosingBrace()
@@ -111,8 +111,9 @@ public sealed class MissingTokenTests
     }
 
     /// <summary>
-    /// A missing bracket says what to write and where, because there is only one thing to write;
-    /// a missing name is the programmer's to write and names no fix.
+    /// The diagnostic for a missing bracket names a fix that says what to insert and where,
+    /// because only one thing can go there. A missing name is the programmer's to choose, so its
+    /// diagnostic names no fix.
     /// </summary>
     [Fact]
     public void AMissingBracketNamesTheFixThatWritesIt()

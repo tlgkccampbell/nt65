@@ -3,11 +3,11 @@ using Norristown.LanguageServer.Protocol;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// One file must stay one file. VS Code escapes a drive's colon, <c>file:///c%3A/src</c>, and
-/// nt65 does not; a file named one way in a diagnostic and another in a go-to-definition is two
-/// files to an editor, and the problems of one of them end up in a list for a file nobody opens.
-/// So every answer spells a file the way the client spelled it, and this test asks for every kind
-/// of answer that names a file.
+/// Checks that one file stays one file. VS Code escapes a drive's colon, as in
+/// <c>file:///c%3A/src</c>, and nt65 does not. A file named one way in a diagnostic and another way
+/// in a go-to-definition is two files to an editor, and the problems of one of them end up in a
+/// list for a file nobody opens. So every answer names a file exactly as the client did, and this
+/// test asks for every kind of answer that names a file.
 /// </summary>
 public sealed class UriSpellingTests
 {
@@ -63,8 +63,8 @@ public sealed class UriSpellingTests
         Assert.Equal(
             [GfxUri, MainUri], renamed.DocumentChanges!.Select(one => one.TextDocument.Uri).Order(StringComparer.Ordinal));
 
-        // The fixes offered on `rows`, which nothing uses: each edits gfx, spelled the way the
-        // client spelled it.
+        // Each fix offered on `rows`, which nothing uses, edits gfx under the name the client
+        // gave it.
         var fixes = await client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
             new CodeActionParams(
                 new TextDocumentIdentifier(GfxUri),

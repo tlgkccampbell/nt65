@@ -6,21 +6,21 @@ using Norristown.Syntax;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 build</c>: finds the project, reads the program, and writes its output, the C header
-/// and the dependencies it was asked for.
+/// Implements <c>nt65 build</c>, which finds the project, reads the program, and writes its
+/// output, along with the C header and the dependencies it was asked for.
 /// <para>
-/// Internally, every file is named by a path relative to the project root, the directory that
-/// holds <c>nt65.json</c> and where a build normally runs: the sources, the outputs, and the
-/// paths the output gives ca65 and the debugger. Paths in messages to the person running nt65
-/// are relative to the directory they ran it from.
+/// Internally, every file is named by a path relative to the project root, which is the directory
+/// that holds <c>nt65.json</c> and where a build normally runs. The sources, the outputs, and the
+/// paths the output gives ca65 and the debugger are all named this way. Paths in messages to the
+/// person running nt65 are relative to the directory they ran it from.
 /// </para>
 /// </summary>
 public static class BuildCommand
 {
     /// <summary>
     /// Builds what <paramref name="command"/> asks for, from <paramref name="directory"/>, and
-    /// returns the exit code: 0 when it built, 1 when the program has errors, 2 when the command
-    /// line is wrong.
+    /// returns the exit code. The code is 0 when the build succeeded, 1 when the program has
+    /// errors, and 2 when the command line is wrong.
     /// </summary>
     public static int Build(CommandLine command, string directory, TextWriter output, TextWriter error, bool colour) =>
         Run(command, directory, output, error, colour).Code;
@@ -130,8 +130,9 @@ public static class BuildCommand
             Say(d);
 
         // `--stdout` prints the named file's output even when the rest of the program has
-        // errors: the text a build would have written, with a note where it is incomplete. It is
-        // the same text the editor's output preview shows, and no files are written.
+        // errors. It prints the text a build would have written, with a note where it is
+        // incomplete. That is the same text the editor's output preview shows, and no files are
+        // written.
         if (command.Stdout)
         {
             if (OutputPreview.Of(analysis, project, named[0]) is not { } preview)
@@ -152,7 +153,7 @@ public static class BuildCommand
                 + $"{CpuNames.Spell(ProgramCpu.Default)}: give `--cpu`, `\"cpu\"` in {ProjectFile.Name}, or a `.cpu` item");
         }
 
-        // `--check` asks only for the diagnostics, which have now been reported: it writes no
+        // `--check` asks only for the diagnostics, which have now been reported. It writes no
         // output, no header, no dependency file, and no record of what was written.
         if (command.Check)
             return new BuildResult(0, root, watched);
@@ -197,9 +198,9 @@ public static class BuildCommand
     }
 
     /// <summary>
-    /// A span's file, relative to the directory nt65 was run from. A span whose file name is really
-    /// a command-line option (starting with <c>-</c>) or a placeholder in parentheses for a place
-    /// with no file of its own keeps that name unchanged.
+    /// Returns a span's file, relative to the directory nt65 was run from. A span whose file name
+    /// is really a command-line option (starting with <c>-</c>), or a placeholder in parentheses
+    /// for a place with no file of its own, keeps that name unchanged.
     /// </summary>
     private static string Named(string directory, string root, Span span) =>
         span.File.StartsWith('-') || span.File.StartsWith('(')
@@ -234,7 +235,9 @@ public static class BuildCommand
         File.Move(written, path, overwrite: true);
     }
 
-    /// <summary>The length of a file an <c>.incbin</c> names, or null when it cannot be read.</summary>
+    /// <summary>
+    /// Returns the length of a file an <c>.incbin</c> names, or null when it cannot be read.
+    /// </summary>
     private static long? Length(string path)
     {
         try

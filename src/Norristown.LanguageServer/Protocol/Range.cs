@@ -1,6 +1,6 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>A range in a document; <see cref="End"/> is exclusive.</summary>
-/// <param name="Start">Where it starts.</param>
-/// <param name="End">Where it ends.</param>
+/// <summary>Represents a range in a document. <see cref="End"/> is exclusive.</summary>
+/// <param name="Start">The start position.</param>
+/// <param name="End">The end position.</param>
 internal sealed record Range(Position Start, Position End);

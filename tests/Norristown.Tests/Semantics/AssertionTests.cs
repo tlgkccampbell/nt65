@@ -1,8 +1,8 @@
 namespace Norristown.Tests.Semantics;
 
 /// <summary>
-/// <c>.assert</c> and <c>.error</c>: what nt65 answers itself, and what it leaves for ca65
-/// and ld65 to answer once the addresses are known.
+/// Checks <c>.assert</c> and <c>.error</c>. nt65 answers what it can itself, and leaves the rest
+/// for ca65 and ld65 to answer once the addresses are known.
 /// </summary>
 public sealed class AssertionTests
 {
@@ -25,7 +25,7 @@ public sealed class AssertionTests
 
     /// <summary>
     /// A failed assertion is always an error. ca65's levels choose when a check runs, which
-    /// nt65 decides for itself, so writing a level is reported.
+    /// nt65 decides for itself, so a level in the source is reported.
     /// </summary>
     [Fact]
     public void AnAssertionTakesNoLevel()
@@ -39,7 +39,7 @@ public sealed class AssertionTests
             program.Problems());
     }
 
-    /// <summary>An assertion with no message still says which line failed.</summary>
+    /// <summary>An assertion with no message still reports which line failed.</summary>
     [Fact]
     public void AnAssertionWithNoMessageSaysSomething()
     {
@@ -49,8 +49,8 @@ public sealed class AssertionTests
     }
 
     /// <summary>
-    /// An assertion nt65 answered does not reach ca65; one about an address, which only the
-    /// linker settles, is written out for ld65.
+    /// An assertion nt65 answered does not reach ca65. An assertion about an address, which only
+    /// the linker can decide, is written out for ld65.
     /// </summary>
     [Fact]
     public void WhatNt65CannotAnswerIsPassedOn()
@@ -69,7 +69,10 @@ public sealed class AssertionTests
         Assert.Contains(".assert irq >= $8000, lderror, \"irq must be in ROM\"", main);
     }
 
-    /// <summary>An <c>.error</c> the build reaches is reported with its own message, and nothing is written for ca65.</summary>
+    /// <summary>
+    /// An <c>.error</c> the build reaches is reported with its own message, and nothing is written
+    /// for ca65.
+    /// </summary>
     [Fact]
     public void AnErrorTheBuildReachesIsReported()
     {

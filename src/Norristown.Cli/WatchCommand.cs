@@ -3,19 +3,21 @@ using Norristown.Project;
 namespace Norristown.Cli;
 
 /// <summary>
-/// <c>nt65 build --watch</c>: builds, then builds again whenever the program changes, until it
-/// is interrupted.
+/// Implements <c>nt65 build --watch</c>, which builds, then builds again whenever the program
+/// changes, until it is interrupted.
 /// <para>
-/// It rebuilds when a file the last build read changes — the project file, the sources, and the
-/// binaries an <c>.incbin</c> read, which are the files the dependency file lists — and also when
-/// any <c>.nt65</c> file under the project root changes, because a source created after the
-/// globs were matched is not in that list. nt65 writes no file of either kind, so a build does
-/// not trigger the next one.
+/// It rebuilds when a file the last build read changes. Those files are the project file, the
+/// sources, and the binaries an <c>.incbin</c> read, which are the files the dependency file
+/// lists. It also rebuilds when any <c>.nt65</c> file under the project root changes, because a
+/// source created after the globs were matched is not in that list. nt65 writes no file of
+/// either kind, so a build does not trigger the next one.
 /// </para>
 /// </summary>
 internal static class WatchCommand
 {
-    /// <summary>How long to let a burst of file events finish before building, in milliseconds.</summary>
+    /// <summary>
+    /// The time, in milliseconds, to let a burst of file events finish before building.
+    /// </summary>
     private const int Settle = 120;
 
     /// <summary>
@@ -80,7 +82,7 @@ internal static class WatchCommand
             }
 
             // An editor may write a file in several steps, and saving many files at once raises
-            // many events, so wait for them to settle, then clear the signal and build once.
+            // many events, so wait for the events to stop, then clear the signal and build once.
             if (cancellation.WaitHandle.WaitOne(Settle))
                 return 0;
             changed.Wait(0, CancellationToken.None);
@@ -88,8 +90,9 @@ internal static class WatchCommand
     }
 
     /// <summary>
-    /// Whether a change to <paramref name="path"/> should trigger a build: it is a file the last
-    /// build read, any nt65 source, or a project file. nt65 writes none of those.
+    /// Returns a value indicating whether a change to <paramref name="path"/> should trigger a
+    /// build. It should when the path is a file the last build read, any nt65 source, or a project
+    /// file. nt65 writes none of those.
     /// </summary>
     private static bool Matters(string path, HashSet<string> watched)
     {

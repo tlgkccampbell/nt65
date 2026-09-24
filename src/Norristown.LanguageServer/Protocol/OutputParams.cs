@@ -1,5 +1,8 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary><c>nt65/output</c>: what one source file became, as the editor holds it now.</summary>
+/// <summary>
+/// Parameters of the <c>nt65/output</c> request, which asks for the output of one source file as
+/// the editor currently holds it.
+/// </summary>
 /// <param name="TextDocument">The source file.</param>
 internal sealed record OutputParams(TextDocumentIdentifier TextDocument);

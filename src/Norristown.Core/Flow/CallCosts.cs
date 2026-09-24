@@ -4,20 +4,23 @@ using Norristown.Semantics;
 namespace Norristown.Flow;
 
 /// <summary>
-/// What a routine costs with what it calls in it. A call costs the call itself and then
-/// whatever the routine it names costs, so the two compose wherever nt65 can name the callee
-/// and has its body; a tail jump and a <c>.fallthrough</c> into another routine compose the same
-/// way, because control comes back from either to this routine's caller.
+/// Works out what a routine costs including the routines it calls. A call costs the call
+/// instruction itself plus what the routine it names costs, so the two compose wherever nt65 can
+/// name the callee and has its body. A tail jump and a <c>.fallthrough</c> into another routine
+/// compose the same way, because control comes back from either to this routine's caller.
 /// <para>
-/// A call to a routine with no body, one through a pointer, and a routine that can reach
-/// itself cannot be counted. The total counts everything else, which makes it a fewest with no
-/// most, and names each thing it leaves out. Naming them is the point: a total that quietly
-/// left a callee out would read as a bound and not be one.
+/// A call to a routine with no body, a call through a pointer, and a routine that can reach
+/// itself cannot be counted. The total counts everything else, so it is a lower bound with no
+/// upper bound, and it lists each item it left out. The list matters because a total that
+/// silently omitted a callee would look like a bound when it is not one.
 /// </para>
 /// </summary>
 public static class CallCosts
 {
-    /// <summary>Works out the total for every routine of <paramref name="flows"/> and writes it on each.</summary>
+    /// <summary>
+    /// Works out the total cost of every routine of <paramref name="flows"/> and stores it in the
+    /// routine's <see cref="FlowRegion.Total"/>.
+    /// </summary>
     public static void Compose(IEnumerable<ControlFlow> flows)
     {
         var regions = new Dictionary<(string Path, string Name), FlowRegion>();
@@ -33,18 +36,18 @@ public static class CallCosts
     }
 
     /// <summary>
-    /// Which routines control ever returns from. An exit from a routine is a reached block with
-    /// no successor inside it: a return, a tail jump, a <c>.fallthrough</c> into another routine,
-    /// or a call to a routine that never returns. A routine returns when any of its exits does:
-    /// a return always does, a tail jump or a fall-through does only when the routine it goes on
-    /// into returns, and a call that never returns does not.
+    /// Returns the routines that control ever returns from. An exit from a routine is a reached
+    /// block with no successor inside it. It may be a return, a tail jump, a <c>.fallthrough</c>
+    /// into another routine, or a call to a routine that never returns. A routine returns when any
+    /// of its exits does. A return always does, and a call that never returns does not. A tail jump
+    /// or a fall-through does only when the routine it goes on into returns.
     /// <para>
-    /// A routine is assumed not to return until something shows that it does, and the set is
-    /// recomputed until it stops changing, so a chain of tail jumps that ends in an infinite
-    /// loop is found however long the chain is. A call nt65 cannot identify, and one to a
-    /// routine with no body, are assumed to return, since saying they do not would be a claim
-    /// about code that is not here; unless the routine is declared <c>noreturn</c>, which is
-    /// that claim, made by the program.
+    /// A routine is assumed not to return until something shows that it does. The set is
+    /// recomputed until it stops changing, so a chain of tail jumps that ends in an infinite loop
+    /// is found no matter how long the chain is. A call nt65 cannot identify, and a call to a
+    /// routine with no body, are assumed to return. Saying they do not would be a claim about code
+    /// that is not in the program. The exception is a routine declared <c>noreturn</c>, where the
+    /// program makes that claim itself.
     /// </para>
     /// </summary>
     private static HashSet<(string Path, string Name)> Returning(Dictionary<(string Path, string Name), FlowRegion> regions)
@@ -64,7 +67,7 @@ public static class CallCosts
         return found;
     }
 
-    /// <summary>Whether any exit from a routine is one through which control returns.</summary>
+    /// <summary>Returns whether any exit from a routine is one through which control returns.</summary>
     private static bool ComesBack(
         FlowRegion region,
         Dictionary<(string Path, string Name), FlowRegion> regions,
@@ -84,17 +87,18 @@ public static class CallCosts
     }
 
     /// <summary>
-    /// A routine identified by its file and its flattened name, rather than by its symbol: an
-    /// analysis that kept a file's results from before an edit holds a different symbol object
-    /// for the same routine. It is the name and not the position, because a kept file still
-    /// refers to the routines of an edited file at the positions they had before the edit.
+    /// Returns a key that identifies a routine by its file and its flattened name, rather than by
+    /// its symbol. An analysis that kept a file's results from before an edit holds a different
+    /// symbol object for the same routine. The key uses the name and not the position, because a
+    /// kept file still refers to the routines of an edited file at the positions they had before
+    /// the edit.
     /// </summary>
     private static (string Path, string Name) Named(Symbol routine) => (routine.Tree.Path, routine.FlatName);
 
     /// <summary>
-    /// What <paramref name="region"/>'s routine costs with its calls, working out what each
-    /// callee costs first. <paramref name="walking"/> holds the routines being worked out, so
-    /// that one reaching itself is found rather than followed round for ever.
+    /// Returns what <paramref name="region"/>'s routine costs with its calls, working out what
+    /// each callee costs first. <paramref name="walking"/> holds the routines being worked out, so
+    /// that a routine reaching itself is detected rather than followed round forever.
     /// </summary>
     private static RoutineCost Total(
         FlowRegion region,
@@ -108,10 +112,11 @@ public static class CallCosts
             return found;
         walking.Add(name);
 
-        // The fewest and the most are worked out separately, because a callee that loops has a
-        // fewest but no most, and its caller then has a fewest but no most too. What is left
-        // out is gathered on the way to the fewest, which weighs every block a path reaches; a
-        // most that leaves anything out would not be one, so there is then no most.
+        // The lower and upper bounds are worked out separately, because a callee that loops has a
+        // lower bound but no upper bound, and then so does its caller. What is left out is
+        // gathered while working out the lower bound, which weighs every block a path reaches.
+        // An upper bound that leaves anything out would not be one, so there is then no upper
+        // bound.
         var excluded = new List<Exclusion>();
         var (least, _, ends) = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, true));
         var most = Paths.Through(region.Blocks, 0, _ => true, block => Weighed(block, false)).Most;
@@ -144,7 +149,7 @@ public static class CallCosts
                 var name = Named(callee);
                 if (!regions.TryGetValue(name, out var called))
                 {
-                    // One declared never to return ends the pass like any other.
+                    // A callee declared never to return ends the pass like any other.
                     if (callee.Signature is { NeverReturns: true })
                         continue;
                     if (!fewest)
@@ -176,8 +181,8 @@ public static class CallCosts
                     continue;
                 }
 
-                // A callee with no count of its own is left out whole; one whose calls leave
-                // something out counts the rest, and what it leaves out, this one does too.
+                // A callee with no count of its own is left out whole. A callee whose calls leave
+                // something out still counts the rest, and this routine leaves out the same items.
                 if (total.Least is not { } shortest)
                 {
                     Exclude(new Exclusion(callee.QualifiedName, called.Cost.Uncounted ?? "it has no count"));
@@ -190,7 +195,7 @@ public static class CallCosts
             return new CycleCount(with);
         }
 
-        // The fewest weighs a block more than once, so each thing is kept only the first time.
+        // The lower-bound walk weighs a block more than once, so each item is kept only the first time.
         void Exclude(Exclusion exclusion)
         {
             if (!excluded.Any(known => known.What == exclusion.What))
@@ -198,13 +203,17 @@ public static class CallCosts
         }
     }
 
-    /// <summary>Whether a routine calls at all, which is what makes a total differ from its own cost.</summary>
+    /// <summary>
+    /// Returns whether a routine calls at all, which is what makes a total differ from its own
+    /// cost.
+    /// </summary>
     private static bool Calls(FlowRegion region) =>
         region.Blocks.Any(block => Onward(block).Any() || block.CallsUnknown);
 
     /// <summary>
-    /// The routines a block hands control to and whose cost is then part of this one's: those
-    /// it calls or tail-jumps to, and the one its <c>.fallthrough</c> runs on into.
+    /// Returns the routines a block hands control to, whose cost is then part of this routine's.
+    /// They are the routines it calls or tail-jumps to, and the routine its <c>.fallthrough</c>
+    /// runs on into.
     /// </summary>
     private static IEnumerable<Symbol> Onward(BasicBlock block) =>
         block.RunsInto is { } into ? block.Calls.Append(into) : block.Calls;

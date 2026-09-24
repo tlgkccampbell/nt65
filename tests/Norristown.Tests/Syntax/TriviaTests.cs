@@ -59,7 +59,10 @@ public sealed class TriviaTests
         Assert.Empty(end.TrailingTrivia);
     }
 
-    /// <summary>The tokens of line <paramref name="line"/> of <paramref name="text"/>, line break aside.</summary>
+    /// <summary>
+    /// Returns the tokens of line <paramref name="line"/> of <paramref name="text"/>, without its
+    /// line break.
+    /// </summary>
     private static List<SyntaxToken> Tokens(string text, int line = 0)
     {
         var tree = SyntaxTree.Parse("test.nt65", text);

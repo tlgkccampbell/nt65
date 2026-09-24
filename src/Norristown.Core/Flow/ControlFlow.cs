@@ -6,13 +6,13 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// Where control goes inside each routine: its basic blocks and the edges between them,
-/// built from the order layout wrote the bytes in, so the macros are expanded and the
-/// repetitions unrolled before anything is asked about the path.
+/// Works out where control goes inside each routine, as basic blocks and the edges between
+/// them. The blocks are built from the order in which layout emitted the bytes, so the macros
+/// are expanded and the repetitions unrolled before anything is asked about the path.
 /// <para>
 /// Every assembly-language trick is allowed, and each can be recognised from its syntax. Where
-/// the operand does not say where flow goes — an indirect jump, a computed target — the edge
-/// comes from a <c>.next</c> instead, and where there is none the path simply ends. On the
+/// the operand does not say where flow goes, as with an indirect jump or a computed target, the
+/// edge comes from a <c>.next</c> instead. Where there is no <c>.next</c>, the path simply ends. On the
 /// 6502 and its CMOS variants nothing consumes processor state, so no annotation is required.
 /// </para>
 /// </summary>
@@ -43,22 +43,23 @@ public sealed class ControlFlow
             || Placements.Declaration(model.Tree) is { } module && Placements.MarkerOf(module) != ModulePlacement.Alone;
     }
 
-    /// <summary>Every routine in the file, one region each.</summary>
+    /// <summary>Gets every routine in the file, one region each.</summary>
     public IReadOnlyList<FlowRegion> Regions => regions;
 
-    /// <summary>What is wrong with the paths through this file.</summary>
+    /// <summary>Gets what is wrong with the paths through this file.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
 
     /// <summary>
-    /// Every <c>.fallthrough</c> saying that flow runs on into a routine this file's own layout
-    /// cannot show is next: one in another module, or one past a <c>.place</c>. Whether it is
-    /// next is a question about the translation unit, answered once every file in it is laid out.
+    /// Gets every <c>.fallthrough</c> claiming that flow runs on into a routine that this file's own
+    /// layout cannot show is next. Such a routine is in another module, or past a <c>.place</c>.
+    /// Whether it is next is a question about the translation unit, answered once every file in it
+    /// is laid out.
     /// </summary>
     public IReadOnlyList<RunningOn> RunningOn => runningOn;
 
     /// <summary>
-    /// What the registers hold at each statement of the file, or null before it has been worked
-    /// out. It is a question about the program rather than about one file, because what a
+    /// Gets what the registers hold at each statement of the file, or null before it has been
+    /// worked out. It is a question about the program rather than about one file, because what a
     /// statement leaves in a register follows from what the routines above it call.
     /// </summary>
     public RegisterStates? Registers { get; internal set; }
@@ -85,7 +86,7 @@ public sealed class ControlFlow
             var entered = blocks.Count > 0 && blocks[0].Label == routine;
             CountedLoops.Find(model, layout, blocks);
 
-            // A routine containing a line that layout could not lay out gets no count: the line
+            // A routine containing a line that layout could not lay out gets no count. The line
             // is missing from the stream, so counting the rest would pass off part as the whole.
             var (least, most, ends) = layout.Unlaid.Contains(routine)
                 ? (null, null, true)
@@ -114,9 +115,9 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Every <c>.scope</c> block written inside a routine, as the span of the line that opens
-    /// it and of the whole block. One at file level is a namespace holding declarations, and
-    /// holds no code of its own, so it is not one of these.
+    /// Returns every <c>.scope</c> block inside a routine, as the span of the line that opens it
+    /// and the span of the whole block. A <c>.scope</c> at file level is a namespace holding
+    /// declarations, with no code of its own, so it is not included.
     /// </summary>
     private static List<(TextSpan Opener, TextSpan Whole)> Inline(SyntaxTree tree)
     {
@@ -138,11 +139,11 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// What each inline <c>.scope</c> of a routine costs. A scope whose lines are blocks of
-    /// their own costs what a pass through those blocks costs; one written inside a single
-    /// block costs what its own statements add up to, since a block runs all of it. A scope
-    /// that is neither, whose first block nothing reaches, or that something branches into
-    /// past its start, gets no cost: there is no single pass through it to count.
+    /// Returns what each inline <c>.scope</c> of a routine costs. A scope whose lines are blocks of
+    /// their own costs what a pass through those blocks costs. A scope inside a single block costs
+    /// what its own statements add up to, since a block runs all of it. A scope that is neither,
+    /// whose first block nothing reaches, or that something branches into past its start, gets no
+    /// cost, because there is no single pass through it to count.
     /// </summary>
     private List<ScopeCost> Costed(
         IReadOnlyList<BasicBlock> blocks, IReadOnlyList<(TextSpan Opener, TextSpan Whole)> inline)
@@ -156,7 +157,9 @@ public sealed class ControlFlow
         return costs;
     }
 
-    /// <summary>What one pass through the part of a routine written inside <paramref name="whole"/> costs.</summary>
+    /// <summary>
+    /// Returns what one pass through the part of a routine inside <paramref name="whole"/> costs.
+    /// </summary>
     private RoutineCost? Cost(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
     {
         var held = Held(blocks, whole);
@@ -172,8 +175,8 @@ public sealed class ControlFlow
                 part++;
         }
 
-        // Written inside one block, and so with nothing in it that branches: what it costs is
-        // what its statements cost, and the block runs every one of them.
+        // The scope lies inside one block, so nothing in it branches. What it costs is what its
+        // statements cost, and the block runs every one of them.
         if (part == 1 && all == 0)
         {
             var at = Array.FindIndex(held, block => block.Inside > 0);
@@ -201,10 +204,10 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// How many of each block's statements are written inside <paramref name="whole"/>, and how
-    /// many it has. A statement written in this file decides by its position whether the walk
-    /// is inside the span; a statement from an expansion counts as being wherever the call that
-    /// expanded it was, so the walk carries the last answer forward over it.
+    /// Returns how many of each block's statements lie inside <paramref name="whole"/>, and how
+    /// many it has. A statement in this file decides by its position whether the walk is inside
+    /// the span. A statement from an expansion counts as being wherever the call that expanded it
+    /// was, so the walk keeps the last answer over it.
     /// </summary>
     internal static (int Inside, int Total)[] Held(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
     {
@@ -225,7 +228,9 @@ public sealed class ControlFlow
         return held;
     }
 
-    /// <summary>What the statements of <paramref name="block"/> written inside a span add up to.</summary>
+    /// <summary>
+    /// Returns what the statements of <paramref name="block"/> that lie inside a span add up to.
+    /// </summary>
     private RoutineCost? Straight(BasicBlock block, TextSpan whole)
     {
         var total = new CycleCount(0);
@@ -245,7 +250,7 @@ public sealed class ControlFlow
         return any ? new RoutineCost(total.Least, total.Most, false, true) : null;
     }
 
-    /// <summary>Whether any block of a part of a routine calls.</summary>
+    /// <summary>Returns whether any block of a part of a routine calls.</summary>
     private static bool Calls(IReadOnlyList<BasicBlock> blocks, bool[] inside)
     {
         for (var i = 0; i < blocks.Count; i++)
@@ -256,11 +261,14 @@ public sealed class ControlFlow
         return false;
     }
 
-    /// <summary>The annotations written under <paramref name="step"/>'s statement, in order.</summary>
+    /// <summary>Returns the annotations under <paramref name="step"/>'s statement, in order.</summary>
     internal IReadOnlyList<StatementSyntax> AnnotationsOf(Step step) =>
         annotations.GetValueOrDefault((step.Statement.Position, step.On)) ?? [];
 
-    /// <summary>Whether a statement calls a routine that never returns, which is where its path ends.</summary>
+    /// <summary>
+    /// Returns whether a statement calls a routine that never returns, which is where its path
+    /// ends.
+    /// </summary>
     internal bool CallsWhatNeverReturns(Step step)
     {
         if (RelativeCallAt(step) is { } relative)
@@ -271,23 +279,28 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Whether a routine calls anything, which its own cycle count does not follow into: here
-    /// a call counts only the call instruction, and what the called routine takes is that
+    /// Returns whether a routine calls anything, which its own cycle count does not follow into.
+    /// Here a call counts only the call instruction, and what the called routine takes is that
     /// routine's own count. A <c>.fallthrough</c> into another routine is the same, since the
     /// count stops where that routine starts.
     /// </summary>
     private static bool Calls(IReadOnlyList<BasicBlock> blocks) =>
         blocks.Any(block => block.Calls.Count > 0 || block.RunsInto is not null || block.CallsUnknown);
 
-    /// <summary>The call a branch makes, for a branch written as a relative call; null for every other statement.</summary>
+    /// <summary>
+    /// Returns the call a branch makes, for a branch that forms a relative call, or null for every
+    /// other statement.
+    /// </summary>
     internal RelativeCall? RelativeCallAt(Step step) =>
         relativeCalls.TryGetValue((step.Statement.Position, step.On), out var call) ? call : null;
 
-    /// <summary>Whether a statement is the <c>per</c> that pushes a relative call's return address.</summary>
+    /// <summary>
+    /// Returns whether a statement is the <c>per</c> that pushes a relative call's return address.
+    /// </summary>
     internal bool IsReturnAddress(Step step) => returnAddresses.Contains((step.Statement.Position, step.On));
 
     /// <summary>
-    /// The statements of one region, each with the annotations written under it. An
+    /// Returns the statements of one region, each with the annotations under it. An
     /// annotation is about the statement above it, so it belongs to that statement rather
     /// than standing on its own.
     /// </summary>
@@ -312,9 +325,9 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The branches that are calls: <c>per L-1</c> directly before <c>brl f</c> or
-    /// <c>bra f</c> to a routine, with <c>L</c> the label directly after the branch, and a
-    /// <c>phk</c> directly before the <c>per</c> for a far one.
+    /// Finds the branches that are calls. Such a branch is <c>brl f</c> or <c>bra f</c> to a
+    /// routine, directly after <c>per L-1</c>, where <c>L</c> is the label directly after the
+    /// branch. A far call also has a <c>phk</c> directly before the <c>per</c>.
     /// </summary>
     private void FindRelativeCalls(IReadOnlyList<Unit> units)
     {
@@ -339,7 +352,10 @@ public sealed class ControlFlow
         }
     }
 
-    /// <summary>Whether a <c>per</c> pushes <c>L-1</c>, the byte before <paramref name="label"/>, as a return address is.</summary>
+    /// <summary>
+    /// Returns whether a <c>per</c> pushes <c>L-1</c>, the byte before <paramref name="label"/>, as
+    /// a return address does.
+    /// </summary>
     private bool NamesTheAddressBefore(Step push, Symbol label)
     {
         if (push.Statement is not InstructionStatementSyntax { Operand: AbsoluteOperandSyntax { Prefix: null } pushed }
@@ -355,7 +371,7 @@ public sealed class ControlFlow
         statement is InstructionStatementSyntax instruction && mnemonics.Contains(instruction.MnemonicKind);
 
     /// <summary>
-    /// The blocks of one region. A label starts a block, and a statement that transfers
+    /// Returns the blocks of one region. A label starts a block, and a statement that transfers
     /// control ends one, so if any of a block runs, all of it runs.
     /// </summary>
     private List<BasicBlock> Blocks(IReadOnlyList<Unit> units)
@@ -421,8 +437,8 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The edges. Fall-through is already known from how the blocks were cut; what is left
-    /// is where each block's last statement says control goes.
+    /// Adds the edges between blocks. Fall-through is already known from how the blocks were cut.
+    /// What is left is where each block's last statement says control goes.
     /// </summary>
     private void Link(
         List<BasicBlock> blocks, List<Unit?> tails, List<bool> fallenInto,
@@ -457,8 +473,8 @@ public sealed class ControlFlow
 
             if (transfer is not (Transfer.Branch or Transfer.Jump or Transfer.Call))
             {
-                // A `jsr` whose target the operand does not name is a call all the same, and
-                // one nothing here can follow into.
+                // A `jsr` whose target the operand does not name is still a call, and one that
+                // nothing here can follow into.
                 blocks[i].CallsUnknown |= transfer == Transfer.Elsewhere && IsCall(tail.Step.Statement);
                 continue;
             }
@@ -469,7 +485,7 @@ public sealed class ControlFlow
 
             // What a call reaches costs what that routine costs, and so does what a tail jump
             // reaches, since control comes back from it to this routine's caller. A target
-            // this routine holds itself is neither: the path simply carries on into it.
+            // inside this routine is neither, because the path simply continues into it.
             if (relative is { } known)
                 blocks[i].Called(known.Routine);
             else if (calls || (transfer == Transfer.Jump && !inside))
@@ -484,8 +500,8 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// How long the whole block takes. A block runs all of it or none, so the counts add up;
-    /// one statement nt65 has no count for leaves the block without one.
+    /// Returns how long the whole block takes. A block runs all of it or none, so the counts add
+    /// up. One statement nt65 has no count for leaves the block without one.
     /// </summary>
     private CycleCount? Counted(BasicBlock block)
     {
@@ -508,16 +524,17 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Whether a step takes no time because it generates nothing that runs: a <c>.state</c>,
-    /// a <c>.frame</c>, a <c>.fallthrough</c>, or a marker for either end of an expansion.
+    /// Returns whether a step takes no time because it generates nothing that runs. Such a step
+    /// is a <c>.state</c>, a <c>.frame</c>, a <c>.fallthrough</c>, or a marker for either end of an
+    /// expansion.
     /// </summary>
     private static bool TakesNoTime(Step step) =>
         step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax or FallthroughDirectiveSyntax || step.IsMarker;
 
     /// <summary>
-    /// Why a statement nt65 recognises has no count, for the editor's code lens, which would
-    /// otherwise show the routine without a count and give no reason; null for a line nt65
-    /// could not lay out, which has already been reported where it is written.
+    /// Returns why a statement nt65 recognises has no count, for the editor's code lens. Without
+    /// it the lens would show the routine without a count and give no reason. It returns null for
+    /// a line nt65 could not lay out, which has already been reported where it appears.
     /// </summary>
     private static string? Uncounted(Step step) =>
         (step.Statement as InstructionStatementSyntax)?.MnemonicKind switch
@@ -527,11 +544,13 @@ public sealed class ControlFlow
             _ => null,
         };
 
-    /// <summary>Why a routine has no count: the first block a path reaches that has none says so.</summary>
+    /// <summary>
+    /// Returns why a routine has no count, taken from the first reached block that has no count.
+    /// </summary>
     private static string? Uncounted(IReadOnlyList<BasicBlock> blocks) =>
         blocks.FirstOrDefault(block => block.IsReached && block.Uncounted is not null)?.Uncounted;
 
-    /// <summary>Which blocks any path from the region's first one reaches.</summary>
+    /// <summary>Marks which blocks any path from the region's first block reaches.</summary>
     private static void Reach(List<BasicBlock> blocks)
     {
         if (blocks.Count == 0)
@@ -552,10 +571,10 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The labels one <c>.next</c> names. A target that is a list, or a data label whose
-    /// items are all code labels or routines — each optionally minus one, as an RTS dispatch
-    /// table writes them — stands for every one of those labels, which is how an indirect
-    /// call names the routines in its table.
+    /// Returns the labels one <c>.next</c> names. A target that is a list stands for every label in
+    /// it. So does a data label whose items are all code labels or routines, each optionally minus
+    /// one as in an RTS dispatch table. This is how an indirect call names the routines in its
+    /// table.
     /// </summary>
     internal IEnumerable<(Symbol Symbol, Expansion? At)> Named(NextDirectiveSyntax next, Expansion? on)
     {
@@ -583,8 +602,8 @@ public sealed class ControlFlow
                 continue;
             }
 
-            // Data that is not a table of code labels names nowhere code goes, which is
-            // reported where the targets are checked rather than followed into the bytes.
+            // Data that is not a table of code labels names nowhere code goes. It is reported
+            // where the targets are checked rather than followed into the bytes.
             if (IsDataWithoutCodeLabels(target.Symbol, on))
                 continue;
             yield return target;
@@ -592,8 +611,8 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The labels a table or a list expands to; empty when it does not expand to labels and
-    /// so names only itself.
+    /// Returns the labels a table or a list expands to. The result is empty when the target does
+    /// not expand to labels and so names only itself.
     /// </summary>
     private IEnumerable<(Symbol Symbol, Expansion? At)> Spread(Symbol target, Expansion? on)
     {
@@ -613,10 +632,10 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The values of a table, which is data declared as addresses with <c>.addr</c> or
-    /// <c>.faraddr</c>, each paired with the writing it is on. Values in a body are read from
-    /// the writings layout made of them, since a repetition there may write each one
-    /// differently. Any other symbol yields no values.
+    /// Returns the values of a table, which is data declared as addresses with <c>.addr</c> or
+    /// <c>.faraddr</c>, each paired with the <see cref="Expansion"/> it is in. Values in a body are
+    /// read from the expansions layout made of them, since each iteration of a repetition there
+    /// may emit a value differently. Any other symbol yields no values.
     /// </summary>
     private IEnumerable<(SyntaxNode Item, Expansion? On)> ItemsOfTable(Symbol target)
     {
@@ -636,25 +655,31 @@ public sealed class ControlFlow
         }
     }
 
-    /// <summary>Whether a symbol is data declared as addresses, which is what a table of targets is.</summary>
+    /// <summary>
+    /// Returns whether a symbol is data declared as addresses, which is what a table of targets is.
+    /// </summary>
     private static bool IsAddressData(Symbol symbol) =>
         symbol is { Kind: SymbolKind.Data, Data: DataDirectiveSyntax element } && DataSyntax.NameOf(element) is ".addr" or ".faraddr";
 
-    /// <summary>Whether a name is data that does not spread to code labels, which names nowhere code goes.</summary>
+    /// <summary>
+    /// Returns whether a symbol is data that does not spread to code labels, and so names nowhere
+    /// code goes.
+    /// </summary>
     private bool IsDataWithoutCodeLabels(Symbol symbol, Expansion? on) =>
         symbol.Kind == SymbolKind.Data && !Spread(symbol, on).Any();
 
     /// <summary>
-    /// A table item with the <c>- 1</c> of an RTS dispatch table taken off it, which is the
-    /// same label either way.
+    /// Returns a table item without the <c>- 1</c> of an RTS dispatch table, which names the same
+    /// label either way.
     /// </summary>
     private static SyntaxNode Stripped(SyntaxNode item) =>
         item is BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Minus } difference ? difference.Left : item;
 
     /// <summary>
-    /// What an annotation names has to be somewhere code can be: a label, a routine, or a
-    /// list or a table of them. Which kind a name is settles only once every symbol has a
-    /// value, which is why this is checked here rather than where the name was resolved.
+    /// Reports each annotation target that is not somewhere code can be. What an annotation names
+    /// has to be a label, a routine, or a list or a table of them. Which kind a name is becomes
+    /// known only once every symbol has a value, so this is checked here rather than where the
+    /// name was resolved.
     /// </summary>
     private void CheckTargets(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
@@ -682,9 +707,9 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Reports a label that nothing falls into and nothing names. nt65 sees every reference
-    /// written in the source, so such a label can only be reached in a way nt65 cannot see,
-    /// and this diagnostic pushes the programmer to write down how. A <c>.state</c> directly
+    /// Reports each label that nothing falls into and nothing names, and each unlabelled start of a
+    /// nested segment block. nt65 sees every reference in the source, so such a label can only be
+    /// reached in a way nt65 cannot see. This diagnostic pushes the programmer to declare how. A <c>.state</c> directly
     /// after the label declares it an entry point, which acknowledges that it is reached from
     /// somewhere nt65 cannot see. A label on data is read rather than run, so control never
     /// reaching it is expected.
@@ -718,14 +743,14 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Whether anything other than its declaration refers to <paramref name="symbol"/>.
+    /// Returns whether anything other than its declaration refers to <paramref name="symbol"/>.
     /// </summary>
     private bool IsNamed(Symbol symbol) =>
         model.ReferencesTo(symbol).Any(reference => !reference.IsDeclaration);
 
     /// <summary>
     /// Reports data that the instruction above falls through into, as happens with the
-    /// <c>.byte $2c</c> skip trick and with opcodes ca65 lacks written out as bytes. A
+    /// <c>.byte $2c</c> skip trick and with opcodes ca65 lacks that are given as bytes. A
     /// <c>.next</c> on the data says where flow goes instead of through it.
     /// </summary>
     private void CheckDataReachedByFallingThrough(
@@ -771,10 +796,11 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The <c>.next</c> that says a conditional branch running into data is always taken, which
-    /// is what data after one nearly always means: the flags are known there, and the bytes
-    /// after it are text or a table the branch jumps over. Offered where the branch is written in
-    /// this file, and named as it is written, so the edit reads as the programmer would write it.
+    /// Returns the fix that adds a <c>.next</c> saying a conditional branch running into data is
+    /// always taken. That is what data after a branch nearly always means. The flags are known
+    /// there, and the bytes after the branch are text or a table it jumps over. The fix is offered
+    /// where the branch is in this file outside any expansion. It names the target as the source
+    /// spells it, so the edit reads as the programmer would type it.
     /// </summary>
     private DiagnosticFix? AlwaysTaken(Unit? branch)
     {
@@ -788,9 +814,10 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The data after each call to a routine that returns past it, which has to be what the
-    /// routine's <c>inline</c> item says: <c>n</c> bytes of data, or one <c>.strz</c>. This
-    /// holds on every CPU, because the call returns past it whatever the processor.
+    /// Finds the data after each call to a routine that returns past it, and reports the data
+    /// where it is not what the routine's <c>inline</c> item says. That item asks for <c>n</c>
+    /// bytes of data, or one <c>.strz</c>. This rule holds on every CPU, because the call returns
+    /// past the data whatever the processor.
     /// </summary>
     private HashSet<Unit> CheckInlineData(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
@@ -859,9 +886,10 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// How a routine that never returns and an interrupt handler may be left and reached, which
-    /// holds on every CPU: neither returns with <c>rts</c> or <c>rtl</c>, and an interrupt handler,
-    /// which leaves by <c>rti</c>, is never called.
+    /// Reports each <c>rts</c> or <c>rtl</c> in a routine that never returns or in an interrupt
+    /// handler, and each call to an interrupt handler. Neither kind of routine returns with
+    /// <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by <c>rti</c>, is never
+    /// called. These rules hold on every CPU.
     /// </summary>
     private void CheckReturnsAndCalls(Symbol routine, IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
@@ -877,9 +905,9 @@ public sealed class ControlFlow
                     ? Catalogue.HandlerReturnsNotRti.Says(routine.DisplayName, returned)
                     : Catalogue.NoreturnReturns.Says(routine.DisplayName, returned),
 
-                    // A handler is left by `rti`, which is the instruction to write instead. A
-                    // routine that never returns has no instruction that would do: what it
-                    // should do there is leave some other way, or not say `noreturn`.
+                    // A handler is left by `rti`, which is the instruction to use instead. A
+                    // routine that never returns has no instruction that would do. It should
+                    // leave some other way there, or not say `noreturn`.
                     own.IsInterrupt ? new DiagnosticFix(FixKind.Return, "rti") : null);
             }
             if (CalledAt(unit) is { Signature.IsInterrupt: true } handler)
@@ -892,7 +920,10 @@ public sealed class ControlFlow
             diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
     }
 
-    /// <summary>The routine a statement calls, directly or as a relative call; null for anything else.</summary>
+    /// <summary>
+    /// Returns the routine a statement calls, directly or as a relative call, or null for anything
+    /// else.
+    /// </summary>
     private Symbol? CalledAt(Unit unit)
     {
         if (RelativeCallAt(unit.Step) is { } relative)
@@ -904,17 +935,22 @@ public sealed class ControlFlow
             : null;
     }
 
-    /// <summary>The routine a <c>.fallthrough</c> names, or null where it names something else or nothing.</summary>
+    /// <summary>
+    /// Returns the routine a <c>.fallthrough</c> names, or null where it names something else or
+    /// nothing.
+    /// </summary>
     private Symbol? RoutineNamed(NameExpressionSyntax written, Expansion? on) =>
         Targets.Of(model, written, on)?.Symbol is { Kind: SymbolKind.Proc, Signature: not null } routine ? routine : null;
 
     /// <summary>
-    /// A <c>.next</c> names where flow goes after a statement nt65 cannot follow: an indirect
-    /// jump or call, a return, a jump to a computed address, data flow runs into, and the last
-    /// statement of a nested segment block, which runs into whatever that segment holds next.
-    /// Under a conditional branch it names the branch's own target and nothing else, which says
-    /// the branch is always taken. After any other statement nt65 already knows where flow goes,
-    /// and the <c>.next</c> could only contradict it. <c>.next ?</c> ends a path wherever it stands.
+    /// Reports each <c>.next</c> that is not needed, or that names something other than a
+    /// conditional branch's own target. A <c>.next</c> names where flow goes after a statement nt65
+    /// cannot follow. Such a statement is an indirect jump or call, a return, a jump to a computed
+    /// address, data that flow runs into, or the last statement of a nested segment block. That
+    /// last statement runs into whatever the segment holds next. Under a conditional branch a
+    /// <c>.next</c> names the branch's own target and nothing else, which says the branch is always
+    /// taken. After any other statement nt65 already knows where flow goes, and the <c>.next</c>
+    /// could only contradict it. <c>.next ?</c> ends a path wherever it stands.
     /// </summary>
     private void CheckNextIsNeeded(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
@@ -962,9 +998,10 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The label or routine a conditional branch goes to when it is taken, short or long, or null
-    /// for any other statement and for a branch whose target nt65 cannot read, such as <c>*+3</c>.
-    /// A relative call written with <c>per</c> and a branch is a call, not a branch.
+    /// Returns the label or routine a short or long conditional branch goes to when it is taken.
+    /// It returns null for any other statement and for a branch whose target nt65 cannot read,
+    /// such as <c>*+3</c>. A relative call made with <c>per</c> and a branch is a call, not a
+    /// branch.
     /// </summary>
     private Symbol? BranchTarget(Unit unit)
     {
@@ -978,8 +1015,9 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Where flow goes after a statement, phrased for a diagnostic message, where nt65 can work
-    /// it out for itself; null where it cannot, which is where a <c>.next</c> is needed.
+    /// Returns where flow goes after a statement, phrased for a diagnostic message, where nt65 can
+    /// work it out for itself. It returns null where nt65 cannot, which is where a <c>.next</c> is
+    /// needed.
     /// </summary>
     private string? Known(Unit unit)
     {
@@ -1006,12 +1044,12 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// A <c>.fallthrough</c> says that every path reaching the end of the routine runs into the
-    /// routine it names, which is true only when that routine starts where this one ends, in the
-    /// same segment. Where the file places another module or may be placed, the routine may be
-    /// another module's, or past a <c>.place</c>, and whether it comes next can then only be
-    /// decided for the whole translation unit, so the claim is recorded in
-    /// <see cref="RunningOn"/> for that check.
+    /// Reports each <c>.fallthrough</c> in this file whose claim is false. A <c>.fallthrough</c>
+    /// says that every path reaching the end of the routine runs into the routine it names. That
+    /// is true only when the named routine starts where this one ends, in the same segment. The
+    /// named routine may be in another file, or the file may place another module or be placed
+    /// itself. Whether the routine comes next can then only be decided for the whole translation
+    /// unit, so the claim is recorded in <see cref="RunningOn"/> for that check.
     /// </summary>
     private void CheckFallthrough(IReadOnlyList<Unit> units, List<Diagnostic> diagnostics)
     {
@@ -1049,10 +1087,11 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// The routine written directly after <paramref name="region"/>'s, in the same run of its
-    /// segment's bytes, whatever regions of other segments come between them in the text, and the
-    /// <c>}</c> that closes this one's body, which is where a <c>.fallthrough</c> naming it goes;
-    /// null where anything with bytes in that segment, or nothing at all, comes next.
+    /// Returns the routine emitted directly after <paramref name="region"/>'s routine in the same
+    /// run of its segment's bytes, ignoring regions of other segments between them in the text.
+    /// It also returns the <c>}</c> that closes this routine's body, which is where a
+    /// <c>.fallthrough</c> naming the next routine goes. It returns null where anything with bytes
+    /// in that segment, or nothing at all, comes next.
     /// </summary>
     internal (Symbol Routine, Span Closer)? WrittenAfter(FlowRegion region)
     {
@@ -1087,8 +1126,8 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Whether a statement is the last of its block, because control leaves after it. A call
-    /// leaves too, even though it comes back: what it reaches is an edge of its own, and an
+    /// Returns whether a statement is the last of its block, because control leaves after it. A
+    /// call leaves too, even though it comes back. What it reaches is an edge of its own, and an
     /// edge leaves a block at its end.
     /// </summary>
     private bool EndsBlock(Unit unit) =>
@@ -1097,9 +1136,9 @@ public sealed class ControlFlow
             != Transfer.Through;
 
     /// <summary>
-    /// Whether control carries on into whatever follows. A call does, however it is written,
-    /// because it returns, unless it calls a routine that never returns. On any other
-    /// statement a <c>.next</c> says where flow goes, and that replaces carrying on past it.
+    /// Returns whether control continues into what follows. A call does, in any form, because it
+    /// returns, unless it calls a routine that never returns. On any other statement a
+    /// <c>.next</c> says where flow goes, and that replaces continuing past it.
     /// </summary>
     private bool RunsOn(Unit unit)
     {
@@ -1119,16 +1158,16 @@ public sealed class ControlFlow
     private static bool IsCall(SyntaxNode statement) =>
         statement is InstructionStatementSyntax instruction && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
 
-    /// <summary>One statement and the annotations written under it.</summary>
+    /// <summary>Represents one statement and the annotations under it.</summary>
     private sealed class Unit(Step step)
     {
-        /// <summary>The statement itself.</summary>
+        /// <summary>Gets the statement itself.</summary>
         public Step Step { get; } = step;
 
-        /// <summary>The annotations under it, in the order they were written.</summary>
+        /// <summary>Gets the annotations under it, in source order.</summary>
         public List<StatementSyntax> Annotations { get; } = [];
 
-        /// <summary>The <c>.next</c> among them, or null when there is none.</summary>
+        /// <summary>Gets the <c>.next</c> among them, or null when there is none.</summary>
         public NextDirectiveSyntax? Next => Annotations.OfType<NextDirectiveSyntax>().FirstOrDefault();
     }
 }

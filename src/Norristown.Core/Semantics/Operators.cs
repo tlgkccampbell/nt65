@@ -4,22 +4,25 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// What each operator does to numbers. Arithmetic is 64-bit and signed, and an operation
-/// whose result does not fit in those 64 bits has no value: nothing wraps, because a wrapped
-/// result is a number nobody wrote.
+/// Applies operators to numbers. Arithmetic is 64-bit and signed, and an operation whose result
+/// does not fit in 64 bits has no value. Nothing wraps, because a wrapped result is a number
+/// nobody wrote.
 /// <para>
-/// Nothing is reported from here. Where there is no value, <c>refused</c> says why, and the
-/// caller reports it at the span it has; a division by zero sets no reason, because the caller
-/// knows which operand is zero and can report it more precisely.
+/// Nothing is reported from here. Where there is no value, <c>refused</c> gives the reason, and
+/// the caller reports it at the span it has. A division by zero sets no reason, because the
+/// caller knows which operand is zero and can report it more precisely.
 /// </para>
 /// </summary>
 internal static class Operators
 {
-    /// <summary>A prefix operator applied to a number.</summary>
+    /// <summary>
+    /// Returns the result of applying the prefix operator <paramref name="op"/> to
+    /// <paramref name="value"/>.
+    /// </summary>
     public static long? Unary(SyntaxKind op, long value, out DiagnosticMessage? refused)
     {
-        // Negating the smallest number there is is the one prefix operation with no answer:
-        // its own positive is one past the largest.
+        // Negating the smallest number is the one prefix operation with no result, because its
+        // positive is one past the largest number.
         if (op == SyntaxKind.Minus && value == long.MinValue)
         {
             refused = Overflows($"negating {Value.Of(value)}");
@@ -40,7 +43,8 @@ internal static class Operators
     }
 
     /// <summary>
-    /// A binary operator applied to two numbers. <c>.mod</c> arrives as a directive token,
+    /// Returns the result of applying the binary operator <paramref name="op"/> to
+    /// <paramref name="a"/> and <paramref name="b"/>. <c>.mod</c> arrives as a directive token,
     /// because <c>%</c> begins a binary number.
     /// </summary>
     public static long? Binary(SyntaxToken op, long a, long b, out DiagnosticMessage? refused)
@@ -48,8 +52,8 @@ internal static class Operators
         refused = null;
         switch (op.Kind)
         {
-            // The four that can overflow 64 bits are computed in 128 bits, and give a value only
-            // when the result fits in 64 bits after all.
+            // The four operators that can overflow 64 bits are computed in 128 bits, and give a
+            // value only when the result fits in 64 bits after all.
             case SyntaxKind.Star:
                 return Within((Int128)a * b, op, a, b, out refused);
             case SyntaxKind.Plus:
@@ -63,13 +67,13 @@ internal static class Operators
             case SyntaxKind.GreaterGreater:
                 return Counted(b, out refused) ? a >> (int)b : null;
 
-            // Truncating toward zero, so the quotient of the smallest number and -1 is one
+            // Division truncates toward zero, so the quotient of the smallest number and -1 is one
             // past the largest.
             case SyntaxKind.Slash:
                 return b == 0 ? null : Within((Int128)a / b, op, a, b, out refused);
 
-            // `.mod` takes the dividend's sign. A remainder by -1 is zero whatever the
-            // dividend, which is worth saying here because the machine instruction traps on it.
+            // `.mod` takes the dividend's sign. A remainder by -1 is zero for any dividend. That
+            // case is handled explicitly because the machine instruction traps on it.
             case SyntaxKind.Directive:
                 return b == 0 ? null : b == -1 ? 0 : a % b;
             default:
@@ -77,14 +81,18 @@ internal static class Operators
         }
     }
 
-    /// <summary>Whether <paramref name="op"/> divides, so that a zero on its right is an error.</summary>
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="op"/> divides, so that a zero on its
+    /// right is an error.
+    /// </summary>
     public static bool Divides(SyntaxToken op) =>
         op.Kind == SyntaxKind.Slash
         || (op.Kind == SyntaxKind.Directive && op.Text.Equals(".mod", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// Whether <paramref name="op"/> already decides its result from <paramref name="left"/>
-    /// alone, so that the right operand is neither evaluated nor looked up.
+    /// Returns a value indicating whether <paramref name="op"/> decides its result from
+    /// <paramref name="left"/> alone, so that the right operand is neither evaluated nor looked
+    /// up.
     /// </summary>
     public static bool ShortCircuits(SyntaxKind op, long left) => op switch
     {
@@ -93,7 +101,10 @@ internal static class Operators
         _ => false,
     };
 
-    /// <summary>The operators that cannot overflow 64 bits: the comparisons, the bitwise and the logical ones.</summary>
+    /// <summary>
+    /// Applies an operator that cannot overflow 64 bits, which are the comparison, bitwise and
+    /// logical operators.
+    /// </summary>
     private static long? Plain(SyntaxKind op, long a, long b) => op switch
     {
         SyntaxKind.Less => Truth(a < b),
@@ -112,7 +123,8 @@ internal static class Operators
     };
 
     /// <summary>
-    /// The result where it is a 64-bit number, and no value with the reason where it is not.
+    /// Returns <paramref name="result"/> when it fits in a 64-bit number. Otherwise, returns null
+    /// and sets <paramref name="refused"/> to the reason.
     /// </summary>
     private static long? Within(Int128 result, SyntaxToken op, long a, long b, out DiagnosticMessage? refused)
     {
@@ -126,14 +138,17 @@ internal static class Operators
     }
 
     /// <summary>
-    /// An operation as the message quotes it. A shift counts places, which are a small
-    /// decimal number rather than the mask or the address every other value is.
+    /// Formats an operation the way the overflow message quotes it. A shift count is formatted as
+    /// a small decimal number, unlike every other value, which may be a mask or an address.
     /// </summary>
     private static string Written(SyntaxToken op, long a, long b) => op.Kind == SyntaxKind.LessLess
         ? $"{Value.Of(a)} {op.Text} {b.ToString(CultureInfo.InvariantCulture)}"
         : $"{Value.Of(a)} {op.Text} {Value.Of(b)}";
 
-    /// <summary>Whether a shift count is from 0 to 63, setting <paramref name="refused"/> when it is not.</summary>
+    /// <summary>
+    /// Returns a value indicating whether a shift count is from 0 to 63, and sets
+    /// <paramref name="refused"/> when it is not.
+    /// </summary>
     private static bool Counted(long places, out DiagnosticMessage? refused)
     {
         refused = places is < 0 or > 63

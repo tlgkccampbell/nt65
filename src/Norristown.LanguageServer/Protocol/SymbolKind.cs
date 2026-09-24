@@ -1,8 +1,8 @@
 namespace Norristown.LanguageServer.Protocol;
 
 /// <summary>
-/// What a document symbol is, as LSP numbers it. Only the kinds nt65 uses are listed; the
-/// client picks the icon from the number.
+/// Specifies the kind of a document symbol, as LSP numbers it. Only the kinds nt65 uses are
+/// listed, and the client picks the icon from the number.
 /// </summary>
 internal enum SymbolKind
 {

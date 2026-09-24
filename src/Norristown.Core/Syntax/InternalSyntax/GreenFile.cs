@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 
 namespace Norristown.Syntax.InternalSyntax;
 
-/// <summary>A whole file: the lines and blocks at its top level.</summary>
+/// <summary>Represents a whole file, which holds the lines and blocks at its top level.</summary>
 internal sealed class GreenFile : GreenNode
 {
     /// <summary>Wraps <paramref name="children"/>, the file's top-level lines and blocks.</summary>
@@ -13,7 +13,7 @@ internal sealed class GreenFile : GreenNode
         RollUp(children);
     }
 
-    /// <summary>The file's top-level lines and blocks, in source order.</summary>
+    /// <summary>Gets the file's top-level lines and blocks, in source order.</summary>
     public ImmutableArray<GreenNode> Children { get; }
 
     /// <inheritdoc/>

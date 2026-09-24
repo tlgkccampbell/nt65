@@ -17,7 +17,7 @@ public sealed class PublishingTests
 
     private const string MainUri = "file:///c:/work/main.nt65";
 
-    /// <summary>Exports what main uses, and keeps one name of its own that nothing uses.</summary>
+    /// <summary>A module that exports what main uses and keeps one name of its own that nothing uses.</summary>
     private const string Gfx = """
         .module gfx
         .export clear, SCREEN
@@ -43,9 +43,9 @@ public sealed class PublishingTests
         """;
 
     /// <summary>
-    /// Diagnostics for the edited file are published at once; those for the rest of the program
-    /// once typing has stopped. The edit here is in gfx and what it breaks is in main, which is
-    /// the case the two timings exist for.
+    /// Diagnostics for the edited file are published at once, and those for the rest of the
+    /// program are published once typing has stopped. The edit here is in gfx and what it breaks
+    /// is in main, which is the case the two timings exist for.
     /// </summary>
     [Fact]
     public async Task TheEditedFileHearsAtOnceAndTheRestOnceTheTypingStops()
@@ -70,9 +70,9 @@ public sealed class PublishingTests
     }
 
     /// <summary>
-    /// A run of keystrokes: what is published about a file never goes back to an older revision
-    /// of it, and a file that is still part of the program never has its diagnostics cleared and
-    /// then published again, which is what makes a squiggle flicker.
+    /// During a run of keystrokes, what is published about a file never goes back to an older
+    /// revision of it. A file that is still part of the program never has its diagnostics cleared
+    /// and then published again, which is what makes a squiggle flicker.
     /// </summary>
     [Fact]
     public async Task ARunOfKeystrokesNeverGoesBackAndNeverEmptiesAFileThatIsStillThere()
@@ -81,8 +81,8 @@ public sealed class PublishingTests
         var held = new HeldDelay();
         await using var client = await OpenBothAsync(held, timeout);
 
-        // `jsr clear` loses and regains its last letter, ten times over: every other keystroke
-        // is a name nothing declares.
+        // `jsr clear` loses and regains its last letter, ten times over, so every other keystroke
+        // leaves a name that nothing declares.
         var version = 1;
         var published = new List<PublishDiagnosticsParams>();
         var letter = Locate.Span(Main, "jsr clea|r");
@@ -107,10 +107,10 @@ public sealed class PublishingTests
     }
 
     /// <summary>
-    /// The client is never asked to refetch semantic tokens for the edited document alone —
-    /// it refetches the document it is showing by itself — and is asked to refetch the others
-    /// only when the edit reaches past its own file, since only then can what their names refer
-    /// to have changed.
+    /// The client is never asked to refetch semantic tokens for the edited document alone,
+    /// because it refetches the document it is showing by itself. It is asked to refetch the
+    /// others only when the edit reaches past its own file, since only then can what their names
+    /// refer to have changed.
     /// </summary>
     [Fact]
     public async Task OnlyAnEditThatReachesPastItsOwnFileAsksForAnythingToBeFetchedAgain()
@@ -119,13 +119,13 @@ public sealed class PublishingTests
         var held = new HeldDelay();
         await using var client = await OpenBothAsync(held, timeout, refreshesTokens: true);
 
-        // A keystroke in a routine body: nothing outside main can have changed.
+        // A keystroke in a routine body cannot change anything outside main.
         await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(
             Locate.Span(Main, "rts"), "nop"));
         await client.NextDiagnosticsAsync(MainUri, timeout);
         await held.ReleaseAsync(timeout);
 
-        // A constant that main reads, changed in gfx: now something outside gfx has changed.
+        // A constant that main reads is changed in gfx, so something outside gfx has now changed.
         await client.ChangeAsync(GfxUri, 2, new TextDocumentContentChangeEvent(
             Locate.Span(Gfx, "$0400"), "$0800"));
         await client.NextDiagnosticsAsync(GfxUri, timeout);
@@ -135,7 +135,7 @@ public sealed class PublishingTests
         Assert.False(client.AskedForTokensRefresh, "a keystroke in a routine body asked for a fetch of its own");
     }
 
-    /// <summary>Opens both files and lets everything the opening published arrive.</summary>
+    /// <summary>Opens both files and waits for everything that opening them publishes.</summary>
     private static async Task<TestClient> OpenBothAsync(
         HeldDelay held, CancellationToken cancellation, bool refreshesTokens = false)
     {

@@ -1,6 +1,6 @@
 namespace Norristown.Syntax;
 
-/// <summary>What an <see cref="OutlineItem"/> declares.</summary>
+/// <summary>Specifies the kind of declaration an <see cref="OutlineItem"/> represents.</summary>
 public enum OutlineKind
 {
     /// <summary>A <c>.proc</c>, with or without a body.</summary>

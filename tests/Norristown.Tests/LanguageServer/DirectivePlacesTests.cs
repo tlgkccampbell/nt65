@@ -6,11 +6,11 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Checks the server's lists of which directives may start a line in each kind of place against
-/// the binder, which is what actually decides. Nothing in the code ties the two together: a
-/// directive offered where the binder rejects it is a completion that writes a broken line, and
-/// one the binder accepts but the list leaves out is a directive nobody is offered.
+/// the binder, which is what actually decides. Nothing in the code ties the two together. A
+/// directive offered where the binder rejects it is a completion that inserts a broken line, and
+/// a directive the binder accepts but the list leaves out is never offered.
 /// <para>
-/// Each directive is written in its smallest complete form, at the start of a line in each kind
+/// Each directive is placed in its smallest complete form at the start of a line in each kind
 /// of place, and the program is built. "Allowed" here means no error is reported on those lines;
 /// "offered" means <see cref="Directives"/> lists it for a caret at the same position.
 /// </para>
@@ -68,13 +68,13 @@ public sealed class DirectivePlacesTests
     };
 
     /// <summary>
-    /// The directives that cannot be tested as a line of their own, and so are not checked
-    /// here: <c>.else</c> and <c>.elseif</c> continue a block that must be open above them;
-    /// <c>.next</c> and <c>.patch</c> describe the statement above them; <c>.fallthrough</c> may
-    /// only be the last line of a routine's body; <c>.frame</c> describes where the stack has
-    /// been left; <c>.module</c> names the module and may only be a file's first line;
-    /// <c>.place</c> places a module that must declare that it may be placed; <c>.incbin</c>
-    /// names a file on disk; and <c>.error</c> fails the build on purpose.
+    /// The directives that cannot be tested as a line of their own, and so are not checked here.
+    /// <c>.else</c> and <c>.elseif</c> continue a block that must be open above them.
+    /// <c>.next</c> and <c>.patch</c> describe the statement above them. <c>.fallthrough</c> may
+    /// only be the last line of a routine's body. <c>.frame</c> describes where the stack has
+    /// been left. <c>.module</c> names the module and may only be a file's first line.
+    /// <c>.place</c> emits a module that must declare that it may be placed. <c>.incbin</c>
+    /// names a file on disk. <c>.error</c> fails the build on purpose.
     /// </summary>
     private static readonly string[] Partial =
     [
@@ -83,7 +83,7 @@ public sealed class DirectivePlacesTests
 
     /// <summary>
     /// The directives the server offers at a place but the binder rejects there. Every list is
-    /// empty: nothing the server offers writes a line that does not build.
+    /// empty, because nothing the server offers may produce a line that does not build.
     /// </summary>
     private static readonly Dictionary<string, string[]> Refused = new(StringComparer.Ordinal)
     {
@@ -108,7 +108,7 @@ public sealed class DirectivePlacesTests
         ["a repetition"] = [".segment"],
     };
 
-    /// <summary>Every directive the server knows is either written out above or listed as partial.</summary>
+    /// <summary>Every directive the server knows either has a complete form above or is listed as partial.</summary>
     [Fact]
     public void EveryDirectiveTheListsKnowIsWrittenHere()
     {
@@ -143,8 +143,8 @@ public sealed class DirectivePlacesTests
     }
 
     /// <summary>
-    /// <c>.config</c> is offered only where a setting may be written: before anything has been
-    /// opened. The places tested above all sit under the preamble's <c>.segment CODE</c>, which
+    /// <c>.config</c> is offered only where a setting is allowed, which is before anything has
+    /// been opened. The places tested above all sit under the preamble's <c>.segment CODE</c>, which
     /// the binder counts as opened, so this test covers the other case, a file that has opened
     /// nothing yet.
     /// </summary>
@@ -162,8 +162,8 @@ public sealed class DirectivePlacesTests
 
     /// <summary>
     /// A <c>.place</c> is offered at file level, both before any segment region and inside one,
-    /// but inside no block: which modules share a translation unit cannot depend on anything a
-    /// block could decide.
+    /// but not inside a block, because which modules share a translation unit cannot depend on
+    /// anything a block could decide.
     /// </summary>
     [Fact]
     public void APlaceIsOfferedAtFileLevelOnly()
@@ -178,7 +178,10 @@ public sealed class DirectivePlacesTests
         Assert.DoesNotContain(".place", Offers(9));
     }
 
-    /// <summary>What the server would offer at the start of a line in <paramref name="place"/>.</summary>
+    /// <summary>
+    /// Returns the directives, other than the partial ones, that the server would offer at the
+    /// start of a line in <paramref name="place"/>.
+    /// </summary>
     private static IReadOnlyList<string> Offered(string place)
     {
         var (text, line) = Host(place, "");
@@ -187,7 +190,10 @@ public sealed class DirectivePlacesTests
         return [.. Directives.At(caret).Select(item => item.Name).Where(name => !Partial.Contains(name))];
     }
 
-    /// <summary>The errors reported on the lines that <paramref name="directive"/> is written on, in <paramref name="place"/>.</summary>
+    /// <summary>
+    /// Returns the errors reported on the lines that <paramref name="directive"/> occupies when
+    /// it is placed in <paramref name="place"/>.
+    /// </summary>
     private static IReadOnlyList<string> Errors(string place, string directive)
     {
         var snippet = Written[directive].Replace("#", "1", StringComparison.Ordinal);
@@ -206,9 +212,10 @@ public sealed class DirectivePlacesTests
     }
 
     /// <summary>
-    /// A program holding <paramref name="written"/> in <paramref name="place"/>, and the line
-    /// it starts on. The preamble declares the things a snippet names, so that what is reported
-    /// about a line is about where it is written and not about what it could not find.
+    /// Builds a program that contains <paramref name="written"/> in <paramref name="place"/>, and
+    /// returns it with the line on which <paramref name="written"/> starts. The preamble declares
+    /// the things a snippet names, so that what is reported about a line concerns where the line
+    /// is and not a name it could not find.
     /// </summary>
     private static (string Text, int Line) Host(string place, string written)
     {

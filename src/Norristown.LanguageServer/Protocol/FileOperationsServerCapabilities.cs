@@ -1,8 +1,8 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>The file operations a server takes part in.</summary>
+/// <summary>Describes the file operations the server takes part in.</summary>
 /// <param name="WillRename">
-/// Which files the server is to be asked about before they are moved or renamed, so that the
-/// edits it returns are applied together with the move; null where it takes no part.
+/// The files the client asks the server about before moving or renaming them, so that the edits
+/// the server returns are applied together with the move; null if the server takes no part.
 /// </param>
 internal sealed record FileOperationsServerCapabilities(FileOperationRegistrationOptions? WillRename);
