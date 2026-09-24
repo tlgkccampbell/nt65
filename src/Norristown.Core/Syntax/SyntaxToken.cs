@@ -6,7 +6,9 @@ namespace Norristown.Syntax;
 /// <summary>
 /// Represents a token together with its parent and absolute position. It is a three-field value,
 /// copied rather than allocated. Two tokens are equal when they are the same token of the same
-/// tree, reached through the same parent node. Only a tree hands out real tokens. A default
+/// tree. A token has one parent however it was reached, so the same token read from a line's
+/// <see cref="LineSyntax.Tokens"/> or from a walk of the tree is equal. Only a tree hands out
+/// real tokens. A default
 /// <see cref="SyntaxToken"/> belongs to nothing, and a lookup returns it when there is no token
 /// to return.
 /// </summary>
@@ -23,10 +25,7 @@ public readonly record struct SyntaxToken
         Position = position;
     }
 
-    /// <summary>
-    /// Gets the node the token belongs to. For a token read from <see cref="LineSyntax.Tokens"/>,
-    /// that node is the line.
-    /// </summary>
+    /// <summary>Gets the node the token belongs to.</summary>
     public SyntaxNode Parent { get; }
 
     /// <summary>Gets the offset in the file's text where the token starts, trivia included.</summary>
@@ -225,13 +224,6 @@ public readonly record struct SyntaxToken
     }
 
     /// <summary>
-    /// Checks whether <paramref name="token"/> is the same green token, at the same position, as
-    /// <paramref name="sought"/>.
-    /// </summary>
-    private static bool SameToken(SyntaxToken token, SyntaxToken sought) =>
-        token.Position == sought.Position && ReferenceEquals(token.Green, sought.Green);
-
-    /// <summary>
     /// Returns the token one step forwards or backwards from this token. The search works one line
     /// at a time, because a line has few enough tokens to walk them all. Stepping past either end
     /// of a line gives the first token of the next line or the last token of the previous line.
@@ -246,14 +238,10 @@ public readonly record struct SyntaxToken
             owner = outer;
 
         // Two missing tokens can sit at the same position with nothing between them — `f(g(1`
-        // is missing two `)` — so identifying a token takes its parent as well as its position.
-        // A token read from the line's Tokens rather than from its child nodes has the line as its
-        // parent instead, so when nothing matches by parent, match by position alone.
+        // is missing two `)` — so identifying a token takes its parent as well as its position,
+        // which token equality does.
         var self = this;
-        var (found, beside) = Beside(owner, direction,
-            token => SameToken(token, self) && ReferenceEquals(token.Parent, self.Parent));
-        if (!found)
-            (found, beside) = Beside(owner, direction, token => SameToken(token, self));
+        var (found, beside) = Beside(owner, direction, token => token == self);
         if (!found)
             return null;
         if (beside is { } neighbour)

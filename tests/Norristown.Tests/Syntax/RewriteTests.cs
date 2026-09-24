@@ -125,6 +125,24 @@ public sealed class RewriteTests
         Assert.IsType<BlockSyntax>(root.Tree.GetLine(1).Parent);
     }
 
+    /// <summary>
+    /// A token read from a line's <see cref="LineSyntax.Tokens"/> is the same token a walk of the
+    /// tree reaches, with the same parent, so replacing it rewrites the file.
+    /// </summary>
+    [Fact]
+    public void ATokenReadFromALineIsReplaced()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".proc main {\n    lda #1\n}\n");
+        var line = tree.GetLine(1);
+        var number = line.Tokens[2];
+        Assert.Equal("1", number.Text);
+        Assert.Equal(line.DescendantTokens().Single(token => token.Text == "1"), number);
+        Assert.IsType<NumberExpressionSyntax>(number.Parent);
+
+        var root = tree.Root.ReplaceToken(number, number.WithText("2"));
+        Assert.Equal(".proc main {\n    lda #2\n}\n", root.Tree.Text);
+    }
+
     /// <summary>A node replaces another, and a line is removed from the file it is on.</summary>
     [Fact]
     public void ANodeIsReplacedAndALineIsRemoved()

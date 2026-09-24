@@ -100,7 +100,7 @@ public abstract class SyntaxNode
     /// Gets the tokens directly under this node, such as a line's tokens, and the separators of
     /// its lists.
     /// </summary>
-    public ImmutableArray<SyntaxToken> ChildTokens
+    public virtual ImmutableArray<SyntaxToken> ChildTokens
     {
         get
         {

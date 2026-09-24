@@ -5,10 +5,11 @@ using Norristown.Syntax.InternalSyntax;
 namespace Norristown.Syntax;
 
 /// <summary>
-/// Represents the tokens of a node whose slots are all tokens. Examples are a line's own tokens
-/// as the lexer read them, the tokens left over at the end of a line, and the whole of a line the
-/// parser could not read. The list is a view over that node and creates each token on request, so
-/// neither getting the list nor walking it allocates anything.
+/// Represents a run of tokens. Examples are a line's own tokens as the lexer read them, the tokens
+/// left over at the end of a line, and the whole of a line the parser could not read. A list over
+/// a node whose slots are all tokens is a view over that node and creates each token on request,
+/// so neither getting the list nor walking it allocates anything. A line's list instead holds the
+/// tokens that a walk of the line reaches, each with the node it is part of as its parent.
 /// <para>
 /// A default list is empty, and an empty slot is read as a default list.
 /// </para>
@@ -16,11 +17,14 @@ namespace Norristown.Syntax;
 public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
 {
     private readonly SyntaxNode? list;
+    private readonly ImmutableArray<SyntaxToken> tokens;
 
     internal SyntaxTokenList(SyntaxNode? list) => this.list = list;
 
+    internal SyntaxTokenList(ImmutableArray<SyntaxToken> tokens) => this.tokens = tokens;
+
     /// <summary>Gets the number of tokens in the list.</summary>
-    public int Count => list?.Green.SlotCount ?? 0;
+    public int Count => tokens.IsDefault ? list?.Green.SlotCount ?? 0 : tokens.Length;
 
     /// <summary>Gets the token at <paramref name="index"/>, from 0 to <see cref="Count"/> − 1.</summary>
     public SyntaxToken this[int index]
@@ -29,7 +33,7 @@ public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
         {
             ArgumentOutOfRangeException.ThrowIfNegative(index);
             ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, Count);
-            return list!.SlotToken(index);
+            return tokens.IsDefault ? list!.SlotToken(index) : tokens[index];
         }
     }
 
@@ -55,7 +59,7 @@ public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
 
     /// <summary>Returns an enumerator over the tokens in source order.</summary>
     /// <returns>An enumerator that allocates nothing, which a <c>foreach</c> uses.</returns>
-    public Enumerator GetEnumerator() => new(list);
+    public Enumerator GetEnumerator() => new(list, tokens);
 
     IEnumerator<SyntaxToken> IEnumerable<SyntaxToken>.GetEnumerator()
     {
@@ -72,12 +76,14 @@ public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
     public struct Enumerator
     {
         private readonly SyntaxNode? list;
+        private readonly ImmutableArray<SyntaxToken> tokens;
         private int index;
         private int position;
 
-        internal Enumerator(SyntaxNode? list)
+        internal Enumerator(SyntaxNode? list, ImmutableArray<SyntaxToken> tokens)
         {
             this.list = list;
+            this.tokens = tokens;
             index = -1;
             position = list?.Position ?? 0;
             Current = default;
@@ -90,6 +96,13 @@ public readonly struct SyntaxTokenList : IReadOnlyList<SyntaxToken>
         /// <returns>true if there was a next token; otherwise, false.</returns>
         public bool MoveNext()
         {
+            if (!tokens.IsDefault)
+            {
+                if (++index >= tokens.Length)
+                    return false;
+                Current = tokens[index];
+                return true;
+            }
             if (list is null || ++index >= list.Green.SlotCount)
                 return false;
             var green = (GreenToken)list.Green.GetSlot(index)!;

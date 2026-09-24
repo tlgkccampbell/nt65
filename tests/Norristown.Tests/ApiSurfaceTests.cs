@@ -90,15 +90,15 @@ public sealed class ApiSurfaceTests
         Assert.Equal(proc.ChildTokens[0].GetHashCode(), proc.ChildTokens[0].GetHashCode());
         Assert.NotEqual(proc.ChildTokens[0], proc.ChildTokens[1]);
 
-        // The node a token was reached through is part of its value, so two missing tokens at the
-        // same position can be told apart.
+        // A token's parent is part of its value, so two missing tokens at the same position can
+        // be told apart. A token has one parent however it is reached, so the same token read
+        // from a line and found in the tree is equal.
         var nop = tree.GetLine(1).Tokens[0];
         Assert.Equal(nop, tree.GetLine(1).Tokens[0]);
         var read = tree.Root.FindToken(nop.Span.Start);
-        Assert.Equal(nop.Span, read.Span);
-        Assert.NotEqual(nop, read);
-        Assert.IsType<LineSyntax>(nop.Parent);
-        Assert.IsType<InstructionStatementSyntax>(read.Parent);
+        Assert.Equal(nop, read);
+        Assert.IsType<InstructionStatementSyntax>(nop.Parent);
+        Assert.Same(read.Parent, nop.Parent);
     }
 
     /// <summary>

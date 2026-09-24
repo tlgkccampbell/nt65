@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
@@ -8,14 +9,15 @@ namespace Norristown.Syntax;
 /// <c>.export</c> that exports what the line declares, its <see cref="Statement"/>, any tokens the
 /// statement could not consume, and the line break that ends it. Those pieces are the line's
 /// children, so a walk of the tree reaches each token once, under the node it is part of.
-/// <see cref="Tokens"/> gives the same line as the lexer read it, as a flat run of tokens whose
-/// parent is the line.
+/// <see cref="Tokens"/> gives the same line as the lexer read it, as a flat run of those same
+/// tokens.
 /// </summary>
 public sealed partial class LineSyntax : SyntaxNode
 {
     private StatementSyntax? statement;
     private SkippedTokensSyntax? skipped;
     private ImmutableArray<SyntaxNodeOrToken> pieces;
+    private ImmutableArray<SyntaxToken> tokens;
 
     internal LineSyntax(SyntaxTree tree, SyntaxNode? parent, GreenLine green, int position)
         : base(tree, parent, green, position)
@@ -38,7 +40,7 @@ public sealed partial class LineSyntax : SyntaxNode
     /// declaration, so the declaration's node looks the same whether or not it is exported.
     /// <see cref="StatementSyntax.IsExported"/> indicates whether the <c>.export</c> is present.
     /// </summary>
-    public SyntaxToken? ExportKeyword => Parsed.ExportKeyword is null ? null : Tokens[0];
+    public SyntaxToken? ExportKeyword => Parsed.ExportKeyword is null ? null : SlotToken(0);
 
     /// <summary>Gets the statement that the line's own tokens parse to.</summary>
     public StatementSyntax Statement => statement ??= (StatementSyntax)Parsed.Node.CreateRed(
@@ -54,19 +56,31 @@ public sealed partial class LineSyntax : SyntaxNode
             : null;
 
     /// <summary>Gets the line break that ends the line, which is the statement's terminator.</summary>
-    public SyntaxToken EndOfLineToken => Tokens[^1];
+    public SyntaxToken EndOfLineToken => SlotToken(Green.SlotCount - 1);
 
     /// <summary>
-    /// Gets the line's tokens as the lexer read them, with the line break last. Their parent is
-    /// the line. The line's pieces hold the same tokens, but there each token's parent is the node
-    /// it is part of. The pieces can also hold missing tokens, which the source does not contain,
-    /// so they do not appear here.
-    /// <para>
-    /// The list is a view over the line, so reading a whole file's tokens through it neither
-    /// allocates nor parses any statement.
-    /// </para>
+    /// Gets the line's tokens as the lexer read them, with the line break last. They are the
+    /// tokens that <see cref="SyntaxNode.DescendantTokens"/> reaches, each with the node it is part
+    /// of as its parent, so a token read here equals the same token reached through
+    /// <see cref="Statement"/>. The line's pieces can also hold missing tokens, which the source
+    /// does not contain, so they do not appear here.
     /// </summary>
-    public SyntaxTokenList Tokens => new(this);
+    public SyntaxTokenList Tokens => new(ChildTokens);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// A line's child tokens are the tokens the lexer read, the same as <see cref="Tokens"/>, so
+    /// each has the node it is part of as its parent rather than the line.
+    /// </remarks>
+    public override ImmutableArray<SyntaxToken> ChildTokens
+    {
+        get
+        {
+            if (tokens.IsDefault)
+                ImmutableInterlocked.InterlockedInitialize(ref tokens, ReadTokens());
+            return tokens;
+        }
+    }
 
     /// <inheritdoc/>
     /// <remarks>
@@ -113,4 +127,28 @@ public sealed partial class LineSyntax : SyntaxNode
     /// <inheritdoc/>
     private protected override void CollectDiagnostics(List<Diagnostic> result) =>
         Tree.CollectLines(LineIndex, LineIndex, result);
+
+    /// <summary>
+    /// Returns the tokens of the line's pieces that the source contains, in source order. They are
+    /// the line's slots, reached through the nodes they are part of.
+    /// </summary>
+    private ImmutableArray<SyntaxToken> ReadTokens()
+    {
+        var builder = ImmutableArray.CreateBuilder<SyntaxToken>(Green.SlotCount);
+        foreach (var piece in RedChildren!.Value)
+        {
+            if (piece.AsNode() is not { } node)
+            {
+                builder.Add(piece.AsToken());
+                continue;
+            }
+            foreach (var token in node.DescendantTokens())
+            {
+                if (!token.IsMissing)
+                    builder.Add(token);
+            }
+        }
+        Debug.Assert(builder.Count == Green.SlotCount, "a line's pieces hold exactly the tokens the lexer read");
+        return builder.MoveToImmutable();
+    }
 }
