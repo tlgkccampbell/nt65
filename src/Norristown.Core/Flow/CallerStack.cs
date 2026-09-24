@@ -15,15 +15,26 @@ namespace Norristown.Flow;
 /// A tail call leaves the stack one return address shallower than a call does, so it is safe
 /// only where the routine called depends on nothing below its own entry.
 /// </para>
+/// <para>
+/// A label that another routine calls or jumps to is an entry point of its own, and is answered
+/// for separately. Entered there, the routine may pull what its path from the top pushed, which
+/// is then what its caller pushed, even where the routine entered at the top does not.
+/// </para>
 /// </summary>
 internal static class CallerStack
 {
     /// <summary>
-    /// Returns the routines of <paramref name="files"/> that depend on the depth of the stack
-    /// they were entered with. A routine whose body is not in the program is taken not to, as
-    /// its signature is the whole of what is known about it.
+    /// Returns the routines of <paramref name="files"/>, and the labels of <paramref name="labels"/>,
+    /// that depend on the depth of the stack they were entered with. A routine whose body is not
+    /// in the program is taken not to, as its signature is the whole of what is known about it.
     /// </summary>
-    public static IReadOnlySet<RoutineKey> Readers(IReadOnlyList<FileAnalysis> files)
+    /// <param name="files">The program's files.</param>
+    /// <param name="labels">
+    /// The labels that are entry points of their own, each with the routine it is in and whether,
+    /// entered there, the routine pulls more than it has pushed.
+    /// </param>
+    public static IReadOnlySet<RoutineKey> Readers(
+        IReadOnlyList<FileAnalysis> files, IReadOnlyDictionary<RoutineKey, (RoutineKey Owner, bool Pulls)> labels)
     {
         var readers = new HashSet<RoutineKey>();
         var reaches = new Dictionary<RoutineKey, HashSet<RoutineKey>>();
@@ -33,9 +44,20 @@ internal static class CallerStack
             {
                 var key = RoutineKey.Of(region.Routine);
                 var targets = reaches.TryGetValue(key, out var known) ? known : reaches[key] = [];
-                if (Reads(file, region, targets))
+                if (Reads(file, region, targets, labels))
                     readers.Add(key);
             }
+        }
+
+        // A label reads what its routine's code reads, which is more than the path from the label
+        // may, and reaches what its routine reaches. It also reads below its entry where, entered
+        // there, the routine pulls what it did not push.
+        foreach (var (label, (owner, pulls)) in labels)
+        {
+            if (pulls || readers.Contains(owner))
+                readers.Add(label);
+            if (reaches.TryGetValue(owner, out var targets))
+                reaches[label] = targets;
         }
 
         // A routine that passes control to one that reads its caller's stack reads it too. The
@@ -59,7 +81,9 @@ internal static class CallerStack
     /// with, and adds to <paramref name="targets"/> each other routine it passes control to. A
     /// transfer nt65 cannot follow could reach anything, so it counts as depending on the depth.
     /// </summary>
-    private static bool Reads(FileAnalysis file, FlowRegion region, HashSet<RoutineKey> targets)
+    private static bool Reads(
+        FileAnalysis file, FlowRegion region, HashSet<RoutineKey> targets,
+        IReadOnlyDictionary<RoutineKey, (RoutineKey Owner, bool Pulls)> labels)
     {
         var model = file.Model;
         var reads = false;
@@ -125,11 +149,16 @@ internal static class CallerStack
             ? states.Before(step.Statement, step.On)?.Stack is { IsAnchored: true, Depth: > 0 }
             : file.Flow.Registers?.Before(step.Statement, step.On)?.Stack is { Depth: > 0 };
 
+        // A label that is an entry point of its own is answered for itself, and any other label as
+        // the routine it is in.
         void Add(Symbol target)
         {
             var owner = target is { Kind: SymbolKind.Label, Routine: { } routine } ? routine : target;
-            if (owner.Signature is not null && owner != region.Routine)
-                targets.Add(RoutineKey.Of(owner));
+            if (owner.Signature is null || owner == region.Routine)
+                return;
+            targets.Add(owner != target && labels.ContainsKey(RoutineKey.Of(target))
+                ? RoutineKey.Of(target)
+                : RoutineKey.Of(owner));
         }
     }
 }

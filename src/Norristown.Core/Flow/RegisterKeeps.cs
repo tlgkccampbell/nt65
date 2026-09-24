@@ -52,23 +52,23 @@ public static class RegisterKeeps
             }
         }
 
+        var labels = Labels(regions, walks);
+
         // Every routine starts out keeping everything, and each round takes away what the round
-        // before it found. Nothing is ever added back, so the rounds stop.
+        // before it found. Nothing is ever added back, so the rounds stop. A label that another
+        // routine calls or jumps to is an entry point of its own, and what it keeps is worked out
+        // from there, alongside the routines. It keeps what its own path keeps, not what its
+        // routine promises, because the promise is checked only from the routine's entry.
         var found = regions.Keys.ToDictionary(name => name, _ => RoutineRegisters.Everything);
+        var foundAt = labels.Keys.ToDictionary(name => name, _ => RoutineRegisters.Everything);
         bool moved;
         do
         {
             moved = false;
             foreach (var (name, region) in regions)
-            {
-                var computed = Declared(region.Routine, walks[name].Run(region, Of, null));
-                var narrowed = new RoutineRegisters(
-                    found[name].Kept & computed.Kept, found[name].Complete && computed.Complete);
-                if (narrowed == found[name])
-                    continue;
-                found[name] = narrowed;
-                moved = true;
-            }
+                moved |= Narrow(found, name, Declared(region.Routine, walks[name].Run(region, Of, null)));
+            foreach (var (name, (owner, start)) in labels)
+                moved |= Narrow(foundAt, name, walks[owner].Run(regions[owner], Of, null, start));
         }
         while (moved);
 
@@ -86,21 +86,23 @@ public static class RegisterKeeps
         // call passes on the entry values of the registers it keeps to whatever uses them next.
         // Every routine starts out reading nothing, and each round adds what the round before it
         // found. Nothing is taken away, so the rounds stop.
-        var readers = CallerStack.Readers(files);
+        //
+        // Entered at a label, a routine may pull what its path from the top pushed, which is then
+        // what its caller pushed. So which labels reach below their entry on the stack is found
+        // from each label, before which routines depend on the stack's depth is worked out.
+        var pulls = labels.ToDictionary(
+            entry => entry.Key,
+            entry => (entry.Value.Owner, walks[entry.Value.Owner].PullsBelow(regions[entry.Value.Owner], Of, entry.Value.Start)));
+        var readers = CallerStack.Readers(files, pulls);
         var reads = regions.Keys.ToDictionary(name => name, _ => RoutineReads.Nothing);
+        var readsAt = labels.Keys.ToDictionary(name => name, _ => RoutineReads.Nothing);
         do
         {
             moved = false;
             foreach (var (name, region) in regions)
-            {
-                var computed = walks[name].Reads(region, Of, ReadsOf, readers);
-                var widened = new RoutineReads(
-                    reads[name].Read | computed.Read, reads[name].Complete && computed.Complete);
-                if (widened == reads[name])
-                    continue;
-                reads[name] = widened;
-                moved = true;
-            }
+                moved |= Widen(reads, name, walks[name].Reads(region, Of, ReadsOf, readers));
+            foreach (var (name, (owner, start)) in labels)
+                moved |= Widen(readsAt, name, walks[owner].Reads(regions[owner], Of, ReadsOf, readers, start: start));
         }
         while (moved);
 
@@ -153,9 +155,8 @@ public static class RegisterKeeps
         // shows is taken at its word, so the mistake is reported at the declaration and not at
         // every call.
         //
-        // A label is treated as the routine it is inside. A jump into another routine's interior
-        // leaves this routine for that one, so what it hands back is what that routine hands
-        // back. A jump to the routine's entry gets the same answer.
+        // A label another routine calls or jumps to keeps what the path from that label keeps. A
+        // label no other routine reaches is treated as the routine it is inside.
         //
         // A routine that never returns is treated as keeping every register, because no caller
         // ever sees what it leaves in them. A path that calls it or jumps into it ends there.
@@ -164,6 +165,8 @@ public static class RegisterKeeps
             var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
             if (routine.Signature is { NeverReturns: true })
                 return RoutineRegisters.Everything;
+            if (routine != target && foundAt.TryGetValue(RoutineKey.Of(target), out var there))
+                return there;
             return found.TryGetValue(RoutineKey.Of(routine), out var known) ? known
                 : routine.Signature?.Keeps is { } keeps && keeps != Registers.None ? new RoutineRegisters(keeps, true)
                 : RoutineRegisters.Nothing;
@@ -171,17 +174,84 @@ public static class RegisterKeeps
 
         // Returns what a routine reads. A routine that declares it is taken at its word, as its
         // callers are, and one whose body breaks the declaration is reported there. A routine
-        // whose body is not in the program and that declares nothing may read anything. So may a
-        // jump into a label inside a routine, because the entry values that routine reads may be
+        // whose body is not in the program and that declares nothing may read anything.
+        //
+        // A label another routine calls or jumps to reads what the path from that label reads.
+        // Any other label may read anything, because the entry values its routine reads may be
         // ones its own code wrote before the label.
         RoutineReads ReadsOf(Symbol target)
         {
             var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
-            var known = routine.Signature?.Reads is { } declared ? new RoutineReads(declared, true)
-                : reads.TryGetValue(RoutineKey.Of(routine), out var found) ? found
+            if (routine != target)
+                return readsAt.TryGetValue(RoutineKey.Of(target), out var there) ? there : RoutineReads.Unknown;
+            return routine.Signature?.Reads is { } declared ? new RoutineReads(declared, true)
+                : reads.TryGetValue(RoutineKey.Of(routine), out var known) ? known
                 : RoutineReads.Unknown;
-            return routine == target ? known : known with { Complete = false };
         }
+    }
+
+    /// <summary>
+    /// Returns every label that a routine calls, jumps to or branches to inside another routine, or
+    /// inside itself by a call, with the routine it is in and the index of the block it starts.
+    /// Each is an entry point of its own, entered as a call enters a routine.
+    /// </summary>
+    private static Dictionary<RoutineKey, (RoutineKey Owner, int Start)> Labels(
+        Dictionary<RoutineKey, FlowRegion> regions, Dictionary<RoutineKey, Walk> walks)
+    {
+        var starts = new Dictionary<RoutineKey, (RoutineKey Owner, int Start)>();
+        foreach (var (name, region) in regions)
+        {
+            foreach (var block in region.Blocks)
+            {
+                if (block.Label is { Kind: SymbolKind.Label } label)
+                    starts.TryAdd(RoutineKey.Of(label), (name, block.Index));
+            }
+        }
+
+        var labels = new Dictionary<RoutineKey, (RoutineKey Owner, int Start)>();
+        foreach (var (name, region) in regions)
+        {
+            foreach (var block in region.Blocks)
+            {
+                if (!block.IsReached)
+                    continue;
+                foreach (var target in block.Calls.Concat(walks[name].Leaves(block, region.Routine)))
+                {
+                    if (target is { Kind: SymbolKind.Label, Routine: not null }
+                        && starts.TryGetValue(RoutineKey.Of(target), out var start))
+                    {
+                        labels.TryAdd(RoutineKey.Of(target), start);
+                    }
+                }
+            }
+        }
+        return labels;
+    }
+
+    /// <summary>
+    /// Narrows what <paramref name="name"/> is known to keep to what a round found, and returns
+    /// whether that changed it.
+    /// </summary>
+    private static bool Narrow(Dictionary<RoutineKey, RoutineRegisters> found, RoutineKey name, RoutineRegisters computed)
+    {
+        var narrowed = new RoutineRegisters(found[name].Kept & computed.Kept, found[name].Complete && computed.Complete);
+        if (narrowed == found[name])
+            return false;
+        found[name] = narrowed;
+        return true;
+    }
+
+    /// <summary>
+    /// Widens what <paramref name="name"/> is known to read to what a round found, and returns
+    /// whether that changed it.
+    /// </summary>
+    private static bool Widen(Dictionary<RoutineKey, RoutineReads> found, RoutineKey name, RoutineReads computed)
+    {
+        var widened = new RoutineReads(found[name].Read | computed.Read, found[name].Complete && computed.Complete);
+        if (widened == found[name])
+            return false;
+        found[name] = widened;
+        return true;
     }
 
     /// <summary>Formats registers as a <c>reads</c> item lists them, with <c>none</c> for no register.</summary>
@@ -204,9 +274,10 @@ public static class RegisterKeeps
         private readonly StateAnalysis? states;
         private readonly OutsideEntries outside;
 
-        // What reaches each block of a routine, kept from the first time what the routine reads
-        // is asked. It depends only on what every routine keeps, which is settled by then.
-        private readonly Dictionary<FlowRegion, RegisterState?[]> solved = [];
+        // What reaches each block of a routine from each place it is entered, kept from the first
+        // time what the routine reads is asked. It depends only on what every routine keeps,
+        // which is settled by then.
+        private readonly Dictionary<(FlowRegion Region, int Start), RegisterState?[]> solved = [];
 
         public Walk(SemanticModel model, CodeLayout layout, ControlFlow flow, StateAnalysis? states)
         {
@@ -225,26 +296,17 @@ public static class RegisterKeeps
         /// Returns what <paramref name="region"/>'s routine keeps, with <paramref name="of"/> giving
         /// what each routine it calls keeps. <paramref name="report"/> collects what is wrong with
         /// the routine on the final walk, once the answer has reached a fixed point. Earlier rounds
-        /// pass null and report nothing.
+        /// pass null and report nothing. <paramref name="start"/> is the index of the block the
+        /// routine is entered at, which is a label's where another routine calls or jumps to it.
         /// </summary>
-        public RoutineRegisters Run(FlowRegion region, Func<Symbol, RoutineRegisters> of, List<Diagnostic>? report)
+        public RoutineRegisters Run(
+            FlowRegion region, Func<Symbol, RoutineRegisters> of, List<Diagnostic>? report, int start = 0)
         {
             var blocks = region.Blocks;
             if (!region.IsEntered || blocks.Count == 0)
                 return RoutineRegisters.Everything;
 
-            var solver = Solver(blocks, of, block => flow.Onward(blocks, block));
-            solver.Enter(0, RegisterState.Entered);
-
-            // A label a `.state` declares may be jumped into from another routine, so the
-            // registers there hold nothing this routine put in them. The stack there is what a
-            // call to the routine leaves, which is empty. Code that jumps in has made none of
-            // this routine's saves, so a save that the path above the label leaves on the stack
-            // cannot be shown to be the one a pull below the label takes back.
-            solver.EnterDeclared(
-                outside, RegisterState.Outside, (block, state) => Entered(state, block, region.Routine));
-
-            var reached = solver.Reached;
+            var reached = Solve(region, of, start);
             var kept = Registers.All;
             var complete = true;
             var leaves = false;
@@ -300,19 +362,14 @@ public static class RegisterKeeps
         /// </summary>
         public RoutineReads Reads(
             FlowRegion region, Func<Symbol, RoutineRegisters> of, Func<Symbol, RoutineReads> reads,
-            IReadOnlySet<RoutineKey> readers, Dictionary<Registers, (Step Step, Symbol? Through)>? sites = null)
+            IReadOnlySet<RoutineKey> readers, Dictionary<Registers, (Step Step, Symbol? Through)>? sites = null,
+            int start = 0)
         {
             var blocks = region.Blocks;
             if (!region.IsEntered || blocks.Count == 0)
                 return RoutineReads.Nothing;
-            if (!solved.TryGetValue(region, out var reached))
-            {
-                var solver = Solver(blocks, of, block => flow.Onward(blocks, block));
-                solver.Enter(0, RegisterState.Entered);
-                solver.EnterDeclared(
-                    outside, RegisterState.Outside, (block, state) => Entered(state, block, region.Routine));
-                solved[region] = reached = solver.Reached;
-            }
+            if (!solved.TryGetValue((region, start), out var reached))
+                solved[(region, start)] = reached = Solve(region, of, start);
 
             var read = Registers.None;
             var complete = true;
@@ -367,9 +424,12 @@ public static class RegisterKeeps
             }
 
             // Adds what a routine uses of the values the registers hold where control passes to it.
+            // One that may read anything leaves the answer incomplete only where something there
+            // still holds one of this routine's entry values.
             void Given(RoutineReads callee, RegisterState state, BasicBlock block, Symbol through)
             {
-                complete &= callee.Complete;
+                if (!callee.Complete && Holds(state))
+                    complete = false;
                 foreach (var register in RegisterEffects.Each(callee.Read))
                     Use(state.Whole(register).Entry, block.Steps[^1], through);
             }
@@ -384,7 +444,8 @@ public static class RegisterKeeps
                 var pushed = state.Stack?.Entries ?? Registers.None;
                 if (block.CallsUnknown || block.Calls.Count == 0)
                 {
-                    complete = false;
+                    if (Holds(state))
+                        complete = false;
                     return;
                 }
                 foreach (var callee in block.Calls)
@@ -394,6 +455,66 @@ public static class RegisterKeeps
                         Use(pushed, block.Steps[^1], callee);
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns whether anything code nt65 cannot follow could read at a point may hold one of
+        /// the routine's entry values. Such code sees only the registers and the stack, so where
+        /// every register holds something else and nothing pushed holds an entry value, it cannot
+        /// read any of them. A stack whose contents are not known may hold anything.
+        /// </summary>
+        private static bool Holds(RegisterState state) =>
+            state.Stack is not { } stack || stack.Entries != Registers.None
+            || RegisterEffects.Each(Registers.All).Any(register => state.Whole(register).Entry != Registers.None);
+
+        /// <summary>
+        /// Returns whether <paramref name="region"/>'s routine, entered at the block at
+        /// <paramref name="start"/>, may pull more than it has pushed on the way, which takes what
+        /// its caller pushed. A pull where what is on the stack is not known counts.
+        /// </summary>
+        public bool PullsBelow(FlowRegion region, Func<Symbol, RoutineRegisters> of, int start)
+        {
+            var reached = Solve(region, of, start);
+            foreach (var block in region.Blocks)
+            {
+                if (reached[block.Index] is not { } state)
+                    continue;
+                foreach (var step in block.Steps)
+                {
+                    if (step.Statement is InstructionStatementSyntax statement
+                        && Instructions.Facts(statement.MnemonicKind).Pulls is not null
+                        && state.Stack is not { Depth: > 0 })
+                    {
+                        return true;
+                    }
+                    state = Step(step, state, null);
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Returns what reaches each block of <paramref name="region"/>, where the routine is entered
+        /// at the block at <paramref name="start"/>, with <paramref name="of"/> giving what each
+        /// routine it calls keeps.
+        /// </summary>
+        public RegisterState?[] Solve(FlowRegion region, Func<Symbol, RoutineRegisters> of, int start)
+        {
+            var blocks = region.Blocks;
+            var solver = Solver(blocks, of, block => flow.Onward(blocks, block));
+            solver.Enter(start, RegisterState.Entered);
+
+            // A label a `.state` declares may be jumped into from another routine, so the
+            // registers there hold nothing this routine put in them. The stack there is what a
+            // call to the routine leaves, which is empty. Code that jumps in has made none of
+            // this routine's saves, so a save that the path above the label leaves on the stack
+            // cannot be shown to be the one a pull below the label takes back. Entered at a label,
+            // the routine's other entry points are not part of the answer unless the path from
+            // that label reaches them.
+            solver.EnterDeclared(
+                outside, start == 0 ? RegisterState.Outside : null,
+                (block, state) => Entered(state, block, region.Routine));
+            return solver.Reached;
         }
 
         /// <summary>
@@ -481,6 +602,8 @@ public static class RegisterKeeps
         /// Returns the fix to suggest where handing control to another routine is what loses the
         /// registers. The promise goes on the routine handed to, since that is the code the
         /// register has to come back through. Control never comes back here to restore anything.
+        /// Where control goes to a label inside a routine, the path from that label has to restore
+        /// the registers, since a promise on the routine does not cover it.
         /// </summary>
         private static string Handing(Symbol into, Registers missing)
         {
@@ -489,12 +612,15 @@ public static class RegisterKeeps
             var items = RegisterEffects.Format(missing).ToLowerInvariant();
             var one = RegisterEffects.Each(missing).Count() == 1;
 
-            // Where the path names a label rather than the routine itself, the message gives both
-            // names. One says where control went, and the other says where the promise belongs.
-            var gone = owner == into
-                ? $"control does not come back from `{name}`, which does not promise to keep {items}"
-                : $"control does not come back from `{into.DisplayName}`, and `{name}` does not promise "
-                    + $"to keep {items}";
+            // Where the path names a label rather than the routine itself, what is kept is what the
+            // path from that label keeps, which no promise on the routine changes.
+            if (owner != into)
+            {
+                return $": control does not come back from `{into.DisplayName}` in `{name}`, and the path from "
+                    + $"there does not keep {items}: restore {(one ? "it" : "them")} there, "
+                    + "or add `.next ?` here to end the path unchecked";
+            }
+            var gone = $"control does not come back from `{name}`, which does not promise to keep {items}";
             return $": {gone}: add `keeps {items}` to `{name}` if it preserves {(one ? "it" : "them")}, "
                 + "or add `.next ?` here to end the path unchecked";
         }
@@ -980,7 +1106,7 @@ public static class RegisterKeeps
         /// them, because that routine returns to this routine's caller. The path therefore ends
         /// there, as a tail call's does.
         /// </summary>
-        private IEnumerable<Symbol> Leaves(BasicBlock block, Symbol routine)
+        public IEnumerable<Symbol> Leaves(BasicBlock block, Symbol routine)
         {
             if (block.Steps.Count == 0 || Ends(block) is { Calls: true } or { Returns: true })
                 yield break;

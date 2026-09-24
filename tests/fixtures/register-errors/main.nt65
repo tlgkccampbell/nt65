@@ -70,9 +70,9 @@
 }
 
 ; A jump into another routine's label is a way out of this one: control never comes back here,
-; so what this routine hands its caller is what the routine the label is in hands back.
+; so what this routine hands its caller is what the path from the label hands back.
 .proc hands_off: keeps a {
-    jmp loses_a::partway    ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway`, and `loses_a` does not promise to keep a: add `keeps a` to `loses_a` if it preserves it, or add `.next ?` here to end the path unchecked
+    jmp loses_a::partway    ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway` in `loses_a`, and the path from there does not keep a: restore it there, or add `.next ?` here to end the path unchecked
 }
 
 .proc loses_a {
@@ -84,7 +84,7 @@
 
 ; A branch into another routine's label is the same way out, on the path where it is taken.
 .proc branches_in: keeps x {
-    beq loses_x::partway    ;! error[keeps-broken]: `branches_in` promises `keeps x`, but X is not the same as on entry here: control does not come back from `partway`, and `loses_x` does not promise to keep x: add `keeps x` to `loses_x` if it preserves it, or add `.next ?` here to end the path unchecked
+    beq loses_x::partway    ;! error[keeps-broken]: `branches_in` promises `keeps x`, but X is not the same as on entry here: control does not come back from `partway` in `loses_x`, and the path from there does not keep x: restore it there, or add `.next ?` here to end the path unchecked
     rts
 }
 

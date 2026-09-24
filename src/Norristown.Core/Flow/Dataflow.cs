@@ -59,12 +59,12 @@ internal sealed class Dataflow<TState>
     /// <summary>
     /// Enters each label that a <c>.state</c> declares, which is an entry point in its own right,
     /// and runs what it reaches to a fixed point. A label no path reaches starts from
-    /// <paramref name="unreached"/>. A label that some path reaches and that
+    /// <paramref name="unreached"/>, or is left unreached where that is null. A label that some path reaches and that
     /// <paramref name="outside"/> finds can also be entered from outside the routine starts from
     /// what <paramref name="entered"/> makes of the state the path brings. Any other label keeps
     /// what reaches it.
     /// </summary>
-    public void EnterDeclared(OutsideEntries outside, TState unreached, Func<BasicBlock, TState, TState> entered)
+    public void EnterDeclared(OutsideEntries outside, TState? unreached, Func<BasicBlock, TState, TState> entered)
     {
         foreach (var block in blocks)
         {
@@ -73,7 +73,11 @@ internal sealed class Dataflow<TState>
             var here = Reached[block.Index];
             TState state;
             if (here is null)
+            {
+                if (unreached is null)
+                    continue;
                 state = unreached;
+            }
             else if (outside.Reaches(block))
                 state = entered(block, here);
             else

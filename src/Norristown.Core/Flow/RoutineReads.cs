@@ -16,9 +16,11 @@ namespace Norristown.Flow;
 /// </summary>
 /// <param name="Read">The registers whose entry values the routine may use.</param>
 /// <param name="Complete">
-/// Whether every routine it passes control to was one nt65 could follow. Where it is false the
-/// routine may read more than <paramref name="Read"/> says, and a caller has to take it that
-/// every register is read.
+/// Whether every routine it passes control to was one nt65 could follow, wherever the registers
+/// or the stack still held one of its entry values there. Code that cannot be followed sees only
+/// the registers and the stack, so where none of them holds an entry value it cannot read one.
+/// Where this is false the routine may read more than <paramref name="Read"/> says, and a caller
+/// has to take it that every register is read.
 /// </param>
 public readonly record struct RoutineReads(Registers Read, bool Complete)
 {

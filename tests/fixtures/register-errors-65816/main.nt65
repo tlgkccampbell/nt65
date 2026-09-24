@@ -41,10 +41,10 @@
 }
 
 ; A jump into another routine's label leaves this routine for good, so what it hands back is what
-; that routine hands back: its `keeps` is taken at its word, just as for a jump to the routine
-; itself, since control comes back from neither.
+; the path from that label hands back. A `keeps` on the routine the label is in does not cover that
+; path, because it is checked only from the routine's entry.
 .proc hands_off: a8, i8, keeps a {
-    jmp widens::partway     ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway`, and `widens` does not promise to keep a: add `keeps a` to `widens` if it preserves it, or add `.next ?` here to end the path unchecked
+    jmp widens::partway     ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway` in `widens`, and the path from there does not keep a: restore it there, or add `.next ?` here to end the path unchecked
 }
 
 .proc widens: a8, i8 {
@@ -54,7 +54,7 @@
     rts
 }
 
-; The same jump where the routine the label is in promises to keep A.
+; The same jump where the path from the label keeps A.
 .proc hands_on: a8, i8, keeps a {
     jmp holds::partway
 }

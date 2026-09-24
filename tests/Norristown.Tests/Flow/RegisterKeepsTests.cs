@@ -302,6 +302,24 @@ public sealed class RegisterKeepsTests
         Assert.Empty(region.ScopeRegisters);
     }
 
+    /// <summary>
+    /// A jump to a label inside another routine hands back what the path from that label keeps,
+    /// not what the routine keeps from its top. The routine writes X before the label, but the
+    /// path from the label leaves X alone. Where the path from the label writes X, the message
+    /// says the path has to restore it, since no promise on the routine covers that path.
+    /// </summary>
+    [Fact]
+    public void AJumpToALabelKeepsWhatThePathFromItKeeps()
+    {
+        Assert.Empty(Problems(
+            ".proc owner {\n    ldx #0\ntail:\n    lda #1\n    rts\n}\n.proc p: keeps x {\n    jmp owner::tail\n}\n"));
+        Assert.Equal(
+            ["main.nt65:8: `p` promises `keeps x`, but X is not the same as on entry here: control does not come "
+                + "back from `tail` in `owner`, and the path from there does not keep x: restore it there, "
+                + "or add `.next ?` here to end the path unchecked"],
+            Problems(".proc owner {\n    lda #1\ntail:\n    ldx #0\n    rts\n}\n.proc p: keeps x {\n    jmp owner::tail\n}\n"));
+    }
+
     private static Registers Kept(string text, string routine) => Found(text, routine).Kept;
 
     private static RoutineRegisters Found(string text, string routine)

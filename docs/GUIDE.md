@@ -1128,8 +1128,14 @@ shows it, as `reads A, C` for instance. A value moved to another register or pus
 back is followed, so `txa` … `sta` reads X, and a save and its restore read nothing. Anything
 nt65 cannot follow counts as read. A pushed value reached by `tsx` is read, and a call to a
 routine whose body is not in the program ends the list with `?`, since that routine may read
-anything. A register stored to memory counts as read, even where it is only being saved, because
-nt65 does not follow values through memory.
+anything. It does so only where a register or the stack still holds something the caller left,
+because that is all such a routine can see. A register stored to memory counts as read, even
+where it is only being saved, because nt65 does not follow values through memory.
+
+A call or a jump to a label inside another routine is answered from that label. It reads and
+keeps what the path from the label reads and keeps, which may differ from what the routine does
+from its top. A routine that sets Y and then runs into a shared tail reads nothing, while a call
+to the tail uses the caller's Y.
 
 A routine can declare what it reads with `reads`, and nt65 then checks its body against the
 declaration. A register the body uses without its being listed is an error where it is used,

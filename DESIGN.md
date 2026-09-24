@@ -1913,8 +1913,13 @@ registers it did not save unknown, and the answer says it is not the whole one.
 A path that hands control to another routine is not a call but a way out: control lands in that
 routine and that routine returns to this one's caller. What a routine hands back across such a
 path is therefore what the routine handed to hands back. A `jmp` to a routine's own entry is
-taken at that word, and so is a jump into another routine's interior (§7.4), since control comes
-back from neither. A branch says the same on the path where it is taken, whether it names the
+taken at that word, since control does not come back from it. A jump into another routine's
+interior (§7.4) is taken at what the path from that label hands back, worked out from the label
+with the registers a call would bring, alongside the routines. A `keeps` on the routine the label
+is in does not cover that path, because it is checked only from the routine's entry. The same
+holds for a call to such a label. Entered there, a routine may pull what its path from the top
+pushed, which is then what its caller pushed, so a label is also asked whether it reaches below
+its entry on the stack. A branch says the same on the path where it is taken, whether it names the
 routine or a label inside it, a `.next` says it for the statement it stands under, which is how
 a jump through a pointer says where control goes, and a `.fallthrough` says it for the end of a
 routine that runs on into the next one. So a routine whose only way out hands control to another
@@ -1999,7 +2004,9 @@ editor can be told not to show.
   alone. Whatever nt65 cannot follow counts as read: a push reached other than by its pull, and
   a register stored to memory even to be restored. The list is an
   upper bound on what nt65 follows, and a call it cannot follow ends it with `?`, which means
-  any register may be read. A block gets no such lens.
+  any register may be read. It does so only where a register or the stack there still holds
+  something the caller left: code nt65 cannot follow sees only those, which the model covers,
+  and a stack whose contents are not known may hold anything. A block gets no such lens.
 - **On hover over the line that declares a routine or opens a block**, the same lists, because
   the lenses above it may not be there.
 - **On hover over an instruction**, beside what the line costs, what each register holds there,

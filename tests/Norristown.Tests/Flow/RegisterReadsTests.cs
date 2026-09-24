@@ -95,6 +95,20 @@ public sealed class RegisterReadsTests
         Assert.Equal(Registers.All, found.Assumed);
     }
 
+    /// <summary>
+    /// Code nt65 cannot follow sees only the registers and the stack. Where every register holds
+    /// something the routine wrote, and nothing it pushed holds an entry value, such code cannot
+    /// read any of the routine's entry values, so the answer stays complete.
+    /// </summary>
+    [Fact]
+    public void ACallThatCannotBeFollowedSeesOnlyWhatIsStillHeld()
+    {
+        Assert.Equal(new RoutineReads(Registers.None, true), Found("6502",
+            ".import print: proc\n.proc p {\n    lda #0\n    ldx #0\n    ldy #0\n    clc\n    jsr print\n    rts\n}\n", "p"));
+        Assert.Equal(new RoutineReads(Registers.None, false), Found("6502",
+            ".import print: proc\n.proc p {\n    pha\n    lda #0\n    ldx #0\n    ldy #0\n    clc\n    jsr print\n    pla\n    rts\n}\n", "p"));
+    }
+
     /// <summary>A routine that takes arguments uses what its caller pushed for it.</summary>
     [Fact]
     public void ARoutineThatTakesArgumentsReadsWhatIsPushed()
@@ -226,6 +240,34 @@ public sealed class RegisterReadsTests
         Assert.Equal(
             ["main.nt65:1: `reads a` is about a routine from entry to exit, and belongs before `->`"],
             FlowFragment.Problems("65816", ".proc p: a8 -> a16, reads a {\n    rep #$20\n    rts\n}\n"));
+    }
+
+    /// <summary>
+    /// A call to a label inside another routine reads what the path from that label reads, not
+    /// what the routine reads from its top. The routine sets Y before the label, so it reads
+    /// nothing, but a call to the label uses the caller's Y.
+    /// </summary>
+    [Fact]
+    public void ACallToALabelReadsWhatThePathFromItReads()
+    {
+        const string Text = ".proc owner {\n    ldy #0\nshared:\n    lda ($10),y\n    sta $12\n    rts\n}\n"
+            + ".proc p {\n    jsr owner::shared\n    rts\n}\n";
+        Assert.Equal(new RoutineReads(Registers.None, true), Found("6502", Text, "owner"));
+        Assert.Equal(new RoutineReads(Registers.Y, true), Found("6502", Text, "p"));
+    }
+
+    /// <summary>
+    /// Entered at a label, a routine may pull what its path from the top pushed, and then takes
+    /// what its caller pushed instead. So a push before a call to such a label is read, though
+    /// the routine entered at its top pulls only what it pushed.
+    /// </summary>
+    [Fact]
+    public void ALabelThatPullsWhatItDidNotPushReadsWhatTheCallerPushed()
+    {
+        const string Text = ".proc owner {\n    pha\ninner:\n    pla\n    sta $10\n    rts\n}\n"
+            + ".proc p {\n    pha\n    jsr owner::inner\n    pla\n    rts\n}\n";
+        Assert.Equal(Registers.A, Read("6502", Text, "owner"));
+        Assert.Equal(Registers.A, Read("6502", Text, "p"));
     }
 
     private static IReadOnlyList<string> Problems(string text) => FlowFragment.Problems("6502", text);
