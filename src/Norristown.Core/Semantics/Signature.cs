@@ -183,80 +183,161 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
     private static Signature Read(
         SyntaxNode? syntax, bool forMacro,
+        Func<ExpressionSyntax, long?>? valueOf, Func<NameExpressionSyntax, Symbol?>? setOf, Action<TextSpan, DiagnosticMessage> report) =>
+        syntax is null
+            ? forMacro ? Unchanged : Default
+            : new Reader(syntax, forMacro, valueOf, setOf, report).Read();
+
+    /// <summary>
+    /// Holds the items one list gives, by part, and the signature set it names, if any.
+    /// </summary>
+    private sealed class Parts
+    {
+        public StateItem? A;
+        public StateItem? Index;
+        public StateItem? E;
+        public StateItem? D;
+        public StateItem? B;
+        public StateItem? Far;
+        public StateItem? Inline;
+        public StateItem? Arguments;
+        public StateItem? Interrupt;
+        public StateItem? NoReturn;
+        public StateItemSyntax? SetReference;
+
+        // Every `keeps` the list gives, and whether a signature set gave it. A list may contain
+        // more than one, and its own replace what a set gives.
+        public readonly List<(StateItem Item, bool FromSet)> Keeps = [];
+
+        // The parts the list gives itself, rather than taking from the set.
+        public readonly HashSet<StatePart> Given = [];
+    }
+
+    /// <summary>
+    /// Reads one signature from its syntax. An instance is used for one reading, and holds the
+    /// items each list gives and which of them came from the signature sets the lists name.
+    /// </summary>
+    /// <param name="syntax">The signature's syntax.</param>
+    /// <param name="forMacro">Whether the signature is read as a macro's.</param>
+    /// <param name="valueOf">
+    /// Evaluates an item's expression, or is null before the program's constants are known.
+    /// </param>
+    /// <param name="setOf">
+    /// Resolves the name of a signature set, or is null before the program's names are resolved.
+    /// </param>
+    /// <param name="report">Receives the problems the reading finds.</param>
+    private sealed class Reader(
+        SyntaxNode syntax, bool forMacro,
         Func<ExpressionSyntax, long?>? valueOf, Func<NameExpressionSyntax, Symbol?>? setOf, Action<TextSpan, DiagnosticMessage> report)
     {
-        var defaults = forMacro ? Unchanged.Entry : ProcessorState.Default;
-        if (syntax is null)
-            return forMacro ? Unchanged : Default;
-
-        var (entryList, exitList) = syntax switch
-        {
-            ProcSignatureSyntax proc => (proc.Entry, proc.Exit),
-            ImportSignatureSyntax import => (import.Entry, import.Exit),
-            SignatureDeclarationSyntax set => (set.Items, null),
-            _ => ((StateListSyntax?)null, (StateListSyntax?)null),
-        };
-
         // The items that come from the signature sets this signature names. Problems with them
         // are reported where each set is declared.
-        var fromSets = new HashSet<(SyntaxTree Tree, int Position)>();
-        var entry = Take(entryList, isExit: false);
-        var exit = Take(exitList, isExit: true);
+        private readonly HashSet<(SyntaxTree Tree, int Position)> fromSets = [];
 
-        var arguments = 0;
-        if (entry.Arguments is { Expression: { } count } args && valueOf is not null && Here(args))
+        // The items the entry and the exit give, by part.
+        private readonly Parts entry = new();
+        private readonly Parts exit = new();
+
+        // The list after `->`, or null when the signature declares no exit.
+        private StateListSyntax? exitList;
+
+        // The value of the `args n` item, or 0 until it is known.
+        private int arguments;
+
+        /// <summary>Returns the signature the syntax declares.</summary>
+        public Signature Read()
         {
-            if (valueOf(count) is not { } bytes)
-                report(count.Span, Catalogue.ArgsNotConstant.Message(args.Text));
-            else if (bytes < 0 || bytes > 0xffff)
-                report(count.Span, Catalogue.ArgsOutOfRange.Message(args.Text));
-            else
-                arguments = (int)bytes;
+            var defaults = forMacro ? Unchanged.Entry : ProcessorState.Default;
+            StateListSyntax? entryList;
+            (entryList, exitList) = syntax switch
+            {
+                ProcSignatureSyntax proc => (proc.Entry, proc.Exit),
+                ImportSignatureSyntax import => (import.Entry, import.Exit),
+                SignatureDeclarationSyntax set => (set.Items, null),
+                _ => ((StateListSyntax?)null, (StateListSyntax?)null),
+            };
+
+            Take(entry, entryList, isExit: false);
+            Take(exit, exitList, isExit: true);
+
+            if (entry.Arguments is { Expression: { } count } args && valueOf is not null && Here(args))
+            {
+                if (valueOf(count) is not { } bytes)
+                    report(count.Span, Catalogue.ArgsNotConstant.Message(args.Text));
+                else if (bytes < 0 || bytes > 0xffff)
+                    report(count.Span, Catalogue.ArgsOutOfRange.Message(args.Text));
+                else
+                    arguments = (int)bytes;
+            }
+
+            if (entry.Interrupt is not null)
+                return Interrupt();
+
+            var entryState = new ProcessorState(
+                entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E,
+                ValueOf(entry.D, 0xffff) ?? defaults.D, Entered(ValueOf(entry.B, 0xff)) ?? defaults.B);
+            CheckEmulation(entry, entryState);
+            entryState = Pinned(entryState);
+
+            // A routine that never returns has no exit state to declare.
+            if (entry.NoReturn is not null)
+            {
+                if (exitList is not null)
+                    report(exitList.Span, Catalogue.NoreturnDeclaresAnExit);
+                return Made(entryState, entryState) with { NeverReturns = true };
+            }
+
+            // An exit that names a 16-bit width but not the mode is in native mode, the only mode in
+            // which that width can hold, whatever the entry's mode.
+            var exitMode = exit.E?.Mode
+                ?? (entryState.E == ProcessorMode.Emulation && (exit.A?.Width == Width.Sixteen || exit.Index?.Width == Width.Sixteen)
+                    ? ProcessorMode.Native
+                    : entryState.E);
+            var exitState = new ProcessorState(
+                exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exitMode,
+                ValueOf(exit.D, 0xffff) ?? entryState.D, Handed(ValueOf(exit.B, 0xff), entryState) ?? entryState.B);
+
+            // An impossible exit item is reported once and read as the entry's value, so that code
+            // using the signature does not report the same mistake again.
+            if (!Kept(exit.A, entryState.A == Width.Unchanged))
+                exitState = exitState with { A = entryState.A };
+            if (!Kept(exit.Index, entryState.Index == Width.Unchanged))
+                exitState = exitState with { Index = entryState.Index };
+            if (!Kept(exit.E, entryState.E == ProcessorMode.Unchanged))
+                exitState = exitState with { E = entryState.E };
+            if (!Kept(exit.D, entryState.D.Kind == StateValueKind.Unchanged))
+                exitState = exitState with { D = entryState.D };
+            if (!Kept(exit.B, entryState.B.IsEntered))
+                exitState = exitState with { B = entryState.B };
+            CheckEmulation(exit, exitState);
+            return Made(entryState, Pinned(exitState));
         }
 
-        if (entry.Interrupt is not null)
-            return Interrupt();
-
-        var entryState = new ProcessorState(
-            entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E,
-            ValueOf(entry.D, 0xffff) ?? defaults.D, Entered(ValueOf(entry.B, 0xff)) ?? defaults.B);
-        CheckEmulation(entry, entryState);
-        entryState = Pinned(entryState);
-
-        // A routine that never returns has no exit state to declare.
-        if (entry.NoReturn is not null)
+        // The registers the list promises. A list that contains its own `keeps` states which
+        // they are. A list that contains none takes what the signature set it names gives.
+        private static Processor.Registers Promised(Parts parts)
         {
-            if (exitList is not null)
-                report(exitList.Span, Catalogue.NoreturnDeclaresAnExit);
-            return Made(entryState, entryState) with { NeverReturns = true };
+            var own = parts.Keeps.Where(kept => !kept.FromSet).ToList();
+            return (own.Count > 0 ? own : parts.Keeps)
+                .Aggregate(Processor.Registers.None, (all, kept) => all | kept.Item.Registers);
         }
 
-        // An exit that names a 16-bit width but not the mode is in native mode, the only mode in
-        // which that width can hold, whatever the entry's mode.
-        var exitMode = exit.E?.Mode
-            ?? (entryState.E == ProcessorMode.Emulation && (exit.A?.Width == Width.Sixteen || exit.Index?.Width == Width.Sixteen)
-                ? ProcessorMode.Native
-                : entryState.E);
-        var exitState = new ProcessorState(
-            exit.A?.Width ?? entryState.A, exit.Index?.Width ?? entryState.Index, exitMode,
-            ValueOf(exit.D, 0xffff) ?? entryState.D, Handed(ValueOf(exit.B, 0xff)) ?? entryState.B);
+        // A set of banks at entry means the routine is entered with one of those banks, and
+        // hands that same bank back unless the exit says otherwise.
+        private static StateValue? Entered(StateValue? value) =>
+            value is { Kind: StateValueKind.Among } among ? StateValue.Within(among.Banks) : value;
 
-        // An impossible exit item is reported once and read as the entry's value, so that code
-        // using the signature does not report the same mistake again.
-        if (!Kept(exit.A, entryState.A == Width.Unchanged))
-            exitState = exitState with { A = entryState.A };
-        if (!Kept(exit.Index, entryState.Index == Width.Unchanged))
-            exitState = exitState with { Index = entryState.Index };
-        if (!Kept(exit.E, entryState.E == ProcessorMode.Unchanged))
-            exitState = exitState with { E = entryState.E };
-        if (!Kept(exit.D, entryState.D.Kind == StateValueKind.Unchanged))
-            exitState = exitState with { D = entryState.D };
-        if (!Kept(exit.B, entryState.B.IsEntered))
-            exitState = exitState with { B = entryState.B };
-        CheckEmulation(exit, exitState);
-        return Made(entryState, Pinned(exitState));
+        // `dbr*` after the arrow, for a routine entered with one of a set of banks, means it
+        // hands back whichever bank it was entered with.
+        private static StateValue? Handed(StateValue? value, ProcessorState entryState) =>
+            value is { Kind: StateValueKind.Unchanged } && entryState.B.Kind == StateValueKind.Within ? entryState.B : value;
 
-        Signature Made(ProcessorState entered, ProcessorState exited) =>
+        // Emulation mode pins both widths at 8 bits, so `emu` implies that too, as it does in
+        // `.state`.
+        private static ProcessorState Pinned(ProcessorState state) =>
+            state.E == ProcessorMode.Emulation ? state with { A = Width.Eight, Index = Width.Eight } : state;
+
+        private Signature Made(ProcessorState entered, ProcessorState exited) =>
             new(entered, exited, entry.Far?.IsFar ?? false, entry.Inline)
             {
                 Arguments = arguments,
@@ -265,18 +346,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 forMacro = forMacro,
             };
 
-        // The registers the list promises. A list that contains its own `keeps` states which
-        // they are. A list that contains none takes what the signature set it names gives.
-        static Processor.Registers Promised(Parts parts)
-        {
-            var own = parts.Keeps.Where(kept => !kept.FromSet).ToList();
-            return (own.Count > 0 ? own : parts.Keeps)
-                .Aggregate(Processor.Registers.None, (all, kept) => all | kept.Item.Registers);
-        }
-
         // An interrupt handler is entered from anywhere, so it may only declare which mode the
         // processor is in. It leaves by `rti`, so it declares nothing after `->`.
-        Signature Interrupt()
+        private Signature Interrupt()
         {
             foreach (var other in new[] { entry.A, entry.Index, entry.D, entry.B })
             {
@@ -313,16 +385,16 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         }
 
         // Whether an item appears in the signature itself rather than coming from a set it names.
-        bool Here(StateItem item) => !fromSets.Contains((item.Node.Tree, item.Node.Position));
+        private bool Here(StateItem item) => !fromSets.Contains((item.Node.Tree, item.Node.Position));
 
         // Where a mistake about an item is reported: at the item, or at the set that gave it.
-        TextSpan At(Parts parts, StateItem item) =>
+        private TextSpan At(Parts parts, StateItem item) =>
             Here(item) || parts.SetReference is not { } reference ? item.Node.Span : reference.Span;
 
         // `dp = e` has the value of e once the constants are known, and is unknown before that.
         // `dp?` is unknown and `dp*` is unchanged. A problem with a value a set gives is reported
         // where the set is declared.
-        StateValue? ValueOf(StateItem? item, long largest)
+        private StateValue? ValueOf(StateItem? item, long largest)
         {
             if (item is not { } given)
                 return null;
@@ -351,19 +423,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return StateValue.Of(value);
         }
 
-        // A set of banks at entry means the routine is entered with one of those banks, and
-        // hands that same bank back unless the exit says otherwise.
-        static StateValue? Entered(StateValue? value) =>
-            value is { Kind: StateValueKind.Among } among ? StateValue.Within(among.Banks) : value;
-
-        // `dbr*` after the arrow, for a routine entered with one of a set of banks, means it
-        // hands back whichever bank it was entered with.
-        StateValue? Handed(StateValue? value) =>
-            value is { Kind: StateValueKind.Unchanged } && entryState.B.Kind == StateValueKind.Within ? entryState.B : value;
-
         // `dbr = [...]` means one of the banks it names. D is a single direct page and has no set
         // form.
-        StateValue BanksOf(StateItem given, long largest)
+        private StateValue BanksOf(StateItem given, long largest)
         {
             if (largest != 0xff)
             {
@@ -380,11 +442,10 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return StateValue.Unknown;
         }
 
-        // Collects the items of one list by part. A signature set comes first, and an item the
-        // list contains after it replaces what the set gives for the same part.
-        Parts Take(StateListSyntax? list, bool isExit)
+        // Collects the items of one list by part into `parts`. A signature set comes first, and an
+        // item the list contains after it replaces what the set gives for the same part.
+        private void Take(Parts parts, StateListSyntax? list, bool isExit)
         {
-            var parts = new Parts();
             var first = true;
             foreach (var item in StateItem.Read(list))
             {
@@ -414,12 +475,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     Assign(parts, setItem, isExit, fromSet: true);
                 }
             }
-            return parts;
         }
 
         // Returns the items a set gives, with the sets it names expanded in place. Before the
         // program's names are resolved, a set gives nothing.
-        List<StateItem> Expand(StateItem reference, HashSet<Symbol> seen)
+        private List<StateItem> Expand(StateItem reference, HashSet<Symbol> seen)
         {
             var items = new List<StateItem>();
             if (setOf?.Invoke(reference.SetName!) is not { } set)
@@ -444,7 +504,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return items;
         }
 
-        void Assign(Parts parts, StateItem item, bool isExit, bool fromSet)
+        private void Assign(Parts parts, StateItem item, bool isExit, bool fromSet)
         {
             switch (item.Part)
             {
@@ -522,7 +582,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
         // Two items in one list for the same part are a mistake. An item after a set replaces
         // what the set gives.
-        StateItem? Once(Parts parts, StateItem? earlier, StateItem item, bool fromSet)
+        private StateItem? Once(Parts parts, StateItem? earlier, StateItem item, bool fromSet)
         {
             if (fromSet)
                 return item;
@@ -533,7 +593,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         }
 
         // A routine can hand back unchanged only what it assumed nothing about.
-        bool Kept(StateItem? exitItem, bool keptAtEntry)
+        private bool Kept(StateItem? exitItem, bool keptAtEntry)
         {
             if (exitItem is not { IsUnchanged: true } kept || keptAtEntry)
                 return true;
@@ -541,12 +601,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return false;
         }
 
-        // Emulation mode pins both widths at 8 bits, so `emu` implies that too, as it does in
-        // `.state`.
-        static ProcessorState Pinned(ProcessorState state) =>
-            state.E == ProcessorMode.Emulation ? state with { A = Width.Eight, Index = Width.Eight } : state;
-
-        void CheckEmulation(Parts parts, ProcessorState state)
+        private void CheckEmulation(Parts parts, ProcessorState state)
         {
             if (state.E != ProcessorMode.Emulation)
                 return;
@@ -556,30 +611,5 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     report(At(parts, item), Catalogue.WidthInEmulation.Message($"`{item.Text}`"));
             }
         }
-    }
-
-    /// <summary>
-    /// Holds the items one list gives, by part, and the signature set it names, if any.
-    /// </summary>
-    private sealed class Parts
-    {
-        public StateItem? A;
-        public StateItem? Index;
-        public StateItem? E;
-        public StateItem? D;
-        public StateItem? B;
-        public StateItem? Far;
-        public StateItem? Inline;
-        public StateItem? Arguments;
-        public StateItem? Interrupt;
-        public StateItem? NoReturn;
-        public StateItemSyntax? SetReference;
-
-        // Every `keeps` the list gives, and whether a signature set gave it. A list may contain
-        // more than one, and its own replace what a set gives.
-        public readonly List<(StateItem Item, bool FromSet)> Keeps = [];
-
-        // The parts the list gives itself, rather than taking from the set.
-        public readonly HashSet<StatePart> Given = [];
     }
 }
