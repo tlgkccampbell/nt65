@@ -349,6 +349,17 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
+    /// Checks that every generated file ends its lines with LF alone, as the repository does,
+    /// whatever newline the platform the compiler runs on uses.
+    /// </summary>
+    [Fact]
+    public void EveryFileUsesLineFeeds()
+    {
+        foreach (var (path, text) in Files(Widget))
+            Assert.False(text.Contains('\r'), $"{path} contains a carriage return");
+    }
+
+    /// <summary>
     /// Returns the files generated for <paramref name="nodes"/>, whose XML omits the enclosing
     /// <c>Tree</c> element. An abstract <c>StatementSyntax</c> is added for them to derive from,
     /// since every node's base must be a node of the table.
