@@ -89,6 +89,22 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
+    /// An expression the refactoring has laid out is already in its layout: the refactoring
+    /// offers nothing more there, and the formatter leaves it as it is.
+    /// </summary>
+    [Fact]
+    public void ALaidOutExpressionStaysLaidOut()
+    {
+        const string Main = ".module main\n.export f\n.func f(m) = .switch(m, [1], 2, .select(1, .switch(m, [3], 4, [5], 6, 7), 8))\n";
+        var laid = Editing.Apply(Main,
+            Single(Main, "[1]", "Lay out the expression across lines", 1, lineLength: 40).Edit.Changes[Uri]);
+
+        Assert.DoesNotContain(Actions(laid, At(laid, "[1]", 1), lineLength: 40),
+            action => action.Title == "Lay out the expression across lines");
+        Assert.Equal(laid, Norristown.Syntax.Formatter.Format(Norristown.Syntax.SyntaxTree.Parse("main.nt65", laid)));
+    }
+
+    /// <summary>
     /// An expression across lines joins back onto one from anywhere inside it, and neither action is
     /// offered where a comment would be lost. A set on its own is laid out as a call is.
     /// </summary>

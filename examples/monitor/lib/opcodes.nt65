@@ -44,21 +44,27 @@
 .func operand_size(m) = .switch(m,
     [Mode::imp, Mode::acc], 0,
     [Mode::abs, Mode::absx, Mode::absy, Mode::ind], 2,
-    .select(.target(65816), .switch(m,
-        [Mode::long, Mode::longx], 3,
-        [Mode::indabsx, Mode::indabsl, Mode::rell, Mode::move], 2,
-        1), 1))
+    .select(
+        .target(65816),
+        .switch(m,
+            [Mode::long, Mode::longx], 3,
+            [Mode::indabsx, Mode::indabsl, Mode::rell, Mode::move], 2,
+            1),
+        1))
 
 ; Returns the text that an operand in mode m shows before its number. That is `#`, `(` or `[`
 ; where the mode has one, followed by `$`.
 .func opening(m) = .switch(m,
     [Mode::imm], "#$",
     [Mode::ind, Mode::indx, Mode::indy], "($",
-    .select(.target(65816), .switch(m,
-        [Mode::imma, Mode::immi], "#$",
-        [Mode::indzp, Mode::sry, Mode::indabsx], "($",
-        [Mode::indl, Mode::indly, Mode::indabsl], "[$",
-        "$"), "$"))
+    .select(
+        .target(65816),
+        .switch(m,
+            [Mode::imma, Mode::immi], "#$",
+            [Mode::indzp, Mode::sry, Mode::indabsx], "($",
+            [Mode::indl, Mode::indly, Mode::indabsl], "[$",
+            "$"),
+        "$"))
 
 ; Returns the text that an operand in mode m shows after its number, which may be empty.
 .func closing(m) = .switch(m,
@@ -67,15 +73,18 @@
     [Mode::indx], ",X)",
     [Mode::indy], "),Y",
     [Mode::ind], ")",
-    .select(.target(65816), .switch(m,
-        [Mode::longx], ",X",
-        [Mode::indabsx], ",X)",
-        [Mode::indzp], ")",
-        [Mode::indl, Mode::indabsl], "]",
-        [Mode::indly], "],Y",
-        [Mode::sr], ",S",
-        [Mode::sry], ",S),Y",
-        ""), ""))
+    .select(
+        .target(65816),
+        .switch(m,
+            [Mode::longx], ",X",
+            [Mode::indabsx], ",X)",
+            [Mode::indzp], ")",
+            [Mode::indl, Mode::indabsl], "]",
+            [Mode::indly], "],Y",
+            [Mode::sr], ",S",
+            [Mode::sry], ",S),Y",
+            ""),
+        ""))
 
 ; Returns whether mode m is a branch's, whose operand is shown as the address it goes to.
 .func branch(m) = m == Mode::rel || .select(.target(65816), m == Mode::rell, 0)
