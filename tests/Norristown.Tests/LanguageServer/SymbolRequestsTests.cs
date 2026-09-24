@@ -142,6 +142,27 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
+    /// Data found elsewhere that states no element type takes the one at its address, which its
+    /// declaration does not show, so hover shows it. A name whose address has none says so.
+    /// </summary>
+    [Fact]
+    public async Task HoverGivesTheElementTypeThatDataFoundElsewhereTakes()
+    {
+        var timeout = TestTimeout.Token();
+        const string Text =
+            ".module main\n.segment ZEROPAGE\n.data FAC: .byte[5]\n.data STRNG1: .word\n"
+                + ".data FAC_LAST = FAC + 4\n.data EXT = STRNG1 + 1\n";
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Text));
+
+        var last = await client.HoverAsync(Uri, Locate.At(Text, "FAC_LAST ="), timeout);
+        var ext = await client.HoverAsync(Uri, Locate.At(Text, "EXT ="), timeout);
+
+        Assert.Contains("element  .byte\n", last?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("size     1 byte\n", last?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("element  none, so it has no size\n", ext?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A function whose body produces text evaluates to that text where it is called, and hover on
     /// the call shows it, with any byte that is not a printable character escaped as a string
     /// literal would show it. A text constant defined by such a call is shown as text as well.

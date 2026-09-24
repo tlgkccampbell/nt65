@@ -1609,7 +1609,7 @@ CPUs that have it.
 | `.set` counters | `.enum`, or the index of a `.repeat` |
 | `.ifdef NAME` | a setting, `.const NAME ?= 0`, and `.if NAME` |
 | `.if` on a program symbol | `.assert`, or a setting |
-| `NAME = label + 1`, an address under a name | `.data NAME: .byte = label + 1`, or `.proc NAME = label` for a routine |
+| `NAME = label + 1`, an address under a name | `.data NAME = label + 1`, with an element type such as `: .byte` where its size is needed, or `.proc NAME = label` for a routine |
 | `.ifp02`, `.ifpc02`, `.ifp816` | `.if .target(6502)` and so on, or `.if .has(phx)` |
 | `.assert expr, error, "m"` | `.assert expr, "m"` |
 | `.a8`, `.a16`, `.i8`, `.i16`, `.smart` | a signature, `.state` and `.ensure` |

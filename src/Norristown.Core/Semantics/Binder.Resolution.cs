@@ -153,7 +153,10 @@ internal sealed partial class Binder
         var container = BodyOf(before.Symbol!);
         if (container is null)
         {
-            Report(token.Span, Catalogue.NotAScope.Message(before.Symbol!.DisplayName, before.Symbol.KindPhrase));
+            if (before.Symbol is { Kind: SymbolKind.AddressAlias, ValueExpression.Parent: DataDeclarationSyntax { Directive: null } })
+                Report(token.Span, Catalogue.FieldsNeedAStatedType.Message(before.Symbol.DisplayName));
+            else
+                Report(token.Span, Catalogue.NotAScope.Message(before.Symbol!.DisplayName, before.Symbol.KindPhrase));
             return null;
         }
 
@@ -318,11 +321,25 @@ internal sealed partial class Binder
     {
         if (Lookup.BodyOf(symbol) is { } known)
             return known;
-        if (symbol.Kind == SymbolKind.Macro || symbol.TypeExpression is null || !resolving.Add(symbol))
+        if (symbol.Kind == SymbolKind.Macro || !resolving.Add(symbol))
             return null;
-        var type = TypeOf(symbol);
-        resolving.Remove(symbol);
-        return type?.Body;
+        try
+        {
+            if (symbol.TypeExpression is not null)
+                return TypeOf(symbol)?.Body;
+
+            // Data found elsewhere that states no type has the type of the data its address names,
+            // or of one element of it. An offset is not evaluated yet, so data at an offset has
+            // no fields here.
+            return symbol is { Kind: SymbolKind.AddressAlias, ValueExpression: NameExpressionSyntax { Parent: DataDeclarationSyntax } address }
+                && NamedByPath(address, symbol.Scope) is { } named
+                    ? BodyOf(named)
+                    : null;
+        }
+        finally
+        {
+            resolving.Remove(symbol);
+        }
     }
 
     /// <summary>

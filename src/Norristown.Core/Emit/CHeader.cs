@@ -192,7 +192,7 @@ public sealed class CHeader
         var size = symbol.Size ?? 0;
         var count = symbol.Count ?? 1;
         var directive = symbol.Data as DataDirectiveSyntax;
-        var counted = directive is not null && (directive.Count is not null || count != 1);
+        var counted = directive is not null && (directive.Count is not null && !symbol.IsOneElement || count != 1);
         var dimension = counted ? $"[{count}]" : "";
 
         if (directive is { IsRecord: true })

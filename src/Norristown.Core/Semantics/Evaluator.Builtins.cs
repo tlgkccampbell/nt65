@@ -494,6 +494,11 @@ internal sealed partial class Evaluator
             Report(at, Catalogue.MeasuresADeclaration.Message(function, at.GetText().Trim()));
             return true;
         }
+        if (HasNoElementType(symbol))
+        {
+            Report(at, Catalogue.DataHasNoElementType.Message(symbol.DisplayName));
+            return true;
+        }
         var what = symbol.Kind switch
         {
             SymbolKind.Label => "a label, which is only a position",

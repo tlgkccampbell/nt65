@@ -17,7 +17,7 @@
 
 .segment CODE
 
-.data TEMP1X: .byte = TEMP1+(5-BYTES_FP)
+.data TEMP1X = TEMP1+(5-BYTES_FP)
 
 ; ----------------------------------------------------------------------------
 ; ADD 0.5 TO FAC

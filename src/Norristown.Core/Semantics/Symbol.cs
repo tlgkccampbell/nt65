@@ -177,6 +177,13 @@ public sealed class Symbol
     public StatementSyntax? Data { get; internal set => field = Unfrozen(value); }
 
     /// <summary>
+    /// Gets a value indicating whether data found elsewhere is one element of what its
+    /// <see cref="Data"/> declares. Such data takes its element type from an address that lands on
+    /// one element of other data, so the count that the directive gives does not apply to it.
+    /// </summary>
+    public bool IsOneElement { get; internal set => field = Unfrozen(value); }
+
+    /// <summary>
     /// Gets the enum member declared before this one, or null for the first. A member with no
     /// value of its own follows it.
     /// </summary>

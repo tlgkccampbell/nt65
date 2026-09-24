@@ -158,6 +158,29 @@ public sealed class FormatterTests
     }
 
     /// <summary>
+    /// Data found elsewhere with no element type has no directive to line up, so it keeps its own
+    /// spacing and does not widen the column. It is data like the lines around it, so it does not
+    /// end their run, and its comment lines up with theirs.
+    /// </summary>
+    [Fact]
+    public void DataWithNoElementTypeStaysInItsRun()
+    {
+        Assert.Equal("""
+            .module main
+            .segment ZEROPAGE
+            .data FAC:    .byte[5]
+            .data FAC_LAST = FAC + 4            ; the last byte
+            .data STRNG1: .word                 ; a string
+            """, Formatted("""
+            .module main
+            .segment ZEROPAGE
+            .data FAC: .byte[5]
+            .data FAC_LAST = FAC + 4 ; the last byte
+            .data STRNG1:   .word ; a string
+            """));
+    }
+
+    /// <summary>
     /// A comment line does not end a run, so a comment about the next declaration can sit inside
     /// the run. An empty line, or any other line that is not a named data line, ends it.
     /// </summary>

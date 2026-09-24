@@ -283,6 +283,11 @@ internal static class Hovers
         var expansion = MacroCallHover.At(analysis, model, reference);
         card.Row("expands to", expansion?.Becomes());
 
+        // Data found elsewhere may take its element type from its address, which its declaration
+        // does not show.
+        if (symbol is { Kind: SymbolKind.AddressAlias, ValueExpression.Parent: DataDeclarationSyntax { Directive: null } })
+            card.Row("element", symbol.Data is DataDirectiveSyntax element ? ElementType(symbol, element) : "none, so it has no size");
+
         // Size and element count answer one question, so they share a row. A count of one is
         // what a declaration without a count means, so it is not shown.
         if (symbol.Size is { } room)
@@ -309,6 +314,13 @@ internal static class Hovers
     }
 
     /// <summary>
+    /// Returns the element type that data found elsewhere took from its address, such as
+    /// <c>.byte</c> or <c>.type Pos</c>.
+    /// </summary>
+    private static string ElementType(Symbol symbol, DataDirectiveSyntax element) =>
+        element.IsRecord && symbol.Type is { } type ? $".type {type.QualifiedName}" : element.Directive.Text.ToLowerInvariant();
+
+    /// <summary>
     /// Returns the keys of the rows most wanted for this kind of name, which lead the hover. Every
     /// other row goes below the rule, in the order the hover adds them. A reader hovers a constant
     /// for its value, a member for its offset, a routine for what a call to it costs and which
@@ -330,7 +342,8 @@ internal static class Hovers
             SymbolKind.Binding => ["declares", "cost", "excluding", "preserves"],
             SymbolKind.MacroParameter => ["mode", "takes"],
             SymbolKind.Data or SymbolKind.List or SymbolKind.Charmap or SymbolKind.Frame
-                or SymbolKind.Label or SymbolKind.ImportedAddress or SymbolKind.AddressAlias => ["address", "size"],
+                or SymbolKind.Label or SymbolKind.ImportedAddress => ["address", "size"],
+            SymbolKind.AddressAlias => ["address", "element", "size"],
             SymbolKind.Struct or SymbolKind.Union or SymbolKind.Enum => ["size"],
 
             // Whether an `.if` may test a constant, and where a setting's value came from, go

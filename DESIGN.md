@@ -745,7 +745,7 @@ marker file.
 | `.enum [name] { ... }` | constants (§6.3). |
 | `.struct name { ... }`, `.union name { ... }` | member offsets and a size (§6.3). |
 | `.data name: element`, `.data name { ... }` | data: an address with a size in bytes, a count of elements for an element type, and a scope of its members or of its type's fields (§8). |
-| `.data name [: element] = expr` | **data found elsewhere**: data at the address `expr` gives, with no bytes of its own. Without an element it is the data `expr` names, under another name (§8). |
+| `.data name [: element] = expr` | **data found elsewhere**: data at the address `expr` gives, with no bytes of its own. Without an element type it takes the one at the address, where there is one (§8). |
 | `.charmap name { ... }` | a text encoding (§8). |
 | `.list name { ... }` | a named sequence of expressions (§6.4). |
 | `.func name(...) = expr` | a pure expression function (§9). |
@@ -2028,20 +2028,42 @@ changes what a name means.
 
 **Data found elsewhere.** `.data name: element = expr` declares data that something else put at
 the address `expr` gives: another declaration, the hardware or another program. It writes no
-bytes, and has the element, count, size and members its type gives it, as data declared here
-does, so `.sizeof(TXTPTR)` below is 2.
+bytes, and has the element type, count, size and fields its type gives it, as data declared
+here does, so `.sizeof(TXTPTR)` below is 2.
 
 ```nt65
-.data PPUCTRL: .byte = $2000                     ; a port
-.data TXTPTR: .addr = CHRGOT + 1                 ; the operand of an instruction in CHRGOT
-.data TEMP3 = FNCNAM                             ; FNCNAM, under another name
+.data PPUCTRL: .byte = $2000        ; a port
+.data TXTPTR:  .addr = CHRGOT + 1   ; the operand of an instruction in CHRGOT
+.data TEMP3 = FNCNAM                ; FNCNAM, under another name
 ```
 
-Without an element, `expr` must name data, and the declaration is that data under another
-name, with its element, count and members. With one, `expr` may be any address, and where it
-is the bare name of data, the element must be that data's. A `.const` is never an address
-(§6.1), so a place is always declared as what is there: data with `.data`, a routine with
-`.proc name = expr` (§7.3) and a position in code with a label.
+The element type may be left out, and the declaration then takes the one at the address. Offsets
+count bytes, as they always have in assembly, so where an offset lands decides what is there:
+
+- The name of data gives that data's element type, count and fields. `TEMP3` above is a `.word`.
+- An offset that lands on the start of an element, or an index, gives one element.
+  `FAC + BYTES_FP - 1` into `FAC: .byte[BYTES_FP]` is a `.byte`.
+- An offset inside an element of a record type gives the field it lands in, when it lands in
+  exactly one. Fields overlap in a union, so an offset into more than one gives nothing.
+- Any other address gives no element type: code, a number, `*`, `.endof`, an offset past the
+  end of the data, and an offset into the middle of an element. `STRNG1 + 1` is the high byte of
+  a `.word`, and no whole element starts there.
+
+A name with no element type is an address like any other, which instructions, data and
+exports use as before. Only what needs the element type is reported, where it is used:
+`.sizeof`, `.countof`, `.endof`, `.spanof` and an index report `data-has-no-element-type`. The
+fields after `::` are resolved while the declarations are read, before an offset is evaluated.
+So they are reachable when the declaration states a type or its address is the name of data, or
+an element of it. Any other address reports `fields-need-a-stated-type`.
+
+A stated element type is the name's own, and may differ from the one at the address: a byte flag
+kept in half of a pointer is `.data SGNCPR: .byte = STRNG1`. What a stated element type must
+not do is take more bytes than the data at the address has left from there, which reaches into
+whatever follows it. That is warned about as `data-elsewhere-overruns`. A name that is only used
+as an address need state nothing, and then nothing can overrun.
+
+A `.const` is never an address (§6.1), so a place is always declared as what is there: data
+with `.data`, a routine with `.proc name = expr` (§7.3) and a position in code with a label.
 
 The element types are the numbers `.byte`, `.word` (16 bits), `.long` (24) and `.dword` (32),
 their big-endian partners `.beword`, `.belong` and `.bedword`, the addresses `.addr` and
@@ -3740,7 +3762,8 @@ alone and without an assembler:
   instruction written around it, the block that holds the line, the routine that holds the
   block, and the file;
 - show on hover the line that declares a symbol, as the language writes it, and under it its
-  value, how wide an address it is, the segment it sits in and how many bytes it takes, what
+  value, how wide an address it is, the segment it sits in and how many bytes it takes, the
+  element type that data found elsewhere took from its address, what
   the output calls it where that is not what the source calls it, and with them the comment
   written above the declaration. There is no doc-comment syntax of its own: the
   `;` lines directly above a declaration, each on a line of its own, are what its author had
@@ -4321,6 +4344,17 @@ Recorded so the reasoning survives. None is open.
   address alias, with the error far away where the value was used. A place is declared as what
   is there, `.data name = expr` or `.proc name = expr`, rather than as an alias, a word most
   languages use for something else.
+- **Data found elsewhere takes its element type from where its address lands.** Before `.const`,
+  such a name was a constant with no element type, and nothing a port did with it needed one:
+  an instruction needs only the address. So the element type is optional. Where the address
+  lands decides it, and a name with none is reported only where something needs one. Offsets
+  count bytes, not elements as in C, because every existing offset means the byte it names.
+  A stated element type may read the bytes another way, which is what much data found
+  elsewhere is for. An earlier rule that it must match the data at the address therefore went
+  away. It is kept from running past that data, which is a warning with no override: a name
+  that overruns and is only used as an address can state nothing instead. A separate directive
+  for an address was weighed and refused. It would serve only the case with no element type,
+  and would bring back a kind of name that is neither a number nor what is at the address.
 - **Defines are gone.** A build sets the settings modules declare, not names of its own that
   every file sees. Such a name had no default, no module and no place to document it, and
   `.defined` existed only to ask whether a build had given one.

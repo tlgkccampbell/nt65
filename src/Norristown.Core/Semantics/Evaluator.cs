@@ -467,10 +467,21 @@ internal sealed partial class Evaluator
                 break;
         }
 
-        // Data found elsewhere with no element of its own takes the element of the data its
-        // address names, before it is sized from that element.
-        if (symbol is { Kind: SymbolKind.AddressAlias, ValueExpression: { Parent: DataDeclarationSyntax elsewhere } address })
-            TakeElement(symbol, elsewhere, address);
+        // Data found elsewhere with no element type of its own takes the one at its address, where
+        // there is one, before it is sized from it.
+        var elsewhere = symbol is { Kind: SymbolKind.AddressAlias, ValueExpression: { Parent: DataDeclarationSyntax } at }
+            ? at
+            : null;
+        Landing? landing = null;
+        if (elsewhere is not null)
+        {
+            // The address is read with this symbol on the stack, so that an address that reaches
+            // back to it through other data is reported as a cycle.
+            using (Evaluating(symbol, context with { Declaring = null }))
+                landing = LandingOf(elsewhere);
+        }
+        if (elsewhere?.Parent is DataDeclarationSyntax { Directive: null } && landing is { } target && target.Storage != symbol)
+            TakeElement(symbol, target);
 
         // A data declaration takes its size and element count from what it declares, and these
         // are what `.sizeof` and `.countof` return for it. Mixed data has bytes and no elements.
@@ -487,8 +498,8 @@ internal sealed partial class Evaluator
             {
                 if (symbol.Data is { } element && RoomFor(element) is { } room)
                 {
-                    symbol.Size = room.Bytes;
-                    symbol.Count = room.Elements;
+                    symbol.Size = symbol.IsOneElement ? room.Bytes / Math.Max(room.Elements, 1) : room.Bytes;
+                    symbol.Count = symbol.IsOneElement ? 1 : room.Elements;
                 }
                 else if (symbol.Definition is BlockSyntax block)
                 {
@@ -496,6 +507,12 @@ internal sealed partial class Evaluator
                 }
             }
         }
+
+        // An element type that data found elsewhere states may differ from the one at its
+        // address, which is how it reads the same bytes another way, but it should not take more
+        // bytes than the data there has left.
+        if (elsewhere?.Parent is DataDeclarationSyntax { Directive: not null } && landing is { } under && under.Storage != symbol)
+            CheckFits(symbol, under);
 
         if (symbol.ValueExpression is not { } expression)
         {
@@ -541,33 +558,157 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Gives data found elsewhere the element of the data its address names, when it writes none,
-    /// and checks that an element it writes is that data's. An address that is not the name of
-    /// data needs an element of its own.
+    /// Returns the declaration with an element type that an address lands in, and how far into it
+    /// the address lands. The address is the name of data or of a field reached through data, or
+    /// such a name moved by a constant. Returns null for any other address, such as code or a
+    /// number, which has no element type.
     /// </summary>
-    private void TakeElement(Symbol symbol, DataDeclarationSyntax declaration, ExpressionSyntax address)
+    private Landing? LandingOf(SyntaxNode node)
     {
-        var target = address is NameExpressionSyntax name ? SymbolOf(name) : null;
-        if (target is not null && target != symbol)
-            EnsureEvaluated(target);
-        if (target is not { IsTypedStorage: true, Data: DataDirectiveSyntax element } || target == symbol)
+        switch (node)
         {
-            if (declaration.Directive is null)
-                Report(symbol.DeclarationSpan, Catalogue.DataElsewhereNeedsAnElement.Message(symbol.Name), []);
+            case ParenthesizedExpressionSyntax parenthesized:
+                return LandingOf(parenthesized.Expression) is { } inner ? inner with { Named = false } : null;
+            case BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } moved:
+                var minus = moved.OperatorToken.Kind == SyntaxKind.Minus;
+                if (LandingOf(moved.Left) is { } left && Evaluate(moved.Right).AsNumber() is { } by)
+                    return new Landing(left.Storage, minus ? left.Offset - by : left.Offset + by, Named: false);
+                if (!minus && Evaluate(moved.Left).AsNumber() is { } ahead && LandingOf(moved.Right) is { } right)
+                    return new Landing(right.Storage, right.Offset + ahead, Named: false);
+                return null;
+            case NameExpressionSyntax name:
+                return LandingOfName(name);
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns where a name lands. A field reached through data lands at the start of the field.
+    /// A name with an index on its last part lands on the element that the index selects.
+    /// </summary>
+    private Landing? LandingOfName(NameExpressionSyntax name)
+    {
+        if (names.BoundItem(name) is not null || names.SymbolOf(name, out _) is not { } symbol)
+            return null;
+
+        // A field is a location only on a path that starts at an address. On a type's own path
+        // it is an offset, which is a number.
+        var throughAddress = false;
+        foreach (var token in name.Names)
+        {
+            if (resolved.TryGetValue((name.Tree, token.Span.Start), out var along) && along.IsAddress)
+                throughAddress = true;
+        }
+        if (symbol.Kind == SymbolKind.Member)
+            return throughAddress ? new Landing(symbol, 0, Named: true) : null;
+
+        // Other data found elsewhere has an element type only once it is evaluated.
+        if (symbol.Kind == SymbolKind.AddressAlias)
+            EnsureEvaluated(symbol);
+        if (!symbol.IsTypedStorage)
+            return null;
+        if (!name.IsIndexed)
+            return new Landing(symbol, 0, Named: true);
+
+        // Only an index on the last part selects an element of this declaration. An index along
+        // the path selects an element of a declaration further out.
+        if (ElementIndexes.Of(name).ToList() is not [var (part, index)] || part.Span != name.Names[^1].Span
+            || index.Index.Span.Length == 0 || Evaluate(index.Index).AsNumber() is not { } at)
+        {
+            return null;
+        }
+        EnsureEvaluated(symbol);
+        return ElementIndexes.Stride(symbol) is { } stride ? new Landing(symbol, at * stride, Named: false) : null;
+    }
+
+    /// <summary>
+    /// Gives data found elsewhere that states no element type the one where its address lands,
+    /// when that is known.
+    /// </summary>
+    private void TakeElement(Symbol symbol, Landing landing)
+    {
+        if (ElementAt(landing.Storage, landing.Offset, landing.Named) is not { } element)
             return;
-        }
-        if (declaration.Directive is not { } written)
-        {
-            symbol.Data = element;
-            symbol.Type = target.Type;
+        symbol.Data = element.Directive;
+        symbol.Type = element.Type;
+        symbol.IsOneElement = element.OneElement;
+    }
+
+    /// <summary>
+    /// Returns the element type at <paramref name="offset"/> bytes into
+    /// <paramref name="storage"/>, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// The name of a declaration has the declaration's own element type and count. An offset that
+    /// lands on the start of an element has that element's type. An offset inside an element of a
+    /// record type has the type of the field it lands in, and an offset anywhere else has none.
+    /// </remarks>
+    private (StatementSyntax Directive, Symbol? Type, bool OneElement)? ElementAt(Symbol storage, long offset, bool named)
+    {
+        EnsureEvaluated(storage);
+        if (storage.Data is not { } directive)
+            return null;
+        if (named)
+            return (directive, storage.Type, storage.IsOneElement);
+        if (storage.Size is not { } size || ElementIndexes.Stride(storage) is not { } stride || offset < 0 || offset >= size)
+            return null;
+        var within = offset % stride;
+        if (within == 0)
+            return (directive, storage.Type, true);
+        if (storage.Type?.Body is not { } body)
+            return null;
+
+        // A union's fields overlap, so an offset inside it has a field's type only when it lands in
+        // exactly one of them.
+        EnsureEvaluated(storage.Type);
+        var fields = body.Symbols
+            .Where(field => field.Kind == SymbolKind.Member)
+            .Where(field =>
+            {
+                EnsureEvaluated(field);
+                return field.Value.AsNumber() is { } start && field.Size is { } length
+                    && within >= start && within < start + length;
+            })
+            .ToList();
+        if (fields is not [var field])
+            return null;
+        var into = within - field.Value.AsNumber()!.Value;
+        return ElementAt(field, into, named: into == 0);
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="symbol"/> is data found elsewhere that has no element
+    /// type, either stated or taken from its address. It is evaluated first, because that is when
+    /// it takes one.
+    /// </summary>
+    private bool HasNoElementType(Symbol symbol)
+    {
+        if (symbol is not { Kind: SymbolKind.AddressAlias, ValueExpression.Parent: DataDeclarationSyntax })
+            return false;
+        EnsureEvaluated(symbol);
+        return symbol.Data is null;
+    }
+
+    /// <summary>
+    /// Reports data found elsewhere whose stated element type takes more bytes than the data at
+    /// its address has left from there.
+    /// </summary>
+    private void CheckFits(Symbol symbol, Landing landing)
+    {
+        EnsureEvaluated(landing.Storage);
+        if (landing.Storage.Size is not { } size || symbol.Size is not { } taken || landing.Offset < 0)
             return;
-        }
-        if (!string.Equals(written.Directive.Text, element.Directive.Text, StringComparison.OrdinalIgnoreCase)
-            || symbol.Type is { } type && target.Type is { } other && type != other)
-        {
-            Report(symbol.DeclarationSpan, Catalogue.DataElsewhereElementDiffers.Message(
-                symbol.Name, written.GetText().Trim(), target.Name, element.GetText().Trim()), []);
-        }
+        var left = size - landing.Offset;
+        if (left >= taken)
+            return;
+        var name = landing.Storage.DisplayName;
+        var why = left <= 0
+            ? $"its address is past the end of `{name}`"
+            : $"only {Bytes(left)} of `{name}` {(left == 1 ? "is" : "are")} left at its address";
+        Add(new Diagnostic(symbol.DeclarationSpan, Catalogue.DataElsewhereOverruns.Message(symbol.Name, Bytes(taken), why)));
+
+        static string Bytes(long count) => $"{count} byte{(count == 1 ? "" : "s")}";
     }
 
     /// <summary>
@@ -659,6 +800,11 @@ internal sealed partial class Evaluator
         {
             if (!resolved.TryGetValue((name.Tree, part.Span.Start), out var symbol))
                 return null;
+            if (HasNoElementType(symbol))
+            {
+                Report(index, Catalogue.DataHasNoElementType.Message(symbol.DisplayName));
+                return null;
+            }
             if (!(symbol.IsTypedStorage || symbol.Kind == SymbolKind.Member)
                 || symbol is { Kind: SymbolKind.Data, Data: null })
             {
@@ -885,6 +1031,17 @@ internal sealed partial class Evaluator
     /// </param>
     private readonly record struct WalkContext(
         Symbol? Owner, Symbol? Declaring, int Choosing, bool ReadingBody, bool Apart);
+
+    /// <summary>
+    /// Represents where an address lands in a declaration that has an element type.
+    /// </summary>
+    /// <param name="Storage">The data declaration, or the field reached through data.</param>
+    /// <param name="Offset">How many bytes into it the address lands.</param>
+    /// <param name="Named">
+    /// Whether the address is the plain name of the declaration, which stands for all of it rather
+    /// than its first element.
+    /// </param>
+    private readonly record struct Landing(Symbol Storage, long Offset, bool Named);
 
     /// <summary>
     /// Restores the walk context a scope replaced when it is disposed, and removes the symbol the

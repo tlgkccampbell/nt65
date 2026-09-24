@@ -625,6 +625,15 @@ public static class Catalogue
         "A `::` reaches into a module, a scope, a routine or a named type. The symbol before it is none of those, "
             + "so nothing can be reached through it.");
 
+    internal static DiagnosticDescriptor FieldsNeedAStatedType { get; } = Entry(
+        Area.Names,
+        "fields-need-a-stated-type",
+        Severity.Error,
+        "`{0}` states no type, so `::` cannot reach its fields; give it one on its declaration, such as `: .type T`",
+        "The names after `::` are resolved while nt65 reads the declarations, before it works out where an offset "
+            + "lands. So the fields of data found elsewhere can be named when its declaration states a type, or when "
+            + "its address is the plain name of data, whose type is known. For any other address, state the type.");
+
     internal static DiagnosticDescriptor NameAlreadyDeclared { get; } = Entry(
         Area.Names,
         "name-already-declared",
@@ -1242,25 +1251,31 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is an address, so it cannot be a `.const`; declare it with `.data`, or with `.proc` for a routine",
         "A `.const` is a number or a text. A name for an address is declared as what is at the address: "
-            + "`.data name: element = expr` for data, and `.proc name = expr` for a routine. The distance between two "
-            + "addresses is a number, so a `.const` may hold it.");
+            + "`.data name = expr` for data, which takes the element type at the address or states its own, and "
+            + "`.proc name = expr` for a routine. The distance between two addresses is a number, so a `.const` may "
+            + "hold it.");
 
-    internal static DiagnosticDescriptor DataElsewhereNeedsAnElement { get; } = Entry(
+    internal static DiagnosticDescriptor DataHasNoElementType { get; } = Entry(
         Area.Values,
-        "data-elsewhere-needs-an-element",
+        "data-has-no-element-type",
         Severity.Error,
-        "`{0}` has no element, and its address is not the name of data; give it one, as in `.data {0}: .byte = address`",
-        "Data found elsewhere without an element is another name for the data its address names, with that data's "
-            + "element, count and members. Any other address, such as an offset or a number, needs an element.");
+        "`{0}` has no element type; give it one on its declaration, such as `: .byte`",
+        "Data found elsewhere that states no element type takes the one at its address. The name of data gives "
+            + "that data's element type, and an offset that lands on the start of an element, or on a field, gives "
+            + "that element's or field's. Any other address, such as code, a number or an offset into the middle of "
+            + "an element, gives none. Such a name is still an address that instructions and data can use, but its "
+            + "size, its count, its elements and its fields are unknown until its declaration states an element "
+            + "type.");
 
-    internal static DiagnosticDescriptor DataElsewhereElementDiffers { get; } = Entry(
+    internal static DiagnosticDescriptor DataElsewhereOverruns { get; } = Entry(
         Area.Values,
-        "data-elsewhere-element-differs",
-        Severity.Error,
-        "`{0}` gives the element `{1}`, but `{2}` is `{3}`; leave the element out to use the data's",
-        "Data found elsewhere whose address is the name of data is that data under another name, so any element it "
-            + "gives must be the data's. Leave the element out to use the data's, or add an offset to describe part "
-            + "of it.");
+        "data-elsewhere-overruns",
+        Severity.Warning,
+        "`{0}` is {1}, but {2}",
+        "Data found elsewhere may state an element type different from the one at its address, to read the same "
+            + "bytes another way. When the data at the address has fewer bytes left than that element type takes, "
+            + "the name reaches into whatever follows it. State an element type that fits, or leave it out if the "
+            + "name is only used as an address.");
 
     internal static DiagnosticDescriptor ConditionUsesAMeasurement { get; } = Entry(
         Area.Values,

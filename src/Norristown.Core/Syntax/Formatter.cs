@@ -56,7 +56,10 @@ public static class Formatter
         /// <summary>A line that belongs to no run.</summary>
         None,
 
-        /// <summary>A named data line, or a member of a layout, which lines up on its directive.</summary>
+        /// <summary>
+        /// A named data line, or a member of a layout, which lines up on its directive. Data found
+        /// elsewhere with no element type is in the run too, but has no directive to line up.
+        /// </summary>
         Data,
 
         /// <summary>A <c>.const</c> line, which lines up on its <c>=</c> or <c>?=</c>.</summary>
@@ -129,7 +132,7 @@ public static class Formatter
             var content = tree.Text.AsSpan(tree.LineStarts[i], Width(tree, i)).TrimEnd(Blank);
             if (content.TrimStart(Blank).IsEmpty)
             {
-                pieces[i] = new Piece(0, Run.None, "", null, "", null, false);
+                pieces[i] = new Piece(0, Run.None, "", null, "", null, false, false);
                 continue;
             }
 
@@ -138,7 +141,7 @@ public static class Formatter
             if (line.LineIndex != i)
             {
                 var indent = continued.GetValueOrDefault(i, (depths[line.LineIndex] + 1) * IndentWidth);
-                pieces[i] = new Piece(indent, Run.None, content.TrimStart(Blank).ToString(), null, "", null, false);
+                pieces[i] = new Piece(indent, Run.None, content.TrimStart(Blank).ToString(), null, "", null, false, false);
                 continue;
             }
 
@@ -166,8 +169,13 @@ public static class Formatter
         if (colon >= 0 && TextOffset(line, colon + 1) < code.Length)
         {
             var name = code[TextOffset(line, 0)..(TextOffset(line, colon) + 1)].ToString();
-            return new Piece(indent, Run.Data, name, null, code[TextOffset(line, colon + 1)..].ToString(), note, false);
+            return new Piece(indent, Run.Data, name, null, code[TextOffset(line, colon + 1)..].ToString(), note, false, false);
         }
+
+        // Data found elsewhere with no element type has no directive to line up, but it is data
+        // like the lines around it, so it stays in their run rather than ending it.
+        if (line.Statement is DataDeclarationSyntax { Directive: null, Address: not null })
+            return new Piece(indent, Run.Data, code[TextOffset(line, 0)..].ToString(), null, "", note, false, true);
 
         // A `.const` line lines up from its first token, which may be `.export`, and a member line
         // from its name. Either one lines up on its `=` only when the value starts on the line.
@@ -181,11 +189,11 @@ public static class Formatter
             _ => (Run.None, default, default),
         };
         if (run == Run.None)
-            return new Piece(indent, Run.None, content.TrimStart(Blank).ToString(), null, "", null, line.LineKind == LineKind.Blank);
+            return new Piece(indent, Run.None, content.TrimStart(Blank).ToString(), null, "", null, line.LineKind == LineKind.Blank, false);
 
         var before = code[(head.Span.Start - start)..(equals.Span.Start - start)].TrimEnd(Blank).ToString();
         var after = code[(equals.Span.End - start)..].TrimStart(Blank).ToString();
-        return new Piece(indent, run, before, equals.Text, after, note, false);
+        return new Piece(indent, run, before, equals.Text, after, note, false, false);
     }
 
     /// <summary>
@@ -219,14 +227,14 @@ public static class Formatter
             // A data line's directive starts one column past its longest name. A `.const` or
             // member line's `=` is one column past its longest name, and a `?=` puts its `?` in
             // the column before, so that every value starts in one column.
-            var column = members.Max(line => pieces[line].Indent + pieces[line].Head.Length
-                + (pieces[line].Operator is { } op ? op.Length : 0)) + 1;
+            var column = members.Where(line => !pieces[line].Unaligned).DefaultIfEmpty(i).Max(line => pieces[line].Indent
+                + pieces[line].Head.Length + (pieces[line].Operator is { } op ? op.Length : 0)) + 1;
             var code = new Dictionary<int, string>();
             foreach (var line in members)
             {
                 var part = pieces[line];
                 var head = new string(' ', part.Indent) + part.Head;
-                code[line] = part.Operator is not { } op
+                code[line] = part.Unaligned ? head : part.Operator is not { } op
                     ? head + new string(' ', column - head.Length) + part.Tail
                     : head + new string(' ', column - op.Length - head.Length) + op + (part.Tail.Length == 0 ? "" : " " + part.Tail);
             }
@@ -397,6 +405,10 @@ public static class Formatter
     /// <param name="Tail">The text after the gap, without the trailing comment.</param>
     /// <param name="Comment">The trailing comment of a line of a run, or null.</param>
     /// <param name="OnlyComment">Whether the line holds only a comment, which does not end a run.</param>
+    /// <param name="Unaligned">
+    /// Whether the line is in a run but has no gap to line up, and so keeps its own spacing and
+    /// does not widen the run's column.
+    /// </param>
     private readonly record struct Piece(
-        int Indent, Run Run, string Head, string? Operator, string Tail, string? Comment, bool OnlyComment);
+        int Indent, Run Run, string Head, string? Operator, string Tail, string? Comment, bool OnlyComment, bool Unaligned);
 }

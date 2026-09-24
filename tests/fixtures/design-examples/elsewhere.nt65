@@ -16,7 +16,7 @@
 
 .data PPUCTRL: .byte = $2000        ; a port
 .data TXTPTR:  .addr = CHRGOT + 1   ; the operand of an instruction in CHRGOT
-.data TEMP3 = FNCNAM                             ; FNCNAM, under another name
+.data TEMP3 = FNCNAM                ; FNCNAM, under another name
 
 .export .const APPLE    ?= 0
 .export .const KIM      ?= 0
