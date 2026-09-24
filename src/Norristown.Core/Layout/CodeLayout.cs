@@ -189,7 +189,7 @@ public sealed partial class CodeLayout
             if (step.Statement is not InstructionStatementSyntax instruction)
                 continue;
             var mnemonic = SyntaxFacts.TextOf(instruction.MnemonicKind);
-            if (Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls)
+            if (Instructions.IsCall(instruction.MnemonicKind))
                 return new CycleSpan(null, $"the span contains a call, `{mnemonic}`, whose time depends on the routine it calls");
             if (Backwards(instruction, step, start, i) is { } loop)
                 return new CycleSpan(null, loop);

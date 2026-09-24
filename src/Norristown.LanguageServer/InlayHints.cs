@@ -182,7 +182,7 @@ internal static class InlayHints
         // A call that changes the state is the surprising case: the change is made in the
         // called routine rather than on this line, and the arrow marks that it came from there.
         var calls = Instruction(statement) is { } instruction
-            && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
+            && Instructions.IsCall(instruction.MnemonicKind);
         return new Mark(
             (calls ? "→ " : "") + string.Join(" ", parts),
             $"The processor state changes from `{was}` to `{now}` after this line.");
