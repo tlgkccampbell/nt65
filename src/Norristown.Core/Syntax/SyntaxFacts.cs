@@ -56,44 +56,44 @@ public static class SyntaxFacts
         [.. Enum.GetValues<BuiltinKind>().Select(kind => kind == BuiltinKind.None ? "" : "." + kind.ToString().ToLowerInvariant())];
 
     /// <summary>
-    /// Every built-in function, in the order <see cref="BuiltinKind"/> declares them, with what
-    /// each one allows. Any expression may call a function here unless it is marked as one only a
-    /// macro body may call.
+    /// Every built-in function, in the order <see cref="BuiltinKind"/> declares them, with how many
+    /// arguments each one takes and what each one allows. Any expression may call a function here
+    /// unless it is marked as one only a macro body may call.
     /// </summary>
     public static readonly IReadOnlyList<BuiltinFunction> Builtins =
     [
-        new(BuiltinKind.Lobyte, Arithmetic: true),
-        new(BuiltinKind.Hibyte, Arithmetic: true),
-        new(BuiltinKind.Bankbyte, Arithmetic: true),
-        new(BuiltinKind.Loword, Arithmetic: true),
-        new(BuiltinKind.Hiword, Arithmetic: true),
-        new(BuiltinKind.Sizeof),
-        new(BuiltinKind.Countof),
-        new(BuiltinKind.Endof),
-        new(BuiltinKind.Spanof),
-        new(BuiltinKind.Loadof),
-        new(BuiltinKind.Runof),
-        new(BuiltinKind.Strlen, Arithmetic: true),
-        new(BuiltinKind.Strat, Arithmetic: true),
-        new(BuiltinKind.Strsub, Arithmetic: true),
-        new(BuiltinKind.Strcat, Arithmetic: true),
-        new(BuiltinKind.Min, Arithmetic: true),
-        new(BuiltinKind.Max, Arithmetic: true),
-        new(BuiltinKind.Addrsize),
-        new(BuiltinKind.Target),
-        new(BuiltinKind.Defined),
-        new(BuiltinKind.Has),
-        new(BuiltinKind.Select),
-        new(BuiltinKind.Sqrt, Arithmetic: true),
-        new(BuiltinKind.Muldiv, Arithmetic: true),
-        new(BuiltinKind.Sin, Arithmetic: true),
-        new(BuiltinKind.Cos, Arithmetic: true),
-        new(BuiltinKind.Mincycles),
-        new(BuiltinKind.Maxcycles),
-        new(BuiltinKind.Mode, MacroOnly: true),
-        new(BuiltinKind.Byteof, MacroOnly: true),
-        new(BuiltinKind.Exprof, MacroOnly: true),
-        new(BuiltinKind.Empty, MacroOnly: true),
+        new(BuiltinKind.Lobyte, 1, 1, "one value", Arithmetic: true),
+        new(BuiltinKind.Hibyte, 1, 1, "one value", Arithmetic: true),
+        new(BuiltinKind.Bankbyte, 1, 1, "one value", Arithmetic: true),
+        new(BuiltinKind.Loword, 1, 1, "one value", Arithmetic: true),
+        new(BuiltinKind.Hiword, 1, 1, "one value", Arithmetic: true),
+        new(BuiltinKind.Sizeof, 1, 1, "the name of a declaration"),
+        new(BuiltinKind.Countof, 1, 1, "the name of a declaration"),
+        new(BuiltinKind.Endof, 1, 1, "the name of a routine or data"),
+        new(BuiltinKind.Spanof, 1, 1, "the name of a routine, data or a segment"),
+        new(BuiltinKind.Loadof, 1, 1, "a segment"),
+        new(BuiltinKind.Runof, 1, 1, "a segment"),
+        new(BuiltinKind.Strlen, 1, 1, "one text", Arithmetic: true),
+        new(BuiltinKind.Strat, 2, 2, "`.strat(text, index)`: a text and a number", Arithmetic: true),
+        new(BuiltinKind.Strsub, 3, 3, "`.strsub(text, start, count)`: a text and two numbers", Arithmetic: true),
+        new(BuiltinKind.Strcat, 1, null, "`.strcat(part, ...)`: at least one text or number", Arithmetic: true),
+        new(BuiltinKind.Min, 2, 2, "two numbers", Arithmetic: true),
+        new(BuiltinKind.Max, 2, 2, "two numbers", Arithmetic: true),
+        new(BuiltinKind.Addrsize, 1, 1, "one expression"),
+        new(BuiltinKind.Target, 1, 1, null),
+        new(BuiltinKind.Defined, 1, 1, "one name"),
+        new(BuiltinKind.Has, 1, 1, null),
+        new(BuiltinKind.Select, 3, 3, null),
+        new(BuiltinKind.Sqrt, 1, 1, "one number", Arithmetic: true),
+        new(BuiltinKind.Muldiv, 3, 3, "`.muldiv(a, b, c)`", Arithmetic: true),
+        new(BuiltinKind.Sin, 3, 3, "`.sin(angle, turn, scale)`", Arithmetic: true),
+        new(BuiltinKind.Cos, 3, 3, "`.cos(angle, turn, scale)`", Arithmetic: true),
+        new(BuiltinKind.Mincycles, 2, 2, "`.mincycles(from, to)`"),
+        new(BuiltinKind.Maxcycles, 2, 2, "`.maxcycles(from, to)`"),
+        new(BuiltinKind.Mode, 1, 1, "an `operand` parameter", MacroOnly: true),
+        new(BuiltinKind.Byteof, 1, 2, "`.byteof(p, n)`: an `operand` parameter and an optional byte number", MacroOnly: true),
+        new(BuiltinKind.Exprof, 1, 1, "an `operand` parameter", MacroOnly: true),
+        new(BuiltinKind.Empty, 1, 1, "a `block` parameter", MacroOnly: true),
     ];
 
     /// <summary>

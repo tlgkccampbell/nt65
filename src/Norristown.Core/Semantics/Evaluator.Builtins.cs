@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Norristown.Processor;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -58,14 +59,19 @@ internal sealed partial class Evaluator
             return Value.Unknown;
 
         var kind = call.BuiltinKind;
+        if (!Fits(kind, function, given))
+            return Value.Unknown;
         switch (kind)
         {
             case BuiltinKind.Select:
-                return Select(function, given);
+                return Select(given);
             case BuiltinKind.Mode or BuiltinKind.Empty:
                 return AboutAnArgument(kind, given);
+
+            // Where a segment is loaded and where it runs are known only to the linker, so
+            // `.loadof` and `.runof` never have a value here.
             case BuiltinKind.Loadof or BuiltinKind.Runof:
-                return Linked(kind, function, given);
+                return Value.Unknown;
             case BuiltinKind.Endof or BuiltinKind.Spanof:
                 return Extent(kind, given);
             case BuiltinKind.Mincycles or BuiltinKind.Maxcycles:
@@ -77,7 +83,7 @@ internal sealed partial class Evaluator
 
             // `.addrsize` asks about the shape of its argument rather than its value.
             case BuiltinKind.Addrsize:
-                return given.Count == 1 && SizeOf(given[0], null) is { } size ? Value.Of((long)size) : Value.Unknown;
+                return SizeOf(given[0], null) is { } size ? Value.Of((long)size) : Value.Unknown;
 
             // A condition in an expansion asks about the CPU in the same way the build's
             // conditions do.
@@ -94,28 +100,43 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
+    /// Checks whether a call gives <paramref name="kind"/> as many arguments as its row of
+    /// <see cref="SyntaxFacts.Builtins"/> allows, and reports the call when it does not. The
+    /// arguments of an arithmetic built-in are values, so they are still evaluated, and any
+    /// problem inside one is still found.
+    /// </summary>
+    private bool Fits(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
+    {
+        var builtin = SyntaxFacts.Builtin(kind);
+        if (builtin.Accepts(arguments.Count))
+            return true;
+        if (builtin.Arithmetic)
+        {
+            foreach (var argument in arguments)
+                Evaluate(argument);
+        }
+        Report(function, kind switch
+        {
+            BuiltinKind.Select => Catalogue.SelectArguments,
+            BuiltinKind.Target => Catalogue.TargetArgument.Message(CpuNames.Listed),
+            BuiltinKind.Has => Catalogue.HasArgument,
+            _ => Catalogue.BuiltinArguments.Message(builtin.Name, builtin.Takes!),
+        });
+        return false;
+    }
+
+    /// <summary>
     /// Returns the value of <c>.mode</c> or <c>.empty</c>, which only a macro body uses. Each asks
     /// about an argument rather than a value, so each reads what the parameter was given rather
     /// than evaluating it.
     /// </summary>
     private Value AboutAnArgument(BuiltinKind kind, IReadOnlyList<SyntaxNode> arguments)
     {
-        if (arguments.Count != 1 || names.Argument(arguments[0]) is not { } about)
+        if (names.Argument(arguments[0]) is not { } about)
             return Value.Unknown;
         return kind == BuiltinKind.Mode
             ? about.Operand is { } operand ? Value.Word(Operands.ModeOf(operand)) : Value.Unknown
             : Value.Of(about.Block is null || Macros.LinesOf(about.Block).Count == 0);
-    }
-
-    /// <summary>
-    /// Returns the value of <c>.loadof</c> or <c>.runof</c>, which is never known here, because
-    /// where a segment is loaded and where it runs are known only to the linker.
-    /// </summary>
-    private Value Linked(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
-    {
-        if (arguments.Count != 1)
-            Report(function, Catalogue.BuiltinArguments.Message(SyntaxFacts.TextOf(kind), "a segment"));
-        return Value.Unknown;
     }
 
     /// <summary>
@@ -127,7 +148,7 @@ internal sealed partial class Evaluator
     private Value Extent(BuiltinKind kind, IReadOnlyList<SyntaxNode> arguments)
     {
         var name = SyntaxFacts.TextOf(kind);
-        if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } laid)
+        if (SymbolOf(arguments[0]) is not { } laid)
             return Value.Unknown;
         if (NotAnExtent(laid, name, arguments[0]))
             return Value.Unknown;
@@ -147,11 +168,6 @@ internal sealed partial class Evaluator
     private Value Cycles(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
     {
         var name = SyntaxFacts.TextOf(kind);
-        if (arguments.Count != 2)
-        {
-            Report(function, Catalogue.BuiltinArguments.Message(name, $"`{name}(from, to)`"));
-            return Value.Unknown;
-        }
         if (SymbolOf(arguments[0]) is not { } start || SymbolOf(arguments[1]) is not { } end)
             return Value.Unknown;
         foreach (var (at, symbol) in new[] { (arguments[0], start), (arguments[1], end) })
@@ -178,7 +194,7 @@ internal sealed partial class Evaluator
     private Value Measured(BuiltinKind kind, IReadOnlyList<SyntaxNode> arguments)
     {
         var name = SyntaxFacts.TextOf(kind);
-        if (arguments.Count != 1 || SymbolOf(arguments[0]) is not { } measured)
+        if (SymbolOf(arguments[0]) is not { } measured)
             return Value.Unknown;
 
         // `.countof(p)` of a `list` parameter is the number of arguments the call gave it.
@@ -227,8 +243,11 @@ internal sealed partial class Evaluator
 
         // Outside an expansion the parameter has been given no operand yet, which is not an
         // error.
-        if (arguments.Count != 1 || names.Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
-            Report(function, Catalogue.BuiltinArguments.Message(SyntaxFacts.TextOf(BuiltinKind.Exprof), "an `operand` parameter"));
+        if (names.Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
+        {
+            var exprOf = SyntaxFacts.Builtin(BuiltinKind.Exprof);
+            Report(function, Catalogue.BuiltinArguments.Message(exprOf.Name, exprOf.Takes!));
+        }
         return Value.Unknown;
     }
 
@@ -278,11 +297,11 @@ internal sealed partial class Evaluator
         var name = SyntaxFacts.TextOf(kind);
         if (kind == BuiltinKind.Strsub)
         {
-            if (values.Length != 3 || values[0].Kind is ValueKind.Number or ValueKind.Word
+            if (values[0].Kind is ValueKind.Number or ValueKind.Word
                 || values[1].Kind is ValueKind.String or ValueKind.Word
                 || values[2].Kind is ValueKind.String or ValueKind.Word)
             {
-                Report(function, Catalogue.BuiltinArguments.Message(name, "`.strsub(text, start, count)`: a text and two numbers"));
+                Report(function, Catalogue.BuiltinArguments.Message(name, SyntaxFacts.Builtin(kind).Takes!));
                 return Value.Unknown;
             }
             if (values is not [{ Kind: ValueKind.String, Text: { } whole }, { Kind: ValueKind.Number } from,
@@ -300,11 +319,6 @@ internal sealed partial class Evaluator
             return Value.Of(whole.Substring((int)from.Number, (int)taken.Number));
         }
 
-        if (values.Length == 0)
-        {
-            Report(function, Catalogue.BuiltinArguments.Message(name, "`.strcat(part, ...)`: at least one text or number"));
-            return Value.Unknown;
-        }
         var joined = new System.Text.StringBuilder();
         var known = true;
         for (var i = 0; i < values.Length; i++)
@@ -373,13 +387,7 @@ internal sealed partial class Evaluator
                     : IntegerMath.Cos(angle.Number, turn.Number, scale.Number);
                 break;
             default:
-                Report(function, Catalogue.BuiltinArguments.Message(name, kind switch
-                {
-                    BuiltinKind.Sqrt => "one number",
-                    BuiltinKind.Muldiv => "`.muldiv(a, b, c)`",
-                    _ => $"`{name}(angle, turn, scale)`",
-                }));
-                return Value.Unknown;
+                throw new UnreachableException($"`{name}` was given a number of arguments it does not take.");
         }
         return worked is { } number ? Value.Of(number) : Value.Unknown;
     }
@@ -422,22 +430,25 @@ internal sealed partial class Evaluator
         // a name that is not a define is the answer rather than a mistake.
         if (kind == BuiltinKind.Defined)
         {
+            if (!Fits(kind, function, given))
+                return Value.Unknown;
             return given is [NameExpressionSyntax { SimpleName: { } about }]
                 ? Value.Of(asked.Defines.ContainsKey(about.Text))
                 : Value.Unknown;
         }
 
         if (kind is BuiltinKind.Target or BuiltinKind.Has)
-            return Configuration.AboutTheCpu(kind, function, given, asked.Cpu, (_, message) => Report(function, message));
+        {
+            return Fits(kind, function, given)
+                ? Configuration.AboutTheCpu(kind, function, given, asked.Cpu, (_, message) => Report(function, message))
+                : Value.Unknown;
+        }
 
         // Only the value the condition chooses is read, so it alone has to be a define.
         if (kind == BuiltinKind.Select)
         {
-            if (given.Count != 3)
-            {
-                Report(function, Catalogue.SelectArguments);
+            if (!Fits(kind, function, given))
                 return Value.Unknown;
-            }
             return Evaluate(given[0]).AsNumber() is { } holds ? Evaluate(given[holds != 0 ? 1 : 2]) : Value.Unknown;
         }
 
@@ -448,20 +459,15 @@ internal sealed partial class Evaluator
             Report(function, Catalogue.ConditionAsksAboutTheProgram.Message(function.Text));
             return Value.Unknown;
         }
-        return Plain(kind, function, given);
+        return Fits(kind, function, given) ? Plain(kind, function, given) : Value.Unknown;
     }
 
     /// <summary>
     /// Evaluates <c>.select(c, a, b)</c>, which is <c>a</c> when the constant <c>c</c> holds and
     /// <c>b</c> when it does not. Only the chosen value is evaluated.
     /// </summary>
-    private Value Select(SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
+    private Value Select(IReadOnlyList<SyntaxNode> arguments)
     {
-        if (arguments.Count != 3)
-        {
-            Report(function, Catalogue.SelectArguments);
-            return Value.Unknown;
-        }
         var condition = Evaluate(arguments[0]);
         if (condition.AsNumber() is not { } holds)
         {

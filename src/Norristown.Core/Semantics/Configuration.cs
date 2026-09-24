@@ -101,8 +101,9 @@ public sealed class Configuration
 
     /// <summary>
     /// Returns the value of <c>.target(cpu)</c> or <c>.has(mnemonic)</c>, whichever
-    /// <paramref name="kind"/> is, for a build for <paramref name="cpu"/>. Problems with the
-    /// argument are reported through <paramref name="report"/>.
+    /// <paramref name="kind"/> is, for a build for <paramref name="cpu"/>. The caller has checked
+    /// that <paramref name="given"/> holds one argument. Problems with the argument are reported
+    /// through <paramref name="report"/>.
     /// </summary>
     internal static Value AboutTheCpu(
         BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> given, Cpu cpu,
@@ -111,7 +112,7 @@ public sealed class Configuration
         switch (kind)
         {
             case BuiltinKind.Target:
-                if (given.Count != 1 || Alone(given[0]) is not { } cpuName || CpuNames.Parse(cpuName.Text) is not { } named)
+                if (Alone(given[0]) is not { } cpuName || CpuNames.Parse(cpuName.Text) is not { } named)
                 {
                     report(function.Span, Catalogue.TargetArgument.Message(CpuNames.Listed));
                     return Value.Unknown;
@@ -122,7 +123,7 @@ public sealed class Configuration
             // program that runs on more than one CPU asks this rather than listing the CPUs
             // that have the instruction.
             case BuiltinKind.Has:
-                if (given.Count != 1 || given[0] is not NameExpressionSyntax { SimpleName: { Kind: SyntaxKind.Mnemonic } mnemonic })
+                if (given[0] is not NameExpressionSyntax { SimpleName: { Kind: SyntaxKind.Mnemonic } mnemonic })
                 {
                     report(function.Span, Catalogue.HasArgument);
                     return Value.Unknown;

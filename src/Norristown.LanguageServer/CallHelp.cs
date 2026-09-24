@@ -13,7 +13,8 @@ internal static class CallHelp
 {
     // The built-in functions that get signature help, with their parameter names and a
     // description of what each returns. A parameter named `...` stands for any number of
-    // further arguments.
+    // further arguments, and is last for a built-in whose row of SyntaxFacts.Builtins sets no
+    // most arguments.
     private static readonly Dictionary<BuiltinKind, (string[] Parameters, string Documentation)> builtins =
         new()
         {
@@ -48,7 +49,9 @@ internal static class CallHelp
                 && builtins.TryGetValue(kind, out var builtin))
             {
                 var parameters = builtin.Parameters;
-                var last = parameters[^1] == "..." ? parameters.Length - 2 : parameters.Length - 1;
+                // A built-in that takes any number of arguments marks the last one it names as
+                // active for every argument from there on.
+                var last = SyntaxFacts.Builtin(kind).MaxArguments is { } most ? most - 1 : parameters.Length - 2;
                 return Help($"{SyntaxFacts.TextOf(kind)}(", parameters, ")", builtin.Documentation,
                     Math.Min(argument, last));
             }

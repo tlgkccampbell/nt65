@@ -55,4 +55,29 @@ public sealed class BuiltinTableTests
             [".mode", ".byteof", ".exprof", ".empty"],
             SyntaxFacts.Builtins.Where(builtin => builtin.MacroOnly).Select(builtin => builtin.Name));
     }
+
+    /// <summary>
+    /// Each row says how many arguments its function takes, and what to say when a call gives
+    /// another number. Only the functions whose wrong calls have diagnostics of their own leave
+    /// that unsaid.
+    /// </summary>
+    [Fact]
+    public void EveryRowStatesItsArity()
+    {
+        Assert.All(SyntaxFacts.Builtins, builtin =>
+        {
+            Assert.InRange(builtin.MinArguments, 1, builtin.MaxArguments ?? int.MaxValue);
+            Assert.True(builtin.Accepts(builtin.MinArguments));
+            Assert.False(builtin.Accepts(builtin.MinArguments - 1));
+            if (builtin.MaxArguments is { } most)
+                Assert.False(builtin.Accepts(most + 1));
+        });
+        Assert.Equal(
+            [".target", ".has", ".select"],
+            SyntaxFacts.Builtins.Where(builtin => builtin.Takes is null).Select(builtin => builtin.Name));
+        Assert.Equal(
+            [".strcat"],
+            SyntaxFacts.Builtins.Where(builtin => builtin.MaxArguments is null).Select(builtin => builtin.Name));
+        Assert.Equal(2, SyntaxFacts.Builtin(BuiltinKind.Byteof).MaxArguments);
+    }
 }

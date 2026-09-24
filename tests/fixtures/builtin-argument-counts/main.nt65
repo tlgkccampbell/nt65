@@ -1,0 +1,46 @@
+; A built-in given too few or too many arguments is reported, whatever it would compute. One in a
+; macro body is reported when a call expands it, and one in a condition when the build reads it.
+.module main
+.cpu 6502
+
+.segment RODATA
+.data table: .byte 1, 2, 3
+
+.data low:     .byte .lobyte()                 ;! error[builtin-arguments]: `.lobyte` takes one value
+.data high:    .byte .hibyte($1234, 1)         ;! error[builtin-arguments]: `.hibyte` takes one value
+.data bank:    .byte .bankbyte()               ;! error[builtin-arguments]: `.bankbyte` takes one value
+.data word:    .word .loword()                 ;! error[builtin-arguments]: `.loword` takes one value
+.data upper:   .word .hiword(1, 2)             ;! error[builtin-arguments]: `.hiword` takes one value
+.data smaller: .byte .min(1)                   ;! error[builtin-arguments]: `.min` takes two numbers
+.data larger:  .byte .max(1, 2, 3)             ;! error[builtin-arguments]: `.max` takes two numbers
+.data length:  .byte .strlen()                 ;! error[builtin-arguments]: `.strlen` takes one text
+.data at:      .byte .strat("AB")              ;! error[builtin-arguments]: `.strat` takes `.strat(text, index)`: a text and a number
+.data root:    .byte .sqrt(table, 2)           ;! error[builtin-arguments]: `.sqrt` takes one number
+.data size:    .byte .sizeof()                 ;! error[builtin-arguments]: `.sizeof` takes the name of a declaration
+.data count:   .byte .countof(table, table)    ;! error[builtin-arguments]: `.countof` takes the name of a declaration
+.data span:    .byte .spanof()                 ;! error[builtin-arguments]: `.spanof` takes the name of a routine, data or a segment
+.data kind:    .byte .addrsize()               ;! error[builtin-arguments]: `.addrsize` takes one expression
+
+.macro load(p: operand, body: block) {
+    lda .byteof()                               ;! error[builtin-arguments]: `.byteof` takes `.byteof(p, n)`: an `operand` parameter and an optional byte number
+    ldx #.empty()                               ;! error[builtin-arguments]: `.empty` takes a `block` parameter
+    ldy #.mode()                                ;! error[builtin-arguments]: `.mode` takes an `operand` parameter
+    body
+}
+
+.segment CODE
+.proc main {
+    lda #.endof()                               ;! error[builtin-arguments]: `.endof` takes the name of a routine or data
+    load!({#1}) {
+        nop
+    }
+    rts
+}
+
+.if .defined() {                                ;! error[builtin-arguments]: `.defined` takes one name
+    NOPE = 1
+}
+
+.if .lobyte(1, 2) {                             ;! error[builtin-arguments]: `.lobyte` takes one value
+    NOPE = 2
+}
