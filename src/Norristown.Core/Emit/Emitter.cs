@@ -1813,7 +1813,7 @@ public sealed class Emitter
     /// <summary>
     /// Rewrites a name as ca65 needs it. Most names become the flat name of the symbol they
     /// refer to. A list becomes its items, a member path its offset, a macro parameter the
-    /// argument given for it, a string its bytes, and a define or a checked import its value.
+    /// argument given for it, a string its bytes, and a setting or a checked import its value.
     /// </summary>
     private void Name(NameExpressionSyntax name, TokenRewriter rewriter)
     {

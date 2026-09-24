@@ -156,8 +156,8 @@ public static class Repetitions
     /// Returns the two halves of the <see cref="Forbidden"/> message, what is refused and why, or
     /// null when the statement is allowed. Whether a directive is refused comes from its
     /// placement, which the editor reads too. A declaration after <c>.export</c> counts as the
-    /// <c>.export</c>. A <c>.use</c>, a <c>.config</c> or a <c>.fallthrough</c> is reported by its
-    /// own rule.
+    /// <c>.export</c>. A <c>.use</c>, a setting or a <c>.fallthrough</c> is reported by its own
+    /// rule.
     /// </summary>
     private static (string What, string Because)? Refused(StatementSyntax statement)
     {

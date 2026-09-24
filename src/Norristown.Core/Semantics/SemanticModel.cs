@@ -59,7 +59,7 @@ public sealed class SemanticModel
 
         Diagnostics = Norristown.Diagnostics.Ordered(bound.Diagnostics.Concat(fromTheProgram));
         bySymbol = References.ToLookup(reference => reference.Symbol);
-        // A struct member is emitted as its number, so, like a define, it is not a symbol to the
+        // A struct member is emitted as its number, so, like a setting, it is not a symbol to the
         // linker and is left out of the external symbols below.
         // A macro this file calls is expanded into it, so what its body uses is named in this
         // file's output and must be brought in here, exactly as if the file had named it itself.

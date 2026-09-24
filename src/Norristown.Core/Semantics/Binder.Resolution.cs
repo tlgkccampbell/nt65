@@ -195,14 +195,14 @@ internal sealed partial class Binder
 
     /// <summary>
     /// Resolves a name that the scopes around it do not declare. The name may be one that a
-    /// <c>.use</c> brought in, a define, the first part of a module's path, or one that a
+    /// <c>.use</c> brought in, the first part of a module's path, or one that a
     /// <c>.use module::*</c> brought in.
     /// </summary>
     private Resolution? Outside(SyntaxToken token, bool last, Action<TextSpan, DiagnosticMessage>? report) =>
         Lookup.Outside(token.Text, last, program, used, globs, Touch, At(token, report));
 
     /// <summary>
-    /// Reports a name that no scope, <c>.use</c> or define declares, naming the modules that
+    /// Reports a name that no scope or <c>.use</c> declares, naming the modules that
     /// export a name spelt the same. A name that starts a path (<paramref name="last"/> is
     /// false) is most likely a module the build does not have, such as one left off the
     /// command line.

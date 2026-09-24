@@ -3148,7 +3148,7 @@ public static class Catalogue
         "project-key-unknown",
         Severity.Error,
         "`{0}` is not a key of {1}{2}",
-        "The project file accepts a fixed set of keys: `cpu`, `files`, `out`, `defines`, `diagnostics`, `spaces`, "
+        "The project file accepts a fixed set of keys: `cpu`, `files`, `out`, `settings`, `diagnostics`, `spaces`, "
             + "`segments`, `ranges` and `configurations`, plus `$schema`, which is accepted and ignored. An "
             + "unknown key is an error, so that a misspelt setting does not silently do nothing.");
 
@@ -3212,10 +3212,10 @@ public static class Catalogue
         Area.TheProjectFile,
         "configuration-not-an-object",
         Severity.Error,
-        "configuration `{0}` must be an object, with any of `defines`, `diagnostics` and `out`",
-        "A named configuration is a JSON object that changes the project's `defines`, `diagnostics` and `out` for "
-            + "builds that choose it with `--config`: its defines and diagnostic severities take precedence over "
-            + "the project's, and its `out` replaces the project's.");
+        "configuration `{0}` must be an object, with any of `settings`, `diagnostics`, `links` and `out`",
+        "A named configuration is a JSON object that changes the project's `settings`, `diagnostics`, `links` and "
+            + "`out` for builds that choose it with `--config`: its settings, diagnostic severities and links take "
+            + "precedence over the project's, and its `out` replaces the project's.");
 
     internal static DiagnosticDescriptor ConfigurationKeyUnknown { get; } = Entry(
         Area.TheProjectFile,
