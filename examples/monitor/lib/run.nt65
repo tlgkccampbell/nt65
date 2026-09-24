@@ -1,13 +1,24 @@
 ; The commands that run code and show what it left: G and R.
 .module monitor::run
 
-.use platform::{putc, text, running}
+.use platform::{putc, text, running, COLUMNS}
 .use monitor::{registers, Registers}
 .use monitor::text::{print, print_byte, space, newline}
 .use monitor::macros::{mov_address, print_address}
 .use monitor::parse
 
 .export go, show
+
+.if .target(65816) {
+    ; The 65816's registers take a line of 47 columns. A narrower screen shows them in two
+    ; lines, the second starting at D. `BREAK` is the offset from `registers::ac` where that
+    ; line starts, which a wide screen never reaches.
+    WIDE = COLUMNS > 47
+    BREAK = .select(WIDE, 0, Registers::dp - Registers::ac)
+    FIRST = "  PC     AC   XR   YR   SP"   ; the heading of PC to S
+    SECOND = "  DP   DB NVMXDIZC E"         ; the heading of D to E
+    HEADING = .select(WIDE, .strcat(FIRST, " ", SECOND), FIRST)
+}
 
 .segment CODE
 ; G [address]: calls `address`, or the PC in `registers`, with the registers from `registers`.
@@ -40,7 +51,7 @@
 .proc show: running {
     jsr print
     .if .target(65816) {
-        .strz text("  PC     AC   XR   YR   SP   DP   DB NVMXDIZC E")
+        .strz text(HEADING)
     } .else {
         .strz text("  PC   AC XR YR SP NV-BDIZC")
     }
@@ -59,6 +70,14 @@
         jsr print_byte
         iny
         iny
+        cpy #BREAK
+        bne @same_line
+        jsr newline
+        jsr print
+        .strz text(SECOND)
+        jsr newline
+        jsr space
+    @same_line:
         cpy #Registers::db - Registers::ac
         bne @word
         jsr space

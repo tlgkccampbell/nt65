@@ -7,6 +7,6 @@ F FROM TO BYTE  FILL MEMORY
 D [FROM [TO]]   DISASSEMBLE
 G [ADDR]        RUN CODE
 R               SHOW REGISTERS
-X               LEAVE THE MONITOR
+X               EXIT THE MONITOR
 ?               SHOW THIS LIST
 .X

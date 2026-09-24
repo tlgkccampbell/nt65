@@ -13,7 +13,7 @@
 ;                       in ASCII's order.
 ;   NEWLINE             The character that ends a line.
 ;   COLUMNS             The width of the screen, which decides how many bytes a line of M
-;                       shows.
+;                       shows, and whether the 65816's registers fit on one line of R.
 ;   LINE_LENGTH         The length of the longest line that `read_line` reads.
 ;   putc: keeps x, y    Writes the character in A, which is a capital letter, a digit, a
 ;                       punctuation mark, a space or `NEWLINE`, in `text`.
@@ -152,8 +152,8 @@ ADDRESS_SIZE = .select(.target(65816), 3, 2)    ; the bytes of an address
     }
 }
 
-; ?: lists the commands. Each line stays inside the narrowest screen a platform has, the C64's
-; forty columns, so none wraps.
+; ?: lists the commands. Each line fits the narrowest screen a platform has, the Super NES's
+; thirty-two columns, so none wraps.
 .proc help: running {
     jsr print
     .strz text("NUMBERS ARE HEX")
@@ -177,7 +177,7 @@ ADDRESS_SIZE = .select(.target(65816), 3, 2)    ; the bytes of an address
     .strz text("R               SHOW REGISTERS")
     jsr newline
     jsr print
-    .strz text("X               LEAVE THE MONITOR")
+    .strz text("X               EXIT THE MONITOR")
     jsr newline
     jsr print
     .strz text("?               SHOW THIS LIST")
