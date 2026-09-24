@@ -22,6 +22,7 @@ public sealed class DataElsewhereTests
         .data STRNG1: .word
         .data P:      .type Pos[2]
         .data U:      .type Either
+        .data MSG:    .strz "hi"
 
         """;
 
@@ -41,6 +42,7 @@ public sealed class DataElsewhereTests
     [InlineData("P + 5", null, null)]
     [InlineData("FAC + 5", null, null)]
     [InlineData("U + 1", null, null)]
+    [InlineData("MSG + 1", null, null)]
     [InlineData("$0200", null, null)]
     public void TheElementTypeIsTheOneWhereTheAddressLands(string address, long? size, long? count)
     {
@@ -71,9 +73,9 @@ public sealed class DataElsewhereTests
             """);
 
         Assert.Equal([
-            "16: `EXT` has no element type; give it one on its declaration, such as `: .byte`",
             "17: `EXT` has no element type; give it one on its declaration, such as `: .byte`",
             "18: `EXT` has no element type; give it one on its declaration, such as `: .byte`",
+            "19: `EXT` has no element type; give it one on its declaration, such as `: .byte`",
         ], model.Problems());
     }
 
@@ -92,8 +94,8 @@ public sealed class DataElsewhereTests
             """);
 
         Assert.Equal([
-            "17: `WIDE` is 4 bytes, but only 2 bytes of `STRNG1` are left at its address",
-            "18: `PAST` is 1 byte, but its address is past the end of `STRNG1`",
+            "18: `WIDE` is 4 bytes, but only 2 bytes of `STRNG1` are left at its address",
+            "19: `PAST` is 1 byte, but its address is past the end of `STRNG1`",
         ], model.Problems());
         Assert.Equal(Severity.Warning, Assert.Single(model.Diagnostics, d => d.Message.StartsWith("`WIDE`", StringComparison.Ordinal)).Severity);
     }
@@ -110,7 +112,7 @@ public sealed class DataElsewhereTests
 
         Assert.Empty(chained.Problems());
         Assert.Equal(1, chained.Symbol("LAST").Size);
-        Assert.Equal(["15: `A1` is defined in terms of itself"], ring.Problems());
+        Assert.Equal(["16: `A1` is defined in terms of itself"], ring.Problems());
     }
 
     /// <summary>
@@ -133,7 +135,7 @@ public sealed class DataElsewhereTests
             """);
 
         Assert.Equal(
-            ["22: `MOVED` states no type, so `::` cannot reach its fields; give it one on its declaration, such as `: .type T`"],
+            ["23: `MOVED` states no type, so `::` cannot reach its fields; give it one on its declaration, such as `: .type T`"],
             model.Problems());
     }
 }

@@ -2042,7 +2042,8 @@ count bytes, as they always have in assembly, so where an offset lands decides w
 
 - The name of data gives that data's element type, count and fields. `TEMP3` above is a `.word`.
 - An offset that lands on the start of an element, or an index, gives one element.
-  `FAC + BYTES_FP - 1` into `FAC: .byte[BYTES_FP]` is a `.byte`.
+  `FAC + BYTES_FP - 1` into `FAC: .byte[BYTES_FP]` is a `.byte`. Data such as `.incbin` or
+  `.strz` states bytes rather than an element type, so an offset into it gives none.
 - An offset inside an element of a record type gives the field it lands in, when it lands in
   exactly one. Fields overlap in a union, so an offset into more than one gives nothing.
 - Any other address gives no element type: code, a number, `*`, `.endof`, an offset past the

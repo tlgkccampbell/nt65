@@ -641,7 +641,7 @@ internal sealed partial class Evaluator
     /// </summary>
     /// <remarks>
     /// The name of a declaration has the declaration's own element type and count. An offset that
-    /// lands on the start of an element has that element's type. An offset inside an element of a
+    /// lands on the start of an element of a stated element type has that element's type. An offset inside an element of a
     /// record type has the type of the field it lands in, and an offset anywhere else has none.
     /// </remarks>
     private (StatementSyntax Directive, Symbol? Type, bool OneElement)? ElementAt(Symbol storage, long offset, bool named)
@@ -651,6 +651,11 @@ internal sealed partial class Evaluator
             return null;
         if (named)
             return (directive, storage.Type, storage.IsOneElement);
+
+        // Data such as `.incbin` or `.strz` states bytes rather than an element type, so an offset
+        // into it lands on no element type either.
+        if (directive is not DataDirectiveSyntax stated || !DataSyntax.IsElementType(stated))
+            return null;
         if (storage.Size is not { } size || ElementIndexes.Stride(storage) is not { } stride || offset < 0 || offset >= size)
             return null;
         var within = offset % stride;
