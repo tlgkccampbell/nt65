@@ -1,27 +1,37 @@
 ; D: shows memory as instructions.
 .module monitor::disasm
 
-.use platform::{putc, text}
-.use monitor::addr
-.use monitor::opcodes::{Mode, operand_size, name_lo, name_hi, modes}
-.use monitor::text::{print, print_byte, print_word, space, newline}
+.use platform::{putc, text, running}
+.use monitor::{addr, registers, ADDRESS_SIZE}
+.use monitor::opcodes::{Mode, operand_size, opening, closing, branch, banks, name_lo, name_hi, modes}
+.use monitor::text::{print, print_byte, space, newline}
 .use monitor::memory::{range, last}
+.use monitor::macros::{add_address, compare_address, peek, print_address}
 
 .export list
 
 INSTRUCTIONS = 16                   ; what D shows when it is not told where to stop
+LONGEST = .select(.target(65816), 4, 3) ; the bytes of the longest instruction
+M_FLAG = $20                        ; the 65816's flag for an 8-bit A
+X_FLAG = $10                        ; the 65816's flag for 8-bit X and Y
+REP_OPCODE = $C2
+SEP_OPCODE = $E2
 
 .segment BSS
-.data count:  .byte                  ; instructions still to show, or 0 to stop past `last`
+.data count:  .byte                 ; instructions still to show, or 0 to stop past `last`
 .data opcode: .byte
 .data mode:   .byte
-.data size:   .byte                   ; the bytes after the opcode
-.data name:   .word                   ; the opcode's name, still packed
+.data length: .byte                 ; the instruction's bytes, the opcode's included
+.data name:   .word                 ; the opcode's name, still packed
+.data target: .byte[ADDRESS_SIZE]   ; where a branch goes
+.if .target(65816) {
+    .data widths: .byte             ; M_FLAG and X_FLAG, set for each register that is 8 bits wide
+}
 
 .segment RODATA
-.data sizes: .byte[] {
+.data lengths: .byte[] {
     .each Mode, m {
-        operand_size(m)
+        operand_size(m) + 1
     }
 }
 .data operands: .addr[] {
@@ -32,8 +42,18 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
 
 .segment CODE
 ; D [from [to]]: shows instructions from `from`, or from where the last M or D stopped, up to
-; the one that holds `to`, or sixteen of them.
-.proc list {
+; the one that holds `to`, or sixteen of them. On the 65816 an immediate is as wide as the
+; registers `R` shows, and as each REP and SEP in the listing leaves them.
+.proc list: running {
+    .if .target(65816) {
+        lda #M_FLAG | X_FLAG        ; emulation mode has only 8-bit registers
+        ldx registers::e
+        bne @emulation
+        lda registers::sr
+        and #M_FLAG | X_FLAG
+    @emulation:
+        sta widths
+    }
     jsr range
     lda #0
     bcs @count
@@ -49,10 +69,7 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
     bne @next
     rts
 @to_last:
-    lda last
-    cmp addr
-    lda last+1
-    sbc addr+1
+    compare_address!(last, addr)
     bcs @next
 @done:
     rts
@@ -60,54 +77,93 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
 
 ; Shows the instruction at `addr`, as its address, its bytes and what they mean, and moves
 ; `addr` past it. Returns with the carry set if that took it past the top of memory.
-.proc instruction {
+.proc instruction: running {
     ldy #0
-    lda (addr),y
+    peek!(addr)
     sta opcode
     tax
     lda modes,x
     sta mode
     tax
-    lda sizes,x
-    sta size
+    lda lengths,x
+    sta length
+    .if .target(65816) {
+        jsr widen
+    }
     lda #text(',')
     jsr putc
-    ldx addr+1
-    lda addr
-    jsr print_word
-    ; The instruction's bytes, in the three columns the longest one needs.
+    print_address!(addr)
+    ; The instruction's bytes, in the columns the longest one needs.
     ldy #0
 @column:
     jsr space
-    cpy size
-    beq @byte
+    cpy length
     bcc @byte
     jsr space
     jsr space
     jmp @step
 @byte:
-    lda (addr),y
+    peek!(addr)
     jsr print_byte
 @step:
     iny
-    cpy #3
+    cpy #LONGEST
     bne @column
     jsr space
     jsr print_name
     jsr print_operand
     jsr newline
-    sec                             ; one for the opcode
-    lda addr
-    adc size
-    sta addr
-    lda addr+1
-    adc #0
-    sta addr+1
+    .if .target(65816) {
+        jsr follow
+    }
+    add_address!(addr, length)
     rts
 }
 
+.if .target(65816) {
+    ; Makes an immediate as wide as the register it is for, where that register is 16 bits.
+    .proc widen: running {
+        lda mode
+        ldx #M_FLAG
+        cmp #Mode::imma
+        beq @test
+        ldx #X_FLAG
+        cmp #Mode::immi
+        bne @done
+    @test:
+        txa
+        and widths
+        bne @done
+        inc length
+    @done:
+        rts
+    }
+
+    ; Follows a REP or SEP, which sets the widths of the instructions after it.
+    .proc follow: running {
+        ldy #1
+        lda opcode
+        cmp #REP_OPCODE
+        beq @rep
+        cmp #SEP_OPCODE
+        bne @done
+        peek!(addr)
+        and #M_FLAG | X_FLAG
+        ora widths
+        sta widths
+    @done:
+        rts
+    @rep:
+        peek!(addr)
+        eor #$FF
+        and widths
+        sta widths
+        rts
+    }
+}
+
 ; Unpacks the opcode's name, five bits to a letter, and writes it.
-.proc print_name {
+.proc print_name: running {
     ldx opcode
     lda name_lo,x
     sta name
@@ -131,7 +187,7 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
 }
 
 ; Writes the operand as its addressing mode shows it; the printer's RTS returns from here.
-.proc print_operand {
+.proc print_operand: running {
     lda mode
     asl a
     tax
@@ -150,7 +206,7 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
 ; One printer for each addressing mode, all from the one body below: `operand::zpx` writes
 ; ` $12,X` from the byte after the opcode.
 .scope operand {
-    .multiproc Mode, m {
+    .multiproc Mode, m: running {
         .if m == Mode::imp {
             rts
         } .elseif m == Mode::acc {
@@ -159,69 +215,82 @@ INSTRUCTIONS = 16                   ; what D shows when it is not told where to 
             jmp putc
         } .else {
             jsr space
-            .if m == Mode::imm {
-                lda #text('#')
-                jsr putc
-            } .elseif m == Mode::ind || m == Mode::indx || m == Mode::indy {
-                lda #text('(')
-                jsr putc
-            }
-            lda #text('$')
-            jsr putc
-            .if m == Mode::rel {
+            jsr print
+            .strz text(opening(m))
+            .if branch(m) {
                 jsr print_target
-            } .elseif operand_size(m) == 2 {
+            } .elseif banks(m) {
+                ; A block move's banks, the source's first, which is the second byte.
                 ldy #2
-                lda (addr),y
-                tax
-                dey
-                lda (addr),y
-                jsr print_word
-            } .else {
-                ldy #1
-                lda (addr),y
+                peek!(addr)
                 jsr print_byte
+                jsr print
+                .strz text(",$")
+                dey
+                peek!(addr)
+                jsr print_byte
+            } .else {
+                jsr print_number
             }
-            .if m == Mode::zpx || m == Mode::absx {
+            .if .strlen(closing(m)) > 0 {
                 jsr print
-                .strz text(",X")
-            } .elseif m == Mode::zpy || m == Mode::absy {
-                jsr print
-                .strz text(",Y")
-            } .elseif m == Mode::indx {
-                jsr print
-                .strz text(",X)")
-            } .elseif m == Mode::indy {
-                jsr print
-                .strz text("),Y")
-            } .elseif m == Mode::ind {
-                lda #text(')')
-                jsr putc
+                .strz text(closing(m))
             }
             rts
         }
     }
 }
 
+; Writes the bytes after the opcode as one number, the last byte first.
+.proc print_number: running {
+    ldy length
+@next:
+    dey
+    beq @done
+    peek!(addr)
+    jsr print_byte
+    jmp @next
+@done:
+    rts
+}
+
 ; Writes where the branch at `addr` goes: the address after it, plus its offset, which is
-; signed.
-.proc print_target {
+; signed. A branch stays in its bank.
+.proc print_target: running {
     ldy #1
-    lda (addr),y
-    ldx addr+1
+    peek!(addr)
+    sta target
+    ldx #0
     cmp #$80
     bcc @forward
     dex                             ; a negative offset's high byte is $FF
 @forward:
+    stx target+1
+    .if .target(65816) {
+        lda length
+        cmp #3
+        bcc @short
+        iny                         ; BRL and PER have a two-byte offset
+        peek!(addr)
+        sta target+1
+    @short:
+        lda addr+2
+        sta target+2
+    }
     clc
+    lda target
     adc addr
-    bcc @after
-    inx
-@after:
+    sta target
+    lda target+1
+    adc addr+1
+    sta target+1
     clc
-    adc #2
+    lda target
+    adc length
+    sta target
     bcc @same_page
-    inx
+    inc target+1
 @same_page:
-    jmp print_word
+    print_address!(target)
+    rts
 }

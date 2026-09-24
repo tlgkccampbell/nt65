@@ -1,9 +1,9 @@
 ; What the monitor writes, in terms of the platform's `putc`.
 .module monitor::text
 
-.use platform::{putc, text, NEWLINE}
+.use platform::{putc, text, NEWLINE, running}
 
-.export print, print_byte, print_word, space, newline
+.export print, print_byte, space, newline
 
 ; What the monitor assumes of the platform's text: the characters from space to `Z` in ASCII's
 ; order, one after another. Hex digits, the disassembler's names and what `M` shows beside the
@@ -15,7 +15,7 @@
 
 .segment CODE
 ; Writes the text written after the call, up to its zero, and returns past the zero.
-.proc print: inline .strz, keeps x, y {
+.proc print: running, inline .strz, keeps x, y {
     pla
     sta source
     pla
@@ -45,7 +45,7 @@
 }
 
 ; Writes A as two hex digits.
-.proc print_byte: keeps x, y {
+.proc print_byte: running, keeps x, y {
     pha
     lsr a
     lsr a
@@ -58,7 +58,7 @@
 }
 
 ; Writes the low four bits of A, which are all that is set, as a hex digit.
-.proc print_digit: keeps x, y {
+.proc print_digit: running, keeps x, y {
     cmp #10
     bcc @decimal
     adc #text('A') - text('9') - 2  ; the carry is set, and '0' is added below
@@ -67,21 +67,12 @@
     jmp putc
 }
 
-; Writes the word whose high byte is in X and low byte in A, as four hex digits.
-.proc print_word: keeps x, y {
-    pha
-    txa
-    jsr print_byte
-    pla
-    jmp print_byte
-}
-
-.proc space: keeps x, y {
+.proc space: running, keeps x, y {
     lda #text(' ')
     jmp putc
 }
 
-.proc newline: keeps x, y {
+.proc newline: running, keeps x, y {
     lda #NEWLINE
     jmp putc
 }

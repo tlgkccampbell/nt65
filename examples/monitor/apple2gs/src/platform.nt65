@@ -1,0 +1,137 @@
+; This module runs the monitor on the Apple IIGS, as a binary file that BRUN runs from
+; BASIC.SYSTEM. The monitor runs in emulation mode, because the firmware's routines need it. The
+; firmware reads each line and writes each character, on the 80-column screen. A BRK in either
+; mode comes in through the Apple II's BRK vector, after the firmware has saved every register
+; at its full width.
+.module platform
+
+.cpu 65816
+
+.use monitor::{registers, Registers}
+.use monitor::parse::line
+.use nt65::apple2::normal_lower
+
+.export COLUMNS, LINE_LENGTH, NEWLINE, putc, read_line, exit, start
+; The firmware's routines are called in emulation mode, and BASIC.SYSTEM runs with D and B at 0.
+.export .signature running = emu, dp = 0, dbr = 0
+.export .use nt65::apple2::normal as text   ; the firmware reads and writes normal video
+
+LOAD = $2000                        ; where BRUN loads the file, and enters it
+COLUMNS = 80                        ; the 80-column screen
+LINE_LENGTH = COLUMNS               ; a row of the screen
+NEWLINE = $8D                       ; RETURN, in normal video
+
+.proc putc = $FDED: running, keeps x, y ; COUT
+.proc GETLN1 = $FD6F: running       ; reads a line into INPUT, without a prompt
+.proc EIGHTY = $C300: running       ; turns the 80-column screen on, and writes A there
+.proc HOME = $FC58: running         ; clears the screen
+.proc DOSWARM = $03D0: running, noreturn ; BASIC.SYSTEM's warm start
+
+INPUT = $0200                       ; where GETLN1 reads a line to, ended by RETURN
+PROMPT = $33                        ; what GETLN writes when it starts a line again
+BRKV = $03F0                        ; where the firmware goes on a BRK
+
+; The firmware saves the registers of a BRK at this address in bank $E1, as `Saved` lays them
+; out. This is where ROM 3 keeps them.
+SAVED = $E10108
+.struct Saved {
+    ac:   .word
+    xr:   .word
+    yr:   .word
+    sp:   .word
+    dp:   .word
+    sr:   .byte
+    db:   .byte
+    mode: .byte                     ; bit 0 is E
+    pb:   .byte
+    pc:   .word
+}
+
+.assert Registers::db - Registers::ac == Saved::sr - Saved::ac, "A, X, Y, S and D must be saved as the monitor keeps them"
+
+.segment BSS
+.data old_brk: .addr
+.data length:  .byte
+
+; BRUN enters the file at its first byte, which is here.
+.segment STARTUP
+.proc start: running, noreturn {
+    lda BRKV
+    sta old_brk
+    lda BRKV+1
+    sta old_brk+1
+    lda #<on_brk
+    sta BRKV
+    lda #>on_brk
+    sta BRKV+1
+    lda #text('.')                  ; a line cancelled with Ctrl-X starts again with the prompt
+    sta PROMPT
+    lda #text(' ')
+    jsr EIGHTY
+    jsr HOME
+    jmp monitor::main
+}
+
+.assert start == LOAD, "`start` must be the file's first byte"
+
+.segment CODE
+.proc read_line: running {
+    jsr GETLN1
+    stx length
+    ldx #0
+@next:
+    cpx length
+    beq @done
+    cpx #LINE_LENGTH
+    beq @done                       ; the line is full: drop the rest
+    lda INPUT,x
+    cmp #normal_lower('a')
+    bcc @keep
+    and #$DF                        ; a lower-case letter as its capital
+@keep:
+    sta line,x
+    inx
+    bne @next
+@done:
+    lda #0
+    sta line,x
+    rts
+}
+
+; Puts back the BRK vector and returns to BASIC.
+.proc exit: running, noreturn {
+    lda old_brk
+    sta BRKV
+    lda old_brk+1
+    sta BRKV+1
+    jmp DOSWARM
+}
+
+; Copies the registers the firmware saved into `registers`, in emulation mode, with D and B at 0.
+.proc on_brk: running, noreturn {
+    ldx #0
+@copy:
+    lda f:SAVED,x
+    sta registers::ac,x
+    inx
+    cpx #Saved::sr
+    bne @copy
+    lda f:SAVED + Saved::sr
+    sta registers::sr
+    lda f:SAVED + Saved::db
+    sta registers::db
+    lda f:SAVED + Saved::mode
+    and #1
+    sta registers::e
+    lda f:SAVED + Saved::pb
+    sta registers::pc+2
+    ; The PC is two past the BRK.
+    lda f:SAVED + Saved::pc
+    sec
+    sbc #2
+    sta registers::pc
+    lda f:SAVED + Saved::pc+1
+    sbc #0
+    sta registers::pc+1
+    jmp monitor::broke
+}

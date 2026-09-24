@@ -2,7 +2,7 @@
 # ca65 and ld65 from the path or from the paths given. Exits 1 if any build fails.
 [CmdletBinding()]
 param(
-    [string[]]$Platform = @('c64'),
+    [string[]]$Platform = @('c64', 'apple2gs'),
     [string]$Nt65 = 'nt65',
     [string]$Ca65 = 'ca65',
     [string]$Ld65 = 'ld65'
@@ -16,7 +16,8 @@ $Nt65, $Ca65, $Ld65 = foreach ($tool in $Nt65, $Ca65, $Ld65) {
 
 # What each platform links into: its linker configuration and the image it writes.
 $platforms = @{
-    c64 = @{ Config = 'c64.cfg'; Image = 'monitor.prg' }
+    c64      = @{ Config = 'c64.cfg'; Image = 'monitor.prg' }
+    apple2gs = @{ Config = 'apple2gs.cfg'; Image = 'monitor.bin' }
 }
 
 function Run([string]$exe, [string[]]$arguments) {
@@ -46,7 +47,7 @@ foreach ($p in $Platform) {
         Run $Ld65 (@('-C', $settings.Config, '-o', $image, '-m', "$stem.map", '-Ln', "$stem.lbl",
                      '--dbgfile', "$stem.dbg") + $objects)
         Run $Nt65 @('remap-dbg', "$stem.dbg")
-        Write-Host ('{0,-6} {1,6:N0} bytes in build/{0}/{2}' -f $p, (Get-Item $image).Length, $settings.Image)
+        Write-Host ('{0,-8} {1,6:N0} bytes in build/{0}/{2}' -f $p, (Get-Item $image).Length, $settings.Image)
     }
     catch {
         Write-Host "$p failed: $_" -ForegroundColor Red

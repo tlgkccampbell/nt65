@@ -1,38 +1,65 @@
-; A machine-language monitor: look at memory, change it, disassemble it, and run code in it.
+; This module is the core of a machine-language monitor, which shows memory, changes it,
+; disassembles it, and runs code in it.
 ;
-; The monitor is a library. It has no nt65.json of its own: each platform is a project whose
-; files are these and its own, and whose own include a module named `platform` that exports
+; The monitor is a library and has no nt65.json of its own. Each platform is a project whose
+; files include these, and whose own files include a module named `platform`. That module
+; exports the names the monitor uses to reach the machine:
 ;
-;   text                the charmap the machine's characters are in, which the monitor
-;                       applies to every character it writes or reads, and which has to
-;                       run from space to `Z` in ASCII's order
-;   NEWLINE             the character that ends a line
-;   LINE_LENGTH         the longest line `read_line` reads
-;   putc: keeps x, y    writes the character in A, which is a capital, digit or
-;                       punctuation mark, a space, or NEWLINE, in `text`
-;   read_line           reads a line typed at the keyboard into `parse::line`, at most
-;                       `parse::LINE_SIZE` - 1 characters followed by a zero, and leaves the
-;                       cursor at the start of the next line
-;   exit: noreturn      leaves the monitor for whatever ran it
+;   running             The signature set that every routine in the monitor declares. It
+;                       describes the state the monitor runs in, which on the 65816 has 8-bit
+;                       registers.
+;   text                The charmap for the machine's characters. The monitor applies it to
+;                       every character it writes or reads, and it must map space through `Z`
+;                       in ASCII's order.
+;   NEWLINE             The character that ends a line.
+;   COLUMNS             The width of the screen, which decides how many bytes a line of M
+;                       shows.
+;   LINE_LENGTH         The length of the longest line that `read_line` reads.
+;   putc: keeps x, y    Writes the character in A, which is a capital letter, a digit, a
+;                       punctuation mark, a space or `NEWLINE`, in `text`.
+;   read_line           Reads a line from the keyboard into `parse::line`, as at most
+;                       `parse::LINE_SIZE` - 1 characters followed by a zero. It leaves the
+;                       cursor at the start of the next line.
+;   exit: noreturn      Leaves the monitor for whatever ran it.
 ;
-; The platform also starts the monitor. It gets the machine ready, arranges for a BRK to reach
-; `broke` with the registers the BRK found stored in `registers`, and jumps to `main`.
+; The platform also starts the monitor. Its start code prepares the machine and arranges for a
+; BRK to reach `broke`, with the registers the BRK found stored in `registers`. It then jumps to
+; `main`.
+;
+; On the 65816 the monitor can reach all sixteen megabytes of memory. There an address is three
+; bytes, written with the bank first, and the registers are the 65816's.
 .module monitor
 
-.use platform::{putc, text}
+.use platform::{putc, text, running}
 .use monitor::text::{print, newline}
 .use monitor::{parse, memory, disasm, run}
 
-.export main, broke, error, Registers, registers, addr
+.export main, broke, error, Registers, registers, addr, ADDRESS_SIZE
+
+ADDRESS_SIZE = .select(.target(65816), 3, 2)    ; the bytes of an address
 
 ; The registers of the program being debugged, as a BRK left them or `G` will start them.
-.struct Registers {
-    pc: .word
-    ac: .byte
-    xr: .byte
-    yr: .byte
-    sp: .byte
-    sr: .byte
+.if .target(65816) {
+    .struct Registers {
+        pc: .faraddr                ; with the program bank as its third byte
+        ac: .word
+        xr: .word
+        yr: .word
+        sp: .word
+        dp: .word
+        db: .byte
+        sr: .byte
+        e:  .byte                   ; 1 in emulation mode
+    }
+} .else {
+    .struct Registers {
+        pc: .word
+        ac: .byte
+        xr: .byte
+        yr: .byte
+        sp: .byte
+        sr: .byte
+    }
 }
 
 ; Each command is a letter and the routine that carries it out. A routine starts with the
@@ -55,14 +82,14 @@
 .assert .sizeof(letters) == .countof(commands), "every command needs a letter"
 
 .segment ZEROPAGE
-.data addr: .word                   ; where M, D, : and F start, and where M and D go on from
+.data addr: .byte[ADDRESS_SIZE]     ; where M, D, : and F start, and where M and D go on from
 
 .segment BSS
 .data registers: .type Registers
 .data home:      .byte                   ; the stack pointer each command starts with
 
 .segment CODE
-.proc main: noreturn {
+.proc main: running, noreturn {
     cld
     tsx
     stx home
@@ -74,6 +101,11 @@
     bpl @clear
     lda home
     sta registers::sp
+    .if .target(65816) {
+        lda #1                      ; the stack is in page 1, and the monitor in emulation mode
+        sta registers::sp+1
+        sta registers::e
+    }
     jsr print
     .strz text("NT65 MONITOR")
     jsr newline
@@ -82,7 +114,7 @@
 
 ; Reads a command and carries it out, for as long as the monitor runs. Every command starts
 ; with the stack as `main` found it, so one that stops part-way through leaves nothing behind.
-.proc prompt: noreturn {
+.proc prompt: running, noreturn {
     ldx home
     txs
     lda #text('.')
@@ -104,7 +136,7 @@
 }
 
 ; Carries out command X; the command's own RTS returns to `prompt`.
-.proc dispatch {
+.proc dispatch: running {
     txa
     asl a
     tax
@@ -122,7 +154,7 @@
 
 ; ?: lists the commands. Each line stays inside the narrowest screen a platform has, the C64's
 ; forty columns, so none wraps.
-.proc help {
+.proc help: running {
     jsr print
     .strz text("NUMBERS ARE HEX")
     jsr newline
@@ -153,7 +185,7 @@
 }
 
 ; A command found something it cannot read: say so, and read the next one.
-.proc error: noreturn {
+.proc error: running, noreturn {
     lda #text('?')
     jsr putc
     jsr newline
@@ -161,7 +193,7 @@
 }
 
 ; Where the platform sends a BRK, with the registers it found stored in `registers`.
-.proc broke: noreturn {
+.proc broke: running, noreturn {
     cld
     ldx home
     txs

@@ -1,59 +1,82 @@
 ; The commands that run code and show what it left: G and R.
 .module monitor::run
 
-.use platform::{putc, text}
+.use platform::{putc, text, running}
 .use monitor::{registers, Registers}
-.use monitor::text::{print, print_byte, print_word, space, newline}
-.use monitor::macros::mov16
+.use monitor::text::{print, print_byte, space, newline}
+.use monitor::macros::{mov_address, print_address}
 .use monitor::parse
 
 .export go, show
 
 .segment CODE
-; G [address]: calls `address`, or the PC in `registers`, with A, X, Y and the flags from
-; `registers`. Code that returns with RTS comes back here, and code that reaches a BRK comes
-; back through the platform to `monitor::broke`; either way the registers are shown.
-.proc go {
+; G [address]: calls `address`, or the PC in `registers`, with the registers from `registers`.
+; Code that returns with RTS, or with RTL on the 65816, comes back here, and code that reaches
+; a BRK comes back through the platform to `monitor::broke`; either way the registers are
+; shown.
+.proc go: running {
     jsr parse::blanks
     beq @call
     jsr parse::number
     jsr parse::expect_end
-    mov16!(registers::pc, parse::value)
+    mov_address!(registers::pc, parse::value)
 @call:
     jsr call
-    php
-    sta registers::ac
-    stx registers::xr
-    sty registers::yr
-    pla
-    sta registers::sr
-    tsx
-    stx registers::sp
-    cld
+    .if !.target(65816) {           ; the 65816's `call` stores them itself, at every width
+        php
+        sta registers::ac
+        stx registers::xr
+        sty registers::yr
+        pla
+        sta registers::sr
+        tsx
+        stx registers::sp
+        cld
+    }
     .fallthrough show
 }
 
 ; R: shows the registers.
-.proc show {
+.proc show: running {
     jsr print
-    .strz text("  PC   AC XR YR SP NV-BDIZC")
+    .if .target(65816) {
+        .strz text("  PC     AC   XR   YR   SP   DP   DB NVMXDIZC E")
+    } .else {
+        .strz text("  PC   AC XR YR SP NV-BDIZC")
+    }
     jsr newline
     jsr space
     jsr space
-    ldx registers::pc+1
-    lda registers::pc
-    jsr print_word
-    ; A, X, Y and S in hex, which are the bytes from `ac` to `sp`, and the flags in binary.
-    ldy #0
-@byte:
+    print_address!(registers::pc)
+    .if .target(65816) {
+        ; A, X, Y, S and D, a word each, and B.
+        ldy #0
+    @word:
+        jsr space
+        lda registers::ac+1,y
+        jsr print_byte
+        lda registers::ac,y
+        jsr print_byte
+        iny
+        iny
+        cpy #Registers::db - Registers::ac
+        bne @word
+        jsr space
+        lda registers::db
+        jsr print_byte
+    } .else {
+        ; A, X, Y and S in hex, which are the bytes from `ac` to `sp`.
+        ldy #0
+    @byte:
+        jsr space
+        lda registers::ac,y
+        jsr print_byte
+        iny
+        cpy #Registers::sp - Registers::ac + 1
+        bne @byte
+    }
     jsr space
-    lda registers::ac,y
-    jsr print_byte
-    iny
-    cpy #Registers::sp - Registers::ac + 1
-    bne @byte
-    jsr space
-    ; The flags, bit 7 first.
+    ; The flags in binary, bit 7 first.
     lda registers::sr
     ldy #8
 @flag:
@@ -65,18 +88,107 @@
     pla
     dey
     bne @flag
+    .if .target(65816) {
+        jsr space
+        lda registers::e
+        clc
+        adc #text('0')
+        jsr putc
+    }
     jmp newline
 }
 
-; Enters the code at the PC in `registers` with the registers it names. Its RTS returns
-; from here.
-.proc call {
-    lda registers::sr
-    pha
-    lda registers::ac
-    ldx registers::xr
-    ldy registers::yr
-    plp
-    jmp (registers::pc)
-    .next ?
+.if .target(65816) {
+    ; Enters the code at the PC in `registers` with the registers it names, as JSL does, and
+    ; stores the registers it comes back with. The monitor runs in emulation mode with D and B
+    ; at 0, and goes back to them.
+    .proc call: running {
+        ; What the code's RTL returns to, then what this routine's RTL enters it with.
+        phk
+        per @back - 1
+        lda registers::pc+2
+        pha
+        lda registers::pc
+        sec
+        sbc #1
+        tax
+        lda registers::pc+1
+        sbc #0
+        pha
+        txa
+        pha
+        lda registers::sr
+        pha
+        lda registers::db
+        pha
+        lda registers::dp+1
+        pha
+        lda registers::dp
+        pha
+        pld
+        ; The registers are loaded at 16 bits, which the flags then narrow as they say.
+        clc
+        xce
+        rep #$30
+        ldx registers::xr
+        ldy registers::yr
+        sep #$20
+        lda registers::e
+        lsr a                       ; the carry is E, for the XCE
+        rep #$20
+        lda registers::ac
+        xce
+        plb
+        plp
+        rtl
+        .next ?
+
+    @back:
+        .state e?, a?, i?, dp?, dbr?
+        php
+        clc
+        xce                         ; the carry is E
+        rep #$30
+        sta f:registers::ac
+        txa
+        sta f:registers::xr
+        tya
+        sta f:registers::yr
+        tdc
+        sta f:registers::dp
+        tsc
+        inc a                       ; past the flags pushed above
+        sta f:registers::sp
+        sep #$30
+        lda #0
+        rol a
+        sta f:registers::e
+        phb
+        pla
+        sta f:registers::db
+        pla
+        sta f:registers::sr
+        lda #0
+        pha
+        plb
+        pea 0
+        pld
+        sec
+        xce
+        cld
+        rts
+    }
+} .else {
+    ; Enters the code at the PC in `registers` with the registers it names. Its RTS returns
+    ; from here.
+    .proc call: running {
+        lda registers::sr
+        pha
+        lda registers::ac
+        ldx registers::xr
+        ldy registers::yr
+        plp
+        jmp (registers::pc)
+        .next ?
+    }
 }

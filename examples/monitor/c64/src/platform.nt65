@@ -8,15 +8,17 @@
 .use monitor::registers
 .use monitor::parse::line
 
-.export LINE_LENGTH, NEWLINE, putc, read_line, exit, start
+.export COLUMNS, LINE_LENGTH, NEWLINE, putc, read_line, exit, start
+.export .signature running = a8, i8 ; the 6502's registers, which are all it has
 .export .use nt65::cbm::petscii as text  ; the KERNAL reads and writes PETSCII
 
+COLUMNS = 40
 LINE_LENGTH = 80                    ; the screen editor's logical line: two rows of the screen
 NEWLINE = $0D                       ; RETURN
 
-.proc putc = $FFD2: keeps x, y      ; CHROUT
-.proc CHRIN = $FFCF                 ; reads the line the cursor is on, a character at a time
-.proc READY = $E37B: noreturn       ; BASIC's warm start
+.proc putc = $FFD2: running, keeps x, y  ; CHROUT
+.proc CHRIN = $FFCF: running        ; reads the line the cursor is on, a character at a time
+.proc READY = $E37B: running, noreturn ; BASIC's warm start
 
 CBINV = $0316                       ; where the KERNAL's interrupt entry goes on a BRK
 CLEAR = $93                         ; PETSCII's clear screen
@@ -28,7 +30,7 @@ UPPERCASE = $8E                     ; PETSCII's switch to the uppercase and grap
 
 ; The BASIC line's SYS lands here.
 .segment STARTUP
-.proc start: noreturn {
+.proc start: running, noreturn {
     lda CBINV
     sta old_brk
     lda CBINV+1
@@ -45,7 +47,7 @@ UPPERCASE = $8E                     ; PETSCII's switch to the uppercase and grap
 }
 
 .segment CODE
-.proc read_line {
+.proc read_line: running {
     lda #0
     sta length
 @next:
@@ -68,7 +70,7 @@ UPPERCASE = $8E                     ; PETSCII's switch to the uppercase and grap
 }
 
 ; Puts back the BRK vector and returns to BASIC.
-.proc exit: noreturn {
+.proc exit: running, noreturn {
     lda old_brk
     sta CBINV
     lda old_brk+1
@@ -78,7 +80,7 @@ UPPERCASE = $8E                     ; PETSCII's switch to the uppercase and grap
 
 ; The KERNAL's interrupt entry pushes A, X and Y above the flags and return address that the
 ; BRK pushed, and comes here when the B flag says it was a BRK.
-.proc on_brk: noreturn {
+.proc on_brk: running, noreturn {
     pla
     sta registers::yr
     pla

@@ -5,8 +5,8 @@
 ; routine that finds one jumps to `monitor::error` rather than returning.
 .module monitor::parse
 
-.use platform::text
-.use monitor::error
+.use platform::{text, running}
+.use monitor::{error, ADDRESS_SIZE}
 
 .export LINE_SIZE, line, value, begin, skip, blanks, number, byte, expect_end
 
@@ -15,13 +15,13 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
 .segment BSS
 .data line:  .byte[LINE_SIZE]
 .data at:    .byte                     ; the offset in `line` of the next character to read
-.data value: .word                  ; the number `number` read
+.data value: .byte[ADDRESS_SIZE]   ; the number `number` read
 
 .segment CODE
 ; Starts reading the line: returns its first character in A, with Z set if there is none.
 ; Dots before it are the prompt, which a platform that reads the line back off the screen
 ; may include.
-.proc begin: keeps y {
+.proc begin: running, keeps y {
     ldx #0
 @next:
     lda line,x
@@ -39,13 +39,13 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
 }
 
 ; Steps past the character just read.
-.proc skip: keeps x, y {
+.proc skip: running, keeps x, y {
     inc at
     rts
 }
 
 ; Steps past spaces: returns the next character in A, with Z set at the end of the line.
-.proc blanks: keeps y {
+.proc blanks: running, keeps y {
     ldx at
 @next:
     lda line,x
@@ -59,23 +59,27 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
     rts
 }
 
-; Reads a number of one to four hex digits into `value`, after any spaces.
-.proc number: keeps y {
+; Reads a number of one to four hex digits into `value`, after any spaces, or one to six on
+; the 65816.
+.proc number: running, keeps y {
     lda #0
-    sta value
-    sta value+1
+    .repeat ADDRESS_SIZE, i {
+        sta value + i
+    }
     jsr blanks
     jsr digit
     bcs @bad
 @next:
-    ldx value+1
+    ldx value + (ADDRESS_SIZE - 1)
     cpx #$10
-    bcs @bad                        ; a fifth digit
+    bcs @bad                        ; a digit more than an address holds
     ; Four shifts make room for the digit in the low four bits.
     ldx #4
 @shift:
     asl value
-    rol value+1
+    .repeat ADDRESS_SIZE - 1, i {
+        rol value + (i + 1)
+    }
     dex
     bne @shift
     ora value
@@ -91,9 +95,12 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
 }
 
 ; Reads a number that fits in a byte into A.
-.proc byte: keeps y {
+.proc byte: running, keeps y {
     jsr number
     lda value+1
+    .if .target(65816) {
+        ora value+2
+    }
     bne @too_big
     lda value
     rts
@@ -102,7 +109,7 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
 }
 
 ; Checks that nothing but spaces is left on the line.
-.proc expect_end: keeps y {
+.proc expect_end: running, keeps y {
     jsr blanks
     bne @more
     rts
@@ -111,7 +118,7 @@ LINE_SIZE = platform::LINE_LENGTH + 1   ; the longest line the platform reads, a
 }
 
 ; The value of the hex digit in A, with the carry clear, or the carry set if it is not one.
-.proc digit: keeps x, y {
+.proc digit: running, keeps x, y {
     cmp #text('0')
     bcc @not
     cmp #text('9') + 1

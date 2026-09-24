@@ -1,29 +1,78 @@
-; Sixteen-bit moves and sums, little-endian, for operands of any mode.
+; Moves, sums and loads for the monitor's addresses, which are `ADDRESS_SIZE` bytes,
+; little-endian, and take operands of any mode.
 .module monitor::macros
 
-.export mov16, add16, inc16
+.use monitor::ADDRESS_SIZE
+.use monitor::text::print_byte
 
-.macro mov16(dest: operand, src: operand) {
-    lda .byteof(src, 0)
-    sta dest
-    lda .byteof(src, 1)
-    sta dest+1
+.export mov_address, add_address, inc_address, compare_address, peek, poke, print_address
+
+; Copies the address at `src` to `dest`.
+.macro mov_address(dest: operand, src: operand) {
+    .repeat ADDRESS_SIZE, i {
+        lda .byteof(src, i)
+        sta dest + i
+    }
 }
 
-; dest += value, with the carry set if the sum passed $FFFF.
-.macro add16(dest: operand, value: operand) {
+; dest += value, where value is a byte, with the carry set if the sum passed the top of memory.
+.macro add_address(dest: operand, value: operand) {
     clc
-    lda .byteof(dest, 0)
-    adc .byteof(value, 0)
+    lda dest
+    adc value
     sta dest
-    lda .byteof(dest, 1)
-    adc .byteof(value, 1)
-    sta dest+1
+    .repeat ADDRESS_SIZE - 1, i {
+        lda dest + (i + 1)
+        adc #0
+        sta dest + (i + 1)
+    }
 }
 
-.macro inc16(dest: operand) {
+; Adds one to the address at `dest`.
+.macro inc_address(dest: operand) {
     inc dest
     bne @done
     inc dest+1
+    .if .target(65816) {
+        bne @done
+        inc dest+2
+    }
 @done:
+}
+
+; Compares two addresses, and leaves the carry set if `left` is at or above `right`.
+.macro compare_address(left: operand, right: operand) {
+    lda left
+    cmp right
+    .repeat ADDRESS_SIZE - 1, i {
+        lda left + (i + 1)
+        sbc right + (i + 1)
+    }
+}
+
+; Loads A from the byte Y past the address in the zero page at `pointer`, which on the 65816
+; may be in any bank.
+.macro peek(pointer) {
+    .if .target(65816) {
+        lda [pointer],y
+    } .else {
+        lda (pointer),y
+    }
+}
+
+; Stores A in the byte Y past the address in the zero page at `pointer`.
+.macro poke(pointer) {
+    .if .target(65816) {
+        sta [pointer],y
+    } .else {
+        sta (pointer),y
+    }
+}
+
+; Writes the address at `from` in hex, high byte first.
+.macro print_address(from: operand) {
+    .repeat ADDRESS_SIZE, i {
+        lda from + (ADDRESS_SIZE - 1 - i)
+        jsr print_byte
+    }
 }
