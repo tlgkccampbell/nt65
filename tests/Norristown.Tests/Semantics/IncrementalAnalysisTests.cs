@@ -155,7 +155,7 @@ public sealed class IncrementalAnalysisTests
         Assert.Equal(4, size.Value.AsNumber());
 
         var edited = main.WithChange(new TextChange(main.Text.IndexOf("rts", StringComparison.Ordinal), 3, "nop\n    rts"));
-        var second = Compiler.Analyze([lib, edited], project, Nothing, first);
+        var second = Compiler.Analyze([lib, edited], project, Nothing, first, TestContext.Current.CancellationToken);
         Assert.Equal(1, second.Reanalyzed);
         Assert.Same(size, second.File("lib.nt65").Symbol("SIZE"));
         Assert.NotSame(first.File("main.nt65").Symbol("main"), second.File("main.nt65").Symbol("main"));
@@ -179,7 +179,7 @@ public sealed class IncrementalAnalysisTests
         Assert.NotEmpty(first.Diagnostics);
 
         var edited = a.WithChange(new TextChange(a.Text.Length, 0, "; a comment\n"));
-        var incremental = Compiler.Analyze([edited, b], project, Nothing, first);
+        var incremental = Compiler.Analyze([edited, b], project, Nothing, first, TestContext.Current.CancellationToken);
         var scratch = Compiler.Analyze([edited, b], project, Nothing);
 
         Assert.Equal(1, incremental.Reanalyzed);
