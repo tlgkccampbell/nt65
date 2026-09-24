@@ -1,4 +1,5 @@
 using System.Reflection;
+using Norristown.LanguageServer;
 
 namespace Norristown.Cli;
 
@@ -43,7 +44,10 @@ public static class Commands
             case ["explain", .. var about]:
                 return ExplainCommand.Run(about, output, error);
             case ["lsp"]:
-                return LspCommand.Run(error);
+                // The language server's own entry point is served here too, so that any editor
+                // that speaks LSP can start it by running nt65 itself. Every other command is
+                // synchronous, so this one waits for the server to exit.
+                return Server.ServeStandardStreamsAsync(error).GetAwaiter().GetResult();
             case ["lsp", var unexpected, ..]:
                 return Wrong(error, $"`lsp` takes no arguments, but was given `{unexpected}`");
             case ["import-inc", .. var converted]:

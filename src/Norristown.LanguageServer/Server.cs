@@ -164,6 +164,28 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
+    /// Serves one client on the process's standard input and output, as <see cref="RunAsync"/>
+    /// does, and records the server's start and exit in the log.
+    /// </summary>
+    /// <param name="error">
+    /// The writer that receives the log's lines, which is standard error when a process serves.
+    /// </param>
+    /// <returns>The process's exit code, as <see cref="RunAsync"/> returns it.</returns>
+    public static async Task<int> ServeStandardStreamsAsync(TextWriter error)
+    {
+        // Standard output carries the protocol, so anything human-readable goes to standard
+        // error, which an editor shows in the server's output channel. NT65_SERVER_LOG names a
+        // file that receives the same lines, for looking at a server an editor started.
+        var logPath = Environment.GetEnvironmentVariable("NT65_SERVER_LOG");
+        using var log = new ServerLog(error, string.IsNullOrEmpty(logPath) ? null : logPath);
+
+        log.Write($"Norristown language server starting (pid {Environment.ProcessId})");
+        var exit = await RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput(), log).ConfigureAwait(false);
+        log.Write($"Norristown language server exiting ({exit})");
+        return exit;
+    }
+
+    /// <summary>
     /// Cancels any publish still waiting for typing to stop, and releases the editor process
     /// handle and the publishing lock.
     /// </summary>
