@@ -29,6 +29,8 @@ def main(argv=None):
     argv = argv or sys.argv
     outfilename = argv[1]
     
+    # A fixed seed makes every build the same image, so a build can be checked against the last.
+    random.seed(0)
     rands = [random.randrange(2) * (1600 - i) * (1600 - i) for i in range(1600)]
     rands.extend([0])
     rands = [int(round((b - a) / 128)) for a, b in zip(rands, rands[1:])]

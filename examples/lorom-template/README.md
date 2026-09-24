@@ -52,7 +52,8 @@ examples/lorom-template/build.ps1 -Nt65 src/Norristown.Cli/bin/Debug/net10.0/nt6
 Every build converts the pictures in `tilesets/` and the sounds in `audio/` into
 `build/assets` with the Python tools upstream wrote, before nt65 runs, because nt65 measures
 every file an `.incbin` names; and it writes the header's checksum into the linked image
-last.
+last. Then it compares both images with `expected.sha256` and fails if either differs, since
+every input is fixed; `-Update` accepts a change that is meant.
 
 ## Organization of the program
 
@@ -109,7 +110,7 @@ it and then the checksum tool.
 - `wav2brr.py` converts an uncompressed wave file to the BRR (bit rate reduction) format, a
   lossy audio codec based on ADPCM used by the S-DSP (the audio chip in the Super NES).
 - `karplus.py` generates a plucked string sound, used for the bass sample.
-- `makehat.py` generates a noise sample.
+- `makehat.py` generates a noise sample, from a fixed seed so that every build is the same.
 - `fixchecksum.py` writes the internal header's checksum into the linked image.
 
 ## What the port changed
@@ -129,8 +130,10 @@ The linked image is byte for byte the upstream build, except where the following
 - `reset_fastrom` reads the header's map mode through its bank $80 address, which is the same
   byte.
 - The unused `irqstub` is gone; the IRQ vector reaches `irq_handler` directly, as upstream.
-- `USE_AUDIO`, `USE_PSEUDOHIRES` and `USE_INTERLACE` are `.config` settings, set with
-  `nt65 build -D main::USE_AUDIO=0`.
+- `USE_AUDIO`, `USE_PSEUDOHIRES` and `USE_INTERLACE` are settings, declared with `?=` and set
+  with `nt65 build -D main::USE_AUDIO=0`.
+- `makehat.py` seeds its random numbers, so the hi-hat is the same noise in every build rather
+  than new noise each time.
 - The sound driver reaches its direct-page variables through the direct page wherever it
   names them. Upstream's macro pack took a plain name as absolute unless `<` said otherwise,
   and the driver wrote `<` in some places and not others; the image is 80 bytes smaller for

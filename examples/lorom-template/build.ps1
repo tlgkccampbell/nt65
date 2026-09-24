@@ -1,12 +1,14 @@
 # Builds build/lorom-template.sfc and build/lorom-template.spc with nt65, ca65 and ld65 from
 # the path, or from the paths given, and Python 3 with Pillow for the asset tools, as `py`,
-# `python3` or `python` or given.
+# `python3` or `python` or given. Compares both images with the SHA-256 in expected.sha256, and
+# exits 1 if either differs; -Update writes the new ones there instead.
 [CmdletBinding()]
 param(
     [string]$Nt65 = 'nt65',
     [string]$Ca65 = 'ca65',
     [string]$Ld65 = 'ld65',
-    [string]$Python
+    [string]$Python,
+    [switch]$Update
 )
 
 $ErrorActionPreference = 'Stop'
@@ -65,6 +67,35 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & $Ld65 -C spcfile/spc.cfg -o build/lorom-template.spc -m build/lorom-template.spc.map build/spcfile/spcheader.o build/spcimage.o build/musicseq.o
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    # Every input is fixed, including the hi-hat's random seed, so an image that differs from
+    # the last one accepted means the output changed.
+    $images = 'lorom-template.sfc', 'lorom-template.spc'
+    $hashes = [ordered]@{}
+    foreach ($image in $images) {
+        $hashes[$image] = (Get-FileHash "build/$image" -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    if ($Update) {
+        $lines = $hashes.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)`n" }
+        [IO.File]::WriteAllText((Join-Path $PSScriptRoot expected.sha256), -join $lines)
+        Write-Host 'wrote expected.sha256'
+        exit 0
+    }
+    $expected = @{}
+    foreach ($line in Get-Content expected.sha256) {
+        $name, $hash = $line -split ' '
+        $expected[$name] = $hash
+    }
+    $failed = $false
+    foreach ($image in $images) {
+        if ($hashes[$image] -ne $expected[$image]) {
+            Write-Host "$image differs from expected.sha256; run with -Update if the change is intended" -ForegroundColor Red
+            $failed = $true
+        } else {
+            Write-Host ('{0,-19} {1,7:N0} bytes, as expected' -f $image, (Get-Item "build/$image").Length)
+        }
+    }
+    if ($failed) { exit 1 }
 }
 finally {
     Pop-Location
