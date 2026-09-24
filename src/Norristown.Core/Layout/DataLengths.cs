@@ -40,7 +40,7 @@ public static class DataLengths
         Check(directive, model, diagnostics, on);
         if (directive is DataDirectiveSyntax data)
         {
-            if (DataSyntax.NameOf(data) == ".align")
+            if (data.Directive.DirectiveKind == DirectiveKind.Align)
                 return Unpredictable;
             if (DataSyntax.BodyOf(data) is { BlockKind: BlockKind.DataBody })
                 return 0;
@@ -72,14 +72,14 @@ public static class DataLengths
     /// width, and is emitted as the two's complement. An address slot takes only an address,
     /// which is not negative.
     /// </summary>
-    public static (long Low, long High)? Holds(string directive) => directive.ToLowerInvariant() switch
+    public static (long Low, long High)? Holds(DirectiveKind directive) => directive switch
     {
-        ".byte" => (-0x80, 0xff),
-        ".word" or ".beword" => (-0x8000, 0xffff),
-        ".long" or ".belong" => (-0x800000, 0xffffff),
-        ".dword" or ".bedword" => (-0x80000000L, 0xffffffffL),
-        ".addr" => (0, 0xffff),
-        ".faraddr" => (0, 0xffffff),
+        DirectiveKind.Byte => (-0x80, 0xff),
+        DirectiveKind.Word or DirectiveKind.BeWord => (-0x8000, 0xffff),
+        DirectiveKind.Long or DirectiveKind.BeLong => (-0x800000, 0xffffff),
+        DirectiveKind.Dword or DirectiveKind.BeDword => (-0x80000000L, 0xffffffffL),
+        DirectiveKind.Addr => (0, 0xffff),
+        DirectiveKind.FarAddr => (0, 0xffffff),
         _ => null,
     };
 
@@ -90,20 +90,21 @@ public static class DataLengths
         var element = directive is DataValuesSyntax values ? DataSyntax.DirectiveOfValues(values) : directive as DataDirectiveSyntax;
         if (element is null)
             return;
+        var kind = element.Directive.DirectiveKind;
         var name = DataSyntax.NameOf(element);
         var operands = ElementsOf(directive);
 
         // A declaration's storage is given by its element type, not by `.res`, and padding
         // such as `.align` is not something a name can declare.
-        if (directive.Parent is DataDeclarationSyntax && name is ".res" or ".align")
+        if (directive.Parent is DataDeclarationSyntax && kind is DirectiveKind.Res or DirectiveKind.Align)
         {
             Report(directive, model, diagnostics, on,
-                name == ".res" ? Catalogue.ResNotADeclaration.Message() : Catalogue.AlignNotADeclaration.Message(),
+                kind == DirectiveKind.Res ? Catalogue.ResNotADeclaration.Message() : Catalogue.AlignNotADeclaration.Message(),
 
                 // The room a `.res` reserves is the count of the `.byte[n]` that replaces it.
                 // An `.align` only positions a declaration and cannot become one, so it gets
                 // no fix.
-                name == ".res" && on is null && directive.Tree == model.Tree
+                kind == DirectiveKind.Res && on is null && directive.Tree == model.Tree
                     ? new DiagnosticFix(FixKind.Storage)
                     : null);
             return;
@@ -123,13 +124,13 @@ public static class DataLengths
                 Report(operand, model, diagnostics, on, Catalogue.ElementNotAValue.Message(name));
         }
 
-        switch (name)
+        switch (kind)
         {
-            case ".strz":
+            case DirectiveKind.Strz:
                 Terminated(directive, operands, model, diagnostics, on);
                 break;
-            case ".byte":
-                Values(operands, model, diagnostics, Holds(name), on);
+            case DirectiveKind.Byte:
+                Values(operands, model, diagnostics, Holds(kind), on);
                 foreach (var operand in operands)
                 {
                     if (TooWide(operand, 1, "`.byte` holds 8 bits", model, on) is { } message)
@@ -139,33 +140,33 @@ public static class DataLengths
 
             // A far address in a 16-bit slot is not the address meant. In an `.addr`, ca65
             // would silently keep only its low 16 bits.
-            case ".word":
-            case ".beword":
-            case ".addr":
-                Values(operands, model, diagnostics, Holds(name), on);
+            case DirectiveKind.Word:
+            case DirectiveKind.BeWord:
+            case DirectiveKind.Addr:
+                Values(operands, model, diagnostics, Holds(kind), on);
                 NoFarAddresses(name, operands, model, diagnostics, on);
                 break;
-            case ".long":
-            case ".belong":
-            case ".faraddr":
-            case ".dword":
-            case ".bedword":
-                Values(operands, model, diagnostics, Holds(name), on);
+            case DirectiveKind.Long:
+            case DirectiveKind.BeLong:
+            case DirectiveKind.FarAddr:
+            case DirectiveKind.Dword:
+            case DirectiveKind.BeDword:
+                Values(operands, model, diagnostics, Holds(kind), on);
                 break;
 
             // The byte directives take an address and keep one byte of it, so no range limit
             // applies to their values.
-            case ".lobytes":
-            case ".hibytes":
-            case ".bankbytes":
+            case DirectiveKind.LoBytes:
+            case DirectiveKind.HiBytes:
+            case DirectiveKind.BankBytes:
                 Values(operands, model, diagnostics, null, on);
                 break;
 
-            case ".res":
+            case DirectiveKind.Res:
                 Reserved(operands, model, diagnostics, on);
                 break;
 
-            case ".align":
+            case DirectiveKind.Align:
                 Alignment(operands, model, diagnostics, on);
                 break;
 
@@ -356,7 +357,7 @@ public static class DataLengths
                 Report(given, model, diagnostics, on, Catalogue.MemberTakesOneValue.Message(name));
                 continue;
             }
-            Scalar(member, element is null ? ".res" : DataSyntax.NameOf(element), given, name, model, diagnostics, on);
+            Scalar(member, element?.Directive.DirectiveKind ?? DirectiveKind.Res, given, name, model, diagnostics, on);
         }
     }
 
@@ -393,17 +394,17 @@ public static class DataLengths
                 Report(item, model, diagnostics, on, Catalogue.ElementIsOneValue.Message(member.Name, spelled));
                 continue;
             }
-            Scalar(member, DataSyntax.NameOf(element), item, member.Name, model, diagnostics, on);
+            Scalar(member, element.Directive.DirectiveKind, item, member.Name, model, diagnostics, on);
         }
     }
 
     /// <summary>Checks one value for a one-element member, or for one element of an array member.</summary>
     private static void Scalar(
-        Symbol member, string element, SyntaxNode given, string name, SemanticModel model, List<Diagnostic>? diagnostics,
+        Symbol member, DirectiveKind element, SyntaxNode given, string name, SemanticModel model, List<Diagnostic>? diagnostics,
         Expansion? on)
     {
         var bytes = Bytes(given, model, on);
-        if (element == ".res")
+        if (element == DirectiveKind.Res)
         {
             if (bytes is not null && bytes.Count > member.Size)
                 Report(given, model, diagnostics, on, Catalogue.MemberTextTooLong.Message(
@@ -413,12 +414,12 @@ public static class DataLengths
         if (bytes is { Count: > 1 })
         {
             Report(given, model, diagnostics, on,
-                Catalogue.MemberNotText.Message(name, element, bytes.Count));
+                Catalogue.MemberNotText.Message(name, SyntaxFacts.TextOf(element), bytes.Count));
             return;
         }
         if (bytes is null && Holds(element) is { } range)
         {
-            CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{element}`");
+            CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{SyntaxFacts.TextOf(element)}`");
         }
     }
 
@@ -490,7 +491,7 @@ public static class DataLengths
         if (operands.Count == 0)
             return;
         if (operands.Count > 1)
-            CheckRange(operands[1], model, diagnostics, Holds(".byte")!.Value, on);
+            CheckRange(operands[1], model, diagnostics, Holds(DirectiveKind.Byte)!.Value, on);
 
         // `.res` is padding, passed straight through to ca65's own `.res`, which reserves at
         // most $ffff bytes, so padding of more than a bank's worth is not padding. A declaration
@@ -512,7 +513,7 @@ public static class DataLengths
         if (operands.Count == 0)
             return;
         if (operands.Count > 1)
-            CheckRange(operands[1], model, diagnostics, Holds(".byte")!.Value, on);
+            CheckRange(operands[1], model, diagnostics, Holds(DirectiveKind.Byte)!.Value, on);
         var boundary = model.ValueOf(operands[0], on).AsNumber();
         if (boundary is null)
             Report(operands[0], model, diagnostics, on, Catalogue.AlignBoundaryNotConstant);

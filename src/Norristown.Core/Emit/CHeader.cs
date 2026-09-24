@@ -71,15 +71,15 @@ public sealed class CHeader
     /// type. For example, the type may be <c>unsigned int</c>, or <c>unsigned char</c> with
     /// <c>[3]</c> for a width C has no integer for.
     /// </summary>
-    private static (string Type, string Dimensions)? ElementType(string directive) => directive switch
+    private static (string Type, string Dimensions)? ElementType(DirectiveKind directive) => directive switch
     {
-        ".byte" => ("unsigned char", ""),
-        ".word" => ("unsigned int", ""),
-        ".addr" => ("void*", ""),
-        ".dword" => ("unsigned long", ""),
-        ".long" or ".faraddr" or ".belong" => ("unsigned char", "[3]"),
-        ".beword" => ("unsigned char", "[2]"),
-        ".bedword" => ("unsigned char", "[4]"),
+        DirectiveKind.Byte => ("unsigned char", ""),
+        DirectiveKind.Word => ("unsigned int", ""),
+        DirectiveKind.Addr => ("void*", ""),
+        DirectiveKind.Dword => ("unsigned long", ""),
+        DirectiveKind.Long or DirectiveKind.FarAddr or DirectiveKind.BeLong => ("unsigned char", "[3]"),
+        DirectiveKind.BeWord => ("unsigned char", "[2]"),
+        DirectiveKind.BeDword => ("unsigned char", "[4]"),
         _ => null,
     };
 
@@ -208,7 +208,7 @@ public sealed class CHeader
             return $"unsigned char {name}[{size}]";
         }
         if (directive is not null && DataSyntax.IsElementType(directive)
-            && ElementType(DataSyntax.NameOf(directive)) is { } element)
+            && ElementType(directive.Directive.DirectiveKind) is { } element)
         {
             return $"{element.Type} {name}{dimension}{element.Dimensions}";
         }

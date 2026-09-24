@@ -151,27 +151,39 @@ public static class Repetitions
 
     /// <summary>
     /// Returns the two halves of the <see cref="Forbidden"/> message, what is refused and why, or
-    /// null when the statement is allowed.
+    /// null when the statement is allowed. Whether a directive is refused comes from its
+    /// placement, which the editor reads too. A declaration after <c>.export</c> counts as the
+    /// <c>.export</c>. A <c>.use</c>, a <c>.config</c> or a <c>.fallthrough</c> is reported by its
+    /// own rule.
     /// </summary>
-    private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
+    private static (string What, string Because)? Refused(StatementSyntax statement)
     {
-        { IsExported: true } or ExportDirectiveSyntax or ImportDirectiveSyntax =>
-            ("an export or an import", "it names one symbol, and the body is expanded once per iteration"),
-        CpuDirectiveSyntax => ("`.cpu`", "the CPU is program-wide"),
-        SegmentDeclarationSyntax =>
-            ("a segment declaration",
-                "a segment is declared exactly once for the program, and this one would be declared once per iteration"),
-        MultiProcDeclarationSyntax =>
-            ("`.multiproc`",
-                "it declares one routine per member of an enum, and this one would declare them again on every iteration"),
-        ProcDeclarationSyntax or ExternProcDeclarationSyntax =>
-            ("`.proc`", "a routine's name and signature are part of the file's interface, and this one would be "
-                + "a different routine on every iteration"),
-        MacroDeclarationSyntax or FuncDeclarationSyntax or SignatureDeclarationSyntax =>
-            ("a definition", "it would be a different one on every iteration, and nothing outside the body could name "
-                + "any of them"),
-        _ => null,
-    };
+        var kind = statement.IsExported ? DirectiveKind.Export : statement.DirectiveKind;
+        if (!SyntaxFacts.PlacementOf(kind).IsBarredBy(DirectiveNesting.Repetition))
+            return null;
+        return kind switch
+        {
+            DirectiveKind.Export or DirectiveKind.Import =>
+                ("an export or an import", "it names one symbol, and the body is expanded once per iteration"),
+            DirectiveKind.Cpu => ("`.cpu`", "the CPU is program-wide"),
+
+            // A segment block or region only places what the body holds, so only a declaration
+            // is refused.
+            DirectiveKind.Segment when statement is SegmentDeclarationSyntax =>
+                ("a segment declaration",
+                    "a segment is declared exactly once for the program, and this one would be declared once per iteration"),
+            DirectiveKind.MultiProc =>
+                ("`.multiproc`",
+                    "it declares one routine per member of an enum, and this one would declare them again on every iteration"),
+            DirectiveKind.Proc =>
+                ("`.proc`", "a routine's name and signature are part of the file's interface, and this one would be "
+                    + "a different routine on every iteration"),
+            DirectiveKind.Macro or DirectiveKind.Func or DirectiveKind.Signature =>
+                ("a definition", "it would be a different one on every iteration, and nothing outside the body could name "
+                    + "any of them"),
+            _ => null,
+        };
+    }
 
     /// <summary>Returns the word <paramref name="item"/> was written as, for a list of words.</summary>
     private static string Word(SyntaxNode item) =>

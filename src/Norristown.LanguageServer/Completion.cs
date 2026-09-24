@@ -55,11 +55,13 @@ internal static class Completion
     /// <summary>
     /// The directives that declare the name after them. Nothing is offered for that new name.
     /// </summary>
-    private static readonly HashSet<string> Declaring = new(StringComparer.Ordinal)
-    {
-        ".module", ".proc", ".scope", ".data", ".enum", ".struct", ".union", ".macro", ".func", ".list",
-        ".charmap", ".signature", ".segment", ".frame", ".config", ".import",
-    };
+    private static readonly HashSet<DirectiveKind> Declaring =
+    [
+        DirectiveKind.Module, DirectiveKind.Proc, DirectiveKind.Scope, DirectiveKind.Data, DirectiveKind.Enum,
+        DirectiveKind.Struct, DirectiveKind.Union, DirectiveKind.Macro, DirectiveKind.Func, DirectiveKind.List,
+        DirectiveKind.Charmap, DirectiveKind.Signature, DirectiveKind.Segment, DirectiveKind.Frame,
+        DirectiveKind.Config, DirectiveKind.Import,
+    ];
 
     /// <summary>
     /// The command the client runs after inserting an unfinished item. It reopens the
@@ -147,7 +149,7 @@ internal static class Completion
         // After `::`, the members of what the path leads to are offered. In a `.use`, a path
         // starts at the root of the module tree, and inside its `{ }` the members of what the
         // path before the brace leads to are offered.
-        if (directive == ".use")
+        if (directive == DirectiveKind.Use)
         {
             var brace = LastIndex(before, SyntaxKind.OpenBrace);
             var path = brace >= 0 ? line.PathBefore(brace) : line.PathBefore(before.Count);
@@ -167,21 +169,21 @@ internal static class Completion
         // A `}` closes a block, and only the next branch of a condition may follow it.
         if (before.Count == 1 && before[0].Kind == SyntaxKind.CloseBrace)
         {
-            AddDirectives([".else", ".elseif"], items);
+            AddDirectives([DirectiveKind.Else, DirectiveKind.ElseIf], items);
             return;
         }
 
-        if (directive == ".ensure")
+        if (directive == DirectiveKind.Ensure)
         {
             AddWords(Widths, "width", items);
             return;
         }
-        if (directive == ".cpu" && before.Count == line.Start + 1)
+        if (directive == DirectiveKind.Cpu && before.Count == line.Start + 1)
         {
             AddWords([.. CpuNames.All.Select(CpuNames.Format)], "processor", items);
             return;
         }
-        if (directive == ".state")
+        if (directive == DirectiveKind.State)
         {
             if (!AfterValuedItem(before))
             {
@@ -198,7 +200,7 @@ internal static class Completion
                 AddWords(PointItems, "processor state", items);
                 AddWords(ValuedItems, "processor state", items);
                 AddWords(KeepItems, "processor state", items);
-                if (signature != ".macro")
+                if (signature != DirectiveKind.Macro)
                 {
                     AddWords(RoutineItems, "processor state", items);
                     AddWords(PromiseItems, "registers kept", items);
@@ -207,7 +209,7 @@ internal static class Completion
                 return;
             }
         }
-        else if (directive == ".macro" && InParameterKind(model, line, items))
+        else if (directive == DirectiveKind.Macro && InParameterKind(model, line, items))
         {
             return;
         }
@@ -223,7 +225,7 @@ internal static class Completion
             // follows it there is nothing to offer.
             return;
         }
-        else if (directive is ".repeat" or ".each" && before.Any(token => token.Kind == SyntaxKind.Comma))
+        else if (directive is DirectiveKind.Repeat or DirectiveKind.Each && before.Any(token => token.Kind == SyntaxKind.Comma))
         {
             // Past the comma a repetition declares the name it binds, and names nothing else.
             return;
@@ -627,17 +629,17 @@ internal static class Completion
     /// After a <c>:</c>, these are an address size or what a declaration or member holds. After a
     /// <c>,</c> in a <c>.segment</c>, they are the segment's attributes.
     /// </summary>
-    private static (IEnumerable<string> Words, string Detail)? AfterMark(LineContext line, string? directive)
+    private static (IEnumerable<string> Words, string Detail)? AfterMark(LineContext line, DirectiveKind? directive)
     {
-        if (directive == ".segment" && line.Before is [.., (SyntaxKind.Comma, _, _)])
+        if (directive == DirectiveKind.Segment && line.Before is [.., (SyntaxKind.Comma, _, _)])
             return (SegmentAttributes, "where the segment lands");
         if (line.Before is not [.., (SyntaxKind.Colon, _, _)])
             return null;
         return directive switch
         {
-            ".import" => ([.. Directives.Sizes, "proc("], "how the name is reached"),
-            ".export" or ".segment" => (Directives.Sizes, "address size"),
-            ".data" => (Directives.Data, "what it holds"),
+            DirectiveKind.Import => ([.. Directives.Sizes, "proc("], "how the name is reached"),
+            DirectiveKind.Export or DirectiveKind.Segment => (Directives.Sizes, "address size"),
+            DirectiveKind.Data => (Directives.Data, "what it holds"),
             null when line.Context == ContextKind.TypeMembers => ([.. Directives.Elements, ".res"], "what it holds"),
             _ => null,
         };
@@ -751,7 +753,7 @@ internal static class Completion
     }
 
     private static void AddDirectives(
-        IEnumerable<string> names,
+        IEnumerable<DirectiveKind> names,
         Dictionary<string, Suggestion> items)
     {
         foreach (var (name, detail) in Directives.Described(names))
@@ -797,20 +799,20 @@ internal static class Completion
     /// <c>.proc</c> or a <c>.macro</c>, after <c>=</c> in a <c>.signature</c>, and in the
     /// <c>proc(...)</c> of an <c>.import</c>.
     /// </summary>
-    private static string? InSignature(LineContext line, string? directive)
+    private static DirectiveKind? InSignature(LineContext line, DirectiveKind? directive)
     {
         var before = line.Before;
         var start = line.Start;
         switch (directive)
         {
-            case ".proc":
+            case DirectiveKind.Proc:
                 for (var i = start + 2; i < before.Count; i++)
                 {
                     if (before[i].Kind == SyntaxKind.Colon)
                         return directive;
                 }
                 return null;
-            case ".macro":
+            case DirectiveKind.Macro:
                 var depth = 0;
                 for (var i = start; i < before.Count; i++)
                 {
@@ -819,9 +821,9 @@ internal static class Completion
                         return directive;
                 }
                 return null;
-            case ".signature":
+            case DirectiveKind.Signature:
                 return before.Any(token => token.Kind == SyntaxKind.Equals) ? directive : null;
-            case ".import":
+            case DirectiveKind.Import:
                 return line.OpenCall() is { Open: >= 1 } call
                     && before[call.Open - 1].Text.Equals("proc", StringComparison.OrdinalIgnoreCase)
                     ? directive

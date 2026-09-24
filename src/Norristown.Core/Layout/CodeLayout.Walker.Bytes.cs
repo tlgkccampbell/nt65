@@ -86,7 +86,7 @@ public sealed partial class CodeLayout
         /// </summary>
         private void PlaceModule(PlaceDirectiveSyntax directive)
         {
-            if (expansion is not null || !Placements.AtFileLevel(directive))
+            if (expansion is not null || !Placements.IsWellPlaced(directive))
                 return;
 
             // The placed module may emit to any segment, so every segment's run ends here.

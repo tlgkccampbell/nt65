@@ -18,7 +18,7 @@ public static class PaddedText
     /// </summary>
     public static (long Zeros, long Count)? Padding(DataDirectiveSyntax directive, SemanticModel model, Expansion? on = null)
     {
-        if (DataSyntax.NameOf(directive) != ".byte"
+        if (directive.Directive.DirectiveKind != DirectiveKind.Byte
             || directive.Count?.Count is not { } countExpression
             || model.ValueOf(countExpression, on).AsNumber() is not { } count
             || OnlyValueOf(directive) is not { } value

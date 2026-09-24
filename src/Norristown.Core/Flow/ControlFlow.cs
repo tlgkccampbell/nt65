@@ -636,7 +636,7 @@ public sealed class ControlFlow
     /// Returns whether a symbol is data declared as addresses, which is what a table of targets is.
     /// </summary>
     private static bool IsAddressData(Symbol symbol) =>
-        symbol is { Kind: SymbolKind.Data, Data: DataDirectiveSyntax element } && DataSyntax.NameOf(element) is ".addr" or ".faraddr";
+        symbol is { Kind: SymbolKind.Data, Data: DataDirectiveSyntax element } && element.Directive.DirectiveKind is DirectiveKind.Addr or DirectiveKind.FarAddr;
 
     /// <summary>
     /// Returns whether a symbol is data that does not spread to code labels, and so names nowhere
@@ -805,7 +805,7 @@ public sealed class ControlFlow
                 if (i + 1 < units.Count && units[i + 1].Step.Label is null
                     && units[i + 1].Step.Stream == units[i].Step.Stream
                     && units[i + 1].Step.Statement is DataDirectiveSyntax text
-                    && text.Directive.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
+                    && text.Directive.DirectiveKind == DirectiveKind.Strz)
                 {
                     Skip(units[i + 1]);
                 }

@@ -144,11 +144,11 @@ public sealed class Configuration
         : null;
 
     /// <summary>
-    /// Determines whether a statement is at file level, outside every block, whether or not it is
-    /// exported.
+    /// Determines whether a setting is where its placement allows it, which is at file level,
+    /// outside every block, whether or not it is exported.
     /// </summary>
-    internal static bool AtFileLevel(StatementSyntax statement) =>
-        statement.Parent?.FirstAncestorOrSelf<LineSyntax>()?.Parent?.Parent is null;
+    internal static bool IsWellPlaced(ConfigDeclarationSyntax setting) =>
+        !SyntaxFacts.PlacementOf(DirectiveKind.Config).IsBarredBy(SyntaxFacts.NestingOf(setting));
 
     /// <summary>
     /// Returns the value the build gives the <c>.config</c> <paramref name="name"/> that
@@ -360,7 +360,7 @@ public sealed class Configuration
                     // A setting is identified by its name, so a line without a name declares nothing.
                     if (declaration.Name is not { IsMissing: false } name)
                         continue;
-                    if (!Configuration.AtFileLevel(declaration))
+                    if (!Configuration.IsWellPlaced(declaration))
                     {
                         diagnostics.Add(new Diagnostic(tree.GetSpan(declaration.Keyword.Span),
                             Catalogue.ConfigMisplaced));

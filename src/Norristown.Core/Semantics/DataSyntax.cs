@@ -19,7 +19,7 @@ public static class DataSyntax
     /// <c>.faraddr</c>, <c>.dword</c> and <c>.type T</c>.
     /// </summary>
     public static bool IsElementType(DataDirectiveSyntax directive) =>
-        directive.IsRecord || SyntaxFacts.ElementSize(NameOf(directive)) is not null;
+        directive.IsRecord || SyntaxFacts.ElementSize(directive.Directive.DirectiveKind) is not null;
 
     /// <summary>
     /// Returns the block of values or <c>member = value</c> lines that the directive's line

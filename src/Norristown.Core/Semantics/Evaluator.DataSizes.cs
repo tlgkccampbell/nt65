@@ -74,25 +74,25 @@ internal sealed partial class Evaluator
             return RoomForElements(directive);
         SeparatedSyntaxList<SyntaxNode> operands = directive.Tail is InlineDataSyntax inline ? inline.Values : default;
 
-        switch (DataSyntax.NameOf(directive))
+        switch (directive.Directive.DirectiveKind)
         {
-            case ".lobytes":
-            case ".hibytes":
-            case ".bankbytes":
+            case DirectiveKind.LoBytes:
+            case DirectiveKind.HiBytes:
+            case DirectiveKind.BankBytes:
                 return Spread(operands, width: 1);
 
             // `.strz` is the text and the zero byte that ends it.
-            case ".strz":
+            case DirectiveKind.Strz:
                 return Spread(operands, width: 1) is { } text
                     ? new DataSize(text.Bytes + 1, text.Elements + 1)
                     : null;
 
-            case ".res":
+            case DirectiveKind.Res:
                 return operands.Count > 0 && Evaluate(operands[0]).AsNumber() is { } reserved and >= 0
                     ? new DataSize(reserved, reserved)
                     : null;
 
-            case ".incbin":
+            case DirectiveKind.IncBin:
                 return RoomForBinary(directive, operands);
 
             // An `.align` generates as many bytes as it takes to reach the next boundary, which
@@ -126,7 +126,7 @@ internal sealed partial class Evaluator
     private long? ElementWidth(DataDirectiveSyntax directive)
     {
         if (directive.Type is not { } named)
-            return SyntaxFacts.ElementSize(DataSyntax.NameOf(directive));
+            return SyntaxFacts.ElementSize(directive.Directive.DirectiveKind);
         if (SymbolOf(named) is not { } type)
             return null;
         EnsureEvaluated(type);
@@ -515,7 +515,7 @@ internal sealed partial class Evaluator
             // silently ignored. For example, `colors: .word 16`, meant as sixteen words, would
             // reserve two bytes.
             var room = member.Data is DataDirectiveSyntax data
-                && (DataSyntax.IsElementType(data) || DataSyntax.NameOf(data) == ".res")
+                && (DataSyntax.IsElementType(data) || data.Directive.DirectiveKind == DirectiveKind.Res)
                 ? RoomFor(data)
                 : null;
             if (member.Data is DataDirectiveSyntax element && DataSyntax.IsElementType(element))

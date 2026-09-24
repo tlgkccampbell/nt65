@@ -15,14 +15,9 @@ internal sealed class LineContext
     {
         Caret = caret;
         Context = around.Context;
-        InProc = around.InProc;
-        InMacro = around.InMacro;
-        InRepetition = around.InRepetition;
-        InBlock = around.InBlock;
-        AtFileLevel = !around.PastFileLevel;
+        Nesting = around.Nesting | (first ? DirectiveNesting.FirstLine : DirectiveNesting.None);
         RecordType = around.RecordType;
         InText = inText;
-        IsFirstLine = first;
         if (partial)
         {
             Partial = tokens[^1];
@@ -50,38 +45,17 @@ internal sealed class LineContext
     public ContextKind Context { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the line is inside a routine, where a <c>.proc</c> or a
-    /// <c>.macro</c> may not be declared.
+    /// Gets what surrounds the line, which rules directives in or out whatever the context. It
+    /// includes <see cref="DirectiveNesting.FirstLine"/> on the file's first line, the only place a
+    /// <c>.module</c> goes.
     /// </summary>
-    public bool InProc { get; }
+    public DirectiveNesting Nesting { get; }
 
     /// <summary>
     /// Gets a value indicating whether the line is inside a macro body, which may declare nothing
     /// the rest of the program shares.
     /// </summary>
-    public bool InMacro { get; }
-
-    /// <summary>
-    /// Gets a value indicating whether the line is inside a repetition, where a declaration would
-    /// be made again on every iteration.
-    /// </summary>
-    public bool InRepetition { get; }
-
-    /// <summary>
-    /// Gets a value indicating whether any block holds the line at all, including an open
-    /// <c>.segment</c> region. A <c>.config</c> may only appear where no block does, because which
-    /// settings a program has is fixed by the build and may not depend on where in a file the
-    /// setting appears.
-    /// </summary>
-    public bool InBlock { get; }
-
-    /// <summary>
-    /// Gets a value indicating whether the line is at file level, which means inside no block
-    /// other than an open <c>.segment</c> region. A <c>.place</c> goes there, because which
-    /// modules share a translation unit must not depend on any condition, and a segment region
-    /// only says where the file's own bytes go.
-    /// </summary>
-    public bool AtFileLevel { get; }
+    public bool InMacro => (Nesting & DirectiveNesting.MacroBody) != 0;
 
     /// <summary>
     /// Gets the type a <c>.type T { }</c> initializer gives values to, or null outside one.
@@ -95,27 +69,24 @@ internal sealed class LineContext
     public bool InText { get; }
 
     /// <summary>
-    /// Gets a value indicating whether this is the file's first line, the only place a
-    /// <c>.module</c> goes.
-    /// </summary>
-    public bool IsFirstLine { get; }
-
-    /// <summary>
     /// Gets the span a completion's text replaces, which is the name being typed, or an empty span
     /// at the caret.
     /// </summary>
     public TextSpan Replaced => Partial is { } partial ? new TextSpan(partial.Start, Caret - partial.Start) : new TextSpan(Caret, 0);
 
     /// <summary>
-    /// Gets the directive the statement starts with, in lower case, after any <c>.export</c> or
-    /// label, or null for a statement that starts with no directive.
+    /// Gets the directive the statement starts with, after any <c>.export</c> or label. The result
+    /// is null for a statement that starts with no directive token, and
+    /// <see cref="DirectiveKind.None"/> for one whose directive token names no directive.
     /// </summary>
-    public string? Directive
+    public DirectiveKind? Directive
     {
         get
         {
             var at = Start;
-            return at < Before.Count && Before[at].Kind == SyntaxKind.Directive ? Before[at].Text.ToLowerInvariant() : null;
+            return at < Before.Count && Before[at].Kind == SyntaxKind.Directive
+                ? SyntaxFacts.DirectiveKindOf(Before[at].Text)
+                : null;
         }
     }
 
@@ -131,7 +102,7 @@ internal sealed class LineContext
                 at += 2;
             }
             if (at < Before.Count && Before[at] is { Kind: SyntaxKind.Directive } export
-                && export.Text.Equals(".export", StringComparison.OrdinalIgnoreCase))
+                && SyntaxFacts.DirectiveKindOf(export.Text) == DirectiveKind.Export)
             {
                 at++;
             }
@@ -241,8 +212,9 @@ internal sealed class LineContext
     /// </summary>
     private static Surrounding Around(SyntaxTree tree, int line)
     {
-        var found = new Surrounding(ContextKind.Item, false, false, false, false, null, false);
-        foreach (var block in Edits.BlockAround(tree, line)?.AncestorsAndSelf().OfType<BlockSyntax>().Reverse() ?? [])
+        var around = Edits.BlockAround(tree, line);
+        var found = new Surrounding(ContextKind.Item, SyntaxFacts.NestingWithin(around), null);
+        foreach (var block in around?.AncestorsAndSelf().OfType<BlockSyntax>().Reverse() ?? [])
             found = found.Within(block);
         return found;
     }
@@ -291,47 +263,32 @@ internal sealed class LineContext
 
     /// <summary>Represents what the blocks around a line determine about what may appear in it.</summary>
     /// <param name="Context">The kind of context the innermost block gives.</param>
-    /// <param name="InProc">Whether a routine holds the line.</param>
-    /// <param name="InMacro">Whether a macro body holds the line.</param>
-    /// <param name="InRepetition">Whether a repetition holds the line.</param>
-    /// <param name="InBlock">Whether any block of any kind holds the line.</param>
+    /// <param name="Nesting">What all the blocks around the line together rule in or out.</param>
     /// <param name="RecordType">The type a record initializer gives values to.</param>
-    /// <param name="PastFileLevel">Whether a block other than a <c>.segment</c> region holds the line.</param>
     private readonly record struct Surrounding(
-        ContextKind Context, bool InProc, bool InMacro, bool InRepetition, bool InBlock,
-        IReadOnlyList<string>? RecordType, bool PastFileLevel)
+        ContextKind Context, DirectiveNesting Nesting, IReadOnlyList<string>? RecordType)
     {
-        /// <summary>
-        /// Returns the surroundings one block further in. Every kind of block sets
-        /// <c>InBlock</c>, in addition to anything else it changes, because what may appear only
-        /// at file level is ruled out by the presence of any block, not by its kind.
-        /// </summary>
-        public Surrounding Within(BlockSyntax block)
+        /// <summary>Returns the surroundings one block further in.</summary>
+        public Surrounding Within(BlockSyntax block) => block.BlockKind switch
         {
-            var inside = block.BlockKind switch
-            {
-                BlockKind.Proc => this with { Context = ContextKind.Code, InProc = true },
-                BlockKind.Macro => this with { Context = ContextKind.Code, InMacro = true },
-                BlockKind.MacroBlock => this with { Context = ContextKind.Code },
-                BlockKind.Scope or BlockKind.Segment or BlockKind.Region or BlockKind.If => this,
-                BlockKind.Repeat or BlockKind.Each => this with { InRepetition = true },
-                BlockKind.Data => this with { Context = ContextKind.Data },
-                BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Context = ContextKind.Values },
-                BlockKind.RecordInitializer =>
-                    this with { Context = ContextKind.Record, RecordType = TypeOf(block.Opener) },
-                BlockKind.Enum => this with { Context = ContextKind.EnumMembers },
-                BlockKind.Struct or BlockKind.Union => this with { Context = ContextKind.TypeMembers },
-                _ => this with { Context = ContextKind.Unknown },
-            };
-            return inside with { InBlock = true, PastFileLevel = PastFileLevel || block.BlockKind != BlockKind.Region };
-        }
+            BlockKind.Proc or BlockKind.Macro or BlockKind.MacroBlock => this with { Context = ContextKind.Code },
+            BlockKind.Scope or BlockKind.Segment or BlockKind.Region or BlockKind.If
+                or BlockKind.Repeat or BlockKind.Each => this,
+            BlockKind.Data => this with { Context = ContextKind.Data },
+            BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Context = ContextKind.Values },
+            BlockKind.RecordInitializer =>
+                this with { Context = ContextKind.Record, RecordType = TypeOf(block.Opener) },
+            BlockKind.Enum => this with { Context = ContextKind.EnumMembers },
+            BlockKind.Struct or BlockKind.Union => this with { Context = ContextKind.TypeMembers },
+            _ => this with { Context = ContextKind.Unknown },
+        };
 
         /// <summary>Returns the path after the <c>.type</c> of a record initializer's opener.</summary>
         private static IReadOnlyList<string>? TypeOf(LineSyntax opener)
         {
             var tokens = opener.Tokens;
             var at = 0;
-            while (at < tokens.Count && !tokens[at].Text.Equals(".type", StringComparison.OrdinalIgnoreCase))
+            while (at < tokens.Count && tokens[at].DirectiveKind != DirectiveKind.Type)
                 at++;
             var parts = new List<string>();
             for (at++; at < tokens.Count && IsWord(tokens[at].Kind); at += 2)

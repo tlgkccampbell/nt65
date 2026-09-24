@@ -90,11 +90,8 @@ internal static class Lines
     /// </summary>
     public static bool IsRegion(ImmutableArray<GreenToken> tokens)
     {
-        if (tokens[0].Kind != SyntaxKind.Directive
-            || !tokens[0].Text.Equals(".segment", StringComparison.OrdinalIgnoreCase))
-        {
+        if (tokens[0].DirectiveKind != DirectiveKind.Segment)
             return false;
-        }
         foreach (var token in tokens)
         {
             if (token.Kind is SyntaxKind.Colon or SyntaxKind.OpenBrace)
@@ -124,14 +121,14 @@ internal static class Lines
         };
 
         // `.export .proc init {` opens the same kind of block as the declaration after `.export`.
-        if (kind == LineKind.Directive && tokens[0].Text.Equals(".export", StringComparison.OrdinalIgnoreCase)
+        if (kind == LineKind.Directive && tokens[0].DirectiveKind == DirectiveKind.Export
             && tokens[1].Kind == SyntaxKind.Directive)
         {
             start = 1;
         }
         var token = tokens[start];
         if (token.Kind == SyntaxKind.Directive)
-            return DataBlockKind(tokens, start) ?? SyntaxFacts.BlockKindOfDirective(token.Text);
+            return DataBlockKind(tokens, start) ?? SyntaxFacts.BlockKindOf(token.DirectiveKind);
         if (IsCallOfMnemonic(tokens, start))
             return BlockKind.MacroBlock;
         if (token.Kind == SyntaxKind.Identifier)
@@ -152,7 +149,7 @@ internal static class Lines
     private static BlockKind? DataBlockKind(ImmutableArray<GreenToken> tokens, int start)
     {
         var element = start;
-        if (tokens[start].Text.Equals(".data", StringComparison.OrdinalIgnoreCase))
+        if (tokens[start].DirectiveKind == DirectiveKind.Data)
         {
             element = -1;
             for (var i = start + 1; i < tokens.Length; i++)
@@ -168,8 +165,8 @@ internal static class Lines
         }
 
         var directive = tokens[element];
-        var record = directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
-        if (directive.Kind != SyntaxKind.Directive || (!record && SyntaxFacts.ElementSize(directive.Text) is null))
+        var record = directive.DirectiveKind == DirectiveKind.Type;
+        if (!record && SyntaxFacts.ElementSize(directive.DirectiveKind) is null)
             return null;
         for (var i = element + 1; i < tokens.Length; i++)
         {

@@ -641,7 +641,7 @@
           type.
         </summary>
       </PropertyComment>
-      <Read><![CDATA[Directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase)]]></Read>
+      <Read><![CDATA[Directive.DirectiveKind == DirectiveKind.Type]]></Read>
     </Member>
     <Field Name="Type" Type="NameExpressionSyntax" Optional="true">
       <PropertyComment>
@@ -2625,6 +2625,20 @@
         </summary>
       </PropertyComment>
       <Read><![CDATA[(Parent as LineSyntax)?.ExportKeyword]]></Read>
+    </Member>
+    <Member Name="DirectiveKind" Type="DirectiveKind">
+      <PropertyComment>
+        <summary>
+          Gets the directive this statement was parsed from, or
+          <see cref="Syntax.DirectiveKind.None"/> for a statement that no directive begins. The
+          <c>}</c> before <c>.elseif</c> or <c>.else</c> is passed over, and the <c>.export</c>
+          before a declaration belongs to the line, not to the statement. A line that could not
+          be parsed is no directive's statement, whatever its first token.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[this is ErrorLineSyntax
+        ? DirectiveKind.None
+        : ChildTokens.Where(token => token.Kind == SyntaxKind.Directive).Select(token => token.DirectiveKind).FirstOrDefault()]]></Read>
     </Member>
   </AbstractNode>
 

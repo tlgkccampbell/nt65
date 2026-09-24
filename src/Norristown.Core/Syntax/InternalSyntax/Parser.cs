@@ -372,7 +372,7 @@ internal sealed partial class Parser
         if (AtName && Next == SyntaxKind.OpenBrace)
             return Finish(new BlockContinuationSyntax(brace, Advance(), Advance()));
 
-        return SyntaxFacts.LineDirectiveKind(Current.Text) switch
+        return SyntaxFacts.LineDirectiveKind(Current.DirectiveKind) switch
         {
             SyntaxKind.ElseIfDirective => Finish(ParseIf(brace)),
             SyntaxKind.ElseDirective => Finish(ParseElse(brace)),

@@ -22,6 +22,8 @@ internal sealed class GreenToken : GreenNode
         TrailingTrivia = trailing;
         if (kind == SyntaxKind.Mnemonic)
             MnemonicKind = SyntaxFacts.MnemonicKindOf(text);
+        else if (kind == SyntaxKind.Directive)
+            DirectiveKind = SyntaxFacts.DirectiveKindOf(text);
 
         // A lexical error covers the token's text and is given to the constructor rather than
         // reported afterwards. That is safe because the cache never shares a token that has an
@@ -49,6 +51,12 @@ internal sealed class GreenToken : GreenNode
     /// other token.
     /// </summary>
     public MnemonicKind MnemonicKind { get; }
+
+    /// <summary>
+    /// Gets the directive a directive token names, or <see cref="DirectiveKind.None"/> for every
+    /// other token, including a directive token that names a built-in function or no directive.
+    /// </summary>
+    public DirectiveKind DirectiveKind { get; }
 
     /// <summary>Gets the whitespace before the token. Only the first token on a line has any.</summary>
     public ImmutableArray<GreenTrivia> LeadingTrivia { get; }

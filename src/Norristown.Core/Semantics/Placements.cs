@@ -72,7 +72,7 @@ public sealed class Placements
             {
                 if (PathOf(place.Name) is not { } path)
                     continue;
-                if (!AtFileLevel(place))
+                if (!IsWellPlaced(place))
                 {
                     // The misplaced `.place` still names the module, so the module is not also
                     // reported as placed nowhere.
@@ -150,19 +150,12 @@ public sealed class Placements
     }
 
     /// <summary>
-    /// Returns a value indicating whether <paramref name="statement"/> is at file level, meaning
-    /// it is in no block other than a <c>.segment</c> region. Once a region has been opened, file
-    /// level is inside it.
+    /// Returns a value indicating whether <paramref name="place"/> is where its placement allows
+    /// it, which is at file level, in no block other than a <c>.segment</c> region. Once a region
+    /// has been opened, file level is inside it.
     /// </summary>
-    public static bool AtFileLevel(StatementSyntax statement)
-    {
-        for (var at = statement.Parent?.FirstAncestorOrSelf<LineSyntax>()?.Parent; at is not null; at = at.Parent)
-        {
-            if (at is BlockSyntax { BlockKind: not BlockKind.Region })
-                return false;
-        }
-        return true;
-    }
+    public static bool IsWellPlaced(PlaceDirectiveSyntax place) =>
+        !SyntaxFacts.PlacementOf(DirectiveKind.Place).IsBarredBy(SyntaxFacts.NestingOf(place));
 
     /// <summary>
     /// Returns the <c>.module</c> line of <paramref name="tree"/>, or null when it has none.

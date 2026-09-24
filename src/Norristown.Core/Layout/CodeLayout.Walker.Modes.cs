@@ -213,7 +213,7 @@ public sealed partial class CodeLayout
                 return;
             }
             // An immediate is a byte or a word slot, which takes a signed value as its two's complement.
-            var (low, high) = DataLengths.Holds(bits == 16 ? ".word" : ".byte")!.Value;
+            var (low, high) = DataLengths.Holds(bits == 16 ? DirectiveKind.Word : DirectiveKind.Byte)!.Value;
             if (sizeUnknown && value is >= -0x8000 and <= 0xffff)
                 return;
             if (value < low || value > high)

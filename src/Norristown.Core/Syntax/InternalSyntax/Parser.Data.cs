@@ -14,8 +14,8 @@ internal sealed partial class Parser
     private DataDirectiveSyntax ParseDataDirective()
     {
         var directive = Advance();
-        var record = directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
-        if (!record && SyntaxFacts.ElementSize(directive.Text) is null)
+        var record = directive.DirectiveKind == DirectiveKind.Type;
+        if (!record && SyntaxFacts.ElementSize(directive.DirectiveKind) is null)
             return new DataDirectiveSyntax(directive, null, null, AtEnd ? null : ParseInlineData());
 
         NameExpressionSyntax? type = null;
@@ -90,7 +90,7 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.Colon)
         {
             colon = Advance();
-            if (Kind == SyntaxKind.Directive && SyntaxFacts.LineDirectiveKind(Current.Text) == SyntaxKind.DataDirective)
+            if (SyntaxFacts.LineDirectiveKind(Current.DirectiveKind) == SyntaxKind.DataDirective)
             {
                 element = ParseDataDirective();
             }

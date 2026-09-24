@@ -86,7 +86,7 @@ internal sealed partial class Parser
         else if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))
         {
             // `inline n` or `inline .strz` gives how much data follows each call.
-            return Kind == SyntaxKind.Directive && Current.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase)
+            return Current.DirectiveKind == DirectiveKind.Strz
                 ? new StateInlineItemSyntax(name, Advance())
                 : new StateValueItemSyntax(name, null, ParseExpression());
         }

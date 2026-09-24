@@ -1234,7 +1234,7 @@ public sealed class Emitter
             edits.Replace[list.OpenBraceToken.Position] = "";
             if (!list.CloseBraceToken.IsMissing)
                 edits.Replace[list.CloseBraceToken.Position] = "";
-            text = $"{ForCa65(directive.Directive.Text)} {Bare(list, edits, out comment)}";
+            text = $"{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {Bare(list, edits, out comment)}";
         }
         else if (directive.Tail is InlineDataSyntax)
         {
@@ -1314,7 +1314,7 @@ public sealed class Emitter
         }
         var edits = new Edits();
         Substitute(values, edits, nested: false);
-        Code(line, $"{Body}{ForCa65(directive.Directive.Text)} {Bare(values, edits, out var comment)}",
+        Code(line, $"{Body}{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {Bare(values, edits, out var comment)}",
             laid.Length, comment);
     }
 
@@ -1498,7 +1498,7 @@ public sealed class Emitter
 
     /// <summary>Returns the byte a <c>.res n, fill</c> member pads with, which is zero when it names none.</summary>
     private long Fill(Symbol member) =>
-        member.Data is DataDirectiveSyntax data && DataSyntax.NameOf(data) == ".res"
+        member.Data is DataDirectiveSyntax { Directive.DirectiveKind: DirectiveKind.Res } data
         && data.Tail is InlineDataSyntax { Values: [_, var padding, ..] }
         && model.ValueOf(padding, context.Expansion).AsNumber() is { } fill
             ? fill & 0xff
@@ -1586,7 +1586,7 @@ public sealed class Emitter
                 }
                 var (width, bigEndian) = Slot(element);
                 Field(line,
-                    $"{ForCa65(DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
+                    $"{ForCa65(element.Directive.DirectiveKind, DataSyntax.NameOf(element))} {string.Join(", ", items.Select(item => Datum(item, width, bigEndian, []) ?? Rendered(item)))}",
                     named, size);
                 bytes += size;
                 continue;
@@ -1642,11 +1642,11 @@ public sealed class Emitter
     private IEnumerable<(string Text, long Size)> Member(Symbol member, DataDirectiveSyntax? element, SyntaxNode? given)
     {
         var size = member.Size ?? 0;
-        var directive = element is null ? ".res" : DataSyntax.NameOf(element);
+        var directive = element?.Directive.DirectiveKind ?? DirectiveKind.Res;
 
         // Room with a fill is what `.res n, fill` says in both languages, so the room a value
         // does not reach is written as the one directive rather than as a row of equal bytes.
-        if (directive == ".res")
+        if (directive == DirectiveKind.Res)
         {
             var values = given is null ? [] : model.BytesOf(given, context.Expansion)?.ToList() ?? [];
             var used = Math.Min(values.Count, size);
@@ -1661,7 +1661,7 @@ public sealed class Emitter
         }
         var (width, bigEndian) = Slot(element!);
         var value = given is null ? Constant(0) : Datum(given, width, bigEndian, []) ?? Rendered(given);
-        yield return ($"{ForCa65(directive)} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}", size);
+        yield return ($"{ForCa65(directive, SyntaxFacts.TextOf(directive))} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}", size);
     }
 
     /// <summary>
@@ -2171,13 +2171,13 @@ public sealed class Emitter
                 // fixed width.
                 if (DataSyntax.IsElementType(directive) && directive.Tail is not BracedDataSyntax)
                 {
-                    edits.Replace[directive.Directive.Position] = ForCa65(directive.Directive.Text);
+                    edits.Replace[directive.Directive.Position] = ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text);
                     var (width, bigEndian) = Slot(directive);
                     foreach (var value in DataLengths.ElementsOf(directive))
                         InPlace(value, width, bigEndian, edits);
                     return;
                 }
-                if (DataSyntax.NameOf(directive) is ".res" or ".align"
+                if (directive.Directive.DirectiveKind is DirectiveKind.Res or DirectiveKind.Align
                     && directive.Tail is InlineDataSyntax { Values: [var count, .. var fills] })
                 {
                     Counted(count, edits);
@@ -2231,14 +2231,15 @@ public sealed class Emitter
     /// <summary>
     /// Returns the ca65 directive for one of nt65's element types. ca65's 24-bit directive is
     /// <c>.faraddr</c> and its one big-endian directive <c>.dbyt</c>; a wider big-endian value
-    /// is written as its bytes.
+    /// is written as its bytes. Every other element type keeps <paramref name="spelled"/>, the
+    /// text it is written with.
     /// </summary>
-    private static string ForCa65(string directive) => directive.ToLowerInvariant() switch
+    private static string ForCa65(DirectiveKind directive, string spelled) => directive switch
     {
-        ".long" => ".faraddr",
-        ".beword" => ".dbyt",
-        ".belong" or ".bedword" => ".byte",
-        _ => directive,
+        DirectiveKind.Long => ".faraddr",
+        DirectiveKind.BeWord => ".dbyt",
+        DirectiveKind.BeLong or DirectiveKind.BeDword => ".byte",
+        _ => spelled,
     };
 
     /// <summary>
@@ -2247,8 +2248,8 @@ public sealed class Emitter
     /// </summary>
     private static (int Width, bool BigEndian) Slot(DataDirectiveSyntax directive)
     {
-        var name = DataSyntax.NameOf(directive);
-        return (SyntaxFacts.ElementSize(name) ?? 1, name is ".beword" or ".belong" or ".bedword");
+        var kind = directive.Directive.DirectiveKind;
+        return (SyntaxFacts.ElementSize(kind) ?? 1, kind is DirectiveKind.BeWord or DirectiveKind.BeLong or DirectiveKind.BeDword);
     }
 
     /// <summary>
@@ -2352,7 +2353,7 @@ public sealed class Emitter
     /// </summary>
     private static void Terminated(DataDirectiveSyntax directive, Edits edits)
     {
-        if (!directive.Directive.Text.Equals(".strz", StringComparison.OrdinalIgnoreCase))
+        if (directive.Directive.DirectiveKind != DirectiveKind.Strz)
             return;
 
         edits.Replace[directive.Directive.Position] = ".byte";
@@ -2369,7 +2370,7 @@ public sealed class Emitter
     /// </summary>
     private bool Included(DataDirectiveSyntax directive, Edits edits)
     {
-        if (!directive.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase))
+        if (directive.Directive.DirectiveKind != DirectiveKind.IncBin)
             return false;
         var values = directive.Tail is InlineDataSyntax inline ? inline.Values : default;
         if (values is [var path, ..]

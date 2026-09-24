@@ -223,31 +223,42 @@ public static class Macros
 
     /// <summary>
     /// Returns the two halves of the <see cref="Forbidden"/> message, what is refused and why, or
-    /// null when the statement is allowed.
+    /// null when the statement is allowed. Whether a directive is refused comes from its
+    /// placement, which the editor reads too. A declaration after <c>.export</c> counts as the
+    /// <c>.export</c>. A <c>.use</c> or a <c>.fallthrough</c> is reported by its own rule.
     /// </summary>
-    private static (string What, string Because)? Refused(StatementSyntax statement) => statement switch
+    private static (string What, string Because)? Refused(StatementSyntax statement)
     {
-        { IsExported: true } or ExportDirectiveSyntax =>
-            ("`.export`", "other files resolve names through the export map, and a body cannot add to it"),
-        ImportDirectiveSyntax =>
-            ("`.import`", "a body resolves names where the macro is declared, and the output imports whatever "
-                + "an expansion uses"),
-        CpuDirectiveSyntax => ("`.cpu`", "the CPU is program-wide"),
-        SegmentDeclarationSyntax =>
-            ("a segment declaration",
-                "a segment is declared exactly once for the program, and this one would be declared once per call"),
-        MultiProcDeclarationSyntax =>
-            ("`.multiproc`", "a routine's name and signature are part of the file's interface, and a body declares "
-                + "nothing in its caller"),
-        ProcDeclarationSyntax or ExternProcDeclarationSyntax =>
-            ("`.proc`", "a routine's name and signature are part of the file's interface. Take a `block` parameter "
-                + "and let the caller declare the routine"),
-        MacroDeclarationSyntax =>
-            ("`.macro`", "a definition there could capture the enclosing macro's parameters"),
-        FuncDeclarationSyntax =>
-            ("`.func`", "a definition there could capture the enclosing macro's parameters"),
-        SignatureDeclarationSyntax =>
-            ("`.signature`", "a signature set is used in signatures, which are part of the file's interface"),
-        _ => null,
-    };
+        var kind = statement.IsExported ? DirectiveKind.Export : statement.DirectiveKind;
+        if (!SyntaxFacts.PlacementOf(kind).IsBarredBy(DirectiveNesting.MacroBody))
+            return null;
+        return kind switch
+        {
+            DirectiveKind.Export =>
+                ("`.export`", "other files resolve names through the export map, and a body cannot add to it"),
+            DirectiveKind.Import =>
+                ("`.import`", "a body resolves names where the macro is declared, and the output imports whatever "
+                    + "an expansion uses"),
+            DirectiveKind.Cpu => ("`.cpu`", "the CPU is program-wide"),
+
+            // A segment block or region only places what the body holds, so only a declaration
+            // is refused.
+            DirectiveKind.Segment when statement is SegmentDeclarationSyntax =>
+                ("a segment declaration",
+                    "a segment is declared exactly once for the program, and this one would be declared once per call"),
+            DirectiveKind.MultiProc =>
+                ("`.multiproc`", "a routine's name and signature are part of the file's interface, and a body declares "
+                    + "nothing in its caller"),
+            DirectiveKind.Proc =>
+                ("`.proc`", "a routine's name and signature are part of the file's interface. Take a `block` parameter "
+                    + "and let the caller declare the routine"),
+            DirectiveKind.Macro =>
+                ("`.macro`", "a definition there could capture the enclosing macro's parameters"),
+            DirectiveKind.Func =>
+                ("`.func`", "a definition there could capture the enclosing macro's parameters"),
+            DirectiveKind.Signature =>
+                ("`.signature`", "a signature set is used in signatures, which are part of the file's interface"),
+            _ => null,
+        };
+    }
 }

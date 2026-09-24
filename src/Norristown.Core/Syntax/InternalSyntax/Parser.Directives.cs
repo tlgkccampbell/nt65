@@ -12,9 +12,9 @@ internal sealed partial class Parser
     /// </summary>
     private GreenNode ParseDirectiveLine()
     {
-        if (ParseDirective(SyntaxFacts.LineDirectiveKind(Current.Text)) is { } statement)
+        if (ParseDirective(SyntaxFacts.LineDirectiveKind(Current.DirectiveKind)) is { } statement)
             return Finish(statement);
-        if (SyntaxFacts.LineDirectiveKind(Current.Text) is SyntaxKind.ElseIfDirective or SyntaxKind.ElseDirective)
+        if (Current.DirectiveKind is DirectiveKind.ElseIf or DirectiveKind.Else)
             return ErrorLine(Catalogue.ElseIfMisplaced.Message(Current.Text));
         return Replaced(Current.Text) is { } instead
             ? ErrorLine(instead.Message, Spelling(instead, wholeLine: true))

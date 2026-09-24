@@ -584,7 +584,7 @@ public sealed partial class CodeLayout
         /// </summary>
         private void Refuse(ErrorDirectiveSyntax directive)
         {
-            var warns = directive.Keyword.Text.Equals(".warning", StringComparison.OrdinalIgnoreCase);
+            var warns = directive.Keyword.DirectiveKind == DirectiveKind.Warning;
             var message = Constructs.AssertionOf(directive).Message ?? "this configuration is not supported";
             Report(directive, warns ? Catalogue.ConfigWarned.Message(message) : Catalogue.ConfigRefused.Message(message));
         }
@@ -598,7 +598,7 @@ public sealed partial class CodeLayout
                 // Bytes that a macro expands outside a routine need a declaration as much as bytes in
                 // the source there do. Binding could not see them, because it sees only the macro body
                 // as declared.
-                if (expansion?.NearestCall is not null && DataSyntax.NameOf(loose) is not (".res" or ".align"))
+                if (expansion?.NearestCall is not null && loose.Directive.DirectiveKind is not (DirectiveKind.Res or DirectiveKind.Align))
                     Report(directive, Catalogue.PaddingOutsideARoutine.Message(loose.Directive.Text, ""));
                 else if (segment is null && length != 0)
                     Report(directive, Catalogue.OutsideEverySegment.Message("this"));

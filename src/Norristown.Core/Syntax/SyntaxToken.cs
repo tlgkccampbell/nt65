@@ -45,6 +45,13 @@ public readonly record struct SyntaxToken
     public MnemonicKind MnemonicKind => Green.MnemonicKind;
 
     /// <summary>
+    /// Gets the directive a <see cref="SyntaxKind.Directive"/> token names, in any letter case, or
+    /// <see cref="Syntax.DirectiveKind.None"/> for every other token, including a directive token
+    /// that names a built-in function or no directive at all.
+    /// </summary>
+    public DirectiveKind DirectiveKind => Green.DirectiveKind;
+
+    /// <summary>
     /// Gets a value indicating whether the token fills a place the syntax requires but the source
     /// leaves empty. Such a token's text is empty, and its span is the empty span where the token
     /// would have been.

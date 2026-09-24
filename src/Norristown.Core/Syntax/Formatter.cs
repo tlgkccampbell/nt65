@@ -204,7 +204,7 @@ public static class Formatter
         {
             // An `.import` line also has an element type after its colon and can declare
             // several items, so it is not one declaration per line and gets no aligned column.
-            if (tokens[name].Text.Equals(".import", StringComparison.OrdinalIgnoreCase))
+            if (tokens[name].DirectiveKind == DirectiveKind.Import)
                 return -1;
             name++;
         }

@@ -25,7 +25,7 @@ internal sealed partial class Parser
             return Finish(new LabeledLineSyntax(label, null));
         }
 
-        switch (SyntaxFacts.LineDirectiveKind(Current.Text))
+        switch (SyntaxFacts.LineDirectiveKind(Current.DirectiveKind))
         {
             case SyntaxKind.DataDirective:
                 return Finish(new LabeledLineSyntax(label, ParseDataDirective()));
@@ -375,8 +375,8 @@ internal sealed partial class Parser
     /// exported.
     /// </summary>
     private GreenNode? ParseExportable() =>
-        SyntaxFacts.IsExportable(Current.Text)
-            ? ParseDirective(SyntaxFacts.LineDirectiveKind(Current.Text))
+        SyntaxFacts.IsExportable(Current.DirectiveKind)
+            ? ParseDirective(SyntaxFacts.LineDirectiveKind(Current.DirectiveKind))
             : null;
 
     /// <summary>
@@ -579,7 +579,7 @@ internal sealed partial class Parser
             {
                 if (Kind == SyntaxKind.Identifier && SyntaxFacts.IsAddressSize(Current.Text))
                     addressSize = Advance();
-                if (Kind == SyntaxKind.Directive && SyntaxFacts.LineDirectiveKind(Current.Text) == SyntaxKind.DataDirective)
+                if (SyntaxFacts.LineDirectiveKind(Current.DirectiveKind) == SyntaxKind.DataDirective)
                     element = ParseImportElement();
                 else if (addressSize is null)
                     Report(Catalogue.ExpectedAddressSize.Message("`zp`, `abs`, `far`, `proc(...)` or what the data is"));
@@ -606,8 +606,8 @@ internal sealed partial class Parser
     {
         var at = index;
         var directive = Advance();
-        var record = directive.Text.Equals(".type", StringComparison.OrdinalIgnoreCase);
-        var element = record || SyntaxFacts.ElementSize(directive.Text) is not null;
+        var record = directive.DirectiveKind == DirectiveKind.Type;
+        var element = record || SyntaxFacts.ElementSize(directive.DirectiveKind) is not null;
         NameExpressionSyntax? type = null;
         if (record)
         {

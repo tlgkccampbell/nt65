@@ -912,13 +912,21 @@ internal sealed partial class Binder
     /// Reports a <c>.macro</c> declared inside a routine or another macro, since a macro belongs
     /// at file level or in a <c>.scope</c> outside any routine. A macro declared in a proc would
     /// see that proc's cheap locals, and an expansion in another proc would branch into them, out
-    /// of sight of the first proc's flow analysis.
+    /// of sight of the first proc's flow analysis. Which surroundings rule a macro out comes from
+    /// its placement, which the editor reads too.
     /// </summary>
     private void CheckMacroPlacement(MacroDeclarationSyntax opener)
     {
+        var placement = SyntaxFacts.PlacementOf(DirectiveKind.Macro);
         for (var around = scope; around is { Kind: not ScopeKind.File }; around = around.Parent)
         {
-            if (around.Kind is not (ScopeKind.Proc or ScopeKind.Macro))
+            var nesting = around.Kind switch
+            {
+                ScopeKind.Proc => DirectiveNesting.Routine,
+                ScopeKind.Macro => DirectiveNesting.MacroBody,
+                _ => DirectiveNesting.None,
+            };
+            if (!placement.IsBarredBy(nesting))
                 continue;
             Report(opener.Keyword.Span, Catalogue.MacroMisplaced.Message(
                 around.Kind == ScopeKind.Proc ? "a routine" : "another macro"));
@@ -1372,7 +1380,7 @@ internal sealed partial class Binder
     {
         if (Placement != ScopeKind.File)
             return;
-        if (statement.Directive.Text.ToLowerInvariant() is not (".res" or ".align"))
+        if (statement.Directive.DirectiveKind is not (DirectiveKind.Res or DirectiveKind.Align))
         {
             var directive = statement.Directive.Text;
             Report(statement.Directive.Span, Catalogue.PaddingOutsideARoutine.Message(
@@ -1977,7 +1985,7 @@ internal sealed partial class Binder
         public override void VisitConfigDeclaration(ConfigDeclarationSyntax node)
         {
             var setting = node.Value;
-            if (Configuration.AtFileLevel(node)
+            if (Configuration.IsWellPlaced(node)
                 && binder.Declare(node.Name, SymbolKind.Constant) is { } config)
             {
                 config.IsConfig = true;

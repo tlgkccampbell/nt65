@@ -606,7 +606,7 @@ public static class Compiler
                 named.Add(used.Tree.Path);
             foreach (var directive in file.Tree.Root.DescendantNodes().OfType<DataDirectiveSyntax>())
             {
-                if (directive.Directive.Text.Equals(".incbin", StringComparison.OrdinalIgnoreCase)
+                if (directive.Directive.DirectiveKind == DirectiveKind.IncBin
                     && directive.Tail is InlineDataSyntax { Values: [var operand, ..] }
                     && file.ValueOf(operand) is { Kind: ValueKind.String, Text: { } included })
                 {

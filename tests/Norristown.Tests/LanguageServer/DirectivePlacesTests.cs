@@ -6,9 +6,11 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Checks the server's lists of which directives may start a line in each kind of place against
-/// the binder, which is what actually decides. Nothing in the code ties the two together. A
-/// directive offered where the binder rejects it is a completion that inserts a broken line, and
-/// a directive the binder accepts but the list leaves out is never offered.
+/// the binder, which is what actually decides. Both read each directive's
+/// <see cref="DirectivePlacement"/>, but the binder also applies rules of its own, such as which
+/// form of <c>.segment</c> a body may hold. A directive offered where the binder rejects it is a
+/// completion that inserts a broken line, and a directive the binder accepts but the list leaves
+/// out is never offered.
 /// <para>
 /// Each directive is placed in its smallest complete form at the start of a line in each kind
 /// of place, and the program is built. "Allowed" here means no error is reported on those lines;
@@ -91,6 +93,14 @@ public sealed class DirectivePlacesTests
         ["a routine"] = [],
         ["a macro body"] = [],
         ["a repetition"] = [],
+        ["a scope"] = [],
+        ["an if"] = [],
+        ["a segment block"] = [],
+        ["an if in a routine"] = [],
+        ["a repetition in a routine"] = [],
+        ["a scope in a routine"] = [],
+        ["a macro in a scope"] = [],
+        ["a repetition in a macro"] = [],
     };
 
     /// <summary>
@@ -106,22 +116,49 @@ public sealed class DirectivePlacesTests
         ["a routine"] = [".cpu", ".proc"],
         ["a macro body"] = [".segment"],
         ["a repetition"] = [".segment"],
+        ["a scope"] = [],
+        ["an if"] = [],
+        ["a segment block"] = [],
+        ["an if in a routine"] = [".proc"],
+        ["a repetition in a routine"] = [".segment"],
+        ["a scope in a routine"] = [".cpu", ".proc"],
+        ["a macro in a scope"] = [".segment"],
+        ["a repetition in a macro"] = [".segment"],
     };
 
-    /// <summary>Every directive the server knows either has a complete form above or is listed as partial.</summary>
+    /// <summary>
+    /// Every directive the language has is described for the server's lists, and either has a
+    /// complete form above or is listed as partial.
+    /// </summary>
     [Fact]
-    public void EveryDirectiveTheListsKnowHasASnippetHere()
+    public void EveryDirectiveHasASnippetHere()
     {
+        Assert.Equal(SyntaxFacts.Directives.Order(), Directives.All.Order());
         Assert.Equal(
-            Directives.All.Order(StringComparer.Ordinal),
+            SyntaxFacts.Directives.Select(SyntaxFacts.TextOf).Order(StringComparer.Ordinal),
             Snippets.Keys.Concat(Partial).Order(StringComparer.Ordinal));
     }
 
+    /// <summary>
+    /// Checks the places where the server's offers and the binder agree. The two skipped places
+    /// are ones where they disagree. The server offers <c>.use</c> inside a <c>.scope</c>, which
+    /// the binder refuses because a <c>.use</c> must be at the module's top level. It also offers
+    /// <c>.cpu</c> under an <c>.if</c>, which the binder refuses because a condition may test the
+    /// processor.
+    /// </summary>
     [Theory]
     [InlineData("file level")]
     [InlineData("a routine")]
     [InlineData("a macro body")]
     [InlineData("a repetition")]
+    [InlineData("a segment block")]
+    [InlineData("an if in a routine")]
+    [InlineData("a repetition in a routine")]
+    [InlineData("a scope in a routine")]
+    [InlineData("a macro in a scope")]
+    [InlineData("a repetition in a macro")]
+    [InlineData("a scope", Skip = "The server offers `.use` in a `.scope`, and the binder refuses it there")]
+    [InlineData("an if", Skip = "The server offers `.cpu` under an `.if`, and the binder refuses it there")]
     public void WhatIsOfferedIsWhatTheBinderTakes(string place)
     {
         var offered = Offered(place);
@@ -237,6 +274,14 @@ public sealed class DirectivePlacesTests
             "a macro body" => (".macro host() {\n", "}\n"),
             "a repetition" => (".repeat 2 {\n", "}\n"),
             "file level" => ("", ""),
+            "a scope" => (".scope host {\n", "}\n"),
+            "an if" => (".if 1 {\n", "}\n"),
+            "a segment block" => (".segment DATA {\n", "}\n"),
+            "an if in a routine" => (".export .proc host {\n.if 1 {\n", "}\nrts\n}\n"),
+            "a repetition in a routine" => (".export .proc host {\n.repeat 2 {\n", "}\nrts\n}\n"),
+            "a scope in a routine" => (".export .proc host {\n.scope inner {\n", "}\nrts\n}\n"),
+            "a macro in a scope" => (".scope outer {\n.macro host() {\n", "}\n}\n"),
+            "a repetition in a macro" => (".macro host() {\n.repeat 2 {\n", "}\n}\n"),
             _ => throw new ArgumentOutOfRangeException(nameof(place), place, "no such place to write a snippet in"),
         };
         var head = Preamble.ReplaceLineEndings("\n") + before;
