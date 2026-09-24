@@ -72,7 +72,6 @@ public sealed class Emitter
 
     // The header's last line. A file that writes anything has more lines after it.
     private EmittedLine? headerEnd;
-    private readonly List<string?> segmentStack = [];
     private readonly HashSet<Symbol> exported = [];
 
     // The counter name each folded repetition uses in the output. A repetition's body may be
@@ -93,25 +92,12 @@ public sealed class Emitter
     // The width at which the previous 65816 immediate of each register was written, in output
     // order, which is exactly ca65's setting when the next one is reached.
     private readonly Dictionary<WidthRegister, int> widths = [];
-    // The segment being written, or null before any region or block names one.
-    private string? segment;
-
-    // The routine being written, which is what a generated label is named after.
-    private Symbol? routine;
     private string? written;
     private bool pendingBlank;
-    private int depth;
 
-    // The expansion being written, which identifies the iteration of each enclosing repetition
-    // and the expansion of each enclosing macro. A body is written once per expansion or
-    // iteration, with every name bound at that level taking the value it has there.
-    private Expansion? expansion;
-
-    // The line an expansion's output maps back to. The lines of an expansion map to the line of
-    // the call, the way a C debugger treats a preprocessor macro. Only a line of this file can be
-    // used, because the line map points into this module's source and a macro body may be
-    // defined in another file.
-    private LineSyntax? callLine;
+    // Where the walk is, which every block, repetition and macro call it enters changes and
+    // puts back when it leaves.
+    private WalkContext context = new(null, null, null, null, 0);
 
     // The modules this one places, by the `.place` that places each, and the files of the
     // translation unit, whose names are defined in the same output and need no import.
@@ -334,7 +320,7 @@ public sealed class Emitter
     /// </summary>
     private void End(StatementSyntax declaration)
     {
-        if (model.DeclaredBy(declaration, expansion) is not { } symbol || !ends.Contains(symbol))
+        if (model.DeclaredBy(declaration, context.Expansion) is not { } symbol || !ends.Contains(symbol))
             return;
         Segment();
         Flush();
@@ -547,7 +533,7 @@ public sealed class Emitter
                     WalkLine(line);
                 continue;
             }
-            if (chain.Includes(model, block, expansion))
+            if (chain.Includes(model, block, context.Expansion))
                 WalkBlock(block, block.BlockKind);
         }
     }
@@ -588,16 +574,16 @@ public sealed class Emitter
         // ca65 `.repeat` is then decided from the lines, once they are all written.
         if (Constructs.Repeats(kind))
         {
-            var outerIteration = expansion;
-            var iterations = Repetitions.Of(model, block, outerIteration, null);
+            var iterations = Repetitions.Of(model, block, context.Expansion, null);
             var starts = new List<int>(iterations.Count);
             foreach (var iteration in iterations)
             {
                 starts.Add(this.lines.Count);
-                expansion = iteration;
-                Walk(lines, from: 1);
+                using (Enter(context with { Expansion = iteration }))
+                {
+                    Walk(lines, from: 1);
+                }
             }
-            expansion = outerIteration;
             if (kind == BlockKind.Repeat)
                 Folded(block, Repetitions.BindingOf(model, opener), starts);
             return;
@@ -609,13 +595,13 @@ public sealed class Emitter
         {
             if (model.FamilyAt(opener) is null)
                 return;
-            var outerFamily = expansion;
-            foreach (var iteration in Repetitions.Of(model, block, outerFamily, null))
+            foreach (var iteration in Repetitions.Of(model, block, context.Expansion, null))
             {
-                expansion = iteration;
-                WalkBlock(block, BlockKind.Proc);
+                using (Enter(context with { Expansion = iteration }))
+                {
+                    WalkBlock(block, BlockKind.Proc);
+                }
             }
-            expansion = outerFamily;
             return;
         }
 
@@ -650,67 +636,74 @@ public sealed class Emitter
         // A segment block anywhere but the file's own top level temporarily switches away from
         // the enclosing segment, which is what `.pushseg` and `.popseg` express. A region is
         // always at file level.
-        var nested = depth > 0;
-        var pushed = false;
-        var outerSegment = segment;
         var placing = kind is BlockKind.Segment or BlockKind.Region;
-        if (placing)
+        var proc = kind == BlockKind.Proc && opener is ProcDeclarationSyntax or MultiProcDeclarationSyntax;
+        var pushed = placing && context.Depth > 0;
+        if (pushed)
         {
-            var name = Constructs.SegmentOf(opener) ?? segment;
-            if (nested)
-            {
-                Blank();
-                Line(".pushseg");
-                segmentStack.Add(segment);
-                pushed = true;
-                written = null;
-            }
-            segment = name;
+            Blank();
+            Line(".pushseg");
+            written = null;
         }
-        else if (kind == BlockKind.Proc && opener is ProcDeclarationSyntax or MultiProcDeclarationSyntax)
+        if (proc)
         {
             Segment();
             Flush();
-            routine = ProcLabel(opener);
-
-            // An instance of a family is written under a comment giving the family's line and the
-            // instance's name. It is one routine in the output, named as the source names it.
-            var instance = model.FamilyAt(opener) is not null && routine is not null ? $"  {routine.QualifiedName}" : "";
-            Line($"; {opener.GetText().Trim().TrimEnd('{').TrimEnd()}  {Where(opener)}{instance}");
-            Label(block.Opener, routine);
-        }
-        else if (kind != BlockKind.Scope)
-        {
-            WalkLine(block.Opener);
         }
 
-        var outerRoutine = routine;
-        depth++;
-        Walk(lines, from: 1);
-        depth--;
-        if (kind == BlockKind.DataBody
-            && (opener as DataDirectiveSyntax ?? (opener as DataDeclarationSyntax)?.Directive) is { } declared)
+        var inner = context with
         {
-            Padding(block.Opener, declared);
+            Segment = placing ? Constructs.SegmentOf(opener) ?? context.Segment : context.Segment,
+            Routine = proc ? ProcLabel(opener) : context.Routine,
+        };
+        using (Enter(inner))
+        {
+            if (proc)
+            {
+                // An instance of a family is written under a comment giving the family's line and
+                // the instance's name. It is one routine in the output, named as the source names it.
+                var routine = context.Routine;
+                var instance = model.FamilyAt(opener) is not null && routine is not null ? $"  {routine.QualifiedName}" : "";
+                Line($"; {opener.GetText().Trim().TrimEnd('{').TrimEnd()}  {Where(opener)}{instance}");
+                Label(block.Opener, routine);
+            }
+            else if (!placing && kind != BlockKind.Scope)
+            {
+                WalkLine(block.Opener);
+            }
+
+            using (Enter(context with { Depth = context.Depth + 1 }))
+            {
+                Walk(lines, from: 1);
+            }
+            if (kind == BlockKind.DataBody
+                && (opener as DataDirectiveSyntax ?? (opener as DataDeclarationSyntax)?.Directive) is { } declared)
+            {
+                Padding(block.Opener, declared);
+            }
+            if (kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody)
+                End(opener);
+            if (kind == BlockKind.Proc && context.Routine is { } named)
+                Line($"; end of {named.Name}");
         }
-        if (kind is BlockKind.Proc or BlockKind.Data or BlockKind.DataBody)
-            End(opener);
-        if (kind == BlockKind.Proc && routine is { } named)
-            Line($"; end of {named.Name}");
-        routine = outerRoutine;
 
         if (pushed)
         {
             Line(".popseg");
-            segment = segmentStack[^1];
-            segmentStack.RemoveAt(segmentStack.Count - 1);
-            written = segment;
+            written = context.Segment;
             pendingBlank = true;
         }
-        else if (placing)
-        {
-            segment = outerSegment;
-        }
+    }
+
+    /// <summary>
+    /// Makes <paramref name="next"/> the context being written in, and returns a scope that puts
+    /// the current one back when it is disposed, however the walk inside it ends.
+    /// </summary>
+    private WalkScope Enter(WalkContext next)
+    {
+        var scope = new WalkScope(this, context);
+        context = next;
+        return scope;
     }
 
     /// <summary>
@@ -984,7 +977,7 @@ public sealed class Emitter
                     EnumMember(member);
                 continue;
             }
-            if (chain.Includes(model, block, expansion) && block.BlockKind == BlockKind.If)
+            if (chain.Includes(model, block, context.Expansion) && block.BlockKind == BlockKind.If)
                 Members(block.Members, 1);
         }
     }
@@ -1010,7 +1003,7 @@ public sealed class Emitter
             return;
 
         // A macro that reaches itself is an error already, and has nothing to write.
-        if (Expansion.Expanding(expansion, definition))
+        if (Expansion.Expanding(context.Expansion, definition))
             return;
 
         Segment();
@@ -1024,16 +1017,17 @@ public sealed class Emitter
         var called = callText.IndexOf('!') is var bang && bang > 0 ? callText[..(bang + 1)] : callText;
         Line($"{Body}; {callText}  {Where(call)}");
 
-        var outerCall = callLine;
-        var outer = expansion;
-
         // Every line of the expansion maps to the call, and a call inside a body maps to the
         // outermost call, which is the line of this file that asked for all of it.
-        callLine ??= line;
-        expansion = Expansion.Of(outer, call, definition);
-        Walk(definition.Members, from: 1);
-        expansion = outer;
-        callLine = outerCall;
+        var expanded = context with
+        {
+            Expansion = Expansion.Of(context.Expansion, call, definition),
+            CallLine = context.CallLine ?? line,
+        };
+        using (Enter(expanded))
+        {
+            Walk(definition.Members, from: 1);
+        }
 
         // An expansion has no end of its own in the output. What follows it is the caller's own
         // code, on the same level and under no label, so only the comment marks the end.
@@ -1049,19 +1043,20 @@ public sealed class Emitter
     private void Splice(BlockSpliceSyntax statement)
     {
         if (model.SymbolAt(statement.Name) is not { Parameter: { } parameter }
-            || model.ArgumentFor(parameter.Symbol, expansion) is not { Block: { } block })
+            || model.ArgumentFor(parameter.Symbol, context.Expansion) is not { Block: { } block })
         {
             return;
         }
 
-        var outerCall = callLine;
-        var outer = expansion;
-        if (block.Tree == model.Tree)
-            callLine = null;
-        expansion = Expansion.Spliced(outer, statement, block);
-        Walk(Macros.LinesOf(block), from: 0);
-        expansion = outer;
-        callLine = outerCall;
+        var spliced = context with
+        {
+            Expansion = Expansion.Spliced(context.Expansion, statement, block),
+            CallLine = block.Tree == model.Tree ? null : context.CallLine,
+        };
+        using (Enter(spliced))
+        {
+            Walk(Macros.LinesOf(block), from: 0);
+        }
     }
 
     /// <summary>Returns where a call appears in the source, as the comment before its expansion names it.</summary>
@@ -1074,7 +1069,7 @@ public sealed class Emitter
     /// Returns the routine that a <c>.proc</c>, or one iteration of a <c>.multiproc</c>, writes out
     /// here.
     /// </summary>
-    private Symbol? ProcLabel(StatementSyntax opener) => model.DeclaredBy(opener, expansion);
+    private Symbol? ProcLabel(StatementSyntax opener) => model.DeclaredBy(opener, context.Expansion);
 
     /// <summary>Writes the label a routine's first byte carries, where the routine has a name.</summary>
     private void Label(LineSyntax line, Symbol? routine)
@@ -1103,7 +1098,7 @@ public sealed class Emitter
             return;
         }
 
-        var over = names.Generated((routine is null ? "" : Named(routine) + "__") + "over");
+        var over = names.Generated((context.Routine is null ? "" : Named(context.Routine) + "__") + "over");
         edits.Replace[mnemonic.Position] = SyntaxFacts.TextOf(MnemonicKind.Jmp);
         var jump = Render(statement, edits, Body);
         Code(line, $"{Body}{SyntaxFacts.TextOf(skipped)} {over}", Instructions.Length(AddressingMode.Relative));
@@ -1131,12 +1126,12 @@ public sealed class Emitter
             Expand(line, call);
             return;
         }
-        if (rest is DataDirectiveSyntax && layout.Of(rest, expansion) is null)
+        if (rest is DataDirectiveSyntax && layout.Of(rest, context.Expansion) is null)
         {
             NotTranspiled(rest);
             return;
         }
-        var bytes = rest is null ? 0 : layout.Of(rest, expansion)?.Length ?? 0;
+        var bytes = rest is null ? 0 : layout.Of(rest, context.Expansion)?.Length ?? 0;
         if (rest is not null)
             Width(rest);
         var edits = new Edits();
@@ -1176,7 +1171,7 @@ public sealed class Emitter
     /// </summary>
     private void Declared(LineSyntax line, DataDeclarationSyntax declaration)
     {
-        if (model.DeclaredBy(declaration, expansion) is not { } symbol)
+        if (model.DeclaredBy(declaration, context.Expansion) is not { } symbol)
             return;
         if (declaration.Directive is not { } element)
         {
@@ -1190,7 +1185,7 @@ public sealed class Emitter
         }
 
         // Bytes such as an `.incbin` are written as the source has them.
-        if (layout.Of(element, expansion) is not { } laid)
+        if (layout.Of(element, context.Expansion) is not { } laid)
         {
             NotTranspiled(element);
             return;
@@ -1221,7 +1216,7 @@ public sealed class Emitter
                 NotTranspiled(directive);
             return;
         }
-        if (layout.Of(directive, expansion) is not { } laid)
+        if (layout.Of(directive, context.Expansion) is not { } laid)
         {
             NotTranspiled(directive);
             return;
@@ -1257,7 +1252,7 @@ public sealed class Emitter
 
         // One text in a counted `.byte` array is padded with zero to the count, so the line
         // holds the text and the line below it the zeros that fill the array out.
-        var zeros = (int)(PaddedText.Padding(directive, model, expansion)?.Zeros ?? 0);
+        var zeros = (int)(PaddedText.Padding(directive, model, context.Expansion)?.Zeros ?? 0);
         WithName(line, symbol, text, laid.Length - zeros, comment);
         Padding(line, directive);
     }
@@ -1281,7 +1276,7 @@ public sealed class Emitter
     /// <summary>Writes the zeros a padded text is filled out with, where a declaration has any.</summary>
     private void Padding(LineSyntax line, DataDirectiveSyntax directive)
     {
-        if (PaddedText.Padding(directive, model, expansion) is not var (zeros, count))
+        if (PaddedText.Padding(directive, model, context.Expansion) is not var (zeros, count))
             return;
         foreach (var reserved in Reservations(zeros))
             Code(line, $"{Body}.res {reserved}, $00", (int)reserved, $"padded to {count}");
@@ -1312,7 +1307,7 @@ public sealed class Emitter
                 Fields(line, type, ValuesIn(record), path: "");
             return;
         }
-        if (layout.Of(values, expansion) is not { } laid)
+        if (layout.Of(values, context.Expansion) is not { } laid)
         {
             NotTranspiled(values);
             return;
@@ -1456,7 +1451,7 @@ public sealed class Emitter
     /// </summary>
     private void Records(LineSyntax line, DataDirectiveSyntax directive, Symbol? symbol, Symbol type)
     {
-        if (model.RoomFor(directive, expansion) is not { } room)
+        if (model.RoomFor(directive, context.Expansion) is not { } room)
         {
             NotTranspiled(directive);
             return;
@@ -1505,7 +1500,7 @@ public sealed class Emitter
     private long Fill(Symbol member) =>
         member.Data is DataDirectiveSyntax data && DataSyntax.NameOf(data) == ".res"
         && data.Tail is InlineDataSyntax { Values: [_, var padding, ..] }
-        && model.ValueOf(padding, expansion).AsNumber() is { } fill
+        && model.ValueOf(padding, context.Expansion).AsNumber() is { } fill
             ? fill & 0xff
             : 0;
 
@@ -1653,7 +1648,7 @@ public sealed class Emitter
         // does not reach is written as the one directive rather than as a row of equal bytes.
         if (directive == ".res")
         {
-            var values = given is null ? [] : model.BytesOf(given, expansion)?.ToList() ?? [];
+            var values = given is null ? [] : model.BytesOf(given, context.Expansion)?.ToList() ?? [];
             var used = Math.Min(values.Count, size);
             if (used > 0)
                 yield return ($".byte {string.Join(", ", values.Take((int)used).Select(b => Hex(b & 0xff, 2)))}", used);
@@ -1692,7 +1687,7 @@ public sealed class Emitter
 
         // Anything with a value nt65 knows is written as that value. Anything else keeps its own
         // spelling, with names flattened.
-        if (model.ValueOf(node, expansion).AsNumber() is { } value)
+        if (model.ValueOf(node, context.Expansion).AsNumber() is { } value)
             return Constant(value);
         var edits = new Edits();
         Substitute(node, edits, nested: false);
@@ -1732,7 +1727,7 @@ public sealed class Emitter
     /// Returns the name a symbol has in the output, at the level being written. A name that a
     /// macro body declares is a different name in every expansion.
     /// </summary>
-    private string Named(Symbol symbol) => names.Of(symbol, expansion);
+    private string Named(Symbol symbol) => names.Of(symbol, context.Expansion);
 
     /// <summary>
     /// Returns an argument written where the body named its parameter. It goes in as a
@@ -1835,7 +1830,7 @@ public sealed class Emitter
     /// </summary>
     private void Ensure(LineSyntax line, EnsureDirectiveSyntax directive)
     {
-        if (layout.Of(directive, expansion)?.Ensured is not { } ensured)
+        if (layout.Of(directive, context.Expansion)?.Ensured is not { } ensured)
             return;
         if (ensured.Reset != 0)
             Code(line, $"{Body}rep #{Hex(ensured.Reset, 2)}", 2);
@@ -1849,7 +1844,7 @@ public sealed class Emitter
     /// </summary>
     private void Slot(StatementSyntax statement, Edits edits)
     {
-        if (layout.Of(statement, expansion)?.Slot is not { } slot
+        if (layout.Of(statement, context.Expansion)?.Slot is not { } slot
             || statement is not InstructionStatementSyntax { Operand: { } operand })
         {
             return;
@@ -1872,7 +1867,7 @@ public sealed class Emitter
     /// </summary>
     private void Direct(StatementSyntax statement, Edits edits)
     {
-        if (layout.Of(statement, expansion) is not { Direct: { } offset } laid
+        if (layout.Of(statement, context.Expansion) is not { Direct: { } offset } laid
             || statement is not InstructionStatementSyntax { Operand: AbsoluteOperandSyntax { Prefix: { } sourcePrefix } operand })
         {
             return;
@@ -1895,7 +1890,7 @@ public sealed class Emitter
     /// </summary>
     private void Width(StatementSyntax statement)
     {
-        if (layout.Of(statement, expansion) is not { Bits: { } bits }
+        if (layout.Of(statement, context.Expansion) is not { Bits: { } bits }
             || statement is not InstructionStatementSyntax instruction
             || Instructions.SizedBy(instruction.MnemonicKind) is not { } register)
         {
@@ -1925,7 +1920,7 @@ public sealed class Emitter
         if (diagnostics.Any(d => d.Severity == Severity.Error && d.Span.File == model.Tree.Path))
             return;
         diagnostics.Add(Expansion.Problem(
-            model.Tree, first.Parent.Tree, first.Span, expansion, null, Catalogue.CannotBeTranslated.Message(first.Text)));
+            model.Tree, first.Parent.Tree, first.Span, context.Expansion, null, Catalogue.CannotBeTranslated.Message(first.Text)));
     }
 
     /// <summary>
@@ -1967,7 +1962,7 @@ public sealed class Emitter
     /// Returns the line of this file a generated line came from, counting from one. The lines of an
     /// expansion came from the call, which is the line of this file that asked for all of them.
     /// </summary>
-    private int At(LineSyntax line) => (callLine ?? line).LineIndex + 1;
+    private int At(LineSyntax line) => (context.CallLine ?? line).LineIndex + 1;
 
     /// <summary>
     /// Writes a definition that is in no segment, such as a constant or a name for an address
@@ -1986,6 +1981,7 @@ public sealed class Emitter
     /// </summary>
     private void Segment()
     {
+        var segment = context.Segment;
         if (written == segment || segment is null)
             return;
         var size = model.Segments.Find(segment)?.Size ?? AddressSize.Absolute;
@@ -2265,7 +2261,7 @@ public sealed class Emitter
     {
         var named = count.DescendantNodes().Prepend(count).OfType<NameExpressionSyntax>().Any(name =>
             name.Names is [.., var last] && model.SymbolAt(last) is { Kind: not (SymbolKind.Binding or SymbolKind.MacroParameter) });
-        if (named && model.ValueOf(count, expansion).AsNumber() is { } known)
+        if (named && model.ValueOf(count, context.Expansion).AsNumber() is { } known)
         {
             edits.Comments.Add(count.GetText().Trim());
             Replace(count, Constant(known), edits);
@@ -2323,10 +2319,10 @@ public sealed class Emitter
     /// </summary>
     private string? Datum(SyntaxNode value, int width, bool bigEndian, List<string> comments)
     {
-        var known = model.ValueOf(value, expansion).AsNumber();
+        var known = model.ValueOf(value, context.Expansion).AsNumber();
         if (bigEndian && width > 2)
         {
-            if (model.BytesOf(value, expansion) is { Count: > 0 } text)
+            if (model.BytesOf(value, context.Expansion) is { Count: > 0 } text)
             {
                 comments.Add(value.GetText().Trim());
                 return string.Join(", ", text.SelectMany(b => HighFirst(b, width)));
@@ -2377,7 +2373,7 @@ public sealed class Emitter
             return false;
         var values = directive.Tail is InlineDataSyntax inline ? inline.Values : default;
         if (values is [var path, ..]
-            && model.ValueOf(path, expansion) is { Kind: ValueKind.String, Text: { } named })
+            && model.ValueOf(path, context.Expansion) is { Kind: ValueKind.String, Text: { } named })
         {
             Replace(path, "\"" + Paths.Relative(Paths.Directory(output), Paths.Beside(source, named)) + "\"", edits);
         }
@@ -2398,7 +2394,7 @@ public sealed class Emitter
         // A path that ends in a repetition's binding names a different member on every iteration.
         if (named.Kind == SymbolKind.Binding && name.SimpleName is null)
         {
-            if (model.SymbolOf(name, expansion) is not { } namesake)
+            if (model.SymbolOf(name, context.Expansion) is not { } namesake)
                 return;
             reference = namesake;
         }
@@ -2435,7 +2431,7 @@ public sealed class Emitter
         // written is its value on the iteration being written.
         if (symbol.Kind == SymbolKind.Binding)
         {
-            if (model.BindingsOf(expansion)?.TryGetValue(symbol, out var bound) is not true)
+            if (model.BindingsOf(context.Expansion)?.TryGetValue(symbol, out var bound) is not true)
                 return;
 
             // A list item is written as it stands, with its own names substituted; a number
@@ -2457,7 +2453,7 @@ public sealed class Emitter
         // written as the bytes of its text, as a literal is.
         if (symbol.Value.IsString)
         {
-            if (model.BytesOf(name, expansion) is { Count: > 0 } bytes)
+            if (model.BytesOf(name, context.Expansion) is { Count: > 0 } bytes)
             {
                 Replace(name, string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2))), edits);
                 edits.Comments.Add(name.GetText().Trim());
@@ -2506,7 +2502,7 @@ public sealed class Emitter
     /// </summary>
     private string? Parameter(Symbol parameter, List<string> comments)
     {
-        if (model.BindingsOf(expansion)?.TryGetValue(parameter, out var bound) is not true)
+        if (model.BindingsOf(context.Expansion)?.TryGetValue(parameter, out var bound) is not true)
             return null;
         if (bound.Value.IsWord)
             return bound.Value.Text;
@@ -2541,7 +2537,7 @@ public sealed class Emitter
         foreach (var (part, index) in ElementIndexes.Of(name))
         {
             if (model.SymbolAt(part) is { } indexed && ElementIndexes.Stride(indexed) is { } stride
-                && model.ValueOf(index.Index, expansion).AsNumber() is { } element)
+                && model.ValueOf(index.Index, context.Expansion).AsNumber() is { } element)
             {
                 offset += element * stride;
             }
@@ -2557,7 +2553,7 @@ public sealed class Emitter
     /// Returns the value of <paramref name="node"/> in the expansion being written, with cycle
     /// counts from the layout.
     /// </summary>
-    private Value Worth(SyntaxNode node) => model.ValueOf(node, expansion, cycles: layout.CyclesOf);
+    private Value Worth(SyntaxNode node) => model.ValueOf(node, context.Expansion, cycles: layout.CyclesOf);
 
     /// <summary>Returns whether an expression names an address anywhere along any of its paths.</summary>
     private bool NamesAnAddress(SyntaxNode node) =>
@@ -2595,7 +2591,7 @@ public sealed class Emitter
         // (`5` for `{#5}`, `ptr` for `{(ptr),y}`), unless it is a constant, which the path
         // below writes as a number.
         if (Semantics.Operands.IsExprOf(call) && Worth(call).AsNumber() is null
-            && model.ExprOf(call, expansion) is { } inner)
+            && model.ExprOf(call, context.Expansion) is { } inner)
         {
             Replace(call, "(" + Substituted(inner, edits.Comments) + ")", edits);
             return;
@@ -2609,7 +2605,7 @@ public sealed class Emitter
             // ca65 never sees text.
             if (Worth(call).IsString)
             {
-                if (model.BytesOf(call, expansion) is { } built)
+                if (model.BytesOf(call, context.Expansion) is { } built)
                 {
                     Replace(call, BytesText(built), edits);
                     edits.Comments.Add(call.GetText().Trim());
@@ -2624,7 +2620,7 @@ public sealed class Emitter
             // An address `.select` chooses is written as the value it chose, which is all ca65 sees.
             if (Worth(call).AsNumber() is null
                 && Evaluator.SelectArguments(call) is [var condition, var ifHolds, var otherwise]
-                && model.ValueOf(condition, expansion).AsNumber() is { } holds)
+                && model.ValueOf(condition, context.Expansion).AsNumber() is { } holds)
             {
                 // A parenthesis first in an operand would read as indirection, which a unary `+` prevents.
                 var chosen = Rendered(holds != 0 ? ifHolds : otherwise, edits.Comments);
@@ -2641,9 +2637,9 @@ public sealed class Emitter
         }
 
         string? text = null;
-        if (model.BytesOf(call, expansion) is { } bytes && (bytes.Count > 0 || Worth(call).IsString))
+        if (model.BytesOf(call, context.Expansion) is { } bytes && (bytes.Count > 0 || Worth(call).IsString))
             text = BytesText(bytes);
-        else if (model.ValueOf(call, expansion).AsNumber() is { } value)
+        else if (model.ValueOf(call, context.Expansion).AsNumber() is { } value)
             text = Constant(value);
 
         if (text is null)
@@ -2678,7 +2674,7 @@ public sealed class Emitter
     /// </summary>
     private bool Given(AbsoluteOperandSyntax operand, Edits edits)
     {
-        if (Semantics.Operands.Substituted(model, operand, expansion) is not { } given)
+        if (Semantics.Operands.Substituted(model, operand, context.Expansion) is not { } given)
             return false;
 
         var text = Argument(given, edits.Comments);
@@ -2687,7 +2683,7 @@ public sealed class Emitter
 
         // ca65 reads a `(` at the head of an operand as indirect addressing, so an expression
         // that starts with one gets a unary `+`, which changes nothing about what it is worth.
-        var prefix = operand.Parent is { } instruction ? layout.Of(instruction, expansion)?.Prefix ?? "" : "";
+        var prefix = operand.Parent is { } instruction ? layout.Of(instruction, context.Expansion)?.Prefix ?? "" : "";
         if (text.StartsWith('(') && (prefix.Length > 0 || given.IsAddress))
             text = "+" + text;
 
@@ -2710,7 +2706,7 @@ public sealed class Emitter
         {
             if (given.Expression is not { } value)
                 return null;
-            if (model.ValueOf(value, expansion).AsNumber() is { } known)
+            if (model.ValueOf(value, context.Expansion).AsNumber() is { } known)
                 return "#" + Constant((known >> (int)(8 * given.Offset)) & 0xff);
             var shifted = Substituted(value, comments);
             return given.Offset == 0
@@ -2736,7 +2732,7 @@ public sealed class Emitter
         var instruction = operand.Parent;
         if (instruction is null)
             return;
-        var chosen = layout.Of(instruction, expansion)?.Prefix;
+        var chosen = layout.Of(instruction, context.Expansion)?.Prefix;
         var prefix = chosen ?? "";
         var sourcePrefix = operand.Prefix;
         if (chosen is null && sourcePrefix is not null)
@@ -2818,8 +2814,14 @@ public sealed class Emitter
         {
             var outer = walked;
             walked = line;
-            Visit(line.Statement);
-            walked = outer;
+            try
+            {
+                Visit(line.Statement);
+            }
+            finally
+            {
+                walked = outer;
+            }
         }
 
         /// <inheritdoc/>
@@ -2849,10 +2851,10 @@ public sealed class Emitter
         {
             if (DataSyntax.IsElementType(node))
                 emitter.Elements(Line, node, symbol: null);
-            else if (emitter.layout.Of(node, emitter.expansion) is null)
+            else if (emitter.layout.Of(node, emitter.context.Expansion) is null)
                 emitter.NotTranspiled(node);
             else
-                emitter.Source(Line, node, emitter.layout.Of(node, emitter.expansion)?.Length ?? 0);
+                emitter.Source(Line, node, emitter.layout.Of(node, emitter.context.Expansion)?.Length ?? 0);
         }
 
         /// <inheritdoc/>
@@ -2862,13 +2864,13 @@ public sealed class Emitter
         public override void VisitInstructionStatement(InstructionStatementSyntax node)
         {
             if (SyntaxFacts.IsLongBranch(node.MnemonicKind)
-                && emitter.layout.Of(node, emitter.expansion) is { } laid)
+                && emitter.layout.Of(node, emitter.context.Expansion) is { } laid)
             {
                 emitter.Branch(Line, node, laid);
             }
             else
             {
-                emitter.Source(Line, node, emitter.layout.Of(node, emitter.expansion)?.Length ?? 0);
+                emitter.Source(Line, node, emitter.layout.Of(node, emitter.context.Expansion)?.Length ?? 0);
             }
         }
 
@@ -2886,7 +2888,7 @@ public sealed class Emitter
         public override void VisitAssertDirective(AssertDirectiveSyntax node)
         {
             if (emitter.model.ValueOf(
-                node.Condition, emitter.expansion, emitter.layout.SpanOf, emitter.layout.CyclesOf).AsNumber() is null)
+                node.Condition, emitter.context.Expansion, emitter.layout.SpanOf, emitter.layout.CyclesOf).AsNumber() is null)
                 emitter.Linked(Line, node);
         }
 
@@ -2901,5 +2903,38 @@ public sealed class Emitter
 
         /// <inheritdoc/>
         public override void VisitPlaceDirective(PlaceDirectiveSyntax node) => emitter.Place(node);
+    }
+
+    /// <summary>
+    /// Represents where the walk is in the source, which each block, repetition and macro call
+    /// it enters changes for as long as it is inside.
+    /// </summary>
+    /// <param name="Segment">The segment being written, or null before any region or block names one.</param>
+    /// <param name="Routine">The routine being written, which is what a generated label is named after.</param>
+    /// <param name="Expansion">
+    /// The expansion being written, which identifies the iteration of each enclosing repetition
+    /// and the expansion of each enclosing macro. A body is written once per expansion or
+    /// iteration, with every name bound at that level taking the value it has there.
+    /// </param>
+    /// <param name="CallLine">
+    /// The line an expansion's output maps back to. The lines of an expansion map to the line of
+    /// the call, the way a C debugger treats a preprocessor macro. Only a line of this file can be
+    /// used, because the line map points into this module's source and a macro body may be
+    /// defined in another file.
+    /// </param>
+    /// <param name="Depth">
+    /// How many blocks enclose the line being written. A segment block inside another block
+    /// switches segments with <c>.pushseg</c> and <c>.popseg</c>.
+    /// </param>
+    private readonly record struct WalkContext(
+        string? Segment, Symbol? Routine, Expansion? Expansion, LineSyntax? CallLine, int Depth);
+
+    /// <summary>Puts an emitter's earlier <see cref="WalkContext"/> back when it is disposed.</summary>
+    /// <param name="emitter">The emitter whose context to put back.</param>
+    /// <param name="outer">The context to put back.</param>
+    private readonly struct WalkScope(Emitter emitter, WalkContext outer) : IDisposable
+    {
+        /// <inheritdoc/>
+        public void Dispose() => emitter.context = outer;
     }
 }
