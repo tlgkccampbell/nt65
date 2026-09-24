@@ -161,6 +161,20 @@ public sealed class Configuration
     internal Decision? DecisionOf(SyntaxTree tree, string name) => table.DecisionOf(tree, name);
 
     /// <summary>
+    /// Determines whether the build gives a value to the setting <paramref name="name"/> that
+    /// <paramref name="tree"/> declares, rather than leaving it at its default.
+    /// </summary>
+    public bool Gives(SyntaxTree tree, string name) => table.Gives(tree, name);
+
+    /// <summary>
+    /// Returns whether the configuration alone decides the constant, setting or enum member that
+    /// <paramref name="tree"/> declares at file level as <paramref name="name"/>, so that an
+    /// <c>.if</c> may test it. Returns null when <paramref name="tree"/> declares no such value
+    /// there, as for one declared under an <c>.if</c> or inside a block.
+    /// </summary>
+    public bool? DecidesValue(SyntaxTree tree, string name) => DecisionOf(tree, name) is { } decision ? decision.Why is null : null;
+
+    /// <summary>
     /// Determines whether the configuration decided a value that <paramref name="tree"/>
     /// declares, such as a setting, or a constant a condition tested. Any file's conditions may
     /// read such a value.
@@ -397,6 +411,10 @@ public sealed class Configuration
                 new Conditions(
                     cpu, name => Name(name, null, diagnostics), Call, (node, name, why) => diagnostics.Add(Undecided(node, name, why))),
                 diagnostics);
+
+        /// <summary>Determines whether the build gives the setting <paramref name="name"/> in <paramref name="tree"/> a value.</summary>
+        public bool Gives(SyntaxTree tree, string name) =>
+            scopes.TryGetValue(tree, out var scope) && scope.FindMember(name) is { } symbol && given.ContainsKey(symbol);
 
         /// <summary>Determines whether a value <paramref name="tree"/> declares has been decided.</summary>
         public bool Decides(SyntaxTree tree) => decided.Keys.Any(symbol => symbol.Tree == tree);

@@ -24,13 +24,13 @@
 ; Microsoft's versions, in the order they were forked. Each has every fix of the ones
 ; before it, so a target based on version 2B is also 2A, 2, 1.1A, 1.1 and 1.0A.
 ; ----------------------------------------------------------------------------
-.export .const CONFIG_2C  ?= MICROTAN || W65C816SXB
-.export .const CONFIG_2B  ?= CONFIG_2C || KBD
-.export .const CONFIG_2A  ?= CONFIG_2B || CBM2 || AIM65 || SYM1
-.export .const CONFIG_2   ?= CONFIG_2A
-.export .const CONFIG_11A ?= CONFIG_2 || KIM
-.export .const CONFIG_11  ?= CONFIG_11A || APPLE
-.export .const CONFIG_10A ?= CONFIG_11 || OSI
+.export .const CONFIG_2C  = MICROTAN || W65C816SXB
+.export .const CONFIG_2B  = CONFIG_2C || KBD
+.export .const CONFIG_2A  = CONFIG_2B || CBM2 || AIM65 || SYM1
+.export .const CONFIG_2   = CONFIG_2A
+.export .const CONFIG_11A = CONFIG_2 || KIM
+.export .const CONFIG_11  = CONFIG_11A || APPLE
+.export .const CONFIG_10A = CONFIG_11 || OSI
 
 ; ----------------------------------------------------------------------------
 ; Features. Changing one alters a target's base configuration, which is not guaranteed

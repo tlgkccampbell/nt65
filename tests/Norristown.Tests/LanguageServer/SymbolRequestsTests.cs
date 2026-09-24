@@ -71,9 +71,10 @@ public sealed class SymbolRequestsTests
         Assert.NotNull(constant);
         Assert.Contains("```nt65\n.const SCREEN = $0400\n```", constant.Contents.Value, StringComparison.Ordinal);
 
-        // A constant's value is what a reader hovers it for, so it comes above the rule. How
-        // wide an address it would make is supporting detail, so it comes below the rule.
-        Assert.Contains("value    $0400 (1024)\n```\n---\n", constant.Contents.Value, StringComparison.Ordinal);
+        // A constant's value is what a reader hovers it for, so it comes above the rule, with
+        // whether the configuration decides it. How wide an address it would make is supporting
+        // detail, so it comes below the rule.
+        Assert.Contains("value    $0400 (1024)\nknown    decided by the configuration\n```\n---\n", constant.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("address  abs (2 bytes)", constant.Contents.Value, StringComparison.Ordinal);
     }
 
@@ -195,6 +196,27 @@ public sealed class SymbolRequestsTests
     }
 
     /// <summary>
+    /// Hover says whether the configuration decides a constant, so that an <c>.if</c> may test
+    /// it, and whether a setting has the value the build gave it or its default.
+    /// </summary>
+    [Fact]
+    public async Task HoverSaysWhatTheConfigurationDecides()
+    {
+        const string Text = ".module main\n.export WIDE, BIG, SIZE\n.const WIDE ?= 0\n.const BIG = WIDE * 2\n"
+            + ".segment BSS\n.data table: .byte[4]\n.const SIZE = .sizeof(table)\n";
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Text));
+
+        var setting = await client.HoverAsync(Uri, Locate.At(Text, ".const W|IDE"), timeout);
+        var decided = await client.HoverAsync(Uri, Locate.At(Text, ".const B|IG"), timeout);
+        var measured = await client.HoverAsync(Uri, Locate.At(Text, ".const S|IZE"), timeout);
+
+        Assert.Contains("its default, which the build may set", setting?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("decided by the configuration", decided?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("once the declarations are read", measured?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// What a routine costs and which registers it preserves are shown wherever its name appears.
     /// A reader asks what a call costs at the call, not at the declaration, and the lens that
     /// shows the cost above the declaration may be far from the call.
@@ -302,6 +324,7 @@ public sealed class SymbolRequestsTests
 
             ```nt65-hover
             value    $20 (32)
+            known    decided by the configuration
             ```
             ---
             ```nt65-hover

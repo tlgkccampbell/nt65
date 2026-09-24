@@ -107,12 +107,12 @@
     jsr putc
     print_address!(addr)
     ; The instruction's bytes, in the columns the longest one needs.
-    .repeat 1 - GAP {
+    .if GAP == 0 {
         jsr space
     }
     ldy #0
 @column:
-    .repeat GAP {
+    .if GAP == 1 {
         jsr space
     }
     cpy length

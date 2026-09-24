@@ -272,6 +272,7 @@ internal static class Hovers
             card.Row("value", Format(symbol.Value));
         else if (symbol.Kind == SymbolKind.Func && Called(model, reference) is { IsKnown: true } called)
             card.Row("value", Format(called));
+        Stage(card, analysis.Configuration, symbol);
         if (symbol.Type is { } type)
             card.Row("type", type.QualifiedName);
 
@@ -331,6 +332,10 @@ internal static class Hovers
             SymbolKind.Data or SymbolKind.List or SymbolKind.Charmap or SymbolKind.Frame
                 or SymbolKind.Label or SymbolKind.ImportedAddress or SymbolKind.AddressAlias => ["address", "size"],
             SymbolKind.Struct or SymbolKind.Union or SymbolKind.Enum => ["size"],
+
+            // Whether an `.if` may test a constant, and where a setting's value came from, go
+            // with its value.
+            SymbolKind.Constant => ["value", "known", "setting"],
             _ => ["value"],
         };
         return new HashSet<string>(["from", "private to", .. kind], StringComparer.Ordinal);
@@ -341,6 +346,25 @@ internal static class Hovers
     /// value when the name is not called there or nt65 cannot evaluate the call, as in a macro
     /// body whose parameters have no arguments yet.
     /// </summary>
+    /// <summary>
+    /// Adds what the configuration makes of a constant at file level: whether the build set a
+    /// setting or left it at its default, and whether an <c>.if</c> may test any other constant.
+    /// The program's configuration is asked rather than a file's, because a file an edit did not
+    /// reach keeps the configuration of the analysis before the edit.
+    /// </summary>
+    private static void Stage(HoverCard card, Configuration configuration, Symbol symbol)
+    {
+        if (symbol.Kind != SymbolKind.Constant || symbol.Scope.Kind != ScopeKind.File)
+            return;
+        if (symbol.IsSetting)
+        {
+            card.Row("setting", configuration.Gives(symbol.Tree, symbol.Name) ? "set by the build" : "its default, which the build may set");
+            return;
+        }
+        if (configuration.DecidesValue(symbol.Tree, symbol.Name) is { } decided)
+            card.Row("known", decided ? "decided by the configuration" : "once the declarations are read");
+    }
+
     private static Value Called(SemanticModel model, SymbolReference reference)
     {
         var token = model.Tree.Root.FindToken(reference.Span.Start);
