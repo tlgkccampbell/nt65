@@ -14,8 +14,8 @@ internal enum ContextKind
     Item,
 
     /// <summary>
-    /// A <c>.proc</c> body, a macro body or a block argument, which holds declarations and the
-    /// instructions, labels and data that only code holds.
+    /// A <c>.proc</c> or <c>.multiproc</c> body, a macro body or a block argument, which holds
+    /// declarations and the instructions, labels and data that only code holds.
     /// </summary>
     Code,
 

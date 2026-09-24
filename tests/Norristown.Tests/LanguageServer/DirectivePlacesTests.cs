@@ -91,6 +91,7 @@ public sealed class DirectivePlacesTests
     {
         ["file level"] = [],
         ["a routine"] = [],
+        ["a family of routines"] = [],
         ["a macro body"] = [],
         ["a repetition"] = [],
         ["a scope"] = [],
@@ -107,13 +108,14 @@ public sealed class DirectivePlacesTests
     /// The directives the binder accepts at a place but the server does not offer there, where
     /// the server is deliberately stricter. A nested <c>.proc</c> is code the outer routine's
     /// flow analysis cannot follow; a <c>.cpu</c> inside a routine sets the program's processor
-    /// from a place nobody would look for it; and a <c>.segment</c> block inside a macro body or
-    /// a repetition would be written out once per expansion.
+    /// from a place nobody would look for it; and a <c>.segment</c> block inside a macro body, a
+    /// repetition or a family of routines would be written out once per expansion.
     /// </summary>
     private static readonly Dictionary<string, string[]> Stricter = new(StringComparer.Ordinal)
     {
         ["file level"] = [],
         ["a routine"] = [".cpu", ".proc"],
+        ["a family of routines"] = [".segment"],
         ["a macro body"] = [".segment"],
         ["a repetition"] = [".segment"],
         ["a scope"] = [],
@@ -148,6 +150,7 @@ public sealed class DirectivePlacesTests
     [Theory]
     [InlineData("file level")]
     [InlineData("a routine")]
+    [InlineData("a family of routines")]
     [InlineData("a macro body")]
     [InlineData("a repetition")]
     [InlineData("a segment block")]
@@ -270,6 +273,7 @@ public sealed class DirectivePlacesTests
         var (before, after) = place switch
         {
             "a routine" => (".export .proc host {\n", "rts\n}\n"),
+            "a family of routines" => (".export .multiproc Kind, host {\n", "rts\n}\n"),
             "a macro body" => (".macro host() {\n", "}\n"),
             "a repetition" => (".repeat 2 {\n", "}\n"),
             "file level" => ("", ""),

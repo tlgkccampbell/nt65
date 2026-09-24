@@ -271,7 +271,8 @@ internal sealed class LineContext
         /// <summary>Returns the surroundings one block further in.</summary>
         public Surrounding Within(BlockSyntax block) => block.BlockKind switch
         {
-            BlockKind.Proc or BlockKind.Macro or BlockKind.MacroBlock => this with { Context = ContextKind.Code },
+            BlockKind.Proc or BlockKind.MultiProc or BlockKind.Macro or BlockKind.MacroBlock =>
+                this with { Context = ContextKind.Code },
             BlockKind.Scope or BlockKind.Segment or BlockKind.Region or BlockKind.If
                 or BlockKind.Repeat or BlockKind.Each => this,
             BlockKind.Data => this with { Context = ContextKind.Data },

@@ -16,7 +16,7 @@ public enum DirectiveContexts
     /// </summary>
     Items = 1 << 0,
 
-    /// <summary>A <c>.proc</c> body, a macro body or a block argument.</summary>
+    /// <summary>A <c>.proc</c> or <c>.multiproc</c> body, a macro body or a block argument.</summary>
     Code = 1 << 1,
 
     /// <summary>A <c>.data name { }</c> block.</summary>

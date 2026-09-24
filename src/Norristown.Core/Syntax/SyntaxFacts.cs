@@ -325,8 +325,9 @@ public static class SyntaxFacts
     /// <summary>
     /// Returns what surrounds a line inside <paramref name="block"/>, combining that block and
     /// every block around it. A null block is a file's top level, which nothing surrounds. The
-    /// result never includes <see cref="DirectiveNesting.FirstLine"/>, which depends on the line
-    /// rather than on the blocks.
+    /// body of a <c>.multiproc</c> is a routine that is repeated once for each member of its enum,
+    /// so it counts as both. The result never includes <see cref="DirectiveNesting.FirstLine"/>,
+    /// which depends on the line rather than on the blocks.
     /// </summary>
     public static DirectiveNesting NestingWithin(BlockSyntax? block)
     {
@@ -340,8 +341,9 @@ public static class SyntaxFacts
                 BlockKind.Proc => DirectiveNesting.Routine | DirectiveNesting.NameScope,
                 BlockKind.Macro => DirectiveNesting.MacroBody | DirectiveNesting.NameScope,
                 BlockKind.Repeat or BlockKind.Each => DirectiveNesting.Repetition | DirectiveNesting.NameScope,
+                BlockKind.MultiProc => DirectiveNesting.Routine | DirectiveNesting.Repetition | DirectiveNesting.NameScope,
                 BlockKind.If => DirectiveNesting.Condition,
-                BlockKind.MultiProc or BlockKind.MacroBlock or BlockKind.Scope or BlockKind.Data
+                BlockKind.MacroBlock or BlockKind.Scope or BlockKind.Data
                     or BlockKind.Enum or BlockKind.Struct or BlockKind.Union => DirectiveNesting.NameScope,
                 _ => DirectiveNesting.None,
             };
