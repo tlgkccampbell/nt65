@@ -20,6 +20,7 @@ public static class Catalogue
     [
         Area.ReadingALine, Area.Names, Area.Values, Area.Macros, Area.Data, Area.Placement,
         Area.Instructions, Area.ControlFlow, Area.ProcessorState, Area.Output, Area.TheProjectFile, Area.Signatures,
+        Area.Suggestions,
     ];
 
     /// <summary>
@@ -2358,6 +2359,16 @@ public static class Catalogue
             + "point, as the analysis tracks it from `rep`, `sep` and the routine's signature. Use a value that "
             + "fits, take one byte of it with `<` or `>`, or widen the register.");
 
+    internal static DiagnosticDescriptor ImmediateMissing { get; } = Entry(
+        Area.Instructions,
+        "immediate-missing",
+        Severity.Warning,
+        "`{0} {1}` reads memory at address {1}: write `#{1}` for the number, or `{2}` for the address",
+        "An operand without `#` is an address, and addresses are written in hexadecimal. A plain decimal address "
+            + "on an instruction that also takes an immediate, such as `lda 10` or `cmp 32`, is nearly always a "
+            + "number whose `#` was left out. Write `#10` for the number, or `$0a` where the address was meant. An "
+            + "indexed operand such as `lda 2,x` is not reported, because a small decimal base there is common.");
+
     internal static DiagnosticDescriptor DirectPageNeeds65816 { get; } = Entry(
         Area.Instructions,
         "direct-page-needs-65816",
@@ -3608,6 +3619,30 @@ public static class Catalogue
         "What a routine is and how it is called are true of it from entry to exit, so they are declared once, "
             + "before the arrow. What comes after the arrow is what the routine leaves.");
 
+    // Suggestions
+
+    internal static DiagnosticDescriptor TailCall { get; } = Entry(
+        Area.Suggestions,
+        "tail-call",
+        Severity.Info,
+        "`{0}` then `{1}` can be `{2}`, which saves {3} cycles{4}",
+        "A call followed at once by a return comes back only to leave again. A jump to the routine does the same "
+            + "work, because the routine's own return then goes straight to this routine's caller. `jmp` in place of "
+            + "`jsr` and `rts` saves 9 cycles, and `jml` in place of `jsl` and `rtl` saves 10. Where nothing else "
+            + "reaches the return, it can go too, which saves a byte. The suggestion is not made for a routine that "
+            + "reads what follows its call, takes arguments on the stack, or never returns.");
+
+    internal static DiagnosticDescriptor WidthAlreadySet { get; } = Entry(
+        Area.Suggestions,
+        "width-already-set",
+        Severity.Info,
+        "`{0}` {1}: {2}",
+        "The processor-state analysis knows the widths on every path to this line, and the `rep` or `sep` sets "
+            + "one or both to what they already are. One that changes nothing can go, which saves 2 bytes and 3 "
+            + "cycles. One that changes only part of what it names can name less. Where the widths are only known "
+            + "because the routine's signature or a `.state` declares them, that declaration is the promise the "
+            + "line relies on.");
+
     // The list is found by reflecting over the class rather than listed by hand, so that a new
     // entry above is included automatically. It is built on first use rather than alongside the
     // entries, because reflecting on a type while its own static initializer is still running can
@@ -3678,5 +3713,8 @@ public static class Catalogue
 
         public static DiagnosticArea Signatures { get; } =
             new("Signatures", "What a routine or macro signature may declare, and what a signature set may hold.");
+
+        public static DiagnosticArea Suggestions { get; } =
+            new("Suggestions", "Changes that make code smaller or faster, which only the editor shows.");
     }
 }

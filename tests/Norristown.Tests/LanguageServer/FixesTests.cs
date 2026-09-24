@@ -94,6 +94,36 @@ public sealed class FixesTests
             ".const SPARE = 1\n",
             ""
         },
+        {
+            "Make it the number `#10`",
+            ".export .proc main: a8, i8 {\n    lda 10\n    rts\n}\n",
+            ".export .proc main: a8, i8 {\n    lda #10\n    rts\n}\n"
+        },
+        {
+            "Write the address as `$0a`",
+            ".export .proc main: a8, i8 {\n    lda 10\n    rts\n}\n",
+            ".export .proc main: a8, i8 {\n    lda $0a\n    rts\n}\n"
+        },
+        {
+            "Remove it",
+            ".export .proc main: a8, i8 {\n    sep #$20\n    lda #1\n    rts\n}\n",
+            ".export .proc main: a8, i8 {\n    lda #1\n    rts\n}\n"
+        },
+        {
+            "Change it to `#$20`",
+            ".export .proc main: a8, i16 {\n    rep #$30\n    lda #$1234\n    sep #$20\n    rts\n}\n",
+            ".export .proc main: a8, i16 {\n    rep #$20\n    lda #$1234\n    sep #$20\n    rts\n}\n"
+        },
+        {
+            "Jump with `jmp` as a tail call",
+            ".proc helper {\n    rts\n}\n.export .proc main {\n    jsr helper\n    rts\n}\n",
+            ".proc helper {\n    rts\n}\n.export .proc main {\n    jmp helper\n}\n"
+        },
+        {
+            "Jump with `jml` as a tail call",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jsl helper\n    rtl\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
+        },
     };
 
     [Theory]
@@ -163,7 +193,7 @@ public sealed class FixesTests
     public async Task AUseItemNothingNamesIsOfferedForRemoval()
     {
         const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
-        const string Main = ".module main\n.use gfx::{clear, fill}\n.segment CODE\n.export .proc main {\n    jsr clear\n    rts\n}\n";
+        const string Main = ".module main\n.use gfx::{clear, fill}\n.segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n";
         var workspace = new Workspace();
         workspace.Open(new TextDocumentItem("file:///c:/work/gfx.nt65", "nt65", 1, Gfx));
         var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Main));
@@ -177,7 +207,7 @@ public sealed class FixesTests
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
         Assert.Equal("Remove the `.use` of `fill`", action.Title);
         Assert.Equal(
-            ".module main\n.use gfx::clear\n.segment CODE\n.export .proc main {\n    jsr clear\n    rts\n}\n",
+            ".module main\n.use gfx::clear\n.segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n",
             Editing.Apply(Main, action.Edit.Changes[Uri]));
     }
 

@@ -133,9 +133,9 @@ public sealed class ServerTests
 
         // The second edit's position is past the end of the text the first one inserts, so it
         // lands where it is meant to only once the first has been applied.
-        var calling = Locate.At(Fixed.Replace("rts", "jsr reset"), "jsr reset|");
+        var calling = Locate.At(Fixed.Replace("rts", "sta $10"), "sta $10|");
         await client.ChangeAsync(Uri, 2,
-            new TextDocumentContentChangeEvent(Locate.Span(Fixed, "rts"), "jsr reset"),
+            new TextDocumentContentChangeEvent(Locate.Span(Fixed, "rts"), "sta $10"),
             new TextDocumentContentChangeEvent(new Range(calling, calling), "\n    rts"));
 
         Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);

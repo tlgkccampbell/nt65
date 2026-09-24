@@ -104,4 +104,27 @@ public enum FixKind
     /// <see cref="DiagnosticFix.At"/>, stating that the branch is always taken.
     /// </summary>
     AlwaysTaken,
+
+    /// <summary>
+    /// The decimal address reported, given the <c>#</c> that makes it a number, or written in
+    /// hexadecimal as the address the fix's <see cref="DiagnosticFix.Text"/> spells. Both fixes
+    /// are offered.
+    /// </summary>
+    Immediate,
+
+    /// <summary>
+    /// The call reported, made a jump with the mnemonic the fix's <see cref="DiagnosticFix.Text"/>
+    /// names. The return after it, at the fix's <see cref="DiagnosticFix.At"/>, is removed where
+    /// there is one to remove.
+    /// </summary>
+    TailCall,
+
+    /// <summary>The statement reported, removed because it changes nothing.</summary>
+    Redundant,
+
+    /// <summary>
+    /// The operand of the <c>rep</c> or <c>sep</c> reported, narrowed to the flags the fix's
+    /// <see cref="DiagnosticFix.Text"/> spells.
+    /// </summary>
+    Flags,
 }

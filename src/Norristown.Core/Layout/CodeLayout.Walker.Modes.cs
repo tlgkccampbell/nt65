@@ -199,6 +199,9 @@ public sealed partial class CodeLayout
                 return;
             }
 
+            if (mode is AddressingMode.Direct or AddressingMode.Absolute or AddressingMode.Long)
+                CheckDecimalAddress(mnemonic, expression);
+
             // `.byteof` takes one byte of the value, so the value it is taken from is not the
             // one that has to fit.
             if (mode != AddressingMode.Immediate || substituted is { ByteOf: true })
@@ -221,6 +224,32 @@ public sealed partial class CodeLayout
                 Report(expression, Catalogue.ImmediateTooWide.Message(
                     bits == 16 ? "this immediate is two bytes" : "an immediate is one byte", Value.Of(value)));
             }
+        }
+
+        /// <summary>
+        /// Reports a plain address written as a decimal number, as in <c>lda 10</c>, on an
+        /// instruction that also takes an immediate. Addresses are written in hexadecimal, so a
+        /// decimal one is nearly always a number that lost its <c>#</c>. An indexed operand such as
+        /// <c>lda 2,x</c> is left alone, because a small decimal base there is a common idiom.
+        /// Only a line of this file outside every expansion is reported.
+        /// </summary>
+        private void CheckDecimalAddress(SyntaxToken mnemonic, ExpressionSyntax expression)
+        {
+            if (expansion is not null || expression.Tree != model.Tree
+                || expression is not NumberExpressionSyntax { Token.Text: [>= '0' and <= '9', ..] }
+                || !Instructions.Modes(cpu, mnemonic.MnemonicKind).Contains(AddressingMode.Immediate)
+                || model.ValueOf(expression, expansion).AsNumber() is not { } value)
+            {
+                return;
+            }
+            var written = expression.GetText().Trim();
+            var hex = StateValue.Hex(value, value > 0xffff ? 6 : value > 0xff ? 4 : 2);
+            diagnostics.Add(new Diagnostic(
+                expression.Tree.GetSpan(expression.Span),
+                Catalogue.ImmediateMissing.Message(mnemonic.Text, written, hex))
+            {
+                Fix = new DiagnosticFix(FixKind.Immediate, hex),
+            });
         }
 
         /// <summary>

@@ -236,6 +236,9 @@ internal static class Lsp
     {
         Severity.Error => Protocol.DiagnosticSeverity.Error,
         Severity.Warning => Protocol.DiagnosticSeverity.Warning,
-        _ => Protocol.DiagnosticSeverity.Information,
+
+        // Nothing a build reports is a note. A note is the editor's own suggestion, which belongs
+        // beside the code rather than in a list of problems.
+        _ => Protocol.DiagnosticSeverity.Hint,
     };
 }

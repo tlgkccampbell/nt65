@@ -10,7 +10,7 @@ namespace Norristown.Tests.LanguageServer;
 /// </summary>
 public sealed class ProjectsTests : IDisposable
 {
-    private const string Caller = ".module main\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    rts\n}\n";
+    private const string Caller = ".module main\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    nop\n    rts\n}\n";
 
     private readonly TempFolder root = new("nt65-projects-");
 

@@ -29,6 +29,11 @@ public sealed record ProgramAnalysis(
     // The files by their logical paths. Where two files share a path, the first is found.
     private readonly Dictionary<string, FileAnalysis> byPath = ByPath(Files);
 
+    // The routines that depend on the depth of the stack they are entered with, worked out the
+    // first time a suggestion needs them. Nothing that changes them can change after an analysis
+    // is made, so a copy made with `with` may keep them.
+    private IReadOnlySet<RoutineKey>? callerStackReaders;
+
     /// <summary>
     /// Gets what analyzing each file of <see cref="Program"/> on its own found, in the same order.
     /// It cannot be replaced, so that the lookups by path always agree with it.
@@ -70,6 +75,25 @@ public sealed record ProgramAnalysis(
     /// </summary>
     public IReadOnlyList<Diagnostic> DiagnosticsFor(string path) =>
         [.. Diagnostics.Where(diagnostic => diagnostic.Span.File == path)];
+
+    /// <summary>
+    /// Returns the places in one file where the code could be smaller or faster, for an editor to
+    /// suggest. No build reports them.
+    /// </summary>
+    public IReadOnlyList<Diagnostic> SuggestionsFor(string path) =>
+        FileFor(path) is { } file
+            ? Flow.Suggestions.For(file, Configuration.Omitted(file.Model.Tree), ReadsCallerStack)
+            : [];
+
+    /// <summary>
+    /// Returns whether a routine depends on the depth of the stack it was entered with, which a
+    /// tail call to it would change.
+    /// </summary>
+    private bool ReadsCallerStack(Symbol routine)
+    {
+        callerStackReaders ??= CallerStack.Readers(Files);
+        return callerStackReaders.Contains(RoutineKey.Of(routine));
+    }
 
     /// <summary>
     /// Returns what analyzing <paramref name="path"/> on its own found, or null when the program

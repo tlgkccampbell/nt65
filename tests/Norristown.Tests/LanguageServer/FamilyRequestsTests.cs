@@ -43,6 +43,7 @@ public sealed class FamilyRequestsTests
         .export .proc main {
             jsr play::triangle
             jsr stop::triangle
+            nop
             rts
         }
         """;

@@ -20,7 +20,8 @@ internal static class Fixes
     /// </summary>
     public static IEnumerable<Change> In(ProgramAnalysis analysis, SemanticModel model, Protocol.Range range)
     {
-        foreach (var diagnostic in analysis.DiagnosticsFor(model.Tree.Path))
+        var path = model.Tree.Path;
+        foreach (var diagnostic in analysis.DiagnosticsFor(path).Concat(analysis.SuggestionsFor(path)))
         {
             if (diagnostic.Fix is not { } fix
                 || diagnostic.Span.LineIndex < range.Start.Line || diagnostic.Span.LineIndex > range.End.Line)
@@ -55,6 +56,29 @@ internal static class Fixes
                 var after = branch.LineIndex;
                 yield return Fix(diagnostic, $"Add `.next {target}`: the branch is always taken",
                     [Edits.InsertAfter(tree, after, $"{Edits.IndentOf(tree, after)}.next {target}")]);
+                break;
+
+            case FixKind.Immediate when fix.Text is { } hex:
+                var number = Edits.SpanOf(tree, diagnostic.Span);
+                var written = tree.Text[number.Start..number.End];
+                yield return Fix(diagnostic, $"Make it the number `#{written}`",
+                    [new Edit(tree, new TextSpan(number.Start, 0), "#")]);
+                yield return Fix(diagnostic, $"Write the address as `{hex}`", [new Edit(tree, number, hex)],
+                    preferred: false);
+                break;
+
+            case FixKind.TailCall when fix.Text is { } jump && ReplaceMnemonic(tree, line, jump) is { } jumped:
+                yield return Fix(diagnostic, $"Jump with `{jump}` as a tail call",
+                    fix.At is { } leaving ? [jumped, Removed(tree, leaving)] : [jumped]);
+                break;
+
+            case FixKind.Redundant:
+                yield return Fix(diagnostic, "Remove it", [Removed(tree, diagnostic.Span)]);
+                break;
+
+            case FixKind.Flags when fix.Text is { } flags:
+                yield return Fix(diagnostic, $"Change it to `#{flags}`",
+                    [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), flags)]);
                 break;
 
             case FixKind.Mnemonic when fix.Text is { } mnemonic && ReplaceMnemonic(tree, line, mnemonic) is { } call:
@@ -192,6 +216,19 @@ internal static class Fixes
     /// </summary>
     private static Change Fix(Diagnostic diagnostic, string title, IReadOnlyList<Edit> edits, bool preferred = true) =>
         new(title, CodeActionKinds.QuickFix, edits, diagnostic, preferred);
+
+    /// <summary>
+    /// Returns an edit that removes the statement at <paramref name="at"/>. A statement alone on
+    /// its line goes with the whole line, and one after a label leaves the label.
+    /// </summary>
+    private static Edit Removed(SyntaxTree tree, Span at)
+    {
+        var span = Edits.SpanOf(tree, at);
+        var line = at.LineIndex;
+        return span.Start == tree.LineStarts[line] + Edits.IndentOf(tree, line).Length
+            ? Edits.RemoveLines(tree, line, line)
+            : new Edit(tree, new TextSpan(span.Start, LineContext.CodeEnd(tree, line) - span.Start), "");
+    }
 
     /// <summary>
     /// Returns an edit that replaces the line's mnemonic with <paramref name="mnemonic"/>, in

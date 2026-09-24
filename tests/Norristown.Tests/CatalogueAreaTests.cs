@@ -104,7 +104,7 @@ public sealed class CatalogueAreaTests
             "address-size-unreachable", "addressing-mode-missing", "addressing-mode-too-narrow",
             "assertion-failed", "branch-operand-not-taken", "branch-out-of-reach", "config-refused",
             "config-warned", "direct-page-form-missing", "direct-page-needs-65816", "direct-page-only",
-            "direct-page-prefix-on-symbol", "immediate-too-wide", "instruction-not-on-cpu",
+            "direct-page-prefix-on-symbol", "immediate-missing", "immediate-too-wide", "instruction-not-on-cpu",
             "operand-has-no-next-byte", "operand-is-text", "operand-missing", "operand-not-taken",
             "target-too-far", "target-too-near", "transfer-prefix",
         ]),
@@ -160,6 +160,7 @@ public sealed class CatalogueAreaTests
             "signature-set-not-first", "signature-set-self-reference", "signature-value-not-constant",
             "signature-value-out-of-range", "state-banks-invalid", "state-banks-not-dbr", "unchanged-needs-entry",
         ]),
+        ("Suggestions", ["tail-call", "width-already-set"]),
     ];
 
     [Fact]

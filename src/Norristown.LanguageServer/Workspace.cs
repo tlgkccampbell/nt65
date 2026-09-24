@@ -401,7 +401,8 @@ internal sealed class Workspace
         var analysis = await analyzing.ConfigureAwait(false);
         var path = document.Tree.Path;
         return new Published(
-            UriOf(path), document.Version, document.Tree, analysis.DiagnosticsFor(path), analysis.Configuration);
+            UriOf(path), document.Version, document.Tree, [.. analysis.DiagnosticsFor(path), .. analysis.SuggestionsFor(path)],
+            analysis.Configuration);
     }
 
     /// <summary>
@@ -472,7 +473,7 @@ internal sealed class Workspace
                 UriOf(file.Key),
                 versions.TryGetValue(file.Key, out var version) ? version : null,
                 file.Value.Tree,
-                file.Value.Analysis.DiagnosticsFor(file.Key),
+                [.. file.Value.Analysis.DiagnosticsFor(file.Key), .. file.Value.Analysis.SuggestionsFor(file.Key)],
                 file.Value.Analysis.Configuration))];
     }
 

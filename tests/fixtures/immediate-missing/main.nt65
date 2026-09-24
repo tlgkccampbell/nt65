@@ -1,0 +1,22 @@
+; A plain address written in decimal, on an instruction that also takes an immediate, is nearly
+; always a number that lost its `#`. An indexed operand, a hexadecimal address, a name, and an
+; instruction with no immediate form are left alone.
+.module main
+
+.cpu 6502
+
+.export main
+
+.const LIMIT = 10
+
+.segment CODE
+.proc main {
+    lda 10              ;! warning[immediate-missing]: `lda 10` reads memory at address 10: write `#10` for the number, or `$0a` for the address
+    cmp 300             ;! warning[immediate-missing]: `cmp 300` reads memory at address 300: write `#300` for the number, or `$012c` for the address
+    lda #10
+    lda $0a
+    lda LIMIT
+    lda 2,x
+    sta 10
+    rts
+}
