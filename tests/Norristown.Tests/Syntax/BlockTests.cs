@@ -1,3 +1,4 @@
+using Norristown.Semantics;
 using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
 
@@ -166,6 +167,23 @@ public sealed class BlockTests
         var tree = Parse(".proc a {", "    .proc b {", "    }", "}");
         Assert.Equal("Proc 1-4\n  Proc 2-3\n", SyntaxDump.Blocks(tree));
         Assert.Empty(tree.Diagnostics);
+    }
+
+    /// <summary>
+    /// Checks that a region line with a <c>{</c> that does not end it opens the region the parser
+    /// reads it as. The stray brace is the only thing reported, and the lines after it are in the
+    /// region, rather than the line being reported as a region inside a block.
+    /// </summary>
+    [Theory]
+    [InlineData(".segment CODE { nop")]
+    [InlineData(".segment CODE {}")]
+    public void ARegionLineWithAStrayBraceStillOpensItsRegion(string region)
+    {
+        var tree = Parse(".segment CODE: abs", region, ".scope {", "}");
+        Assert.Equal(SyntaxKind.SegmentRegion, tree.Root.DescendantNodes().OfType<LineSyntax>().ElementAt(1).Statement.Kind);
+        Assert.Equal("Region 2-4 no closer\n  Scope 3-4\n", SyntaxDump.Blocks(tree));
+        var model = SemanticModel.Create(tree, SegmentTable.Build([tree], []));
+        Assert.DoesNotContain(model.Diagnostics, d => d.Id == "segment-region-misplaced");
     }
 
     [Fact]

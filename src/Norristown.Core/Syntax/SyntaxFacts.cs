@@ -316,6 +316,32 @@ public static class SyntaxFacts
         directiveRows.TryGetValue(directive, out var row) ? row.ElementSize : null;
 
     /// <summary>
+    /// Checks whether <paramref name="directive"/> is an element type, which data may be made of
+    /// and which may take a count. The element types are those <see cref="ElementSize"/> gives a
+    /// size, and <c>.type T</c>, whose size is that of T.
+    /// </summary>
+    public static bool IsElementType(DirectiveKind directive) =>
+        directive == DirectiveKind.Type || ElementSize(directive) is not null;
+
+    /// <summary>
+    /// Returns the kind of block that a line ending in <c>{</c> opens after the element type
+    /// <paramref name="element"/>, or null when such a line opens no block of values.
+    /// </summary>
+    /// <param name="element">The directive that gives the element type.</param>
+    /// <param name="counted">Whether the element type has a count, such as <c>[16]</c> or <c>[]</c>.</param>
+    /// <returns>
+    /// <see cref="BlockKind.DataBody"/>, which holds an array's values, for an element type with a
+    /// count. <see cref="BlockKind.RecordInitializer"/>, which holds one record's
+    /// <c>member = value</c> lines, for <c>.type T</c> with no count. Null for any other element
+    /// type without a count, and for a directive that is not an element type.
+    /// </returns>
+    public static BlockKind? DataBodyKind(DirectiveKind element, bool counted) =>
+        !IsElementType(element) ? null
+        : counted ? BlockKind.DataBody
+        : element == DirectiveKind.Type ? BlockKind.RecordInitializer
+        : null;
+
+    /// <summary>
     /// Returns where <paramref name="directive"/> may begin a line. A directive with no row, and
     /// <see cref="DirectiveKind.None"/>, may begin a line nowhere.
     /// </summary>

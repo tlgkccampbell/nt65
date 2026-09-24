@@ -30,8 +30,7 @@ internal static class Lines
         }
         return first switch
         {
-            SyntaxKind.Identifier when second == SyntaxKind.Bang => LineKind.MacroCall,
-            SyntaxKind.Mnemonic when IsCallOfMnemonic(tokens, 0) => LineKind.MacroCall,
+            _ when IsMacroCall(tokens, 0) => LineKind.MacroCall,
             SyntaxKind.Identifier when second == SyntaxKind.EndOfLine => LineKind.BareIdentifier,
             SyntaxKind.Mnemonic => LineKind.Instruction,
             _ => LineKind.Expression,
@@ -84,31 +83,50 @@ internal static class Lines
     }
 
     /// <summary>
-    /// Returns a value indicating whether the line is <c>.segment NAME</c> with neither a brace
-    /// nor a size. Such a region line puts the lines after it in the segment, rather than lines
-    /// inside braces.
+    /// Returns a value indicating whether the line is a <c>.segment NAME</c> region line that
+    /// opens no braced block. Such a line puts the lines after it in the segment, rather than
+    /// lines inside braces.
     /// </summary>
-    public static bool IsRegion(ImmutableArray<GreenToken> tokens)
+    public static bool IsRegion(ImmutableArray<GreenToken> tokens) =>
+        tokens[0].DirectiveKind == DirectiveKind.Segment && SegmentForm(tokens, opens: false) == SyntaxKind.SegmentRegion;
+
+    /// <summary>
+    /// Returns the kind of node a <c>.segment</c> line parses to. A line that opens a block with
+    /// <c>{</c> is a <see cref="SyntaxKind.SegmentBlock"/>. Otherwise a line with a <c>:</c> is a
+    /// <see cref="SyntaxKind.SegmentDeclaration"/>, and any other line is a
+    /// <see cref="SyntaxKind.SegmentRegion"/>, even one with a stray <c>{</c> the parser reports.
+    /// </summary>
+    /// <param name="tokens">The line's tokens.</param>
+    /// <param name="opens">Whether the line opens a block, as <see cref="Braces"/> decides.</param>
+    public static SyntaxKind SegmentForm(ImmutableArray<GreenToken> tokens, bool opens)
     {
-        if (tokens[0].DirectiveKind != DirectiveKind.Segment)
-            return false;
+        if (opens)
+            return SyntaxKind.SegmentBlock;
         foreach (var token in tokens)
         {
-            if (token.Kind is SyntaxKind.Colon or SyntaxKind.OpenBrace)
-                return false;
+            if (token.Kind == SyntaxKind.Colon)
+                return SyntaxKind.SegmentDeclaration;
         }
-        return true;
+        return SyntaxKind.SegmentRegion;
     }
 
     /// <summary>
-    /// Returns a value indicating whether the mnemonic at <paramref name="at"/> names a macro
-    /// being called. A macro may be named after an instruction, such as one another processor
-    /// has. Only <c>!(</c> after it makes a call, because <c>lda !flag</c> is an instruction whose
-    /// operand is the logical not of <c>flag</c>.
+    /// Returns a value indicating whether the token at <paramref name="at"/> names a macro being
+    /// called, as in <c>name!(...)</c> or <c>name!</c>. A macro may be named after an instruction,
+    /// such as one another processor has. Then only <c>!(</c> after it makes a call, because
+    /// <c>lda !flag</c> is an instruction whose operand is the logical not of <c>flag</c>.
     /// </summary>
-    public static bool IsCallOfMnemonic(ImmutableArray<GreenToken> tokens, int at) =>
-        at + 2 < tokens.Length && tokens[at].Kind == SyntaxKind.Mnemonic
-        && tokens[at + 1].Kind == SyntaxKind.Bang && tokens[at + 2].Kind == SyntaxKind.OpenParen;
+    public static bool IsMacroCall(ImmutableArray<GreenToken> tokens, int at)
+    {
+        if (at + 1 >= tokens.Length || tokens[at + 1].Kind != SyntaxKind.Bang)
+            return false;
+        return tokens[at].Kind switch
+        {
+            SyntaxKind.Identifier => true,
+            SyntaxKind.Mnemonic => at + 2 < tokens.Length && tokens[at + 2].Kind == SyntaxKind.OpenParen,
+            _ => false,
+        };
+    }
 
     public static BlockKind BlockKindOf(ImmutableArray<GreenToken> tokens, LineKind kind)
     {
@@ -129,13 +147,14 @@ internal static class Lines
         var token = tokens[start];
         if (token.Kind == SyntaxKind.Directive)
             return DataBlockKind(tokens, start) ?? SyntaxFacts.BlockKindOf(token.DirectiveKind);
-        if (IsCallOfMnemonic(tokens, start))
+        if (IsMacroCall(tokens, start))
             return BlockKind.MacroBlock;
-        if (token.Kind == SyntaxKind.Identifier)
+
+        // `} else {` closes one block argument of a macro call and opens the next.
+        if (kind == LineKind.BlockClose && token.Kind == SyntaxKind.Identifier
+            && tokens[start + 1].Kind == SyntaxKind.OpenBrace)
         {
-            var next = tokens[start + 1].Kind;
-            if (next == SyntaxKind.Bang || (kind == LineKind.BlockClose && next == SyntaxKind.OpenBrace))
-                return BlockKind.MacroBlock;
+            return BlockKind.MacroBlock;
         }
         return BlockKind.Unknown;
     }
@@ -164,15 +183,12 @@ internal static class Lines
                 return BlockKind.Data;
         }
 
-        var directive = tokens[element];
-        var record = directive.DirectiveKind == DirectiveKind.Type;
-        if (!record && SyntaxFacts.ElementSize(directive.DirectiveKind) is null)
+        var directive = tokens[element].DirectiveKind;
+        if (!SyntaxFacts.IsElementType(directive))
             return null;
-        for (var i = element + 1; i < tokens.Length; i++)
-        {
-            if (tokens[i].Kind == SyntaxKind.OpenBracket)
-                return BlockKind.DataBody;
-        }
-        return record ? BlockKind.RecordInitializer : null;
+        var counted = false;
+        for (var i = element + 1; i < tokens.Length && !counted; i++)
+            counted = tokens[i].Kind == SyntaxKind.OpenBracket;
+        return SyntaxFacts.DataBodyKind(directive, counted);
     }
 }

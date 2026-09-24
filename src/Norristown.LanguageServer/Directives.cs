@@ -13,7 +13,7 @@ internal static class Directives
     public static readonly string[] Elements =
     [
         .. SyntaxFacts.Directives
-            .Where(kind => SyntaxFacts.ElementSize(kind) is not null || kind == DirectiveKind.Type)
+            .Where(SyntaxFacts.IsElementType)
             .Select(SyntaxFacts.TextOf),
     ];
 

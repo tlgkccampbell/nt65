@@ -14,7 +14,7 @@ internal sealed partial class Parser
 
         // A label may be followed by an instruction, a data directive or a macro call, and a
         // macro may be named after an instruction.
-        if ((Kind == SyntaxKind.Identifier && Next == SyntaxKind.Bang) || Lines.IsCallOfMnemonic(tokens, index))
+        if (Lines.IsMacroCall(tokens, index))
             return Finish(new LabeledLineSyntax(label, ParseMacroCall()));
         if (Kind == SyntaxKind.Mnemonic)
             return Finish(new LabeledLineSyntax(label, ParseInstruction()));
@@ -173,7 +173,7 @@ internal sealed partial class Parser
     private GreenNode ParseSegment()
     {
         var keyword = Advance();
-        var declaration = !opensBlock && tokens.Any(token => token.Kind == SyntaxKind.Colon);
+        var form = Lines.SegmentForm(tokens, opensBlock);
         GreenToken name;
         if (AtName)
         {
@@ -189,20 +189,20 @@ internal sealed partial class Parser
             // A line that does not name its segment is parsed no further, so the missing name is
             // the only thing reported about it.
             name = Missing(SyntaxKind.Identifier, Catalogue.ExpectedName.Message("a segment name"));
-            return opensBlock
-                ? new SegmentBlockSyntax(keyword, name, GreenToken.Missing(SyntaxKind.OpenBrace))
-                : declaration
-                    ? new SegmentDeclarationSyntax(
-                        keyword, name, GreenToken.Missing(SyntaxKind.Colon),
-                        GreenToken.Missing(SyntaxKind.Identifier), null, null)
-                    : new SegmentRegionSyntax(keyword, name, null);
+            return form switch
+            {
+                SyntaxKind.SegmentBlock => new SegmentBlockSyntax(keyword, name, GreenToken.Missing(SyntaxKind.OpenBrace)),
+                SyntaxKind.SegmentDeclaration => new SegmentDeclarationSyntax(
+                    keyword, name, GreenToken.Missing(SyntaxKind.Colon), GreenToken.Missing(SyntaxKind.Identifier), null, null),
+                _ => new SegmentRegionSyntax(keyword, name, null),
+            };
         }
 
         // A `{` after the name opens a block only when it ends the line. Otherwise the line opens
         // nothing, and the brace is kept on the region line as a misplaced token.
-        if (opensBlock)
+        if (form == SyntaxKind.SegmentBlock)
             return new SegmentBlockSyntax(keyword, name, Expect(SyntaxKind.OpenBrace));
-        if (!declaration)
+        if (form == SyntaxKind.SegmentRegion)
             return new SegmentRegionSyntax(keyword, name, Kind == SyntaxKind.OpenBrace ? Advance() : null);
 
         if (Kind != SyntaxKind.Colon)
@@ -606,20 +606,10 @@ internal sealed partial class Parser
     {
         var at = index;
         var directive = Advance();
-        var record = directive.DirectiveKind == DirectiveKind.Type;
-        var element = record || SyntaxFacts.ElementSize(directive.DirectiveKind) is not null;
-        NameExpressionSyntax? type = null;
-        if (record)
-        {
-            if (AtName || Kind == SyntaxKind.ColonColon)
-                type = ParseName();
-            else
-                Report(Catalogue.ExpectedDataType.Message("the type: `.type T`"));
-        }
-        else if (!element)
-        {
+        var element = SyntaxFacts.IsElementType(directive.DirectiveKind);
+        if (!element)
             Report(at, Catalogue.ImportNeedsAnElementType.Message(directive.Text));
-        }
+        var type = ParseRecordType(directive);
         var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
         // One cause gets one diagnostic. A directive that is not an element type has been

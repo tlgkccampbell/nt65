@@ -14,18 +14,11 @@ internal sealed partial class Parser
     private DataDirectiveSyntax ParseDataDirective()
     {
         var directive = Advance();
-        var record = directive.DirectiveKind == DirectiveKind.Type;
-        if (!record && SyntaxFacts.ElementSize(directive.DirectiveKind) is null)
+        if (!SyntaxFacts.IsElementType(directive.DirectiveKind))
             return new DataDirectiveSyntax(directive, null, null, AtEnd ? null : ParseInlineData());
 
-        NameExpressionSyntax? type = null;
-        if (record)
-        {
-            if (AtName || Kind == SyntaxKind.ColonColon)
-                type = ParseName();
-            else
-                Report(Catalogue.ExpectedDataType.Message("the type: `.type T`"));
-        }
+        var record = directive.DirectiveKind == DirectiveKind.Type;
+        var type = ParseRecordType(directive);
         var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
         DataTailSyntax? tail = null;
@@ -34,7 +27,7 @@ internal sealed partial class Parser
             // A body holds an array's values, or one record's `member = value` lines.
             if (Next == SyntaxKind.EndOfLine)
             {
-                if (count is null && !record)
+                if (SyntaxFacts.DataBodyKind(directive.DirectiveKind, count is not null) is null)
                     ReportOnce(Catalogue.DataBodyNeedsACount.Message(directive.Text));
                 tail = new DataBodySyntax(Advance());
             }
@@ -54,6 +47,20 @@ internal sealed partial class Parser
             tail = ParseInlineData();
         }
         return new DataDirectiveSyntax(directive, type, count, tail);
+    }
+
+    /// <summary>
+    /// Parses the type after <c>.type</c>, or returns null for any other element type. A
+    /// <c>.type</c> with no type after it is reported, and also gives null.
+    /// </summary>
+    private NameExpressionSyntax? ParseRecordType(GreenToken directive)
+    {
+        if (directive.DirectiveKind != DirectiveKind.Type)
+            return null;
+        if (AtName || Kind == SyntaxKind.ColonColon)
+            return ParseName();
+        Report(Catalogue.ExpectedDataType.Message("the type: `.type T`"));
+        return null;
     }
 
     /// <summary>
