@@ -42,8 +42,8 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
             stack);
         return merged with
         {
-            WhyA = Why(a.A, b.A, known.WhyA, arriving.WhyA, "A"),
-            WhyIndex = Why(a.Index, b.Index, known.WhyIndex, arriving.WhyIndex, "X and Y"),
+            WhyA = Why(a.A, b.A, known.WhyA, arriving.WhyA, StateRegister.A),
+            WhyIndex = Why(a.Index, b.Index, known.WhyIndex, arriving.WhyIndex, StateRegister.Index),
             WhyStack = stack is null ? known.WhyStack ?? arriving.WhyStack : null,
         };
     }
@@ -52,14 +52,14 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
     /// Returns why a merged width is unknown. The cause is the one either side had, or else the
     /// two paths disagreeing.
     /// </summary>
-    private static Cause? Why(Width a, Width b, Cause? known, Cause? arriving, string register)
+    private static Cause? Why(Width a, Width b, Cause? known, Cause? arriving, StateRegister register)
     {
         if (a == b)
             return a is Width.Eight or Width.Sixteen ? null : known ?? arriving;
         if (a is Width.Eight or Width.Sixteen && b is Width.Eight or Width.Sixteen)
         {
             return new Cause(
-                $"the paths that reach here leave {register} 8-bit on one and 16-bit on another",
+                $"the paths that reach here leave {register.Name} 8-bit on one and 16-bit on another",
                 "an `.ensure` sets it whichever path was taken");
         }
         return known ?? arriving;

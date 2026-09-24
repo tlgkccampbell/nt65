@@ -160,11 +160,11 @@ internal static class Edits
     public static string FormatState(ProcessorState state) =>
         string.Join(", ", new[]
         {
-            state.A == Width.Unchanged ? null : ProcessorState.Format("a", state.A),
-            state.Index == Width.Unchanged ? null : ProcessorState.Format("i", state.Index),
+            state.A == Width.Unchanged ? null : ProcessorState.Format(StateRegister.A, state.A),
+            state.Index == Width.Unchanged ? null : ProcessorState.Format(StateRegister.Index, state.Index),
             state.E == ProcessorMode.Unchanged ? null : ProcessorState.Format(state.E),
-            state.D.Kind == StateValueKind.Unchanged ? null : state.D.Format("dp"),
-            state.B.Kind == StateValueKind.Unchanged ? null : state.B.Format("dbr"),
+            state.D.Kind == StateValueKind.Unchanged ? null : state.D.Format(StateRegister.DirectPage),
+            state.B.Kind == StateValueKind.Unchanged ? null : state.B.Format(StateRegister.DataBank),
         }.OfType<string>());
 
     /// <summary>

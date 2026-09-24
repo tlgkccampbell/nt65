@@ -135,11 +135,11 @@ public readonly record struct StateValue(StateValueKind Kind, long Value)
     /// Formats the value as a state item, such as <c>dp = $2100</c>, <c>dbr = [$00..$3f]</c>,
     /// <c>dp?</c> or <c>dp*</c>.
     /// </summary>
-    public string Format(string item) => Kind switch
+    public string Format(StateRegister register) => Kind switch
     {
-        StateValueKind.Known => $"{item} = {Hex(Value, item == "dp" ? 4 : 2)}",
-        StateValueKind.Among or StateValueKind.Within => $"{item} = {Banks.FormatAsItem()}",
-        StateValueKind.Unknown => item + "?",
-        _ => item + "*",
+        StateValueKind.Known => $"{register.Item} = {Hex(Value, register.Digits)}",
+        StateValueKind.Among or StateValueKind.Within => $"{register.Item} = {Banks.FormatAsItem()}",
+        StateValueKind.Unknown => register.Item + "?",
+        _ => register.Item + "*",
     };
 }

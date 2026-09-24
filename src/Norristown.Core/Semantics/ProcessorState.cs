@@ -33,19 +33,19 @@ public readonly record struct ProcessorState(
     /// page and the data bank are included when they are anything other than unchanged.
     /// </summary>
     public override string ToString() =>
-        $"{Format("a", A)}, {Format("i", Index)}, {Format(E)}"
-        + (D.Kind == StateValueKind.Unchanged ? "" : ", " + D.Format("dp"))
-        + (B.Kind == StateValueKind.Unchanged ? "" : ", " + B.Format("dbr"));
+        $"{Format(StateRegister.A, A)}, {Format(StateRegister.Index, Index)}, {Format(E)}"
+        + (D.Kind == StateValueKind.Unchanged ? "" : ", " + D.Format(StateRegister.DirectPage))
+        + (B.Kind == StateValueKind.Unchanged ? "" : ", " + B.Format(StateRegister.DataBank));
 
     /// <summary>
     /// Formats one width as a signature item: <c>a8</c>, <c>a16</c>, <c>a?</c> or <c>a*</c>.
     /// </summary>
-    public static string Format(string register, Width width) => width switch
+    public static string Format(StateRegister register, Width width) => width switch
     {
-        Width.Eight => register + "8",
-        Width.Sixteen => register + "16",
-        Width.Unknown => register + "?",
-        _ => register + "*",
+        Width.Eight => register.Item + "8",
+        Width.Sixteen => register.Item + "16",
+        Width.Unknown => register.Item + "?",
+        _ => register.Item + "*",
     };
 
     /// <summary>

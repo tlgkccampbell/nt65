@@ -167,15 +167,15 @@ internal static class InlayHints
         }
         var parts = new List<string>();
         if (now.A != was.A)
-            parts.Add(ProcessorState.Format("a", now.A));
+            parts.Add(ProcessorState.Format(StateRegister.A, now.A));
         if (now.Index != was.Index)
-            parts.Add(ProcessorState.Format("i", now.Index));
+            parts.Add(ProcessorState.Format(StateRegister.Index, now.Index));
         if (now.E != was.E)
             parts.Add(ProcessorState.Format(now.E));
         if (now.D != was.D)
-            parts.Add(now.D.Format("dp"));
+            parts.Add(now.D.Format(StateRegister.DirectPage));
         if (now.B != was.B)
-            parts.Add(now.B.Format("dbr"));
+            parts.Add(now.B.Format(StateRegister.DataBank));
         if (parts.Count == 0)
             return null;
 

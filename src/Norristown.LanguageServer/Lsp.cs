@@ -749,7 +749,7 @@ internal static class Lsp
             return frame;
         var entry = entries[top];
         if (entry.IsStatus)
-            return (1, $"status {ProcessorState.Format("a", entry.A)}, {ProcessorState.Format("i", entry.Index)}");
+            return (1, $"status {ProcessorState.Format(StateRegister.A, entry.A)}, {ProcessorState.Format(StateRegister.Index, entry.Index)}");
         if (entry is { Size: > 0, Byte: 0, Held.IsKnown: true } && entry.Size <= top + 1)
             return (entry.Size, StateValue.Hex(entry.Held.Value, entry.Size * 2));
         return (hint is { } wide && wide <= top + 1 ? wide : 1, null);

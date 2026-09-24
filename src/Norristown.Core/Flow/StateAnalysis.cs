@@ -203,10 +203,10 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns the cause for a width at a declared label being unknown, which is that the
     /// declaration does not say.
     /// </summary>
-    private static Cause Undeclared(Symbol label, Symbol routine, string register, string item) => new(
+    private static Cause Undeclared(Symbol label, Symbol routine, StateRegister register) => new(
         $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and its `.state` does not "
-            + $"declare the width of {register}",
-        $"the `.state` after `{label.DisplayName}` can declare `{item}8` or `{item}16`");
+            + $"declare the width of {register.Name}",
+        $"the `.state` after `{label.DisplayName}` can declare `{register.Item}8` or `{register.Item}16`");
 
     private static AnalysisStack? Push(AnalysisStack? stack, int? bytes) =>
         bytes is { } count ? stack?.Push(StackEntry.Opaque, count) : null;
@@ -285,10 +285,10 @@ public sealed class StateAnalysis : IProcessorStates
                 given.Contains(StatePart.DataBank) ? here.B : StateValue.Merge(here.B, outside.B)),
             Stack = stack,
             WhyA = a == Width.Unknown && !given.Contains(StatePart.A)
-                ? Undeclared(label, routine, "A", "a")
+                ? Undeclared(label, routine, StateRegister.A)
                 : reached.WhyA,
             WhyIndex = index == Width.Unknown && !given.Contains(StatePart.Index)
-                ? Undeclared(label, routine, "X and Y", "i")
+                ? Undeclared(label, routine, StateRegister.Index)
                 : reached.WhyIndex,
             WhyStack = stack is null ? OutsideEntries.UnknownStack(label, routine) : reached.WhyStack,
         };
@@ -771,10 +771,10 @@ public sealed class StateAnalysis : IProcessorStates
             switch (item.Part)
             {
                 case StatePart.A:
-                    processor = processor with { A = Set("A", processor.A, item) };
+                    processor = processor with { A = Set(StateRegister.A, processor.A, item) };
                     break;
                 case StatePart.Index:
-                    processor = processor with { Index = Set("X and Y", processor.Index, item) };
+                    processor = processor with { Index = Set(StateRegister.Index, processor.Index, item) };
                     break;
                 case StatePart.E:
                     if (StateChecks.IsKnown(item.Mode) && StateChecks.IsKnown(processor.E) && item.Mode != processor.E)
@@ -786,10 +786,10 @@ public sealed class StateAnalysis : IProcessorStates
                     break;
 
                 case StatePart.DirectPage:
-                    processor = processor with { D = SetValue("D", processor.D, item) };
+                    processor = processor with { D = SetValue(StateRegister.DirectPage, processor.D, item) };
                     break;
                 case StatePart.DataBank:
-                    processor = processor with { B = SetValue("B", processor.B, item) };
+                    processor = processor with { B = SetValue(StateRegister.DataBank, processor.B, item) };
                     break;
                 case StatePart.AllUnknown:
                     processor = new ProcessorState(
@@ -810,7 +810,7 @@ public sealed class StateAnalysis : IProcessorStates
         }
         return state with { Processor = processor };
 
-        StateValue SetValue(string register, StateValue here, StateItem item)
+        StateValue SetValue(StateRegister register, StateValue here, StateItem item)
         {
             if (item.IsBankSet)
                 return SetBanks(register, here, item);
@@ -818,28 +818,27 @@ public sealed class StateAnalysis : IProcessorStates
                 return StateValue.Unknown;
             if (model.ValueOf(expression, step.On).AsNumber() is not { } value)
             {
-                report?.ReportAt(expression, step, Catalogue.StateValueNotConstant.Message(item.Text, register));
+                report?.ReportAt(expression, step, Catalogue.StateValueNotConstant.Message(item.Text, register.Name));
                 return StateValue.Unknown;
             }
-            if (value < 0 || value > (register == "D" ? 0xffff : 0xff))
+            if (value < 0 || value > register.Maximum)
             {
                 report?.ReportAt(expression, step, Catalogue.StateValueOutOfRange.Message(
-                    item.Text,
-                    register == "D" ? "the direct page is a 16-bit address" : "a bank is one byte"));
+                    item.Text, register.Range));
                 return StateValue.Unknown;
             }
             if (here.IsBounded && !here.Values.Contains(value))
             {
                 report?.ReportAt(item.Node, step,
-                    Catalogue.StateValueMismatch.Message(item.Text, register, here.Describe(register == "D" ? 4 : 2)));
+                    Catalogue.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)));
             }
             return StateValue.Of(value);
         }
 
         // `.state dbr = [...]`: B is one of the banks, which it has to be already where it is known.
-        StateValue SetBanks(string register, StateValue here, StateItem item)
+        StateValue SetBanks(StateRegister register, StateValue here, StateItem item)
         {
-            if (register == "D")
+            if (register == StateRegister.DirectPage)
             {
                 report?.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Message(item.Text));
                 return StateValue.Unknown;
@@ -851,16 +850,16 @@ public sealed class StateAnalysis : IProcessorStates
             }
             if (here.Narrowed(banks) is { } narrowed)
                 return narrowed;
-            report?.ReportAt(item.Node, step, Catalogue.StateValueMismatch.Message(item.Text, register, here.Describe(2)));
+            report?.ReportAt(item.Node, step, Catalogue.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)));
             return StateValue.Among(banks);
         }
 
-        Width Set(string register, Width here, StateItem item)
+        Width Set(StateRegister register, Width here, StateItem item)
         {
             if (StateChecks.IsKnown(item.Width) && StateChecks.IsKnown(here) && item.Width != here)
             {
                 report?.ReportAt(item.Node, step, Catalogue.StateWidthMismatch.Message(
-                    item.Text, register, (register == "A" ? "is" : "are"), StateChecks.Format(here)));
+                    item.Text, register.Name, register.Is, StateChecks.Format(here)));
             }
             return item.Width;
         }

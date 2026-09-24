@@ -40,7 +40,7 @@ internal sealed class StateChecks
     public static string Format(Width width) => width == Width.Sixteen ? "16-bit" : "8-bit";
 
     /// <summary>Returns the register an immediate's width comes from, as a message names it.</summary>
-    public static string Format(WidthRegister register) => register == WidthRegister.A ? "A" : "X and Y";
+    public static string Format(WidthRegister register) => StateRegister.Of(register).Name;
 
     /// <summary>Returns a known mode in the words a message uses.</summary>
     public static string Mode(ProcessorMode mode) => mode == ProcessorMode.Native ? "native" : "emulation";
@@ -105,7 +105,7 @@ internal sealed class StateChecks
     {
         var width = state.Of(register);
         var text = SyntaxFacts.TextOf(mnemonic);
-        var item = register == WidthRegister.A ? "a" : "i";
+        var item = StateRegister.Of(register).Item;
         if (width == Width.Unchanged)
         {
             Report(step, Catalogue.WidthUnknown.Message(
@@ -206,8 +206,8 @@ internal sealed class StateChecks
     /// </summary>
     public void CheckEntry(Step step, string what, Signature callee, ProcessorState state)
     {
-        Width("a", "A", callee.Entry.A, state.A);
-        Width("i", "X and Y", callee.Entry.Index, state.Index);
+        Width(StateRegister.A, callee.Entry.A, state.A);
+        Width(StateRegister.Index, callee.Entry.Index, state.Index);
         if (IsKnown(callee.Entry.E) && callee.Entry.E != state.E)
         {
             Report(step, Catalogue.CallStateMismatch.Message(
@@ -215,31 +215,31 @@ internal sealed class StateChecks
                 ProcessorState.Format(callee.Entry.E),
                 IsKnown(state.E) ? $"the processor is in {Mode(state.E)} here" : "the mode is not known here"));
         }
-        Value("dp", "D", callee.Entry.D, state.D);
-        Value("dbr", "B", callee.Entry.B, state.B);
+        Value(StateRegister.DirectPage, callee.Entry.D, state.D);
+        Value(StateRegister.DataBank, callee.Entry.B, state.B);
 
-        void Value(string item, string register, StateValue needed, StateValue here)
+        void Value(StateRegister register, StateValue needed, StateValue here)
         {
             if (!needed.IsBounded || here.Meets(needed))
                 return;
             Report(step, Catalogue.CallStateMismatch.Message(
                 what,
-                needed.Format(item),
+                needed.Format(register),
                 here.IsBounded
-                    ? $"{register} is {here.Describe(register == "D" ? 4 : 2)} here"
-                    : $"{register} is not known here"));
+                    ? $"{register.Name} is {here.Describe(register.Digits)} here"
+                    : $"{register.Name} is not known here"));
         }
 
-        void Width(string item, string register, Width needed, Width here)
+        void Width(StateRegister register, Width needed, Width here)
         {
             if (!IsKnown(needed) || needed == here)
                 return;
             Report(step, Catalogue.CallStateMismatch.Message(
                 what,
-                ProcessorState.Format(item, needed),
+                ProcessorState.Format(register, needed),
                 IsKnown(here)
-                    ? $"{register} {(register == "A" ? "is" : "are")} {Format(here)} here"
-                    : $"the width of {register} is not known here"));
+                    ? $"{register.Name} {register.Is} {Format(here)} here"
+                    : $"the width of {register.Name} is not known here"));
         }
     }
 
@@ -252,8 +252,8 @@ internal sealed class StateChecks
         Step step, string what, string where, ProcessorState exit, ProcessorState state, string name)
     {
         var lead = what.Length == 0 ? "" : what + " ";
-        Part("a", "A", exit.A, state.A);
-        Part("i", "X and Y", exit.Index, state.Index);
+        Part(StateRegister.A, exit.A, state.A);
+        Part(StateRegister.Index, exit.Index, state.Index);
         if (exit.E == ProcessorMode.Unchanged && state.E != ProcessorMode.Unchanged)
         {
             Report(step, Catalogue.AssertedItemNotRestored.Message(
@@ -270,18 +270,18 @@ internal sealed class StateChecks
                     : $"the mode is not known {where}"));
         }
 
-        Value("dp", "D", exit.D, state.D);
-        Value("dbr", "B", exit.B, state.B);
+        Value(StateRegister.DirectPage, exit.D, state.D);
+        Value(StateRegister.DataBank, exit.B, state.B);
 
-        void Value(string item, string register, StateValue declared, StateValue here)
+        void Value(StateRegister register, StateValue declared, StateValue here)
         {
             if (declared.IsEntered && here != declared)
             {
                 Report(step, Catalogue.AssertedItemNotRestored.Message(
                     lead,
                     name,
-                    declared.Kind == StateValueKind.Unchanged ? $"{item}*" : declared.Format(item),
-                    register,
+                    declared.Kind == StateValueKind.Unchanged ? $"{register.Item}*" : declared.Format(register),
+                    register.Name,
                     "what it was on entry",
                     where));
             }
@@ -290,23 +290,23 @@ internal sealed class StateChecks
                 Report(step, Catalogue.ReturnStateMismatch.Message(
                     lead,
                     name,
-                    $"with `{declared.Format(item)}`",
+                    $"with `{declared.Format(register)}`",
                     here.IsBounded
-                        ? $"{register} is {here.Describe(register == "D" ? 4 : 2)} {where}"
-                        : $"{register} is not known {where}"));
+                        ? $"{register.Name} is {here.Describe(register.Digits)} {where}"
+                        : $"{register.Name} is not known {where}"));
             }
         }
 
-        void Part(string item, string register, Width declared, Width here)
+        void Part(StateRegister register, Width declared, Width here)
         {
             if (declared == Width.Unchanged && here != Width.Unchanged)
             {
                 Report(step, Catalogue.AssertedItemNotRestored.Message(
                     lead,
                     name,
-                    $"{item}*",
-                    register,
-                    register == "A" ? "as wide as it was on entry" : "as wide as they were on entry",
+                    $"{register.Item}*",
+                    register.Name,
+                    register.IsPlural ? "as wide as they were on entry" : "as wide as it was on entry",
                     where));
             }
             else if (IsKnown(declared) && declared != here)
@@ -314,10 +314,10 @@ internal sealed class StateChecks
                 Report(step, Catalogue.ReturnStateMismatch.Message(
                     lead,
                     name,
-                    $"with `{ProcessorState.Format(item, declared)}`",
+                    $"with `{ProcessorState.Format(register, declared)}`",
                     IsKnown(here)
-                        ? $"{register} {(register == "A" ? "is" : "are")} {Format(here)} {where}"
-                        : $"the width of {register} is not known {where}"));
+                        ? $"{register.Name} {register.Is} {Format(here)} {where}"
+                        : $"the width of {register.Name} is not known {where}"));
             }
         }
     }

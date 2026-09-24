@@ -160,7 +160,7 @@ public static class Cycles
             // with a 16-bit index.
             if (reads && mode is AddressingMode.AbsoluteX or AddressingMode.AbsoluteY or AddressingMode.DirectIndirectY)
                 total += index == Width.Sixteen ? new Timing(1) : new Timing(new CycleCount(0, 1), Crossing);
-            return total + Wider(sized, modifies ? 2 : 1, indexed ? "X and Y" : "A");
+            return total + Wider(sized, modifies ? 2 : 1, indexed ? StateRegister.Index : StateRegister.A);
         }
 
         // A branch costs 2 not taken and 3 taken; only in emulation mode does a taken branch
@@ -192,10 +192,10 @@ public static class Cycles
             // The native forms push and pull the program bank as well.
             (Rti, _) => new Timing(6) + Native(state.E),
             (Brk or Cop, _) => new Timing(7) + Native(state.E),
-            (Pha, _) => new Timing(3) + Wider(a, 1, "A"),
-            (Phx or Phy, _) => new Timing(3) + Wider(index, 1, "X and Y"),
-            (Pla, _) => new Timing(4) + Wider(a, 1, "A"),
-            (Plx or Ply, _) => new Timing(4) + Wider(index, 1, "X and Y"),
+            (Pha, _) => new Timing(3) + Wider(a, 1, StateRegister.A),
+            (Phx or Phy, _) => new Timing(3) + Wider(index, 1, StateRegister.Index),
+            (Pla, _) => new Timing(4) + Wider(a, 1, StateRegister.A),
+            (Plx or Ply, _) => new Timing(4) + Wider(index, 1, StateRegister.Index),
             (Php or Phb or Phk, _) => new Timing(3),
             (Phd, _) => new Timing(4),
             (Plp or Plb, _) => new Timing(4),
@@ -217,11 +217,11 @@ public static class Cycles
     /// is 8, and anywhere from none up to <paramref name="cycles"/> where the analysis does not
     /// know the width.
     /// </summary>
-    private static Timing Wider(Width width, int cycles, string register) => width switch
+    private static Timing Wider(Width width, int cycles, StateRegister register) => width switch
     {
         Width.Eight => new Timing(0),
         Width.Sixteen => new Timing(cycles),
-        _ => new Timing(new CycleCount(0, cycles), $"+{cycles} when {register} is 16-bit"),
+        _ => new Timing(new CycleCount(0, cycles), $"+{cycles} when {register.Name} is 16-bit"),
     };
 
     /// <summary>Returns what native mode adds to an interrupt or a return from one.</summary>
