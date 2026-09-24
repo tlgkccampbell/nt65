@@ -284,7 +284,8 @@ re-exports its character map as `platform::text`, and the library writes `text("
 
 A segment's address size is declared once, not at each use. The standard ca65 segments are
 already declared: `ZEROPAGE` is zero page, and `CODE`, `RODATA`, `DATA` and `BSS` are
-absolute. You declare others yourself, in a source file or in `nt65.json`:
+absolute. You declare others yourself, in a source file, in `nt65.json`, or by linking your
+linker configuration, below:
 
 ```nt65
 .segment ZP2: zp                    ; a declaration: a size after the colon
@@ -319,7 +320,20 @@ A segment block can also be used at file level, for one item in a different segm
 region around it.
 
 There is no `.org` and no `.reloc`. Where a segment lives in memory is the linker
-configuration's business, and nt65 never reads the linker configuration.
+configuration's business. nt65 never writes one, but it can read yours, so that the segments
+are written down once:
+
+```json
+"links": { "prg": { "config": "c64.cfg" } }
+```
+
+With `links` in `nt65.json`, each segment in the config's `SEGMENTS` block is declared: `zp` if
+its `type` is `zp` or it runs in page zero, and `abs` otherwise, in the bank it runs in. A
+segment the config does not place is an error where you name it, before ld65 would stop the
+link, and so is `.loadof` of a segment the config does not give `define = yes`. `segments` in
+`nt65.json` then adds only what a config cannot say, such as `"far"` or a `dp`. A program
+linked twice, such as a cartridge and a music file, names both configs, and a segment they
+both place must be the same in each.
 
 **A segment's bytes are one run.** ca65 writes each segment's bytes in the order they appear
 in the file, whichever `.segment` line put them there, and nt65 reads the file the same way.
@@ -1339,6 +1353,9 @@ which space it is in:
 }
 ```
 
+A project that links its config gives the space to the memory the segment runs in, and every
+segment that runs there is in it: `"memory": { "SPCRAM": { "space": "spc" } }` under the link.
+
 `"data"` means the space runs another processor, so its segments hold data and no
 instructions. The other processor's code is written with macros that emit its instructions as
 bytes. `"code"` means it runs this program's processor, as the second 65816 of an SA-1
@@ -1489,7 +1506,8 @@ everything below works across modules.
 
 - **Navigation:** go to definition, find references, highlight, rename (including through
   `.use`, macros and families), call hierarchy, workspace symbol search, the outline, folding
-  and expand selection. An `.incbin` path is a link to its file.
+  and expand selection. An `.incbin` path is a link to its file. Go to definition on a segment
+  name opens the line of each linked config that places it.
 - **Hover:** a symbol's declaration and the comment above it, its value or address size, its
   segment and size; an instruction's cycle count, the flags it writes and, on the 65816, the
   processor state reaching it; what a routine costs and which registers it preserves.

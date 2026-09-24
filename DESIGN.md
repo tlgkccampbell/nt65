@@ -34,7 +34,8 @@ that targets an existing, widely deployed toolchain rather than replacing it.
 
 - Not a high-level language. No runtime types, no structured control flow, no register
   allocation. (Macros can build such things; the language does not.)
-- Not an assembler. nt65 never produces object code and does not read linker configs.
+- Not an assembler. nt65 never produces object code. It reads the linker configs a project
+  links for the segments they declare (§5.3), and never writes or changes one.
 - Not a ca65-compatible source dialect. Where ca65 syntax was harmless it was kept;
   where it was the cause of the problem it was changed or removed.
 
@@ -47,8 +48,9 @@ accepting ca65 source. nt65 promises a project that mixes them:
    line map beside each (§13); a module another places (§12) is written into that one's file
    instead of a file of its own. The project
    assembles those files with its existing ca65, built from the cc65 commit nt65 pins
-   (§13), and links them with its existing ld65 configuration. nt65 never runs ca65 or ld65, and never reads,
-   requires or changes a linker configuration. A build that wants source-level debugging runs
+   (§13), and links them with its existing ld65 configuration. nt65 never runs ca65 or ld65. It reads
+   the linker configurations a project links (§5.3), for the segments they declare, and never
+   requires or changes one: a project that links none declares its segments itself. A build that wants source-level debugging runs
    `nt65 remap-dbg` on the debug file afterwards; one that does not can leave the maps alone.
 2. **Command line.** The output assembles to the same bytes under any ca65 options the
    project uses (§13). Where an option genuinely conflicts with nt65's declarations,
@@ -407,14 +409,34 @@ namespace with symbols; nt65 declares segments in a table of their own, so a seg
 symbol may share a name. The output still quotes them for ca65.
 
 A segment's address size (`zp`, `abs`, `far`) is declared **exactly once** per program,
-by a `.segment NAME: size` declaration item in any one file or in the project
-configuration; a size after `:` is what makes the line a declaration rather than a region.
+by a `.segment NAME: size` declaration item in any one file, in the project file's `segments`,
+or by the ld65 configs the project links (§5.3); a size after `:` is what makes the line a
+declaration rather than a region.
 Regions and blocks only name the segment. The standard names are predeclared (`ZEROPAGE` as
 `zp`, and `CODE`, `DATA`, `BSS` and `RODATA` as `abs`), and the predeclaration is what stands
 when the program says nothing: a program may declare a standard segment once, as it declares
 any other, to give it a direct page, a bank or mirrors, and at a size other than its own that
 declaration is an error. A region or block that names a segment declared nowhere is an error,
 so a misspelled name is caught before ld65 runs.
+
+**Linked segments.** A project that names its ld65 configs under `links` (§5.3) takes its
+segments from them. Each entry of a config's `SEGMENTS` block declares a segment. It is `zp`
+when its `type` is `zp` or it runs wholly in $0000–$00FF, as code copied into page zero does,
+and `abs` otherwise. Its home bank is the bank of the address it runs at: its own `start`, or
+its memory area's, when the whole area is in one bank. A value that depends on ld65's command
+line, such as `%S`, is unknown, never guessed, and a bank nt65 cannot tell is left for the
+project file to give. A standard segment a config places is declared there, at its standard
+size. In such a project a region, a block, an import's `in`, or a `.loadof` or `.runof` that
+names a segment no config places is an error, which ld65 would otherwise report as a missing memory area; a `.loadof`
+or `.runof` of a segment without `define = yes` is an error too.
+
+A program linked more than once, such as a cartridge and a sound file that share objects,
+names a link for each. nt65 analyzes each module once, whichever links it goes into, so a
+segment two links place must agree on its size, space, bank and mirrors. nt65 does not ask
+which modules go into which link: that list belongs to the build, and copying it into the
+project would be one more thing to keep in step. One name therefore means one segment across
+a program's links.
+
 The address size is what nt65 uses to size references to symbols in that segment
 (§7.2), so keeping it in one place means sizing depends on a small table rather than on
 a fold over every file.
@@ -486,8 +508,10 @@ sides use.
 }
 ```
 
-These declarations restate facts that live in the ld65 configuration, which nt65 does
-not read or check. In particular a `zp` segment is emitted with `z:` operands, so ld65
+Without `links`, these declarations restate facts that live in the ld65 configuration, which
+nt65 then does not read. With them, the configuration gives the size and the bank, and the
+project gives only what a configuration has no word for: `dp`, `far`, and the mirrors and
+space of each memory area. In particular a `zp` segment is emitted with `z:` operands, so ld65
 must place it where its symbols are direct-page offsets (`$00`–`$FF`, relative to D);
 `#<sym` and `.addr sym` on such a symbol then yield that offset, not an absolute
 address, and on the 65816 an absolute operand on it is an error when its segment's `dp`
@@ -575,13 +599,33 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   declares them: a program that links another processor's image has a project.
 - `segments`: the segment table of §5.2 and §7.5. A segment declared here may not also
   be declared in a file, and a standard one keeps its size here too. Its `mirrors` are
-  written as `ranges` writes banks, and its `space` names one of `spaces`.
+  written as `ranges` writes banks, and its `space` names one of `spaces`. With `links`, the
+  configs declare the segments, and an entry here adds only what they cannot say: `far` for an
+  absolute segment, a `dp`, or a `bank` the config leaves unclear. Giving anything else again
+  is an error, and so is an entry no config places.
+- `links`: the ld65 configs the output is linked with, by name, each a path from the project
+  file. Their `SEGMENTS` blocks declare the program's segments (§5.2). A link's `memory`
+  describes the config's memory areas by name, with the `mirrors` and `space` of the segments
+  that run in each, and a link's `space` puts everything in it in one space:
+
+  ```json
+  "links": {
+    "sfc": { "config": "lorom256k.cfg",
+             "memory": { "BSS": { "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
+                         "SPCRAM": { "space": "spc" } } },
+    "spc": { "config": "spcfile/spc.cfg", "space": "spc" }
+  }
+  ```
+
+  A build lists the configs in its dependency file, and the language server reads a project
+  again when one changes.
 - `ranges`: which banks an absolute *constant* address in each range may be accessed
   from (§7.5), for hardware registers that are mirrored in some banks only. A key is a
   range of addresses or a single address, each item a range of banks or a single bank,
   and no two keys may overlap.
 - `configurations`: named builds of the program. Each gives `defines` over the project's,
-  by name, `diagnostics` over the project's, by name, and an `out` in place of the project's,
+  by name, `diagnostics` over the project's, by name, `links` over the project's, by name, and
+  an `out` in place of the project's,
   so that a release build can be stricter than the one being worked in; `--config name`
   chooses one, `-D` overrides on top of it, and with none chosen the project's own settings
   build. The editor's setting for the active configuration chooses the one a language server
@@ -3629,7 +3673,9 @@ alone and without an assembler:
   macro bodies and block arguments, without expanding a macro, and through qualified names,
   `.use`, `as` and re-exports: a rename across modules rewrites the `.use` items that name
   the symbol, and leaves a name `as` gave alone), the member names a record gives values
-  included;
+  included. A segment name leads to where it is declared: each linked config line that places
+  it, answered for every project that builds the file, since a library's `CODE` is each
+  platform's `CODE`;
 - colour every name by what it refers to, so `Joy::A` is an enum member and not a register. A
   long file is asked about a screenful at a time, and after an edit only what changed about it
   is sent: a file of thousands of lines is thousands of numbers, and a keystroke moves a
@@ -4267,6 +4313,16 @@ Recorded so the reasoning survives. None is open.
   first depends on placement, and making the second a constant would have constants wait for
   expansion, which §3.1 rules out.
 - **Segments are declared.** A misspelled segment name is an error, not a new segment.
+- **Linked configs declare segments.** A segment table in the project file and the ld65
+  config beside it drifted apart: nothing noticed a bank that no longer matched where the
+  config put a segment, and the link succeeded with the bank checks made against the wrong
+  bank. Link-time assertions in the output were weighed. They keep nt65 from reading the config,
+  but they catch drift only when ld65 runs, never in the editor, and they leave the table
+  written twice. Reading the config makes it the one source of what it says, and the project
+  file keeps only what ld65 has no field for. nt65 still never writes or requires a config, and
+  a project without `links` works as before. The facts that belong to memory rather than to a
+  segment, mirrors and spaces, are given on the memory area, so each is written once however
+  many segments run there.
 - **A standard segment's predeclaration is a default.** It could not be declared again, so it
   could never carry a direct page, a bank or mirrors, and a 65816 program that wanted the checks
   on its standard segments renamed them. The rename leaked into the linker configuration, and
