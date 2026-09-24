@@ -21,11 +21,11 @@
 .const LINE_LENGTH = COLUMNS        ; a row of the screen
 .const NEWLINE     = $8D            ; RETURN, in normal video
 
-.proc putc = $FDED: running, keeps x, y ; COUT
-.proc GETLN1 = $FD6F: running       ; reads a line into INPUT, without a prompt
-.proc EIGHTY = $C300: running       ; turns the 80-column screen on, and writes A there
-.proc HOME = $FC58: running         ; clears the screen
-.proc DOSWARM = $03D0: running, noreturn ; BASIC.SYSTEM's warm start
+.proc putc = $FDED: running, reads a, keeps x, y     ; COUT
+.proc GETLN1 = $FD6F: running, reads none            ; reads a line into INPUT, without a prompt
+.proc EIGHTY = $C300: running, reads a               ; turns the 80-column screen on, and writes A there
+.proc HOME = $FC58: running, reads none              ; clears the screen
+.proc DOSWARM = $03D0: running, noreturn, reads none ; BASIC.SYSTEM's warm start
 
 .const INPUT  = $0200               ; where GETLN1 reads a line to, ended by RETURN
 .const PROMPT = $33                 ; what GETLN writes when it starts a line again

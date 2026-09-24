@@ -19,7 +19,7 @@
 ;!!! runs into "STOP"
 
 .if CONFIG_CBM_ALL {
-    .export .proc ISCNTC = $FFE1         ; the KERNAL's
+    .export .proc ISCNTC = $FFE1: reads none ; the KERNAL's
 }
 .if AIM65 {
     .export .use aim65::iscntc::ISCNTC

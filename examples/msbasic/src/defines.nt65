@@ -123,15 +123,15 @@
     ; the KERNAL
     .export .proc OPEN = $FFC0
     .export .proc CLOSE = $FFC3
-    .export .proc CHKIN = $FFC6
-    .export .proc CHKOUT = $FFC9
-    .export .proc CLRCH = $FFCC
-    .export .proc CHRIN = $FFCF
-    .export .proc CHROUT = $FFD2
+    .export .proc CHKIN = $FFC6: reads x
+    .export .proc CHKOUT = $FFC9: reads x
+    .export .proc CLRCH = $FFCC: reads none
+    .export .proc CHRIN = $FFCF: reads none
+    .export .proc CHROUT = $FFD2: reads a
     .export .proc VERIFY = $FFDB
     .export .proc SYS = $FFDE
-    .export .proc GETIN = $FFE4
-    .export .proc CLALL = $FFE7
+    .export .proc GETIN = $FFE4: reads none
+    .export .proc CLALL = $FFE7: reads none
     .export .proc LE7F3 = $E7F3         ; for CBM1
     .export .proc MONCOUT = CHROUT
     .export .proc MONRDKEY = GETIN
@@ -148,9 +148,9 @@
     .export .const RAMSTART2       = $0300
     .export .const L0200           = $0200
 
-    .export .proc MONRDKEY = $FFEB
-    .export .proc MONCOUT = $FFEE
-    .export .proc MONISCNTC = $FFF1
+    .export .proc MONRDKEY = $FFEB: reads none
+    .export .proc MONCOUT = $FFEE: reads a
+    .export .proc MONISCNTC = $FFF1: reads none
 }
 
 .if APPLE {
@@ -162,17 +162,17 @@
     .export .const WIDTH2          = 14
     .export .const RAMSTART2       = $2A00
 
-    .export .proc MONRDKEY = $FD0C
-    .export .proc MONCOUT = $FDED
+    .export .proc MONRDKEY = $FD0C: reads none
+    .export .proc MONCOUT = $FDED: reads a
     .export .proc LF689 = $F689: inline 37   ; SWEET16
-    .export .proc LF800 = $F800
-    .export .proc LF819 = $F819
-    .export .proc LF828 = $F828
-    .export .proc LF864 = $F864
-    .export .proc TEX = $FB2F
-    .export .proc LFB40 = $FB40
-    .export .proc LFD0C = $FD0C
-    .export .proc LFD6A = $FD6A
+    .export .proc LF800 = $F800: reads a, y
+    .export .proc LF819 = $F819: reads a, y
+    .export .proc LF828 = $F828: reads a, y
+    .export .proc LF864 = $F864: reads a
+    .export .proc TEX = $FB2F: reads none
+    .export .proc LFB40 = $FB40: reads none
+    .export .proc LFD0C = $FD0C: reads none
+    .export .proc LFD6A = $FD6A: reads none
     .export .proc LFECD = $FECD
     .export .proc LFEFD = $FEFD
 }
@@ -189,8 +189,8 @@
 
     .export .proc L1800 = $1800
     .export .proc L1873 = $1873
-    .export .proc MONRDKEY = $1E5A
-    .export .proc MONCOUT = $1EA0
+    .export .proc MONRDKEY = $1E5A: reads none
+    .export .proc MONCOUT = $1EA0: reads a
 }
 
 .if KBD {
@@ -288,8 +288,8 @@
 
     .export .proc ASCNIB = $8275
     .export .proc INSTAT = $8386
-    .export .proc MONRDKEY = $8A1B
-    .export .proc MONCOUT = $8A47
+    .export .proc MONRDKEY = $8A1B: reads none
+    .export .proc MONCOUT = $8A47: reads a
     .export .proc ACCESS = $8B86
     .export .const L8C78 = $8C78
     .export .const DUMPT = $8E87
