@@ -262,7 +262,7 @@ internal sealed partial class Parser
                 name, equals, value: null, openBracketToken: null, ranges: null, closeBracketToken: null);
         }
         var openBracket = Advance();
-        var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseBankRange) : null;
+        var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseRange) : null;
         GreenToken? closeBracket = null;
         if (Kind == SyntaxKind.CloseBracket)
             closeBracket = Advance();
@@ -272,15 +272,16 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// Parses one bank, such as <c>$80</c>, or a range of banks, such as <c>$00..$3f</c>.
+    /// Parses one value, such as <c>$80</c>, or a range of values, such as <c>$00..$3f</c>, in a
+    /// set of banks or a set of values.
     /// </summary>
-    private GreenNode ParseBankRange()
+    private GreenNode ParseRange()
     {
         var first = ParseExpression();
         if (Kind != SyntaxKind.DotDot)
-            return new BankRangeSyntax(first, null, null);
+            return new RangeSyntax(first, null, null);
         var dotDot = Advance();
-        return new BankRangeSyntax(first, dotDot, ParseExpression());
+        return new RangeSyntax(first, dotDot, ParseExpression());
     }
 
     private GreenNode ParseProc()

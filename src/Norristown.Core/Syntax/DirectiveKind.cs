@@ -6,9 +6,9 @@ namespace Norristown.Syntax;
 /// kinds rather than spellings. Each member's name, in lower case and after a <c>.</c>, is its
 /// spelling in source.
 /// <para>
-/// The built-in functions, such as <c>.lobyte</c>, and the <c>.mod</c> operator are spelled like
-/// directives but are not among these kinds, because they appear inside expressions rather than
-/// beginning a statement.
+/// The built-in functions, such as <c>.lobyte</c>, and the <c>.mod</c> and <c>.in</c> operators
+/// are spelled like directives but are not among these kinds, because they appear inside
+/// expressions rather than beginning a statement.
 /// </para>
 /// </summary>
 public enum DirectiveKind

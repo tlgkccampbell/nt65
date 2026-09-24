@@ -72,6 +72,7 @@ public static class SyntaxFacts
         new(BuiltinKind.Defined, 1, 1, "one name"),
         new(BuiltinKind.Has, 1, 1, null),
         new(BuiltinKind.Select, 3, 3, null),
+        new(BuiltinKind.Switch, 3, null, null),
         new(BuiltinKind.Sqrt, 1, 1, "one number", Arithmetic: true),
         new(BuiltinKind.Muldiv, 3, 3, "`.muldiv(a, b, c)`", Arithmetic: true),
         new(BuiltinKind.Sin, 3, 3, "`.sin(angle, turn, scale)`", Arithmetic: true),
@@ -457,9 +458,9 @@ public static class SyntaxFacts
 
     /// <summary>
     /// Returns the precedence level of a binary operator, from 3 to 13 with 3 binding tightest,
-    /// or 0 when the token is not a binary operator. <c>.mod</c> is a directive rather than a
-    /// punctuation token, because <c>%</c> begins a binary number, so the text is needed to tell
-    /// it from other directives.
+    /// or 0 when the token is not a binary operator. <c>.mod</c> and <c>.in</c> are directives
+    /// rather than punctuation tokens, <c>.mod</c> because <c>%</c> begins a binary number, so the
+    /// text is needed to tell them from other directives.
     /// </summary>
     /// <param name="kind">The kind of the token.</param>
     /// <param name="text">The token's text, which distinguishes one directive from another.</param>
@@ -470,6 +471,7 @@ public static class SyntaxFacts
         SyntaxKind.Plus or SyntaxKind.Minus => 4,
         SyntaxKind.LessLess or SyntaxKind.GreaterGreater => 5,
         SyntaxKind.Less or SyntaxKind.LessEquals or SyntaxKind.Greater or SyntaxKind.GreaterEquals => 6,
+        SyntaxKind.Directive when text.Equals(".in", StringComparison.OrdinalIgnoreCase) => 6,
         SyntaxKind.EqualsEquals or SyntaxKind.BangEquals => 7,
         SyntaxKind.Ampersand => 8,
         SyntaxKind.Caret => 9,

@@ -149,7 +149,8 @@ public sealed class TextMateGrammarTests
             SyntaxKind.CheapLocal => TextMateGrammar.CheapLocal,
             SyntaxKind.Mnemonic => TextMateGrammar.Mnemonic,
             SyntaxKind.Register => TextMateGrammar.Register,
-            SyntaxKind.Directive when token.Text.Equals(".mod", StringComparison.OrdinalIgnoreCase) => TextMateGrammar.OperatorWord,
+            SyntaxKind.Directive when token.Text.Equals(".mod", StringComparison.OrdinalIgnoreCase)
+                || token.Text.Equals(".in", StringComparison.OrdinalIgnoreCase) => TextMateGrammar.OperatorWord,
             SyntaxKind.Directive => TextMateGrammar.Directive,
             SyntaxKind.NumberLiteral => TextMateGrammar.Number,
             SyntaxKind.CharacterLiteral => TextMateGrammar.Character,

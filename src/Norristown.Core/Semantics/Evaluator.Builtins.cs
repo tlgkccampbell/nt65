@@ -17,13 +17,6 @@ namespace Norristown.Semantics;
 internal sealed partial class Evaluator
 {
     /// <summary>
-    /// Returns the arguments of a <c>.select</c> call, or null when <paramref name="node"/> is not
-    /// a <c>.select</c> call.
-    /// </summary>
-    internal static IReadOnlyList<SyntaxNode>? SelectArguments(SyntaxNode node) =>
-        node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Select } call ? call.Arguments.Arguments : null;
-
-    /// <summary>
     /// Determines whether a built-in is one that the configuration alone can evaluate, which
     /// <see cref="BuiltinFunction.Arithmetic"/> records.
     /// </summary>
@@ -65,6 +58,8 @@ internal sealed partial class Evaluator
         {
             case BuiltinKind.Select:
                 return Select(given);
+            case BuiltinKind.Switch:
+                return Switch(given);
             case BuiltinKind.Mode or BuiltinKind.Empty:
                 return AboutAnArgument(kind, given);
 
@@ -118,6 +113,7 @@ internal sealed partial class Evaluator
         Report(function, kind switch
         {
             BuiltinKind.Select => Catalogue.SelectArguments,
+            BuiltinKind.Switch => Catalogue.SwitchArguments,
             BuiltinKind.Target => Catalogue.TargetArgument.Message(CpuNames.Listed),
             BuiltinKind.Has => Catalogue.HasArgument,
             _ => Catalogue.BuiltinArguments.Message(builtin.Name, builtin.Takes!),
@@ -453,6 +449,8 @@ internal sealed partial class Evaluator
                 return Value.Unknown;
             return Evaluate(given[0]).AsNumber() is { } holds ? Evaluate(given[holds != 0 ? 1 : 2]) : Value.Unknown;
         }
+        if (kind == BuiltinKind.Switch)
+            return Fits(kind, function, given) ? Switch(given) : Value.Unknown;
 
         // What the function asks about is checked before its arguments are read, so a
         // `.sizeof(Point)` is one mistake, not that plus a `Point` that is not a define.
@@ -494,16 +492,6 @@ internal sealed partial class Evaluator
         using (Enter(context with { Choosing = context.Choosing + 1 }))
             return Evaluate(arguments[holds != 0 ? 1 : 2]);
     }
-
-    /// <summary>
-    /// Returns the value a <c>.select</c> call chooses, or null when <paramref name="node"/> is
-    /// not a <c>.select</c> call or its condition is not a constant.
-    /// </summary>
-    private SyntaxNode? ChosenBy(SyntaxNode node) =>
-        SelectArguments(node) is [var condition, var ifHolds, var otherwise]
-            && Evaluate(condition).AsNumber() is { } holds
-            ? holds != 0 ? ifHolds : otherwise
-            : null;
 
     /// <summary>
     /// Reports a symbol that <paramref name="function"/> cannot measure, and returns whether it

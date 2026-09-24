@@ -1273,6 +1273,62 @@ public static class Catalogue
         "Which of the two values a `.select` gives depends on its condition, so the condition has to be known "
             + "while nt65 builds, not only at link time or at run time.");
 
+    internal static DiagnosticDescriptor SwitchArguments { get; } = Entry(
+        Area.Values,
+        "switch-arguments",
+        Severity.Error,
+        "`.switch` takes a value, then a set and a result for each arm, and may end with a result for when no set "
+            + "holds the value: `.switch(v, [a, b], x, [c], y, otherwise)`",
+        "`.switch(v, [a, b], x, [c], y, otherwise)` is `x` when `v` is `a` or `b`, `y` when it is `c`, and `otherwise` "
+            + "when it is none of them. It takes a value and at least one arm.");
+
+    internal static DiagnosticDescriptor SwitchValueNotConstant { get; } = Entry(
+        Area.Values,
+        "switch-value-not-constant",
+        Severity.Error,
+        "the value a `.switch` tests must be a constant",
+        "Which result a `.switch` gives depends on the value it tests, so that value has to be known while nt65 "
+            + "builds, not only at link time or at run time.");
+
+    internal static DiagnosticDescriptor SwitchSetNotConstant { get; } = Entry(
+        Area.Values,
+        "switch-set-not-constant",
+        Severity.Error,
+        "the values in the sets of a `.switch` must be constants",
+        "A `.switch` chooses its result while nt65 builds, so every value its sets are compared with, up to the arm "
+            + "that holds the value it tests, has to be known then.");
+
+    internal static DiagnosticDescriptor SwitchNoArm { get; } = Entry(
+        Area.Values,
+        "switch-no-arm",
+        Severity.Error,
+        "no arm of this `.switch` holds {0}, and it has no result for otherwise",
+        "A `.switch` without a last result for otherwise must have an arm for every value it is given. Add the "
+            + "value to an arm's set, or end the `.switch` with a result for the values no arm holds.");
+
+    internal static DiagnosticDescriptor SetExpected { get; } = Entry(
+        Area.Values,
+        "set-expected",
+        Severity.Error,
+        "{0} takes a set in brackets, such as `[a, b, c..d]`, or the name of a `.list`",
+        "A set is written as values and ranges in brackets, `[Mode::zpx, $00..$3f]`, or is a `.list` whose items "
+            + "are its values.");
+
+    internal static DiagnosticDescriptor SetOutOfPlace { get; } = Entry(
+        Area.Values,
+        "set-out-of-place",
+        Severity.Error,
+        "a set in brackets stands only after `.in` or as an arm of `.switch`",
+        "A set has no value of its own. `v .in [a, b]` asks whether it holds `v`, and `.switch` chooses a result by "
+            + "the first of its sets that holds a value.");
+
+    internal static DiagnosticDescriptor SetItemIsText { get; } = Entry(
+        Area.Values,
+        "set-item-is-text",
+        Severity.Error,
+        "a set holds numbers and names, not text",
+        "`.in` and `.switch` compare numbers, and the words a `one(...)` parameter holds. Text is not compared.");
+
     internal static DiagnosticDescriptor CpuUnderACondition { get; } = Entry(
         Area.Values,
         "cpu-under-a-condition",

@@ -473,7 +473,7 @@ internal sealed partial class Evaluator
         {
             case ParenthesizedExpressionSyntax parenthesized:
                 return BytesIn(parenthesized.Expression);
-            case CallExpressionSyntax when SelectArguments(operand) is not null:
+            case CallExpressionSyntax when ChoiceArguments(operand) is not null:
                 return ChosenBy(operand) is { } chosen ? BytesIn(chosen) : null;
             case CallExpressionSyntax { BuiltinKind: BuiltinKind.Strsub or BuiltinKind.Strcat }:
             case CallExpressionSyntax { Callee: { } callee } when SymbolOf(callee) is { Kind: SymbolKind.Func }:

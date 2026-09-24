@@ -77,6 +77,12 @@ public enum BuiltinKind
     /// <summary><c>.select(c, a, b)</c>: one of two values, chosen by a constant.</summary>
     Select,
 
+    /// <summary>
+    /// <c>.switch(v, [set], value, ..., otherwise)</c>: the value of the first arm whose set holds
+    /// a constant.
+    /// </summary>
+    Switch,
+
     /// <summary><c>.sqrt(n)</c>: a whole square root.</summary>
     Sqrt,
 

@@ -23,7 +23,7 @@
           "name": "constant.character.nt65"
         },
         {
-          "match": "(?i)\\.mod\\b",
+          "match": "(?i)\\.(?:mod|in)\\b",
           "name": "keyword.operator.word.nt65"
         },
         {

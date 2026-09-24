@@ -1,0 +1,28 @@
+; The guide's sets: `.switch` over an enum, and `.in` on an address the linker places.
+.module sets
+
+.cpu 6502
+
+.enum Mode {
+    imp
+    acc
+    imm
+    abs
+    absx
+    ind
+}
+
+.segment CODE
+.proc main {
+    rts
+}
+
+.func operand_size(m) = .switch(m, [Mode::imp, Mode::acc], 0, [Mode::abs..Mode::ind], 2, 1)
+.assert main .in [$8000..$ffff], "main is in ROM"
+
+.segment RODATA
+.data sizes: .byte[] {
+    .each Mode, m {
+        operand_size(m)
+    }
+}

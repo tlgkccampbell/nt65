@@ -2199,7 +2199,7 @@ Operators and precedence, highest first:
 | 3 | `*` `/` `.mod` |
 | 4 | `+` `-` |
 | 5 | `<<` `>>` |
-| 6 | `<` `<=` `>` `>=` |
+| 6 | `<` `<=` `>` `>=` `.in` |
 | 7 | `==` `!=` |
 | 8 | `&` |
 | 9 | `^` (xor) |
@@ -2208,8 +2208,9 @@ Operators and precedence, highest first:
 | 12 | `^^` |
 | 13 | `\|\|` |
 
-This is C's order, with `.mod` in place of `%` (which begins a binary number) and `^^`
-for logical exclusive or. `=` only defines; equality is `==` and `!=`.
+This is C's order, with `.mod` in place of `%` (which begins a binary number), `^^` for
+logical exclusive or, and `.in` beside the comparisons (below). `=` only defines; equality is
+`==` and `!=`.
 
 Where the order is easy to misread, parentheses are required:
 
@@ -2294,6 +2295,26 @@ export's size.
 ```nt65
 COLUMNS = .select(WIDE, 80, 40)
 .func clamp(v) = .select(v > 255, 255, v)
+```
+
+**Sets.** A set is values and ranges in brackets, `[Mode::zpx, Mode::absx]` or
+`[$00..$3f, $80]`, written as `mirrors` writes banks, or the name of a `.list`, whose items are
+its values. A set has no value of its own, so it stands only in the two places that test one,
+and anywhere else it is an error.
+
+- **`v .in set`** is 1 when the set holds `v` and 0 when it does not. It binds as the
+  comparisons do. A word, such as a `one(...)` parameter's, is compared with the bare name of
+  each item, as `==` compares it. Where `v` is an address only the linker places, as in
+  `.assert main .in [$8000..$ffff]`, the output writes ca65's comparisons, one for each item.
+- **`.switch(v, set, result, ..., otherwise)`** is the result after the first set that holds
+  `v`, and `otherwise` when none does. `otherwise` may be left out, and then a value that no set
+  holds is an error, which is how a `.switch` over an enum says it covers every member. `v` must
+  be a constant. Like `.select`, it reads only the result it chooses, and no set after the one
+  that holds `v`, so those may name what this build does not declare.
+
+```nt65
+.func closing(m) = .switch(m, [Mode::zpx, Mode::absx], ",X", [Mode::zpy, Mode::absy], ",Y", "")
+FAST = SPEED .in [2, 4..8]
 ```
 
 **Functions.** `.func` declares a pure expression function, which is what a function-like
@@ -4719,13 +4740,15 @@ unary       := ('+' | '-' | '~' | '!' | '<' | '>' | '^')* primary
 primary     := number | char | string | cpu-name | '*' | '(' expr ')'
              | path ('(' (expr (',' expr)*)? ')')?    ; a charmap applied, or a .func call
              | builtin '(' (expr (',' expr)*)? ')'
+             | '[' (range (',' range)*)? ']'           ; a set: after .in, or a .switch arm
+range       := expr ('..' expr)?
 binop       := '*' | '/' | '.mod' | '+' | '-' | '<<' | '>>' | '<' | '<=' | '>' | '>='
-             | '==' | '!=' | '&' | '^' | '|' | '&&' | '^^' | '||'
+             | '.in' | '==' | '!=' | '&' | '^' | '|' | '&&' | '^^' | '||'
 builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.sizeof'
              | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.strsub' | '.strcat'
              | '.min' | '.max'
              | '.sqrt' | '.muldiv' | '.sin' | '.cos' | '.mincycles' | '.maxcycles'
-             | '.addrsize' | '.target' | '.defined' | '.has' | '.select'
+             | '.addrsize' | '.target' | '.defined' | '.has' | '.select' | '.switch'
              | '.loadof' | '.runof'                     ; of a segment
              | '.mode' | '.byteof' | '.exprof' | '.empty' ; the last four in macro bodies
 ```

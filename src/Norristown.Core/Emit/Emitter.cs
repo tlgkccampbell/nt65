@@ -1150,7 +1150,10 @@ public sealed class Emitter
         {
             case ParenthesizedExpressionSyntax parenthesized:
                 return "(" + Rendered(parenthesized.Expression, comments) + ")";
-            case BinaryExpressionSyntax binary:
+            case BinaryExpressionSyntax binary when Evaluator.IsIn(binary.OperatorToken)
+                && model.ValueOf(binary, context.Expansion).AsNumber() is null:
+                return Compared(binary, comments) ?? binary.GetText().Trim();
+            case BinaryExpressionSyntax binary when !Evaluator.IsIn(binary.OperatorToken):
                 return $"({Rendered(binary.Left, comments)} {TokenRewriter.Ca65Operator(binary.OperatorToken)} {Rendered(binary.Right, comments)})";
             case UnaryExpressionSyntax unary:
                 return $"({unary.OperatorToken.Text}{Rendered(unary.Operand, comments)})";
@@ -1165,6 +1168,61 @@ public sealed class Emitter
         var rewriter = new TokenRewriter();
         Substitute(node, rewriter, nested: false);
         return rewriter.Inline(node, comments);
+    }
+
+    /// <summary>
+    /// Writes <c>value .in set</c> as its value, 1 or 0, where nt65 knows it. Where it does not,
+    /// because the value is an address that only the linker places, it is written as ca65's
+    /// comparisons, one for each item of the set.
+    /// </summary>
+    private void Membership(BinaryExpressionSyntax binary, TokenRewriter rewriter)
+    {
+        if (model.ValueOf(binary, context.Expansion).AsNumber() is { } value)
+        {
+            rewriter.Replace(binary, Constant(value));
+            return;
+        }
+        if (Compared(binary, rewriter.Comments) is not { } compared)
+        {
+            NotTranspiled(binary);
+            return;
+        }
+
+        // A parenthesis first in an operand would read as indirection, which a unary `+` prevents.
+        rewriter.Replace(binary, "+" + compared);
+    }
+
+    /// <summary>
+    /// Returns <c>value .in set</c> as ca65's comparisons, joined with <c>||</c>, or null when the
+    /// set is a list with an item whose value nt65 does not know. A list's items are written as
+    /// their values, since their names belong to the file that declares the list.
+    /// </summary>
+    private string? Compared(BinaryExpressionSyntax binary, List<string>? comments)
+    {
+        var value = Rendered(binary.Left, comments);
+        var tests = new List<string>();
+        switch (binary.Right)
+        {
+            case SetExpressionSyntax set:
+                foreach (var range in set.Items)
+                {
+                    tests.Add(range.Last is { } last
+                        ? $"(({value} >= {Rendered(range.First, comments)}) && ({value} <= {Rendered(last, comments)}))"
+                        : $"({value} = {Rendered(range.First, comments)})");
+                }
+                break;
+            case NameExpressionSyntax name when model.SymbolOf(name, context.Expansion) is { Kind: SymbolKind.List } list:
+                foreach (var item in list.Items)
+                {
+                    if (model.ValueOf(item).AsNumber() is not { } known)
+                        return null;
+                    tests.Add($"({value} = {Constant(known)})");
+                }
+                break;
+            default:
+                return null;
+        }
+        return tests.Count == 0 ? "0" : "(" + string.Join(" || ", tests) + ")";
     }
 
     /// <summary>
@@ -1551,6 +1609,10 @@ public sealed class Emitter
 
             case CallExpressionSyntax call:
                 Applied(call, rewriter);
+                return;
+
+            case BinaryExpressionSyntax binary when Evaluator.IsIn(binary.OperatorToken):
+                Membership(binary, rewriter);
                 return;
 
             // `wdm #n` is written as its bytes, which is what it is to every processor but the
@@ -1943,13 +2005,12 @@ public sealed class Emitter
                 return;
             }
 
-            // An address `.select` chooses is written as the value it chose, which is all ca65 sees.
-            if (Worth(call).AsNumber() is null
-                && Evaluator.SelectArguments(call) is [var condition, var ifHolds, var otherwise]
-                && model.ValueOf(condition, context.Expansion).AsNumber() is { } holds)
+            // An address `.select` or `.switch` chooses is written as the value it chose, which is
+            // all ca65 sees.
+            if (Worth(call).AsNumber() is null && model.ChosenBy(call, context.Expansion) is { } choice)
             {
                 // A parenthesis first in an operand would read as indirection, which a unary `+` prevents.
-                var chosen = Rendered(holds != 0 ? ifHolds : otherwise, rewriter.Comments);
+                var chosen = Rendered(choice, rewriter.Comments);
                 rewriter.Replace(call, chosen.StartsWith('(') ? "+" + chosen : chosen);
                 return;
             }

@@ -61,7 +61,7 @@ internal sealed partial class Parser
             if (Kind == SyntaxKind.OpenBracket)
             {
                 var openBracket = Advance();
-                var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseBankRange) : null;
+                var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseRange) : null;
                 var closeBracket = Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`"));
                 if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
                     Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));

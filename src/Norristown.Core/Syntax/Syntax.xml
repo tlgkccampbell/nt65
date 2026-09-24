@@ -189,31 +189,6 @@
     </Field>
   </Node>
 
-  <Node Name="BankRangeSyntax" Base="SyntaxNode">
-    <Kind Name="BankRange"/>
-    <TypeComment>
-      <summary>
-        Represents one bank, such as <c>$80</c>, or a range of banks, such as <c>$00..$3f</c>.
-      </summary>
-    </TypeComment>
-    <Field Name="First" Type="ExpressionSyntax">
-      <PropertyComment>
-        <summary>Gets the bank, or the first bank of the range.</summary>
-      </PropertyComment>
-    </Field>
-    <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
-      <PropertyComment>
-        <summary>Gets the <c>..</c> token, or null.</summary>
-      </PropertyComment>
-      <Kind Name="DotDot"/>
-    </Field>
-    <Field Name="Last" Type="ExpressionSyntax" Optional="true">
-      <PropertyComment>
-        <summary>Gets the last bank of the range, or null.</summary>
-      </PropertyComment>
-    </Field>
-  </Node>
-
   <Node Name="BinaryExpressionSyntax" Base="ExpressionSyntax">
     <Kind Name="BinaryExpression"/>
     <TypeComment>
@@ -2126,6 +2101,32 @@
     </Field>
   </Node>
 
+  <Node Name="RangeSyntax" Base="SyntaxNode">
+    <Kind Name="Range"/>
+    <TypeComment>
+      <summary>
+        Represents one value, such as <c>$80</c>, or a range of values, such as <c>$00..$3f</c>, in
+        a set of banks or in a set of values that <c>.in</c> and <c>.switch</c> test.
+      </summary>
+    </TypeComment>
+    <Field Name="First" Type="ExpressionSyntax">
+      <PropertyComment>
+        <summary>Gets the value, or the first value of the range.</summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="DotDotToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>..</c> token, or null.</summary>
+      </PropertyComment>
+      <Kind Name="DotDot"/>
+    </Field>
+    <Field Name="Last" Type="ExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>Gets the last value of the range, or null.</summary>
+      </PropertyComment>
+    </Field>
+  </Node>
+
   <Node Name="RecordValuesSyntax" Base="SyntaxNode">
     <Kind Name="RecordValues"/>
     <TypeComment>
@@ -2255,7 +2256,7 @@
       </PropertyComment>
       <Kind Name="OpenBracket"/>
     </Field>
-    <Field Name="Ranges" Type="SeparatedSyntaxList&lt;BankRangeSyntax&gt;">
+    <Field Name="Ranges" Type="SeparatedSyntaxList&lt;RangeSyntax&gt;">
       <PropertyComment>
         <summary>Gets the banks of a <c>mirrors</c>.</summary>
       </PropertyComment>
@@ -2350,6 +2351,33 @@
       <Kind Name="StringLiteral"/>
     </Field>
   </AbstractNode>
+
+  <Node Name="SetExpressionSyntax" Base="ExpressionSyntax">
+    <Kind Name="SetExpression"/>
+    <TypeComment>
+      <summary>
+        Represents a set of values, such as <c>[Mode::zpx, Mode::absx]</c> or <c>[$00..$3f, $80]</c>,
+        which stands on the right of <c>.in</c> and as an arm of <c>.switch</c>.
+      </summary>
+    </TypeComment>
+    <Field Name="OpenBracketToken" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>Gets the <c>[</c> token.</summary>
+      </PropertyComment>
+      <Kind Name="OpenBracket"/>
+    </Field>
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;RangeSyntax&gt;">
+      <PropertyComment>
+        <summary>Gets the values and ranges in the set.</summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="CloseBracketToken" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>Gets the <c>]</c> token.</summary>
+      </PropertyComment>
+      <Kind Name="CloseBracket"/>
+    </Field>
+  </Node>
 
   <Node Name="SignatureDeclarationSyntax" Base="StatementSyntax">
     <Kind Name="SignatureDeclaration"/>
@@ -2490,7 +2518,7 @@
       </PropertyComment>
       <Kind Name="OpenBracket"/>
     </Field>
-    <Field Name="Ranges" Type="SeparatedSyntaxList&lt;BankRangeSyntax&gt;">
+    <Field Name="Ranges" Type="SeparatedSyntaxList&lt;RangeSyntax&gt;">
       <PropertyComment>
         <summary>Gets the banks, each a single bank or a range of banks.</summary>
       </PropertyComment>

@@ -24,7 +24,7 @@ public enum SyntaxKind : byte
     /// <summary>A register, which is <c>a</c>, <c>x</c>, <c>y</c> or <c>s</c>. Case-insensitive.</summary>
     Register,
 
-    /// <summary>A <c>.name</c> directive, including the <c>.mod</c> operator.</summary>
+    /// <summary>A <c>.name</c> directive, including the <c>.mod</c> and <c>.in</c> operators.</summary>
     Directive,
 
     /// <summary>A number, such as <c>$1F</c>, <c>%1010</c> or <c>255</c>.</summary>
@@ -264,8 +264,11 @@ public enum SyntaxKind : byte
     /// </summary>
     SegmentAttribute,
 
-    /// <summary>One bank, <c>$80</c>, or a range of them, <c>$00..$3f</c>, in a segment's <c>mirrors</c>.</summary>
-    BankRange,
+    /// <summary>
+    /// One value, <c>$80</c>, or a range of them, <c>$00..$3f</c>, in a set of banks or in a set
+    /// of values.
+    /// </summary>
+    Range,
 
     /// <summary><c>.segment NAME {</c>, the line opening a segment block.</summary>
     SegmentBlock,
@@ -474,6 +477,9 @@ public enum SyntaxKind : byte
 
     /// <summary>An expression in parentheses.</summary>
     ParenthesizedExpression,
+
+    /// <summary>A set of values in brackets, which <c>.in</c> and <c>.switch</c> test.</summary>
+    SetExpression,
 
     /// <summary>A number.</summary>
     NumberExpression,

@@ -4,7 +4,7 @@
 
 .cpu 65816
 
-.export reloc, irq, module, mixed, greeting, letter, COLUMNS, clamp, red
+.export reloc, irq, module, mixed, greeting, letter, COLUMNS, clamp, red, closing, FAST
 
 WIDE = 1
 
@@ -82,6 +82,17 @@ WIDE = 1
 
 COLUMNS = .select(WIDE, 80, 40)
 .func clamp(v) = .select(v > 255, 255, v)
+
+.enum Mode {
+    zpx
+    absx
+    zpy
+    absy
+}
+SPEED = 5
+
+.func closing(m) = .switch(m, [Mode::zpx, Mode::absx], ",X", [Mode::zpy, Mode::absy], ",Y", "")
+FAST = SPEED .in [2, 4..8]
 
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
 

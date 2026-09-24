@@ -164,6 +164,20 @@ internal sealed partial class Evaluator
         }).Evaluate(expression);
 
     /// <summary>
+    /// Returns the value a <c>.select</c> or a <c>.switch</c> chooses once every symbol has been
+    /// evaluated, or null when <paramref name="node"/> is neither or what decides the choice is not
+    /// a constant. Nothing is reported from here.
+    /// </summary>
+    public static SyntaxNode? ChosenOf(
+        SyntaxNode node,
+        SegmentTable segments,
+        IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved,
+        IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
+        Configuration? configuration = null) =>
+        Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound)) { Configuration = configuration })
+            .ChosenBy(node);
+
+    /// <summary>
     /// Creates an evaluator for the conditions of a build, which are evaluated before any
     /// declaration exists. Nothing resolves in a condition, so the evaluator carries no symbols
     /// at all, and <paramref name="conditions"/> decides what a name and a call may mean there.
@@ -321,6 +335,14 @@ internal sealed partial class Evaluator
 
             case UnaryExpressionSyntax unary:
                 return Unary(unary.OperatorToken, Evaluate(unary.Operand));
+
+            case BinaryExpressionSyntax binary when IsIn(binary.OperatorToken):
+                return In(binary);
+
+            // A set stands only where `.in` and `.switch` read it as one, and never has a value.
+            case SetExpressionSyntax set:
+                Report(set, Catalogue.SetOutOfPlace);
+                return Value.Unknown;
 
             case BinaryExpressionSyntax binary:
                 // `&&` and `||` skip the right operand once the left decides the result, so

@@ -145,7 +145,7 @@ internal static class TextMateGrammar
             new TextMateRule(Match: """
                 '(?:[^'\\]|\\.)*'?
                 """, Name: Character),
-            new TextMateRule(Match: @"(?i)\.mod\b", Name: OperatorWord),
+            new TextMateRule(Match: @"(?i)\.(?:mod|in)\b", Name: OperatorWord),
 
             // Blocks, each opened by a directive on its line.
             TextMateRule.Block($@"(?i)(\.enum)(?:\s+({Word}))?\s*(\{{)", @"\}", [Directive, Enum],

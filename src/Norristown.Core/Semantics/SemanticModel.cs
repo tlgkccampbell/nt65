@@ -293,6 +293,14 @@ public sealed class SemanticModel
         Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans, cycles, Configuration);
 
     /// <summary>
+    /// Returns the value a <c>.select</c> or a <c>.switch</c> chooses, or null when
+    /// <paramref name="node"/> is neither or what decides the choice is not a constant.
+    /// <paramref name="on"/> is the expansion the node is read in.
+    /// </summary>
+    public SyntaxNode? ChosenBy(SyntaxNode node, Expansion? on = null) =>
+        Evaluator.ChosenOf(node, Segments, resolved, BindingsOf(on), Configuration);
+
+    /// <summary>
     /// Returns the symbol a name refers to, or null when it names none. <paramref name="on"/> is
     /// the iteration the name is in, for a path that ends in a repetition's name.
     /// </summary>

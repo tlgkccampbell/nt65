@@ -1629,9 +1629,9 @@ internal sealed partial class Binder
             }
         }
 
-        // `.select` evaluates only the value its condition chooses, so only that value's names
+        // `.select` and `.switch` evaluate only the value they choose, so only that value's names
         // have to resolve, and evaluation is what reports them.
-        if (Evaluator.SelectArguments(node) is { Count: > 0 } selected)
+        if (Evaluator.ChoiceArguments(node) is { Count: > 0 } selected)
         {
             CollectUses(selected[0], into, words, chosen);
             foreach (var value in selected.Skip(1))
@@ -2124,7 +2124,7 @@ internal sealed partial class Binder
                     if (!attribute.Name.Text.Equals("space", StringComparison.OrdinalIgnoreCase))
                         binder.CollectUses(attribute.Value);
                 }
-                else if (item is BankRangeSyntax range)
+                else if (item is RangeSyntax range)
                 {
                     binder.CollectUses(range.First);
                     binder.CollectUses(range.Last);

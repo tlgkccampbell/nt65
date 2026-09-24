@@ -1,0 +1,49 @@
+; `value .in set` is 1 when the set holds the value and 0 when it does not, and
+; `.switch(value, set, result, ..., otherwise)` is the result after the first set that holds the
+; value. A set is values and ranges in brackets, or the name of a list.
+.module main
+
+.cpu 6502
+
+.enum Mode {
+    imp
+    zpx
+    absx
+    zpy
+    absy
+    ind
+}
+
+.list by_x {
+    Mode::zpx
+    Mode::absx
+}
+
+; A `.switch` with no last result must have an arm for every value it is given, and only the
+; arm it chooses is read.
+.func closing(m) = .switch(m, by_x, ",X", [Mode::zpy, Mode::absy], ",Y", [Mode::ind], ")", "")
+.func size(m) = .switch(m, [Mode::imp], 0, [Mode::zpx, Mode::zpy], 1, [Mode::absx..Mode::ind], 2)
+.func pick(n) = .switch(n, [1], 10, [2], NOT_IN_THIS_BUILD, 30)
+
+HIGH = 200
+IS_HIGH = HIGH .in [128..255]
+BY_X = Mode::absx .in by_x
+
+.segment RODATA
+.data sizes: .byte[] {
+    .each Mode, m {
+        size(m)
+    }
+}
+.data text:  .byte closing(Mode::zpx), closing(Mode::ind), closing(Mode::imp), 0
+.data flags: .byte IS_HIGH, BY_X, 3 .in [1, 2], Mode::zpy .in by_x, pick(1), pick(5)
+
+.segment CODE
+.export .proc main {
+    lda #.switch(HIGH, [0..99], 1, [100..199], 2, 3)
+    ldx #Mode::zpx .in [Mode::zpx, Mode::absx]
+    rts
+}
+
+; An address is compared when the program is linked.
+.assert main .in [$0200..$ffff], "main is above the stack"

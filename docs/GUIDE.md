@@ -604,6 +604,17 @@ evaluated, so the other may name something this build does not declare:
 COLUMNS = .select(WIDE, 80, 40)
 ```
 
+**Sets.** `v .in [a, b, c..d]` is 1 when the set holds `v` and 0 when it does not, and
+`.switch(v, set, result, ..., otherwise)` is the result after the first set that holds `v`. A
+set is values and ranges in brackets, or the name of a `.list`. `.switch` reads only the result
+it chooses, as `.select` does, and a `.switch` with no `otherwise` is an error for a value no set
+holds:
+
+```nt65
+.func operand_size(m) = .switch(m, [Mode::imp, Mode::acc], 0, [Mode::abs..Mode::ind], 2, 1)
+.assert main .in [$8000..$ffff], "main is in ROM"
+```
+
 **CPU tests.** `.if .has(phx)` holds on every CPU that has the `phx` instruction, and
 `.target(65c02)` names one CPU exactly. The CPU is part of the configuration.
 
@@ -634,6 +645,7 @@ so nothing in the output depends on ca65's own table.
 |---|---|
 | `a = b`, `a <> b` in a condition | `a == b`, `a != b` |
 | `a .mod b` | `a .mod b` (`%` starts a binary number) |
+| `a = 1 .or a = 2 .or a = 3` | `a .in [1..3]` |
 | `a .xor b` | `a ^^ b` |
 | `.bitand`, `.bitor`, `.bitxor`, `.bitnot` | `&`, `\|`, `^`, `~` |
 | `.and`, `.or`, `.not` | `&&`, `\|\|`, `!` |
@@ -677,7 +689,7 @@ SCALE = 127
 
 The other built-in functions are `.lobyte`, `.hibyte`, `.bankbyte`, `.loword`, `.hiword`,
 `.min`, `.max`, `.addrsize` (1, 2 or 3 for an address's size), `.defined`, `.has`,
-`.target`, `.select`, the size functions of [Data has a type](#data-has-a-type), the text
+`.target`, `.select`, `.switch`, the size functions of [Data has a type](#data-has-a-type), the text
 functions of [Text](#text), and `.mincycles` and `.maxcycles`, which are in [Cycle counts and
 branch range](#cycle-counts-and-branch-range).
 

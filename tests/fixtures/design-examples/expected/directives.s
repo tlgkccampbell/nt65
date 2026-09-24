@@ -16,6 +16,7 @@
 .export directives__greeting
 .export directives__letter
 .exportzp directives__COLUMNS
+.exportzp directives__FAST
 .export directives__red
 
 WIDE = 1
@@ -85,5 +86,14 @@ directives__greeting: .byte $08, $05, $0c, $0c, $0f, $20, $17, $0f, $12, $0c, $0
 directives__letter:   .byte $01     ; screen('A')
 
 directives__COLUMNS = $50
+
+Mode__zpx = $00
+Mode__absx = $01
+Mode__zpy = $02
+Mode__absy = $03
+
+SPEED = 5
+
+directives__FAST = $01
 
 directives__red: .word $1f          ; rgb15(31, 0, 0)

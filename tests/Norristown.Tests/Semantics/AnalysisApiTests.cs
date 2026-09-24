@@ -198,6 +198,7 @@ public sealed class AnalysisApiTests
         Assert.Equal(AddressSize.ZeroPage, model.AddressSizeOf(sizeof_));
         Assert.Equal(model.Symbols.First(symbol => symbol.Name == "Point"), model.SymbolOf(sizeof_.Arguments.Arguments[0]));
         Assert.Null(model.ItemsOf(sizeof_));
+        Assert.Null(model.ChosenBy(sizeof_));
 
         // A value with bytes of its own, and an operand nothing else would ever evaluate.
         var problems = new List<Diagnostic>();

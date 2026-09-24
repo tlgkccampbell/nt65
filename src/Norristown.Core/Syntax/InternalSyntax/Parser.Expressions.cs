@@ -71,6 +71,8 @@ internal sealed partial class Parser
                 return new CurrentAddressExpressionSyntax(Advance());
             case SyntaxKind.OpenParen:
                 return ParseParenthesized();
+            case SyntaxKind.OpenBracket:
+                return ParseSet();
             case SyntaxKind.Directive:
                 return ParseBuiltinCall();
             case SyntaxKind.Identifier or SyntaxKind.CheapLocal or SyntaxKind.ColonColon
@@ -91,6 +93,17 @@ internal sealed partial class Parser
         var expression = ParseExpression();
         return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message(
             "`)`")));
+    }
+
+    /// <summary>
+    /// Parses a set of values, such as <c>[Mode::zpx, Mode::absx]</c> or <c>[$00..$3f, $80]</c>.
+    /// Only <c>.in</c> and <c>.switch</c> take one, and the binder reports a set anywhere else.
+    /// </summary>
+    private ExpressionSyntax ParseSet()
+    {
+        var open = Advance();
+        var items = Kind is not SyntaxKind.CloseBracket && !AtEnd ? ParseSeparatedList(ParseRange) : null;
+        return new SetExpressionSyntax(open, items, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`")));
     }
 
     private ExpressionSyntax ParseBuiltinCall()

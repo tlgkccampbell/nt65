@@ -20,6 +20,8 @@ internal static class CallHelp
         {
             [BuiltinKind.Select] = (["condition", "chosen", "otherwise"],
                 "the second argument when the condition holds, and the third when it does not"),
+            [BuiltinKind.Switch] = (["value", "set", "result", "..."],
+                "the result after the first set that holds the value, or a last result when no set does"),
             [BuiltinKind.Strlen] = (["text"], "how many bytes the text is"),
             [BuiltinKind.Strat] = (["text", "index"], "the byte of the text at the index, counting from 0"),
             [BuiltinKind.Strsub] = (["text", "start", "count"], "`count` bytes of the text from `start`, counting from 0"),
@@ -52,8 +54,12 @@ internal static class CallHelp
                 // A built-in that takes any number of arguments marks the last one it names as
                 // active for every argument from there on.
                 var last = SyntaxFacts.Builtin(kind).MaxArguments is { } most ? most - 1 : parameters.Length - 2;
-                return Help($"{SyntaxFacts.TextOf(kind)}(", parameters, ")", builtin.Documentation,
-                    Math.Min(argument, last));
+                var active = Math.Min(argument, last);
+
+                // The arms of a `.switch` alternate between a set and a result.
+                if (kind == BuiltinKind.Switch && argument > 0)
+                    active = argument % 2 == 1 ? 1 : 2;
+                return Help($"{SyntaxFacts.TextOf(kind)}(", parameters, ")", builtin.Documentation, active);
             }
             if (open >= 2 && before[open - 1].Kind == SyntaxKind.Bang
                 && Completion.Callee(model, line, open - 1) is { Kind: SymbolKind.Macro } macro)

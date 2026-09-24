@@ -14,6 +14,9 @@ public sealed class SignatureHelpTests
         { "body", "    poke!(twice(|", "twice(n)", 0 },
         { "body", "    poke!(twice(1), |", "poke!(address: expr, value: const = 0)", 1 },
         { "top", "X = .select(1, 2, |", ".select(condition, chosen, otherwise)", 2 },
+        { "top", "X = .switch(1, |", ".switch(value, set, result, ...)", 1 },
+        { "top", "X = .switch(1, [1, 2], |", ".switch(value, set, result, ...)", 2 },
+        { "top", "X = .switch(1, [1], 2, [3..4], 5, |", ".switch(value, set, result, ...)", 1 },
         { "top", "X = .strsub(\"HELLO\", 1, |", ".strsub(text, start, count)", 2 },
         { "top", "X = .strcat(\"A\", 1, 2, |", ".strcat(part, ...)", 0 },
     };

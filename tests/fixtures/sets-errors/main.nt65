@@ -1,0 +1,24 @@
+; What `.in` and `.switch` refuse.
+.module main
+
+.cpu 6502
+
+.enum Mode {
+    imp
+    zpx
+}
+
+NOT_A_SET = 3 .in 4                             ;! error[set-expected]: `.in` takes a set in brackets, such as `[a, b, c..d]`, or the name of a `.list`
+ALONE = [1, 2]                                  ;! error[set-out-of-place]: a set in brackets stands only after `.in` or as an arm of `.switch`
+TEXT = 3 .in ["three"]                          ;! error[set-item-is-text]: a set holds numbers and names, not text
+NO_ARM = .switch(Mode::zpx, [Mode::imp], 1)     ;! error[switch-no-arm]: no arm of this `.switch` holds 1, and it has no result for otherwise
+SHORT = .switch(1, [1])                         ;! error[switch-arguments]: `.switch` takes a value, then a set and a result for each arm, and may end with a result for when no set holds the value: `.switch(v, [a, b], x, [c], y, otherwise)`
+
+.segment BSS
+.data where: .byte
+
+.segment CODE
+.export .proc main {
+    lda #.switch(where, [1], 1, 2)              ;! error[switch-value-not-constant]: the value a `.switch` tests must be a constant
+    rts
+}

@@ -93,7 +93,7 @@ internal sealed partial class Evaluator
                 widest = Widest(widest, SegmentSize(segment));
                 return;
             }
-            if (SelectArguments(node) is not null)
+            if (ChoiceArguments(node) is not null)
             {
                 if (ChosenBy(node) is { } chosen)
                     Walk(chosen);
@@ -125,7 +125,7 @@ internal sealed partial class Evaluator
             return true;
         if (node is NameExpressionSyntax name)
             return SymbolOf(name) is { IsAddress: true };
-        if (SelectArguments(node) is not null)
+        if (ChoiceArguments(node) is not null)
             return ChosenBy(node) is { } chosen && NamesAnAddress(chosen);
         foreach (var child in node.ChildNodes)
         {
