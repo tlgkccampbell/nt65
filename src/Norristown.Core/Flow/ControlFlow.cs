@@ -162,38 +162,17 @@ public sealed class ControlFlow
     /// </summary>
     private RoutineCost? Cost(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
     {
-        var held = Held(blocks, whole);
-        var part = 0;
-        var all = 0;
-        for (var i = 0; i < blocks.Count; i++)
-        {
-            if (held[i].Inside == 0)
-                continue;
-            if (held[i].Inside == held[i].Total)
-                all++;
-            else
-                part++;
-        }
+        if (ScopeShape.Of(blocks, whole) is not { } shape)
+            return null;
 
         // The scope lies inside one block, so nothing in it branches. What it costs is what its
         // statements cost, and the block runs every one of them.
-        if (part == 1 && all == 0)
-        {
-            var at = Array.FindIndex(held, block => block.Inside > 0);
-            return blocks[at].IsReached ? Straight(blocks[at], whole) : null;
-        }
-        if (part > 0 || all == 0)
-            return null;
-
-        var inside = new bool[blocks.Count];
-        for (var i = 0; i < blocks.Count; i++)
-            inside[i] = held[i].Inside > 0;
-        var entry = Array.FindIndex(inside, held => held);
-        if (!blocks[entry].IsReached || inside.All(held => held))
-            return null;
+        if (shape.IsStraight)
+            return Straight(blocks[shape.Entry], whole);
 
         // A branch into the middle of it means entering at the top is not the only way through,
         // so there is no single cost to give.
+        var (entry, inside) = (shape.Entry, shape.Inside);
         for (var i = 0; i < blocks.Count; i++)
         {
             if (inside[i] && i != entry && blocks[i].Predecessors.Any(from => !inside[from]))
@@ -201,31 +180,6 @@ public sealed class ControlFlow
         }
         var (minimum, maximum, ends) = Paths.Through(blocks, entry, at => inside[at], Paths.Costing);
         return minimum is null ? null : new RoutineCost(minimum, maximum, Calls(blocks, inside), ends);
-    }
-
-    /// <summary>
-    /// Returns how many of each block's statements lie inside <paramref name="whole"/>, and how
-    /// many it has. A statement in this file decides by its position whether the walk is inside
-    /// the span. A statement from an expansion counts as being wherever the call that expanded it
-    /// was, so the walk keeps the last answer over it.
-    /// </summary>
-    internal static (int Inside, int Total)[] Held(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
-    {
-        var held = new (int Inside, int Total)[blocks.Count];
-        var within = false;
-        for (var i = 0; i < blocks.Count; i++)
-        {
-            var inside = 0;
-            foreach (var step in blocks[i].Steps)
-            {
-                if (step.On is null)
-                    within = step.Statement.Position >= whole.Start && step.Statement.Position < whole.End;
-                if (within)
-                    inside++;
-            }
-            held[i] = (inside, blocks[i].Steps.Count);
-        }
-        return held;
     }
 
     /// <summary>
@@ -286,6 +240,33 @@ public sealed class ControlFlow
     /// </summary>
     private static bool Calls(IReadOnlyList<BasicBlock> blocks) =>
         blocks.Any(block => block.Calls.Count > 0 || block.RunsInto is not null || block.CallsUnknown);
+
+    /// <summary>
+    /// Returns the blocks that the state after <paramref name="block"/> flows on to, within one
+    /// routine. A call's edge is to the routine it calls, which is checked against its signature
+    /// rather than walked into, so after a call the state goes on only to the statement after it.
+    /// A jump to a routine's entry, the routine's own included, leaves this routine, because it
+    /// is a tail call.
+    /// </summary>
+    internal IEnumerable<int> Onward(IReadOnlyList<BasicBlock> blocks, BasicBlock block)
+    {
+        var calls = EndsInCall(block);
+        foreach (var edge in block.Successors)
+        {
+            if (edge.Kind == EdgeKind.Call || (calls && edge.Kind != EdgeKind.FallThrough))
+                continue;
+            if (edge.Kind != EdgeKind.FallThrough && blocks[edge.To].Label is { Signature: not null })
+                continue;
+            yield return edge.To;
+        }
+    }
+
+    /// <summary>
+    /// Returns whether <paramref name="block"/> ends in a call, made directly, through a pointer
+    /// or as a relative call.
+    /// </summary>
+    internal bool EndsInCall(BasicBlock block) =>
+        block.Steps.Count > 0 && (IsCall(block.Steps[^1].Statement) || RelativeCallAt(block.Steps[^1]) is not null);
 
     /// <summary>
     /// Returns the call a branch makes, for a branch that forms a relative call, or null for every

@@ -153,35 +153,18 @@ public static class RegisterKeeps
             if (!region.IsEntered || blocks.Count == 0)
                 return RoutineRegisters.Everything;
 
-            var reached = new RegisterState?[blocks.Count];
-            var pending = new SortedSet<int>();
-            reached[0] = RegisterState.Entered;
-            pending.Add(0);
-            Converge();
+            var solver = Solver(blocks, of, block => flow.Onward(blocks, block));
+            solver.Enter(0, RegisterState.Entered);
 
             // A label a `.state` declares may be jumped into from another routine, so the
             // registers there hold nothing this routine put in them. The stack there is what a
             // call to the routine leaves, which is empty. Code that jumps in has made none of
             // this routine's saves, so a save that the path above the label leaves on the stack
             // cannot be shown to be the one a pull below the label takes back.
-            foreach (var block in blocks)
-            {
-                if (!block.IsDeclared)
-                    continue;
-                RegisterState entered;
-                if (reached[block.Index] is not { } state)
-                    entered = RegisterState.Outside;
-                else if (outside.Reaches(block))
-                    entered = Entered(state, block, region.Routine);
-                else
-                    continue;
-                if (entered.Equals(reached[block.Index]))
-                    continue;
-                reached[block.Index] = entered;
-                pending.Add(block.Index);
-                Converge();
-            }
+            solver.EnterDeclared(
+                outside, RegisterState.Outside, (block, state) => Entered(state, block, region.Routine));
 
+            var reached = solver.Reached;
             var kept = Registers.All;
             var complete = true;
             var leaves = false;
@@ -225,27 +208,16 @@ public static class RegisterKeeps
             // A routine no path leaves never returns anything to a caller, so there is nothing
             // it can fail to keep. What it does to the registers matters to no one else.
             return leaves ? new RoutineRegisters(kept, complete) : RoutineRegisters.Everything;
-
-            void Converge()
-            {
-                while (pending.Count > 0)
-                {
-                    var index = pending.Min;
-                    pending.Remove(index);
-                    var after = Through(blocks[index], reached[index]!, of, null);
-                    foreach (var edge in Onward(blocks[index]))
-                    {
-                        var merged = RegisterState.Merge(reached[edge], after);
-                        if (merged.Equals(reached[edge]))
-                            continue;
-                        reached[edge] = merged;
-                        pending.Add(edge);
-                    }
-                }
-            }
-
-            IEnumerable<int> Onward(BasicBlock block) => FlowsTo(blocks, block);
         }
+
+        /// <summary>
+        /// Returns a solver that runs <paramref name="blocks"/> to a fixed point over what the
+        /// registers hold, with <paramref name="of"/> giving what each routine they call keeps.
+        /// </summary>
+        private Dataflow<RegisterState> Solver(
+            IReadOnlyList<BasicBlock> blocks, Func<Symbol, RoutineRegisters> of,
+            Func<BasicBlock, IEnumerable<int>> successors) =>
+            new(blocks, (block, state) => Through(block, state, of, null), RegisterState.Merge, successors);
 
         /// <summary>
         /// Returns the state at a declared label that can also be entered from outside the routine.
@@ -264,24 +236,6 @@ public static class RegisterKeeps
                     ? OutsideEntries.UnknownStack(block.Label!, routine)
                     : reached.WhyStack,
             };
-        }
-
-        /// <summary>
-        /// Returns the blocks the state after a block flows to, as the 65816's analysis treats them.
-        /// After a call, flow goes on at the statement after it, and a jump to a routine's entry
-        /// leaves this routine.
-        /// </summary>
-        private IEnumerable<int> FlowsTo(IReadOnlyList<BasicBlock> blocks, BasicBlock block)
-        {
-            var calls = Ends(block).Calls;
-            foreach (var edge in block.Successors)
-            {
-                if (edge.Kind == EdgeKind.Call || (calls && edge.Kind != EdgeKind.FallThrough))
-                    continue;
-                if (edge.Kind != EdgeKind.FallThrough && blocks[edge.To].Label is { Signature: not null })
-                    continue;
-                yield return edge.To;
-            }
         }
 
         /// <summary>
@@ -311,52 +265,18 @@ public static class RegisterKeeps
         private RoutineRegisters? Within(FlowRegion region, TextSpan whole, Func<Symbol, RoutineRegisters> of)
         {
             var blocks = region.Blocks;
-            var held = ControlFlow.Held(blocks, whole);
-            var inside = new bool[blocks.Count];
-            var all = 0;
-            var part = 0;
-            for (var i = 0; i < blocks.Count; i++)
-            {
-                inside[i] = held[i].Inside > 0;
-                if (held[i].Inside == 0)
-                    continue;
-                if (held[i].Inside == held[i].Total)
-                    all++;
-                else
-                    part++;
-            }
+            if (ScopeShape.Of(blocks, whole) is not { } shape)
+                return null;
 
             // The scope lies inside one block, which runs all of it. What it keeps is what its own
             // statements leave, with nothing branching in or out of the middle of them.
-            if (part == 1 && all == 0)
-            {
-                var at = Array.FindIndex(held, block => block.Inside > 0);
-                return blocks[at].IsReached ? Straight(blocks[at], whole, of) : null;
-            }
-            if (part > 0 || all == 0)
-                return null;
+            if (shape.IsStraight)
+                return Straight(blocks[shape.Entry], whole, of);
 
-            var entry = Array.FindIndex(inside, block => block);
-            if (!blocks[entry].IsReached || inside.All(block => block))
-                return null;
-
-            var reached = new RegisterState?[blocks.Count];
-            var pending = new SortedSet<int> { entry };
-            reached[entry] = RegisterState.Entered;
-            while (pending.Count > 0)
-            {
-                var index = pending.Min;
-                pending.Remove(index);
-                var after = Through(blocks[index], reached[index]!, of, null);
-                foreach (var edge in FlowsTo(blocks, blocks[index]).Where(to => inside[to]))
-                {
-                    var merged = RegisterState.Merge(reached[edge], after);
-                    if (merged.Equals(reached[edge]))
-                        continue;
-                    reached[edge] = merged;
-                    pending.Add(edge);
-                }
-            }
+            var inside = shape.Inside;
+            var solver = Solver(blocks, of, block => flow.Onward(blocks, block).Where(to => inside[to]));
+            solver.Enter(shape.Entry, RegisterState.Entered);
+            var reached = solver.Reached;
 
             var kept = Registers.All;
             var complete = true;
@@ -370,7 +290,7 @@ public static class RegisterKeeps
                 // A block is an exit from the scope when what runs after it is outside the
                 // scope. A return, or a jump to another routine, is an exit too.
                 var left = Leaves(blocks[i], region.Routine).ToList();
-                if (left.Count == 0 && FlowsTo(blocks, blocks[i]).All(to => inside[to])
+                if (left.Count == 0 && flow.Onward(blocks, blocks[i]).All(to => inside[to])
                     && !Ends(blocks[i]).Returns)
                 {
                     continue;
@@ -631,9 +551,7 @@ public static class RegisterKeeps
             var control = statement is InstructionStatementSyntax instruction
                 ? Instructions.Facts(instruction.MnemonicKind).Control
                 : Control.Through;
-            var calls = transfer == Transfer.Call
-                || flow.RelativeCallAt(step) is not null
-                || (transfer == Transfer.Elsewhere && control == Control.Calls);
+            var calls = flow.EndsInCall(block);
 
             // `stp` and `jam` stop the processor, so nothing ever reads what they left. `rti`
             // goes back to the code the interrupt broke into, which is exactly where the

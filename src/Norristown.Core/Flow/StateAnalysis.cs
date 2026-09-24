@@ -216,24 +216,25 @@ public sealed class StateAnalysis : IProcessorStates
         bytes is { } count ? stack?.Pull(count) : null;
 
     /// <summary>
-    /// Runs one region to a fixed point, then once more to report. Blocks are taken lowest index
-    /// first, which is the order their bytes are emitted in, so most of a routine reaches its
-    /// fixed point in a single pass.
+    /// Runs one region to a fixed point, then once more to report.
     /// </summary>
     private void Analyze(FlowRegion region)
     {
         var blocks = region.Blocks;
         var signature = region.Routine.Signature ?? Signature.Default;
-        var reached = new FlowState?[blocks.Count];
         var walks = new int[blocks.Count];
-        var pending = new SortedSet<int>();
+        var solver = new Dataflow<FlowState>(
+            blocks,
+            (block, state) =>
+            {
+                walks[block.Index]++;
+                return Walk(block, state, region);
+            },
+            FlowState.Merge,
+            block => flow.Onward(blocks, block));
 
         if (region.IsEntered && blocks.Count > 0)
-        {
-            reached[0] = Entry(signature, region.Routine);
-            pending.Add(0);
-        }
-        Converge();
+            solver.Enter(0, Entry(signature, region.Routine));
 
         // A label a `.state` declares is an entry point in its own right. If no path reaches
         // it, it starts from what the directive says, over an otherwise unknown state and the
@@ -241,77 +242,21 @@ public sealed class StateAnalysis : IProcessorStates
         // path already reaches it, the directive is checked against that path. Where the label
         // can also be entered from outside the routine, only the parts the declaration gives
         // are kept, because what the paths inside leave is no promise to code that jumps in.
-        foreach (var block in blocks)
-        {
-            if (!block.IsDeclared)
-                continue;
-            if (reached[block.Index] is null)
-            {
-                reached[block.Index] = new FlowState(Outside(signature), EntryStack(signature));
-            }
-            else if (outside.Reaches(block))
-            {
-                var entered = Entered(block, reached[block.Index]!, signature, region.Routine);
-                if (entered.Equals(reached[block.Index]))
-                    continue;
-                reached[block.Index] = entered;
-            }
-            else
-            {
-                continue;
-            }
-            pending.Add(block.Index);
-            Converge();
-        }
+        solver.EnterDeclared(
+            outside,
+            new FlowState(Outside(signature), EntryStack(signature)),
+            (block, state) => Entered(block, state, signature, region.Routine));
 
         checks.Final = true;
         foreach (var block in blocks)
         {
-            if (reached[block.Index] is { } state)
+            if (solver.Reached[block.Index] is { } state)
                 Walk(block, state, region);
             else
                 checks.Unreached(block, region);
         }
         checks.Final = false;
         MaximumWalks = Math.Max(MaximumWalks, walks.DefaultIfEmpty().Max());
-
-        void Converge()
-        {
-            while (pending.Count > 0)
-            {
-                var index = pending.Min;
-                pending.Remove(index);
-                walks[index]++;
-                var block = blocks[index];
-                var after = Walk(block, reached[index]!, region);
-                foreach (var edge in FlowsTo(block))
-                {
-                    var merged = FlowState.Merge(reached[edge], after);
-                    if (merged.Equals(reached[edge]))
-                        continue;
-                    reached[edge] = merged;
-                    pending.Add(edge);
-                }
-            }
-        }
-
-        // Returns the blocks the state after a block flows to. A call's edge is to the routine
-        // it calls, which is checked against its signature rather than walked into. A jump to a
-        // routine's entry, the routine's own included, is treated the same way, because it is a
-        // tail call.
-        IEnumerable<int> FlowsTo(BasicBlock block)
-        {
-            var calls = block.Steps.Count > 0
-                && (IsCallOrIndirectCall(block.Steps[^1]) || flow.RelativeCallAt(block.Steps[^1]) is not null);
-            foreach (var edge in block.Successors)
-            {
-                if (edge.Kind == EdgeKind.Call || (calls && edge.Kind != EdgeKind.FallThrough))
-                    continue;
-                if (edge.Kind != EdgeKind.FallThrough && blocks[edge.To].Label is { Signature: not null })
-                    continue;
-                yield return edge.To;
-            }
-        }
     }
 
     /// <summary>
@@ -669,11 +614,6 @@ public sealed class StateAnalysis : IProcessorStates
         target is { Kind: SymbolKind.Label, Routine: { } owner } && owner != routine && !owner.IsSiblingOf(routine)
             ? owner
             : null;
-
-    /// <summary>Returns whether a statement calls, directly or through a pointer.</summary>
-    private static bool IsCallOrIndirectCall(Step step) =>
-        step.Statement is InstructionStatementSyntax instruction
-        && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
 
     /// <summary>
     /// Checks a call and returns the state after it. The state here must be what the routine
