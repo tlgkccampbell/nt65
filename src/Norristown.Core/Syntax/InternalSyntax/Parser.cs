@@ -177,6 +177,41 @@ internal sealed partial class Parser
     }
 
     /// <summary>
+    /// Starts an attempt to read the line one way, which may be abandoned. The diagnostics
+    /// reported during the attempt are held apart from the line's, and join them only if
+    /// <see cref="Keep"/> is called.
+    /// </summary>
+    /// <returns>The reset point that <see cref="Keep"/> or <see cref="Rewind"/> ends the attempt at.</returns>
+    private ResetPoint Attempt()
+    {
+        var point = new ResetPoint(index, reported, pending);
+        pending = [];
+        return point;
+    }
+
+    /// <summary>
+    /// Ends the attempt that started at <paramref name="point"/> by keeping what it read, adding
+    /// the diagnostics it reported to the line's.
+    /// </summary>
+    private void Keep(ResetPoint point)
+    {
+        point.Pending.AddRange(pending);
+        pending = point.Pending;
+    }
+
+    /// <summary>
+    /// Ends the attempt that started at <paramref name="point"/> by abandoning it. The parser goes
+    /// back to the token the attempt started at, and the diagnostics the attempt reported are
+    /// dropped, so the line is as it was before the attempt.
+    /// </summary>
+    private void Rewind(ResetPoint point)
+    {
+        pending = point.Pending;
+        index = point.Index;
+        reported = point.Reported;
+    }
+
+    /// <summary>
     /// Attaches to <paramref name="node"/> the pending diagnostics that fall within its text. The
     /// parser has just finished reading the node, so it ends at the parser's current position. A
     /// pending diagnostic inside that range is about this node, since no inner node claimed it.
@@ -399,6 +434,14 @@ internal sealed partial class Parser
     }
 
     /// <summary>
+    /// Returns the current token if it is of <paramref name="kind"/>, or otherwise a missing token
+    /// that reports <paramref name="message"/>, whatever else the line has reported. It is used
+    /// where a missing piece deserves a diagnostic of its own.
+    /// </summary>
+    private GreenToken Require(SyntaxKind kind, DiagnosticMessage message) =>
+        Kind == kind ? Advance() : Missing(kind, message);
+
+    /// <summary>
     /// Returns the name at the current token, or a missing identifier that reports
     /// <paramref name="message"/>. A name may be lexed as an identifier, a register or a mnemonic,
     /// so it is not a single token kind that <see cref="Expect(SyntaxKind, DiagnosticMessage)"/>
@@ -494,4 +537,13 @@ internal sealed partial class Parser
     /// <param name="Message">The message for the programmer.</param>
     /// <param name="Fix">The change the message names as its fix, or null.</param>
     private readonly record struct Pending(int Start, int Width, DiagnosticMessage Message, DiagnosticFix? Fix);
+
+    /// <summary>
+    /// Represents the point an attempt started at, which <see cref="Rewind"/> returns the parser
+    /// to.
+    /// </summary>
+    /// <param name="Index">The token the attempt started at.</param>
+    /// <param name="Reported">How many diagnostics the line had been given before the attempt.</param>
+    /// <param name="Pending">The line's pending diagnostics, which the attempt's own join if it is kept.</param>
+    private readonly record struct ResetPoint(int Index, int Reported, List<Pending> Pending);
 }

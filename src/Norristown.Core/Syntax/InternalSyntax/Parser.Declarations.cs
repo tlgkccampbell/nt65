@@ -62,8 +62,7 @@ internal sealed partial class Parser
 
         // A missing name and a missing brace are separate problems, so a line missing both gets
         // a diagnostic for each.
-        var brace = Kind == SyntaxKind.OpenBrace ? Advance() : Missing(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Message(
-            "`{`"));
+        var brace = Require(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Message("`{`"));
         return kind switch
         {
             SyntaxKind.EnumDeclaration => new EnumDeclarationSyntax(keyword, name, brace),
@@ -88,9 +87,7 @@ internal sealed partial class Parser
 
         // The `=` and the body are separate pieces, so a line that has neither gets a diagnostic
         // for each.
-        var equals = Kind == SyntaxKind.Equals
-            ? Advance()
-            : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=` and the body"));
+        var equals = Require(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=` and the body"));
         return new FuncDeclarationSyntax(keyword, name, parameters, equals, ParseExpression());
     }
 
@@ -140,9 +137,7 @@ internal sealed partial class Parser
     {
         var openParen = Advance();
         var parameters = Kind != SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseParameter) : null;
-        var closeParen = Kind == SyntaxKind.CloseParen
-            ? Advance()
-            : Missing(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
+        var closeParen = Require(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
         return new ParameterListSyntax(openParen, parameters, closeParen);
     }
 
@@ -634,9 +629,7 @@ internal sealed partial class Parser
                 exit = ParseStateList();
         }
 
-        var closeParen = Kind == SyntaxKind.CloseParen
-            ? Advance()
-            : Missing(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
+        var closeParen = Require(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
         return new ImportSignatureSyntax(keyword, openParen, entry, arrow, exit, closeParen);
     }
 }

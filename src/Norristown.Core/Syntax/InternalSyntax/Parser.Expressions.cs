@@ -107,9 +107,7 @@ internal sealed partial class Parser
     {
         var openParen = Advance();
         var arguments = Kind is not SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseExpression) : null;
-        var closeParen = Kind == SyntaxKind.CloseParen
-            ? Advance()
-            : Missing(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
+        var closeParen = Require(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
         return new ArgumentListSyntax(openParen, arguments, closeParen);
     }
 

@@ -179,8 +179,7 @@ internal sealed partial class Parser
             return null;
         }
         var name = Advance();
-        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
-            "`=`"));
+        var equals = Require(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`"));
         return new MemberValueSyntax(name, equals, ParseDataValue());
     }
 
@@ -220,8 +219,7 @@ internal sealed partial class Parser
             dotDot = Advance();
             last = ParseExpression();
         }
-        var equals = Kind == SyntaxKind.Equals ? Advance() : Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
-            "`=`"));
+        var equals = Require(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`"));
         return Finish(new CharmapEntrySyntax(first, dotDot, last, equals, ParseExpression()));
     }
 }

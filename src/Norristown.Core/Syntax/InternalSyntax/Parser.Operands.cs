@@ -56,20 +56,13 @@ internal sealed partial class Parser
         // succeeds. A failed attempt leaves no trace. Its tokens are read again as an ordinary
         // expression, and the nodes it built are discarded along with the diagnostics reported
         // while building them, so no diagnostic about a missing token from the attempt survives.
-        var start = index;
-        var reportedBefore = reported;
-        var line = pending;
-        pending = [];
-        var indirect = ParseIndirect();
-        var attempt = pending;
-        pending = line;
-        if (indirect is not null)
+        var point = Attempt();
+        if (ParseIndirect() is { } indirect)
         {
-            pending.AddRange(attempt);
+            Keep(point);
             return indirect;
         }
-        index = start;
-        reported = reportedBefore;
+        Rewind(point);
         return null;
     }
 
@@ -109,9 +102,7 @@ internal sealed partial class Parser
     {
         var openBracket = Advance();
         var address = ParseExpression();
-        var closeBracket = Kind == SyntaxKind.CloseBracket
-            ? Advance()
-            : Missing(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`"));
+        var closeBracket = Require(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`"));
         return Kind == SyntaxKind.Comma && IsRegister(1, "y")
             ? new LongIndirectOperandSyntax(openBracket, address, closeBracket, Advance(), Advance())
             : new LongIndirectOperandSyntax(openBracket, address, closeBracket, null, null);
