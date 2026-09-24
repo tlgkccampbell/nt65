@@ -39,9 +39,6 @@ internal sealed partial class Parser
     /// <summary>The loosest binding level, which <see cref="ParseExpression"/> starts at.</summary>
     private const int LowestPrecedence = 13;
 
-    /// <summary>The tightest binding level that is still a binary operator.</summary>
-    private const int TightestPrecedence = 3;
-
     /// <summary>
     /// How deeply expressions may nest inside one another. Each level uses about a dozen stack
     /// frames, and a stack overflow kills the whole process, so the parser stops reading an

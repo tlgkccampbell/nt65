@@ -19,13 +19,17 @@ internal sealed partial class Parser
         return expression;
     }
 
-    private ExpressionSyntax ParseBinary(int level)
+    /// <summary>
+    /// Parses a binary expression whose operators bind no more loosely than
+    /// <paramref name="loosest"/>, by precedence climbing. Each operand is read once, and the
+    /// operand on the right of an operator takes only operators that bind more tightly, so every
+    /// operator is left-associative.
+    /// </summary>
+    private ExpressionSyntax ParseBinary(int loosest)
     {
-        if (level < TightestPrecedence)
-            return ParseUnary();
-
-        var left = ParseBinary(level - 1);
-        while (SyntaxFacts.BinaryPrecedence(Current.Kind, Current.Text) == level)
+        var left = ParseUnary();
+        while (SyntaxFacts.BinaryPrecedence(Current.Kind, Current.Text) is var level and > 0
+            && level <= loosest)
         {
             var operatorIndex = index;
             var op = Advance();
