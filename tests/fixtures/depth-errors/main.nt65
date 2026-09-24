@@ -1,0 +1,462 @@
+; A name defined through a long chain of others is worked out only so deep, so that a generated
+; chain cannot overflow the stack. An enum is worked out first to last, however long it is.
+.module main
+
+.const LAST = Long::m299            ; before the enum, so the enum is worked out from its end
+
+.enum Long {
+    m0
+    m1
+    m2
+    m3
+    m4
+    m5
+    m6
+    m7
+    m8
+    m9
+    m10
+    m11
+    m12
+    m13
+    m14
+    m15
+    m16
+    m17
+    m18
+    m19
+    m20
+    m21
+    m22
+    m23
+    m24
+    m25
+    m26
+    m27
+    m28
+    m29
+    m30
+    m31
+    m32
+    m33
+    m34
+    m35
+    m36
+    m37
+    m38
+    m39
+    m40
+    m41
+    m42
+    m43
+    m44
+    m45
+    m46
+    m47
+    m48
+    m49
+    m50
+    m51
+    m52
+    m53
+    m54
+    m55
+    m56
+    m57
+    m58
+    m59
+    m60
+    m61
+    m62
+    m63
+    m64
+    m65
+    m66
+    m67
+    m68
+    m69
+    m70
+    m71
+    m72
+    m73
+    m74
+    m75
+    m76
+    m77
+    m78
+    m79
+    m80
+    m81
+    m82
+    m83
+    m84
+    m85
+    m86
+    m87
+    m88
+    m89
+    m90
+    m91
+    m92
+    m93
+    m94
+    m95
+    m96
+    m97
+    m98
+    m99
+    m100
+    m101
+    m102
+    m103
+    m104
+    m105
+    m106
+    m107
+    m108
+    m109
+    m110
+    m111
+    m112
+    m113
+    m114
+    m115
+    m116
+    m117
+    m118
+    m119
+    m120
+    m121
+    m122
+    m123
+    m124
+    m125
+    m126
+    m127
+    m128
+    m129
+    m130
+    m131
+    m132
+    m133
+    m134
+    m135
+    m136
+    m137
+    m138
+    m139
+    m140
+    m141
+    m142
+    m143
+    m144
+    m145
+    m146
+    m147
+    m148
+    m149
+    m150
+    m151
+    m152
+    m153
+    m154
+    m155
+    m156
+    m157
+    m158
+    m159
+    m160
+    m161
+    m162
+    m163
+    m164
+    m165
+    m166
+    m167
+    m168
+    m169
+    m170
+    m171
+    m172
+    m173
+    m174
+    m175
+    m176
+    m177
+    m178
+    m179
+    m180
+    m181
+    m182
+    m183
+    m184
+    m185
+    m186
+    m187
+    m188
+    m189
+    m190
+    m191
+    m192
+    m193
+    m194
+    m195
+    m196
+    m197
+    m198
+    m199
+    m200
+    m201
+    m202
+    m203
+    m204
+    m205
+    m206
+    m207
+    m208
+    m209
+    m210
+    m211
+    m212
+    m213
+    m214
+    m215
+    m216
+    m217
+    m218
+    m219
+    m220
+    m221
+    m222
+    m223
+    m224
+    m225
+    m226
+    m227
+    m228
+    m229
+    m230
+    m231
+    m232
+    m233
+    m234
+    m235
+    m236
+    m237
+    m238
+    m239
+    m240
+    m241
+    m242
+    m243
+    m244
+    m245
+    m246
+    m247
+    m248
+    m249
+    m250
+    m251
+    m252
+    m253
+    m254
+    m255
+    m256
+    m257
+    m258
+    m259
+    m260
+    m261
+    m262
+    m263
+    m264
+    m265
+    m266
+    m267
+    m268
+    m269
+    m270
+    m271
+    m272
+    m273
+    m274
+    m275
+    m276
+    m277
+    m278
+    m279
+    m280
+    m281
+    m282
+    m283
+    m284
+    m285
+    m286
+    m287
+    m288
+    m289
+    m290
+    m291
+    m292
+    m293
+    m294
+    m295
+    m296
+    m297
+    m298
+    m299
+}
+
+.const C000 = C001 + 1
+.const C001 = C002 + 1
+.const C002 = C003 + 1
+.const C003 = C004 + 1
+.const C004 = C005 + 1
+.const C005 = C006 + 1
+.const C006 = C007 + 1
+.const C007 = C008 + 1
+.const C008 = C009 + 1
+.const C009 = C010 + 1
+.const C010 = C011 + 1
+.const C011 = C012 + 1
+.const C012 = C013 + 1
+.const C013 = C014 + 1
+.const C014 = C015 + 1
+.const C015 = C016 + 1
+.const C016 = C017 + 1
+.const C017 = C018 + 1
+.const C018 = C019 + 1
+.const C019 = C020 + 1
+.const C020 = C021 + 1
+.const C021 = C022 + 1
+.const C022 = C023 + 1
+.const C023 = C024 + 1
+.const C024 = C025 + 1
+.const C025 = C026 + 1
+.const C026 = C027 + 1
+.const C027 = C028 + 1
+.const C028 = C029 + 1
+.const C029 = C030 + 1
+.const C030 = C031 + 1
+.const C031 = C032 + 1
+.const C032 = C033 + 1
+.const C033 = C034 + 1
+.const C034 = C035 + 1
+.const C035 = C036 + 1
+.const C036 = C037 + 1
+.const C037 = C038 + 1
+.const C038 = C039 + 1
+.const C039 = C040 + 1
+.const C040 = C041 + 1
+.const C041 = C042 + 1
+.const C042 = C043 + 1
+.const C043 = C044 + 1
+.const C044 = C045 + 1
+.const C045 = C046 + 1
+.const C046 = C047 + 1
+.const C047 = C048 + 1
+.const C048 = C049 + 1
+.const C049 = C050 + 1
+.const C050 = C051 + 1
+.const C051 = C052 + 1
+.const C052 = C053 + 1
+.const C053 = C054 + 1
+.const C054 = C055 + 1
+.const C055 = C056 + 1
+.const C056 = C057 + 1
+.const C057 = C058 + 1
+.const C058 = C059 + 1
+.const C059 = C060 + 1
+.const C060 = C061 + 1
+.const C061 = C062 + 1
+.const C062 = C063 + 1
+.const C063 = C064 + 1
+.const C064 = C065 + 1
+.const C065 = C066 + 1
+.const C066 = C067 + 1
+.const C067 = C068 + 1
+.const C068 = C069 + 1
+.const C069 = C070 + 1
+.const C070 = C071 + 1
+.const C071 = C072 + 1
+.const C072 = C073 + 1
+.const C073 = C074 + 1
+.const C074 = C075 + 1
+.const C075 = C076 + 1
+.const C076 = C077 + 1
+.const C077 = C078 + 1
+.const C078 = C079 + 1
+.const C079 = C080 + 1
+.const C080 = C081 + 1
+.const C081 = C082 + 1
+.const C082 = C083 + 1
+.const C083 = C084 + 1
+.const C084 = C085 + 1
+.const C085 = C086 + 1
+.const C086 = C087 + 1
+.const C087 = C088 + 1
+.const C088 = C089 + 1
+.const C089 = C090 + 1
+.const C090 = C091 + 1
+.const C091 = C092 + 1
+.const C092 = C093 + 1
+.const C093 = C094 + 1
+.const C094 = C095 + 1
+.const C095 = C096 + 1
+.const C096 = C097 + 1
+.const C097 = C098 + 1
+.const C098 = C099 + 1
+.const C099 = C100 + 1
+.const C100 = C101 + 1              ;! error[defined-too-deep]: `C100` is defined through more than 100 other names: nt65 works out no further
+.const C101 = C102 + 1
+.const C102 = C103 + 1
+.const C103 = C104 + 1
+.const C104 = C105 + 1
+.const C105 = C106 + 1
+.const C106 = C107 + 1
+.const C107 = C108 + 1
+.const C108 = C109 + 1
+.const C109 = C110 + 1
+.const C110 = C111 + 1
+.const C111 = C112 + 1
+.const C112 = C113 + 1
+.const C113 = C114 + 1
+.const C114 = C115 + 1
+.const C115 = C116 + 1
+.const C116 = C117 + 1
+.const C117 = C118 + 1
+.const C118 = C119 + 1
+.const C119 = C120 + 1
+.const C120 = C121 + 1
+.const C121 = C122 + 1
+.const C122 = C123 + 1
+.const C123 = C124 + 1
+.const C124 = C125 + 1
+.const C125 = C126 + 1
+.const C126 = C127 + 1
+.const C127 = C128 + 1
+.const C128 = C129 + 1
+.const C129 = C130 + 1
+.const C130 = C131 + 1
+.const C131 = C132 + 1
+.const C132 = C133 + 1
+.const C133 = C134 + 1
+.const C134 = C135 + 1
+.const C135 = C136 + 1
+.const C136 = C137 + 1
+.const C137 = C138 + 1
+.const C138 = C139 + 1
+.const C139 = C140 + 1
+.const C140 = C141 + 1
+.const C141 = C142 + 1
+.const C142 = C143 + 1
+.const C143 = C144 + 1
+.const C144 = C145 + 1
+.const C145 = C146 + 1
+.const C146 = C147 + 1
+.const C147 = C148 + 1
+.const C148 = C149 + 1
+.const C149 = C150 + 1
+.const C150 = 0
+
+.export LAST, C000

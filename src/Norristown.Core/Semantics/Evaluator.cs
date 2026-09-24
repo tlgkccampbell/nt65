@@ -15,6 +15,10 @@ namespace Norristown.Semantics;
 /// </summary>
 internal sealed partial class Evaluator
 {
+    // How many names deep the evaluation of one name may go through the names it uses. Each level
+    // takes a good deal of stack, and a few hundred overflow it.
+    private const int MaximumDepth = 100;
+
     private readonly EvaluationMode mode;
     private readonly SegmentTable segments;
     private readonly IReadOnlyDictionary<(SyntaxTree Tree, int Position), Symbol> resolved;
@@ -49,6 +53,9 @@ internal sealed partial class Evaluator
     // steps of the same expression around that value are the same mistake, so only the first is
     // reported.
     private readonly HashSet<object> wide = [];
+
+    // Whether a chain of definitions deeper than MaximumDepth has been reported.
+    private bool tooDeep;
 
     // How many problems evaluation has met, counting one it found again and did not report. A
     // call that meets one is evaluated again at each use, so that each use reports it.
@@ -433,6 +440,15 @@ internal sealed partial class Evaluator
         }
         if (!evaluated.Add(symbol))
             return;
+        if (evaluating.Count >= MaximumDepth)
+        {
+            // A chain long enough to be cut once is usually cut again further along, and the
+            // first report says all there is to say.
+            if (!tooDeep)
+                Report(symbol.DeclarationSpan, Catalogue.DefinedTooDeep.Message(symbol.DisplayName, MaximumDepth), []);
+            tooDeep = true;
+            return;
+        }
 
         // The type that a `.type T` names is worth keeping on the symbol. Emission walks into
         // it, an editor asks what a path reaches through it, and nothing else would have
@@ -904,6 +920,14 @@ internal sealed partial class Evaluator
     {
         if (member.PreviousMember is not { } previous)
             return 0;
+
+        // The members before it are worked out first to last, so that a long enum is not worked
+        // out one member deeper for every member.
+        var earlier = new Stack<Symbol>();
+        for (var at = previous.PreviousMember; at is not null && !evaluated.Contains(at); at = at.PreviousMember)
+            earlier.Push(at);
+        while (earlier.TryPop(out var first))
+            EvaluateSymbol(first);
         EvaluateSymbol(previous);
         return previous.Value.AsNumber() is { } before ? before + 1 : null;
     }

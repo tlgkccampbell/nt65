@@ -52,7 +52,7 @@ public sealed class CatalogueAreaTests
             "condition-uses-a-measurement", "constant-names-an-address", "countof-has-no-elements",
             "cpu-disagrees", "cpu-under-a-condition", "cycles-needs-a-position", "cycles-span-has-no-bound",
             "data-elsewhere-overruns", "data-has-no-element-type",
-            "declaration-in-a-repetition", "defined-in-terms-of-itself", "division-by-zero",
+            "declaration-in-a-repetition", "defined-in-terms-of-itself", "defined-too-deep", "division-by-zero",
             "each-not-over-a-list", "element-index-not-constant", "element-index-out-of-range", "else-without-if",
             "enum-member-is-not-an-address", "family-member-missing", "function-argument-count", "has-argument",
             "incbin-unreadable", "measures-a-declaration", "member-count-not-a-number", "member-has-no-value",

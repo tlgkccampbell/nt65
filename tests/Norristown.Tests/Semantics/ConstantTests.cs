@@ -214,4 +214,30 @@ public sealed class ConstantTests
         Assert.Equal(["2: `missing` is not declared"], model.Problems());
         Assert.Equal(2, model.ReferencesTo(model.Symbol("main")).Count);
     }
+
+    /// <summary>
+    /// A chain of definitions far deeper than the stack could follow is reported where it gives
+    /// out, and an enum as long is worked out from its first member however it is reached.
+    /// </summary>
+    [Fact]
+    public void ALongChainIsReportedRatherThanOverflowingTheStack()
+    {
+        const int length = 5000;
+        string[] lines =
+        [
+            ".module main",
+            ".const LAST = Long::m4999",
+            ".enum Long {",
+            .. Enumerable.Range(0, length).Select(i => $"    m{i}"),
+            "}",
+            .. Enumerable.Range(0, length).Select(i => $".const C{i} = C{i + 1} + 1"),
+            $".const C{length} = 0",
+        ];
+
+        var model = Analysis.Model(string.Join('\n', lines) + "\n");
+
+        Assert.Equal(4999, model.Symbol("LAST").Value.Number);
+        var problem = Assert.Single(model.Problems());
+        Assert.Contains("is defined through more than 100 other names", problem, StringComparison.Ordinal);
+    }
 }

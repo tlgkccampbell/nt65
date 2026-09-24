@@ -1036,6 +1036,16 @@ public static class Catalogue
             + "cycle by defining one of the names without referring back to the others. The cycle is reported "
             + "once, at one of its declarations, and the other names in it are shown as related locations.");
 
+    internal static DiagnosticDescriptor DefinedTooDeep { get; } = Entry(
+        Area.Values,
+        "defined-too-deep",
+        Severity.Error,
+        "`{0}` is defined through more than {1} other names: nt65 works out no further",
+        "nt65 works out a name's value by working out the names it uses first, and each of those in turn. It stops "
+            + "at this depth, far beyond what a program needs, so that a generated chain of definitions cannot "
+            + "overflow the stack and crash the assembler or the editor's language server. Define the name from a "
+            + "value nearer the start of the chain.");
+
     internal static DiagnosticDescriptor NumberTooWide { get; } = Entry(
         Area.Values,
         "number-too-wide",
