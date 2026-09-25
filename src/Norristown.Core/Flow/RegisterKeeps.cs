@@ -1058,7 +1058,7 @@ public static class RegisterKeeps
             var sets = mnemonic switch
             {
                 MnemonicKind.Sep => mode != AddressingMode.Immediate
-                    || Constant(step) is not { } flags || (flags & (long)StatusFlags.X) != 0,
+                    || StepOperands.Constant(model, step) is not { } flags || (flags & (long)StatusFlags.X) != 0,
                 MnemonicKind.Plp or MnemonicKind.Xce => true,
                 _ => false,
             };
