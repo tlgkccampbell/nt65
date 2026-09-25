@@ -23,6 +23,7 @@
 .export main__grid
 .export main__edge
 .export main__chosen
+.export main__low_bytes
 .export main__crossing
 
 .segment "ZP": zeropage
@@ -164,8 +165,13 @@ main__chosen:
     .byte $22
     .byte $22
 
+main__low_bytes:
+    .repeat 3
+        .byte <main__crossing
+    .endrepeat
+
 .segment "CODE": absolute
-; .proc crossing: a8, i8  main.nt65:189
+; .proc crossing: a8, i8  main.nt65:197
 main__crossing:
     lda z:$fe + $00
     lda z:$fe + $01

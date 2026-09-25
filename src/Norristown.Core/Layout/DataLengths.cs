@@ -494,7 +494,7 @@ public static class DataLengths
         if (operands.Count == 0)
             return;
         if (operands.Count > 1)
-            CheckRange(operands[1], model, diagnostics, Holds(DirectiveKind.Byte)!.Value, on);
+            CheckFill(operands[1], "a `.res`", model, diagnostics, on);
 
         // `.res` is padding, passed straight through to ca65's own `.res`, which reserves at
         // most $ffff bytes, so padding of more than a bank's worth is not padding. A declaration
@@ -507,6 +507,19 @@ public static class DataLengths
     }
 
     /// <summary>
+    /// Checks the byte a <c>.res</c> or an <c>.align</c> fills with, which ca65 has to know when it
+    /// reaches the line and which has to fit in a byte.
+    /// </summary>
+    private static void CheckFill(
+        SyntaxNode fill, string directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
+    {
+        if (model.ValueOf(fill, on).AsNumber() is null && !model.ValueOf(fill, on).IsString)
+            Report(fill, model, diagnostics, on, Catalogue.FillNotConstant.Message(directive));
+        else
+            CheckRange(fill, model, diagnostics, Holds(DirectiveKind.Byte)!.Value, on);
+    }
+
+    /// <summary>
     /// Checks an <c>.align</c>. The alignment must be a constant power of two, which is what ca65
     /// will take, and the fill it pads with must be a byte, as a <c>.res</c> fill is.
     /// </summary>
@@ -516,7 +529,7 @@ public static class DataLengths
         if (operands.Count == 0)
             return;
         if (operands.Count > 1)
-            CheckRange(operands[1], model, diagnostics, Holds(DirectiveKind.Byte)!.Value, on);
+            CheckFill(operands[1], "an `.align`", model, diagnostics, on);
         var boundary = model.ValueOf(operands[0], on).AsNumber();
         if (boundary is null)
             Report(operands[0], model, diagnostics, on, Catalogue.AlignBoundaryNotConstant);

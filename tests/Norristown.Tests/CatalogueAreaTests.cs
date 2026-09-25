@@ -84,7 +84,7 @@ public sealed class CatalogueAreaTests
             "align-boundary-not-power-of-two", "align-not-a-declaration", "charmap-value-not-a-byte",
             "element-count-empty", "element-count-mismatch", "element-count-negative",
             "element-count-not-constant", "element-is-one-value", "element-not-a-record", "element-not-a-value",
-            "far-address-in-word", "member-count-mismatch", "member-given-twice", "member-needs-a-list",
+            "far-address-in-word", "fill-not-constant", "member-count-mismatch", "member-given-twice", "member-needs-a-list",
             "member-needs-a-record", "member-not-text", "member-takes-one-value", "member-text-too-long",
             "member-unknown", "res-count-not-constant", "res-count-out-of-range", "res-not-a-declaration",
             "strz-not-text", "strz-zero-in-text", "text-not-ascii", "union-many-members-given", "value-too-wide",

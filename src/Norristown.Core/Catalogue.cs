@@ -1999,6 +1999,14 @@ public static class Catalogue
         "a `.res` count must be a constant",
         "How much room is reserved decides where everything after it goes, so it is decided while nt65 builds.");
 
+    internal static DiagnosticDescriptor FillNotConstant { get; } = Entry(
+        Area.Data,
+        "fill-not-constant",
+        Severity.Error,
+        "the fill of {0} must be a constant",
+        "ca65 fills the room a `.res` or an `.align` leaves with a byte it has to know when it reaches the line. A "
+            + "byte of an address, such as `<main`, is known only to the linker.");
+
     internal static DiagnosticDescriptor ResCountOutOfRange { get; } = Entry(
         Area.Data,
         "res-count-out-of-range",

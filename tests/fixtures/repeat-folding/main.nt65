@@ -11,7 +11,7 @@
 
 .export shift, spaced, widths_alike, widths_differ, nested, twice, per_turn_label
 .export branching, padding, over_a_list, over_an_enum
-.export ramp, grid, edge, chosen, crossing
+.export ramp, grid, edge, chosen, crossing, low_bytes
 
 .segment ZP: zp
 
@@ -180,6 +180,14 @@
         } .else {
             $22
         }
+    }
+}
+
+; A byte of an address only the linker knows is no fill ca65 can take, so equal lines of one are
+; written as they are.
+.data low_bytes: .byte[] {
+    .repeat 3 {
+        <crossing
     }
 }
 

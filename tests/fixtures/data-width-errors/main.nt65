@@ -40,3 +40,14 @@
         .byte[$2000000000000000]
     }
 }
+
+; A fill is a byte ca65 knows when it reaches the line.
+.segment CODE
+.export .proc filled {
+    rts
+}
+.segment RODATA
+.data padding {
+    .res 2, <filled ;! error[fill-not-constant]: the fill of a `.res` must be a constant
+    .align 4, <filled ;! error[fill-not-constant]: the fill of an `.align` must be a constant
+}

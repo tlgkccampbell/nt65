@@ -280,7 +280,10 @@ public sealed class Emitter
     /// write more or fewer bytes than one, as text does, so the length decides.
     /// </summary>
     /// <param name="directive">The directive whose type the line's values have.</param>
-    /// <param name="single">The line's value as written, or null when it has more than one.</param>
+    /// <param name="single">
+    /// The line's value as written, or null when it has more than one or it is not a constant.
+    /// A byte of an address only the linker knows, such as <c>&lt;main</c>, is not a fill.
+    /// </param>
     /// <param name="bytes">The number of bytes the line assembles to.</param>
     private static string? ByteValue(DataDirectiveSyntax directive, string? single, long bytes) =>
         directive.Directive.DirectiveKind == DirectiveKind.Byte && bytes == 1 ? single : null;
@@ -1026,13 +1029,13 @@ public sealed class Emitter
                 rewriter.Replacements[list.CloseBraceToken.Position] = "";
             var values = rewriter.Bare(list, out comment);
             text = $"{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {values}";
-            single = list.Values.Count == 1 ? values : null;
+            single = list.Values is [var one] && IsConstant(one) ? values : null;
         }
         else if (directive.Tail is InlineDataSyntax { Values: var inline })
         {
             expressions.Substitute(directive, rewriter);
             text = rewriter.Bare(directive, out comment);
-            single = inline is [var only] ? rewriter.Render(only).Trim() : null;
+            single = inline is [var only] && IsConstant(only) ? rewriter.Render(only).Trim() : null;
         }
         else
         {
@@ -1080,7 +1083,7 @@ public sealed class Emitter
         expressions.Substitute(values, rewriter);
         var text = rewriter.Bare(values, out var comment);
         Code(line, $"{Body}{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {text}",
-            laid.Length, comment, value: ByteValue(directive, values.Values.Count == 1 ? text : null, laid.Length));
+            laid.Length, comment, value: ByteValue(directive, values.Values is [var one] && IsConstant(one) ? text : null, laid.Length));
     }
 
     /// <summary>
@@ -1277,6 +1280,9 @@ public sealed class Emitter
         Flush();
         Line($"{Body}.{StateRegister.Of(register).WidthItem(bits)}");
     }
+
+    /// <summary>Returns whether nt65 knows <paramref name="value"/> as a number in the expansion being written.</summary>
+    private bool IsConstant(SyntaxNode value) => model.ValueOf(value, context.Expansion).AsNumber() is not null;
 
     /// <summary>
     /// Reports a line for which nothing can be written, which analysis should already have rejected.

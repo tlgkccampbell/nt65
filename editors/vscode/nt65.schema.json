@@ -251,6 +251,7 @@
         "far-address-in-word",
         "far-needs-65816",
         "fields-need-a-stated-type",
+        "fill-not-constant",
         "frame-depth-unknown",
         "frame-gone",
         "frame-member-not-stack-relative",
