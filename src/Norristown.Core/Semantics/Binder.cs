@@ -479,10 +479,13 @@ internal sealed partial class Binder
     /// <summary>
     /// Returns the repetition around <paramref name="opener"/> when the declaration is named
     /// after the name the repetition binds, and so declares one declaration per member rather
-    /// than one private to each iteration.
+    /// than one private to each iteration. Only a routine, a scope or data can be declared that
+    /// way. Anything else with the binding's name is an ordinary statement, checked as any other.
     /// </summary>
     private static Repeated? NamedByBinding(StatementSyntax opener, Repeated? repeated) =>
-        repeated is { } found && NameToken(opener) is { } name && name.Text == found.Binding.Name
+        repeated is { } found
+            && opener is ProcDeclarationSyntax or ScopeDeclarationSyntax or DataDeclarationSyntax { Address: null }
+            && NameToken(opener) is { } name && name.Text == found.Binding.Name
             ? found
             : null;
 

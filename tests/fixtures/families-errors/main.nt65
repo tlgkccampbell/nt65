@@ -84,6 +84,14 @@
     }
 }
 
+; Only a routine or data declaration named after the binding declares a family. Anything else
+; with that name is checked as it would be under any other name.
+.each Channel, r {
+    .macro r() {                ;! error[declaration-in-a-repetition]: a definition cannot be inside a `.repeat` or `.each` body: it would be a different one on every iteration, and nothing outside the body could name any of them;! error[name-already-declared]: `r` is already declared in this scope
+    }
+    .proc r = $1234             ;! error[declaration-in-a-repetition]: `.proc` cannot be inside a `.repeat` or `.each` body: a routine's name and signature are part of the file's interface, and this one would be a different routine on every iteration;! error[name-already-declared]: `r` is already declared in this scope
+}
+
 ; One declaration per member in the scope around it, so it collides as any duplicate does.
 .proc pulse1 {
     rts
