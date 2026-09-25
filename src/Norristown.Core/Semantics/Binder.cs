@@ -269,13 +269,23 @@ internal sealed partial class Binder
 
         // A module exports what it declares. A name brought in from another module belongs to
         // that module, and making it part of this one is a re-export, which states where it came
-        // from.
+        // from. The references are indexed by where they start once, rather than searched once
+        // per item, and the last reference at a position is the one an item names.
+        var usedAt = new Dictionary<int, SymbolReference>();
+        if (exportItems.Count > 0)
+        {
+            foreach (var found in references)
+            {
+                if (!found.IsDeclaration)
+                    usedAt[found.Span.Start] = found;
+            }
+        }
         foreach (var (item, _) in exportItems)
         {
             if (item.Name is not { LastPart: { } innermost } name)
                 continue;
             var last = innermost.Name;
-            var reference = references.LastOrDefault(found => found.Span.Start == last.Span.Start && !found.IsDeclaration);
+            var reference = usedAt.GetValueOrDefault(last.Span.Start);
             if (reference?.Symbol is { } foreign && foreign.Tree != tree)
             {
                 Report(name.Span, Catalogue.ReexportNeeded.Message(foreign.Name, foreign.Module, foreign.PathName));
