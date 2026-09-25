@@ -78,6 +78,28 @@ public sealed class FormattingTests
     }
 
     /// <summary>
+    /// A selection that ends at the start of a line covers only the lines above it, which is how
+    /// an editor represents whole lines selected from the margin. The line it ends on is left as
+    /// it is.
+    /// </summary>
+    [Fact]
+    public async Task FormattingWholeSelectedLinesLeavesTheLineAfterThem()
+    {
+        var timeout = TestTimeout.Token();
+        await using var client = await OpenAsync(Crooked, timeout);
+
+        var edits = await client.RequestAsync<IReadOnlyList<TextEdit>>("textDocument/rangeFormatting",
+            new
+            {
+                textDocument = new { uri = Uri },
+                range = new { start = new { line = 2, character = 0 }, end = new { line = 6, character = 0 } },
+            },
+            timeout);
+
+        Assert.Equal([(2, ".data one:    .byte")], edits.Select(edit => (edit.Range.Start.Line, edit.NewText)));
+    }
+
+    /// <summary>
     /// A file with an error in it still formats, because a line's indentation comes from the
     /// braces around it and formatting does not wait for an analysis.
     /// </summary>

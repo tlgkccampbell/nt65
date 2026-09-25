@@ -691,16 +691,17 @@ internal sealed class Server : IDisposable
     /// <summary>
     /// Returns edits that format the selected lines. Layout is computed over the whole file,
     /// because a run of data lines, for instance, shares one column, but only the selected lines
-    /// are changed.
+    /// are changed. A selection that ends at the start of a line leaves that line alone.
     /// </summary>
     [JsonRpcMethod("textDocument/rangeFormatting")]
     public IReadOnlyList<TextEdit> RangeFormatting(
         DocumentRangeFormattingParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return workspace.Find(request.TextDocument.Uri) is { } document
-            ? Lsp.ToFormatting(document.Tree, request.Range.Start.Line, request.Range.End.Line)
-            : [];
+        if (workspace.Find(request.TextDocument.Uri) is not { } document)
+            return [];
+        var (first, last) = Lsp.SelectedLines(document.Tree, request.Range);
+        return Lsp.ToFormatting(document.Tree, first, last);
     }
 
     [JsonRpcMethod("textDocument/prepareCallHierarchy")]
