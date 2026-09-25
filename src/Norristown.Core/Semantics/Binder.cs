@@ -765,9 +765,12 @@ internal sealed partial class Binder
         return new Scope(kind, null, scope, null);
     }
 
-    /// <summary>Records a declaration named by a repetition's binding, to be declared once the enum is known.</summary>
+    /// <summary>
+    /// Records a declaration named by a repetition's binding, to be declared once the enum is
+    /// known. A routine family gives the scope of its body, and a data family has no body to give.
+    /// </summary>
     private void AddFamily(
-        Repeated each, StatementSyntax declaration, Scope body, SymbolKind kind,
+        Repeated each, StatementSyntax declaration, Scope? body, SymbolKind kind,
         ProcSignatureSyntax? signature, DataDirectiveSyntax? data, NameExpressionSyntax? type)
     {
         if (each.Why is { } refused)
@@ -810,9 +813,10 @@ internal sealed partial class Binder
         // The family's line contains the repetition's binding, and that is the name declared
         // there. Each instance is looked up by its own member name, but its declaration span is
         // that line, which is where go-to-definition lands. References may not overlap, so no
-        // reference to an instance is recorded at that line.
-        if (instances.Count > 0)
-            pending.Body.Owner = instances[0].Instance;
+        // reference to an instance is recorded at that line. A routine family's body belongs to
+        // its first instance, and a data family has no body.
+        if (instances.Count > 0 && pending.Body is { } body)
+            body.Owner = instances[0].Instance;
         families.Add(new Family(pending.Declaration, pending.Each.Block, pending.Each.Binding, found, instances));
     }
 
@@ -1434,7 +1438,7 @@ internal sealed partial class Binder
         }
         if (NamedByBinding(statement, repeated) is { } each && element is not null)
         {
-            AddFamily(each, statement, scope, SymbolKind.Data, null, element, element.Type);
+            AddFamily(each, statement, null, SymbolKind.Data, null, element, element.Type);
         }
         else if (element is not null)
         {
@@ -1964,7 +1968,7 @@ internal sealed partial class Binder
     /// be known.
     /// </summary>
     private sealed record PendingFamily(
-        StatementSyntax Declaration, Repeated Each, Scope Body, SymbolKind Kind,
+        StatementSyntax Declaration, Repeated Each, Scope? Body, SymbolKind Kind,
         ProcSignatureSyntax? Signature, DataDirectiveSyntax? Data, NameExpressionSyntax? Type);
 
     /// <summary>

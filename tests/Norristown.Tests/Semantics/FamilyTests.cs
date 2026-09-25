@@ -137,6 +137,23 @@ public sealed class FamilyTests
         Assert.Equal(["a", "b"], family.Instances.Select(instance => instance.Name));
     }
 
+    /// <summary>
+    /// A data family declares its instances into the scope around its <c>.each</c>, and the
+    /// repetition's own scope stays owned by nothing. Only a routine family's body belongs to an
+    /// instance.
+    /// </summary>
+    [Fact]
+    public void ADataFamilyLeavesItsRepetitionUnowned()
+    {
+        var program = Analysis.Program(("main.nt65", $"{Channels}.each Channel, ch {{\n    .data ch: .byte 1\n}}\n"));
+        var model = program.File("main.nt65");
+
+        var family = Assert.Single(model.Families);
+        Assert.Equal(["pulse1", "pulse2", "triangle"], family.Instances.Select(instance => instance.Name));
+        Assert.All(family.Instances, instance => Assert.Equal(SymbolKind.Data, instance.Kind));
+        Assert.Null(family.Binding.Scope.Owner);
+    }
+
     private static string Output(string text) => Analysis.Outputs(("main.nt65", text))["main.s"];
 
     /// <summary>Returns the output without the comments, which name where each line came from.</summary>
