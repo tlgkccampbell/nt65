@@ -242,6 +242,23 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
+    /// <c>--cpu</c> gives the processor only when the project does not. A project that names one
+    /// keeps it, and a program with no project is built for the one <c>--cpu</c> names.
+    /// </summary>
+    [Fact]
+    public void CpuAppliesOnlyWhenTheProjectNamesNone()
+    {
+        Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
+        root.Write("app/main.nt65", ".module main\n.cpu 6502\n.segment CODE\n.export .proc main {\n    rts\n}\n");
+        var app = Path.Combine(root.FullName, "app");
+
+        Assert.Equal((ExitCode.Success, ""), Run(app, "build", "--cpu", "65816"));
+
+        root.Write("alone/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    phb\n    plb\n    rts\n}\n");
+        Assert.Equal((ExitCode.Success, ""), Run(Path.Combine(root.FullName, "alone"), "build", "main.nt65", "--cpu", "65816"));
+    }
+
+    /// <summary>
     /// <c>--check</c> reports what a build would report and writes none of the files a build
     /// would write. A gate or a pre-commit hook wants the report and the exit code, with no
     /// output tree to clean up afterwards.
