@@ -276,6 +276,17 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
+    /// A <c>rep</c> in a macro body whose flags come from an <c>operand</c> argument reads the
+    /// argument, as the width analysis does. A flag byte without the carry leaves the carry kept.
+    /// </summary>
+    [Fact]
+    public void ARepInAMacroReadsItsOperandArgument()
+    {
+        Assert.Empty(Wide(".macro widen(flags: operand) {\n    rep flags\n}\n"
+            + ".proc p: a8, i8, native, keeps c -> a16 {\n    widen!({#$20})\n    rts\n}\n"));
+    }
+
+    /// <summary>
     /// A scope that something branches into past its start has no single pass through it, so it
     /// gets neither a cost nor a register answer. Here a pass from the top restores A, but a path
     /// that enters at <c>mid</c> pulls a byte the scope never pushed.

@@ -946,7 +946,7 @@ public static class RegisterKeeps
                     : state.With(moved.To, moved.From == Registers.A ? Taken(step, mnemonic, state) : state.Of(moved.From));
             }
             var written = RegisterEffects.Written(
-                mnemonic, mode, mode == AddressingMode.Immediate ? Constant(step) : null);
+                mnemonic, mode, mode == AddressingMode.Immediate ? StepOperands.Constant(model, step) : null);
             var after = state.WithEach(written & ~Registers.A, RegisterValue.Written);
             if (!written.HasFlag(Registers.A))
                 return after;
@@ -1189,12 +1189,5 @@ public static class RegisterKeeps
             if (transfer != Transfer.Jump || target.Signature is null || !outside)
                 yield return target;
         }
-
-        /// <summary>Returns the value of an immediate operand, where it is known.</summary>
-        private long? Constant(Step step) =>
-            (step.Statement as InstructionStatementSyntax)?.Operand?.ChildNodes
-                .OfType<ExpressionSyntax>().FirstOrDefault() is { } expression
-                ? model.ValueOf(expression, step.On).AsNumber()
-                : null;
     }
 }

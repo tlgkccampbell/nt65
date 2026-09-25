@@ -419,7 +419,7 @@ public sealed class StateAnalysis : IProcessorStates
             MnemonicKind.Plp when state.Stack is null && state.WhyStack is { } lost => lost,
             MnemonicKind.Plp => new($"{quoted} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
             MnemonicKind.Xce => new($"{quoted} follows neither `clc` nor `sec`", "a `.state` after it declares what it is"),
-            MnemonicKind.Rep when mode != ProcessorMode.Native && Constant(step) is not null
+            MnemonicKind.Rep when mode != ProcessorMode.Native && StepOperands.Constant(model, step) is not null
                 => new($"{quoted} widens nothing in emulation mode, and the mode is not known", "a `.state` before it declares which mode it is"),
             MnemonicKind.Rep or MnemonicKind.Sep => new($"{quoted} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
             MnemonicKind.Jsr or MnemonicKind.Jsl when next is not null && statement.Operand is not AbsoluteOperandSyntax
@@ -542,7 +542,7 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Pea:
                 return state with
                 {
-                    Stack = stack?.PushValue(Constant(step) is { } pushed ? StateValue.Of(pushed & 0xffff) : StateValue.Unknown, 2),
+                    Stack = stack?.PushValue(StepOperands.Constant(model, step) is { } pushed ? StateValue.Of(pushed & 0xffff) : StateValue.Unknown, 2),
                 };
             case MnemonicKind.Pei:
             case MnemonicKind.Per:
@@ -750,7 +750,7 @@ public sealed class StateAnalysis : IProcessorStates
         // the widths and then finding the mode would throw away what the mode already said.
         if (state.E == ProcessorMode.Emulation)
             return state;
-        if (Constant(step) is not { } flags)
+        if (StepOperands.Constant(model, step) is not { } flags)
             return state with { A = Width.Unknown, Index = Width.Unknown };
 
         var width = reset
@@ -764,22 +764,13 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// Returns the value of an instruction's operand, such as the <c>#c</c> of <c>rep #c</c> or the
-    /// <c>c</c> of <c>pea c</c>, or null when it is not a constant.
-    /// </summary>
-    private long? Constant(Step step) =>
-        checks.OperandOf(step) is { } operand && CodeLayout.Expression(operand) is { } expression
-            ? model.ValueOf(expression, step.On).AsNumber()
-            : null;
-
-    /// <summary>
     /// Returns the constant <paramref name="step"/> loads into A, for an <c>lda #c</c>, or null for
     /// anything else.
     /// </summary>
     private long? Loaded(Step step) =>
         step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Lda }
         && layout.Of(step.Statement, step.On)?.Mode == AddressingMode.Immediate
-            ? Constant(step)
+            ? StepOperands.Constant(model, step)
             : null;
 
     /// <summary>
@@ -789,7 +780,7 @@ public sealed class StateAnalysis : IProcessorStates
     /// </summary>
     private StateValue MovedTo(Step step)
     {
-        if (checks.OperandOf(step) is not ImmediateOperandSyntax { SecondValue: { } destination })
+        if (StepOperands.Of(model, step) is not ImmediateOperandSyntax { SecondValue: { } destination })
             return StateValue.Unknown;
         if (model.ValueOf(destination, step.On).AsNumber() is { } bank and >= 0 and <= 0xff)
             return StateValue.Of(bank);

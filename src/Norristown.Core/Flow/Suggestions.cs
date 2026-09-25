@@ -156,8 +156,7 @@ public static class Suggestions
             if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rep or MnemonicKind.Sep } statement
                 || !Own(model, step)
                 || file.Layout.Of(statement, step.On)?.Mode != AddressingMode.Immediate
-                || statement.Operand is not { } operand || CodeLayout.Expression(operand) is not { } expression
-                || model.ValueOf(expression, step.On).AsNumber() is not { } flags)
+                || StepOperands.Constant(model, step) is not { } flags)
             {
                 continue;
             }

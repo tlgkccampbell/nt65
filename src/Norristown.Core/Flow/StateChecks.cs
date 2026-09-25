@@ -72,16 +72,6 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// Returns the operand an instruction has in this expansion of it. Where the body names an
-    /// <c>operand</c> parameter, that is the operand the call gave.
-    /// </summary>
-    public SyntaxNode? OperandOf(Step step)
-    {
-        var operand = (step.Statement as InstructionStatementSyntax)?.Operand;
-        return Operands.Substituted(model, operand, step.On)?.Operand ?? operand;
-    }
-
-    /// <summary>
     /// Returns whether <paramref name="target"/> is in another address space than the code at
     /// <paramref name="step"/>.
     /// </summary>
@@ -137,7 +127,7 @@ internal sealed class StateChecks
     /// </summary>
     public void CheckMemory(Step step, MnemonicKind mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
     {
-        if (mode is not { } chosen || OperandOf(step) is not { } operand
+        if (mode is not { } chosen || StepOperands.Of(model, step) is not { } operand
             || CodeLayout.Expression(operand) is not { } expression)
         {
             return;
@@ -527,7 +517,7 @@ internal sealed class StateChecks
         {
             if (step.Statement is not InstructionStatementSyntax statement)
                 continue;
-            if (OperandOf(step) is { } operand && CodeLayout.ThroughDirectPage(operand))
+            if (StepOperands.Of(model, step) is { } operand && CodeLayout.ThroughDirectPage(operand))
             {
                 Report(step, Catalogue.DirectPageUnknown.Message(
                     "`d:` is reached through the direct page",

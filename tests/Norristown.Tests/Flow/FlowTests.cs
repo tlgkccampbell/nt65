@@ -381,6 +381,19 @@ public sealed class FlowTests
     }
 
     /// <summary>
+    /// Checks that a loop whose count is loaded in a macro, from an <c>operand</c> argument, is
+    /// counted from the argument's value.
+    /// </summary>
+    [Fact]
+    public void ACountLoadedFromAnOperandArgumentIsCounted()
+    {
+        var region = Region(
+            ".macro count(n: operand) {\n    ldx n\n}\n.proc p {\n    count!({#4})\n@loop:\n    dex\n    bne @loop\n    rts\n}\n");
+
+        Assert.NotNull(region.Cost.Maximum);
+    }
+
+    /// <summary>
     /// Returns the problems reported for <paramref name="text"/>, compiled after two lines that
     /// declare the module and select the code segment.
     /// </summary>

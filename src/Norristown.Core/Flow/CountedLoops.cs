@@ -33,7 +33,7 @@ internal static class CountedLoops
     {
         foreach (var loop in Loops.In(blocks))
         {
-            if (IterationCount(model, blocks, loop, bodies) is not { } iterations)
+            if (IterationCount(model, layout, blocks, loop, bodies) is not { } iterations)
                 continue;
 
             // The loop is marked as counted while the cost of an iteration is worked out, so
@@ -52,7 +52,7 @@ internal static class CountedLoops
     /// Every part of the shape has to hold, and anything unexpected leaves the loop uncounted.
     /// </summary>
     private static int? IterationCount(
-        SemanticModel model, IReadOnlyList<BasicBlock> blocks, Loop loop,
+        SemanticModel model, CodeLayout layout, IReadOnlyList<BasicBlock> blocks, Loop loop,
         IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies)
     {
         // Each iteration ends with the decrement immediately followed by the branch back,
@@ -114,7 +114,7 @@ internal static class CountedLoops
             if (!loop.Inside[i] && blocks[i].Successors.Any(edge => edge.Kind != EdgeKind.Call && edge.To == loop.Header))
                 from.Add(i);
         }
-        if (from.Count != 1 || Started(model, blocks[from[0]], counter == MnemonicKind.Dex ? MnemonicKind.Ldx : MnemonicKind.Ldy, register) is not { } start)
+        if (from.Count != 1 || Started(model, layout, blocks[from[0]], counter == MnemonicKind.Dex ? MnemonicKind.Ldx : MnemonicKind.Ldy, register) is not { } start)
             return null;
 
         // `bne` runs the count down to zero, so the stride has to divide it or the count skips
@@ -144,7 +144,7 @@ internal static class CountedLoops
     /// leaves anything else there. The last value the block writes to the register is what the
     /// loop starts from.
     /// </summary>
-    private static long? Started(SemanticModel model, BasicBlock before, MnemonicKind load, Registers register)
+    private static long? Started(SemanticModel model, CodeLayout layout, BasicBlock before, MnemonicKind load, Registers register)
     {
         long? started = null;
         foreach (var step in InstructionsIn(before))
@@ -152,7 +152,7 @@ internal static class CountedLoops
             var mnemonic = Mnemonic(step);
             if (!Writes(mnemonic, register))
                 continue;
-            started = mnemonic == load ? Immediate(model, step) : null;
+            started = mnemonic == load ? StepOperands.Immediate(model, layout, step) : null;
         }
         return started;
     }
@@ -277,13 +277,4 @@ internal static class CountedLoops
     /// <summary>Returns the mnemonic of a step's statement, or <see cref="MnemonicKind.None"/>.</summary>
     private static MnemonicKind Mnemonic(Step step) =>
         (step.Statement as InstructionStatementSyntax)?.MnemonicKind ?? MnemonicKind.None;
-
-    /// <summary>
-    /// Returns the value of a step's immediate operand, or null when it has none whose value nt65
-    /// knows.
-    /// </summary>
-    private static long? Immediate(SemanticModel model, Step step) =>
-        step.Statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax operand }
-            ? model.ValueOf(operand.Value, step.On).AsNumber()
-            : null;
 }
