@@ -30,6 +30,12 @@ public sealed class BrokenSourceTests
     /// </summary>
     private const int MaximumProblems = 5;
 
+    /// <summary>
+    /// The share of a cut variant's lines that the everyday run makes requests on: one line in
+    /// this many. The thorough run makes them on every line.
+    /// </summary>
+    private const int Stride = 8;
+
     [Fact]
     public void EveryRequestAnswersOnWholeAndBrokenLines()
     {
@@ -37,25 +43,27 @@ public sealed class BrokenSourceTests
         // costs more than a short one, and the uncut file more than a cut one, so smaller units
         // keep every core busy until the end.
         var variants = Repo.Sources()
-            .SelectMany(path => BrokenLines.Variants(Repo.ReadText(path))
-                .Select((text, cut) => (Where: $"{Repo.Named(path)} cut {cut}", Path: Repo.Named(path), Text: text)))
+            .SelectMany(path => BrokenLines.Of(path)
+                .Select((text, cut) => (Where: $"{Repo.Named(path)} cut {cut}", Path: Repo.Named(path), Text: text, Cut: cut)))
             .ToList();
         Assert.True(variants.Count > 1000, $"{variants.Count} variants is too few to be every source's");
 
         var failures = Repo.CollectFailures(variants, variant =>
         {
             var problems = new List<string>();
-            Sweep(variant.Path, variant.Where, variant.Text, problems);
+            Sweep(variant.Path, variant.Where, variant.Text, variant.Cut, problems);
             return problems;
         });
         Assert.True(failures.Count == 0, string.Join("\n", failures.Take(20)));
     }
 
     /// <summary>
-    /// Analyzes one variant as a program of its own, and then makes requests about it at every
-    /// line.
+    /// Analyzes one variant as a program of its own, and then makes requests about it line by
+    /// line. The everyday run makes them on every line of the uncut source but only on every
+    /// <see cref="Stride"/>th line of a cut one. Each cut starts at a different line, so together
+    /// the cuts still reach most lines. The thorough run makes them on every line of every variant.
     /// </summary>
-    private static void Sweep(string path, string where, string text, List<string> problems)
+    private static void Sweep(string path, string where, string text, int cut, List<string> problems)
     {
         var tree = SyntaxTree.Parse(path, text);
         ProgramAnalysis analysis;
@@ -88,7 +96,8 @@ public sealed class BrokenSourceTests
         }
 
         WholeFile(analysis, model, where, problems);
-        for (var line = 0; line < tree.LineCount && problems.Count < MaximumProblems; line++)
+        var step = cut == 0 || Fixtures.FixtureRunner.ThoroughMode ? 1 : Stride;
+        for (var line = step == 1 ? 0 : cut % Stride; line < tree.LineCount && problems.Count < MaximumProblems; line += step)
             OnLine(analysis, model, line, where, problems);
     }
 
