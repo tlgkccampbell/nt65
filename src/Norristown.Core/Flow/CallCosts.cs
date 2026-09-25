@@ -19,9 +19,10 @@ public static class CallCosts
 {
     /// <summary>
     /// Works out the total cost of every routine of <paramref name="flows"/> and stores it in the
-    /// routine's <see cref="FlowRegion.Total"/>.
+    /// routine's <see cref="FlowRegion.Total"/>. The regions are changed in place, so a flow kept
+    /// from an earlier analysis has to be the copy <see cref="ControlFlow.ForComposing"/> makes.
     /// </summary>
-    public static void Compose(IEnumerable<ControlFlow> flows)
+    internal static void Compose(IEnumerable<ControlFlow> flows)
     {
         var regions = new Dictionary<RoutineKey, FlowRegion>();
         foreach (var flow in flows)

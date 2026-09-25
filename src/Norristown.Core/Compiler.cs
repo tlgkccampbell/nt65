@@ -443,8 +443,9 @@ public static class Compiler
             analyzed[model.Tree.Path] = found;
         }
 
-        // Composing the program updates the routines of the files kept from before, which the
-        // previous analysis shares, so a cancelled analysis stops here rather than partway through.
+        // Composing the program sets its answers on this analysis's regions, which for a file kept
+        // from before are the copies made above, so the previous analysis keeps its own answers.
+        // Composing cannot be cancelled once it starts, so a cancelled analysis stops here.
         cancellation.ThrowIfCancellationRequested();
         return files;
     }
