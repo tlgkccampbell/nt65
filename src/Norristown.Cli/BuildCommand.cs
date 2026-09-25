@@ -299,15 +299,13 @@ public static class BuildCommand
         if (header is not null && compilation.Header is { } text)
             Write(header, text, [.. paths.Concat(extra).Select(path => Path.Combine(root, path))]);
 
+        // Every path in the dependency file is relative to the project root, like every path nt65
+        // writes into output, because that is where a Makefile that runs nt65 normally runs.
         if (run.Command.DependencyFile is { } dependencyFile)
         {
-            List<(string, IEnumerable<string>)> rules =
-            [
-                .. written.Select(o => (ProjectRoot.Shown(directory, Path.Combine(root, o.Path)),
-                    o.Dependencies.Concat(extra).Select(dependency => ProjectRoot.Shown(directory, Path.Combine(root, dependency))))),
-            ];
+            List<(string, IEnumerable<string>)> rules = [.. written.Select(o => (o.Path, o.Dependencies.Concat(extra)))];
             if (header is not null)
-                rules.Add((ProjectRoot.Shown(directory, header), paths.Concat(extra).Select(path => ProjectRoot.Shown(directory, Path.Combine(root, path)))));
+                rules.Add((ProjectRoot.Logical(root, header), paths.Concat(extra)));
             Write(Path.GetFullPath(dependencyFile, directory), DependencyFile.Write(rules), []);
         }
     }

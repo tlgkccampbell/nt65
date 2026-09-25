@@ -98,7 +98,8 @@ public sealed class BuildCommandTests : IDisposable
 
     /// <summary>
     /// The dependency file names, for each output, its source, the modules whose interfaces it
-    /// uses, the binaries included, and the project file, relative to where nt65 runs.
+    /// uses, the binaries included, and the project file. Every path in it is relative to the
+    /// project root, wherever nt65 runs.
     /// </summary>
     [Fact]
     public void TheDependencyFileNamesWhatEachOutputDependsOn()
@@ -110,7 +111,7 @@ public sealed class BuildCommandTests : IDisposable
         root.Write("app/data/font.bin", "ABCD");
         var app = Path.Combine(root.FullName, "app");
 
-        Assert.Equal(ExitCode.Success, Run(app, "build", "--depfile", "build/nt65.d").Code);
+        Assert.Equal(ExitCode.Success, Run(Path.Combine(app, "src"), "build", "--depfile", "../build/nt65.d").Code);
 
         Assert.Equal("""
             build/main.s: \
