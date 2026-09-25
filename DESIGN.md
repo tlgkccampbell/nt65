@@ -692,7 +692,8 @@ and says which directory it is watching after each one. What it waits for is wha
 build read — the project file, the sources, and the binaries an `.incbin` measured, which is
 the set `--depfile` names — and any `.nt65` under the project root or in a directory the globs
 search besides, since a file that did not exist when the globs were matched is in no set worked
-out before it was written.
+out before it was written. An event the system drops, as it may when a branch switch changes
+many files at once, is taken as a change.
 Nothing nt65 writes is either of those, so a build does not set off the next one. A command
 line that is wrong comes straight back, because no file changing fixes it.
 

@@ -21,7 +21,7 @@ namespace Norristown.Cli;
 internal static class WatchCommand
 {
     /// <summary>
-    /// The time, in milliseconds, to let a burst of file events finish before building.
+    /// The time, in milliseconds, that must pass with no file events before a build starts.
     /// </summary>
     private const int QuietMilliseconds = 120;
 
@@ -47,10 +47,10 @@ internal static class WatchCommand
         // still triggers a rebuild rather than being missed.
         var watched = new HashSet<string>(FilePaths.Comparer);
         using var changed = new SemaphoreSlim(0, 1);
-        void Touched(object? sender, FileSystemEventArgs change)
+        var last = Environment.TickCount64;
+        void Signal()
         {
-            if (!Matters(change.FullPath, watched))
-                return;
+            Interlocked.Exchange(ref last, Environment.TickCount64);
             try
             {
                 changed.Release();
@@ -60,7 +60,15 @@ internal static class WatchCommand
                 // A change is already pending, and one build covers any number of changes.
             }
         }
-        using var watchers = new Watchers(Touched);
+        void Touched(object? sender, FileSystemEventArgs change)
+        {
+            if (Matters(change.FullPath, watched)
+                || (change is RenamedEventArgs renamed && Matters(renamed.OldFullPath, watched)))
+            {
+                Signal();
+            }
+        }
+        using var watchers = new Watchers(Touched, Signal);
         watchers.Update([(root, true)]);
 
         while (true)
@@ -86,9 +94,13 @@ internal static class WatchCommand
             }
 
             // An editor may write a file in several steps, and saving many files at once raises
-            // many events, so wait for the events to stop, then clear the signal and build once.
-            if (cancellation.WaitHandle.WaitOne(QuietMilliseconds))
-                return ExitCode.Success;
+            // many events. The build therefore waits until no event has arrived for a while, so
+            // that one build covers them all, then clears the signal they left.
+            while (Environment.TickCount64 - Interlocked.Read(ref last) is var quiet && quiet < QuietMilliseconds)
+            {
+                if (cancellation.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(QuietMilliseconds - quiet)))
+                    return ExitCode.Success;
+            }
             changed.Wait(0, CancellationToken.None);
         }
     }
@@ -126,13 +138,18 @@ internal static class WatchCommand
     /// under another that is watched with its subdirectories needs no watcher of its own.
     /// </summary>
     /// <param name="touched">The handler for a file that is created, changed, deleted or renamed.</param>
-    private sealed class Watchers(FileSystemEventHandler touched) : IDisposable
+    /// <param name="lost">
+    /// The handler for events that were lost, because the watcher's buffer overflowed or the
+    /// watcher failed. Any file may have changed, so the handler should build again.
+    /// </param>
+    private sealed class Watchers(FileSystemEventHandler touched, Action lost) : IDisposable
     {
         private readonly Dictionary<string, FileSystemWatcher> active = new(FilePaths.Comparer);
+        private readonly HashSet<FileSystemWatcher> failed = [];
 
         /// <summary>
         /// Watches exactly the directories in <paramref name="wanted"/> that exist, keeping the
-        /// watchers it already has for them.
+        /// watchers it already has for them. A watcher that failed is replaced.
         /// </summary>
         public void Update(IEnumerable<(string Directory, bool Recursive)> wanted)
         {
@@ -147,13 +164,18 @@ internal static class WatchCommand
                     && !chosen.Any(other => other.Value && Within(entry.Key, other.Key)))
                 .ToDictionary(entry => entry.Key, entry => entry.Value, FilePaths.Comparer);
 
-            foreach (var (directory, watcher) in active.ToList())
+            lock (failed)
             {
-                if (!needed.TryGetValue(directory, out var recursive) || recursive != watcher.IncludeSubdirectories)
+                foreach (var (directory, watcher) in active.ToList())
                 {
-                    watcher.Dispose();
-                    active.Remove(directory);
+                    if (!needed.TryGetValue(directory, out var recursive)
+                        || recursive != watcher.IncludeSubdirectories || failed.Contains(watcher))
+                    {
+                        watcher.Dispose();
+                        active.Remove(directory);
+                    }
                 }
+                failed.Clear();
             }
             foreach (var (directory, recursive) in needed)
             {
@@ -186,11 +208,26 @@ internal static class WatchCommand
             {
                 IncludeSubdirectories = recursive,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+
+                // A switch of git branch can change thousands of files at once. The largest buffer
+                // makes an overflow less likely, and an overflow still triggers a build.
+                InternalBufferSize = 64 * 1024,
             };
             watcher.Changed += touched;
             watcher.Created += touched;
             watcher.Deleted += touched;
             watcher.Renamed += (sender, renamed) => touched(sender, renamed);
+            watcher.Error += (sender, problem) =>
+            {
+                // An overflow loses events but leaves the watcher running. Any other error stops
+                // it, so the next update starts another in its place.
+                if (problem.GetException() is not InternalBufferOverflowException)
+                {
+                    lock (failed)
+                        failed.Add(watcher);
+                }
+                lost();
+            };
             watcher.EnableRaisingEvents = true;
             return watcher;
         }
