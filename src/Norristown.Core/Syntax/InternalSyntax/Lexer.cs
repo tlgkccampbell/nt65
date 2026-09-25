@@ -224,7 +224,8 @@ internal static class Lexer
     /// Scans a character or string literal, up to its closing quote or the end of the line, and
     /// returns its errors, or null if it has none. Both kinds of literal take the escapes
     /// <c>\n \r \t \0 \\ \" \' \xHH</c>. Every unreadable escape is reported, since each needs its
-    /// own correction. A character literal that does not hold exactly one character is reported
+    /// own correction, and a literal that reaches the end of the line is reported as unterminated
+    /// after them. A character literal that does not hold exactly one character is reported
     /// only when every escape was readable, since otherwise a bad escape is the likely cause.
     /// </summary>
     private static IReadOnlyList<DiagnosticMessage>? ScanQuoted(ReadOnlySpan<char> text, ref int pos, char quote)
@@ -237,8 +238,10 @@ internal static class Lexer
         {
             if (pos >= text.Length)
             {
+                var unterminated = Catalogue.TextUnterminated.Message(isChar ? "character literal" : "string");
                 if (errors is null)
-                    return One(Catalogue.TextUnterminated.Message(isChar ? "character literal" : "string"));
+                    return One(unterminated);
+                errors.Add(unterminated);
                 return errors;
             }
             var c = text[pos];

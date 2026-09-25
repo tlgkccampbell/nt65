@@ -74,13 +74,15 @@ public sealed class LexerTests
     /// <summary>
     /// Every bad escape in a literal is reported, since each is a separate thing to correct. A
     /// character literal with a bad escape is not also checked for holding exactly one character:
-    /// the count means little while one of its characters could not be read.
+    /// the count means little while one of its characters could not be read. A literal that also
+    /// runs to the end of the line is reported as unterminated after its escapes.
     /// </summary>
     [Theory]
     [InlineData(@"""\q\z""", new[] { @"unknown escape `\q`", @"unknown escape `\z`" })]
     [InlineData(@"""\x4\q""", new[] { @"`\x` must be followed by two hexadecimal digits", @"unknown escape `\q`" })]
     [InlineData(@"'\xZZ'", new[] { @"`\x` must be followed by two hexadecimal digits" })]
-    [InlineData(@"""\q", new[] { @"unknown escape `\q`" })]
+    [InlineData(@"""\q", new[] { @"unknown escape `\q`", "unterminated string" })]
+    [InlineData(@"'\q", new[] { @"unknown escape `\q`", "unterminated character literal" })]
     public void EveryEscapeALiteralGetsWrongIsReported(string text, string[] errors)
     {
         var token = Lexer.LexLine(text).Tokens[0];
