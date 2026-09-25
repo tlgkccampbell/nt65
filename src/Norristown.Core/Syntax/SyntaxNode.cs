@@ -301,7 +301,9 @@ public abstract class SyntaxNode
     /// Returns a copy of this node that has <paramref name="annotations"/> in addition to the
     /// annotations it already has. The result is a node of this node's own class. It belongs to no
     /// file until a rewrite puts it into one, and it is a <em>different</em> node from this one,
-    /// so that a rewrite can find it again afterwards.
+    /// so that a rewrite can find it again afterwards. A line, a block or the file is the
+    /// exception: it is the node of a copy of its file, since what a line parses to depends on the
+    /// blocks around it.
     /// </summary>
     /// <param name="annotations">
     /// The annotations to add. Annotations this node already has are skipped.
@@ -809,11 +811,16 @@ public abstract class SyntaxNode
     }
 
     /// <summary>
-    /// Returns this node if <paramref name="green"/> is the green node it already wraps, or a
-    /// detached node that wraps <paramref name="green"/> if its annotations changed.
+    /// Returns this node if <paramref name="green"/> is the green node it already wraps, or a node
+    /// with the annotations of <paramref name="green"/> if they changed. A line, a block or the
+    /// file is only whole within its file, so it becomes the node of a copy of its file. Any other
+    /// node becomes a detached node that wraps <paramref name="green"/>.
     /// </summary>
     /// <param name="green">The green node with the annotations the result is to have.</param>
-    private SyntaxNode Reannotated(GreenNode green) => green == Green ? this : SyntaxTree.Detached(green);
+    private SyntaxNode Reannotated(GreenNode green) =>
+        green == Green ? this
+        : this is LineSyntax or BlockSyntax or FileSyntax ? Tree.Reannotated(this, green.Annotations)
+        : SyntaxTree.Detached(green);
 
     /// <summary>Replaces the given nodes, or removes them from the tree, during a rewrite.</summary>
     /// <typeparam name="TNode">The type of the nodes to replace.</typeparam>

@@ -45,6 +45,12 @@ public sealed class SyntaxTree
     // diagnostics, a flag on the green line alone could not cover everything on the line.
     private readonly bool[]? annotated;
 
+    // The annotations of lines, blocks and the file itself, by the line of the file each starts
+    // on. Blocks and the file are built afresh with every tree, and a continued line is joined
+    // afresh, so their annotations are kept here and put on the nodes once they are built. An
+    // edit keeps the entries of the lines it leaves alone, as it keeps their parses.
+    private readonly ImmutableArray<NodeMark> nodeMarks;
+
     /// <summary>
     /// Initializes the tree that a node built by <see cref="SyntaxFactory"/> belongs to. The tree's
     /// text is the node's own text and nothing else, so the node's spans, trivia and diagnostics
@@ -64,6 +70,7 @@ public sealed class SyntaxTree
         statements = [];
         blockErrors = [];
         reported = [];
+        nodeMarks = [];
         diagnostics = new(() =>
         {
             var result = new List<Diagnostic>();
@@ -72,9 +79,25 @@ public sealed class SyntaxTree
         });
     }
 
+    /// <summary>Initializes a tree of a file from the lines the lexer read.</summary>
+    /// <param name="path">The file's logical path.</param>
+    /// <param name="text">The file's text.</param>
+    /// <param name="lineStarts">Where each line of the text starts.</param>
+    /// <param name="physical">The lines the lexer read, one per line of the file.</param>
+    /// <param name="keptParses">The annotated parses to keep, by the line of the file each starts on.</param>
+    /// <param name="previous">
+    /// The lines the parser read in the tree before an edit, which lets a line kept across the edit
+    /// keep its parse.
+    /// </param>
+    /// <param name="nodeMarks">The annotations of lines, blocks and the file.</param>
+    /// <param name="keptFitTheLines">
+    /// Whether every kept parse is known to be of the line it is kept for, as when only the
+    /// annotations of the lines have changed.
+    /// </param>
     private SyntaxTree(
         string path, string text, ImmutableArray<int> lineStarts, ImmutableArray<GreenLine> physical,
-        ImmutableArray<Parser.Result?> keptParses, ImmutableArray<GreenLine> previous)
+        ImmutableArray<Parser.Result?> keptParses, ImmutableArray<GreenLine> previous,
+        ImmutableArray<NodeMark> nodeMarks = default, bool keptFitTheLines = false)
     {
         Path = path;
         Text = text;
@@ -93,10 +116,12 @@ public sealed class SyntaxTree
         // A kept parse belongs to the line it was made for, so it is kept only where that line
         // itself was kept, and not where an edit joined it to another or split it from one.
         this.keptParses = keptParses;
-        var kept = keptParses.IsDefaultOrEmpty ? default : Kept(lines, previous, keptParses, firsts);
+        var kept = keptParses.IsDefaultOrEmpty ? default
+            : Kept(lines, keptFitTheLines ? default : previous, keptParses, firsts);
 
         var errors = new List<Blocks.Error>();
-        green = Blocks.Build(lines, errors);
+        this.nodeMarks = nodeMarks.IsDefault ? [] : nodeMarks;
+        green = WithMarks(Blocks.Build(lines, errors), this.nodeMarks, firsts);
         blockErrors = [.. errors];
 
         // Blocks come first because a line's syntax depends on the kind of block around it.
@@ -120,6 +145,8 @@ public sealed class SyntaxTree
             if (Marked(parsed[i], lines[i]))
                 (annotated ??= new bool[lines.Length])[i] = true;
         }
+        foreach (var mark in this.nodeMarks.Where(mark => mark.Kind == SyntaxKind.Line && mark.Line < joinedOf.Length))
+            (annotated ??= new bool[lines.Length])[joinedOf[mark.Line]] = true;
         foreach (var error in blockErrors)
             reported[error.Line] = true;
         diagnostics = new(() => CollectRange(0, lines.Length - 1));
@@ -165,6 +192,9 @@ public sealed class SyntaxTree
     /// breaks has n + 1 lines.
     /// </summary>
     internal ImmutableArray<GreenLine> PhysicalLines { get; }
+
+    /// <summary>Gets the annotations of lines, blocks and the file, by the line each starts on.</summary>
+    internal ImmutableArray<NodeMark> NodeMarks => nodeMarks;
 
     /// <summary>Parses a source file.</summary>
     public static SyntaxTree Parse(SourceFile file) => Parse(file.Path, file.Text);
@@ -291,7 +321,8 @@ public sealed class SyntaxTree
         for (var i = oldCount - suffix; i < oldCount; i++)
             lines.Add(PhysicalLines[i]);
         return new SyntaxTree(
-            Path, text, starts, lines.MoveToImmutable(), KeptParsesAfter(prefix, suffix, newCount), Lines);
+            Path, text, starts, lines.MoveToImmutable(), KeptParsesAfter(prefix, suffix, newCount), Lines,
+            NodeMarksAfter(prefix, suffix, newCount));
     }
 
     /// <summary>
@@ -314,6 +345,24 @@ public sealed class SyntaxTree
         for (var i = 0; i < suffix; i++)
             any |= (kept[newCount - 1 - i] = keptParses[keptParses.Length - 1 - i]) is not null;
         return any ? ImmutableCollectionsMarshal.AsImmutableArray(kept) : default;
+    }
+
+    /// <summary>
+    /// Returns the annotations of lines, blocks and the file to keep in the tree an edit produces.
+    /// A line or block keeps its annotations when the line it starts on keeps its green node, as
+    /// <see cref="KeptParsesAfter"/> keeps parses, and the file always keeps its own.
+    /// </summary>
+    /// <param name="prefix">The number of lines at the start of the file the edit left alone.</param>
+    /// <param name="suffix">The number of lines at the end of the file the edit left alone.</param>
+    /// <param name="newCount">The number of lines in the edited file.</param>
+    private ImmutableArray<NodeMark> NodeMarksAfter(int prefix, int suffix, int newCount)
+    {
+        if (nodeMarks.IsEmpty)
+            return nodeMarks;
+        var oldCount = LineStarts.Length;
+        return [.. nodeMarks
+            .Where(mark => mark.Kind == SyntaxKind.File || mark.Line < prefix || mark.Line >= oldCount - suffix)
+            .Select(mark => mark.Kind == SyntaxKind.File || mark.Line < prefix ? mark : mark with { Line = mark.Line + newCount - oldCount })];
     }
 
     /// <summary>
@@ -364,7 +413,44 @@ public sealed class SyntaxTree
     /// One entry per line, holding either a parse to keep or null to use the line's own parse.
     /// </param>
     internal SyntaxTree WithKeptParses(ImmutableArray<Parser.Result?> kept) =>
-        new(Path, Text, LineStarts, PhysicalLines, kept, Lines);
+        new(Path, Text, LineStarts, PhysicalLines, kept, Lines, nodeMarks);
+
+    /// <summary>
+    /// Returns a copy of this tree with annotations restored on what the parses cannot hold.
+    /// <see cref="AnnotationCarrier"/> uses this method as it does <see cref="WithKeptParses"/>.
+    /// The text is this tree's. The lines the lexer read are <paramref name="physical"/>, which
+    /// differ from this tree's only in the annotations of their tokens.
+    /// </summary>
+    /// <param name="physical">The lines the lexer read, with annotated tokens.</param>
+    /// <param name="kept">One entry per line, holding either a parse to keep or null.</param>
+    /// <param name="marks">The annotations of lines, blocks and the file.</param>
+    internal SyntaxTree WithAnnotated(
+        ImmutableArray<GreenLine> physical, ImmutableArray<Parser.Result?> kept, ImmutableArray<NodeMark> marks) =>
+        new(Path, Text, LineStarts, physical, kept, Lines, marks, keptFitTheLines: true);
+
+    /// <summary>
+    /// Returns the node of a copy of this tree that corresponds to <paramref name="node"/>, a line,
+    /// a block or the file, with <paramref name="wanted"/> as its annotations. Nothing else about
+    /// the copy differs, so the node answers every question as <paramref name="node"/> does.
+    /// </summary>
+    /// <param name="node">A line, a block or the file of this tree.</param>
+    /// <param name="wanted">The annotations the node is to have.</param>
+    internal SyntaxNode Reannotated(SyntaxNode node, ImmutableArray<SyntaxAnnotation> wanted)
+    {
+        var line = node is FileSyntax ? 0 : node.LineIndex;
+        ImmutableArray<NodeMark> marks =
+        [
+            .. nodeMarks.Where(mark => mark.Line != line || mark.Kind != node.Kind),
+            .. wanted.IsEmpty ? [] : new[] { new NodeMark(line, node.Kind, wanted) },
+        ];
+        var tree = new SyntaxTree(Path, Text, LineStarts, PhysicalLines, keptParses, Lines, marks);
+        return node switch
+        {
+            FileSyntax => tree.Root,
+            LineSyntax => tree.GetLine(line),
+            _ => tree.Root.DescendantNodes().OfType<BlockSyntax>().First(block => block.LineIndex == line),
+        };
+    }
 
     /// <summary>
     /// Returns everything the line holding the 0-based line <paramref name="line"/> of the file
@@ -434,6 +520,15 @@ public sealed class SyntaxTree
         }
         return false;
     }
+
+    /// <summary>
+    /// Checks whether a line or a block starting on any line from <paramref name="first"/> to
+    /// <paramref name="last"/>, both 0-based and inclusive lines of the file, has annotations of
+    /// its own. A block and the file use this method, with <see cref="LinesContainAnnotations"/>,
+    /// to answer <see cref="SyntaxNode.ContainsAnnotations"/>.
+    /// </summary>
+    internal bool NodesContainAnnotations(int first, int last) =>
+        nodeMarks.Any(mark => mark.Kind != SyntaxKind.File && mark.Line >= first && mark.Line <= last);
 
     /// <summary>
     /// Adds the diagnostics of the lines from <paramref name="first"/> to <paramref name="last"/>,
@@ -507,6 +602,71 @@ public sealed class SyntaxTree
         (BlockKind.Enum, BlockKind.If) => BlockKind.Enum,
         _ => block,
     };
+
+    /// <summary>
+    /// Returns <paramref name="file"/> with <paramref name="marks"/> put on the lines and blocks
+    /// they name and on the file itself. A mark whose line starts no node of its kind is dropped.
+    /// </summary>
+    /// <param name="file">The file as the blocks were built.</param>
+    /// <param name="marks">The annotations, by the line of the file each node starts on.</param>
+    /// <param name="firsts">For each line the parser reads, the line of the file where it starts.</param>
+    private static GreenFile WithMarks(GreenFile file, ImmutableArray<NodeMark> marks, ImmutableArray<int> firsts)
+    {
+        if (marks.IsEmpty)
+            return file;
+        var line = 0;
+        var children = WithMarks(file.Children, marks, firsts, ref line);
+        var marked = children == file.Children ? file : new GreenFile(children);
+        return (GreenFile)WithMark(marked, marks, 0, SyntaxKind.File);
+    }
+
+    /// <summary>
+    /// Returns <paramref name="children"/>, the lines and blocks of a file or a block, with
+    /// <paramref name="marks"/> put on them, or the same array when none is marked.
+    /// <paramref name="line"/> counts the lines the parser reads, and is advanced past them.
+    /// </summary>
+    private static ImmutableArray<GreenNode> WithMarks(
+        ImmutableArray<GreenNode> children, ImmutableArray<NodeMark> marks, ImmutableArray<int> firsts, ref int line)
+    {
+        ImmutableArray<GreenNode>.Builder? changed = null;
+        for (var i = 0; i < children.Length; i++)
+        {
+            var child = children[i];
+            GreenNode marked;
+            if (child is GreenBlock block)
+            {
+                var start = firsts[line];
+                var inner = WithMarks(block.Children, marks, firsts, ref line);
+                marked = WithMark(inner == block.Children ? block : new GreenBlock(inner, block.HasCloser), marks, start, SyntaxKind.Block);
+            }
+            else
+            {
+                marked = WithMark(child, marks, firsts[line++], SyntaxKind.Line);
+            }
+            if (changed is null && !ReferenceEquals(marked, child))
+            {
+                changed = ImmutableArray.CreateBuilder<GreenNode>(children.Length);
+                changed.AddRange(children, i);
+            }
+            changed?.Add(marked);
+        }
+        return changed is null ? children : changed.MoveToImmutable();
+    }
+
+    /// <summary>
+    /// Returns <paramref name="node"/> with the annotations of the mark for a node of
+    /// <paramref name="kind"/> starting on <paramref name="line"/>, or the node itself when there
+    /// is none.
+    /// </summary>
+    private static GreenNode WithMark(GreenNode node, ImmutableArray<NodeMark> marks, int line, SyntaxKind kind)
+    {
+        foreach (var mark in marks)
+        {
+            if (mark.Line == line && mark.Kind == kind)
+                return node.WithAnnotations(mark.Annotations);
+        }
+        return node;
+    }
 
     /// <summary>
     /// Returns the kept parse of each line the parser reads, indexed as <paramref name="lines"/>
@@ -617,4 +777,13 @@ public sealed class SyntaxTree
             .ThenBy(d => d.Message, StringComparer.Ordinal)
             .ThenBy(d => d.Id, StringComparer.Ordinal)];
     }
+
+    /// <summary>
+    /// Represents the annotations of a line, a block or the file, which the tree puts on the node
+    /// each time it builds it.
+    /// </summary>
+    /// <param name="Line">The 0-based line of the file the node starts on.</param>
+    /// <param name="Kind">The kind of the node, which is a line, a block or the file.</param>
+    /// <param name="Annotations">The node's annotations.</param>
+    internal readonly record struct NodeMark(int Line, SyntaxKind Kind, ImmutableArray<SyntaxAnnotation> Annotations);
 }

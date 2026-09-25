@@ -184,27 +184,25 @@ public sealed class AnnotationTests
 
     /// <summary>
     /// A child element for which the reparse makes no match loses its annotations, silently. A
-    /// line is the plainest case of that. A rewrite writes a line back as text, so a tag on what is
-    /// <em>on</em> the line survives, and a tag on the line node itself has nothing to land on.
+    /// number whose token is given the text of a name is read back as a name rather than a number,
+    /// so the tag on the number has nothing to land on. A tag on something else on the same line
+    /// still survives.
     /// </summary>
     [Fact]
     public void AnAnnotationWithNothingToLandOnIsDropped()
     {
         var tree = SyntaxTree.Parse("main.nt65", Program);
-        var line = tree.GetLine(2);
         var number = tree.Root.DescendantNodes().OfType<NumberExpressionSyntax>().Single();
-        var inner = new SyntaxAnnotation("on what is written");
-        var whole = new SyntaxAnnotation("on the line");
+        var mnemonic = tree.Root.DescendantTokens().First(token => token.Text == "lda");
+        var lost = new SyntaxAnnotation("on what is misread");
+        var kept = new SyntaxAnnotation("on what is read back");
 
-        var root = tree.Root.ReplaceNodes<SyntaxNode>(
-            [line, number],
-            (old, _) => ReferenceEquals(old, line)
-                ? line.WithAdditionalAnnotations(whole)
-                : number.WithAdditionalAnnotations(inner));
-        Assert.Equal(Program, root.ToFullString());
-        Assert.Equal("16", Assert.Single(root.GetAnnotatedNodes(inner)).GetText());
-        Assert.Empty(root.GetAnnotatedNodes(whole));
-        Assert.False(root.Tree.GetLine(2).ContainsAnnotations);
+        var misread = number.ReplaceToken(number.Token, number.Token.WithText("mask")).WithAdditionalAnnotations(lost);
+        var root = tree.Root.ReplaceNode(number, misread);
+        root = root.ReplaceToken(root.FindToken(mnemonic.Span.Start), mnemonic.WithAdditionalAnnotations(kept));
+        Assert.Equal(".proc main {\n    lda #mask ; the mask\n    sta mask\n    rts\n}\n", root.ToFullString());
+        Assert.Empty(root.GetAnnotatedNodes(lost));
+        Assert.Equal("lda", Assert.Single(root.GetAnnotatedTokens(kept)).Text);
     }
 
     /// <summary>
@@ -306,6 +304,72 @@ public sealed class AnnotationTests
     }
 
     /// <summary>
+    /// A line, a block and the file can be tagged like any other node. The tagged node answers
+    /// questions about itself as the node it was made from does, and its tag survives putting it
+    /// into the file, a rewrite of a name on the same line, and an edit elsewhere in the file.
+    /// </summary>
+    [Theory]
+    [InlineData(SyntaxKind.Line)]
+    [InlineData(SyntaxKind.Block)]
+    [InlineData(SyntaxKind.File)]
+    public void ALineABlockAndTheFileKeepTheirTags(SyntaxKind kind)
+    {
+        var tree = SyntaxTree.Parse("main.nt65", Program);
+        SyntaxNode node = kind switch
+        {
+            SyntaxKind.Line => tree.GetLine(2),
+            SyntaxKind.Block => tree.Root.DescendantNodes().OfType<BlockSyntax>().Single(),
+            _ => tree.Root,
+        };
+        var tag = new SyntaxAnnotation("probe");
+
+        var tagged = node.WithAdditionalAnnotations(tag);
+        Assert.True(tagged.HasAnnotation(tag));
+        Assert.Equal(node.ToFullString(), tagged.ToFullString());
+        Assert.Equal(node.ContainsDiagnostics, tagged.ContainsDiagnostics);
+        Assert.Equal(
+            node.DescendantNodes().OfType<LineSyntax>().Select(line => line.Statement.Kind),
+            tagged.DescendantNodes().OfType<LineSyntax>().Select(line => line.Statement.Kind));
+
+        var root = kind == SyntaxKind.File ? tagged : tree.Root.ReplaceNode(node, tagged);
+        Assert.Equal(Program, root.ToFullString());
+        Assert.Equal([kind], root.GetAnnotatedNodes(tag).Select(found => found.Kind));
+
+        // A name on the tagged line is replaced, which parses that line again.
+        var mask = root.DescendantTokens().Single(token => token.Text == "mask");
+        var renamed = root.ReplaceToken(mask, SyntaxFactory.Identifier("flags").WithTriviaFrom(mask));
+        Assert.Equal([kind], renamed.GetAnnotatedNodes(tag).Select(found => found.Kind));
+
+        // An edit at the end of the file leaves the line the tagged node starts on alone.
+        var edited = renamed.Tree.WithChange(new TextChange(renamed.Tree.Text.Length, 0, ".byte 1\n"));
+        Assert.Equal([kind], edited.Root.GetAnnotatedNodes(tag).Select(found => found.Kind));
+    }
+
+    /// <summary>
+    /// A tag on the <c>.export</c> of a line or on its line break survives a rewrite of the line,
+    /// since both belong to the line rather than to its statement.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ATagOnWhatBelongsToTheLineSurvivesARewriteOfIt(bool lineBreak)
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".export .const MASK = 16\n");
+        var line = tree.GetLine(0);
+        var token = lineBreak ? line.EndOfLineToken : line.ExportKeyword!.Value;
+        var kind = token.Kind;
+        var tag = new SyntaxAnnotation("probe");
+
+        var tagged = tree.Root.ReplaceToken(token, token.WithAdditionalAnnotations(tag));
+        Assert.Equal([kind], tagged.GetAnnotatedTokens(tag).Select(found => found.Kind));
+
+        var name = tagged.DescendantTokens().Single(other => other.Text == "MASK");
+        var renamed = tagged.ReplaceToken(name, SyntaxFactory.Identifier("FLAGS").WithTriviaFrom(name));
+        Assert.Equal(".export .const FLAGS = 16\n", renamed.ToFullString());
+        Assert.Equal([kind], renamed.GetAnnotatedTokens(tag).Select(found => found.Kind));
+    }
+
+    /// <summary>
     /// The lexer's cache shares one token instance among all the places it appears in a file, so
     /// an annotated token must never get into it. Adding a tag makes a new token, and the cache
     /// holds only tokens the lexer made.
@@ -383,15 +447,13 @@ public sealed class AnnotationTests
     }
 
     /// <summary>
-    /// Returns the node to tag, which is a node inside a statement. It is picked at random with a
-    /// seed taken from the file's length, so that the sweep meets different kinds across sources
-    /// and the same node on every run.
+    /// Returns the node to tag, which is any node below the file, a line or a block among them. It
+    /// is picked at random with a seed taken from the file's length, so that the sweep meets
+    /// different kinds across sources and the same node on every run.
     /// </summary>
     private static SyntaxNode? Chosen(SyntaxTree tree)
     {
-        var nodes = tree.Root.DescendantNodes()
-            .Where(node => node is not (LineSyntax or BlockSyntax or FileSyntax) && node.Span.Length > 0)
-            .ToList();
+        var nodes = tree.Root.DescendantNodes().Where(node => node.Span.Length > 0).ToList();
         return nodes.Count == 0 ? null : nodes[new Random(tree.Text.Length).Next(nodes.Count)];
     }
 

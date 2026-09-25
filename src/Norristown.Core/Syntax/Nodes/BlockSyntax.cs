@@ -43,9 +43,11 @@ public sealed partial class BlockSyntax : SyntaxNode
     /// <inheritdoc/>
     /// <remarks>
     /// The value comes from the tree's per-line record for the block's lines, as it does for the
-    /// diagnostics.
+    /// diagnostics, and from the tree's record of the annotations of the block and the blocks and
+    /// lines inside it.
     /// </remarks>
-    public override bool ContainsAnnotations => Tree.LinesContainAnnotations(LineIndex, LastLineIndex);
+    public override bool ContainsAnnotations =>
+        Tree.LinesContainAnnotations(LineIndex, LastLineIndex) || Tree.NodesContainAnnotations(LineIndex, LastLineIndex);
 
     private GreenBlock GreenBlock => (GreenBlock)Green;
 

@@ -38,6 +38,7 @@ internal sealed class RewriteSession(SyntaxRewriter rewriter)
         var offsets = new int[changes.Count];
         var joined = Joined(node.Tree.Text, changes, offsets);
         annotations.CollectBetween(node.Tree, changes, offsets);
+        annotations.CollectAround(node.Tree, changes);
         var tree = node.Tree.WithChange(joined);
         return Corresponding(node, annotations.Reattach(tree, offsets));
     }
@@ -173,7 +174,7 @@ internal sealed class RewriteSession(SyntaxRewriter rewriter)
         if (rewritten is not null && ReferenceEquals(original.Green, rewritten.Green))
             return;
         if (rewritten is not null)
-            annotations.Collect(rewritten.Green, changes.Count);
+            annotations.Collect(rewritten, changes.Count);
         changes.Add(new TextChange(
             original.FullSpan.Start, original.FullSpan.Length, rewritten?.ToFullString() ?? ""));
     }

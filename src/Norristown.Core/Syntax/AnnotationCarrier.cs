@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using Norristown.Syntax.InternalSyntax;
+using NodeMark = Norristown.Syntax.SyntaxTree.NodeMark;
 
 namespace Norristown.Syntax;
 
@@ -31,6 +32,26 @@ internal sealed class AnnotationCarrier
     /// <param name="green">The node or token whose text the change writes.</param>
     /// <param name="change">The index of the change among the rewrite's changes.</param>
     public void Collect(GreenNode green, int change) => Collect(green, change, 0);
+
+    /// <summary>
+    /// Collects every annotated node and token of <paramref name="node"/>, which is the text of
+    /// the change at index <paramref name="change"/>. A line, a block or the file holds what its
+    /// lines parse to in its tree rather than in its green node, so it is walked as a node of its
+    /// tree. Any other node is walked as <see cref="Collect(GreenNode, int)"/> walks it.
+    /// </summary>
+    /// <param name="node">The node whose text the change writes.</param>
+    /// <param name="change">The index of the change among the rewrite's changes.</param>
+    public void Collect(SyntaxNode node, int change)
+    {
+        if (node is not (LineSyntax or BlockSyntax or FileSyntax))
+        {
+            Collect(node.Green, change, 0);
+            return;
+        }
+        var start = node.FullSpan.Start;
+        foreach (var piece in node.AnnotatedPieces())
+            tagged.Add(new Tagged(change, piece.FullSpan.Start - start, piece.FullSpan.Length, piece.Kind, piece.IsToken, AnnotationsOf(piece)));
+    }
 
     /// <summary>Discards what was collected after the first <paramref name="count"/> entries.</summary>
     /// <param name="count">The value <see cref="Count"/> had when the discarded changes began.</param>
@@ -71,9 +92,40 @@ internal sealed class AnnotationCarrier
                 var span = piece.FullSpan;
                 if (span.Start < from || span.End > to)
                     continue;
-                var annotations = piece.AsNode() is { } inner ? inner.Green.Annotations : piece.AsToken().Green.Annotations;
-                tagged.Add(new Tagged(-1, span.Start + moved, span.Length, piece.Kind, piece.IsToken, annotations));
+                tagged.Add(new Tagged(-1, span.Start + moved, span.Length, piece.Kind, piece.IsToken, AnnotationsOf(piece)));
             }
+        }
+    }
+
+    /// <summary>
+    /// Collects the annotations that belong to the lines the changes are on, rather than to what
+    /// those lines parse to. These are the annotations of each line node, of each block such a line
+    /// opens, and of each line's <c>.export</c> and line break. A line with a change on it is lexed
+    /// again, so they have to survive the reparse like the rest. Any that a change replaces whole
+    /// is skipped, because the change's own text holds what it becomes.
+    /// </summary>
+    /// <param name="tree">The file before the changes.</param>
+    /// <param name="changes">The rewrite's changes, in source order and never overlapping.</param>
+    public void CollectAround(SyntaxTree tree, IReadOnlyList<TextChange> changes)
+    {
+        if (changes.Count == 0 || !tree.Root.ContainsAnnotations)
+            return;
+        var first = tree.GetLineIndex(changes[0].Start);
+        var last = tree.GetLineIndex(changes[^1].Start + changes[^1].Length);
+        for (var i = first; i <= last; i++)
+        {
+            // The lines of a continued statement are one line node, which is visited once.
+            if (tree.StatementStart(i) != i)
+                continue;
+            var line = tree.GetLine(i);
+            if (!line.Green.Annotations.IsEmpty)
+                Around(line, changes);
+            if (line.Parent is BlockSyntax block && block.Opener == line && !block.Green.Annotations.IsEmpty)
+                Around(block, changes);
+            if (line.ExportKeyword is { ContainsAnnotations: true } export)
+                Around(export, changes);
+            if (line.EndOfLineToken.ContainsAnnotations)
+                Around(line.EndOfLineToken, changes);
         }
     }
 
@@ -91,11 +143,28 @@ internal sealed class AnnotationCarrier
         if (tagged.Count == 0)
             return tree;
         var byLine = new Dictionary<int, List<Tagged>>();
+        var marks = tree.NodeMarks.ToList();
+        var physical = tree.PhysicalLines.ToBuilder();
+        var any = false;
         foreach (var mark in tagged)
         {
             var at = Math.Clamp(mark.Change < 0 ? mark.At : offsets[mark.Change] + mark.At, 0, tree.Text.Length);
             if (tree.GetLineIndex(at) >= tree.LineCount)
                 continue;
+
+            // A line, a block and the file are built afresh with the tree, so their annotations
+            // are kept by the tree. The `.export` and the line break belong to the line the lexer
+            // read rather than to its statement, so theirs are kept on that line's tokens.
+            if (!mark.IsToken && mark.Kind is SyntaxKind.Line or SyntaxKind.Block or SyntaxKind.File)
+            {
+                any |= Marked(marks, tree, mark with { At = at });
+                continue;
+            }
+            if (mark.IsToken && LineToken(tree, physical, mark with { At = at }))
+            {
+                any = true;
+                continue;
+            }
 
             // A statement continued over several lines of the file is parsed as one line, and its
             // kept parse belongs to the first of them, wherever on it the mark lands.
@@ -114,7 +183,6 @@ internal sealed class AnnotationCarrier
             if (tree.StatementStart(i) == i && tree.LinesContainAnnotations(i, i))
                 kept[i] = tree.Parsed(i);
         }
-        var any = false;
         foreach (var (line, wanted) in byLine)
         {
             // The line's skipped tokens are searched too, since an annotated token may be among
@@ -134,7 +202,83 @@ internal sealed class AnnotationCarrier
             kept[line] = parsed with { Node = node ?? parsed.Node, SkippedTokens = rest ?? parsed.SkippedTokens };
             any = true;
         }
-        return any ? tree.WithKeptParses(ImmutableCollectionsMarshal.AsImmutableArray(kept)) : tree;
+        return any ? tree.WithAnnotated(physical.MoveToImmutable(), ImmutableCollectionsMarshal.AsImmutableArray(kept), [.. marks]) : tree;
+    }
+
+    /// <summary>
+    /// Records <paramref name="piece"/>, which lies on a line with a change on it, at the place it
+    /// lands once the changes are applied, unless a change replaces it whole or runs into it.
+    /// </summary>
+    private void Around(SyntaxNodeOrToken piece, IReadOnlyList<TextChange> changes)
+    {
+        var span = piece.FullSpan;
+        var shift = 0;
+        foreach (var change in changes)
+        {
+            var end = change.Start + change.Length;
+            if (change.Length > 0 && change.Start <= span.Start && end >= span.End)
+                return;
+            if (end <= span.Start)
+            {
+                shift += change.NewText.Length - change.Length;
+                continue;
+            }
+            if (change.Start < span.Start)
+                return;
+            break;
+        }
+        tagged.Add(new Tagged(-1, span.Start + shift, span.Length, piece.Kind, piece.IsToken, AnnotationsOf(piece)));
+    }
+
+    /// <summary>Returns the annotations of a node or a token.</summary>
+    private static ImmutableArray<SyntaxAnnotation> AnnotationsOf(SyntaxNodeOrToken piece) =>
+        piece.AsNode() is { } node ? node.Green.Annotations : piece.AsToken().Green.Annotations;
+
+    /// <summary>
+    /// Adds the annotations of a line, a block or the file to <paramref name="marks"/>, the
+    /// annotations the tree keeps for such nodes. A node that starts anywhere but the start of a
+    /// line is not there to be given them.
+    /// </summary>
+    /// <returns>Whether the annotations were added.</returns>
+    private static bool Marked(List<NodeMark> marks, SyntaxTree tree, Tagged mark)
+    {
+        var line = tree.GetLineIndex(mark.At);
+        if (tree.LineStarts[line] != mark.At)
+            return false;
+        var at = marks.FindIndex(other => other.Line == line && other.Kind == mark.Kind);
+        if (at < 0)
+        {
+            marks.Add(new NodeMark(line, mark.Kind, mark.Annotations));
+        }
+        else
+        {
+            var own = marks[at].Annotations;
+            marks[at] = marks[at] with { Annotations = own.AddRange(mark.Annotations.Where(annotation => !own.Contains(annotation))) };
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Gives the annotations of <paramref name="mark"/> to the <c>.export</c> that starts a line
+    /// of <paramref name="physical"/> or the line break that ends it, when the mark is one of those
+    /// tokens.
+    /// </summary>
+    /// <returns>Whether the mark was such a token.</returns>
+    private static bool LineToken(SyntaxTree tree, ImmutableArray<GreenLine>.Builder physical, Tagged mark)
+    {
+        var line = tree.GetLineIndex(mark.At);
+        var tokens = physical[line].Tokens;
+        var index = mark.Kind == SyntaxKind.EndOfLine ? tokens.Length - 1
+            : tree.StatementStart(line) == line && tree.Parsed(line).ExportKeyword is not null ? 0
+            : -1;
+        if (index < 0 || tokens[index].Kind != mark.Kind || tokens[index].FullWidth != mark.Width
+            || tree.LineStarts[line] + physical[line].TextOffset(index) - tokens[index].LeadingWidth != mark.At)
+        {
+            return false;
+        }
+        var token = (GreenToken)tokens[index].WithAdditionalAnnotations(mark.Annotations);
+        physical[line] = new GreenLine(tokens.SetItem(index, token));
+        return true;
     }
 
     /// <summary>

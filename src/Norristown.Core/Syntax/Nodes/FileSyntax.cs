@@ -24,8 +24,13 @@ public sealed partial class FileSyntax : SyntaxNode
     public override bool ContainsDiagnostics => Tree.LinesContainDiagnostics(0, Tree.LineCount - 1);
 
     /// <inheritdoc/>
-    /// <remarks>The root covers every line of the file, as it does for diagnostics.</remarks>
-    public override bool ContainsAnnotations => Tree.LinesContainAnnotations(0, Tree.LineCount - 1);
+    /// <remarks>
+    /// The root covers every line of the file, as it does for diagnostics. It may also have
+    /// annotations of its own, and so may the blocks and lines in it.
+    /// </remarks>
+    public override bool ContainsAnnotations =>
+        !Green.Annotations.IsEmpty || Tree.LinesContainAnnotations(0, Tree.LineCount - 1)
+        || Tree.NodesContainAnnotations(0, Tree.LineCount - 1);
 
     /// <summary>
     /// Gets the file's lines in source order, at any depth of block nesting. The blocks are walked
