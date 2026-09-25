@@ -169,11 +169,9 @@ internal sealed class ExpressionWriter(
         }
         foreach (var token in sourcePrefix.ChildTokens)
             rewriter.Replacements[token.Position] = "";
-        var tokens = TokenRewriter.Tokens(operand.Address);
-        rewriter.Before.Remove(tokens[0].Position);
-        rewriter.Replacements[tokens[0].Position] = (laid.Prefix ?? "") + Hex(offset, 2);
-        for (var i = 1; i < tokens.Count; i++)
-            rewriter.Replacements[tokens[i].Position] = "";
+
+        // The whole address goes, with the parentheses written around any operation in it.
+        rewriter.Replace(operand.Address, (laid.Prefix ?? "") + Hex(offset, 2), around: false);
     }
 
     /// <summary>Returns the label just past a symbol's last byte, which is what <c>.endof</c> stands for.</summary>

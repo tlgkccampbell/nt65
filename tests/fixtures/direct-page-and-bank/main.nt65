@@ -81,6 +81,7 @@
 .proc registers: a8, i8, dp = $2100 {
     lda d:$2105
     sta d:$2100,x
+    lda d:$2100 + 2 * 2             ; an operation is replaced whole, parentheses and all
     rts
 }
 
