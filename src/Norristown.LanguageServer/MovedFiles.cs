@@ -91,10 +91,16 @@ internal static class MovedFiles
     {
         var moved = Paths.Directory(from) != Paths.Directory(to);
         var renamedInPlace = !moved && from != to;
+
+        // A file that several programs share, such as a library, is in each of their analyses,
+        // but its paths are rewritten once. Edits that overlap make a client reject the whole edit.
+        var seen = new HashSet<string>(FilePaths.Comparer);
         foreach (var analysis in programs)
         {
             foreach (var model in analysis.Program.Files)
             {
+                if (!seen.Add(model.Tree.Path))
+                    continue;
                 // A path is rewritten when the file containing it moved, so that it resolves
                 // from the new folder, and when it names the file that moved.
                 var inThisFile = model.Tree.Path == from;

@@ -163,6 +163,29 @@ async function renameAt(uri, line, character) {
   await vscode.commands.executeCommand('editor.action.rename', [document.uri, position]);
 }
 
+// Moving a source rewrites the `files` entries of the nt65.json files that name it. Only nt65
+// sources are synchronized with the server, so it computes those edits against nt65.json as saved.
+// Offsets into a file with unsaved changes would land in the wrong place, so the edits to such a
+// file are dropped, and the programmer is told to update it by hand.
+async function keepUnsavedProjects(event, next) {
+  const edit = await next(event);
+  if (!edit) return edit;
+  const unsaved = new Set(vscode.workspace.textDocuments
+    .filter(document => document.isDirty && path.basename(document.uri.fsPath) === 'nt65.json')
+    .map(document => document.uri.toString()));
+  const kept = new vscode.WorkspaceEdit();
+  for (const [uri, edits] of edit.entries()) {
+    if (!unsaved.has(uri.toString())) {
+      kept.set(uri, edits);
+      continue;
+    }
+    vscode.window.showWarningMessage(
+      `nt65: ${vscode.workspace.asRelativePath(uri)} has unsaved changes, so its \`files\` were left `
+      + 'unchanged. Save it and edit `files` by hand if the moved file should still be built.');
+  }
+  return kept;
+}
+
 async function activate(context) {
   // The active configuration goes to the server when it starts, and again whenever the `nt65`
   // settings change. The client watches the kinds of file every program is made of: the sources
@@ -174,7 +197,7 @@ async function activate(context) {
       // Only files are the program's. A module that comes with nt65 is shown under an `nt65:`
       // URI, read-only, and is not a document the server is told about.
       documentSelector: [{ scheme: 'file', language: 'nt65' }, { scheme: 'untitled', language: 'nt65' }],
-      middleware: views.middleware,
+      middleware: { ...views.middleware, workspace: { willRenameFiles: keepUnsavedProjects } },
       initializationOptions: {
         configuration: vscode.workspace.getConfiguration('nt65').get('configuration'),
         inlayHints: hintSettings(),

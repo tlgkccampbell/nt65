@@ -98,6 +98,31 @@ public sealed class MovedFileTests : IDisposable
     }
 
     /// <summary>
+    /// A library that two projects share is in both of their programs, but the path of a binary it
+    /// includes is rewritten once. A client refuses a whole edit that has two edits at one place.
+    /// </summary>
+    [Fact]
+    public async Task APathInALibraryTwoProjectsShareIsRewrittenOnce()
+    {
+        var timeout = TestTimeout.Token();
+        root.Write("one/nt65.json", """{ "cpu": "6502", "files": ["*.nt65", "../lib/*.nt65"] }""");
+        root.Write("two/nt65.json", """{ "cpu": "6502", "files": ["*.nt65", "../lib/*.nt65"] }""");
+        root.Write("one/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    rts\n}\n");
+        root.Write("two/main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    rts\n}\n");
+        root.Write("lib/sprite.nt65", ".module sprite\n.segment RODATA\n.export .data tiles: .incbin \"tiles.bin\"\n");
+        root.Write("lib/tiles.bin", "0123");
+
+        await using var client = await TestClient.StartAsync(
+            TestClient.Capable(), timeout, rootUri: Folder(""));
+        await client.OpenAsync(Folder("lib/sprite.nt65"), root.Read("lib/sprite.nt65"));
+        await client.NextDiagnosticsAsync(Folder("lib/sprite.nt65"), timeout);
+
+        var binary = await RenameAsync(client, timeout, ("lib/tiles.bin", "lib/art/tiles.bin"));
+        Assert.NotNull(binary);
+        Assert.Equal("\"art/tiles.bin\"", Assert.Single(binary.Changes[Folder("lib/sprite.nt65")]).NewText);
+    }
+
+    /// <summary>
     /// A client that does not declare <c>willRename</c> support is not registered for it, and a
     /// client that does is registered for every file.
     /// </summary>
