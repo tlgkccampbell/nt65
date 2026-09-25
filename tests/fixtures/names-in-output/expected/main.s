@@ -16,23 +16,29 @@ z := *
     .res 1
 f := *
     .res 1
+Z := *
+    .res 1
+F := *
+    .res 1
 main__ptr: .res 2
 
 .segment "CODE": absolute
-; .proc top  main.nt65:19
+; .proc top  main.nt65:21
 main__top:
     jsr draw
     rts
 ; end of top
 
-; .proc inner  main.nt65:25
+; .proc inner  main.nt65:27
 outer__inner:
     lda z:z
     lda z:f
+    lda z:Z
+    lda z:F
     rts
 ; end of inner
 
-; .proc draw  main.nt65:32
+; .proc draw  main.nt65:36
 draw:
     ldx #0
 draw__loop:

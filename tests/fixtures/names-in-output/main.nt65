@@ -7,10 +7,12 @@
 .cpu 6502
 
 .segment ZEROPAGE
-; ca65 reads `z:` and `f:` at the start of a line as address-size prefixes, so a label
-; named `z` or `f` is written as an assignment instead.
+; ca65 reads `z:` and `f:` at the start of a line as address-size prefixes, in either case, so
+; a label named `z` or `f` is written as an assignment instead.
 .data z:   .byte
 .data f:   .byte
+.data Z:   .byte
+.data F:   .byte
 .data ptr: .word
 
 .export top
@@ -25,6 +27,8 @@
     .proc inner {
         lda z
         lda f
+        lda Z
+        lda F
         rts
     }
 }

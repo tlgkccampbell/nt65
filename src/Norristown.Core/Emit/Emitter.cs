@@ -290,9 +290,10 @@ public sealed class Emitter
 
     /// <summary>
     /// Returns a label definition or, for a name ca65 would misread as an address-size prefix
-    /// (<c>z</c> or <c>f</c>), the <c>:= *</c> assignment written in its place.
+    /// (<c>z</c> or <c>f</c>, in either case), the <c>:= *</c> assignment written in its place.
     /// </summary>
-    private static string LabelText(string name) => name is "z" or "f" ? $"{name} := *" : $"{name}:";
+    private static string LabelText(string name) =>
+        name is "z" or "f" or "Z" or "F" ? $"{name} := *" : $"{name}:";
 
     /// <summary>
     /// Returns the lines as the file holds them, each with its comment at the column where the
