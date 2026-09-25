@@ -690,8 +690,9 @@ no entry can be missing from it or say two things.
 **Watching.** `nt65 build --watch` builds, then builds again whenever the program changes,
 and says which directory it is watching after each one. What it waits for is what the last
 build read — the project file, the sources, and the binaries an `.incbin` measured, which is
-the set `--depfile` names — and any `.nt65` under the project root besides, since a file that
-did not exist when the globs were matched is in no set worked out before it was written.
+the set `--depfile` names — and any `.nt65` under the project root or in a directory the globs
+search besides, since a file that did not exist when the globs were matched is in no set worked
+out before it was written.
 Nothing nt65 writes is either of those, so a build does not set off the next one. A command
 line that is wrong comes straight back, because no file changing fixes it.
 

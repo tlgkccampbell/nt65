@@ -45,7 +45,7 @@ public static class BuildCommand
             // nt65. On Windows it is common: an editor holds a source, or an emulator holds an
             // output. A watch goes on watching, and builds again once something changes.
             error.WriteLine($"nt65: error: {e.Message}");
-            return new BuildResult(ExitCode.InputError, directory, []);
+            return new BuildResult(ExitCode.InputError, directory, [], []);
         }
     }
 
@@ -62,7 +62,7 @@ public static class BuildCommand
         if (command.Project is not null && !File.Exists(projectFile))
         {
             error.WriteLine($"nt65: {ProjectRoot.Shown(directory, projectFile!)} does not exist");
-            return new BuildResult(ExitCode.UsageError, directory, []);
+            return new BuildResult(ExitCode.UsageError, directory, [], []);
         }
         var run = new Context(
             command, directory, projectFile is null ? directory : Path.GetDirectoryName(projectFile)!, output, error, colour);
@@ -73,30 +73,32 @@ public static class BuildCommand
         {
             error.WriteLine("nt65: `--stdout` prints one file's output, so name exactly one file");
             error.WriteLine(CommandLine.SeeHelp);
-            return new BuildResult(ExitCode.UsageError, run.Root, watched);
+            return new BuildResult(ExitCode.UsageError, run.Root, watched, []);
         }
         var project = ResolveProject(run, projectFile);
-        watched = [.. watched, .. project.Links.Select(link => Path.Combine(run.Root, link.ConfigPath))];
+        watched = [.. watched, .. project.Links.Select(link => Path.GetFullPath(link.ConfigPath, run.Root))];
+        List<(string, bool)> searched = [.. project.Files.Select(glob => SourceGlobs.Searched(run.Root, glob))];
         if (NamedFiles(run) is not { } named)
-            return new BuildResult(ExitCode.InputError, run.Root, watched);
+            return new BuildResult(ExitCode.InputError, run.Root, watched, searched);
         var paths = project.Files.SelectMany(glob => SourceGlobs.Matching(run.Root, glob)).Concat(named)
             .Distinct(FilePaths.Comparer).Order(StringComparer.Ordinal).ToList();
 
         if (paths.Count == 0)
-            return new BuildResult(ReportNoInput(run, project, projectFile), run.Root, watched);
+            return new BuildResult(ReportNoInput(run, project, projectFile), run.Root, watched, searched);
 
         var header = command.Header is { } headerPath ? Path.GetFullPath(headerPath, directory) : null;
         var (analysis, compilation) = Compile(run, project, paths, header);
 
         // A watch watches the files the build read: the sources, and the binaries the outputs list
         // as dependencies. A program with errors may list no binaries, but the source that fixes
-        // it is in the list either way.
+        // it is in the list either way. Each path is made full, which also gives it the separators
+        // a file watcher reports.
         watched =
         [
             .. watched,
-            .. paths.Select(path => Path.Combine(run.Root, path)),
+            .. paths.Select(path => Path.GetFullPath(path, run.Root)),
             .. compilation.Outputs.SelectMany(o => o.Dependencies).Distinct(StringComparer.Ordinal)
-                .Select(dependency => Path.Combine(run.Root, dependency)),
+                .Select(dependency => Path.GetFullPath(dependency, run.Root)),
         ];
 
         Report(run, compilation.Diagnostics);
@@ -107,10 +109,10 @@ public static class BuildCommand
         // incomplete. That is the same text the editor's output preview shows, and no files are
         // written.
         if (command.Stdout)
-            return new BuildResult(Preview(run, analysis, project, named[0], failed), run.Root, watched);
+            return new BuildResult(Preview(run, analysis, project, named[0], failed), run.Root, watched, searched);
 
         if (failed)
-            return new BuildResult(ExitCode.InputError, run.Root, watched);
+            return new BuildResult(ExitCode.InputError, run.Root, watched, searched);
         if (compilation.IsCpuAssumed)
         {
             error.WriteLine($"nt65: note: nothing declares which processor this program is for, so it is built for the "
@@ -124,7 +126,7 @@ public static class BuildCommand
             WriteArtifacts(run, project, compilation, named, paths, header,
                 projectFile is null ? [] : [ProjectFile.Name, .. project.Links.Select(link => link.ConfigPath)]);
         }
-        return new BuildResult(ExitCode.Success, run.Root, watched);
+        return new BuildResult(ExitCode.Success, run.Root, watched, searched);
     }
 
     /// <summary>

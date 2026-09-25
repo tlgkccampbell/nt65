@@ -16,4 +16,9 @@ namespace Norristown.Cli;
 /// read to find its size. A build that stopped early lists the files it had read by then, which is
 /// enough for a watch to notice when the missing file is written.
 /// </param>
-internal sealed record BuildResult(ExitCode Code, string Root, IReadOnlyList<string> Watched);
+/// <param name="Searched">
+/// The directories the project's <c>files</c> globs search, each with whether its subdirectories
+/// are searched too. A source created in one of them may be a new file of the program.
+/// </param>
+internal sealed record BuildResult(
+    ExitCode Code, string Root, IReadOnlyList<string> Watched, IReadOnlyList<(string Directory, bool Recursive)> Searched);

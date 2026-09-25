@@ -52,6 +52,17 @@ public static class SourceGlobs
     }
 
     /// <summary>
+    /// Returns the full path of the directory <paramref name="glob"/> searches, and whether it
+    /// also searches that directory's subdirectories. A file that is created there may be a new
+    /// file of the program, so this is what a watch has to watch.
+    /// </summary>
+    public static (string Directory, bool Recursive) Searched(string root, string glob)
+    {
+        var (from, _, search) = Split(root, glob);
+        return (from, search == SearchOption.AllDirectories);
+    }
+
+    /// <summary>
     /// Splits a glob into the directory it searches, the pattern its files match, and whether it
     /// also searches subdirectories.
     /// </summary>

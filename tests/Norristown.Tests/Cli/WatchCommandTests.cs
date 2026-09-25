@@ -56,6 +56,67 @@ public sealed class WatchCommandTests : IDisposable
     }
 
     /// <summary>
+    /// A binary that an <c>.incbin</c> in another directory reads is watched like a source. Its
+    /// path joins the root's separator to the <c>/</c> that the logical path uses, and the watch
+    /// still recognises it.
+    /// </summary>
+    [Fact]
+    public async Task ItBuildsAgainWhenAnIncludedBinaryChanges()
+    {
+        var timeout = TestTimeout.Token();
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["src/*.nt65"], "out": "build" }""");
+        root.Write("src/main.nt65", Good + ".segment RODATA\n.data font: .incbin \"../assets/font.bin\"\n.export font\n");
+        root.Write("assets/font.bin", "ABCD");
+
+        var printed = new Lines();
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
+        var watching = Task.Run(
+            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, stopping.Token),
+            CancellationToken.None);
+        Assert.Empty(await WaitAsync(printed, timeout));
+
+        root.Write("assets/font.bin", "ABCDEF");
+        Assert.Empty(await WaitAsync(printed, timeout));
+
+        await stopping.CancelAsync();
+        Assert.Equal(ExitCode.Success, await watching);
+    }
+
+    /// <summary>
+    /// A glob may reach above the project root for a library shared between projects. The watch
+    /// sees a change to a source there, and a source written there after the watch began.
+    /// </summary>
+    [Fact]
+    public async Task ItBuildsAgainWhenASourceAboveTheRootChanges()
+    {
+        var timeout = TestTimeout.Token();
+        root.Write("app/nt65.json", """{ "cpu": "6502", "files": ["*.nt65", "../lib/*.nt65"], "out": "build" }""");
+        root.Write("app/main.nt65", Good);
+        root.Write("lib/vic.nt65", ".module vic\n.export .const BORDER = $d020\n");
+
+        var printed = new Lines();
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
+        var app = Path.Combine(root.FullName, "app");
+        var watching = Task.Run(
+            () => Commands.Run(["build", "--watch"], app, TextWriter.Null, printed, false, stopping.Token),
+            CancellationToken.None);
+        Assert.Empty(await WaitAsync(printed, timeout));
+
+        root.Write("lib/vic.nt65", ".module vic\n.export .const BORDER = nowhere\n");
+        Assert.Contains("`nowhere` is not declared", Assert.Single(await WaitAsync(printed, timeout)), StringComparison.Ordinal);
+
+        root.Write("lib/vic.nt65", ".module vic\n.export .const BORDER = $d020\n");
+        Assert.Empty(await WaitAsync(printed, timeout));
+
+        root.Write("lib/sid.nt65", ".module sid\n.export clear\n.segment CODE\n.proc clear {\n    rts\n}\n");
+        Assert.Empty(await WaitAsync(printed, timeout));
+        Assert.True(File.Exists(Path.Combine(app, "build", "sid.s")));
+
+        await stopping.CancelAsync();
+        Assert.Equal(ExitCode.Success, await watching);
+    }
+
+    /// <summary>
     /// No change to a file can fix a wrong command line, so a watch given one returns at once
     /// rather than waiting for a change that cannot help.
     /// </summary>
