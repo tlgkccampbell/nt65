@@ -60,7 +60,7 @@ public sealed partial class FormattingTests
             var name = Repo.Named(file);
             var problems = new List<string>();
             var cut = 0;
-            foreach (var variant in BrokenLines.Variants(Repo.ReadText(file)))
+            foreach (var variant in BrokenLines.Of(file))
             {
                 var tree = SyntaxTree.Parse(name, variant);
                 problems.AddRange(Syntax.Fidelity.Problems(tree).Select(problem => $"{name} cut {cut}: {problem}"));

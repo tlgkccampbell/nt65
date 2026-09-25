@@ -174,7 +174,7 @@ public sealed class TreeDiagnosticsTests
     public void TheRootAnswersForTheWholeFileOnWholeAndBrokenLines()
     {
         var variants = Repo.Sources()
-            .SelectMany(path => BrokenLines.Variants(Repo.ReadText(path))
+            .SelectMany(path => BrokenLines.Of(path)
                 .Select((text, cut) => (Where: $"{Repo.Named(path)} cut {cut}", Path: Repo.Named(path), Text: text)))
             .ToList();
         Assert.True(variants.Count > 1000, $"{variants.Count} variants is too few to be every source's");

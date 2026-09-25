@@ -16,9 +16,8 @@ public sealed class TypedNodeTests
     {
         var failures = Repo.CollectFailures(Repo.Sources(), path =>
         {
-            var text = Repo.ReadText(path);
             var problems = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var variant in BrokenLines.Variants(text))
+            foreach (var variant in BrokenLines.Of(path))
                 problems.UnionWith(Problems(SyntaxTree.Parse(Repo.Named(path), variant)));
             return problems.Take(5);
         });

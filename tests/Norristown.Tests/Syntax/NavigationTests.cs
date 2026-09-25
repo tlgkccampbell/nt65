@@ -28,7 +28,7 @@ public sealed class NavigationTests
         // One variant of one source is the unit of work, rather than a whole source: a long file
         // costs more than a short one, so splitting them apart keeps every core busy to the end.
         var variants = Repo.Sources()
-            .SelectMany(path => BrokenLines.Variants(Repo.ReadText(path))
+            .SelectMany(path => BrokenLines.Of(path)
                 .Select((text, cut) => (Where: $"{Repo.Named(path)} cut {cut}", Path: Repo.Named(path), Text: text)))
             .ToList();
         Assert.True(variants.Count > 1000, $"{variants.Count} variants is too few to be every source's");

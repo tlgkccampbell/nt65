@@ -23,7 +23,7 @@ public sealed class ShapeTests
         var failures = Repo.CollectFailures(Repo.Sources(), path =>
         {
             var problems = new SortedDictionary<string, string>(StringComparer.Ordinal);
-            foreach (var variant in BrokenLines.Variants(Repo.ReadText(path)))
+            foreach (var variant in BrokenLines.Of(path))
             {
                 var tree = SyntaxTree.Parse(Repo.Named(path), variant);
                 foreach (var node in tree.Root.DescendantNodes())
