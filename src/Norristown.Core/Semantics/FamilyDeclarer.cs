@@ -82,7 +82,7 @@ internal sealed class FamilyDeclarer(
         if (pending.Count == 0)
             return instances;
 
-        var brought = new Dictionary<string, Resolution>(StringComparer.Ordinal);
+        var brought = new Dictionary<string, BroughtName>(StringComparer.Ordinal);
         var globs = new List<ProgramSymbols.Module>();
         var paths = new NamePaths(provisional, brought, globs, touched, keepsTypes: false);
         foreach (var use in uses)
@@ -104,7 +104,7 @@ internal sealed class FamilyDeclarer(
     /// </summary>
     private void Read(
         UseDirectiveSyntax use, ProgramSymbols program, NamePaths paths, Scope fileScope,
-        Dictionary<string, Resolution> brought, List<ProgramSymbols.Module> globs)
+        Dictionary<string, BroughtName> brought, List<ProgramSymbols.Module> globs)
     {
         var path = use.Path.Names;
         if (path.Length == 0)
@@ -136,7 +136,7 @@ internal sealed class FamilyDeclarer(
         {
             if ((use.IsExported && found.Symbol is null) || fileScope.FindMember(name.Text) is not null)
                 return;
-            brought.TryAdd(name.Text, found);
+            brought.TryAdd(name.Text, new BroughtName(found.Symbol, found.Module, name.Span, use.IsExported));
         }
     }
 

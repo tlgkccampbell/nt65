@@ -390,11 +390,7 @@ internal sealed partial class Binder
                 name.Text), new RelatedSpan(local.DeclarationSpan, "declared here"));
             return;
         }
-        if (!used.TryAdd(name.Text, target))
-        {
+        if (!used.TryAdd(name.Text, new BroughtName(target.Symbol, target.Module, name.Span, exported)))
             Report(name.Span, Catalogue.UseBringsInTwice.Message(name.Text));
-            return;
-        }
-        broughtAt[name.Text] = (name.Span, exported);
     }
 }

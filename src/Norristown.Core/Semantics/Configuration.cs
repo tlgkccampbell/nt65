@@ -756,7 +756,7 @@ public sealed class Configuration
                 return new Resolution(local);
             var reach = ReachOf(tree);
             if (reach.Brought.TryGetValue(text, out var brought))
-                return brought.IsReported ? null : brought;
+                return brought.Resolved is { IsReported: false } place ? place : null;
             return Semantics.Lookup.Outside(text, last, program, reach.Brought, reach.Globs);
         }
 
@@ -768,7 +768,7 @@ public sealed class Configuration
         {
             if (reached.TryGetValue(tree, out var known))
                 return known;
-            var brought = new Dictionary<string, Resolution>(StringComparer.Ordinal);
+            var brought = new Dictionary<string, BroughtName>(StringComparer.Ordinal);
             var globs = new List<ProgramSymbols.Module>();
             foreach (var use in UsesIn(tree))
             {
@@ -783,7 +783,11 @@ public sealed class Configuration
                 // A `.use` whose path leads nowhere here still brings the name in, so that the
                 // name does not go on to mean what a `*` brought in.
                 foreach (var item in ModuleSyntax.Brought(use))
-                    brought.TryAdd(item.Name, Walk(item.Path) ?? Resolution.Reported);
+                {
+                    brought.TryAdd(item.Name, Walk(item.Path) is { } place
+                        ? new BroughtName(place.Symbol, place.Module, default, use.IsExported)
+                        : default);
+                }
             }
             return reached[tree] = new Reach(brought, globs);
         }
@@ -970,5 +974,5 @@ public sealed class Configuration
     /// </summary>
     /// <param name="Brought">The names brought in one by one, and where each leads.</param>
     /// <param name="Globs">The modules whose exports a <c>.use module::*</c> brings in.</param>
-    private sealed record Reach(Dictionary<string, Resolution> Brought, List<ProgramSymbols.Module> Globs);
+    private sealed record Reach(Dictionary<string, BroughtName> Brought, List<ProgramSymbols.Module> Globs);
 }

@@ -87,11 +87,7 @@ internal sealed partial class Binder
 
     // The file's `.use` items, what they bring in once resolved, and what it re-exports.
     private readonly List<UseDirectiveSyntax> useDirectives = [];
-    private readonly Dictionary<string, Resolution> used = new(StringComparer.Ordinal);
-
-    // Where each `.use` gives the name it brings in, so that an item nothing uses can be
-    // reported on the item rather than on the whole line.
-    private readonly Dictionary<string, (TextSpan At, bool Exported)> broughtAt = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, BroughtName> used = new(StringComparer.Ordinal);
     private readonly List<ProgramSymbols.Module> globs = [];
     private readonly List<ProgramSymbols.Reexport> reexports = [];
 
@@ -305,13 +301,7 @@ internal sealed partial class Binder
         return new Result(fileScope, symbols, references, diagnostics, regions)
         {
             Families = families.Declared,
-            Brought = used.ToDictionary(
-                pair => pair.Key,
-                pair => new BroughtName(pair.Value.Symbol, pair.Value.Module,
-                    broughtAt.TryGetValue(pair.Key, out var at) ? at.At : default,
-                    broughtAt.TryGetValue(pair.Key, out var how) && how.Exported),
-                StringComparer.Ordinal),
-            Used = used,
+            Brought = used,
             Globs = globs,
         };
     }
@@ -1828,13 +1818,6 @@ internal sealed partial class Binder
 
         /// <summary>Gets the families the file declares, each standing for one declaration per member.</summary>
         public IReadOnlyList<Family> Families { get; init; } = [];
-
-        /// <summary>
-        /// Gets the same names mapped to what they resolve to, which is what a lookup in this file
-        /// returns.
-        /// </summary>
-        internal IReadOnlyDictionary<string, Resolution> Used { get; init; } =
-            new Dictionary<string, Resolution>(StringComparer.Ordinal);
     }
 
     /// <summary>

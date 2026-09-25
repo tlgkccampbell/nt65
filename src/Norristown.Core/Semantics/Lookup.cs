@@ -24,13 +24,13 @@ internal static class Lookup
         string name,
         bool last,
         ProgramSymbols program,
-        IReadOnlyDictionary<string, Resolution> brought,
+        IReadOnlyDictionary<string, BroughtName> brought,
         IReadOnlyList<ProgramSymbols.Module> globs,
         Action<string?, string>? touched = null,
         Action<DiagnosticMessage, DiagnosticFix?>? report = null)
     {
         if (brought.TryGetValue(name, out var found))
-            return found with { IsAlias = found.Symbol is { } target && target.Name != name };
+            return found.Resolved with { IsAlias = found.Symbol is { } target && target.Name != name };
         if (!last && program.IsModulePath(name))
             return new Resolution(null, name);
 
@@ -115,7 +115,7 @@ internal static class Lookup
         bool fromRoot,
         Scope at,
         ProgramSymbols program,
-        IReadOnlyDictionary<string, Resolution> brought,
+        IReadOnlyDictionary<string, BroughtName> brought,
         IReadOnlyList<ProgramSymbols.Module> globs,
         Action<string?, string>? touched = null) =>
         fromRoot ? ModuleRoot(name, program)
@@ -196,7 +196,7 @@ internal static class Lookup
     public static IEnumerable<(string Name, Resolution Means)> InScope(
         Scope at,
         ProgramSymbols program,
-        IReadOnlyDictionary<string, Resolution> brought,
+        IReadOnlyDictionary<string, BroughtName> brought,
         IReadOnlyList<ProgramSymbols.Module> globs)
     {
         for (var scope = at; scope is not null; scope = scope.Parent)
@@ -205,7 +205,7 @@ internal static class Lookup
                 yield return (symbol.DisplayName, new Resolution(symbol));
         }
         foreach (var (name, place) in brought)
-            yield return (name, place with { IsAlias = place.Symbol is { } target && target.Name != name });
+            yield return (name, place.Resolved with { IsAlias = place.Symbol is { } target && target.Name != name });
         foreach (var module in globs)
         {
             foreach (var symbol in module.FileScope.Symbols)

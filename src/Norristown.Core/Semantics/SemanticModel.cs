@@ -26,10 +26,9 @@ public sealed class SemanticModel
     // distance between two declarations reads it, and every query would otherwise walk the file.
     private readonly ConcurrentDictionary<SyntaxTree, List<Evaluator.Write>> walks = new();
 
-    // What the file may name in the other modules, and the places its `.use` items reach.
-    // Together they answer a lookup at a position.
+    // What the file may name in the other modules. With the names its `.use` items bring in,
+    // it answers a lookup at a position.
     private readonly ProgramSymbols program;
-    private readonly IReadOnlyDictionary<string, Resolution> used;
 
     internal SemanticModel(
         SyntaxTree tree,
@@ -48,7 +47,6 @@ public sealed class SemanticModel
         this.declared = declared;
         this.binaryLength = binaryLength;
         this.program = program;
-        used = bound.Used;
         Tree = tree;
         Segments = segments;
         Configuration = configuration;
@@ -236,7 +234,7 @@ public sealed class SemanticModel
     /// </para>
     /// </summary>
     public IEnumerable<(string Name, SymbolInfo Means)> LookupNames(int position) =>
-        Lookup.InScope(ScopeAt(position), program, used, Globs)
+        Lookup.InScope(ScopeAt(position), program, Brought, Globs)
             .Select(found => (found.Name, found.Means.Means));
 
     /// <summary>
@@ -266,7 +264,7 @@ public sealed class SemanticModel
     {
         if (path.Count == 0)
             return SymbolInfo.None;
-        var start = Lookup.First(path[0], path.Count == 1, fromRoot, ScopeAt(position), program, used, Globs);
+        var start = Lookup.First(path[0], path.Count == 1, fromRoot, ScopeAt(position), program, Brought, Globs);
         return Lookup.Walk(start, path, program) is { IsReported: false } found ? found.Means : SymbolInfo.None;
     }
 

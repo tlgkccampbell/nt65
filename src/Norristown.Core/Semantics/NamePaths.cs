@@ -22,7 +22,7 @@ namespace Norristown.Semantics;
 /// </param>
 internal sealed class NamePaths(
     ProgramSymbols program,
-    IReadOnlyDictionary<string, Resolution> brought,
+    IReadOnlyDictionary<string, BroughtName> brought,
     IReadOnlyList<ProgramSymbols.Module> globs,
     Action<string?, string> touched,
     bool keepsTypes)

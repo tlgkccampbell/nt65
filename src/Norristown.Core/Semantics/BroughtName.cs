@@ -14,4 +14,12 @@ namespace Norristown.Semantics;
 /// Whether it is an <c>.export .use</c>, which re-exports the name rather than using it, so
 /// it is not reported as unused when this module never refers to it.
 /// </param>
-public readonly record struct BroughtName(Symbol? Symbol, string? Module, TextSpan At, bool IsExported);
+public readonly record struct BroughtName(Symbol? Symbol, string? Module, TextSpan At, bool IsExported)
+{
+    /// <summary>
+    /// Gets what the name resolves to, which is what a lookup of it in the file returns. A name
+    /// whose item leads nowhere has neither a symbol nor a module, and resolves to
+    /// <see cref="Resolution.Reported"/>.
+    /// </summary>
+    internal Resolution Resolved => new(Symbol, Module);
+}
