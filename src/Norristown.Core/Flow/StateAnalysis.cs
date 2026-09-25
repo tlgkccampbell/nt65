@@ -793,8 +793,7 @@ public sealed class StateAnalysis : IProcessorStates
     /// </summary>
     private long? Loaded(Step step) =>
         step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Lda }
-        && layout.Of(step.Statement, step.On)?.Mode == AddressingMode.Immediate
-            ? StepOperands.Constant(model, step)
+            ? StepOperands.Immediate(model, layout, step)
             : null;
 
     /// <summary>

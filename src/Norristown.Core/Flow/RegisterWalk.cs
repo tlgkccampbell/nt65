@@ -206,7 +206,7 @@ internal sealed class RegisterWalk
 
         // Setting the index flag zeroes the high bytes of X and Y, which `plp` and `rti` do as
         // well as `sep`, however the flag is set again later.
-        if (NarrowsIndex(step, next, mnemonic, mode))
+        if (NarrowsIndex(step, next, mnemonic))
             state = state.WithEach(Registers.X | Registers.Y, RegisterValue.Written);
 
         // A call is handled for the block as a whole, because its effect depends on which
@@ -235,7 +235,7 @@ internal sealed class RegisterWalk
                 : state.With(moved.To, moved.From == Registers.A ? Taken(step, mnemonic, state) : state.Of(moved.From));
         }
         var written = RegisterEffects.Written(
-            mnemonic, mode, mode == AddressingMode.Immediate ? StepOperands.Constant(model, step) : null);
+            mnemonic, mode, StepOperands.Immediate(model, layout, step));
         var after = state.WithEach(written & ~Registers.A, RegisterValue.Written);
         if (!written.HasFlag(Registers.A))
             return after;
@@ -521,12 +521,12 @@ internal sealed class RegisterWalk
     /// index registers found those bytes zero, so zeroing them again changes nothing it was
     /// given. Only an instruction that can set the index flag narrows it.
     /// </summary>
-    private bool NarrowsIndex(Step step, Step? next, MnemonicKind mnemonic, AddressingMode? mode)
+    private bool NarrowsIndex(Step step, Step? next, MnemonicKind mnemonic)
     {
         var sets = mnemonic switch
         {
-            MnemonicKind.Sep => mode != AddressingMode.Immediate
-                || StepOperands.Constant(model, step) is not { } flags || (flags & (long)StatusFlags.X) != 0,
+            MnemonicKind.Sep => StepOperands.Immediate(model, layout, step) is not { } flags
+                || (flags & (long)StatusFlags.X) != 0,
             MnemonicKind.Plp or MnemonicKind.Xce => true,
             _ => false,
         };

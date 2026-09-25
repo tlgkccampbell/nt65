@@ -155,8 +155,7 @@ public static class Suggestions
         {
             if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rep or MnemonicKind.Sep } statement
                 || !Own(model, step)
-                || file.Layout.Of(statement, step.On)?.Mode != AddressingMode.Immediate
-                || StepOperands.Constant(model, step) is not { } flags)
+                || StepOperands.Immediate(model, file.Layout, step) is not { } flags)
             {
                 continue;
             }
