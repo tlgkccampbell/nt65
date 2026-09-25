@@ -867,21 +867,17 @@ public sealed class Emitter
         // expansion follows it. A label on an instruction likewise goes on a line of its own,
         // and the instruction is written as it would be without the label, long branch and
         // negative immediate included.
-        if (rest is MacroCallSyntax call)
-        {
-            LabelOnly(line, label);
-            Expand(line, call);
-            return;
-        }
-        if (rest is InstructionStatementSyntax)
+        if (rest is MacroCallSyntax or InstructionStatementSyntax)
         {
             LabelOnly(line, label);
             statements.Walk(line, rest);
             return;
         }
+
+        // A data directive that nt65 does not transpile is handled as it is without a label.
         if (rest is DataDirectiveSyntax && layout.Of(rest, context.Expansion) is null)
         {
-            NotTranspiled(rest);
+            statements.Walk(line, rest);
             return;
         }
         var bytes = rest is null ? 0 : layout.Of(rest, context.Expansion)?.Length ?? 0;
