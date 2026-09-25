@@ -1,0 +1,13 @@
+; Where an `.incbin` starts and how much it takes are constants, and stay inside the file, as ca65
+; requires. `eight.bin` is 8 bytes long.
+.module main
+
+.cpu 6502
+
+.segment RODATA
+.export .data whole:    .incbin "eight.bin", 8, 0
+.export .data past:     .incbin "eight.bin", 9       ;! error[incbin-out-of-range]: `.incbin` reaches outside `eight.bin`: it asks for offset 9, and the file is 8 bytes long
+.export .data before:   .incbin "eight.bin", -1      ;! error[incbin-out-of-range]: `.incbin` reaches outside `eight.bin`: it asks for offset -1, and the file is 8 bytes long
+.export .data long:     .incbin "eight.bin", 4, 5    ;! error[incbin-out-of-range]: `.incbin` reaches outside `eight.bin`: it asks for 5 bytes from offset 4, and the file is 8 bytes long
+.export .data negative: .incbin "eight.bin", 2, -1   ;! error[incbin-out-of-range]: `.incbin` reaches outside `eight.bin`: it asks for -1 bytes from offset 2, and the file is 8 bytes long
+.export .data moving:   .incbin "eight.bin", <whole  ;! error[incbin-not-constant]: the offset of an `.incbin` must be a constant

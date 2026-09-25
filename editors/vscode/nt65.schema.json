@@ -273,6 +273,8 @@
         "immediate-too-wide",
         "import-holds-no-values",
         "import-needs-an-element-type",
+        "incbin-not-constant",
+        "incbin-out-of-range",
         "incbin-unreadable",
         "indirect-call-unchecked",
         "indirect-jump-unchecked",

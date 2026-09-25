@@ -55,7 +55,7 @@ public sealed class CatalogueAreaTests
             "declaration-in-a-repetition", "defined-in-terms-of-itself", "defined-too-deep", "division-by-zero",
             "each-not-over-a-list", "element-index-not-constant", "element-index-out-of-range", "else-without-if",
             "enum-member-is-not-an-address", "family-member-missing", "function-argument-count", "has-argument",
-            "incbin-unreadable", "measures-a-declaration", "member-count-not-a-number", "member-has-no-value",
+            "incbin-not-constant", "incbin-out-of-range", "incbin-unreadable", "measures-a-declaration", "member-count-not-a-number", "member-has-no-value",
             "member-reserves-nothing", "not-indexable", "not-measurable", "nothing-to-measure", "number-too-wide",
             "operator-on-text", "repeat-count-negative", "repeat-count-not-constant", "scope-has-no-address",
             "select-arguments", "select-condition-is-text", "select-condition-not-constant", "set-expected",

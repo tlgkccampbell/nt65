@@ -390,10 +390,39 @@ internal sealed partial class Evaluator
             return null;
         }
 
-        var offset = operands.Count > 1 ? Evaluate(operands[1]).AsNumber() ?? 0 : 0;
-        var taken = operands.Count > 2 ? Evaluate(operands[2]).AsNumber() : null;
-        var available = Math.Max(0, length - offset);
-        var bytes = taken is { } wanted ? Math.Min(wanted, available) : available;
+        // Where the bytes start and how many are taken have to be constants, and both have to
+        // stay inside the file, as ca65 requires.
+        long offset = 0;
+        if (operands.Count > 1)
+        {
+            if (Evaluate(operands[1]).AsNumber() is not { } start)
+            {
+                Report(operands[1], Catalogue.IncbinNotConstant.Message("offset"));
+                return null;
+            }
+            if (start < 0 || start > length)
+            {
+                Report(operands[1], Catalogue.IncbinOutOfRange.Message(path, $"offset {start}", length));
+                return null;
+            }
+            offset = start;
+        }
+        var bytes = length - offset;
+        if (operands.Count > 2)
+        {
+            if (Evaluate(operands[2]).AsNumber() is not { } wanted)
+            {
+                Report(operands[2], Catalogue.IncbinNotConstant.Message("length"));
+                return null;
+            }
+            if (wanted < 0 || wanted > bytes)
+            {
+                Report(operands[2], Catalogue.IncbinOutOfRange.Message(
+                    path, $"{wanted} {(wanted == 1 ? "byte" : "bytes")} from offset {offset}", length));
+                return null;
+            }
+            bytes = wanted;
+        }
         return new DataSize(bytes, bytes);
     }
 

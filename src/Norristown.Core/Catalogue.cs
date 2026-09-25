@@ -1518,6 +1518,22 @@ public static class Catalogue
             + "current enum member. `container` has no member of that name; every enum member needs a matching "
             + "declaration inside it.");
 
+    internal static DiagnosticDescriptor IncbinNotConstant { get; } = Entry(
+        Area.Values,
+        "incbin-not-constant",
+        Severity.Error,
+        "the {0} of an `.incbin` must be a constant",
+        "How many bytes an `.incbin` takes decides where everything after it goes, so where it starts in the "
+            + "file and how much of it it takes are decided while nt65 builds.");
+
+    internal static DiagnosticDescriptor IncbinOutOfRange { get; } = Entry(
+        Area.Values,
+        "incbin-out-of-range",
+        Severity.Error,
+        "`.incbin` reaches outside `{0}`: it asks for {1}, and the file is {2} bytes long",
+        "An `.incbin` offset starts at 0 and may be as large as the file, and a length may not run past the file's "
+            + "end. ca65 refuses both, and so does nt65, where it can say which line asked.");
+
     internal static DiagnosticDescriptor IncbinUnreadable { get; } = Entry(
         Area.Values,
         "incbin-unreadable",
