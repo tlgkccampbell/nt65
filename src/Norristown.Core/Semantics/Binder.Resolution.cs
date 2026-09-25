@@ -150,7 +150,7 @@ internal sealed partial class Binder
             return InModule(token, prefix, use.Last, report);
 
         // For a part after `::`, the scope to look in is the one the part before it opened.
-        var container = BodyOf(before.Symbol!);
+        var container = paths.BodyOf(before.Symbol!);
         if (container is null)
         {
             if (before.Symbol is { Kind: SymbolKind.AddressAlias, ValueExpression.Parent: DataDeclarationSyntax { Directive: null } })
@@ -312,59 +312,6 @@ internal sealed partial class Binder
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));
         Fixed(new DiagnosticFix(FixKind.Export, symbol.QualifiedName, symbol.DeclarationSpan));
         return symbol;
-    }
-
-    /// <summary>
-    /// Returns the scope that a path can look into after <paramref name="symbol"/> while the
-    /// file is being bound. This is the scope a routine or a scope opens, or the scope of the type
-    /// that a member or a data declaration names. The type's scope makes the fields of
-    /// <c>.type T</c> data reachable through the data. The type is resolved here, on demand,
-    /// because nothing has been evaluated yet.
-    /// </summary>
-    private Scope? BodyOf(Symbol symbol)
-    {
-        if (Lookup.BodyOf(symbol) is { } known)
-            return known;
-        if (symbol.Kind == SymbolKind.Macro || !resolving.Add(symbol))
-            return null;
-        try
-        {
-            if (symbol.TypeExpression is not null)
-                return TypeOf(symbol)?.Body;
-
-            // Data found elsewhere that states no type has the type of the data its address names,
-            // or of one element of it. An offset is not evaluated yet, so data at an offset has
-            // no fields here.
-            return symbol is { Kind: SymbolKind.AddressAlias, ValueExpression: NameExpressionSyntax { Parent: DataDeclarationSyntax } address }
-                && NamedByPath(address, symbol.Scope) is { } named
-                    ? BodyOf(named)
-                    : null;
-        }
-        finally
-        {
-            resolving.Remove(symbol);
-        }
-    }
-
-    /// <summary>
-    /// Resolves the type that a <c>.type</c> names, from where the <c>.type</c> appears. This runs
-    /// on demand rather than in order, because a name may reach into a type that the file declares
-    /// later. Nothing is reported from here, because the names in the type are uses like any
-    /// others and are reported where they are resolved.
-    /// </summary>
-    private Symbol? TypeOf(Symbol symbol)
-    {
-        if (symbol.Type is { } known)
-            return known;
-        var type = NamedByPath(symbol.TypeExpression, symbol.Scope);
-
-        // A symbol of a file that was not read again after an edit belongs to a completed model,
-        // which other threads may be reading, so the type is kept only on a symbol still being
-        // built.
-        if (symbol.IsFrozen)
-            return type;
-        symbol.Type = type;
-        return symbol.Type;
     }
 
     /// <summary>
