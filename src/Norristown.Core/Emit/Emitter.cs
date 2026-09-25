@@ -197,6 +197,10 @@ public sealed class Emitter
         first.Linkage([.. emitters.SelectMany(emitter => emitter.Exports()).Distinct(StringComparer.Ordinal)]);
         first.Linkage([.. emitters.SelectMany(emitter => emitter.Imports()).Distinct(StringComparer.Ordinal)]);
         first.WalkContainer(root.Tree.Root);
+
+        // The passes run once over the whole unit, placed modules' lines included. No run they
+        // rewrite crosses into or out of a placed module, because the comments that open and
+        // close its part stand between them.
         LinePasses.AlignColumns(first.lines);
         LinePasses.FoldFills(first.lines);
 
@@ -1408,8 +1412,6 @@ public sealed class Emitter
         placed.writtenSegment = writtenSegment;
         Carry(widths, placed.widths);
         placed.WalkContainer(placed.model.Tree.Root);
-        LinePasses.AlignColumns(placed.lines);
-        LinePasses.FoldFills(placed.lines);
         lines.AddRange(placed.lines);
         Line($"; end of {name}");
         parts.Add((placed.source, opens, lines[^1]));
