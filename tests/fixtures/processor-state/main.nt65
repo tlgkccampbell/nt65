@@ -63,6 +63,17 @@
     rts
 }
 
+; A `plp` in emulation mode leaves both widths at 8, whatever it pulls, even a status no `php`
+; pushed.
+.export .proc pulled: emu -> emu {
+    lda #$30
+    pha
+    plp
+    lda #$12
+    ldx #$34
+    rts
+}
+
 ; A routine that returns in emulation mode returns with both widths 8, however its `a*` and
 ; `i*` read, because that is what the mode pins them at.
 .proc go_emu = $8000: a*, i* -> emu

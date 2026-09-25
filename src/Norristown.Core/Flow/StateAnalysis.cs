@@ -560,13 +560,14 @@ public sealed class StateAnalysis : IProcessorStates
                 return new FlowState(processor with { D = stack?.PulledValue(2) ?? StateValue.Unknown }, Pull(stack, 2));
 
             // A pull that finds the status register a `php` saved restores the widths saved
-            // with it. Any other pull leaves them unknown. The emulation flag is not in it.
+            // with it. Any other pull leaves them unknown. The emulation flag is not in it, and in
+            // emulation mode both widths are 8 bits whatever is pulled.
             case MnemonicKind.Plp:
-                var restored = stack?.Top is { IsStatus: true } saved
-                    ? processor.E == ProcessorMode.Emulation
-                        ? processor with { A = Width.Eight, Index = Width.Eight }
-                        : processor with { A = saved.A, Index = saved.Index }
-                    : processor with { A = Width.Unknown, Index = Width.Unknown };
+                var restored = processor.E == ProcessorMode.Emulation
+                    ? processor with { A = Width.Eight, Index = Width.Eight }
+                    : stack?.Top is { IsStatus: true } saved
+                        ? processor with { A = saved.A, Index = saved.Index }
+                        : processor with { A = Width.Unknown, Index = Width.Unknown };
                 return new FlowState(restored, Pull(stack, 1));
 
             // The stack pointer now points somewhere unknown, and what is pushed from here on
