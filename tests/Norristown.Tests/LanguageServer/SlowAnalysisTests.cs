@@ -140,4 +140,29 @@ public sealed class SlowAnalysisTests
         Assert.Equal([null, first], held.Previous);
         Assert.Null(second.WholeProgram);
     }
+
+    /// <summary>
+    /// A rename that waits for an analysis while the client edits the document names the version
+    /// it was computed from, not the version the client holds when the answer is sent. The
+    /// client then refuses an edit whose offsets are for text it no longer has.
+    /// </summary>
+    [Fact]
+    public async Task AnEditNamesTheVersionItWasComputedFrom()
+    {
+        var timeout = TestTimeout.Token();
+        var held = new HeldAnalysis();
+        await using var client = await TestClient.StartAsync(TestClient.Capable(), timeout, analyzer: held.Analyze);
+        await client.OpenAsync(Uri, Source);
+        await held.Started.Task.WaitAsync(timeout);
+
+        var renaming = client.RenameAsync(Uri, new Position(2, 16), "start", timeout);
+        await client.FoldingRangesAsync(Uri, timeout);
+        await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(Locate.Span(Source, "ldx #|0"), "1"));
+        await client.FoldingRangesAsync(Uri, timeout);
+        held.Release();
+
+        var edit = await renaming;
+        Assert.NotNull(edit);
+        Assert.Equal(1, Assert.Single(edit.DocumentChanges!).TextDocument.Version);
+    }
 }

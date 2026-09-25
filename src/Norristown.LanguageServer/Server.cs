@@ -384,7 +384,7 @@ internal sealed class Server : IDisposable
             [.. request.Files.Select(file => (Uris.ToPath(file.OldUri), Uris.ToPath(file.NewUri)))]);
         foreach (var message in messages)
             await ShowAsync(MessageType.Warning, message).ConfigureAwait(false);
-        return outgoing.ToClient(edit);
+        return outgoing.ToClient(edit, programs);
     }
 
     /// <summary>
@@ -586,7 +586,7 @@ internal sealed class Server : IDisposable
         // A new name the language will not accept is returned as a failed request, which the
         // client shows for the programmer to correct, rather than as an empty edit.
         var (edit, problem) = LanguageServer.Rename.EditAt(asked.Program, asked.Model, asked.Position, request.NewName);
-        return problem is null ? outgoing.ToClient(edit) : throw new LocalRpcException(problem);
+        return problem is null ? outgoing.ToClient(edit, [asked.Analysis]) : throw new LocalRpcException(problem);
     }
 
     [JsonRpcMethod("textDocument/completion")]
@@ -710,7 +710,8 @@ internal sealed class Server : IDisposable
         if (await AtAsync(start, cancellation).ConfigureAwait(false) is not { } asked)
             return [];
         return outgoing.ToClient(
-            LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, request.Context.Only, lineLength));
+            LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, request.Context.Only, lineLength),
+            asked.Analysis);
     }
 
     [JsonRpcMethod("textDocument/semanticTokens/full")]

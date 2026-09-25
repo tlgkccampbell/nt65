@@ -1,4 +1,5 @@
 using Norristown.LanguageServer.Protocol;
+using Norristown.Syntax;
 
 namespace Norristown.LanguageServer;
 
@@ -54,11 +55,14 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
 
     /// <summary>
     /// Returns a workspace edit with its URIs converted and its shape chosen for the client, or
-    /// null when <paramref name="edit"/> is null. The edits of each file are also given against the
-    /// version the client holds of the file when the client accepts that, and only as a plain map
-    /// of edits when it does not.
+    /// null when <paramref name="edit"/> is null. When the client accepts that, the edits of each
+    /// file are given against the version of the document they were computed from, so that a
+    /// client that has changed the document since rejects them rather than applying them at the
+    /// wrong places. When it does not, they are given as a plain map of edits.
     /// </summary>
-    public WorkspaceEdit? ToClient(WorkspaceEdit? edit)
+    /// <param name="edit">The edit.</param>
+    /// <param name="from">The analyses the edit was computed from.</param>
+    public WorkspaceEdit? ToClient(WorkspaceEdit? edit, IReadOnlyList<ProgramAnalysis> from)
     {
         if (edit is null)
             return null;
@@ -67,26 +71,32 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
             named,
             !client.DocumentChanges
                 ? null
-                : [.. named
-                    .OrderBy(file => file.Key, StringComparer.Ordinal)
+                : [.. edit.Changes
+                    .Select(file => (Uri: ToClient(file.Key), Version: VersionIn(from, file.Key), Edits: file.Value))
+                    .OrderBy(file => file.Uri, StringComparer.Ordinal)
                     .Select(file => new TextDocumentEdit(
-                        new OptionalVersionedTextDocumentIdentifier(file.Key, workspace.VersionOf(file.Key)),
-                        file.Value))]);
+                        new OptionalVersionedTextDocumentIdentifier(file.Uri, file.Version), file.Edits))]);
     }
 
     /// <summary>
     /// Returns a code action with its edit, the diagnostics it answers and the command it runs
     /// converted to the client's form.
     /// </summary>
-    public CodeAction ToClient(CodeAction action) => action with
+    /// <param name="action">The code action.</param>
+    /// <param name="from">The analysis the action was computed from.</param>
+    public CodeAction ToClient(CodeAction action, ProgramAnalysis from) => action with
     {
         Diagnostics = ToClient(action.Diagnostics),
-        Edit = ToClient(action.Edit)!,
+        Edit = ToClient(action.Edit, [from])!,
         Command = ToClient(action.Command),
     };
 
-    /// <summary>Returns the code actions, each converted to the client's form.</summary>
-    public IReadOnlyList<CodeAction> ToClient(IReadOnlyList<CodeAction> actions) => [.. actions.Select(ToClient)];
+    /// <summary>
+    /// Returns the code actions, each converted to the client's form, which were computed from
+    /// the analysis <paramref name="from"/>.
+    /// </summary>
+    public IReadOnlyList<CodeAction> ToClient(IReadOnlyList<CodeAction> actions, ProgramAnalysis from) =>
+        [.. actions.Select(action => ToClient(action, from))];
 
     /// <summary>
     /// Returns a command the client runs once a change is applied, converted to the client's form.
@@ -147,4 +157,17 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
                 new SymbolInformation(symbol.Name, symbol.Kind, new Location(uri, symbol.Range), container),
                 .. Flat(uri, symbol.Children ?? [], symbol.Name),
             ])];
+
+    /// <summary>
+    /// Returns the version of the document that the analyses read the file at
+    /// <paramref name="uri"/> from, or null when they read it from disk.
+    /// </summary>
+    private int? VersionIn(IReadOnlyList<ProgramAnalysis> from, string uri)
+    {
+        var path = Uris.ToPath(uri);
+        return from.Select(analysis => analysis.ModelFor(path)?.Tree)
+            .OfType<SyntaxTree>()
+            .Select(workspace.VersionOf)
+            .FirstOrDefault(version => version is not null);
+    }
 }

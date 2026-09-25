@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using Norristown.LanguageServer.Protocol;
 using Norristown.Project;
 using Norristown.Standard;
@@ -30,6 +31,10 @@ internal sealed class Workspace
     private readonly Analyzer analyzer;
     private readonly Lock gate = new();
     private readonly Dictionary<string, Document> open = new(StringComparer.Ordinal);
+
+    // The document each tree was parsed from, which gives the version an edit computed from an
+    // analysis of that tree applies to, however the document has changed since.
+    private readonly ConditionalWeakTable<SyntaxTree, Document> parsedFrom = new();
 
     // The URI the client uses for each file it has named, by logical path. VS Code escapes a
     // drive's colon and nt65 does not, so a file the client has opened keeps the client's form of
@@ -165,6 +170,7 @@ internal sealed class Workspace
         lock (gate)
         {
             open[item.Uri] = document;
+            parsedFrom.AddOrUpdate(document.Tree, document);
             named[document.Tree.Path] = item.Uri;
             Invalidate(document.Tree.Path);
         }
@@ -184,7 +190,9 @@ internal sealed class Workspace
                 return null;
             var tree = Applied(document.Tree, changes);
             Invalidate(tree.Path);
-            return open[id.Uri] = new Document(id.Uri, id.Version, tree);
+            var changed = new Document(id.Uri, id.Version, tree);
+            parsedFrom.AddOrUpdate(tree, changed);
+            return open[id.Uri] = changed;
         }
     }
 
@@ -399,6 +407,13 @@ internal sealed class Workspace
             return open.GetValueOrDefault(uri)?.Version;
         }
     }
+
+    /// <summary>
+    /// Returns the version of the document <paramref name="tree"/> was parsed from, or null when
+    /// it was read from disk. An edit computed from an analysis of the tree applies to that
+    /// version, even when the client has changed the document since.
+    /// </summary>
+    public int? VersionOf(SyntaxTree tree) => parsedFrom.TryGetValue(tree, out var document) ? document.Version : null;
 
     /// <summary>
     /// Returns the diagnostics of one open document, which is the file the client has just opened
