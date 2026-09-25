@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using Norristown.LanguageServer.Protocol;
 using Norristown.Project;
 using Norristown.Standard;
@@ -27,6 +28,10 @@ namespace Norristown.LanguageServer;
 /// </summary>
 internal sealed class Workspace
 {
+    // What emitting each analysis found beyond the analysis itself. Emitting is kept for the
+    // publish once typing has stopped, and each analysis is emitted at most once.
+    private static readonly ConditionalWeakTable<ProgramAnalysis, IReadOnlyList<Diagnostic>> emitted = new();
+
     private readonly Analyzer analyzer;
     private readonly Lock gate = new();
     private readonly Dictionary<string, Document> open = new(StringComparer.Ordinal);
@@ -465,24 +470,29 @@ internal sealed class Workspace
         }
         await Task.WhenAll(programs.Select(program => program.Analysis)).ConfigureAwait(false);
 
-        var found = new Dictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree)>(StringComparer.Ordinal);
+        var found = new Dictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree, IReadOnlyList<Diagnostic> Emitted)>(
+            StringComparer.Ordinal);
         foreach (var (project, analyzing) in programs)
         {
+            // What only emitting the program finds, such as two names that collide in the output,
+            // would otherwise first show up when the program is built.
             var analysis = await analyzing.ConfigureAwait(false);
+            var settings = project?.Settings ?? ProjectSettings.None;
+            var extra = emitted.GetValue(analysis, done => Compiler.EmissionDiagnostics(done, settings));
             if (project is null)
             {
                 foreach (var file in analysis.Program.Files.Where(file => !StandardModules.IsStandard(file.Tree.Path)))
-                    found[file.Tree.Path] = (analysis, file.Tree);
+                    found[file.Tree.Path] = (analysis, file.Tree, extra);
                 continue;
             }
 
             // The project file is not one of the program's sources, but its errors can stop the
             // program being read at all, so they are published like any other file's.
-            found[project.File] = (analysis, null);
+            found[project.File] = (analysis, null, extra);
             foreach (var file in analysis.Program.Files)
             {
                 if (owners.GetValueOrDefault(file.Tree.Path) == project && !StandardModules.IsStandard(file.Tree.Path))
-                    found[file.Tree.Path] = (analysis, file.Tree);
+                    found[file.Tree.Path] = (analysis, file.Tree, extra);
             }
         }
         return [.. found
@@ -491,7 +501,11 @@ internal sealed class Workspace
                 UriOf(file.Key),
                 versions.TryGetValue(file.Key, out var version) ? version : null,
                 file.Value.Tree,
-                [.. file.Value.Analysis.DiagnosticsFor(file.Key), .. file.Value.Analysis.SuggestionsFor(file.Key)],
+                [
+                    .. file.Value.Analysis.DiagnosticsFor(file.Key),
+                    .. file.Value.Emitted.Where(diagnostic => diagnostic.Span.File == file.Key),
+                    .. file.Value.Analysis.SuggestionsFor(file.Key),
+                ],
                 file.Value.Analysis.Configuration))];
     }
 

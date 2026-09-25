@@ -60,6 +60,29 @@ public sealed class ServerTests
         Assert.Null(diagnostic.RelatedInformation);
     }
 
+    /// <summary>
+    /// What only emitting the program finds, such as two names that become one in the output, is
+    /// published once typing stops, so that the editor shows everything a build would fail on.
+    /// </summary>
+    [Fact]
+    public async Task WhatOnlyEmittingFindsIsPublishedOnceTypingStops()
+    {
+        const string Colliding = ".module main\n.cpu 6502\n.segment RODATA\n.scope outer {\n    .data inner: .byte 1\n}\n"
+            + ".data outer__inner: .byte 2\n.export .data t: .addr outer::inner, outer__inner\n";
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, Colliding);
+
+        PublishDiagnosticsParams published;
+        do
+            published = await client.NextDiagnosticsAsync(Uri, timeout);
+        while (published.Diagnostics.Count == 0);
+
+        var diagnostic = Assert.Single(published.Diagnostics);
+        Assert.Equal("output-name-collision", diagnostic.Code?.ToString());
+        Assert.Equal(6, diagnostic.Range.Start.Line);
+    }
+
     /// <summary>Typing the missing operand clears the error, exercising the basic edit-and-republish loop.</summary>
     [Fact]
     public async Task EditingAwayAnErrorClearsIt()
