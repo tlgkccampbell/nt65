@@ -242,12 +242,6 @@ public sealed class Emitter
     private static int SourceSize(SemanticModel model) => Encoding.UTF8.GetByteCount(model.Tree.Text);
 
     /// <summary>
-    /// Returns whether <paramref name="symbol"/> is a struct or union whose size this file exports.
-    /// </summary>
-    private static bool IsSized(Symbol symbol) => symbol is { IsExported: true, IsLayout: true, Size: not null };
-
-
-    /// <summary>
     /// Formats an <c>.export</c> or <c>.import</c> of <paramref name="name"/> with the address
     /// size <paramref name="size"/>, as <c>.exportzp</c>, <c>.export name: far</c> or the plain
     /// form.
@@ -309,45 +303,11 @@ public sealed class Emitter
 
     /// <summary>
     /// Records the routines and data declarations this file measures, and claims their end
-    /// labels and the size constants of the types it exports. The end of <c>f</c> is written
-    /// <c>f__end</c>. That spelling is fixed, because other files and hand-written ca65 refer to
-    /// it once it is exported, so a name that collides with it is an error rather than a reason
-    /// to rename.
+    /// labels and the size constants of the types it exports, as
+    /// <see cref="OutputNames.Claim"/> describes. A name that collides with one of them has been
+    /// reported by the analysis already.
     /// </summary>
-    private void Ends()
-    {
-        var own = Extents.MeasuredIn(model).Concat(measuredElsewhere)
-            .Where(symbol => symbol.Tree == model.Tree)
-            .Distinct()
-            .OrderBy(s => s.NameSpan.Start);
-        foreach (var measured in own)
-        {
-            ends.Add(measured);
-            var end = expressions.EndLabelOf(measured);
-            if (names.Claimed(end) is { } other)
-            {
-                diagnostics.Add(new Diagnostic(measured.DeclarationSpan,
-                    Catalogue.OutputNameCollision.Message(
-    other.QualifiedName,
-    $"the end of `{measured.QualifiedName}`",
-    end), [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
-            }
-            names.Claim(end);
-        }
-
-        foreach (var type in model.Symbols.Where(symbol => symbol.Tree == model.Tree && IsSized(symbol)))
-        {
-            var size = SizeConstantOf(type);
-            if (names.Claimed(size) is { } other)
-            {
-                diagnostics.Add(new Diagnostic(type.DeclarationSpan,
-                    Catalogue.OutputNameCollision.Message(
-    other.QualifiedName, $"the size of `{type.QualifiedName}`", size),
-                    [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
-            }
-            names.Claim(size);
-        }
-    }
+    private void Ends() => OutputNames.Claim(model, names, measuredElsewhere, ends, []);
 
     /// <summary>
     /// Returns the name of the constant that an exported struct or union's size is exported as,
@@ -413,7 +373,7 @@ public sealed class Emitter
         var directives = new List<string>();
         foreach (var symbol in model.Symbols)
         {
-            if (IsSized(symbol) && symbol.Tree == model.Tree)
+            if (OutputNames.IsSized(symbol) && symbol.Tree == model.Tree)
                 directives.Add(LinkageDirective(".export", Implicit(Value.Of(symbol.Size!.Value).ImpliedAddressSize()), SizeConstantOf(symbol)));
             if (!symbol.IsExported || !ProgramSymbols.IsLinked(symbol))
                 continue;
@@ -1132,7 +1092,7 @@ public sealed class Emitter
             if (exported.Contains(member) && member.Value.AsNumber() is { } offset)
                 Definition($"{NameOf(member)} = {Constant(offset)}");
         }
-        if (IsSized(reference))
+        if (OutputNames.IsSized(reference))
             Definition($"{SizeConstantOf(reference)} = {Constant(reference.Size!.Value)}");
     }
 

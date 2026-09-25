@@ -65,7 +65,7 @@ public static class Compiler
         // Every file is written even when the program already has errors, because what emission
         // finds — a construct no earlier stage checked, two names that collide in the output —
         // is worth reporting alongside the rest rather than only once the rest is fixed.
-        var measured = Measured(analysis);
+        var measured = OutputNames.MeasuredElsewhere(analysis);
         foreach (var file in analysis.Files)
         {
             var model = file.Model;
@@ -128,7 +128,7 @@ public static class Compiler
         if (analysis.ModelFor(path) is not { } model || StandardModules.IsStandard(path))
             return null;
         var root = analysis.Placements.UnitOf(model.Tree)?.Root.Path ?? path;
-        return analysis.FileFor(root) is { } file ? EmitFile(analysis, project, file, Measured(analysis), []) : null;
+        return analysis.FileFor(root) is { } file ? EmitFile(analysis, project, file, OutputNames.MeasuredElsewhere(analysis), []) : null;
     }
 
     /// <summary>
@@ -199,43 +199,21 @@ public static class Compiler
     }
 
     /// <summary>
-    /// Returns, for each file of the program in order, the file's tree and the symbols it
-    /// measures with <c>.endof</c> and <c>.spanof</c>.
-    /// </summary>
-    private static List<(SyntaxTree Tree, IReadOnlySet<Symbol> Symbols)> Measured(ProgramAnalysis analysis) =>
-        [.. analysis.Files.Select(file => (file.Model.Tree, Extents.MeasuredIn(file.Model)))];
-
-    /// <summary>
-    /// Emits one file of the program. <paramref name="measured"/> holds, for each file of the
-    /// program in order, the symbols that file measures with <c>.endof</c> and <c>.spanof</c>.
-    /// The symbols of this file that other files measure are the ones its output has to label.
+    /// Emits one file of the program. <paramref name="measured"/> holds, for each file, the
+    /// symbols it declares that other files measure with <c>.endof</c> and <c>.spanof</c>, which
+    /// are the ones its output has to label.
     /// </summary>
     private static OutputFile EmitFile(
         ProgramAnalysis analysis, ProjectSettings project, FileAnalysis file,
-        IReadOnlyList<(SyntaxTree Tree, IReadOnlySet<Symbol> Symbols)> measured, List<Diagnostic> diagnostics)
+        IReadOnlyDictionary<SyntaxTree, IReadOnlySet<Symbol>> measured, List<Diagnostic> diagnostics)
     {
-        var model = file.Model;
-        IReadOnlySet<Symbol> Elsewhere(SyntaxTree tree) => measured.Where(other => other.Tree != tree)
-            .SelectMany(other => other.Symbols)
-            .Where(symbol => symbol.Tree == tree)
-            .ToHashSet();
-        if (analysis.Placements.UnitOf(model.Tree) is not { IsPlaced: true } unit)
+        // The analysis has reported every name that collides in the output, so building the
+        // tables again reports nothing new.
+        var members = OutputNames.Tables(analysis, analysis.Placements, file, measured, []);
+        if (analysis.Placements.UnitOf(file.Model.Tree) is not { IsPlaced: true })
         {
-            return Emitter.Emit(
-                model, file.Layout, FlatNames.Create(model, analysis.Cpu, diagnostics), diagnostics,
-                project.Out, Elsewhere(model.Tree));
-        }
-
-        // The modules of a translation unit share one output, and so one table of names; the
-        // root module claims its names in that table first.
-        var members = new List<(SemanticModel, CodeLayout, FlatNames, IReadOnlySet<Symbol>)>();
-        FlatNames? names = null;
-        foreach (var tree in unit.Members)
-        {
-            if (analysis.FileFor(tree.Path) is not { } member)
-                continue;
-            names = FlatNames.Create(member.Model, analysis.Cpu, diagnostics, names, placed: members.Count > 0);
-            members.Add((member.Model, member.Layout, names, Elsewhere(member.Model.Tree)));
+            var (model, layout, names, elsewhere) = members[0];
+            return Emitter.Emit(model, layout, names, diagnostics, project.Out, elsewhere);
         }
         return Emitter.Emit(members, analysis.Placements, diagnostics, project.Out);
     }
@@ -512,7 +490,8 @@ public static class Compiler
         {
             Diagnostics = Collected(project, analysis.Cpu, cpu, program, reuse, [
                 .. registers, .. placements.Diagnostics,
-                .. Flow.RunningOnChecks.Check(program, analysis.Files, placements)]),
+                .. Flow.RunningOnChecks.Check(program, analysis.Files, placements),
+                .. OutputNames.Collisions(analysis, placements)]),
             Reused = reuse,
             Placements = placements,
             CallerStackReaders = readers,

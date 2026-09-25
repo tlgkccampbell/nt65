@@ -394,4 +394,20 @@ public sealed class ModuleTests
 
         Assert.Equal(["main.nt65:3: `lib::hidden` is not exported by module `lib`"], program.Problems());
     }
+
+    /// <summary>
+    /// Two names that become one in the output are found by the analysis, which is what an
+    /// editor shows, and not only once the program is emitted.
+    /// </summary>
+    [Fact]
+    public void NamesThatCollideInTheOutputAreFoundByTheAnalysis()
+    {
+        var program = Analysis.Program(("main.nt65",
+            ".module main\n.cpu 6502\n.segment RODATA\n.scope outer {\n    .data inner: .byte 1\n}\n"
+            + ".data outer__inner: .byte 2\n.export .data t: .addr outer::inner, outer__inner\n"));
+
+        Assert.Equal(
+            ["main.nt65:7: `outer__inner` and `outer::inner` both become `outer__inner` in the ca65 output"],
+            program.Problems());
+    }
 }
