@@ -379,4 +379,19 @@ public sealed class ModuleTests
             ["lib.nt65:2: `hidden` is never used: nothing names it, and it is not exported"],
             Analysis.Program(("lib.nt65", Lib), ("main.nt65", Leaves)).Problems());
     }
+
+    /// <summary>
+    /// A name in a <c>.select</c>'s value only has to resolve if that value is chosen, so what is
+    /// wrong with it there is not reported. A later use of the same unexported name outside any
+    /// <c>.select</c> is still reported, once.
+    /// </summary>
+    [Fact]
+    public void AnUnexportedNameInASelectDoesNotHideALaterUse()
+    {
+        var program = Analysis.Program(
+            ("lib.nt65", ".module lib\n.const hidden = 1\n"),
+            ("main.nt65", ".module main\n.const FIRST = .select(1, 2, lib::hidden)\n.const SECOND = lib::hidden\n.export FIRST, SECOND\n"));
+
+        Assert.Equal(["main.nt65:3: `lib::hidden` is not exported by module `lib`"], program.Problems());
+    }
 }

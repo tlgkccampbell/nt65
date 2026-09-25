@@ -180,12 +180,14 @@ internal sealed partial class Binder
     /// <summary>
     /// Resolves one part of a name as <see cref="Resolve(Use, Resolution?)"/> does, with the
     /// diagnostics it reports going to a list that is then dropped. Everything else that
-    /// resolving it records is kept.
+    /// resolving it records is kept, except that a name it finds unexported is not marked as
+    /// reported.
     /// </summary>
     private Resolution? Unreported(Use use, Resolution? previous)
     {
         var kept = diagnostics;
         diagnostics = [];
+        dropping = true;
         try
         {
             return Resolve(use, previous);
@@ -193,6 +195,7 @@ internal sealed partial class Binder
         finally
         {
             diagnostics = kept;
+            dropping = false;
         }
     }
 
@@ -301,8 +304,9 @@ internal sealed partial class Binder
     private Symbol CheckExported(SyntaxToken token, Symbol symbol, bool last)
     {
         // Reported once, where the file first names the symbol, because every other use is the
-        // same mistake.
-        if (!last || symbol.Tree == tree || symbol.IsExported || !unexported.Add(symbol))
+        // same mistake. A report that is being dropped does not count, or the use that should be
+        // reported later would not be.
+        if (!last || symbol.Tree == tree || symbol.IsExported || dropping || !unexported.Add(symbol))
             return symbol;
         Report(token.Span, Catalogue.NotExported.Message(symbol.PathName, symbol.Module),
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));

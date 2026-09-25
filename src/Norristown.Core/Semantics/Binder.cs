@@ -52,6 +52,10 @@ internal sealed partial class Binder
     // points this at a list of its own for as long as that takes.
     private List<Diagnostic> diagnostics = [];
 
+    // Whether the diagnostics being reported are about to be dropped, as those of a name in a
+    // `.select`'s value are.
+    private bool dropping;
+
     // The callback a lookup reports its diagnostics through; a lookup that must not report is
     // passed null instead.
     private readonly Action<TextSpan, DiagnosticMessage> report;
