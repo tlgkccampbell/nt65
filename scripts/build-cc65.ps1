@@ -17,7 +17,9 @@ $short = $sha.Substring(0, 7)
 # differs between Windows and other systems.
 $exe = if ($IsWindows) { '.exe' } else { '' }
 
-if (-not $Force -and (Test-Path (Join-Path $bin "ca65$exe")) -and (Test-Path (Join-Path $bin "cc65$exe"))) {
+# The build is skipped only when every tool it builds is there, so a missing one is built again.
+$built = @('cc65', 'ca65', 'ld65' | Where-Object { Test-Path (Join-Path $bin "$_$exe") }).Count -eq 3
+if (-not $Force -and $built) {
     $version = & (Join-Path $bin "ca65$exe") --version 2>&1 | Out-String
     if ($version -match "Git $short") {
         Write-Host "cc65, ca65 and ld65 at $short are already built."
