@@ -1,3 +1,4 @@
+using Norristown.LanguageServer;
 using Norristown.LanguageServer.Protocol;
 
 // The protocol has a Range of its own, which is the one these tests mean.
@@ -133,6 +134,27 @@ public sealed class PublishingTests
 
         await client.NextTokensRefreshAsync(timeout);
         Assert.False(client.AskedForTokensRefresh, "a keystroke in a routine body asked for a fetch of its own");
+    }
+
+    /// <summary>
+    /// A diagnostic that moves its end, changes its code or gains a tag is published again, even
+    /// where its start and message stay the same, because the client shows each of those.
+    /// </summary>
+    [Fact]
+    public void EveryFieldTheClientShowsTellsTwoPublishesApart()
+    {
+        var one = new Norristown.LanguageServer.Protocol.Diagnostic(
+            new Range(new Position(1, 0), new Position(1, 4)), DiagnosticSeverity.Hint, "unused", "nt65",
+            "`rows` is never used", null);
+        string[] signatures =
+        [
+            Server.Signature([one]),
+            Server.Signature([one with { Range = one.Range with { End = new Position(1, 8) } }]),
+            Server.Signature([one with { Code = "unreachable" }]),
+            Server.Signature([one with { Tags = [DiagnosticTag.Unnecessary] }]),
+        ];
+
+        Assert.Equal(signatures.Length, signatures.Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>Opens both files and waits for everything that opening them publishes.</summary>

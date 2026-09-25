@@ -830,6 +830,14 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
+    /// Returns a string that stands for the diagnostics published for a file. Two sets that the
+    /// client would show differently have different signatures, so every field the client reads
+    /// is part of it, down to a diagnostic's end, code, tags and related locations.
+    /// </summary>
+    internal static string Signature(IReadOnlyList<Protocol.Diagnostic> diagnostics) =>
+        JsonSerializer.Serialize(diagnostics);
+
+    /// <summary>
     /// Returns the longest a line may be before breaking it is suggested, from an editor's
     /// <c>nt65</c> settings. A length the settings do not give, or give as other than a whole
     /// number from 0, is the default, and 0 turns the suggestion off.
@@ -851,14 +859,6 @@ internal sealed class Server : IDisposable
             && named.ValueKind == JsonValueKind.String && named.GetString() is { Length: > 0 } name
             ? name
             : null;
-
-    /// <summary>
-    /// Returns a string that stands for the diagnostics published for a file. It holds enough to
-    /// tell one set of diagnostics from another and nothing more, because nothing reads it back.
-    /// </summary>
-    private static string Signature(IReadOnlyList<Protocol.Diagnostic> diagnostics) =>
-        string.Join("\n", diagnostics.Select(d =>
-            $"{d.Range.Start.Line}:{d.Range.Start.Character}:{(int)d.Severity}:{d.Message}"));
 
     /// <summary>
     /// Watches the editor process that started this server, when the client gave its process
