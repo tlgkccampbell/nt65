@@ -176,13 +176,14 @@ public static class IntegerMath
 
     /// <summary>
     /// Returns <paramref name="value"/> divided by <paramref name="by"/>, rounded to the nearest
-    /// whole number, with halves rounded away from zero. <paramref name="by"/> must be positive.
+    /// whole number, with halves rounded away from zero. <paramref name="by"/> must not be zero.
     /// </summary>
     private static BigInteger Rounded(BigInteger value, BigInteger by)
     {
-        var negative = value.Sign < 0;
-        var magnitude = negative ? -value : value;
-        var rounded = ((magnitude * 2) + by) / (by * 2);
+        var negative = value.Sign * by.Sign < 0;
+        var magnitude = BigInteger.Abs(value);
+        var divisor = BigInteger.Abs(by);
+        var rounded = ((magnitude * 2) + divisor) / (divisor * 2);
         return negative ? -rounded : rounded;
     }
 

@@ -41,6 +41,12 @@ public sealed class IntegerMathTests
     [InlineData(-3, 1, 2, -2)]
     [InlineData(1, 1, 3, 0)]
     [InlineData(2, 1, 3, 1)]
+
+    // A negative divisor rounds the same way, with the sign it gives the result.
+    [InlineData(10, 1, -3, -3)]
+    [InlineData(-10, 1, -3, 3)]
+    [InlineData(3, 1, -2, -2)]
+    [InlineData(-3, 1, -2, 2)]
     public void MulDivIsTheExactProductRoundedToTheNearest(long a, long b, long c, long expected) =>
         Assert.Equal(expected, IntegerMath.MulDiv(a, b, c));
 
