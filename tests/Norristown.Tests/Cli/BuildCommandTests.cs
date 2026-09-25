@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using Norristown.Cli;
 
@@ -451,6 +453,31 @@ public sealed class BuildCommandTests : IDisposable
                 + "nt65: note: deleted build/part.s.lines, which the program no longer writes\n",
             deleted);
         Assert.False(Exists("app/build/part.s"));
+    }
+
+    /// <summary>
+    /// The shipped executable writes UTF-8, so a path the console's default code page cannot
+    /// hold reaches a script that reads standard error intact.
+    /// </summary>
+    [Fact]
+    public async Task TheExecutableWritesUtf8()
+    {
+        root.Write("app/café.nt65", ".module main\n.export BORDER\n.const BORDER = nowhere\n");
+        var exe = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "nt65.exe" : "nt65");
+        using var nt65 = Process.Start(new ProcessStartInfo(exe, ["build", "--cpu", "6502", "café.nt65"])
+        {
+            WorkingDirectory = Path.Combine(root.FullName, "app"),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardErrorEncoding = Encoding.UTF8,
+            UseShellExecute = false,
+        });
+        Assert.NotNull(nt65);
+
+        var error = await nt65.StandardError.ReadToEndAsync(TestTimeout.Token());
+        await nt65.WaitForExitAsync(TestTimeout.Token());
+
+        Assert.StartsWith("café.nt65:3:17: error: `nowhere` is not declared", error, StringComparison.Ordinal);
     }
 
     private static (ExitCode Code, string Printed) Run(string directory, params string[] arguments)

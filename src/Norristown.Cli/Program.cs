@@ -1,4 +1,17 @@
+using System.Text;
 using Norristown.Cli;
+
+// Paths and messages may hold any character, and the OEM code page Windows gives a console by
+// default cannot show most of them, so nt65 writes UTF-8. The encoding has no byte order mark,
+// which would otherwise start what a script reads from nt65. A process with no console at all
+// cannot change its code page, and keeps the default.
+try
+{
+    Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+}
+catch (IOException)
+{
+}
 
 // Colour highlights a diagnostic's severity, and is used only when a person is likely reading
 // standard error: a redirected stream is another program's input, and a non-empty NO_COLOR
