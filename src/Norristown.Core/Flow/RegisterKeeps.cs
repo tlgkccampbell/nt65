@@ -306,13 +306,24 @@ public static class RegisterKeeps
             if (!region.IsEntered || blocks.Count == 0)
                 return RoutineRegisters.Everything;
 
-            var reached = Solve(region, of, start);
+            // The promise is about calls to the routine, so it is checked on the paths from the
+            // routine's entry. Code reached only from a declared label that another routine jumps
+            // to is followed too, for what an editor shows and for its `.state` items, but what it
+            // leaves is not held to the promise.
+            var reached = Solve(region, of, start, fromOutside: report is not null);
+            var entered = report is null ? reached : Solve(region, of, start, fromOutside: false);
             var kept = Registers.All;
             var complete = true;
             var leaves = false;
             foreach (var block in blocks)
             {
                 if (reached[block.Index] is not { } state)
+                    continue;
+                var through = Through(block, state, of, report);
+                var after = ReferenceEquals(reached, entered) ? through
+                    : entered[block.Index] is { } fromEntry ? Through(block, fromEntry, of, null)
+                    : null;
+                if (after is null)
                     continue;
                 var ends = Ends(block);
                 if (block.CallsUnknown)
@@ -322,7 +333,6 @@ public static class RegisterKeeps
                     if (!of(callee).Complete)
                         complete = false;
                 }
-                var after = Through(block, state, of, report);
 
                 // A path that passes control to another routine is an exit from this one, and is
                 // checked against the registers that routine returns unchanged.
@@ -496,9 +506,10 @@ public static class RegisterKeeps
         /// <summary>
         /// Returns what reaches each block of <paramref name="region"/>, where the routine is entered
         /// at the block at <paramref name="start"/>, with <paramref name="of"/> giving what each
-        /// routine it calls keeps.
+        /// routine it calls keeps. With <paramref name="fromOutside"/> false, a declared label the
+        /// path from the entry does not reach is not entered at all.
         /// </summary>
-        public RegisterState?[] Solve(FlowRegion region, Func<Symbol, RoutineRegisters> of, int start)
+        public RegisterState?[] Solve(FlowRegion region, Func<Symbol, RoutineRegisters> of, int start, bool fromOutside = true)
         {
             var blocks = region.Blocks;
             var solver = Solver(blocks, of, block => flow.Onward(blocks, block));
@@ -512,7 +523,7 @@ public static class RegisterKeeps
             // the routine's other entry points are not part of the answer unless the path from
             // that label reaches them.
             solver.EnterDeclared(
-                outside, start == 0 ? RegisterState.Outside : null,
+                outside, start == 0 && fromOutside ? RegisterState.Outside : null,
                 (block, state) => Entered(state, block, region.Routine));
             return solver.Reached;
         }

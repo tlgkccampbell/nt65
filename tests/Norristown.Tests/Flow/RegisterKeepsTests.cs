@@ -203,14 +203,18 @@ public sealed class RegisterKeepsTests
 
     /// <summary>
     /// A label that a `.state` declares as an entry point may be jumped to from anywhere, so
-    /// nothing is known about the registers there and none is kept.
+    /// nothing is known about the registers there. What the path from it hands back is for the
+    /// code that jumped in, not for a caller of the routine, which never runs that path. So it
+    /// takes nothing from what the routine keeps, and it is not held to the routine's promise.
     /// </summary>
     [Fact]
-    public void ADeclaredLabelIsEnteredWithNothingKnown()
+    public void ADeclaredLabelIsNotHeldToTheRoutinesPromise()
     {
         Assert.Equal(
-            Registers.None,
+            Registers.All,
             Kept(".proc p {\n    rts\n@entry:\n    .state\n    rts\n}\n", "p"));
+        Assert.Empty(FlowFragment.Problems(
+            "65816", ".proc p: a8, i8, keeps x {\n    rts\n@entry:\n    .state native, a8, i8\n    ldx #0\n    rts\n}\n"));
     }
 
     /// <summary>A tail jump hands this routine's caller whatever the routine it jumps to hands back.</summary>
