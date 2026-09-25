@@ -164,6 +164,15 @@ internal sealed partial class Binder
     public ProgramSymbols.Module Module => new(tree, moduleName, moduleNameSpan, fileScope, exported, reexports);
 
     /// <summary>
+    /// Gets the file as the program will see it once it has exported what its <c>.export</c>
+    /// items name, before it has. A family's instances are declared before any module exports,
+    /// because what a module exports includes them. The enum a family walks may be one a
+    /// <c>.use hw::*</c> brings in, so that <c>.use</c> is read against these modules.
+    /// </summary>
+    public ProgramSymbols.Module ProvisionalModule =>
+        new(tree, moduleName, moduleNameSpan, fileScope, [.. ToExport().Distinct()], reexports);
+
+    /// <summary>
     /// Gets a value indicating whether the file holds any declaration named by a repetition's
     /// binding.
     /// </summary>
@@ -358,6 +367,35 @@ internal sealed partial class Binder
                 Report(spelled.Span, Catalogue.LinkerNameIsAnInstruction.Message(linkerName));
             }
             Export(symbol, item.Span, linkerName, size);
+        }
+    }
+
+    /// <summary>
+    /// Returns what <see cref="Export()"/> will export, reporting nothing and changing no symbol.
+    /// </summary>
+    private IEnumerable<Symbol> ToExport()
+    {
+        var named = exportedDeclarations.Select(declaration => declaration.Symbol)
+            .Concat(exportItems.Select(item => Declared(item.Item.Name, item.Scope)).OfType<Symbol>());
+        foreach (var symbol in named)
+        {
+            foreach (var exported in WithMembers(symbol))
+                yield return exported;
+        }
+
+        // Exporting a named scope, data or a type exports what it declares, as Export does.
+        static IEnumerable<Symbol> WithMembers(Symbol symbol)
+        {
+            yield return symbol;
+            if (symbol.Kind is not (SymbolKind.Scope or SymbolKind.Data or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union))
+                yield break;
+            foreach (var member in symbol.Body?.Symbols ?? [])
+            {
+                if (member.IsCheapLocal)
+                    continue;
+                foreach (var exported in WithMembers(member))
+                    yield return exported;
+            }
         }
     }
 

@@ -37,11 +37,15 @@ internal static class Lookup
         // A module on its own is not a value, so a name that appears alone means what a `*`
         // brought in, if anything. Only when nothing else matches is it the module, which the
         // caller reports as a module used as a name.
+        // Whether a module exports a name is what its list of exports says. Before the modules
+        // have exported, which is when a family finds the enum it walks, the list is what each
+        // will export, and no symbol is marked yet.
         Resolution? chosen = null;
         foreach (var module in globs)
         {
             if (program.Member(module, name, touched) is not { } exported
-                || exported.Tree == module.Tree && !exported.IsExported || chosen?.Symbol == exported)
+                || exported.Tree == module.Tree && !exported.IsExported && !module.Exported.Contains(exported)
+                || chosen?.Symbol == exported)
             {
                 continue;
             }

@@ -119,6 +119,24 @@ public sealed class FamilyTests
         Assert.Single(model.ReferencesTo(family.Enumeration), reference => reference.InUse);
     }
 
+    /// <summary>
+    /// A family may walk an enum that a <c>.use hw::*</c> brings in. The glob is read before any
+    /// module has exported, so it is read against what each module will export. A full analysis
+    /// and one after an edit that leaves the enum's module alone find the same instances.
+    /// </summary>
+    [Fact]
+    public void AFamilyWalksAnEnumAGlobBringsIn()
+    {
+        (string, string) sound = ("sound.nt65", ".module sound\n.export .enum Channel {\n    a\n    b\n}\n");
+        (string, string) main = ("main.nt65", ".module main\n.use sound::*\n.segment CODE\n.export .multiproc Channel, ch {\n    rts\n}\n");
+
+        var program = Analysis.Program(Analysis.Fragment, sound, main);
+
+        Assert.Empty(program.Problems());
+        var family = Assert.Single(program.File("main.nt65").Families);
+        Assert.Equal(["a", "b"], family.Instances.Select(instance => instance.Name));
+    }
+
     private static string Output(string text) => Analysis.Outputs(("main.nt65", text))["main.s"];
 
     /// <summary>Returns the output without the comments, which name where each line came from.</summary>

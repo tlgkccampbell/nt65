@@ -382,7 +382,12 @@ public sealed class ProgramModel
         // been read, and before the modules' exports, because what a file exports includes them.
         if (binders.Any(binder => binder.HasFamilies))
         {
-            var provisional = ProgramSymbols.Build(modules, []);
+            // The files being read have exported nothing yet, so each is seen as it will be once
+            // it has. A file that is not read exported what it does when it was last read.
+            var reading = binders.ToDictionary(binder => binder.Tree);
+            var provisional = ProgramSymbols.Build(
+                [.. modules.Select(module => reading.TryGetValue(module.Tree, out var binder) ? binder.ProvisionalModule : module)],
+                []);
             foreach (var binder in binders)
                 binder.DeclareFamilies(provisional);
         }
