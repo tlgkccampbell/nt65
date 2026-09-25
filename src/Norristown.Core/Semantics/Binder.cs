@@ -1046,17 +1046,19 @@ internal sealed partial class Binder
         var outer = scope;
         scope = body;
         var parameters = new List<MacroParameter>();
+        var written = new List<MacroParameterSyntax>();
         foreach (var parameter in declarations)
         {
             if (Declare(parameter.Name, SymbolKind.MacroParameter) is not { } declared)
                 continue;
             declared.Parameter = Macros.Describe(parameter, declared);
             parameters.Add(declared.Parameter);
+            written.Add(parameter);
         }
         scope = outer;
         if (symbol is not null)
             symbol.Parameters = parameters;
-        CheckParameterOrder(declarations, parameters);
+        CheckParameterOrder(written, parameters);
         return body;
     }
 
@@ -1105,13 +1107,16 @@ internal sealed partial class Binder
     /// Reports parameters declared in the wrong order. A macro has at most one <c>list</c>, which
     /// takes every remaining positional argument, and only blocks may follow it. Blocks come
     /// last, because they appear after the parentheses and so cannot be positional at all.
+    /// Each of <paramref name="parameters"/> is reported at the syntax in the same place in
+    /// <paramref name="declaredParameters"/>, which holds only the parameters that declared a
+    /// name.
     /// </summary>
     private void CheckParameterOrder(
         IReadOnlyList<MacroParameterSyntax> declaredParameters, IReadOnlyList<MacroParameter> parameters)
     {
         MacroParameter? list = null;
         MacroParameter? block = null;
-        for (var i = 0; i < parameters.Count && i < declaredParameters.Count; i++)
+        for (var i = 0; i < parameters.Count; i++)
         {
             var parameter = parameters[i];
             var at = declaredParameters[i].Span;
