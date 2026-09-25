@@ -1,4 +1,5 @@
 using Norristown.Syntax;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Tests.Syntax;
 
@@ -84,6 +85,41 @@ public sealed class IncrementalTests
         Assert.Same(tree.Lines[1], edited.Lines[1]);
         Assert.Equal(SyntaxKind.EnumMember, edited.Parsed(1).Node.Kind);
         Assert.Equal(SyntaxDump.Full(SyntaxTree.Parse("main.nt65", edited.Text)), SyntaxDump.Full(edited));
+    }
+
+    /// <summary>
+    /// A line is not parsed while it is built. Finding the kind of a data block parses its line
+    /// later, and that parse is the one the block layer then asks for.
+    /// </summary>
+    [Fact]
+    public void FindingTheKindOfADataBlockParsesItsLineOnce()
+    {
+        var line = Lexer.LexLine(".data rows: .byte[] {\n");
+        Assert.Null(line.CachedParse);
+
+        Assert.Equal(BlockKind.DataBody, line.OpensBlockKind);
+        var kept = Assert.IsType<Parser.Result>(line.CachedParse);
+        Assert.Equal(BlockKind.DataBody, kept.Context);
+        Assert.Same(kept, line.Parse(BlockKind.DataBody));
+    }
+
+    /// <summary>
+    /// Every line keeps the parse in the context the block layer asked for, including a
+    /// conditional or a repetition inside a data body, which takes the body's context. An edit
+    /// elsewhere then parses none of them again.
+    /// </summary>
+    [Fact]
+    public void EveryLineOfADataBodyKeepsTheParseItWasAskedFor()
+    {
+        var tree = SyntaxTree.Parse(
+            "main.nt65",
+            ".data rows: .byte[] {\n    1, 2\n    .if X {\n        3\n    }\n    .repeat 2 {\n        4\n    }\n}\n");
+        for (var i = 0; i < tree.LineCount - 1; i++)
+            Assert.Same(tree.Parsed(i), tree.PhysicalLines[i].CachedParse);
+
+        var edited = tree.WithChange(new TextChange(0, 0, "nop\n"));
+        for (var i = 0; i < tree.LineCount - 1; i++)
+            Assert.Same(tree.Parsed(i), edited.Parsed(i + 1));
     }
 
     [Theory]

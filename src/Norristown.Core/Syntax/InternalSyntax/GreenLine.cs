@@ -10,7 +10,14 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 internal sealed class GreenLine : GreenNode
 {
+    /// <summary>The value of <see cref="opensBlockKind"/> before the kind has been found.</summary>
+    private const int Unfound = -1;
+
     private Parser.Result? parsed;
+
+    // The kind of block the line opens, held as an int so that threads that read the line at once
+    // never see half of a write. Each thread that finds the kind finds the same one.
+    private int opensBlockKind = Unfound;
 
     internal GreenLine(ImmutableArray<GreenToken> tokens) : this(tokens, default)
     {
@@ -23,15 +30,6 @@ internal sealed class GreenLine : GreenNode
         Parts = parts.IsDefault ? [this] : parts;
         LineKind = Lines.Classify(tokens);
         (Opens, Closes) = Lines.Braces(tokens);
-        OpensBlockKind = Opens ? Lines.BlockKindOf(this)
-            : Lines.IsRegion(tokens) ? BlockKind.Region
-            : BlockKind.None;
-
-        // Finding the kind of a data block parses the line. The parser reads a line that opens a
-        // block the same way in any context, so that parse is kept as the one in the block's own
-        // kind, which is the context the block layer asks for.
-        if (parsed is not null)
-            parsed = parsed with { Context = OpensBlockKind };
 
         // A green line holds only its tokens, so its flags cover just the lexer's errors on them.
         // Diagnostics from parsing are held by the statement the parser returns.
@@ -64,13 +62,33 @@ internal sealed class GreenLine : GreenNode
     /// <c>.segment NAME</c> region line opens a <see cref="BlockKind.Region"/> block, which has no
     /// brace.
     /// </summary>
-    public BlockKind OpensBlockKind { get; }
+    /// <remarks>
+    /// The kind of a data block is read from the line's parse, so the kind is found on first
+    /// read. The constructor never parses, because the parser would then read a line that is
+    /// not yet complete.
+    /// </remarks>
+    public BlockKind OpensBlockKind
+    {
+        get
+        {
+            var found = Volatile.Read(ref opensBlockKind);
+            if (found == Unfound)
+            {
+                found = (int)FindOpensBlockKind();
+                Volatile.Write(ref opensBlockKind, found);
+            }
+            return (BlockKind)found;
+        }
+    }
 
     /// <summary>Gets the line's contribution to the block depth, which is +1, −1 or 0.</summary>
     public int BraceValue => (Opens ? 1 : 0) - (Closes ? 1 : 0);
 
     /// <inheritdoc/>
     public override int SlotCount => Tokens.Length;
+
+    /// <summary>Gets the parse that <see cref="Parse"/> has cached, or null if there is none.</summary>
+    internal Parser.Result? CachedParse => parsed;
 
     /// <summary>Returns the offset of token <paramref name="index"/>'s text from the start of the line.</summary>
     public int TextOffset(int index)
@@ -97,5 +115,22 @@ internal sealed class GreenLine : GreenNode
     {
         var cached = parsed;
         return cached is not null && cached.Context == context ? cached : parsed = Parser.Parse(this, context);
+    }
+
+    /// <summary>
+    /// Returns the kind of block the line opens, which <see cref="OpensBlockKind"/> gives. Finding
+    /// the kind of a data block parses the line. The parser reads a line that opens a block the
+    /// same way in any context, so that parse is kept as the one in the block's own kind. That is
+    /// the context the block layer asks for, since a data block is never one of the blocks that
+    /// take the context of the body around them.
+    /// </summary>
+    private BlockKind FindOpensBlockKind()
+    {
+        if (!Opens)
+            return Lines.IsRegion(Tokens) ? BlockKind.Region : BlockKind.None;
+        var kind = Lines.BlockKindOf(this);
+        if (parsed is { Context: BlockKind.None } opener)
+            parsed = opener with { Context = kind };
+        return kind;
     }
 }
