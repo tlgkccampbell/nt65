@@ -53,9 +53,7 @@ internal sealed partial class Evaluator
         // distance, which would recurse. The walk context's `Apart` flag prevents that.
         if (first.Tree != second.Tree || context.Apart)
             return null;
-        var writes = new List<Write>();
-        using (Enter(context with { Apart = true }))
-            Writes(first.Tree.Root.Members, 0, null, writes);
+        var writes = WritesOf(first.Tree);
         var at = writes.FindIndex(write => write.Declares(first));
         var to = writes.FindIndex(write => write.Declares(second));
         if (at < 0 || to < 0 || writes[at].Segment is not { } segment || writes[to].Segment != segment)
@@ -73,6 +71,44 @@ internal sealed partial class Evaluator
             distance += length;
         }
         return at < to ? distance : -distance;
+    }
+
+    /// <summary>
+    /// Returns what <paramref name="tree"/> emits to each segment, in the order it emits it. A walk
+    /// that met no problem and read no value still being computed is kept and returned again,
+    /// because every value it read is final. Each distance in a file would otherwise walk the
+    /// whole file again.
+    /// <para>
+    /// A walk is neither kept nor reused while a <c>.select</c> is choosing, while a function body
+    /// is read with nothing given, or while a data declaration is being searched. Each of those
+    /// changes what a walk reads.
+    /// </para>
+    /// <para>
+    /// A query about a model is answered by an evaluator of its own, so a walk a query makes is
+    /// also kept with the model, in <see cref="EvaluationInputs.Walks"/>, for the next query. Only
+    /// a walk that asked nothing of layout is kept there, because each query brings its own.
+    /// </para>
+    /// </summary>
+    private List<Write> WritesOf(SyntaxTree tree)
+    {
+        var key = (tree, context.Written is not null);
+        var plain = context is { Choosing: 0, ReadingBody: false } && placing.Count == 0;
+        var shared = plain && context.Written is null && mode == EvaluationMode.Query ? walks : null;
+        if (plain && writesOf.TryGetValue(key, out var kept))
+            return kept;
+        if (shared is not null && shared.TryGetValue(tree, out var queried))
+            return queried;
+
+        var writes = new List<Write>();
+        var (problemsBefore, readsBefore, layoutBefore) = (problems, unfinishedReads, layoutReads);
+        using (Enter(context with { Apart = true }))
+            Writes(tree.Root.Members, 0, null, writes);
+        if (!plain || problems != problemsBefore || unfinishedReads != readsBefore)
+            return writes;
+        writesOf[key] = writes;
+        if (layoutReads == layoutBefore)
+            shared?.TryAdd(tree, writes);
+        return writes;
     }
 
     /// <summary>
@@ -338,7 +374,7 @@ internal sealed partial class Evaluator
     /// <param name="Span">The span of the item.</param>
     /// <param name="Length">The number of bytes the item emits, or null when nt65 does not know.</param>
     /// <param name="Everywhere">Whether the item could emit to any segment.</param>
-    private readonly record struct Write(string? Segment, TextSpan Span, long? Length, bool Everywhere)
+    internal readonly record struct Write(string? Segment, TextSpan Span, long? Length, bool Everywhere)
     {
         /// <summary>Determines whether this is the item that declares <paramref name="data"/>.</summary>
         public bool Declares(Symbol data) => !Everywhere && Span.Contains(data.NameSpan.Start);

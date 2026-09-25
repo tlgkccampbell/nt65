@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using Norristown.Syntax;
+
 namespace Norristown.Semantics;
 
 /// <summary>
@@ -29,4 +32,13 @@ internal sealed record EvaluationInputs(SegmentTable Segments, BoundNames Names)
     /// every condition is evaluated as a condition inside an expansion would be.
     /// </summary>
     public Configuration? Configuration { get; init; }
+
+    /// <summary>
+    /// Gets where a model keeps what each of its files emits to each segment, which a distance
+    /// between two declarations reads. Every symbol has its value by the time a query is asked, so
+    /// a walk one query makes serves the next. A walk that asks for a span or for cycles is not
+    /// kept, because another query may be given different <see cref="Spans"/> or
+    /// <see cref="Cycles"/>.
+    /// </summary>
+    public ConcurrentDictionary<SyntaxTree, List<Evaluator.Write>>? Walks { get; init; }
 }

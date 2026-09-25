@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Norristown.Processor;
 using Norristown.Syntax;
 
@@ -20,6 +21,10 @@ public sealed class SemanticModel
     private readonly Func<string, long?>? binaryLength;
     private readonly IReadOnlyList<(TextSpan Span, Scope Scope)> regions;
     private readonly Dictionary<StatementSyntax, Family> byFamily;
+
+    // What each file emits to each segment, as the queries about this model have found it. A
+    // distance between two declarations reads it, and every query would otherwise walk the file.
+    private readonly ConcurrentDictionary<SyntaxTree, List<Evaluator.Write>> walks = new();
 
     // What the file may name in the other modules, and the places its `.use` items reach.
     // Together they answer a lookup at a position.
@@ -290,7 +295,8 @@ public sealed class SemanticModel
     public Value ValueOf(
         SyntaxNode expression, Expansion? on = null, Func<Symbol, long?>? spans = null,
         Func<Symbol, Symbol, bool, CycleSpan>? cycles = null) =>
-        Evaluator.ValueOf(expression, Segments, resolved, BindingsOf(on), spans, cycles, Configuration);
+        Evaluator.ValueOf(
+            expression, Segments, resolved, BindingsOf(on), spans, cycles, Configuration, walks);
 
     /// <summary>
     /// Returns the value a <c>.select</c> or a <c>.switch</c> chooses, or null when

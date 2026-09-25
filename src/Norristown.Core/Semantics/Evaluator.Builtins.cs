@@ -168,6 +168,7 @@ internal sealed partial class Evaluator
             Report(arguments[0], Catalogue.NothingToMeasure.Message(laid.Name, laid.KindPhrase, name));
             return Value.Unknown;
         }
+        layoutReads++;
         return kind == BuiltinKind.Spanof && spans?.Invoke(laid) is { } span ? Value.Of(span) : Value.Unknown;
     }
 
@@ -189,6 +190,7 @@ internal sealed partial class Evaluator
                 return Value.Unknown;
             }
         }
+        layoutReads++;
         if (cycles?.Invoke(start, end, kind == BuiltinKind.Maxcycles) is not { } counted)
             return Value.Unknown;
         if (counted.Problem is { } problem)
@@ -229,7 +231,10 @@ internal sealed partial class Evaluator
             return Value.Unknown;
         }
         if (measured.Kind == SymbolKind.Proc)
+        {
+            layoutReads++;
             return spans?.Invoke(measured) is { } body ? Value.Of(body) : Value.Unknown;
+        }
 
         EnsureEvaluated(measured);
         var room = kind == BuiltinKind.Sizeof ? measured.Size : measured.Count;

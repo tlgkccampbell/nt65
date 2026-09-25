@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using Norristown.Syntax;
 
@@ -70,6 +71,25 @@ internal sealed partial class Evaluator
     // about one from code inside it gets an unknown answer rather than recursing.
     private readonly HashSet<Symbol> placing = [];
 
+    // The symbols whose evaluation has started and not finished. A symbol leaves the stack of
+    // `evaluating` between the steps of its evaluation, so a read of it there sees only what the
+    // steps so far have given it. `unfinishedReads` counts such reads.
+    private readonly HashSet<Symbol> unfinished = [];
+    private int unfinishedReads;
+
+    // How many times evaluation has asked for something only layout knows, whether or not the
+    // caller could answer. A walk that asks nothing of layout reads the same for every caller.
+    private int layoutReads;
+
+    // What each file emits to each segment, in order, as a walk that met nothing uncertain found
+    // it. The key also says whether the walk was checking an expression the output writes as it
+    // stands, which is when a value too wide for ca65 is a problem.
+    private readonly Dictionary<(SyntaxTree Tree, bool Written), List<Write>> writesOf = [];
+
+    // What each file emits to each segment, kept with a model across the evaluators that answer
+    // queries about it, when the caller keeps one there.
+    private readonly ConcurrentDictionary<SyntaxTree, List<Write>>? walks;
+
     // Where the walk over the program is. Every change to it is undone by the scope that made
     // it, however that scope ends.
     private WalkContext context;
@@ -89,6 +109,7 @@ internal sealed partial class Evaluator
         spans = inputs.Spans;
         cycles = inputs.Cycles;
         configuration = inputs.Configuration;
+        walks = inputs.Walks;
         this.report = report;
         this.unchanged = unchanged ?? (static _ => false);
         this.conditions = conditions;
@@ -172,12 +193,14 @@ internal sealed partial class Evaluator
         IReadOnlyDictionary<Symbol, Expansion.Bound>? bound = null,
         Func<Symbol, long?>? spans = null,
         Func<Symbol, Symbol, bool, CycleSpan>? cycles = null,
-        Configuration? configuration = null) =>
+        Configuration? configuration = null,
+        ConcurrentDictionary<SyntaxTree, List<Write>>? walks = null) =>
         Querying(new EvaluationInputs(segments, new BoundNames(resolved, bound))
         {
             Spans = spans,
             Cycles = cycles,
             Configuration = configuration,
+            Walks = walks,
         }).Evaluate(expression);
 
     /// <summary>
@@ -439,17 +462,39 @@ internal sealed partial class Evaluator
             return;
         }
         if (!evaluated.Add(symbol))
+        {
+            if (unfinished.Contains(symbol))
+                unfinishedReads++;
             return;
+        }
         if (evaluating.Count >= MaximumDepth)
         {
             // A chain long enough to be cut once is usually cut again further along, and the
-            // first report says all there is to say.
+            // first report says all there is to say. A walk that met the cut read a symbol that
+            // was never finished, so it is not kept either.
             if (!tooDeep)
                 Report(symbol.DeclarationSpan, Catalogue.DefinedTooDeep.Message(symbol.DisplayName, MaximumDepth), []);
             tooDeep = true;
+            unfinishedReads++;
             return;
         }
+        unfinished.Add(symbol);
+        try
+        {
+            EvaluateOnce(symbol);
+        }
+        finally
+        {
+            unfinished.Remove(symbol);
+        }
+    }
 
+    /// <summary>
+    /// Evaluates a symbol the first time evaluation reaches it, giving it its type, its value, its
+    /// size and its address size, as far as its kind has them.
+    /// </summary>
+    private void EvaluateOnce(Symbol symbol)
+    {
         // The type that a `.type T` names is worth keeping on the symbol. Emission walks into
         // it, an editor asks what a path reaches through it, and nothing else would have
         // resolved it unless a path happened to lead that way.
