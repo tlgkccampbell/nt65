@@ -111,7 +111,7 @@ internal static class CallerStack
                     continue;
                 var mnemonic = statement.MnemonicKind;
                 var mode = file.Layout.Of(statement, step.On)?.Mode;
-                if (mnemonic is MnemonicKind.Tsx or MnemonicKind.Tsc
+                if (RegisterEffects.ReadsStackPointer(mnemonic)
                     || mode is AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY
                     || (Instructions.Facts(mnemonic).Pulls is not null && !Pushed(file, step)))
                 {

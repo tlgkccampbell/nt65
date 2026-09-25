@@ -64,6 +64,22 @@ public static class RegisterEffects
     public static (Registers From, Registers To)? Moved(MnemonicKind mnemonic) => Instructions.Facts(mnemonic).Copies;
 
     /// <summary>
+    /// Returns whether <paramref name="mnemonic"/> sets the stack pointer to a value it computes,
+    /// rather than moving it by a push or a pull. The undocumented <c>tas</c> and <c>las</c> of
+    /// the NMOS 6502 do this as well as <c>txs</c> and <c>tcs</c>.
+    /// </summary>
+    public static bool SetsStackPointer(MnemonicKind mnemonic) =>
+        mnemonic is MnemonicKind.Txs or MnemonicKind.Tcs or MnemonicKind.Tas or MnemonicKind.Las;
+
+    /// <summary>
+    /// Returns whether <paramref name="mnemonic"/> uses the value of the stack pointer, other than
+    /// to push or pull. The undocumented <c>las</c> of the NMOS 6502 does this as well as
+    /// <c>tsx</c> and <c>tsc</c>.
+    /// </summary>
+    public static bool ReadsStackPointer(MnemonicKind mnemonic) =>
+        mnemonic is MnemonicKind.Tsx or MnemonicKind.Tsc or MnemonicKind.Las;
+
+    /// <summary>
     /// Formats <paramref name="registers"/> as a message or a code lens names them, as the names
     /// <c>A</c>, <c>X</c>, <c>Y</c> and <c>C</c> separated by commas.
     /// </summary>

@@ -937,7 +937,7 @@ public static class RegisterKeeps
                 return Restored(step, state, facts, pull, use);
 
             // Moving the stack pointer leaves nothing known about the saves on the stack.
-            if (mnemonic is MnemonicKind.Txs or MnemonicKind.Tcs)
+            if (RegisterEffects.SetsStackPointer(mnemonic))
                 state = state with { Stack = null };
 
             if (RegisterEffects.Moved(mnemonic) is { } moved)
@@ -990,7 +990,7 @@ public static class RegisterKeeps
             // Reading the stack pointer, moving it, or addressing the stack by offset reaches the
             // pushes in some way other than pulling them back in order.
             if (read == Registers.All
-                || mnemonic is MnemonicKind.Tsx or MnemonicKind.Tsc or MnemonicKind.Txs or MnemonicKind.Tcs
+                || RegisterEffects.ReadsStackPointer(mnemonic) || RegisterEffects.SetsStackPointer(mnemonic)
                 || mode is AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
             {
                 use(state.Stack?.Entries ?? Registers.None);

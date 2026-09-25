@@ -276,6 +276,22 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
+    /// The undocumented <c>tas</c> and <c>las</c> of the NMOS 6502 write the stack pointer, as
+    /// <c>txs</c> does. A pull after one of them restores nothing known.
+    /// </summary>
+    [Theory]
+    [InlineData("tas $0200,y")]
+    [InlineData("las $0200,y")]
+    [InlineData("txs")]
+    public void AnInstructionThatWritesTheStackPointerForgetsTheSaves(string instruction)
+    {
+        var analysis = FlowFragment.Analyze("6502x", $".proc p {{\n    pha\n    {instruction}\n    pla\n    rts\n}}\n");
+        var p = analysis.FlowFor("main.nt65")!.Regions.Single(region => region.Routine.DisplayName == "p");
+
+        Assert.False(p.Registers.Kept.HasFlag(Registers.A));
+    }
+
+    /// <summary>
     /// A <c>rep</c> in a macro body whose flags come from an <c>operand</c> argument reads the
     /// argument, as the width analysis does. A flag byte without the carry leaves the carry kept.
     /// </summary>
