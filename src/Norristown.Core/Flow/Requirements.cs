@@ -324,21 +324,15 @@ internal sealed class Requirements
             diagnostics.Add(new Diagnostic(at.DeclarationSpan, runningOff, message) { Fix = runsInto });
             return;
         }
+        // A `.next` on the last statement says where flow goes, so the routine is not reported
+        // even where the statement is a call, which returns and so runs on.
         var step = last.Steps[^1];
-        if (last.Next is not null || step.Statement is FallthroughDirectiveSyntax)
+        if (last.Next is not null || !last.RunsOn)
             return;
-        var transfer = Transfers.Of(step.Statement, layout.Of(step.Statement, step.On)?.Mode);
-        var runsOn = (transfer is Transfer.Through or Transfer.Branch or Transfer.Call
-            || flow.RelativeCallAt(step) is not null
-            || transfer == Transfer.Elsewhere && ControlFlow.IsCall(step.Statement))
-            && !flow.CallsWhatNeverReturns(step);
-        if (runsOn)
+        diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), runningOff, message)
         {
-            diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), runningOff, message)
-            {
-                Fix = runsInto ?? EndPath(step),
-            });
-        }
+            Fix = runsInto ?? EndPath(step),
+        });
     }
 
     /// <summary>

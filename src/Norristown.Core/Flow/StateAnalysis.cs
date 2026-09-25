@@ -342,7 +342,7 @@ public sealed class StateAnalysis : IProcessorStates
                 return Walk(block, state, region, null);
             },
             FlowState.Merge,
-            block => flow.Onward(blocks, block));
+            block => ControlFlow.Onward(blocks, block));
 
         if (region.IsEntered && blocks.Count > 0)
             solver.Enter(0, Entry(signature, region.Routine));
@@ -382,8 +382,10 @@ public sealed class StateAnalysis : IProcessorStates
             if (report is not null && !step.Closes)
                 reaching[step.Key] = state;
             Step? previous = i > 0 ? block.Steps[i - 1] : null;
-            var next = i == block.Steps.Count - 1 ? block.Next : null;
-            state = Explained(step, next, state, Through(step, previous, next, state, routine, report));
+            var last = i == block.Steps.Count - 1;
+            var next = last ? block.Next : null;
+            var end = last ? block.End : BlockEnd.Through;
+            state = Explained(step, next, state, Through(step, previous, next, end, state, routine, report));
         }
         return state;
     }
@@ -429,9 +431,13 @@ public sealed class StateAnalysis : IProcessorStates
         };
     }
 
-    /// <summary>Returns what one statement does to the state.</summary>
+    /// <summary>
+    /// Returns what one statement does to the state. <paramref name="end"/> is how the block ends
+    /// where the statement is its last, and <see cref="BlockEnd.Through"/> for every other.
+    /// </summary>
     private FlowState Through(
-        Step step, Step? previous, NextDirectiveSyntax? next, FlowState state, Symbol routine, StateChecks? report)
+        Step step, Step? previous, NextDirectiveSyntax? next, BlockEnd end, FlowState state, Symbol routine,
+        StateChecks? report)
     {
         if (step.Statement is StateDirectiveSyntax)
             return Asserted(step, state, report);
@@ -592,28 +598,65 @@ public sealed class StateAnalysis : IProcessorStates
                 return state;
 
             default:
-                return Transferred(step, mnemonic, mode, next, state, routine, report);
+                return Transferred(step, mnemonic, mode, next, end, state, routine, report);
         }
     }
 
     /// <summary>
     /// Returns what a call or a jump does to the state. After a call the state becomes the called
-    /// routine's exit, and a jump to a routine is checked as a tail call.
+    /// routine's exit, and a jump to a routine is checked as a tail call. <paramref name="end"/>
+    /// is how the block ends where the statement is its last, and <see cref="BlockEnd.Through"/>
+    /// for every other.
     /// </summary>
     private FlowState Transferred(
         Step step,
         MnemonicKind mnemonic,
         AddressingMode? mode,
         NextDirectiveSyntax? next,
+        BlockEnd end,
         FlowState state,
         Symbol routine,
         StateChecks? report)
     {
         var statement = step.Statement;
         var transfer = Transfers.Of(statement, mode);
-        var calls = Instructions.IsCall(mnemonic);
         var target = Targets.Of(model, Transfers.TargetOf(statement, mode), step.On)?.Symbol;
+        if (end is BlockEnd.Call or BlockEnd.CallNeverReturns)
+            return AfterCall(step, mnemonic, mode, transfer, target, next, state, report);
 
+        // The operand's target is checked even where a `.next` names other places.
+        if (transfer is Transfer.Jump or Transfer.Branch && target is { Signature: { } callee }
+            && !checks.InAnotherSpace(step, target))
+        {
+            report?.CheckMirror(step, mode);
+            report?.CheckTailCall(step, SyntaxFacts.TextOf(mnemonic), mnemonic, target, callee, state.Processor, routine);
+        }
+        else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && Interior(target, routine) is { } owner)
+        {
+            if (DeclaredElsewhere(target) is { } declared)
+                report?.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
+            report?.CheckJumpInto(step, SyntaxFacts.TextOf(mnemonic), target, owner, state.Processor, routine);
+        }
+        if (report is not null && next is not null)
+            CheckNamed(step, next, state, routine, report);
+        return state;
+    }
+
+    /// <summary>
+    /// Returns what a call does to the state, whether it is made directly, as a relative call or
+    /// through a pointer. <paramref name="transfer"/> is how the statement transfers control, and
+    /// <paramref name="target"/> is the symbol its operand names, if any.
+    /// </summary>
+    private FlowState AfterCall(
+        Step step,
+        MnemonicKind mnemonic,
+        AddressingMode? mode,
+        Transfer transfer,
+        Symbol? target,
+        NextDirectiveSyntax? next,
+        FlowState state,
+        StateChecks? report)
+    {
         if (transfer == Transfer.Call)
         {
             report?.CheckMirror(step, mode);
@@ -634,34 +677,15 @@ public sealed class StateAnalysis : IProcessorStates
         // routines it names return with. With nothing named, nothing is known after it. With no
         // `.next` at all, that has been reported, and the state is left alone so the one
         // mistake is not reported again wherever the state is used.
-        if (calls)
-        {
-            if (next is null)
-                return state;
-            var named = Routines(next, step.On).ToList();
-            if (named.Count == 0)
-                return state with { Processor = ProcessorState.Unknown };
-            FlowState? merged = null;
-            foreach (var each in named)
-                merged = FlowState.Merge(merged, state with { Processor = Called(step, mnemonic, each, state.Processor, report) });
-            return merged!;
-        }
-
-        if (transfer is Transfer.Jump or Transfer.Branch && target is { Signature: { } callee }
-            && !checks.InAnotherSpace(step, target))
-        {
-            report?.CheckMirror(step, mode);
-            report?.CheckTailCall(step, SyntaxFacts.TextOf(mnemonic), mnemonic, target, callee, state.Processor, routine);
-        }
-        else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && Interior(target, routine) is { } owner)
-        {
-            if (DeclaredElsewhere(target) is { } declared)
-                report?.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
-            report?.CheckJumpInto(step, SyntaxFacts.TextOf(mnemonic), target, owner, state.Processor, routine);
-        }
-        if (report is not null && next is not null)
-            CheckNamed(step, next, state, routine, report);
-        return state;
+        if (next is null)
+            return state;
+        var named = Routines(next, step.On).ToList();
+        if (named.Count == 0)
+            return state with { Processor = ProcessorState.Unknown };
+        FlowState? merged = null;
+        foreach (var each in named)
+            merged = FlowState.Merge(merged, state with { Processor = Called(step, mnemonic, each, state.Processor, report) });
+        return merged!;
     }
 
     /// <summary>

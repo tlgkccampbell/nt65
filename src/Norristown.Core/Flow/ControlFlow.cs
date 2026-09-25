@@ -149,6 +149,26 @@ public sealed class ControlFlow
         calls.TryGetValue(step.Key, out var call) ? call : null;
 
     /// <summary>
+    /// Returns the blocks that the state after <paramref name="block"/> flows on to, within one
+    /// routine. A call's edge is to the routine it calls, which is checked against its signature
+    /// rather than walked into, so after a call the state goes on only to the statement after it.
+    /// A jump to a routine's entry, the routine's own included, leaves this routine, because it
+    /// is a tail call.
+    /// </summary>
+    internal static IEnumerable<int> Onward(IReadOnlyList<BasicBlock> blocks, BasicBlock block)
+    {
+        var calls = block.EndsInCall;
+        foreach (var edge in block.Successors)
+        {
+            if (edge.Kind == EdgeKind.Call || (calls && edge.Kind != EdgeKind.FallThrough))
+                continue;
+            if (edge.Kind != EdgeKind.FallThrough && blocks[edge.To].Label is { Signature: not null })
+                continue;
+            yield return edge.To;
+        }
+    }
+
+    /// <summary>
     /// Returns a copy of this flow for another analysis of the program to compose. Composing sets
     /// what each routine costs with its calls and which registers it keeps, and an analysis that
     /// keeps this file from an earlier one composes into the copy. The earlier analysis, which a
@@ -193,39 +213,6 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Returns whether a statement calls a routine that never returns, which is where its path
-    /// ends.
-    /// </summary>
-    internal bool CallsWhatNeverReturns(Step step) => CalledAt(step) is { Signature.NeverReturns: true };
-
-    /// <summary>
-    /// Returns the blocks that the state after <paramref name="block"/> flows on to, within one
-    /// routine. A call's edge is to the routine it calls, which is checked against its signature
-    /// rather than walked into, so after a call the state goes on only to the statement after it.
-    /// A jump to a routine's entry, the routine's own included, leaves this routine, because it
-    /// is a tail call.
-    /// </summary>
-    internal IEnumerable<int> Onward(IReadOnlyList<BasicBlock> blocks, BasicBlock block)
-    {
-        var calls = EndsInCall(block);
-        foreach (var edge in block.Successors)
-        {
-            if (edge.Kind == EdgeKind.Call || (calls && edge.Kind != EdgeKind.FallThrough))
-                continue;
-            if (edge.Kind != EdgeKind.FallThrough && blocks[edge.To].Label is { Signature: not null })
-                continue;
-            yield return edge.To;
-        }
-    }
-
-    /// <summary>
-    /// Returns whether <paramref name="block"/> ends in a call, made directly, through a pointer
-    /// or as a relative call.
-    /// </summary>
-    internal bool EndsInCall(BasicBlock block) =>
-        block.Steps.Count > 0 && (IsCall(block.Steps[^1].Statement) || RelativeCallAt(block.Steps[^1]) is not null);
-
-    /// <summary>
     /// Returns the call a branch makes, for a branch that forms a relative call, or null for every
     /// other statement.
     /// </summary>
@@ -237,31 +224,45 @@ public sealed class ControlFlow
     internal bool IsReturnAddress(Step step) => returnAddresses.Contains(step.Key);
 
     /// <summary>
-    /// Returns whether control continues into what follows. A call does, in any form, because it
-    /// returns, unless it calls a routine that never returns. On any other statement a
+    /// Returns whether control continues into what follows a statement. A call does, in any form,
+    /// because it returns, unless it calls a routine that never returns. On any other statement a
     /// <c>.next</c> says where flow goes, and that replaces continuing past it.
     /// </summary>
-    internal bool RunsOn(Unit unit) => RunsOn(unit, RelativeCallAt(unit.Step));
+    internal bool RunsOn(Unit unit) => BasicBlock.Continues(EndOf(unit, RelativeCallAt(unit.Step)));
 
     /// <summary>
-    /// Returns whether control continues into what follows, where <paramref name="relative"/> is
-    /// the relative call the statement makes, if any. A call does, in any form, because it
-    /// returns, unless it calls a routine that never returns. On any other statement a
-    /// <c>.next</c> says where flow goes, and that replaces continuing past it.
+    /// Returns how control leaves <paramref name="unit"/>'s statement, where
+    /// <paramref name="relative"/> is the relative call the statement makes, if any. This is how a
+    /// block ends where the statement is its last. A jump is <see cref="BlockEnd.Jump"/> here,
+    /// and <see cref="Link"/> tells a <see cref="BlockEnd.TailCall"/> apart once it knows which
+    /// labels are the routine's own.
     /// </summary>
-    internal bool RunsOn(Unit unit, RelativeCall? relative)
+    internal BlockEnd EndOf(Unit unit, RelativeCall? relative)
     {
-        if (unit.Step.Statement is FallthroughDirectiveSyntax)
-            return false;
-        if (CalledAt(unit.Step, relative) is { Signature.NeverReturns: true })
-            return false;
-        var transfer = Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode);
-        if (transfer is Transfer.Call or Transfer.Elsewhere && IsCall(unit.Step.Statement))
-            return true;
-        if (relative is not null)
-            return true;
+        var step = unit.Step;
+        if (step.Statement is FallthroughDirectiveSyntax)
+            return BlockEnd.Fallthrough;
 
-        return unit.Next is null && transfer is Transfer.Through or Transfer.Branch or Transfer.Call;
+        // A call returns to the statement after it, even where a `.next` lists the routines it
+        // calls, unless it calls a routine that never returns.
+        if (IsCall(step.Statement) || relative is not null)
+        {
+            return CalledAt(step, relative) is { Signature.NeverReturns: true }
+                ? BlockEnd.CallNeverReturns
+                : BlockEnd.Call;
+        }
+        if (unit.Next is not null)
+            return BlockEnd.Declared;
+        return Transfers.Of(step.Statement, layout.Of(step.Statement, step.On)?.Mode) switch
+        {
+            Transfer.Branch => BlockEnd.Branch,
+            Transfer.Jump => BlockEnd.Jump,
+            Transfer.Elsewhere => BlockEnd.Elsewhere,
+            Transfer.Return when step.Statement is InstructionStatementSyntax instruction
+                && Instructions.Facts(instruction.MnemonicKind).Control == Control.Stops => BlockEnd.Stop,
+            Transfer.Return => BlockEnd.Return,
+            _ => BlockEnd.Through,
+        };
     }
 
     /// <summary>
@@ -641,7 +642,7 @@ public sealed class ControlFlow
             if (!EndsBlock(unit))
                 continue;
             open = false;
-            runsOn = RunsOn(unit, RelativeCallIn(calls, unit.Step));
+            runsOn = BasicBlock.Continues(EndOf(unit, RelativeCallIn(calls, unit.Step)));
         }
 
         Link(blocks, tails, fallenInto, found, calls);
@@ -686,6 +687,7 @@ public sealed class ControlFlow
             var transfer = Transfers.Of(tail.Step.Statement, mode);
             var relative = RelativeCallIn(calls, tail.Step);
             var makesCall = transfer == Transfer.Call || relative is not null;
+            blocks[i].End = EndOf(tail, relative);
 
             // A `.next` replaces the operand as the source of the targets, because the operand
             // does not identify them. On a call it lists the routines called, and the call
@@ -722,9 +724,18 @@ public sealed class ControlFlow
             // reaches, since control comes back from it to this routine's caller. A target
             // inside this routine is neither, because the path simply continues into it.
             if (relative is { } known)
+            {
                 blocks[i].Called(known.Routine);
-            else if (makesCall || (transfer == Transfer.Jump && !inside))
+            }
+            else if (makesCall)
+            {
                 blocks[i].SetCalled(target?.Symbol);
+            }
+            else if (transfer == Transfer.Jump && !inside)
+            {
+                blocks[i].SetCalled(target?.Symbol);
+                blocks[i].End = BlockEnd.TailCall;
+            }
         }
 
         void Edge(int from, int to, EdgeKind kind)

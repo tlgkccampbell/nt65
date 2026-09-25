@@ -325,7 +325,6 @@ public static class RegisterKeeps
                     : null;
                 if (after is null)
                     continue;
-                var ends = Ends(block);
                 if (block.CallsUnknown)
                     complete = false;
                 foreach (var callee in block.Calls)
@@ -349,7 +348,10 @@ public static class RegisterKeeps
                     if (report is not null)
                         Check(region, block, onExit, into, handed.Kept, report);
                 }
-                if (left || (!ends.Returns && !ends.Tail))
+                // `stp` and `jam` stop the processor, so nothing ever reads what they left. `rti`
+                // goes back to the code the interrupt broke into, which is exactly where the
+                // registers matter.
+                if (left || block.End is not (BlockEnd.Return or BlockEnd.TailCall))
                     continue;
                 leaves = true;
                 kept &= after.Kept;
@@ -388,15 +390,14 @@ public static class RegisterKeeps
             {
                 if (reached[block.Index] is not { } state)
                     continue;
-                var ends = Ends(block);
                 for (var i = 0; i < block.Steps.Count; i++)
                 {
                     var step = block.Steps[i];
                     var saved = i + 1 < block.Steps.Count ? Saved(step, block.Steps[i + 1], state) : Registers.None;
                     state = Step(step, state, null, entries => Use(entries, step, null), saved, NextOf(block, i));
-                    if (i == block.Steps.Count - 1 && (ends.Calls || ends.Tail))
+                    if (i == block.Steps.Count - 1 && CallsAtEnd(block))
                     {
-                        Called(block, state, ends.Tail);
+                        Called(block, state, block.End == BlockEnd.TailCall);
                         state = Calls(block, state, of);
                     }
                 }
@@ -408,7 +409,7 @@ public static class RegisterKeeps
                     Given(reads(into), state, block, into);
                     Use(state.Stack?.Entries ?? Registers.None, block.Steps[^1], into);
                 }
-                if (ends.Returns)
+                if (block.End == BlockEnd.Return)
                     Use(state.Stack?.Entries ?? Registers.None, block.Steps[^1], null);
                 left[block.Index] = state;
             }
@@ -419,7 +420,7 @@ public static class RegisterKeeps
             {
                 if (left[block.Index] is not { Stack: { } stack })
                     continue;
-                if (flow.Onward(blocks, block).Any(to => reached[to] is { Stack: null }))
+                if (ControlFlow.Onward(blocks, block).Any(to => reached[to] is { Stack: null }))
                     Use(stack.Entries, block.Steps[^1], null);
             }
             return new RoutineReads(read, complete);
@@ -512,7 +513,7 @@ public static class RegisterKeeps
         public RegisterState?[] Solve(FlowRegion region, Func<Symbol, RoutineRegisters> of, int start, bool fromOutside = true)
         {
             var blocks = region.Blocks;
-            var solver = Solver(blocks, of, block => flow.Onward(blocks, block));
+            var solver = Solver(blocks, of, block => ControlFlow.Onward(blocks, block));
             solver.Enter(start, RegisterState.Entered);
 
             // A label a `.state` declares may be jumped into from another routine, so the
@@ -567,6 +568,13 @@ public static class RegisterKeeps
         /// <summary>Returns whether every call a block makes is one nt65 could follow into a body.</summary>
         private static bool Followed(BasicBlock block, Func<Symbol, RoutineRegisters> of) =>
             !block.CallsUnknown && block.Calls.All(callee => of(callee).Complete);
+
+        /// <summary>
+        /// Returns whether a block ends by calling a routine or by handing control to one in a tail
+        /// call. Either way, what that routine keeps decides what the registers hold after the
+        /// block.
+        /// </summary>
+        private static bool CallsAtEnd(BasicBlock block) => block.EndsInCall || block.End == BlockEnd.TailCall;
 
         /// <summary>
         /// Reports a diagnostic where a routine's <c>keeps</c> promise does not hold at a point a
@@ -736,7 +744,7 @@ public static class RegisterKeeps
                 return Straight(blocks[shape.Entry], whole, of);
 
             var inside = shape.Inside;
-            var solver = Solver(blocks, of, block => flow.Onward(blocks, block).Where(to => inside[to]));
+            var solver = Solver(blocks, of, block => ControlFlow.Onward(blocks, block).Where(to => inside[to]));
             solver.Enter(shape.Entry, RegisterState.Entered);
             var reached = solver.Reached;
 
@@ -752,8 +760,8 @@ public static class RegisterKeeps
                 // A block is an exit from the scope when what runs after it is outside the
                 // scope. A return, or a jump to another routine, is an exit too.
                 var left = Leaves(blocks[i], region.Routine).ToList();
-                if (left.Count == 0 && flow.Onward(blocks, blocks[i]).All(to => inside[to])
-                    && !Ends(blocks[i]).Returns)
+                if (left.Count == 0 && ControlFlow.Onward(blocks, blocks[i]).All(to => inside[to])
+                    && blocks[i].End != BlockEnd.Return)
                 {
                     continue;
                 }
@@ -784,7 +792,7 @@ public static class RegisterKeeps
                     continue;
                 any = true;
                 state = Step(step, state, null, next: NextOf(block, i));
-                if (i == block.Steps.Count - 1 && Ends(block) is { Calls: true } or { Tail: true })
+                if (i == block.Steps.Count - 1 && CallsAtEnd(block))
                     state = Calls(block, state, of);
             }
             return any ? new RoutineRegisters(state.Kept, Followed(block, of)) : null;
@@ -794,7 +802,6 @@ public static class RegisterKeeps
         private RegisterState Through(
             BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of, List<Diagnostic>? report)
         {
-            var ends = Ends(block);
             var above = state;
             for (var i = 0; i < block.Steps.Count; i++)
             {
@@ -805,7 +812,7 @@ public static class RegisterKeeps
                     CheckSaves(i > 0 ? block.Steps[i - 1] : null, step, above, report);
                 above = state;
                 state = Step(step, state, report, next: NextOf(block, i));
-                if (i == block.Steps.Count - 1 && (ends.Calls || ends.Tail))
+                if (i == block.Steps.Count - 1 && CallsAtEnd(block))
                     state = Calls(block, state, of);
             }
             return state;
@@ -1120,28 +1127,6 @@ public static class RegisterKeeps
             return size == PushSize.Accumulator ? processor.A : processor.Index;
         }
 
-        /// <summary>Returns how a block ends, which is by calling, jumping away for good, or returning.</summary>
-        private (bool Calls, bool Tail, bool Returns) Ends(BasicBlock block)
-        {
-            if (block.Steps.Count == 0)
-                return (false, false, false);
-            var step = block.Steps[^1];
-            var statement = step.Statement;
-            var mode = layout.Of(statement, step.On)?.Mode;
-            var transfer = Transfers.Of(statement, mode);
-            var control = statement is InstructionStatementSyntax instruction
-                ? Instructions.Facts(instruction.MnemonicKind).Control
-                : Control.Through;
-            var calls = flow.EndsInCall(block);
-
-            // `stp` and `jam` stop the processor, so nothing ever reads what they left. `rti`
-            // goes back to the code the interrupt broke into, which is exactly where the
-            // registers matter.
-            var returns = transfer == Transfer.Return && block.Next is null && control != Control.Stops;
-            var tail = !calls && !returns && (block.Calls.Count > 0 || block.CallsUnknown);
-            return (calls, tail, returns);
-        }
-
         /// <summary>
         /// Returns what a block hands control to. That is the other routines, and the labels inside
         /// them, that its jump or branch names, that a <c>.next</c> on it names in their place, or
@@ -1152,7 +1137,7 @@ public static class RegisterKeeps
         /// </summary>
         public IEnumerable<Symbol> Leaves(BasicBlock block, Symbol routine)
         {
-            if (block.Steps.Count == 0 || Ends(block) is { Calls: true } or { Returns: true })
+            if (block.Steps.Count == 0 || block.EndsInCall || block.End == BlockEnd.Return)
                 yield break;
             var step = block.Steps[^1];
             if (block.RunsInto is { } runsInto)
@@ -1170,10 +1155,9 @@ public static class RegisterKeeps
                 }
                 yield break;
             }
-            var mode = layout.Of(step.Statement, step.On)?.Mode;
-            var transfer = Transfers.Of(step.Statement, mode);
-            if (transfer is not (Transfer.Jump or Transfer.Branch))
+            if (block.End is not (BlockEnd.Branch or BlockEnd.Jump or BlockEnd.TailCall))
                 yield break;
+            var mode = layout.Of(step.Statement, step.On)?.Mode;
             // A jump or a branch to the routine's own entry is a tail call to itself. The flow
             // graph does not follow it back into the routine's body, so the path ends here.
             if (Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is not { } target)
@@ -1186,7 +1170,7 @@ public static class RegisterKeeps
             // and what that routine keeps is applied there. A branch is not accounted for that
             // way, and neither is a jump into a routine's interior or to this routine's own
             // entry, so each is returned here.
-            if (transfer != Transfer.Jump || target.Signature is null || !outside)
+            if (block.End == BlockEnd.Branch || target.Signature is null || !outside)
                 yield return target;
         }
     }

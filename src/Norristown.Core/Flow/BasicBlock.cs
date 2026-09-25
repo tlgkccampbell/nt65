@@ -57,6 +57,21 @@ public sealed class BasicBlock
     /// </summary>
     public IReadOnlyList<Symbol> Calls => calls;
 
+    /// <summary>Gets how control leaves the block after its last statement.</summary>
+    public BlockEnd End { get; internal set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the block ends in a call, made directly, through a pointer
+    /// or as a relative call, whether or not the routine called returns.
+    /// </summary>
+    public bool EndsInCall => End is BlockEnd.Call or BlockEnd.CallNeverReturns;
+
+    /// <summary>
+    /// Gets a value indicating whether control may run on past the block's last statement into
+    /// what follows it.
+    /// </summary>
+    public bool RunsOn => Continues(End);
+
     /// <summary>
     /// Gets a value indicating whether the block calls somewhere nt65 cannot identify. Such a call
     /// goes through a pointer, or to an address where no declaration is. What such a call costs
@@ -135,6 +150,13 @@ public sealed class BasicBlock
     /// for every other block.
     /// </summary>
     public int? Repeats { get; internal set; }
+
+    /// <summary>
+    /// Returns whether control may run on past a statement that ends a block the way
+    /// <paramref name="end"/> says. It does after a statement that transfers nothing, a branch
+    /// that is not taken, and a call that returns.
+    /// </summary>
+    internal static bool Continues(BlockEnd end) => end is BlockEnd.Through or BlockEnd.Branch or BlockEnd.Call;
 
     internal void Add(Step step) => steps.Add(step);
 

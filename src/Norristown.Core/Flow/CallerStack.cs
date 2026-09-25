@@ -96,10 +96,9 @@ internal static class CallerStack
             // A routine that takes `args` reads its arguments where its caller pushed them, which
             // is within the caller's own part of the stack. A tail call to the caller leaves them
             // where they were.
-            var calls = file.Flow.EndsInCall(block);
             foreach (var called in block.Calls)
             {
-                if (!calls || called.Signature is not { Arguments: > 0 })
+                if (!block.EndsInCall || called.Signature is not { Arguments: > 0 })
                     Add(called);
             }
             if (block.RunsInto is { } runsInto)
@@ -127,16 +126,20 @@ internal static class CallerStack
                     Add(named);
                 continue;
             }
-            var lastMode = file.Layout.Of(ending, last.On)?.Mode;
-            var transfer = Transfers.Of(ending, lastMode);
-            if (transfer is Transfer.Branch or Transfer.Jump)
+
+            // The branch of a relative call names the routine it calls, which is added as the
+            // branch's target, whether or not that routine takes `args`. An indirect call with no
+            // `.next` calls somewhere unknown, which has already counted above.
+            if (block.End is BlockEnd.Branch or BlockEnd.Jump or BlockEnd.TailCall
+                || file.Flow.RelativeCallAt(last) is not null)
             {
+                var lastMode = file.Layout.Of(ending, last.On)?.Mode;
                 if (Targets.Of(model, Transfers.TargetOf(ending, lastMode), last.On)?.Symbol is { } target)
                     Add(target);
                 else
                     reads = true;
             }
-            else if (transfer == Transfer.Elsewhere)
+            else if (block.End == BlockEnd.Elsewhere)
             {
                 reads = true;
             }
