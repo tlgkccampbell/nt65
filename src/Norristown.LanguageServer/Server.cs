@@ -528,36 +528,42 @@ internal sealed class Server : IDisposable
     /// <summary>
     /// Returns where the name at the caret is declared. A segment may be declared in several
     /// places, one for each linked config that places it and each project that builds the file,
-    /// so the answer is a list.
+    /// so the answer is a list. So may a name in a library that several projects share, since
+    /// each project's program may declare it differently.
     /// </summary>
     [JsonRpcMethod("textDocument/definition")]
     public async Task<IReadOnlyList<Location>> DefinitionAsync(TextDocumentPositionParams request, CancellationToken cancellation)
     {
-        if (await AtAsync(request, cancellation).ConfigureAwait(false) is not { } asked)
+        var everywhere = await EverywhereAsync(request, cancellation).ConfigureAwait(false);
+        if (everywhere is not [var asked, ..])
             return [];
         if (SegmentNavigation.At(asked.Model, asked.Position) is { } segment)
-        {
-            var analyses = await workspace.AnalysesForAsync(asked.Model.Tree.Path, cancellation).ConfigureAwait(false);
-            return outgoing.ToClient(SegmentNavigation.Definitions(analyses, segment));
-        }
-        return (Lsp.ToDefinition(asked.Program, asked.Model, asked.Position)
-            ?? Lsp.ToPlacedDefinition(asked.Analysis, asked.Model, asked.Position)) is { } where
-            ? [outgoing.ToClient(where)]
-            : [];
+            return outgoing.ToClient(SegmentNavigation.Definitions([.. everywhere.Select(one => one.Analysis)], segment));
+        return outgoing.ToClient([.. everywhere
+            .Select(one => Lsp.ToDefinition(one.Program, one.Model, one.Position)
+                ?? Lsp.ToPlacedDefinition(one.Analysis, one.Model, one.Position))
+            .OfType<Location>()
+            .Distinct()]);
     }
 
+    /// <summary>
+    /// Returns every use of the name at the caret. In a library that several projects share, the
+    /// uses are those of every project's program.
+    /// </summary>
     [JsonRpcMethod("textDocument/references")]
     public async Task<IReadOnlyList<Location>> ReferencesAsync(ReferenceParams request, CancellationToken cancellation)
     {
-        if (await AtAsync(request, cancellation).ConfigureAwait(false) is not { } asked)
+        var everywhere = await EverywhereAsync(request, cancellation).ConfigureAwait(false);
+        if (everywhere is not [var asked, ..])
             return [];
         if (SegmentNavigation.At(asked.Model, asked.Position) is { } segment)
         {
-            var analyses = await workspace.AnalysesForAsync(asked.Model.Tree.Path, cancellation).ConfigureAwait(false);
-            return outgoing.ToClient(SegmentNavigation.References(analyses, segment, request.Context.IncludeDeclaration));
+            return outgoing.ToClient(SegmentNavigation.References(
+                [.. everywhere.Select(one => one.Analysis)], segment, request.Context.IncludeDeclaration));
         }
-        return outgoing.ToClient(
-            Lsp.ToReferences(asked.Program, asked.Model, asked.Position, request.Context.IncludeDeclaration));
+        return outgoing.ToClient([.. everywhere
+            .SelectMany(one => Lsp.ToReferences(one.Program, one.Model, one.Position, request.Context.IncludeDeclaration))
+            .Distinct()]);
     }
 
     [JsonRpcMethod("textDocument/documentHighlight")]
@@ -577,16 +583,41 @@ internal sealed class Server : IDisposable
             ? LanguageServer.Rename.RangeAt(asked.Model, asked.Position)
             : null;
 
+    /// <summary>
+    /// Returns the edit that renames the name at the caret everywhere it is used. A name in a
+    /// library that several projects share is renamed in every project's program, since renaming
+    /// it in one would leave the others broken.
+    /// </summary>
     [JsonRpcMethod("textDocument/rename")]
     public async Task<WorkspaceEdit?> RenameAsync(RenameParams request, CancellationToken cancellation)
     {
-        if (await AtAsync(request, cancellation).ConfigureAwait(false) is not { } asked)
+        var everywhere = await EverywhereAsync(request, cancellation).ConfigureAwait(false);
+        if (everywhere.Count == 0)
             return null;
+        var edits = new Dictionary<string, List<TextEdit>>(StringComparer.Ordinal);
+        string? problem = null;
+        foreach (var asked in everywhere)
+        {
+            // A program in which the name does not resolve has nothing of it to rename.
+            if (asked.Model.ReferenceAt(asked.Position) is null)
+                continue;
+            var (edit, refused) = LanguageServer.Rename.EditAt(asked.Program, asked.Model, asked.Position, request.NewName);
+            problem ??= refused;
+            foreach (var (uri, changes) in edit?.Changes ?? new Dictionary<string, IReadOnlyList<TextEdit>>())
+            {
+                if (!edits.TryGetValue(uri, out var found))
+                    edits[uri] = found = [];
+                found.AddRange([.. changes.Except(found)]);
+            }
+        }
 
         // A new name the language will not accept is returned as a failed request, which the
         // client shows for the programmer to correct, rather than as an empty edit.
-        var (edit, problem) = LanguageServer.Rename.EditAt(asked.Program, asked.Model, asked.Position, request.NewName);
-        return problem is null ? outgoing.ToClient(edit, [asked.Analysis]) : throw new LocalRpcException(problem);
+        if (problem is not null || edits.Count == 0)
+            throw new LocalRpcException(problem ?? "there is no name here to rename");
+        return outgoing.ToClient(
+            new WorkspaceEdit(edits.ToDictionary(file => file.Key, IReadOnlyList<TextEdit> (file) => file.Value, StringComparer.Ordinal)),
+            [.. everywhere.Select(asked => asked.Analysis)]);
     }
 
     [JsonRpcMethod("textDocument/completion")]
@@ -1178,6 +1209,26 @@ internal sealed class Server : IDisposable
             analysis.Program,
             model,
             document.Tree.GetPosition(request.Position.Line, request.Position.Character));
+    }
+
+    /// <summary>
+    /// Returns what a request points at in each program that holds the file, as
+    /// <see cref="AtAsync"/> does for the one program the editor shows the file as part of. A
+    /// library that several projects share is a file of each of their programs.
+    /// </summary>
+    private async Task<IReadOnlyList<Asked>> EverywhereAsync(TextDocumentPositionParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (workspace.Find(request.TextDocument.Uri) is not { } document)
+            return [];
+        var analyses = await workspace.AnalysesForAsync(document.Tree.Path, cancellation).ConfigureAwait(false);
+        cancellation.ThrowIfCancellationRequested();
+        var position = document.Tree.GetPosition(request.Position.Line, request.Position.Character);
+        return [.. analyses
+            .Select(analysis => analysis.ModelFor(document.Tree.Path) is { } model
+                ? new Asked(analysis, analysis.Program, model, position)
+                : null)
+            .OfType<Asked>()];
     }
 
     /// <summary>Represents a request resolved to what it is about.</summary>

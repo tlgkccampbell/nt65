@@ -211,6 +211,45 @@ public sealed class ProjectsTests : IDisposable
             references.Select(location => (location.Uri, location.Range.Start.Line)).Distinct().Order());
     }
 
+    /// <summary>
+    /// A library that two projects share is a file of both of their programs. Renaming a name it
+    /// declares renames the uses in both projects, and so leaves neither broken. Its references
+    /// are those of both programs, and a name each project declares for it has two definitions.
+    /// </summary>
+    [Fact]
+    public async Task ANameInASharedLibraryIsFollowedIntoEveryProject()
+    {
+        var timeout = TestTimeout.Token();
+        const string Library = ".module gfx\n.use hw::BORDER\n.segment CODE\n.export .proc clear {\n    sta BORDER\n    rts\n}\n";
+        root.Write("one/nt65.json", """{ "cpu": "6502", "files": ["*.nt65", "../lib/*.nt65"] }""");
+        root.Write("two/nt65.json", """{ "cpu": "6502", "files": ["*.nt65", "../lib/*.nt65"] }""");
+        root.Write("one/main.nt65", Caller);
+        root.Write("two/main.nt65", Caller);
+        root.Write("one/hw.nt65", ".module hw\n.export .const BORDER = $d020\n");
+        root.Write("two/hw.nt65", ".module hw\n.export .const BORDER = $2001\n");
+        root.Write("lib/gfx.nt65", Library);
+        await using var client = await TestClient.StartAsync(TestClient.Capable(), timeout, rootUri: Uri(""));
+        Assert.Empty(await DiagnosticsAsync(client, "lib/gfx.nt65", timeout));
+
+        var clear = new Position(3, ".export .proc c".Length);
+        var renamed = await client.RenameAsync(Uri("lib/gfx.nt65"), clear, "wipe", timeout);
+        Assert.NotNull(renamed);
+        Assert.Equal(
+            [Uri("lib/gfx.nt65"), Uri("one/main.nt65"), Uri("two/main.nt65")],
+            renamed.Changes.Keys.Order(StringComparer.Ordinal));
+        Assert.All(renamed.Changes.Values, edits => Assert.Single(edits));
+
+        var references = await client.ReferencesAsync(Uri("lib/gfx.nt65"), clear, true, timeout);
+        Assert.Equal(
+            [(Uri("lib/gfx.nt65"), 3), (Uri("one/main.nt65"), 3), (Uri("two/main.nt65"), 3)],
+            references.Select(location => (location.Uri, location.Range.Start.Line)).Order());
+
+        var border = await client.DefinitionsAsync(Uri("lib/gfx.nt65"), new Position(4, "    sta B".Length), timeout);
+        Assert.Equal(
+            [(Uri("one/hw.nt65"), 1), (Uri("two/hw.nt65"), 1)],
+            border.Select(location => (location.Uri, location.Range.Start.Line)).Order());
+    }
+
     private static IReadOnlyList<int> Dimmed(PublishDiagnosticsParams published) =>
         [.. published.Diagnostics.Where(d => d.Tags?.Contains(DiagnosticTag.Unnecessary) == true).Select(d => d.Range.Start.Line)];
 
