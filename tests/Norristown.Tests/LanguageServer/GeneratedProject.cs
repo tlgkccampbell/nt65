@@ -30,8 +30,8 @@ internal static class GeneratedProject
 
             .export m{{i}}_init, m{{i}}_step, m{{i}}_fill, M{{i}}_SIZE, M{{i}}_LIMIT, m{{i}}_table, m{{i}}_put
 
-            M{{i}}_SIZE = {{16 + index % 32}}
-            M{{i}}_LIMIT = M{{before}}_SIZE * 2
+            .const M{{i}}_SIZE = {{16 + index % 32}}
+            .const M{{i}}_LIMIT = M{{before}}_SIZE * 2
 
             .segment BSS
             .data m{{i}}_state:   .byte[M{{i}}_SIZE]

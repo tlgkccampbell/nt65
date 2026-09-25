@@ -40,10 +40,10 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         var version = 1;
         Time(workspace, uri, ref version, "keystroke in a routine body", Line(workspace, uri, "lda #0"), 9, 10, "1", "0");
         Time(workspace, uri, ref version, "new line in a routine body", Line(workspace, uri, "lda #0"), 0, 0, "\n", null);
-        Time(workspace, uri, ref version, "exported constant changed", Line(workspace, uri, ".const _SIZE = "), 12, 14, "17", "32");
+        Time(workspace, uri, ref version, "exported constant changed", Line(workspace, uri, "_SIZE = "), 19, 21, "17", "38");
         uri = GeneratedProject.Uri(Files - 1);
         version = 1;
-        Time(workspace, uri, ref version, "constant every file uses changed", Line(workspace, uri, ".const _SIZE = "), 12, 14, "17", "27");
+        Time(workspace, uri, ref version, "constant every file uses changed", Line(workspace, uri, "_SIZE = "), 19, 21, "17", "27");
     }
 
     /// <summary>
