@@ -29,8 +29,18 @@ public sealed class GrammarColoursTests
     [Fact]
     public void TheGrammarColoursNamesAsTheServerDoes()
     {
+        var failures = Repo.CollectFailures(Folders(), Check);
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
+    }
+
+    /// <summary>
+    /// Returns where the grammar and the server colour a name differently in the program of the
+    /// sources beneath <paramref name="folder"/>.
+    /// </summary>
+    private static List<string> Check(string folder)
+    {
         var failures = new List<string>();
-        foreach (var program in Programs())
+        if (Program(folder) is { } program)
         {
             var analysis = Compiler.Analyze(program.Trees, program.Settings, _ => 16);
             foreach (var tree in program.Trees)
@@ -65,7 +75,7 @@ public sealed class GrammarColoursTests
                 }
             }
         }
-        Assert.True(failures.Count == 0, string.Join("\n", failures));
+        return failures;
     }
 
     /// <summary>
@@ -87,27 +97,27 @@ public sealed class GrammarColoursTests
         _ => null,
     };
 
-    /// <summary>
-    /// Returns every fixture, corpus program and example, each as a program made of the sources
-    /// beneath its folder.
-    /// </summary>
-    private static IEnumerable<(IReadOnlyList<SyntaxTree> Trees, ProjectSettings Settings)> Programs()
-    {
-        var folders = new[] { Repo.Path("tests", "fixtures"), Repo.Path("tests", "corpus"), Repo.Path("examples") }
+    /// <summary>Returns the folder of every fixture, corpus program and example.</summary>
+    private static List<string> Folders() =>
+        [.. new[] { Repo.Path("tests", "fixtures"), Repo.Path("tests", "corpus"), Repo.Path("examples") }
             .SelectMany(Directory.GetDirectories)
-            .Order(StringComparer.Ordinal);
-        foreach (var folder in folders)
-        {
-            var build = Path.Combine(folder, "build") + Path.DirectorySeparatorChar;
-            var trees = Directory.GetFiles(folder, "*.nt65", SearchOption.AllDirectories)
-                .Where(path => !path.StartsWith(build, StringComparison.Ordinal))
-                .Order(StringComparer.Ordinal)
-                .Select(path => SyntaxTree.Parse(Paths.Normalized(Path.GetRelativePath(folder, path)), Repo.ReadText(path)))
-                .ToList();
-            if (trees.Count == 0)
-                continue;
-            var project = Path.Combine(folder, ProjectFile.Name);
-            yield return (trees, File.Exists(project) ? Repo.ReadProject(folder) : ProjectSettings.None);
-        }
+            .Order(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// Returns the program made of the sources beneath <paramref name="folder"/>, or null when
+    /// the folder holds none.
+    /// </summary>
+    private static (IReadOnlyList<SyntaxTree> Trees, ProjectSettings Settings)? Program(string folder)
+    {
+        var build = Path.Combine(folder, "build") + Path.DirectorySeparatorChar;
+        var trees = Directory.GetFiles(folder, "*.nt65", SearchOption.AllDirectories)
+            .Where(path => !path.StartsWith(build, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .Select(path => SyntaxTree.Parse(Paths.Normalized(Path.GetRelativePath(folder, path)), Repo.ReadText(path)))
+            .ToList();
+        if (trees.Count == 0)
+            return null;
+        var project = Path.Combine(folder, ProjectFile.Name);
+        return (trees, File.Exists(project) ? Repo.ReadProject(folder) : ProjectSettings.None);
     }
 }
