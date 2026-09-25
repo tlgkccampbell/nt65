@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Norristown.Standard;
 
 namespace Norristown.LanguageServer;
@@ -17,9 +18,15 @@ internal static class Uris
     /// </summary>
     private const string StandardScheme = "nt65:/";
 
+    // The spelling the file system stores each path with, by the spelling a URI gave. Finding it
+    // reads every folder along the path, and every location the server sends passes through here.
+    private static readonly ConcurrentDictionary<string, string> stored = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Returns the logical path a URI names, with <c>/</c> separators, which is the form that
-    /// diagnostics and output carry. A URI that is not a file is returned unchanged.
+    /// diagnostics and output carry. A URI that is not a file is returned unchanged. The path is
+    /// spelled as the file system stores it, so that a file named <c>SRC/MAIN.nt65</c> is the
+    /// <c>src/main.nt65</c> a project finds on disk. The drive is kept as the client wrote it.
     /// </summary>
     public static string ToPath(string uri)
     {
@@ -30,8 +37,15 @@ internal static class Uris
         // VS Code escapes a drive's colon, `file:///c%3A/src`, which .NET does not take for a
         // drive and gives back as `/c:/src`.
         var path = parsed.LocalPath.Replace('\\', '/');
-        return path.Length >= 3 && path[0] == '/' && char.IsAsciiLetter(path[1]) && path[2] == ':' ? path[1..] : path;
+        path = path.Length >= 3 && path[0] == '/' && char.IsAsciiLetter(path[1]) && path[2] == ':' ? path[1..] : path;
+        return stored.GetOrAdd(path, FilePaths.AsStored);
     }
+
+    /// <summary>
+    /// Forgets how the file system spells each path. Renaming a file to differ only in case
+    /// changes it.
+    /// </summary>
+    public static void Forget() => stored.Clear();
 
     /// <summary>
     /// Converts a logical path back to a URI, as for a diagnostic that points into another file.

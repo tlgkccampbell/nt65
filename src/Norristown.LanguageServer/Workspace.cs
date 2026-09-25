@@ -40,7 +40,7 @@ internal sealed class Workspace
     // drive's colon and nt65 does not, so a file the client has opened keeps the client's form of
     // its URI for the rest of the session. Two forms of one file's URI would list its diagnostics
     // in the Problems panel twice.
-    private readonly Dictionary<string, string> named = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> named = new(FilePaths.Comparer);
     private readonly List<WorkspaceProject> projects = [];
     private IReadOnlyList<string> roots = [];
     private string? configuration;
@@ -130,11 +130,11 @@ internal sealed class Workspace
     {
         lock (gate)
         {
-            var gone = removed.Select(Uris.ToPath).ToHashSet(StringComparer.Ordinal);
+            var gone = removed.Select(Uris.ToPath).ToHashSet(FilePaths.Comparer);
             IReadOnlyList<string> folders = [.. roots.Where(root => !gone.Contains(root))
                 .Concat(added.Select(Uris.ToPath))
                 .Where(root => root.Length > 0)
-                .Distinct(StringComparer.Ordinal)];
+                .Distinct(FilePaths.Comparer)];
             Load(folders, configuration);
             return folders;
         }
@@ -229,6 +229,8 @@ internal sealed class Workspace
     /// </summary>
     public bool ChangedOnDisk(IEnumerable<string> uris)
     {
+        // A file that was created, deleted or renamed may now be spelled differently.
+        Uris.Forget();
         lock (gate)
         {
             var changed = false;
@@ -341,7 +343,7 @@ internal sealed class Workspace
             .Concat(looseAnalysis is null ? [] : [looseAnalysis])
             .SelectMany(analysis => analysis.Binaries)
             .Concat(linked)
-            .Distinct(StringComparer.Ordinal)
+            .Distinct(FilePaths.Comparer)
             .Order(StringComparer.Ordinal)];
     }
 
@@ -464,7 +466,7 @@ internal sealed class Workspace
     {
         var programs = new List<(WorkspaceProject? Project, Task<ProgramAnalysis> Analysis)>();
         Dictionary<string, WorkspaceProject?> owners;
-        var versions = new Dictionary<string, int>(StringComparer.Ordinal);
+        var versions = new Dictionary<string, int>(FilePaths.Comparer);
         lock (gate)
         {
             foreach (var project in projects)
@@ -473,14 +475,14 @@ internal sealed class Workspace
                 programs.Add((null, LooseAsync(cancellation)));
             owners = projects.SelectMany(project => project.OnDisk().Select(tree => tree.Path))
                 .Concat(open.Values.Select(document => document.Tree.Path))
-                .Distinct(StringComparer.Ordinal)
-                .ToDictionary(path => path, Owner, StringComparer.Ordinal);
+                .Distinct(FilePaths.Comparer)
+                .ToDictionary(path => path, Owner, FilePaths.Comparer);
             foreach (var document in open.Values)
                 versions.TryAdd(document.Tree.Path, document.Version);
         }
         await Task.WhenAll(programs.Select(program => program.Analysis)).ConfigureAwait(false);
 
-        var found = new Dictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree)>(StringComparer.Ordinal);
+        var found = new Dictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree)>(FilePaths.Comparer);
         foreach (var (project, analyzing) in programs)
         {
             var analysis = await analyzing.ConfigureAwait(false);
@@ -518,7 +520,7 @@ internal sealed class Workspace
     {
         lock (gate)
         {
-            var trees = new Dictionary<string, SyntaxTree>(StringComparer.Ordinal);
+            var trees = new Dictionary<string, SyntaxTree>(FilePaths.Comparer);
             foreach (var tree in projects.SelectMany(project => project.OnDisk()))
                 trees[tree.Path] = tree;
             foreach (var document in open.Values)
@@ -611,7 +613,10 @@ internal sealed class Workspace
     /// </summary>
     private Task<ProgramAnalysis> LooseAsync(CancellationToken cancellation) =>
         loose.AnalysisAsync(
-            () => ([.. open.Values.Where(document => Owner(document.Tree.Path) is null).Select(document => document.Tree)],
+            () => ([.. open.Values
+                    .Where(document => Owner(document.Tree.Path) is null)
+                    .DistinctBy(document => document.Tree.Path, FilePaths.Comparer)
+                    .Select(document => document.Tree)],
                 ProjectSettings.None),
             cancellation);
 

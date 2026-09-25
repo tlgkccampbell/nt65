@@ -175,6 +175,24 @@ public sealed class WorkspaceTests
         Assert.Equal($"lda #2{lineBreak}rts{lineBreak}", changed.Tree.Text);
     }
 
+    /// <summary>
+    /// Where the file system ignores case, a file the client opens under two spellings of its
+    /// drive is one file of the program, and does not declare its module twice.
+    /// </summary>
+    [Fact]
+    public async Task AFileOpenedUnderTwoSpellingsIsOneFile()
+    {
+        Assert.SkipUnless(FilePaths.IgnoresCase, "only a file system that ignores case has two spellings of one file");
+        var workspace = new Workspace();
+        workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Source));
+        workspace.Open(new TextDocumentItem(Uri.Replace("c:", "C:", StringComparison.Ordinal), "nt65", 1, Source));
+
+        var analysis = await workspace.AnalysisForAsync(Named, TestTimeout.Token());
+
+        Assert.Single(analysis.Files);
+        Assert.DoesNotContain(analysis.Diagnostics, diagnostic => diagnostic.Id == "module-name-taken");
+    }
+
     [Fact]
     public void ChangingADocumentThatIsNotOpenIsIgnored()
     {

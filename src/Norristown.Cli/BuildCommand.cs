@@ -80,7 +80,7 @@ public static class BuildCommand
         if (NamedFiles(run) is not { } named)
             return new BuildResult(ExitCode.InputError, run.Root, watched);
         var paths = project.Files.SelectMany(glob => SourceGlobs.Matching(run.Root, glob)).Concat(named)
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            .Distinct(FilePaths.Comparer).Order(StringComparer.Ordinal).ToList();
 
         if (paths.Count == 0)
             return new BuildResult(ReportNoInput(run, project, projectFile), run.Root, watched);
@@ -177,7 +177,8 @@ public static class BuildCommand
                 run.Error.WriteLine($"{file}: error: file not found");
                 return null;
             }
-            named.Add(ProjectRoot.Logical(run.Root, full));
+            // Spelled as the file system stores it, the file is the one the project's globs find.
+            named.Add(ProjectRoot.Logical(run.Root, FilePaths.AsStored(full)));
         }
         return named;
     }

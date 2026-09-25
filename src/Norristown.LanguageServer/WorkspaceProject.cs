@@ -13,7 +13,7 @@ internal sealed class WorkspaceProject
 {
     // A cache of whether the globs match each path, since that is checked for every open
     // document on every analysis.
-    private readonly Dictionary<string, bool> owned = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, bool> owned = new(FilePaths.Comparer);
 
     // The program's analysis, which keeps the last analysis past the change that made it stale
     // so that the next analysis can start from it.
@@ -112,10 +112,10 @@ internal sealed class WorkspaceProject
         onDisk ??= Own.Files
             .SelectMany(glob => SourceGlobs.Matching(Root, glob))
             .Select(path => Paths.Normalized(Path.GetFullPath(path, Root)))
-            .Distinct(StringComparer.Ordinal)
+            .Distinct(FilePaths.Comparer)
             .Select(path => Workspace.Read(path) is { } text ? SyntaxTree.Parse(path, text) : null)
             .OfType<SyntaxTree>()
-            .ToDictionary(tree => tree.Path, StringComparer.Ordinal);
+            .ToDictionary(tree => tree.Path, FilePaths.Comparer);
         return onDisk.Values;
     }
 
@@ -131,7 +131,7 @@ internal sealed class WorkspaceProject
         analysis.AnalysisAsync(
             () =>
             {
-                var sources = OnDisk().ToDictionary(tree => tree.Path, StringComparer.Ordinal);
+                var sources = OnDisk().ToDictionary(tree => tree.Path, FilePaths.Comparer);
                 foreach (var document in open.Where(document => Owns(document.Tree.Path)))
                     sources[document.Tree.Path] = document.Tree;
                 return ([.. sources.Values], Settings);

@@ -158,6 +158,24 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
+    /// Where the file system ignores case, a file named in another case is still the file the
+    /// project's globs find, and not a second copy that declares its module again.
+    /// </summary>
+    [Fact]
+    public void AFileNamedInAnotherCaseIsTheOneTheProjectFinds()
+    {
+        Assert.SkipUnless(FilePaths.IgnoresCase, "only a file system that ignores case has two spellings of one file");
+        Project("""{ "cpu": "6502", "files": ["src/*.nt65"], "settings": { "DEBUG": 0 } }""");
+        root.Write("app/src/main.nt65", Main.Replace("hw::BORDER", "hw::vic::BORDER", StringComparison.Ordinal));
+        root.Write("app/src/vic.nt65", Hw);
+
+        var (code, printed) = Run(Path.Combine(root.FullName, "app"), "build", "SRC/MAIN.nt65");
+
+        Assert.Equal((ExitCode.Success, ""), (code, printed));
+        Assert.True(Exists("app/main.s"));
+    }
+
+    /// <summary>
     /// When a build finds no files, an error in the project file is a far more common cause than a
     /// missing <c>files</c>. The project file's errors are then the whole report, with no note that
     /// nothing matched and none of the forty lines of usage text. The build fails as a program
