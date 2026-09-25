@@ -121,7 +121,7 @@ internal sealed class WhitespaceNormalizer : SyntaxRewriter
         or SyntaxKind.Less or SyntaxKind.LessEquals or SyntaxKind.Greater or SyntaxKind.GreaterEquals
         or SyntaxKind.EqualsEquals or SyntaxKind.BangEquals or SyntaxKind.Ampersand
         or SyntaxKind.AmpersandAmpersand or SyntaxKind.Bar or SyntaxKind.BarBar or SyntaxKind.Caret
-        or SyntaxKind.CaretCaret or SyntaxKind.Equals or SyntaxKind.Arrow;
+        or SyntaxKind.CaretCaret or SyntaxKind.Equals or SyntaxKind.QuestionEquals or SyntaxKind.Arrow;
 
     /// <summary>
     /// Checks whether <paramref name="kind"/> is a word-like token, which needs a space between it

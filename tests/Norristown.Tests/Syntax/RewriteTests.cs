@@ -225,6 +225,18 @@ public sealed class RewriteTests
     }
 
     /// <summary>
+    /// Normalizing puts a space on both sides of the <c>?=</c> of a setting, as it does for the
+    /// <c>=</c> of a constant.
+    /// </summary>
+    [Fact]
+    public void NormalizingSpacesASettingLikeAConstant()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".const X?=1\n.const Y=2\n");
+
+        Assert.Equal(".const X ?= 1\n.const Y = 2\n", tree.Root.NormalizeWhitespace().ToFullString());
+    }
+
+    /// <summary>
     /// A normalized file reads back as the tokens it was made of, each of the same kind. The spacing is not the
     /// file's own — <see cref="Formatter"/> is what lays a line out — but nothing runs together
     /// and nothing is lost.
