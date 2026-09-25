@@ -87,7 +87,7 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     public CodeAction ToClient(CodeAction action, ProgramAnalysis from) => action with
     {
         Diagnostics = ToClient(action.Diagnostics),
-        Edit = ToClient(action.Edit, [from])!,
+        Edit = ToClient(action.Edit, [from]),
         Command = ToClient(action.Command),
     };
 

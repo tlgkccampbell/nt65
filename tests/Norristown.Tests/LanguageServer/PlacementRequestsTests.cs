@@ -76,8 +76,8 @@ public sealed class PlacementRequestsTests
         Assert.Equal("place-not-placeable", refused.Id);
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
         Assert.Equal("Declare `part` as placed", action.Title);
-        Assert.Equal([PartUri], action.Edit.Changes.Keys);
-        Assert.Equal(".module part: placed\n" + Part[".module part\n".Length..], Editing.Apply(Part, action.Edit.Changes[PartUri]));
+        Assert.Equal([PartUri], action.Edit!.Changes.Keys);
+        Assert.Equal(".module part: placed\n" + Part[".module part\n".Length..], Editing.Apply(Part, action.Edit!.Changes[PartUri]));
     }
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string main, string part)

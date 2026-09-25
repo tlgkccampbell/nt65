@@ -431,10 +431,10 @@ internal static class Fixes
         }
 
         var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
-        IReadOnlyList<Edit> edits = symbol is null
-            ? [new Edit(tree, new TextSpan(span.Start, 0), "@")]
-            : Edits.Rename(program, symbol, "@" + name);
-        yield return Fix(diagnostic, $"Make `{name}` a position, `@{name}`", edits, preferred: false);
+        var title = $"Make `{name}` a position, `@{name}`";
+        yield return symbol is null
+            ? Fix(diagnostic, title, [new Edit(tree, new TextSpan(span.Start, 0), "@")], preferred: false)
+            : Change.Deferred(title, CodeActionKinds.QuickFix, () => Edits.Rename(program, symbol, "@" + name), diagnostic, false);
     }
 
     /// <summary>

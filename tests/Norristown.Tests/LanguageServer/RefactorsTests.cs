@@ -34,7 +34,7 @@ public sealed class RefactorsTests
         Assert.Equal("refactor.rewrite", action.Kind);
         Assert.Equal(
             ".module main\n.use gfx::clear\n.segment CODE\n.proc main {\n    jsr clear\n    jsr clear\n    rts\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -50,7 +50,7 @@ public sealed class RefactorsTests
 
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    jsr gfx::clear\n    rts\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed class RefactorsTests
 
         Assert.Equal(
             ".module main\n.export X\n.const X = .select(\n    1,\n    2,\n    3) + .select(\n        4,\n        5,\n        6)\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -85,7 +85,7 @@ public sealed class RefactorsTests
         Assert.Equal(
             ".module main\n.export f\n.func f(m) = .switch(m,\n    [1], 2,\n    .select(\n        1,\n"
                 + "        .switch(m, [3], 4, [5], 6, 7),\n        8))\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ public sealed class RefactorsTests
     {
         const string Main = ".module main\n.export f\n.func f(m) = .switch(m, [1], 2, .select(1, .switch(m, [3], 4, [5], 6, 7), 8))\n";
         var laid = Editing.Apply(Main,
-            Single(Main, "[1]", "Lay out the expression across lines", 1, lineLength: 40).Edit.Changes[Uri]);
+            Single(Main, "[1]", "Lay out the expression across lines", 1, lineLength: 40).Edit!.Changes[Uri]);
 
         Assert.DoesNotContain(Actions(laid, At(laid, "[1]", 1), lineLength: 40),
             action => action.Title == "Lay out the expression across lines");
@@ -114,7 +114,7 @@ public sealed class RefactorsTests
         const string Broken = ".module main\n.export X\n.const X = .switch(2,\n    [1, 4], 10,\n    [2, 3], 20,\n    30) + 1\n";
         var joined = Single(Broken, "3]", "Join the expression onto one line");
         Assert.Equal(".module main\n.export X\n.const X = .switch(2, [1, 4], 10, [2, 3], 20, 30) + 1\n",
-            Editing.Apply(Broken, joined.Edit.Changes[Uri]));
+            Editing.Apply(Broken, joined.Edit!.Changes[Uri]));
 
         const string Commented = ".module main\n.export X\n.const X = .select(\n    1,  ; one\n    2, 3)\n";
         Assert.DoesNotContain(Actions(Commented, At(Commented, "2,")), action => action.Title.EndsWith("line", StringComparison.Ordinal)
@@ -122,7 +122,7 @@ public sealed class RefactorsTests
 
         const string Set = ".module main\n.export X\n.const X = 2 .in [1, 2]\n";
         var values = Single(Set, "1,", "Lay out the expression across lines");
-        Assert.Equal(".module main\n.export X\n.const X = 2 .in [\n    1,\n    2]\n", Editing.Apply(Set, values.Edit.Changes[Uri]));
+        Assert.Equal(".module main\n.export X\n.const X = 2 .in [\n    1,\n    2]\n", Editing.Apply(Set, values.Edit!.Changes[Uri]));
     }
 
     /// <summary>Organizing sorts the <c>.use</c> items and removes any that nothing names.</summary>
@@ -136,7 +136,7 @@ public sealed class RefactorsTests
 
         Assert.Equal(
             ".module main\n.use gfx::clear\n.segment CODE\n.proc main {\n    jsr clear\n    rts\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -149,11 +149,11 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.segment CODE\n.proc start {\n    rts\n}\n";
 
         var exported = Single(Main, ".proc start", "Export `start` from `main`");
-        var edited = Editing.Apply(Main, exported.Edit.Changes[Uri]);
+        var edited = Editing.Apply(Main, exported.Edit!.Changes[Uri]);
         Assert.Equal(".module main\n.segment CODE\n.export .proc start {\n    rts\n}\n", edited);
 
         var stopped = Single(edited, ".export .proc start", "Stop exporting `start`");
-        Assert.Equal(Main, Editing.Apply(edited, stopped.Edit.Changes[Uri]));
+        Assert.Equal(Main, Editing.Apply(edited, stopped.Edit!.Changes[Uri]));
     }
 
     /// <summary>What a routine leaves is declared from what the analysis finds at its returns.</summary>
@@ -166,7 +166,7 @@ public sealed class RefactorsTests
 
         Assert.Equal(
             ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 -> a16, i8, native {\n    rep #$20\n    rts\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -179,13 +179,13 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 -> a16 {\n    rep #$20\n    rts\n}\n";
 
         var ensured = Single(Main, "rep #$20", "Rewrite as `.ensure a16`");
-        var edited = Editing.Apply(Main, ensured.Edit.Changes[Uri]);
+        var edited = Editing.Apply(Main, ensured.Edit!.Changes[Uri]);
         Assert.Equal(
             ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 -> a16 {\n    .ensure a16\n    rts\n}\n",
             edited);
 
         var back = Single(edited, ".ensure a16", "Write it out as `rep #$20`");
-        Assert.Equal(Main, Editing.Apply(edited, back.Edit.Changes[Uri]));
+        Assert.Equal(Main, Editing.Apply(edited, back.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -216,7 +216,7 @@ public sealed class RefactorsTests
         Assert.Equal("refactor.extract", action.Kind);
         Assert.Equal(
             ".module main\n.const VALUE = $d020\n.segment CODE\n.proc main {\n    lda VALUE\n    rts\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>A cheap local is given a name of its own, and a label only its routine names is made cheap.</summary>
@@ -226,11 +226,11 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.segment CODE\n.proc main {\n@loop:\n    jmp @loop\n}\n";
 
         var named = Single(Main, "@loop:", "Give `@loop` a name of its own");
-        var edited = Editing.Apply(Main, named.Edit.Changes[Uri]);
+        var edited = Editing.Apply(Main, named.Edit!.Changes[Uri]);
         Assert.Equal(".module main\n.segment CODE\n.proc main {\nloop:\n    jmp loop\n}\n", edited);
 
         var cheap = Single(edited, "loop:", "Make `loop` a cheap local, `@loop`");
-        Assert.Equal(Main, Editing.Apply(edited, cheap.Edit.Changes[Uri]));
+        Assert.Equal(Main, Editing.Apply(edited, cheap.Edit!.Changes[Uri]));
     }
 
     /// <summary>A declaration a routine owns is put in a segment block of its own.</summary>
@@ -245,7 +245,7 @@ public sealed class RefactorsTests
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    lda table\n    rts\n"
                 + "    .segment RODATA {\n        .data table: .byte 1, 2\n    }\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>Selected instructions become a routine of their own, with a call left where they were.</summary>
@@ -261,7 +261,7 @@ public sealed class RefactorsTests
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    jsr extracted\n    rts\n}\n"
                 + "\n.proc extracted {\n    lda #0\n    sta $0400\n    rts\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -277,7 +277,7 @@ public sealed class RefactorsTests
         var selection = new Range(Locate.At(Main, "@wait:"), Locate.At(Main, "    rts"));
         var action = Single(Main, selection, "Extract into a `.proc`");
 
-        var edited = Editing.Apply(Main, action.Edit.Changes[Uri]);
+        var edited = Editing.Apply(Main, action.Edit!.Changes[Uri]);
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    jsr wait\n    rts\n}\n"
                 + "\n.proc wait {\n@wait:\n    lda $d012\n    cmp #100\n    rts\n}\n",
@@ -302,7 +302,7 @@ public sealed class RefactorsTests
 
         var action = Single(Main, new Range(new Position(3, 0), new Position(6, 0)), "Extract into a `.proc`");
 
-        var edited = Editing.Apply(Main, action.Edit.Changes[Uri]);
+        var edited = Editing.Apply(Main, action.Edit!.Changes[Uri]);
         Assert.NotNull(action.Command);
         var line = (int)action.Command.Arguments![1];
         var character = (int)action.Command.Arguments[2];
@@ -325,8 +325,8 @@ public sealed class RefactorsTests
 
         foreach (var (title, range) in new[] { ("Extract into a `.proc`", extract), ("Bring in `gfx::clear` with `.use`", At(Main, "gfx::clear")) })
         {
-            var expected = Editing.Apply(Main, Single(Main, range, title).Edit.Changes[Uri]);
-            var edited = Editing.Apply(own, Single(own, range, title).Edit.Changes[Uri]);
+            var expected = Editing.Apply(Main, Single(Main, range, title).Edit!.Changes[Uri]);
+            var edited = Editing.Apply(own, Single(own, range, title).Edit!.Changes[Uri]);
             Assert.Equal(expected.Replace("\n", lineBreak, StringComparison.Ordinal), edited);
         }
     }
@@ -358,7 +358,7 @@ public sealed class RefactorsTests
         var selection = new Range(Locate.At(Main, "@wait:"), Locate.At(Main, "}"));
         var action = Single(Main, selection, "Extract into a `.proc`");
 
-        Assert.Contains("jsr wait", Editing.Apply(Main, action.Edit.Changes[Uri]), StringComparison.Ordinal);
+        Assert.Contains("jsr wait", Editing.Apply(Main, action.Edit!.Changes[Uri]), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -392,7 +392,7 @@ public sealed class RefactorsTests
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    rts\n}\n"
                 + ".segment ZEROPAGE\n.data ptr: .byte[2]\n.segment CODE\n.proc old {\n    lda #$00\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -418,7 +418,7 @@ public sealed class RefactorsTests
                 + ".const LINES = 25\n.func rgb(r, g) = (r | g)\n"
                 + ".if DEBUG {\n.const TRACE = 1 & 3\n}\n"
                 + ":   bne :-\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>

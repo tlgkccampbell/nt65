@@ -234,7 +234,8 @@ internal sealed class Server : IDisposable
             SignatureHelpProvider: new SignatureHelpOptions(["(", ",", "="]),
             CodeLensProvider: new CodeLensOptions(ResolveProvider: false),
             WorkspaceSymbolProvider: true,
-            CodeActionProvider: new CodeActionOptions(CodeActionKinds.All),
+            CodeActionProvider: new CodeActionOptions(
+                CodeActionKinds.All, client.ResolvesActionEdits ? true : null),
             SemanticTokensProvider: new SemanticTokensOptions(
                 NameHighlighting.Legend, new SemanticTokensFullOptions(Delta: true), Range: true),
             SelectionRangeProvider: true,
@@ -742,9 +743,34 @@ internal sealed class Server : IDisposable
         var start = new TextDocumentPositionParams(request.TextDocument, request.Range.Start);
         if (await AtAsync(start, cancellation).ConfigureAwait(false) is not { } asked)
             return [];
+        var only = request.Context.Only;
         return outgoing.ToClient(
-            LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, request.Context.Only, lineLength),
+            client.ResolvesActionEdits
+                ? LanguageServer.CodeActions.Unresolved(
+                    asked.Analysis, asked.Model, request.TextDocument.Uri, request.Range, only, lineLength)
+                : LanguageServer.CodeActions.In(asked.Analysis, asked.Model, request.Range, only, lineLength),
             asked.Analysis);
+    }
+
+    /// <summary>
+    /// Fills in the edits of a code action the programmer picked. A client that can ask for them
+    /// is sent actions without edits, because the client asks what can be done at every caret
+    /// move, and finding edits can mean following a name through the whole program.
+    /// </summary>
+    [JsonRpcMethod("codeAction/resolve")]
+    public async Task<CodeAction> ResolveCodeActionAsync(CodeAction request, CancellationToken cancellation)
+    {
+        if (request.Data is not { } data)
+            return request;
+        var at = new TextDocumentPositionParams(new TextDocumentIdentifier(data.Uri), data.Range.Start);
+        if (await AtAsync(at, cancellation).ConfigureAwait(false) is not { } asked
+            || LanguageServer.CodeActions.Resolved(asked.Analysis, asked.Model, request, lineLength) is not { } resolved)
+        {
+            // The file changed after the action was offered, and the action is no longer offered
+            // there. The client reports the failure rather than applying nothing in silence.
+            throw new LocalRpcException($"`{request.Title}` no longer applies, because the file has changed.");
+        }
+        return outgoing.ToClient(resolved, asked.Analysis);
     }
 
     [JsonRpcMethod("textDocument/semanticTokens/full")]

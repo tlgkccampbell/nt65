@@ -145,8 +145,8 @@ public sealed class FixesTests
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == title);
 
         Assert.Equal("quickfix", action.Kind);
-        Assert.Equal([Uri], action.Edit.Changes.Keys);
-        Assert.Equal(Header + fixedBody, Editing.Apply(Header + body, action.Edit.Changes[Uri]));
+        Assert.Equal([Uri], action.Edit!.Changes.Keys);
+        Assert.Equal(Header + fixedBody, Editing.Apply(Header + body, action.Edit!.Changes[Uri]));
 
         // What the fix leaves is a file with nothing wrong.
         var (after, _) = Analyzed(Header + fixedBody);
@@ -168,7 +168,7 @@ public sealed class FixesTests
 
         Assert.Equal(
             ".module main\n.export SPARE\n.cpu 65816\n.segment CODE\n.const SPARE = 1\n",
-            Editing.Apply(Header + ".const SPARE = 1\n", action.Edit.Changes[Uri]));
+            Editing.Apply(Header + ".const SPARE = 1\n", action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -192,7 +192,7 @@ public sealed class FixesTests
         Assert.All(actions, action => Assert.False(action.IsPreferred));
         Assert.Equal(
             Header + ".proc other: a8, i8 -> ? {\n    rts\n}\n.export .proc main: a8, i8 {\n    jsr other\n    .ensure a8\n    lda #1\n    rts\n}\n",
-            Editing.Apply(Header + Body, actions[0].Edit.Changes[Uri]));
+            Editing.Apply(Header + Body, actions[0].Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -218,7 +218,7 @@ public sealed class FixesTests
         Assert.Equal("Remove the `.use` of `fill`", action.Title);
         Assert.Equal(
             ".module main\n.use gfx::clear\n.segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n",
-            Editing.Apply(Main, action.Edit.Changes[Uri]));
+            Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -240,7 +240,7 @@ public sealed class FixesTests
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == title);
 
         Assert.Equal("quickfix", action.Kind);
-        Assert.Equal(Header + repaired, Editing.Apply(Header + body, action.Edit.Changes[Uri]));
+        Assert.Equal(Header + repaired, Editing.Apply(Header + body, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -255,7 +255,7 @@ public sealed class FixesTests
 
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Insert the missing `{`");
 
-        var repaired = Editing.Apply(Header + Body, action.Edit.Changes[Uri]);
+        var repaired = Editing.Apply(Header + Body, action.Edit!.Changes[Uri]);
         var (after, _) = Analyzed(repaired);
         Assert.Empty(after.Diagnostics.Select(diagnostic => diagnostic.Message));
     }
@@ -273,7 +273,7 @@ public sealed class FixesTests
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
 
         Assert.Equal("Rename `lda`…", action.Title);
-        Assert.Empty(action.Edit.Changes);
+        Assert.Empty(action.Edit!.Changes);
         var rename = Assert.IsType<Command>(action.Command);
         Assert.Equal("nt65.rename", rename.Name);
         Assert.Equal([Uri, 4, 0], rename.Arguments);

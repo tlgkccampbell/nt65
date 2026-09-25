@@ -30,6 +30,10 @@ namespace Norristown.LanguageServer;
 /// connecting to watch more files. This matters because the files an <c>.incbin</c> reads are
 /// named by the program and are not known until it has been read.
 /// </param>
+/// <param name="ResolvesActionEdits">
+/// Whether the client can be sent a code action without its edits and ask for them with
+/// <c>codeAction/resolve</c> once the programmer picks it. A caret move then costs no edits.
+/// </param>
 internal sealed record ClientCapabilities(
     bool RefreshesTokens,
     bool RefreshesLenses,
@@ -39,14 +43,15 @@ internal sealed record ClientCapabilities(
     bool HierarchicalSymbols,
     bool WorkspaceFolders,
     bool WillRenameFiles,
-    bool WatchesWhatItIsAsked)
+    bool WatchesWhatItIsAsked,
+    bool ResolvesActionEdits)
 {
     /// <summary>
     /// Gets the capabilities of a client that has declared nothing, which is what the server
     /// assumes until <c>initialize</c> arrives.
     /// </summary>
     public static ClientCapabilities None { get; } =
-        new(false, false, false, false, false, false, false, false, false);
+        new(false, false, false, false, false, false, false, false, false, false);
 
     /// <summary>
     /// Returns the capabilities that the <c>capabilities</c> of an <c>initialize</c> request
@@ -63,18 +68,32 @@ internal sealed record ClientCapabilities(
         WorkspaceFolders: Flag(capabilities, "workspace", "workspaceFolders"),
         WillRenameFiles: Flag(capabilities, "workspace", "fileOperations", "willRename"),
         WatchesWhatItIsAsked: Flag(
-            capabilities, "workspace", "didChangeWatchedFiles", "dynamicRegistration"));
+            capabilities, "workspace", "didChangeWatchedFiles", "dynamicRegistration"),
+        ResolvesActionEdits: Lists(
+            capabilities, "edit", "textDocument", "codeAction", "resolveSupport", "properties"));
 
     /// <summary>Checks whether the nested property <paramref name="path"/> names is declared true.</summary>
-    private static bool Flag(JsonElement? capabilities, params string[] path)
+    private static bool Flag(JsonElement? capabilities, params string[] path) =>
+        At(capabilities, path)?.ValueKind == JsonValueKind.True;
+
+    /// <summary>
+    /// Checks whether the nested property <paramref name="path"/> names is a list that holds the
+    /// string <paramref name="value"/>.
+    /// </summary>
+    private static bool Lists(JsonElement? capabilities, string value, params string[] path) =>
+        At(capabilities, path) is { ValueKind: JsonValueKind.Array } list
+            && list.EnumerateArray().Any(item => item.ValueKind == JsonValueKind.String && item.GetString() == value);
+
+    /// <summary>Returns the nested property <paramref name="path"/> names, or null where there is none.</summary>
+    private static JsonElement? At(JsonElement? capabilities, string[] path)
     {
         var at = capabilities;
         foreach (var step in path)
         {
             if (at is not { ValueKind: JsonValueKind.Object } held || !held.TryGetProperty(step, out var next))
-                return false;
+                return null;
             at = next;
         }
-        return at?.ValueKind == JsonValueKind.True;
+        return at;
     }
 }

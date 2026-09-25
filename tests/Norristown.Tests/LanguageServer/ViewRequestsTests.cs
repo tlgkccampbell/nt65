@@ -228,7 +228,7 @@ public sealed class ViewRequestsTests
             timeout);
         var inline = Assert.Single(actions, action => action.Title == "Inline `set16!`");
         Assert.Null(inline.Disabled);
-        var edit = Assert.Single(inline.Edit.Changes[Uri]);
+        var edit = Assert.Single(inline.Edit!.Changes[Uri]);
         Assert.Equal(
             "    lda #<SCREEN\n    sta ptr\n    lda #>SCREEN\n    sta ptr+1\n",
             edit.NewText);
@@ -269,7 +269,7 @@ public sealed class ViewRequestsTests
         var refused = Assert.Single(actions, action => action.Title == "Inline `twice!`");
         Assert.NotNull(refused.Disabled);
         Assert.Contains("inside a macro body", refused.Disabled.Reason, StringComparison.Ordinal);
-        Assert.Empty(refused.Edit.Changes);
+        Assert.Empty(refused.Edit!.Changes);
     }
 
     private static Task<OutputResult?> OutputAsync(TestClient client, CancellationToken cancellation) =>

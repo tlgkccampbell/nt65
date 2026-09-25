@@ -49,12 +49,13 @@ public sealed class CapabilitiesTests : IDisposable
               },
               "textDocument": {
                 "completion": { "completionItem": { "snippetSupport": true } },
-                "documentSymbol": { "hierarchicalDocumentSymbolSupport": true }
+                "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
+                "codeAction": { "resolveSupport": { "properties": ["command", "edit"] } }
               }
             }
             """).RootElement);
 
-        Assert.Equal(new ClientCapabilities(true, true, true, true, true, true, true, true, true), declared);
+        Assert.Equal(new ClientCapabilities(true, true, true, true, true, true, true, true, true, true), declared);
         Assert.Equal(ClientCapabilities.None, ClientCapabilities.Of(JsonDocument.Parse("{}").RootElement));
         Assert.Equal(ClientCapabilities.None, ClientCapabilities.Of(null));
 

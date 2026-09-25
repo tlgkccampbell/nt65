@@ -56,7 +56,7 @@ public sealed class SuggestionsTests
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Jump with `jmp` as a tail call");
         Assert.Equal(
             Header + Body.Replace("jsr helper", "jmp helper", StringComparison.Ordinal),
-            Editing.Apply(Header + Body, action.Edit.Changes[Uri]));
+            Editing.Apply(Header + Body, action.Edit!.Changes[Uri]));
     }
 
     /// <summary>

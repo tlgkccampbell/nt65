@@ -11,7 +11,10 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Diagnostics">
 /// The diagnostic the change fixes, or none for a change that no diagnostic reported.
 /// </param>
-/// <param name="Edit">The edits that make the change.</param>
+/// <param name="Edit">
+/// The edits that make the change, or null when the client finds them later with
+/// <c>codeAction/resolve</c>.
+/// </param>
 /// <param name="IsPreferred">
 /// Whether a client may apply this change without asking the programmer to choose. It is left
 /// null when the change is one of several plausible readings of the same line, because only the
@@ -27,11 +30,16 @@ namespace Norristown.LanguageServer.Protocol;
 /// meaning of the line is still offered, greyed out with the reason, so that a programmer looking
 /// for it finds the reason rather than nothing.
 /// </param>
+/// <param name="Data">
+/// What the server needs to find the edits of an action sent without them, or null for an action
+/// sent whole.
+/// </param>
 internal sealed record CodeAction(
     string Title,
     string Kind,
     IReadOnlyList<Diagnostic> Diagnostics,
-    WorkspaceEdit Edit,
+    WorkspaceEdit? Edit,
     bool? IsPreferred = null,
     Command? Command = null,
-    CodeActionDisabled? Disabled = null);
+    CodeActionDisabled? Disabled = null,
+    CodeActionData? Data = null);

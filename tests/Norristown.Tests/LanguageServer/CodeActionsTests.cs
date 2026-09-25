@@ -17,6 +17,9 @@ public sealed class CodeActionsTests
 
     private const string Header = ".module main\n.cpu 65816\n.segment CODE\n";
 
+    // The properties of a code action that a client which resolves actions finds later.
+    private static readonly string[] ResolvedLater = ["edit"];
+
     public static TheoryData<string, string, string> Fixes => new()
     {
         {
@@ -76,8 +79,8 @@ public sealed class CodeActionsTests
         var action = await ActionAsync(client, MainUri, title, timeout);
 
         Assert.Equal("quickfix", action.Kind);
-        Assert.Equal([MainUri], action.Edit.Changes.Keys);
-        Assert.Equal(Header + fixedBody, Editing.Apply(Header + body, action.Edit.Changes[MainUri]));
+        Assert.Equal([MainUri], action.Edit!.Changes.Keys);
+        Assert.Equal(Header + fixedBody, Editing.Apply(Header + body, action.Edit!.Changes[MainUri]));
 
         // What the fix leaves is a file with nothing wrong.
         await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(null, Header + fixedBody));
@@ -97,12 +100,12 @@ public sealed class CodeActionsTests
         await using var client = await TestClient.OpenedAsync(timeout, (GfxUri, Gfx), (MainUri, Main));
 
         var export = await ActionAsync(client, MainUri, "Export `clear` from `gfx`", timeout);
-        Assert.Equal([GfxUri], export.Edit.Changes.Keys);
-        Assert.Equal(".module gfx\n.export clear\n" + Gfx[".module gfx\n".Length..], Editing.Apply(Gfx, export.Edit.Changes[GfxUri]));
+        Assert.Equal([GfxUri], export.Edit!.Changes.Keys);
+        Assert.Equal(".module gfx\n.export clear\n" + Gfx[".module gfx\n".Length..], Editing.Apply(Gfx, export.Edit!.Changes[GfxUri]));
 
         var use = await ActionAsync(client, MainUri, "Bring in `gfx::fill` with `.use`", timeout);
         Assert.Equal(".module main\n.use gfx::fill as paint\n.use gfx::fill\n" + Main[".module main\n.use gfx::fill as paint\n".Length..],
-            Editing.Apply(Main, use.Edit.Changes[MainUri]));
+            Editing.Apply(Main, use.Edit!.Changes[MainUri]));
     }
 
     /// <summary>A diagnostic whose message names no fix is offered none.</summary>
@@ -120,6 +123,45 @@ public sealed class CodeActionsTests
         Assert.Empty(await ActionsAsync(client, MainUri, timeout));
     }
 
+    /// <summary>
+    /// A client that can resolve an action's edits is sent actions without them, and gets the
+    /// edits when it resolves the one the programmer picked. They are the edits a client that
+    /// cannot resolve is sent at once. A client that cannot resolve is not told the server can.
+    /// </summary>
+    [Fact]
+    public async Task AClientThatResolvesGetsTheEditsOnlyWhenItAsks()
+    {
+        var timeout = TestTimeout.Token();
+        const string Main = ".module main\n.segment CODE\n.export .proc main {\n@loop:\n    dex\n    bne @loop\n    rts\n}\n";
+        const string Title = "Give `@loop` a name of its own";
+        await using var plain = await TestClient.OpenedAsync(timeout, (MainUri, Main));
+        await using var client = await TestClient.StartAsync(
+            new { textDocument = new { codeAction = new { resolveSupport = new { properties = ResolvedLater } } } },
+            timeout);
+        await client.OpenAsync(MainUri, Main);
+        await client.NextDiagnosticsAsync(MainUri, timeout);
+        Assert.Null(plain.Initialized.Capabilities.CodeActionProvider!.ResolveProvider);
+        Assert.True(client.Initialized.Capabilities.CodeActionProvider!.ResolveProvider);
+        var caret = Locate.At(Main, "@lo|op:");
+
+        var whole = Assert.Single(await ActionsAsync(plain, MainUri, new Range(caret, caret), timeout), action => action.Title == Title);
+        var offered = Assert.Single(await ActionsAsync(client, MainUri, new Range(caret, caret), timeout), action => action.Title == Title);
+        Assert.Null(offered.Edit);
+        Assert.NotNull(offered.Data);
+
+        var resolved = await client.RequestAsync<CodeAction>("codeAction/resolve", offered, timeout);
+        Assert.Equal(whole.Edit!.Changes[MainUri], resolved.Edit!.Changes[MainUri]);
+        Assert.Equal(".module main\n.segment CODE\n.export .proc main {\nloop:\n    dex\n    bne loop\n    rts\n}\n",
+            Editing.Apply(Main, resolved.Edit.Changes[MainUri]));
+
+        // Once the label is gone, the action no longer applies, and resolving it fails rather than
+        // applying nothing.
+        await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(null, Main.Replace("@loop", "@again", StringComparison.Ordinal)));
+        await client.NextDiagnosticsAsync(MainUri, timeout);
+        await Assert.ThrowsAsync<StreamJsonRpc.RemoteInvocationException>(
+            () => client.RequestAsync<CodeAction>("codeAction/resolve", offered, timeout));
+    }
+
     private static async Task<CodeAction> ActionAsync(TestClient client, string uri, string title, CancellationToken timeout)
     {
         var actions = await ActionsAsync(client, uri, timeout);
@@ -127,8 +169,11 @@ public sealed class CodeActionsTests
     }
 
     private static Task<IReadOnlyList<CodeAction>> ActionsAsync(TestClient client, string uri, CancellationToken timeout) =>
+        ActionsAsync(client, uri, new Range(new Position(0, 0), new Position(100, 0)), timeout);
+
+    private static Task<IReadOnlyList<CodeAction>> ActionsAsync(
+        TestClient client, string uri, Range range, CancellationToken timeout) =>
         client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
-            new CodeActionParams(new TextDocumentIdentifier(uri), new Range(new Position(0, 0), new Position(100, 0)),
-                new CodeActionContext([])),
+            new CodeActionParams(new TextDocumentIdentifier(uri), range, new CodeActionContext([])),
             timeout);
 }

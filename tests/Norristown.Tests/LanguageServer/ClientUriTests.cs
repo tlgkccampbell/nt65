@@ -74,7 +74,7 @@ public sealed class ClientUriTests
         Assert.NotEmpty(fixes);
         Assert.All(fixes, action =>
         {
-            Assert.All(action.Edit.Changes.Keys, uri => Assert.Equal(GfxUri, uri));
+            Assert.All(action.Edit!.Changes.Keys, uri => Assert.Equal(GfxUri, uri));
             if (action.Command?.Arguments is [string named, ..])
                 Assert.Equal(GfxUri, named);
         });

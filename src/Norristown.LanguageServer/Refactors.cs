@@ -344,8 +344,8 @@ internal static class Refactors
         if (label.IsCheapLocal)
         {
             var name = Edits.UnusedName(model, label.Name);
-            yield return new Change($"Give `@{label.Name}` a name of its own", CodeActionKinds.Rewrite,
-                Edits.Rename(program, label, name));
+            yield return Change.Deferred($"Give `@{label.Name}` a name of its own", CodeActionKinds.Rewrite,
+                () => Edits.Rename(program, label, name));
             yield break;
         }
 
@@ -358,8 +358,8 @@ internal static class Refactors
         }
         if (model.ReferencesTo(label).Any(other => other.Span.Start < body.Start || other.Span.End > body.End))
             yield break;
-        yield return new Change($"Make `{label.Name}` a cheap local, `@{label.Name}`", CodeActionKinds.Rewrite,
-            Edits.Rename(program, label, "@" + label.Name));
+        yield return Change.Deferred($"Make `{label.Name}` a cheap local, `@{label.Name}`", CodeActionKinds.Rewrite,
+            () => Edits.Rename(program, label, "@" + label.Name));
     }
 
     /// <summary>

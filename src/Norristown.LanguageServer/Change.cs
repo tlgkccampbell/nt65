@@ -27,6 +27,11 @@ namespace Norristown.LanguageServer;
 /// means is offered greyed out with the reason rather than left out, so that a programmer
 /// looking for it finds the reason.
 /// </param>
+/// <param name="Later">
+/// Finds the edits when they are wanted, for a change whose edits cost too much to find each time
+/// the caret moves, such as a rename across the program. <paramref name="Edits"/> is empty when
+/// this is given.
+/// </param>
 internal sealed record Change(
     string Title,
     string Kind,
@@ -35,8 +40,23 @@ internal sealed record Change(
     bool? Preferred = null,
     Change.Placeholder? Names = null,
     Span? Renames = null,
-    string? Refused = null)
+    string? Refused = null,
+    Func<IReadOnlyList<Edit>>? Later = null)
 {
+    /// <summary>
+    /// Returns a change whose edits are found only when they are wanted, as <paramref name="later"/>
+    /// finds them.
+    /// </summary>
+    public static Change Deferred(
+        string title, string kind, Func<IReadOnlyList<Edit>> later, Diagnostic? diagnostic = null, bool? preferred = null) =>
+        new(title, kind, [], diagnostic, preferred, Later: later);
+
+    /// <summary>
+    /// Returns the change with its edits found, which is the change itself unless they were left
+    /// for later.
+    /// </summary>
+    public Change Made() => Later is { } later ? this with { Edits = later(), Later = null } : this;
+
     /// <summary>
     /// Represents a placeholder name that a change must insert even though only the programmer
     /// knows what it should be. It records which edit's text holds the name and where in that

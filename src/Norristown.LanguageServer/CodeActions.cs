@@ -16,7 +16,60 @@ internal static class CodeActions
     /// </summary>
     public static IReadOnlyList<Protocol.CodeAction> In(
         ProgramAnalysis analysis, SemanticModel model, Protocol.Range range, IReadOnlyList<string>? only = null,
-        int lineLength = LineBreaks.DefaultLength)
+        int lineLength = LineBreaks.DefaultLength) =>
+        [.. Changes(analysis, model, range, only, lineLength).Select(change => ToCodeAction(change.Made()))];
+
+    /// <summary>
+    /// Returns the changes offered over <paramref name="range"/> of the file at
+    /// <paramref name="uri"/>, as <see cref="In"/> does, but with each change's edits left for
+    /// <see cref="Resolved"/> to find. Finding edits can mean following a name through the whole
+    /// program, and the client asks at every caret move but applies at most one change.
+    /// </summary>
+    /// <remarks>
+    /// A change whose command needs its edits, such as a rename of the placeholder it inserts, is
+    /// returned whole.
+    /// </remarks>
+    public static IReadOnlyList<Protocol.CodeAction> Unresolved(
+        ProgramAnalysis analysis, SemanticModel model, string uri, Protocol.Range range, IReadOnlyList<string>? only,
+        int lineLength)
+    {
+        var changes = Changes(analysis, model, range, only, lineLength);
+        return
+        [
+            .. changes.Select((change, index) => change.Names is null && change.Renames is null
+                ? ToCodeAction(change with { Edits = [], Later = null }) with
+                {
+                    Edit = null,
+                    Data = new Protocol.CodeActionData(uri, range, only, index),
+                }
+                : ToCodeAction(change.Made())),
+        ];
+    }
+
+    /// <summary>
+    /// Returns <paramref name="action"/>, sent by <see cref="Unresolved"/>, with its edits.
+    /// Returns null when the change is no longer offered where it was, because the file has
+    /// changed since.
+    /// </summary>
+    public static Protocol.CodeAction? Resolved(
+        ProgramAnalysis analysis, SemanticModel model, Protocol.CodeAction action, int lineLength)
+    {
+        if (action.Data is not { } data)
+            return action;
+        var changes = Changes(analysis, model, data.Range, data.Only, lineLength);
+        bool Same(Change change) => change.Title == action.Title && change.Kind == action.Kind;
+        var found = data.Index < changes.Count && Same(changes[data.Index])
+            ? changes[data.Index]
+            : changes.FirstOrDefault(Same);
+        return found is null ? null : ToCodeAction(found.Made());
+    }
+
+    /// <summary>
+    /// Returns the changes offered over <paramref name="range"/>, of the kinds the client asked
+    /// for, before any edits left for later are found.
+    /// </summary>
+    private static List<Change> Changes(
+        ProgramAnalysis analysis, SemanticModel model, Protocol.Range range, IReadOnlyList<string>? only, int lineLength)
     {
         var changes = new List<Change>();
         if (Wanted(only, CodeActionKinds.QuickFix))
@@ -25,8 +78,8 @@ internal static class CodeActions
             changes.AddRange(Refactors.In(analysis, model, range, lineLength));
         return [.. changes
             .Where(change => Wanted(only, change.Kind)
-                && (change.Edits.Count > 0 || change.Renames is not null || change.Refused is not null))
-            .Select(ToCodeAction)];
+                && (change.Edits.Count > 0 || change.Later is not null || change.Renames is not null
+                    || change.Refused is not null))];
     }
 
     /// <summary>
