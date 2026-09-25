@@ -1,3 +1,5 @@
+using Norristown.Syntax.InternalSyntax;
+
 namespace Norristown.Syntax;
 
 /// <summary>
@@ -27,7 +29,7 @@ internal sealed class WhitespaceNormalizer : SyntaxRewriter
         for (var i = 0; i < tokens.Count; i++)
         {
             var (token, tight) = tokens[i];
-            SyntaxTrivia[] after = !tight && i + 1 < tokens.Count && Apart(token.Kind, tokens[i + 1].Token.Kind)
+            SyntaxTrivia[] after = i + 1 < tokens.Count && Spaced(token, tight, tokens[i + 1].Token)
                 ? [SyntaxFactory.Space]
                 : [];
             spaced[token] = token.WithLeadingTrivia().WithTrailingTrivia(after);
@@ -55,6 +57,32 @@ internal sealed class WhitespaceNormalizer : SyntaxRewriter
             else
                 tokens.Add((child.AsToken(), tight));
         }
+    }
+
+    /// <summary>
+    /// Checks whether a space goes after <paramref name="token"/>, before <paramref name="next"/>.
+    /// Nothing goes after a line break, since a space there would indent the next line. Otherwise
+    /// a space goes where standard spacing puts one, and wherever the two tokens would be read
+    /// as other tokens if nothing separated them.
+    /// </summary>
+    /// <param name="token">The token the space would follow.</param>
+    /// <param name="tight">Whether the token's parent allows no space before the next token.</param>
+    /// <param name="next">The token that follows it.</param>
+    private static bool Spaced(SyntaxToken token, bool tight, SyntaxToken next) =>
+        token.Kind != SyntaxKind.EndOfLine
+        && ((!tight && Apart(token.Kind, next.Kind)) || RunTogether(token, next));
+
+    /// <summary>
+    /// Checks whether two tokens written with nothing between them would be read as other tokens.
+    /// The <c>:</c> of an address prefix and the <c>::</c> of a path from the root would be read as
+    /// <c>::</c> and <c>:</c>, for example, which does not parse.
+    /// </summary>
+    private static bool RunTogether(SyntaxToken left, SyntaxToken right)
+    {
+        if (left.Text.Length == 0 || right.Text.Length == 0 || right.Kind == SyntaxKind.EndOfLine)
+            return false;
+        var read = Lexer.LexLine(left.Text + right.Text).Tokens;
+        return read.Length != 3 || read[0].Text != left.Text || read[1].Text != right.Text;
     }
 
     /// <summary>

@@ -212,7 +212,20 @@ public sealed class RewriteTests
     }
 
     /// <summary>
-    /// A normalized file reads back as the tokens it was made of. The spacing is not the
+    /// Normalizing keeps apart two tokens that would read as another token run together, as the
+    /// <c>:</c> of an address prefix and the <c>::</c> of a path from the root would. It puts
+    /// nothing at the start of a line, so a closing <c>}</c> is not indented.
+    /// </summary>
+    [Fact]
+    public void NormalizingKeepsWhatTheTokensMean()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".proc main {\n    lda z: ::hw::foo\n}\n");
+
+        Assert.Equal(".proc main {\nlda z: ::hw::foo\n}\n", tree.Root.NormalizeWhitespace().ToFullString());
+    }
+
+    /// <summary>
+    /// A normalized file reads back as the tokens it was made of, each of the same kind. The spacing is not the
     /// file's own — <see cref="Formatter"/> is what lays a line out — but nothing runs together
     /// and nothing is lost.
     /// </summary>
@@ -234,12 +247,13 @@ public sealed class RewriteTests
     }
 
     /// <summary>
-    /// Returns the text of every token under a node, leaving out missing tokens and line breaks.
+    /// Returns the kind and text of every token under a node, leaving out missing tokens and line
+    /// breaks.
     /// </summary>
     private static List<string> TokenTexts(SyntaxNode node) =>
         [.. node.DescendantTokens()
             .Where(token => !token.IsMissing && token.Kind != SyntaxKind.EndOfLine)
-            .Select(token => token.Text)];
+            .Select(token => $"{token.Kind} {token.Text}")];
 
     /// <summary>
     /// Represents a rewrite that overrides nothing, which is the one rewrite that must change
