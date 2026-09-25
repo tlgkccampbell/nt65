@@ -71,6 +71,18 @@
         rts
     }
 }
+.repeat 2 {
+    .scope inner {
+        .each Channel, n {
+            .proc n {           ;! error[family-misplaced]: a family cannot be inside another `.repeat` or `.each`: it declares its routines into the scope around its `.each`, and inside a repetition that scope is a new one on every pass
+                rts
+            }
+        }
+        .multiproc Channel, q { ;! error[declaration-in-a-repetition]: `.multiproc` cannot be inside a `.repeat` or `.each` body: it declares one routine per member of an enum, and this one would declare them again on every iteration
+            rts
+        }
+    }
+}
 
 ; One declaration per member in the scope around it, so it collides as any duplicate does.
 .proc pulse1 {

@@ -673,7 +673,7 @@ internal sealed partial class Binder
         DiagnosticMessage? why = kind == BlockKind.Repeat
             ? Catalogue.FamilyMisplaced.Message("a family must be in an `.each` over a named enum, because each routine it "
                 + "declares is named after one of the enum's members; a `.repeat` only counts, so it gives no names")
-            : around.Kind == ScopeKind.Repetition
+            : around.Enclosing(ScopeKind.Repetition) is not null
                 ? Catalogue.FamilyMisplaced.Message("a family cannot be inside another `.repeat` or `.each`: it declares its "
                     + "routines into the scope around its `.each`, and inside a repetition that scope is a new one on every pass")
                 : Placement is ScopeKind.File
@@ -726,7 +726,7 @@ internal sealed partial class Binder
 
         // A `.multiproc` inside a macro body, a block argument or a repetition has been reported
         // by the rule that forbids `.proc` there. A misplaced one declares nothing.
-        var declares = why is null && placement is ScopeKind.File && around.Kind != ScopeKind.Repetition;
+        var declares = why is null && placement is ScopeKind.File && !InRepetition;
 
         CheckWidthsExist(multiProc);
         var walked = multiProc.Expression;
