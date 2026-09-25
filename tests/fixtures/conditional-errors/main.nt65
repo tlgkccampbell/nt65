@@ -33,6 +33,11 @@
 .if 1 {
     .cpu 65c02                      ;! error[cpu-under-a-condition]: `.cpu` cannot be inside an `.if`: conditions can test the processor, so it must be set first
 }
+.if 1 {
+    .if 1 {
+        .cpu 65c02                  ;! error[cpu-under-a-condition]: `.cpu` cannot be inside an `.if`: conditions can test the processor, so it must be set first
+    }
+}
 
 .segment CODE
 .scope gfx {

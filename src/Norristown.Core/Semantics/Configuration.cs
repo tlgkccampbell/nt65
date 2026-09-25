@@ -237,6 +237,10 @@ public sealed class Configuration
         List<TextSpan> omitted,
         HashSet<(SyntaxTree, int)> answered)
     {
+        // How many branches of a chain the walk is inside. The outermost branch has already been
+        // searched for `.cpu`, all the way down, so a branch inside it is not searched again.
+        private int branches;
+
         public void Container(SyntaxNode container)
         {
             foreach (var (child, included) in ConditionChain.Walk(container.ChildNodes, 0, Branch, Orphaned))
@@ -248,10 +252,17 @@ public sealed class Configuration
                 {
                     continue;
                 }
-                if (included)
-                    Container(block);
-                else
+                if (!included)
+                {
                     Leave(block);
+                    continue;
+                }
+                var branch = block.Opener.Statement is IfDirectiveSyntax or ElseIfDirectiveSyntax or ElseDirectiveSyntax;
+                if (branch)
+                    branches++;
+                Container(block);
+                if (branch)
+                    branches--;
             }
         }
 
@@ -273,10 +284,13 @@ public sealed class Configuration
             // The CPU is configuration, and a condition may test it with `.target`, so a
             // `.cpu` under an `.if` would change the very thing its condition may depend on. The
             // placement of `.cpu`, which the editor reads too, bars it there.
-            foreach (var node in block.DescendantNodes())
+            if (branches == 0)
             {
-                if (node is CpuDirectiveSyntax && SyntaxFacts.PlacementOf(DirectiveKind.Cpu).IsBarredBy(DirectiveNesting.Condition))
-                    Report(node.Span, Catalogue.CpuUnderACondition);
+                foreach (var node in block.DescendantNodes())
+                {
+                    if (node is CpuDirectiveSyntax && SyntaxFacts.PlacementOf(DirectiveKind.Cpu).IsBarredBy(DirectiveNesting.Condition))
+                        Report(node.Span, Catalogue.CpuUnderACondition);
+                }
             }
 
             return !already && Holds(block.Opener.Statement);
