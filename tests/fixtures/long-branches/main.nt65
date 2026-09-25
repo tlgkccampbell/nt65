@@ -37,5 +37,14 @@
     rts
 }
 
+; A branch with a label on its line is written as the same branch without one, and so is an
+; immediate, whose negative value is its two's complement.
+.export .proc labeled {
+@wait: jeq @load
+@load: lda #-2
+    bne @wait
+    rts
+}
+
 .segment BSS
 .data count: .byte

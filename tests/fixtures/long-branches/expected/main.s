@@ -11,6 +11,7 @@
 .export main__close_by
 .export main__way_off
 .export main__looping
+.export main__labeled
 
 .segment "CODE": absolute
 ; .proc close_by  main.nt65:12
@@ -42,6 +43,16 @@ looping__top:
     bne looping__top
     rts
 ; end of looping
+
+; .proc labeled  main.nt65:42
+main__labeled:
+labeled__wait:
+    beq labeled__load
+labeled__load:
+    lda #$fe                        ; -2
+    bne labeled__wait
+    rts
+; end of labeled
 
 .segment "BSS": absolute
 count: .res 1

@@ -900,11 +900,19 @@ public sealed class Emitter
         }
 
         // A label on a call names what the expansion emits, so the label comes first and the
-        // expansion follows it.
+        // expansion follows it. A label on an instruction likewise goes on a line of its own,
+        // and the instruction is written as it would be without the label, long branch and
+        // negative immediate included.
         if (rest is MacroCallSyntax call)
         {
             LabelOnly(line, label);
             Expand(line, call);
+            return;
+        }
+        if (rest is InstructionStatementSyntax)
+        {
+            LabelOnly(line, label);
+            statements.Walk(line, rest);
             return;
         }
         if (rest is DataDirectiveSyntax && layout.Of(rest, context.Expansion) is null)
@@ -1481,13 +1489,21 @@ public sealed class Emitter
 
         /// <summary>Writes what <paramref name="line"/> generates.</summary>
         /// <param name="line">The line.</param>
-        public void Walk(LineSyntax line)
+        public void Walk(LineSyntax line) => Walk(line, line.Statement);
+
+        /// <summary>
+        /// Writes what <paramref name="statement"/>, one statement of <paramref name="line"/>,
+        /// generates, such as the instruction after a label.
+        /// </summary>
+        /// <param name="line">The line.</param>
+        /// <param name="statement">The statement.</param>
+        public void Walk(LineSyntax line, SyntaxNode? statement)
         {
             var outer = walked;
             walked = line;
             try
             {
-                Visit(line.Statement);
+                Visit(statement);
             }
             finally
             {
