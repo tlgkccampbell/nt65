@@ -110,6 +110,27 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
+    /// Publishing again when no program has been analyzed again since gives back the diagnostics
+    /// already found, rather than looking for each file's suggestions again. An edit makes its
+    /// program's files look again.
+    /// </summary>
+    [Fact]
+    public async Task PublishingAgainReusesWhatAnUnchangedProgramFound()
+    {
+        var workspace = new Workspace();
+        workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Source));
+        var first = Assert.Single(await workspace.ToPublishAsync(TestTimeout.Token()));
+
+        var again = Assert.Single(await workspace.ToPublishAsync(TestTimeout.Token()));
+        Assert.Same(first.Diagnostics, again.Diagnostics);
+
+        workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
+            [new TextDocumentContentChangeEvent(Locate.Span(Source, "ldx #|0"), "1")]);
+        var edited = Assert.Single(await workspace.ToPublishAsync(TestTimeout.Token()));
+        Assert.NotSame(first.Diagnostics, edited.Diagnostics);
+    }
+
+    /// <summary>
     /// An edit re-lexes the lines it touches and no others. The lines above and below keep the
     /// green nodes they had, which is the reuse the tree is built for.
     /// </summary>

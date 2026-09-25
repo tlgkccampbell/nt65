@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Norristown.LanguageServer.Protocol;
 using Norristown.Semantics;
 using Norristown.Standard;
+using Norristown.Syntax;
 using StreamJsonRpc;
 
 namespace Norristown.LanguageServer;
@@ -34,12 +35,12 @@ internal sealed class Server : IDisposable
     private readonly TaskCompletionSource<int> leaving =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    // `published` holds a signature of the diagnostics last published for each URI, so that a
-    // file is sent again only when its diagnostics change. `newest` holds the newest version of
-    // each open file that the client has sent, so that nothing is published about text that has
-    // since changed. Both are concurrent because publishing for a keystroke and publishing after
-    // the debounce can run at the same time.
-    private readonly ConcurrentDictionary<string, string> published = new(StringComparer.Ordinal);
+    // `published` holds what the diagnostics last published for each URI were worked out from,
+    // and a signature of them, so that a file is sent again only when its diagnostics change.
+    // `newest` holds the newest version of each open file that the client has sent, so that
+    // nothing is published about text that has since changed. Both are concurrent because
+    // publishing for a keystroke and publishing after the debounce can run at the same time.
+    private readonly ConcurrentDictionary<string, Sent> published = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> newest = new(StringComparer.Ordinal);
 
     // The publish of each open document's own diagnostics that may still be waiting for its
@@ -1082,12 +1083,23 @@ internal sealed class Server : IDisposable
         cancellation.ThrowIfCancellationRequested();
         if (file.Version is { } version && newest.TryGetValue(file.Uri, out var latest) && latest > version)
             return false;
-        var diagnostics = outgoing.ToClient(
-            Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration, lineLength));
-        var signature = Signature(diagnostics);
-        if (!always && published.TryGetValue(file.Uri, out var before) && before == signature)
+
+        // The workspace hands back the same list for a file whose program has not been analyzed
+        // again since, and what the client is sent is worked out from that list, the tree and
+        // the line length alone. When none of them has changed, neither has what was sent.
+        var length = lineLength;
+        var had = published.GetValueOrDefault(file.Uri);
+        if (!always && had is not null && had.From == file.Diagnostics && had.Tree == file.Tree
+            && had.Configuration == file.Configuration && had.LineLength == length)
+        {
             return false;
-        published[file.Uri] = signature;
+        }
+        var diagnostics = outgoing.ToClient(
+            Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration, length));
+        var signature = Signature(diagnostics);
+        published[file.Uri] = new Sent(file.Diagnostics, file.Tree, file.Configuration, length, signature);
+        if (!always && had?.Signature == signature)
+            return false;
         await rpc!.NotifyWithParameterObjectAsync("textDocument/publishDiagnostics",
             new PublishDiagnosticsParams(file.Uri, file.Version, diagnostics)).ConfigureAwait(false);
         return true;
@@ -1239,4 +1251,13 @@ internal sealed class Server : IDisposable
     /// <param name="Position">The offset in that file's text.</param>
     private sealed record Asked(
         ProgramAnalysis Analysis, ProgramModel Program, SemanticModel Model, int Position);
+
+    /// <summary>Represents the diagnostics last published for a file and what they came from.</summary>
+    /// <param name="From">The diagnostics the workspace gave, before conversion for the client.</param>
+    /// <param name="Tree">The file's syntax tree, or null for a project file.</param>
+    /// <param name="Configuration">The configuration used to fade the branches the build omits.</param>
+    /// <param name="LineLength">The line length the long-line suggestions were found with.</param>
+    /// <param name="Signature">The signature of what the client was sent.</param>
+    private sealed record Sent(
+        IReadOnlyList<Diagnostic> From, SyntaxTree? Tree, Configuration Configuration, int LineLength, string Signature);
 }

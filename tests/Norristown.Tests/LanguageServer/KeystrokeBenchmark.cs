@@ -32,6 +32,16 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         output.WriteLine($"{Files} files, first analysis: {watch.Elapsed.TotalMilliseconds:0} ms");
         Assert.Empty(first.Diagnostics);
 
+        // Publishing the program's diagnostics looks for every file's suggestions the first
+        // time. Publishing again with nothing analyzed since, as closing a file does, reuses them.
+        foreach (var what in new[] { "first publish", "publish with nothing changed" })
+        {
+            watch.Restart();
+            foreach (var file in await workspace.ToPublishAsync(TestTimeout.Token()))
+                _ = Lsp.ToDiagnostics(file.Diagnostics, file.Tree, file.Configuration);
+            output.WriteLine($"{what}: {watch.Elapsed.TotalMilliseconds:0.0} ms");
+        }
+
         // In the middle file, `lda #0` becomes `lda #1` and back, a line is added above it and
         // removed, and the file's exported size changes, which the file after it uses. Then the
         // last file's size changes. The first file's `M000_LIMIT` is computed from it, and every
@@ -40,10 +50,10 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         var version = 1;
         Time(workspace, uri, ref version, "keystroke in a routine body", Line(workspace, uri, "lda #0"), 9, 10, "1", "0");
         Time(workspace, uri, ref version, "new line in a routine body", Line(workspace, uri, "lda #0"), 0, 0, "\n", null);
-        Time(workspace, uri, ref version, "exported constant changed", Line(workspace, uri, "_SIZE = "), 19, 21, "17", "38");
+        Time(workspace, uri, ref version, "exported constant changed", Line(workspace, uri, $".const M{Files / 2}_SIZE = "), 19, 21, "17", $"{16 + (Files / 2 % 32)}");
         uri = GeneratedProject.Uri(Files - 1);
         version = 1;
-        Time(workspace, uri, ref version, "constant every file uses changed", Line(workspace, uri, "_SIZE = "), 19, 21, "17", "27");
+        Time(workspace, uri, ref version, "constant every file uses changed", Line(workspace, uri, $".const M{Files - 1}_SIZE = "), 19, 21, "17", $"{16 + ((Files - 1) % 32)}");
     }
 
     /// <summary>

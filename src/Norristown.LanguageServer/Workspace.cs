@@ -45,6 +45,12 @@ internal sealed class Workspace
     private IReadOnlyList<string> roots = [];
     private string? configuration;
 
+    // The diagnostics last published for each file, by logical path, with the analysis they came
+    // from. A file whose program has not been analyzed again since gets the same list back, and
+    // its suggestions are not looked for again.
+    private IReadOnlyDictionary<string, (ProgramAnalysis Analysis, IReadOnlyList<Diagnostic> Diagnostics)> reported =
+        new Dictionary<string, (ProgramAnalysis, IReadOnlyList<Diagnostic>)>(StringComparer.Ordinal);
+
     // The analysis of the program formed by the open documents no project names.
     private readonly LiveAnalysis loose;
 
@@ -511,13 +517,37 @@ internal sealed class Workspace
                     found[file.Tree.Path] = (analysis, file.Tree);
             }
         }
+        // The diagnostics depend on nothing but the analysis and the file, so a program that has
+        // not been analyzed again since the last publish costs nothing to publish again.
+        IReadOnlyDictionary<string, (ProgramAnalysis Analysis, IReadOnlyList<Diagnostic> Diagnostics)> before;
+        lock (gate)
+        {
+            before = reported;
+        }
+        var now = new Dictionary<string, (ProgramAnalysis Analysis, IReadOnlyList<Diagnostic> Diagnostics)>(StringComparer.Ordinal);
+        var lookups = new Dictionary<ProgramAnalysis, ILookup<string, Diagnostic>>(ReferenceEqualityComparer.Instance);
+        foreach (var (path, (analysis, _)) in found)
+        {
+            if (before.TryGetValue(path, out var had) && had.Analysis == analysis)
+            {
+                now[path] = had;
+                continue;
+            }
+            if (!lookups.TryGetValue(analysis, out var byFile))
+                lookups[analysis] = byFile = analysis.Diagnostics.ToLookup(diagnostic => diagnostic.Span.File, StringComparer.Ordinal);
+            now[path] = (analysis, [.. byFile[path], .. analysis.SuggestionsFor(path)]);
+        }
+        lock (gate)
+        {
+            reported = now;
+        }
         return [.. found
             .OrderBy(file => file.Key, StringComparer.Ordinal)
             .Select(file => new Published(
                 UriOf(file.Key),
                 versions.TryGetValue(file.Key, out var version) ? version : null,
                 file.Value.Tree,
-                [.. file.Value.Analysis.DiagnosticsFor(file.Key), .. file.Value.Analysis.SuggestionsFor(file.Key)],
+                now[file.Key].Diagnostics,
                 file.Value.Analysis.Configuration))];
     }
 
