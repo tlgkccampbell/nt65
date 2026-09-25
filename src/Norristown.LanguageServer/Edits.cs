@@ -35,7 +35,23 @@ internal static class Edits
             return new Edit(tree, new TextSpan(tree.LineStarts[line + 1], 0), text + "\n");
 
         // The last line has no line break after it to put the new line behind.
-        return new Edit(tree, new TextSpan(tree.Text.Length, 0), (tree.Text.EndsWith('\n') ? "" : "\n") + text + "\n");
+        return new Edit(tree, new TextSpan(tree.Text.Length, 0), (tree.Text.EndsWith('\n') || tree.Text.EndsWith('\r') ? "" : "\n") + text + "\n");
+    }
+
+    /// <summary>
+    /// Returns <paramref name="text"/> with its line breaks written the way
+    /// <paramref name="tree"/>'s file writes them. The helpers here and the changes built on them
+    /// break lines with <c>\n</c>, and an edit in a file with other line breaks is converted as
+    /// it leaves the server, so that the file does not end up with two kinds.
+    /// </summary>
+    public static string WithLineBreaksOf(SyntaxTree tree, string text)
+    {
+        var lineBreak = LineBreakOf(tree.Text);
+        if (lineBreak == "\n" || !text.AsSpan().ContainsAny('\r', '\n'))
+            return text;
+        return text.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Replace("\n", lineBreak, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -256,5 +272,17 @@ internal static class Edits
             if (!taken.Contains($"{wanted}{n}"))
                 return $"{wanted}{n}";
         }
+    }
+
+    /// <summary>
+    /// Returns the line break a file uses, which is the first one in it, or <c>\n</c> for a file
+    /// of one line.
+    /// </summary>
+    private static string LineBreakOf(string text)
+    {
+        var at = text.AsSpan().IndexOfAny('\r', '\n');
+        if (at < 0 || text[at] == '\n')
+            return "\n";
+        return at + 1 < text.Length && text[at + 1] == '\n' ? "\r\n" : "\r";
     }
 }

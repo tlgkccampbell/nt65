@@ -310,6 +310,28 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
+    /// The lines a change inserts end the way the file's lines already end, so that a file with
+    /// <c>\r\n</c> or a lone <c>\r</c> after each line does not end up with two kinds of line
+    /// break.
+    /// </summary>
+    [Theory]
+    [InlineData("\r\n")]
+    [InlineData("\r")]
+    public void InsertedLinesEndTheWayTheFileEnds(string lineBreak)
+    {
+        const string Main = ".module main\n.segment CODE\n.proc main {\n@wait:\n    jsr gfx::clear\n    lda $d012\n    rts\n}\n";
+        var own = Main.Replace("\n", lineBreak, StringComparison.Ordinal);
+        var extract = new Range(new Position(3, 0), new Position(6, 0));
+
+        foreach (var (title, range) in new[] { ("Extract into a `.proc`", extract), ("Bring in `gfx::clear` with `.use`", At(Main, "gfx::clear")) })
+        {
+            var expected = Editing.Apply(Main, Single(Main, range, title).Edit.Changes[Uri]);
+            var edited = Editing.Apply(own, Single(own, range, title).Edit.Changes[Uri]);
+            Assert.Equal(expected.Replace("\n", lineBreak, StringComparison.Ordinal), edited);
+        }
+    }
+
+    /// <summary>
     /// A selection that returns from its routine part way through cannot be extracted into a
     /// routine.
     /// </summary>

@@ -44,6 +44,7 @@ internal static class CodeActions
     /// </summary>
     private static Protocol.CodeAction ToCodeAction(Change change)
     {
+        change = WithLineBreaksOfFiles(change);
         var edits = change.Edits
             .GroupBy(edit => edit.Tree)
             .ToDictionary(
@@ -59,6 +60,23 @@ internal static class CodeActions
             change.Preferred,
             Renaming(change),
             change.Refused is { } why ? new Protocol.CodeActionDisabled(why) : null);
+    }
+
+    /// <summary>
+    /// Returns <paramref name="change"/> with the line breaks in its edits written the way each
+    /// edit's file writes them, as <see cref="Edits.WithLineBreaksOf"/> does. The placeholder's
+    /// offset moves with its text, so that the rename starts where the client will find the name.
+    /// </summary>
+    private static Change WithLineBreaksOfFiles(Change change)
+    {
+        static Edit Converted(Edit edit) => edit with { Text = Edits.WithLineBreaksOf(edit.Tree, edit.Text) };
+        return change with
+        {
+            Edits = [.. change.Edits.Select(Converted)],
+            Names = change.Names is { In: var edit, At: var at }
+                ? new Change.Placeholder(Converted(edit), Edits.WithLineBreaksOf(edit.Tree, edit.Text[..at]).Length)
+                : null,
+        };
     }
 
     /// <summary>
