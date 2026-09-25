@@ -11,7 +11,7 @@
 
 .export shift, spaced, widths_alike, widths_differ, nested, twice, per_turn_label
 .export branching, padding, over_a_list, over_an_enum
-.export ramp, grid, edge, chosen, crossing, low_bytes
+.export ramp, grid, edge, chosen, crossing, low_bytes, waits
 
 .segment ZP: zp
 
@@ -181,6 +181,25 @@
             $22
         }
     }
+}
+
+; Each iteration takes one branch of the chain, so both branches may declare `@wait`, and each
+; branch's `bne` waits on its own.
+.proc waits: a8, i8 {
+    .repeat 2, i {
+        .if i == 0 {
+            ldx #1
+        @wait:
+            dex
+            bne @wait
+        } .else {
+            ldy #1
+        @wait:
+            dey
+            bne @wait
+        }
+    }
+    rts
 }
 
 ; A byte of an address only the linker knows is no fill ca65 can take, so equal lines of one are

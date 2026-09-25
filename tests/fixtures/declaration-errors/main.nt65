@@ -80,3 +80,20 @@ rts                                 ;! error[instruction-outside-a-routine]: an 
 .macro widen(): a16 {                   ;! error[signature-item-needs-65816]: `a16` describes 65816 state, which the 6502 does not have
     nop
 }
+
+; Two branches of one `.if` chain in a repetition may declare one name, since each iteration takes
+; only one of them. Two separate `.if`s may both be taken, so the second declaration clashes.
+.segment CODE
+.export .proc twice {
+    .repeat 2, i {
+        .if i == 0 {
+        @x:
+            nop
+        }
+        .if i == 1 {
+        @x: ;! error[name-already-declared]: `@x` is already declared in this scope
+            nop
+        }
+    }
+    rts
+}

@@ -46,4 +46,12 @@ public enum ScopeKind
     /// and offsets rather than of code.
     /// </summary>
     Type,
+
+    /// <summary>
+    /// One branch of an <c>.if</c> chain inside a macro body or a repetition, whose condition
+    /// depends on the expansion or iteration. Each expansion takes one branch of the chain, so
+    /// two branches may declare the same name, and a name in a branch means that branch's own
+    /// declaration. What a branch declares is also seen by the rest of the body.
+    /// </summary>
+    Branch,
 }

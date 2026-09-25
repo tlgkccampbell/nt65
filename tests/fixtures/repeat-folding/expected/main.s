@@ -23,6 +23,7 @@
 .export main__grid
 .export main__edge
 .export main__chosen
+.export main__waits
 .export main__low_bytes
 .export main__crossing
 
@@ -165,13 +166,27 @@ main__chosen:
     .byte $22
     .byte $22
 
+; .proc waits: a8, i8  main.nt65:188
+main__waits:
+    .i8
+    ldx #1
+waits__wait:
+    dex
+    bne waits__wait
+    ldy #1
+waits__wait_2:
+    dey
+    bne waits__wait_2
+    rts
+; end of waits
+
 main__low_bytes:
     .repeat 3
         .byte <main__crossing
     .endrepeat
 
 .segment "CODE": absolute
-; .proc crossing: a8, i8  main.nt65:197
+; .proc crossing: a8, i8  main.nt65:216
 main__crossing:
     lda z:$fe + $00
     lda z:$fe + $01

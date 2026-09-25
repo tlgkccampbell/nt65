@@ -68,6 +68,10 @@ internal sealed partial class Binder
     private readonly HashSet<Symbol> resolving = [];
     private readonly HashSet<Symbol> unexported = [];
 
+    // The `.if` chain being read in each scope, which the branches of an `.elseif` and an `.else`
+    // share with the `.if` before them.
+    private readonly Dictionary<Scope, object> chains = [];
+
     // What the file exports. This includes the declarations that follow `.export`, the items
     // of its `.export` lists with the scope each appears in, and everything that exporting
     // those spreads to.
@@ -611,6 +615,17 @@ internal sealed partial class Binder
                 // bare word, which is never looked up, so a name here that turns out not to be
                 // a name is a word rather than a mistake.
                 CollectUses(opener, uses, words: true);
+
+                // A condition the build did not decide depends on the expansion or iteration, and
+                // each takes one branch. Each branch is a scope of its own, so that two may
+                // declare one name.
+                if (!configuration.Answered(block)
+                    && (scope.Enclosing(ScopeKind.Repetition) ?? scope.Enclosing(ScopeKind.Macro)) is not null)
+                {
+                    if (opener is IfDirectiveSyntax || !chains.ContainsKey(scope))
+                        chains[scope] = new object();
+                    scope = new Scope(ScopeKind.Branch, null, scope, scope.Owner) { Chain = chains[scope] };
+                }
                 break;
             case BlockKind.Repeat:
             case BlockKind.Each:

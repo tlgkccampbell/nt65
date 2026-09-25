@@ -40,6 +40,12 @@ public sealed class Scope
     /// </summary>
     public string? Module { get; internal set; }
 
+    /// <summary>
+    /// Gets the <c>.if</c> chain a <see cref="ScopeKind.Branch"/> is one branch of, which its
+    /// sibling branches share; null for every other scope.
+    /// </summary>
+    internal object? Chain { get; init; }
+
     /// <summary>Gets every symbol declared in this scope, including cheap locals, in source order.</summary>
     public IReadOnlyList<Symbol> Symbols => order;
 
@@ -136,15 +142,40 @@ public sealed class Scope
 
     /// <summary>
     /// Adds <paramref name="symbol"/>, or returns the declaration already using that name.
-    /// A name may be declared once in its scope, and cheap locals count separately.
+    /// A name may be declared once in its scope, and cheap locals count separately. What a
+    /// <see cref="ScopeKind.Branch"/> declares is also seen by the scopes around it, unless one of
+    /// them already has the name from another branch of the same chain, which is no clash
+    /// because only one of the two is ever expanded.
     /// </summary>
     internal Symbol? Declare(Symbol symbol)
     {
         var table = symbol.IsCheapLocal ? cheapLocals : members;
         if (table.TryGetValue(symbol.Name, out var existing))
             return existing;
+        for (var branch = this; branch.Kind == ScopeKind.Branch && branch.Parent is { } around; branch = around)
+        {
+            var outer = symbol.IsCheapLocal ? around.cheapLocals : around.members;
+            if (!outer.TryGetValue(symbol.Name, out var seen))
+                continue;
+            if (!Exclusive(seen.Scope, branch))
+                return seen;
+            break;
+        }
         table.Add(symbol.Name, symbol);
         order.Add(symbol);
+        for (var branch = this; branch.Kind == ScopeKind.Branch && branch.Parent is { } around; branch = around)
+            (symbol.IsCheapLocal ? around.cheapLocals : around.members).TryAdd(symbol.Name, symbol);
         return null;
+
+        // Two scopes are exclusive where each is inside a different branch of one chain.
+        static bool Exclusive(Scope declared, Scope branch)
+        {
+            for (var at = declared; at is not null; at = at.Parent)
+            {
+                if (at.Parent == branch.Parent)
+                    return at != branch && at.Kind == ScopeKind.Branch && at.Chain == branch.Chain;
+            }
+            return false;
+        }
     }
 }
