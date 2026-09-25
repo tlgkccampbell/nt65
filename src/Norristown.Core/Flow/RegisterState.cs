@@ -89,7 +89,9 @@ public sealed record RegisterState(
             stack)
         {
             AHigh = RegisterValue.Merge(known.AHigh, arriving.AHigh),
-            WhyStack = stack is null ? known.WhyStack ?? arriving.WhyStack : null,
+            WhyStack = stack is not null ? null
+                : known.Stack is null || arriving.Stack is null ? known.WhyStack ?? arriving.WhyStack
+                : Cause.StacksDiffer(depths: true),
         };
     }
 

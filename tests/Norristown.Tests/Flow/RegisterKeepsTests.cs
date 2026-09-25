@@ -276,6 +276,20 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
+    /// Two paths that meet having pushed different amounts leave the stack unknown, and a broken
+    /// promise after that says so rather than asking for a restore that is already there.
+    /// </summary>
+    [Fact]
+    public void PathsThatMeetWithDifferentPushesNameTheCause()
+    {
+        Assert.Equal(
+            ["main.nt65:7: `p` promises `keeps a`, but A is not the same as on entry here, because two paths meet "
+                + "above it having pushed different amounts: pulling on each path what it pushed before they meet "
+                + "keeps the stack known"],
+            Problems(".proc p: keeps a {\n    pha\n    beq @skip\n    pha\n@skip:\n    pla\n    rts\n}\n"));
+    }
+
+    /// <summary>
     /// The undocumented <c>tas</c> and <c>las</c> of the NMOS 6502 write the stack pointer, as
     /// <c>txs</c> does. A pull after one of them restores nothing known.
     /// </summary>

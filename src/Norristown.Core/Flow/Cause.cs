@@ -16,4 +16,15 @@ public sealed record Cause(string Reason, string Fix)
     /// </summary>
     public static string Because(Cause? cause) =>
         cause is null ? "" : $", because {cause.Reason}: {cause.Fix}";
+
+    /// <summary>
+    /// Returns the cause for a stack that two paths leave unknown where they meet, because they
+    /// pushed different things. <paramref name="depths"/> says whether they pushed different
+    /// amounts, which is the usual reason.
+    /// </summary>
+    public static Cause StacksDiffer(bool depths) => depths
+        ? new("two paths meet above it having pushed different amounts",
+            "pulling on each path what it pushed before they meet keeps the stack known")
+        : new("two paths meet above it having pushed different things",
+            "pushing the same things on each path before they meet keeps the stack known");
 }

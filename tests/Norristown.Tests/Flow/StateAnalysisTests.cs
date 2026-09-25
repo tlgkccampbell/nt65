@@ -139,6 +139,31 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
+    /// Two paths that meet having pushed different amounts leave the stack unknown, and a `plp`
+    /// after that names the meeting as the cause.
+    /// </summary>
+    [Fact]
+    public void APlpAfterPathsThatPushedDifferentAmountsNamesTheCause()
+    {
+        const string Text = """
+            .proc p: a8, i8 {
+                php
+                beq @skip
+                pha
+            @skip:
+                plp
+                lda #1
+                .state a8, i8
+                rts
+            }
+            """;
+
+        Assert.Equal(["main.nt65:7: `lda #` needs the width of A, and it is not known here, because two paths meet above "
+            + "it having pushed different amounts: pulling on each path what it pushed before they meet keeps the stack "
+            + "known"], Problems(Text));
+    }
+
+    /// <summary>
     /// Once a routine pulls more than it pushed, reaching into what its caller pushed, the
     /// analysis no longer knows where the stack's base is. It goes on tracking later pushes
     /// relative to that unknown base.

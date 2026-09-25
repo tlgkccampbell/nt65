@@ -44,7 +44,9 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
         {
             WhyA = Why(a.A, b.A, known.WhyA, arriving.WhyA, StateRegister.A),
             WhyIndex = Why(a.Index, b.Index, known.WhyIndex, arriving.WhyIndex, StateRegister.Index),
-            WhyStack = stack is null ? known.WhyStack ?? arriving.WhyStack : null,
+            WhyStack = stack is not null ? null
+                : known.Stack is null || arriving.Stack is null ? known.WhyStack ?? arriving.WhyStack
+                : Cause.StacksDiffer(known.Stack.Depth != arriving.Stack.Depth),
         };
     }
 
