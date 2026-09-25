@@ -3,7 +3,9 @@
 # them. -Fixture runs only fixtures and corpus programs whose name contains the text. -Update
 # rewrites expected fixture output instead of comparing it. -Benchmark builds Release and runs
 # only the timings, which print what an edit costs; no gate runs them. -Thorough also compiles
-# every fixture with its files reversed and shuffled, which the gate asks for and an edit need not.
+# every fixture with its files reversed and shuffled, and makes the editor requests of the
+# broken-source sweep on every line rather than a sample, which the gate asks for and an edit
+# need not.
 [CmdletBinding()]
 param(
     [switch]$Ca65,
@@ -32,7 +34,7 @@ if ($Benchmark) {
     $savedGc = $env:DOTNET_gcServer
     try {
         $env:DOTNET_gcServer = '0'
-        & $runner -noLogo -trait 'Category=Benchmark' -parallel none -showLiveOutput
+        & $runner -noLogo -trait 'Category=Benchmark' -parallelMode none -showLiveOutput
         exit $LASTEXITCODE
     }
     finally {
@@ -51,8 +53,8 @@ $runnerArgs += if ($Ca65) { '-trait', 'Category=Oracle' } else { '-trait-', 'Cat
 if ($Fixture -and -not $Ca65) { $runnerArgs += '-class', 'Norristown.Tests.Fixtures.FixtureTests' }
 
 # Tiered PGO is turned off. It instruments tier-0 code to collect a profile for tier-1
-# compilation, and a suite that finishes in three seconds rarely calls anything often enough to
-# recoup that cost, so most of the run would execute the slower instrumented code. The
+# compilation, and a suite of short tests rarely calls anything often enough to recoup that
+# cost, so most of the run would execute the slower instrumented code. The
 # benchmarks above keep PGO on, because the shipped binaries do.
 $saved = $env:NT65_FIXTURE, $env:NT65_UPDATE, $env:NT65_THOROUGH, $env:DOTNET_TieredPGO
 try {
