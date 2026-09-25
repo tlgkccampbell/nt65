@@ -154,6 +154,27 @@ public sealed class WorkspaceTests
         Assert.Equal(Source + "nop\n", changed.Tree.Text);
     }
 
+    /// <summary>
+    /// A position past the end of a line is clamped to the end of the line's text, before its
+    /// line break. An edit that ends there leaves the line break, and a CRLF line keeps its
+    /// <c>\r</c> and <c>\n</c> together.
+    /// </summary>
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void APositionPastTheEndOfALineStaysOnTheLine(string lineBreak)
+    {
+        var workspace = new Workspace();
+        var text = $"lda #1{lineBreak}rts{lineBreak}";
+        workspace.Open(new TextDocumentItem(Uri, "nt65", 1, text));
+
+        var changed = workspace.Change(new VersionedTextDocumentIdentifier(Uri, 2),
+            [new TextDocumentContentChangeEvent(new Range(new Position(0, 5), new Position(0, 9999)), "2")]);
+
+        Assert.NotNull(changed);
+        Assert.Equal($"lda #2{lineBreak}rts{lineBreak}", changed.Tree.Text);
+    }
+
     [Fact]
     public void ChangingADocumentThatIsNotOpenIsIgnored()
     {

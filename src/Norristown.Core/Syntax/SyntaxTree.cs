@@ -203,8 +203,8 @@ public sealed class SyntaxTree
     /// <summary>
     /// Returns the offset in <paramref name="text"/> of a 0-based line and character, given where
     /// each line starts as <see cref="LineOffsets"/> returns it. The offset is clamped to the
-    /// text, since an editor may name a position past the end of a line or of the file, and that
-    /// is not an error here.
+    /// line's text, before its line break, since an editor may name a position past the end of a
+    /// line or of the file, and that is not an error here.
     /// </summary>
     public static int GetPosition(string text, ImmutableArray<int> lineStarts, int line, int character)
     {
@@ -213,12 +213,13 @@ public sealed class SyntaxTree
         if (line >= lineStarts.Length)
             return text.Length;
         var start = lineStarts[line];
-        return character <= 0 ? start : Math.Min(start + character, LineEnd(text, lineStarts, line));
+        return character <= 0 ? start : Math.Min(start + character, ContentEnd(text, lineStarts, line));
     }
 
     /// <summary>
-    /// Returns the offset of a 0-based line and character, clamped to the text. An editor may name
-    /// a position past the end of a line or of the file, and that is not an error here.
+    /// Returns the offset of a 0-based line and character, clamped to the line's text before its
+    /// line break. An editor may name a position past the end of a line or of the file, and that
+    /// is not an error here.
     /// </summary>
     public int GetPosition(int line, int character) => GetPosition(Text, LineStarts, line, character);
 
@@ -341,7 +342,7 @@ public sealed class SyntaxTree
         var column = span.Start - LineStarts[line] + 1;
         var width = span.Length;
         if (line + 1 < LineStarts.Length && span.Start + width > LineStarts[line + 1])
-            width = Math.Max(0, ContentEnd(line) - span.Start);
+            width = Math.Max(0, ContentEnd(Text, LineStarts, line) - span.Start);
         return new Span(Path, line + 1, column, column + width);
     }
 
@@ -508,18 +509,6 @@ public sealed class SyntaxTree
     };
 
     /// <summary>
-    /// Returns where the 0-based line <paramref name="line"/> of the file ends, before its line
-    /// break.
-    /// </summary>
-    private int ContentEnd(int line)
-    {
-        var end = GetLineEnd(line);
-        while (end > LineStarts[line] && Text[end - 1] is '\r' or '\n')
-            end--;
-        return end;
-    }
-
-    /// <summary>
     /// Returns the kept parse of each line the parser reads, indexed as <paramref name="lines"/>
     /// are, where <paramref name="keptParses"/> has one for the line of the file it starts on and
     /// the line is one <paramref name="previous"/> also has. Without a previous tree, every line is
@@ -541,6 +530,18 @@ public sealed class SyntaxTree
 
     private static int LineEnd(string text, ImmutableArray<int> starts, int line) =>
         line + 1 < starts.Length ? starts[line + 1] : text.Length;
+
+    /// <summary>
+    /// Returns where the 0-based line <paramref name="line"/> of <paramref name="text"/> ends,
+    /// before its line break.
+    /// </summary>
+    private static int ContentEnd(string text, ImmutableArray<int> starts, int line)
+    {
+        var end = LineEnd(text, starts, line);
+        while (end > starts[line] && text[end - 1] is '\r' or '\n')
+            end--;
+        return end;
+    }
 
     private static ReadOnlySpan<char> LineText(string text, ImmutableArray<int> starts, int line) =>
         text.AsSpan(starts[line], LineEnd(text, starts, line) - starts[line]);
