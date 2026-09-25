@@ -160,6 +160,25 @@ public sealed class RewriteTests
         Assert.Equal(".proc main {\n    lda #1\n    rts\n}\n", tree.Root.RemoveNode(nop).ToFullString());
     }
 
+    /// <summary>
+    /// A block nested in another is removed or replaced whole, as a line is, and a rewrite that
+    /// overrides <see cref="SyntaxRewriter.VisitBlock"/> is shown every block, nested or not.
+    /// </summary>
+    [Fact]
+    public void ANestedBlockIsRemovedAndReplaced()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".proc main {\n    .if 1 {\n        nop\n    }\n    rts\n}\n");
+        var inner = tree.Root.DescendantNodes().OfType<BlockSyntax>().Single(block => block.Parent is BlockSyntax);
+
+        Assert.Equal(".proc main {\n    rts\n}\n", tree.Root.RemoveNode(inner).ToFullString());
+        var line = SyntaxTree.Parse("line.nt65", "    brk\n").GetLine(0);
+        Assert.Equal(".proc main {\n    brk\n    rts\n}\n", tree.Root.ReplaceNode(inner, line).ToFullString());
+
+        var seen = new BlocksSeen();
+        Assert.Same(tree.Root, seen.Visit(tree.Root));
+        Assert.Equal([0, 1], seen.Lines);
+    }
+
     /// <summary>An item removed from a separated list takes the comma after it along.</summary>
     [Fact]
     public void AListItemIsRemovedWithItsSeparator()
@@ -228,6 +247,18 @@ public sealed class RewriteTests
     /// </summary>
     private sealed class Untouched : SyntaxRewriter
     {
+    }
+
+    /// <summary>Records the line each block it is shown opens on, and changes nothing.</summary>
+    private sealed class BlocksSeen : SyntaxRewriter
+    {
+        public List<int> Lines { get; } = [];
+
+        public override SyntaxNode? VisitBlock(BlockSyntax node)
+        {
+            Lines.Add(node.LineIndex);
+            return base.VisitBlock(node);
+        }
     }
 
     /// <summary>Replaces every identifier with a new token of the same text and trivia.</summary>

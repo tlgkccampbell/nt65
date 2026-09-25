@@ -55,25 +55,26 @@ internal sealed class RewriteSession(SyntaxRewriter rewriter)
         }
         foreach (var child in node.ChildNodes)
         {
-            // Each line is visited as a whole first, so that a rewrite can replace or remove it;
-            // if it comes back unchanged, the changes collected from its children stand.
-            if (child is not LineSyntax line)
+            // Each line and nested block is visited as a whole first, so that a rewrite can
+            // replace or remove it. If it comes back unchanged, the changes collected from inside
+            // it stand.
+            if (child is not (LineSyntax or BlockSyntax))
             {
                 Collect(child);
                 continue;
             }
             var before = changes.Count;
             var marked = annotations.Count;
-            var rewritten = rewriter.Visit(line);
-            if (ReferenceEquals(rewritten, line))
+            var rewritten = rewriter.Visit(child);
+            if (ReferenceEquals(rewritten, child))
                 continue;
 
-            // The whole line is being replaced, so any changes collected from inside it are
-            // discarded. One change covers the line, and no change may fall inside a span that is
+            // The whole line or block is being replaced, so any changes collected from inside it
+            // are discarded. One change covers it, and no change may fall inside a span that is
             // already replaced.
             changes.RemoveRange(before, changes.Count - before);
             annotations.Truncate(marked);
-            Changed(line, rewritten);
+            Changed(child, rewritten);
         }
     }
 
