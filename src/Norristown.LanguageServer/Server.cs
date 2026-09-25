@@ -910,8 +910,8 @@ internal sealed class Server : IDisposable
 
     /// <summary>
     /// Publishes the rest of the program once typing has stopped. <paramref name="changed"/> is
-    /// the file the client is editing, whose diagnostics were already published and are sent
-    /// again only where emitting the program adds to them.
+    /// the file the client is editing, whose diagnostics were already published and are not
+    /// sent again.
     /// </summary>
     private void PublishTheRestSoon(string changed) =>
         settling.After(async cancellation =>
@@ -941,8 +941,8 @@ internal sealed class Server : IDisposable
     /// broken in one file breaks every module that uses it, and none of those modules may be open.
     /// </summary>
     /// <param name="changed">
-    /// The file the client is editing, which has already been published from its own analysis;
-    /// null when this is not an edit.
+    /// The file the client is editing, which has already been published from its own analysis
+    /// and is skipped here; null when this is not an edit.
     /// </param>
     /// <param name="cancellation">Checked between files, because a program may hold hundreds.</param>
     /// <param name="refresh">
@@ -975,10 +975,8 @@ internal sealed class Server : IDisposable
         {
             cancellation.ThrowIfCancellationRequested();
             current.Add(file.Uri);
-
-            // The file being edited was published from its own analysis already, which does not
-            // include what emitting the program finds. It is sent again only where that differs.
-            _ = await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
+            if (file.Uri != changed)
+                _ = await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
         }
 
         // The client keeps the diagnostics it was last sent until told otherwise, so a file that

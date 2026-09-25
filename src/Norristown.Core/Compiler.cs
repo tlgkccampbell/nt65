@@ -41,18 +41,6 @@ public static class Compiler
     }
 
     /// <summary>
-    /// Returns what emitting the program that <paramref name="analysis"/> describes finds wrong
-    /// with it beyond what the analysis found, such as two names that collide in the output. An
-    /// editor shows these beside the analysis's own, so that a build fails on nothing the editor
-    /// showed as clean.
-    /// </summary>
-    public static IReadOnlyList<Diagnostic> EmissionDiagnostics(ProgramAnalysis analysis, ProjectSettings project)
-    {
-        var analyzed = analysis.Diagnostics.ToHashSet();
-        return [.. Emit(analysis, project).Diagnostics.Where(d => !analyzed.Contains(d))];
-    }
-
-    /// <summary>
     /// Emits the program that <paramref name="analysis"/> describes, and a C header of what it
     /// exports when <paramref name="cHeader"/> names the file for the header.
     /// </summary>
