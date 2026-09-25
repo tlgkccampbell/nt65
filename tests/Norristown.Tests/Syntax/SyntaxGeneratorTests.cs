@@ -80,7 +80,7 @@ public sealed class SyntaxGeneratorTests
     [Fact]
     public void AFieldTakesNoReadAndAMemberWantsOne()
     {
-        var read = Assert.Throws<InvalidOperationException>(() => Files("""
+        var read = Assert.Throws<TableException>(() => Files("""
             <Node Name="WidgetSyntax" Base="StatementSyntax">
               <Kind Name="Widget"/>
               <TypeComment><summary>A widget.</summary></TypeComment>
@@ -93,7 +93,7 @@ public sealed class SyntaxGeneratorTests
             """));
         Assert.Contains("Keyword", read.Message);
 
-        var unread = Assert.Throws<InvalidOperationException>(() => Files("""
+        var unread = Assert.Throws<TableException>(() => Files("""
             <Node Name="WidgetSyntax" Base="StatementSyntax">
               <Kind Name="Widget"/>
               <TypeComment><summary>A widget.</summary></TypeComment>
@@ -209,7 +209,7 @@ public sealed class SyntaxGeneratorTests
     [Fact]
     public void ALayoutNamesEverySlotExactlyOnce()
     {
-        var missed = Assert.Throws<InvalidOperationException>(() => Files("""
+        var missed = Assert.Throws<TableException>(() => Files("""
             <Node Name="LidSyntax" Base="SyntaxNode" Layout="Keyword">
               <Kind Name="Lid"/>
               <TypeComment><summary>A lid.</summary></TypeComment>
@@ -325,7 +325,7 @@ public sealed class SyntaxGeneratorTests
     [Fact]
     public void ANodeIsWrittenOnce()
     {
-        var twice = Assert.Throws<InvalidOperationException>(() => Files($"{Widget}\n{Widget}"));
+        var twice = Assert.Throws<TableException>(() => Files($"{Widget}\n{Widget}"));
         Assert.Contains("WidgetSyntax is declared twice", twice.Message);
     }
 
@@ -336,7 +336,7 @@ public sealed class SyntaxGeneratorTests
     [Fact]
     public void AClassDoesNotDeriveFromItself()
     {
-        var circle = Assert.Throws<InvalidOperationException>(() => Files("""
+        var circle = Assert.Throws<TableException>(() => Files("""
             <Node Name="WidgetSyntax" Base="LidSyntax">
               <Kind Name="Widget"/>
               <TypeComment><summary>A widget.</summary></TypeComment>

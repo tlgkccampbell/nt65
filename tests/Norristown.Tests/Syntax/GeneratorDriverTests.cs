@@ -33,6 +33,7 @@ public sealed class GeneratorDriverTests
         Assert.Equal("NT1001", diagnostic.Id);
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
         Assert.Contains("wants a Base", diagnostic.GetMessage());
+        Assert.Equal(1, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
         Assert.Empty(run.GeneratedSources);
     }
 
@@ -50,6 +51,24 @@ public sealed class GeneratorDriverTests
         var diagnostic = Assert.Single(run.Diagnostics);
         Assert.Equal("NT1001", diagnostic.Id);
         Assert.Contains(message, diagnostic.GetMessage());
+        Assert.Equal(1, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
+        Assert.Empty(run.GeneratedSources);
+    }
+
+    /// <summary>
+    /// A fault in the generator itself is one error diagnostic on the table, which names the
+    /// exception. It does not escape to the compiler. A node with no kind is such a fault, since
+    /// the reader lets it through and the writer then has no kind to give its green class.
+    /// </summary>
+    [Fact]
+    public void AFaultInTheGeneratorIsADiagnostic()
+    {
+        var run = Run("<Tree>\n  <Node Name=\"WidgetSyntax\" Base=\"SyntaxNode\"/>\n</Tree>\n");
+        Assert.Null(run.Exception);
+        var diagnostic = Assert.Single(run.Diagnostics);
+        Assert.Equal("NT1001", diagnostic.Id);
+        Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Contains("the generator failed while reading Syntax.xml", diagnostic.GetMessage());
         Assert.Empty(run.GeneratedSources);
     }
 

@@ -20,6 +20,7 @@ namespace Norristown.SyntaxGenerator;
 /// node's own, or empty otherwise.
 /// </param>
 /// <param name="Slots">The class's properties, in the order the table lists them.</param>
+/// <param name="Line">The one-based line of the table that declares the node, where a problem with it is reported.</param>
 public sealed record NodeRow(
     string Name,
     string Base,
@@ -31,7 +32,8 @@ public sealed record NodeRow(
     bool IsPartial,
     bool IsMissingNode,
     ImmutableArray<string> Layout,
-    ImmutableArray<NodeSlot> Slots)
+    ImmutableArray<NodeSlot> Slots,
+    int Line)
 {
     /// <summary>
     /// Gets the name without the <c>Syntax</c> suffix, which is also the name of the kind and of the

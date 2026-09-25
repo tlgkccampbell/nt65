@@ -20,7 +20,7 @@ public static class NodeTable
     public static ImmutableArray<NodeRow> Read(string text)
     {
         var root = XDocument.Parse(text, LoadOptions.SetLineInfo).Root
-            ?? throw new InvalidOperationException("the node table holds nothing");
+            ?? throw new TableException("the node table holds nothing", 0);
         if (root.Name.LocalName != "Tree")
             throw Bad(root, $"the node table starts with <{root.Name.LocalName}>, not <Tree>");
 
@@ -38,7 +38,7 @@ public static class NodeTable
             if (named.TryGetValue(node.Name, out var first))
             {
                 throw Bad(element,
-                    $"{node.Name} is declared twice, here and at line {((IXmlLineInfo)first).LineNumber}");
+                    $"{node.Name} is declared twice, here and at line {LineOf(first)}");
             }
             named.Add(node.Name, element);
             nodes.Add(node);
@@ -88,7 +88,8 @@ public static class NodeTable
             Flag(element, "Partial"),
             Flag(element, "Missing"),
             Words(element.Attribute("Layout")?.Value),
-            slots.ToImmutable());
+            slots.ToImmutable(),
+            LineOf(element));
     }
 
     private static NodeSlot ReadSlot(XElement element, SlotRole role)
@@ -219,6 +220,8 @@ public static class NodeTable
         }
     }
 
-    private static InvalidOperationException Bad(XElement element, string message) =>
-        new($"{message}, at line {((IXmlLineInfo)element).LineNumber}");
+    private static TableException Bad(XElement element, string message) =>
+        new(message, LineOf(element));
+
+    private static int LineOf(XElement element) => ((IXmlLineInfo)element).LineNumber;
 }

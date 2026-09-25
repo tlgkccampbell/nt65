@@ -68,9 +68,18 @@ public sealed class SyntaxSourceGenerator : IIncrementalGenerator
             Report(context, table.Path, malformed.LineNumber, malformed.Message);
             return;
         }
-        catch (InvalidOperationException wrong)
+        catch (TableException wrong)
         {
-            Report(context, table.Path, 0, wrong.Message);
+            Report(context, table.Path, wrong.Line, wrong.Message);
+            return;
+        }
+        catch (Exception failed) when (failed is not OperationCanceledException)
+        {
+            // A fault in the generator itself would otherwise escape to the compiler, which reports
+            // it as warning CS8785 against no file. Reported here, it is an error on the table like
+            // any other problem with it.
+            Report(context, table.Path, 0,
+                $"the generator failed while reading {TableName}, with {failed.GetType().Name}: {failed.Message}");
             return;
         }
 

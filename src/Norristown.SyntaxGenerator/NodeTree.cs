@@ -34,8 +34,9 @@ public sealed class NodeTree
         {
             if (node.Base != Root && (node.Base == node.Name || !byName.ContainsKey(node.Base)))
             {
-                throw new InvalidOperationException(
-                    $"{node.Name} derives from {node.Base}, which is neither another node of the table nor {Root}");
+                throw new TableException(
+                    $"{node.Name} derives from {node.Base}, which is neither another node of the table nor {Root}",
+                    node.Line);
             }
         }
 
@@ -124,8 +125,7 @@ public sealed class NodeTree
                     pieces.Select(piece => piece.Slot.Name).OrderBy(name => name, StringComparer.Ordinal),
                     StringComparer.Ordinal))
             {
-                throw new InvalidOperationException(
-                    $"{node.Name}'s layout must name each of its slots exactly once");
+                throw new TableException($"{node.Name}'s layout must name each of its slots exactly once", node.Line);
             }
             pieces = [.. node.Layout.Select(name => pieces.First(piece => piece.Slot.Name == name))];
         }
