@@ -381,6 +381,27 @@ public sealed class FlowTests
     }
 
     /// <summary>
+    /// Checks that a branch to another routine is a way out of the routine, so the shortest pass
+    /// can end there. A loop that such a branch can leave is not counted.
+    /// </summary>
+    [Fact]
+    public void ABranchToAnotherRoutineIsAWayOut()
+    {
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n"
+            + ".proc other {\n    rts\n}\n"
+            + ".proc p {\n    beq other\n    nop\n    nop\n    rts\n}\n"
+            + ".proc q {\n    ldx #4\n@loop:\n    beq other\n    dex\n    bne @loop\n    rts\n}\n"));
+        Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
+        var regions = analysis.Files.Single().Flow.Regions;
+        var p = regions.Single(region => region.Routine.Name == "p");
+        var q = regions.Single(region => region.Routine.Name == "q");
+
+        Assert.Equal(2, p.Cost.Minimum);
+        Assert.Equal(14, p.Cost.Maximum);
+        Assert.Null(q.Cost.Maximum);
+    }
+
+    /// <summary>
     /// Checks that a loop whose count is loaded in a macro, from an <c>operand</c> argument, is
     /// counted from the argument's value.
     /// </summary>

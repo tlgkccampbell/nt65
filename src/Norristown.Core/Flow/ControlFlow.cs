@@ -716,6 +716,7 @@ public sealed class ControlFlow
                 inside = true;
                 Edge(i, landing, makesCall ? EdgeKind.Call : EdgeKind.Taken);
             }
+            blocks[i].BranchesOut = transfer == Transfer.Branch && !inside && relative is null;
 
             // What a call reaches costs what that routine costs, and so does what a tail jump
             // reaches, since control comes back from it to this routine's caller. A target

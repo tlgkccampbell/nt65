@@ -92,11 +92,12 @@ internal static class Paths
             .Distinct();
 
     /// <summary>
-    /// Returns whether a path that reaches a block may end there, because nothing follows it or
-    /// what follows it is outside.
+    /// Returns whether a path that reaches a block may end there, because nothing follows it, what
+    /// follows it is outside, or it branches out of the routine.
     /// </summary>
     private static bool Leaves(BasicBlock block, Func<int, bool> inside) =>
-        block.Successors.Any(edge => edge.Kind != EdgeKind.Call && !inside(edge.To))
+        block.BranchesOut
+        || block.Successors.Any(edge => edge.Kind != EdgeKind.Call && !inside(edge.To))
         || !block.Successors.Any(edge => edge.Kind != EdgeKind.Call);
 
     /// <summary>

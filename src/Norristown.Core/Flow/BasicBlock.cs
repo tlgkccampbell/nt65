@@ -65,6 +65,13 @@ public sealed class BasicBlock
     public bool CallsUnknown { get; internal set; }
 
     /// <summary>
+    /// Gets a value indicating whether the block ends with a conditional branch to a place outside
+    /// its routine. Where the branch is taken, the path leaves the routine there, even though the
+    /// block also runs on into the next one.
+    /// </summary>
+    public bool BranchesOut { get; internal set; }
+
+    /// <summary>
     /// Gets a value indicating whether the block above falls through into this one, as opposed to
     /// control reaching it only by a transfer to its label.
     /// </summary>

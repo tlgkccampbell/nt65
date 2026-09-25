@@ -85,7 +85,8 @@ internal static class CountedLoops
         {
             if (!loop.Inside[i])
                 continue;
-            var leaves = blocks[i].Successors.Any(edge => edge.Kind != EdgeKind.Call && !loop.Inside[edge.To]);
+            var leaves = blocks[i].BranchesOut
+                || blocks[i].Successors.Any(edge => edge.Kind != EdgeKind.Call && !loop.Inside[edge.To]);
             if (leaves && i != loop.Latch)
                 return null;
         }
