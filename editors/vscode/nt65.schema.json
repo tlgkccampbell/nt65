@@ -121,6 +121,7 @@
         "block-parameter-unknown",
         "branch-operand-not-taken",
         "branch-out-of-reach",
+        "branch-to-far-routine",
         "builtin-arguments",
         "byte-operator-needs-parentheses",
         "c-header-name-left-out",

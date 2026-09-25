@@ -394,6 +394,10 @@ internal sealed class StateChecks
                 Report(step, Catalogue.JumpAcrossBanks.Message(target.DisplayName, routine.DisplayName));
             }
         }
+        else if (Instructions.Facts(mnemonic).Control == Control.Branches && callee.IsFar)
+        {
+            Report(step, Catalogue.BranchToFarRoutine.Message(target.DisplayName));
+        }
         else if (mnemonic is not (MnemonicKind.Jml or MnemonicKind.None) && callee.IsFar)
         {
             Report(step, Catalogue.JumpDistanceMismatch.Message(target.DisplayName, "far", "jml", target.DisplayName));

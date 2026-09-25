@@ -124,7 +124,7 @@ public sealed class CatalogueAreaTests
         ]),
         ("Processor state",
         [
-            "args-not-pushed", "asserted-item-not-restored", "bank-mismatch", "call-distance-mismatch",
+            "args-not-pushed", "asserted-item-not-restored", "bank-mismatch", "branch-to-far-routine", "call-distance-mismatch",
             "call-state-mismatch", "call-target-not-a-routine", "call-target-unknown", "direct-page-mismatch",
             "direct-page-out-of-reach", "direct-page-unknown", "ensure-item-not-a-width", "ensure-needs-native",
             "frame-depth-unknown", "frame-gone", "frame-member-not-stack-relative", "frame-not-a-record",

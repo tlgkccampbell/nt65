@@ -3012,6 +3012,15 @@ public static class Catalogue
         "`jmp` stays in the current bank, and `jml` also sets the program bank. A far routine is reached with "
             + "`jml`, and a near one in the same bank with `jmp`.");
 
+    internal static DiagnosticDescriptor BranchToFarRoutine { get; } = Entry(
+        Area.ProcessorState,
+        "branch-to-far-routine",
+        Severity.Error,
+        "`{0}` is far, and a branch cannot set the program bank: branch on the opposite condition around a `jml {0}`",
+        "A far routine is reached with `jml`, which also sets the program bank. A conditional branch stays in the "
+            + "current bank and has no long form, so it cannot be changed into a `jml`. Branch on the opposite "
+            + "condition past a `jml` to the routine instead.");
+
     internal static DiagnosticDescriptor JumpAcrossBanks { get; } = Entry(
         Area.ProcessorState,
         "jump-across-banks",

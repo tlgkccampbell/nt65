@@ -139,6 +139,33 @@ public sealed class StateAnalysisTests
     }
 
     /// <summary>
+    /// A conditional branch has no long form, so a branch to a far routine is told to go around
+    /// a `jml`, not to become one. An unconditional `bra` can simply be replaced.
+    /// </summary>
+    [Fact]
+    public void ABranchToAFarRoutineIsToldToBranchAroundAJml()
+    {
+        const string Text = """
+            .proc target: a8, i8, far {
+                rtl
+            }
+
+            .proc p: a8, i8, far {
+                beq target
+                bra target
+            }
+            """;
+
+        Assert.Equal(
+            [
+                "main.nt65:6: `target` is far, and a branch cannot set the program bank: branch on the opposite "
+                    + "condition around a `jml target`",
+                "main.nt65:7: `target` is far: jump to it with `jml target`",
+            ],
+            Problems(Text));
+    }
+
+    /// <summary>
     /// Two paths that meet having pushed different amounts leave the stack unknown, and a `plp`
     /// after that names the meeting as the cause.
     /// </summary>
