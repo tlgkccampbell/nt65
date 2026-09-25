@@ -44,6 +44,12 @@
     far                             ;! error[number-too-wide]: $100000000 does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
 }
 
+; A member after the largest value nt65 holds overflows rather than wrapping around.
+.enum Topped {
+    top = $7fffffffffffffff         ;! error[number-too-wide]: $7fffffffffffffff does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff
+    past                            ;! error[arithmetic-overflow]: $7fffffffffffffff + 1 overflows nt65's 64-bit signed arithmetic
+}
+
 .export LIMIT, FLOOR, Counted
 
 ; An operand and a data value are written as they stand, too, so their steps are held to

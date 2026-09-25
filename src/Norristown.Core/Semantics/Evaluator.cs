@@ -914,7 +914,7 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Returns the value of an enum member with no value of its own, which is the previous
     /// member's value plus one, or zero for the first member. Returns null when the previous
-    /// member has no value.
+    /// member has no value, and reports an overflow when it has the largest value nt65 holds.
     /// </summary>
     private long? Follows(Symbol member)
     {
@@ -929,7 +929,14 @@ internal sealed partial class Evaluator
         while (earlier.TryPop(out var first))
             EvaluateSymbol(first);
         EvaluateSymbol(previous);
-        return previous.Value.AsNumber() is { } before ? before + 1 : null;
+        if (previous.Value.AsNumber() is not { } before)
+            return null;
+        if (before == long.MaxValue)
+        {
+            Report(member.DeclarationSpan, Catalogue.ArithmeticOverflow.Message($"{Value.Of(before)} + 1"), []);
+            return null;
+        }
+        return before + 1;
     }
 
     /// <summary>

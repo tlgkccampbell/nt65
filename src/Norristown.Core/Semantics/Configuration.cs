@@ -580,7 +580,8 @@ public sealed class Configuration
 
         /// <summary>
         /// Returns the value of an enum member, which is its own value, or one more than the member
-        /// before it in the branches the build takes.
+        /// before it in the branches the build takes. One more than the largest value nt65 holds is
+        /// unknown here, and the evaluator reports it as an overflow.
         /// </summary>
         private Decision Member(Symbol symbol, Entry.Member member)
         {
@@ -603,7 +604,7 @@ public sealed class Configuration
                     var decision = line.Value is { } value ? Probe(value, at, null, null)
                         : previous is not { } last ? Decision.Of(Value.Of(0))
                         : last.Why is { } why ? Decision.Not(why.Through(at.DeclarationSpan, at.DisplayName, before!.DisplayName))
-                        : last.Value.AsNumber() is { } number ? Decision.Of(Value.Of(number + 1))
+                        : last.Value.AsNumber() is { } number and < long.MaxValue ? Decision.Of(Value.Of(number + 1))
                         : Decision.Of(Value.Unknown);
                     if (name.Text == symbol.Name)
                         found ??= decision;
