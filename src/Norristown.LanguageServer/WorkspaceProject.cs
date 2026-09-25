@@ -105,6 +105,16 @@ internal sealed class WorkspaceProject
     public bool Measured(string path) => analysis.Latest?.Binaries.Contains(path) ?? false;
 
     /// <summary>
+    /// Returns every file the project reads, as logical paths. These are the project file, the
+    /// sources on disk, the linked configs and the binaries the last analysis included.
+    /// </summary>
+    public IEnumerable<string> Reads() =>
+        new[] { File }
+            .Concat(OnDisk().Select(tree => tree.Path))
+            .Concat(Own.LinkedFiles)
+            .Concat(analysis.Latest?.Binaries ?? []);
+
+    /// <summary>
     /// Returns every file of the program on disk, reading the files if they have not been read.
     /// </summary>
     public IReadOnlyCollection<SyntaxTree> OnDisk()

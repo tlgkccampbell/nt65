@@ -207,6 +207,10 @@ async function activate(context) {
         fileEvents: [
           vscode.workspace.createFileSystemWatcher('**/*.nt65'),
           vscode.workspace.createFileSystemWatcher('**/nt65.json'),
+          // A folder that is renamed or deleted is reported once, under the folder's own path,
+          // which neither pattern above matches. Every path is watched for coming and going,
+          // though not for changing, so that the server hears of such a folder.
+          vscode.workspace.createFileSystemWatcher('**/*', false, true, false),
         ],
       },
     });

@@ -138,7 +138,37 @@ public sealed class MovedFileTests : IDisposable
         Assert.NotNull(operations);
         var filter = Assert.Single(operations.WillRename!.Filters);
         Assert.Equal("**/*", filter.Pattern.Glob);
-        Assert.Equal("file", filter.Pattern.Matches);
+        Assert.Null(filter.Pattern.Matches);
+    }
+
+    /// <summary>
+    /// Moving a folder moves every file in it. An <c>.incbin</c> path into the folder is
+    /// rewritten, and a glob that named the folder is reported once. A path between two files
+    /// that move together still reaches the same file and is left alone.
+    /// </summary>
+    [Fact]
+    public async Task MovingAFolderMovesEverythingInIt()
+    {
+        var timeout = TestTimeout.Token();
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["main.nt65", "gfx/*.nt65"] }""");
+        root.Write("main.nt65", ".module main\n.segment RODATA\n.export .data tiles: .incbin \"data/tiles.bin\"\n");
+        root.Write("gfx/sprite.nt65", ".module gfx::sprite\n.segment RODATA\n.export .data s: .incbin \"sprite.bin\"\n");
+        root.Write("gfx/other.nt65", ".module gfx::other\n");
+        root.Write("gfx/sprite.bin", "01");
+        root.Write("data/tiles.bin", "0123");
+        await using var client = await TestClient.StartAsync(
+            TestClient.Capable(), timeout, rootUri: Folder(""));
+        await client.OpenAsync(Folder("main.nt65"), root.Read("main.nt65"));
+        await client.NextDiagnosticsAsync(Folder("main.nt65"), timeout);
+
+        var data = await RenameAsync(client, timeout, ("data", "assets"));
+        Assert.NotNull(data);
+        Assert.Equal("\"assets/tiles.bin\"", Assert.Single(Assert.Single(data.Changes).Value).NewText);
+
+        var gfx = await RenameAsync(client, timeout, ("gfx", "art"));
+        Assert.Null(gfx);
+        var warning = await client.NextShowMessageAsync(timeout);
+        Assert.Contains("`gfx/*.nt65` in nt65.json does not match", warning.Message, StringComparison.Ordinal);
     }
 
     private Task<WorkspaceEdit?> RenameAsync(

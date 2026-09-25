@@ -101,6 +101,33 @@ public sealed class ProjectsTests : IDisposable
     }
 
     /// <summary>
+    /// An editor reports a folder that is deleted or renamed once, and not each file in it. A
+    /// folder that goes takes the sources beneath it out of the program, and a folder that
+    /// appears brings the sources in it into the program.
+    /// </summary>
+    [Fact]
+    public async Task AFolderThatGoesOrComesChangesTheProgram()
+    {
+        var timeout = TestTimeout.Token();
+        const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n";
+        root.Write("nt65.json", """{ "cpu": "6502", "files": ["**/*.nt65"] }""");
+        root.Write("lib/gfx.nt65", Gfx);
+        root.Write("main.nt65", Caller);
+        await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
+        Assert.Empty((await NextForAsync(client, "main.nt65", timeout)).Diagnostics);
+
+        Directory.Move(root.PathOf("lib"), root.PathOf("gone"));
+        Directory.Delete(root.PathOf("gone"), recursive: true);
+        await client.ChangedOnDiskAsync(Uri("lib"));
+        Assert.Equal(["`gfx` is not declared, and no module `gfx` is in this build"],
+            (await NextForAsync(client, "main.nt65", timeout)).Diagnostics.Select(d => d.Message));
+
+        root.Write("art/gfx.nt65", Gfx);
+        await client.ChangedOnDiskAsync(Uri("art"));
+        Assert.Empty((await NextForAsync(client, "main.nt65", timeout)).Diagnostics);
+    }
+
+    /// <summary>
     /// Diagnostics are published for the project file as well. It is not a source of the
     /// program, but a mistake in it can stop the program being read at all, so it is worth a
     /// squiggle where the mistake is written.

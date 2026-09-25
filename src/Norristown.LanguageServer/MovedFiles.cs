@@ -17,6 +17,10 @@ namespace Norristown.LanguageServer;
 /// relative to the file that contains it, so it changes when either that file or the binary it
 /// names moves.
 /// </para>
+/// <para>
+/// Moving a folder moves every file beneath it that a program reads, all at once. A path between
+/// two files that move together is left alone, because it still reaches the same file.
+/// </para>
 /// </summary>
 internal static class MovedFiles
 {
@@ -27,18 +31,17 @@ internal static class MovedFiles
     /// <param name="workspace">The workspace the editor is working on.</param>
     /// <param name="programs">The analysis of every program the workspace holds.</param>
     /// <param name="renames">
-    /// Each file's current path and new path, as logical paths.
+    /// Each file or folder's current path and new path, as logical paths. A folder is one that
+    /// exists on disk at its current path, since the client asks before it moves anything.
     /// </param>
     public static (Protocol.WorkspaceEdit? Edit, IReadOnlyList<string> Messages) For(
         Workspace workspace, IReadOnlyList<ProgramAnalysis> programs, IReadOnlyList<(string From, string To)> renames)
     {
+        var moved = Expanded(workspace, programs, renames);
         var edits = new Dictionary<string, List<Protocol.TextEdit>>(StringComparer.Ordinal);
         var messages = new List<string>();
-        foreach (var (from, to) in renames)
-        {
-            Named(workspace, from, to, edits, messages);
-            Included(programs, from, to, edits);
-        }
+        Named(workspace, moved, edits, messages);
+        Included(programs, moved, edits);
         if (edits.Count == 0)
             return (null, messages);
         return (
@@ -50,11 +53,40 @@ internal static class MovedFiles
     }
 
     /// <summary>
-    /// Handles each <c>files</c> entry that names the moved file. An entry that names it
-    /// literally is rewritten, and a glob that no longer matches is reported.
+    /// Returns the new path of every file that moves, keyed by its current path. A folder stands
+    /// for every file beneath it that a program reads, which are the sources, the binaries and the
+    /// project files.
+    /// </summary>
+    private static Dictionary<string, string> Expanded(
+        Workspace workspace, IReadOnlyList<ProgramAnalysis> programs, IReadOnlyList<(string From, string To)> renames)
+    {
+        var moved = new Dictionary<string, string>(FilePaths.Comparer);
+        foreach (var (from, to) in renames)
+        {
+            if (!Directory.Exists(from))
+            {
+                moved[from] = to;
+                continue;
+            }
+            var known = programs
+                .SelectMany(analysis => analysis.Program.Files.Select(model => model.Tree.Path).Concat(analysis.Binaries))
+                .Concat(workspace.Projects().Select(project => project.File));
+            foreach (var path in known)
+            {
+                if (path.StartsWith(from + "/", FilePaths.Comparison))
+                    moved[path] = to + path[from.Length..];
+            }
+        }
+        return moved;
+    }
+
+    /// <summary>
+    /// Handles each <c>files</c> entry that names a moved file. An entry that names it literally
+    /// is rewritten, and a glob that no longer matches is reported once. An entry is relative to
+    /// its project file, which may itself be moving with a folder.
     /// </summary>
     private static void Named(
-        Workspace workspace, string from, string to,
+        Workspace workspace, Dictionary<string, string> moved,
         Dictionary<string, List<Protocol.TextEdit>> edits, List<string> messages)
     {
         foreach (var project in workspace.Projects())
@@ -62,21 +94,25 @@ internal static class MovedFiles
             var text = Workspace.Read(project.File);
             if (text is null)
                 continue;
+            var root = Paths.Directory(moved.GetValueOrDefault(project.File, project.File));
             foreach (var glob in project.Own.Files)
             {
-                if (!SourceGlobs.Matches(project.Root, glob, from))
-                    continue;
-                if (glob.Contains('*', StringComparison.Ordinal) || glob.Contains('?', StringComparison.Ordinal))
+                foreach (var (from, to) in moved.Where(file => SourceGlobs.Matches(project.Root, glob, file.Key)))
                 {
-                    if (!SourceGlobs.Matches(project.Root, glob, to))
+                    if (glob.Contains('*', StringComparison.Ordinal) || glob.Contains('?', StringComparison.Ordinal))
                     {
-                        messages.Add($"nt65: `{glob}` in {Shown(project.File)} does not match {Shown(to)}, the file's new path. "
-                            + "The glob was left unchanged: edit `files` by hand if the moved file should still be built.");
+                        if (!SourceGlobs.Matches(root, glob, to))
+                        {
+                            messages.Add($"nt65: `{glob}` in {Shown(project.File)} does not match {Shown(to)}, the file's new path. "
+                                + "The glob was left unchanged: edit `files` by hand if the moved file should still be built.");
+                            break;
+                        }
+                        continue;
                     }
-                    continue;
+                    var now = Relative(root, to);
+                    if (now != Paths.Normalized(glob) && Json.Entry(text, "files", glob) is { } at)
+                        Add(edits, project.File, Lsp.ToRange(text, at), Json.Quoted(now));
                 }
-                if (Json.Entry(text, "files", glob) is { } at)
-                    Add(edits, project.File, Lsp.ToRange(text, at), Json.Quoted(Relative(project.Root, to)));
             }
         }
     }
@@ -87,11 +123,9 @@ internal static class MovedFiles
     /// binary that moved.
     /// </summary>
     private static void Included(
-        IReadOnlyList<ProgramAnalysis> programs, string from, string to, Dictionary<string, List<Protocol.TextEdit>> edits)
+        IReadOnlyList<ProgramAnalysis> programs, Dictionary<string, string> moved,
+        Dictionary<string, List<Protocol.TextEdit>> edits)
     {
-        var moved = Paths.Directory(from) != Paths.Directory(to);
-        var renamedInPlace = !moved && from != to;
-
         // A file that several programs share, such as a library, is in each of their analyses,
         // but its paths are rewritten once. Edits that overlap make a client reject the whole edit.
         var seen = new HashSet<string>(FilePaths.Comparer);
@@ -102,21 +136,21 @@ internal static class MovedFiles
                 if (!seen.Add(model.Tree.Path))
                     continue;
                 // A path is rewritten when the file containing it moved, so that it resolves
-                // from the new folder, and when it names the file that moved.
-                var inThisFile = model.Tree.Path == from;
-                if (!inThisFile && !moved && !renamedInPlace)
-                    continue;
+                // from the new folder, and when it names a file that moved.
+                var file = model.Tree.Path;
+                var newFile = moved.GetValueOrDefault(file, file);
                 foreach (var (operand, included) in Includes(model))
                 {
                     if (Paths.IsRooted(included))
                         continue;
-                    var names = Paths.Beside(model.Tree.Path, included);
-                    var target = names == from ? to : names;
-                    var beside = inThisFile ? Paths.Directory(to) : Paths.Directory(model.Tree.Path);
-                    var now = Relative(beside, target);
+                    var names = Paths.Beside(file, included);
+                    var target = moved.GetValueOrDefault(names, names);
+                    if (newFile == file && target == names)
+                        continue;
+                    var now = Relative(Paths.Directory(newFile), target);
                     if (now == included)
                         continue;
-                    Add(edits, model.Tree.Path, Lsp.ToRange(model.Tree, operand.Span), Json.Quoted(now));
+                    Add(edits, file, Lsp.ToRange(model.Tree, operand.Span), Json.Quoted(now));
                 }
             }
         }
@@ -139,14 +173,18 @@ internal static class MovedFiles
         }
     }
 
-    /// <summary>Adds one edit, naming the file by the URI the client knows it as.</summary>
+    /// <summary>
+    /// Adds one edit, naming the file by the URI the client knows it as. A file two programs share
+    /// is visited once for each, and the second visit's edit is dropped.
+    /// </summary>
     private static void Add(
         Dictionary<string, List<Protocol.TextEdit>> edits, string path, Protocol.Range at, string included)
     {
         var uri = Uris.ToUri(path);
         if (!edits.TryGetValue(uri, out var found))
             edits[uri] = found = [];
-        found.Add(new Protocol.TextEdit(at, included));
+        if (!found.Any(edit => edit.Range == at))
+            found.Add(new Protocol.TextEdit(at, included));
     }
 
     /// <summary>Returns the path of a file relative to a directory, with <c>/</c> separators.</summary>

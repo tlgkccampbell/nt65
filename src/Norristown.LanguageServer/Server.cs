@@ -250,14 +250,14 @@ internal sealed class Server : IDisposable
 
             // A client that supports workspace folders is asked to report changes to them, so a
             // folder added to the workspace brings its projects with it. A client that asks
-            // before moving a file is asked about every file, because which files a program
-            // includes is decided by the program and is not known until it has been read.
+            // before moving a file is asked about every file and folder, because which files a
+            // program includes is decided by the program and is not known until it has been read.
             Workspace: client.WorkspaceFolders || client.WillRenameFiles
                 ? new WorkspaceServerCapabilities(
                     client.WorkspaceFolders ? new WorkspaceFoldersServerCapabilities(true, true) : null,
                     client.WillRenameFiles
                         ? new FileOperationsServerCapabilities(new FileOperationRegistrationOptions(
-                            [new FileOperationFilter(new FileOperationPattern("**/*", "file"))]))
+                            [new FileOperationFilter(new FileOperationPattern("**/*"))]))
                         : null)
                 : null);
         return new InitializeResult(capabilities, new ServerInfo("Norristown Assembler", "0.0.0"));
@@ -366,9 +366,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// Returns the edits to make before files are moved or renamed. A module's name comes from its
-    /// <c>.module</c> line and its output is named after that, so moving a source needs few
-    /// edits. A <c>files</c> entry that names the source literally is updated, and so are
+    /// Returns the edits to make before files or folders are moved or renamed. A module's name
+    /// comes from its <c>.module</c> line and its output is named after that, so moving a source
+    /// needs few edits. A <c>files</c> entry that names the source literally is updated, and so are
     /// <c>.incbin</c> paths, which are resolved relative to the including file and so change when
     /// either end moves. A glob that stops matching is reported rather than rewritten, because
     /// only the programmer knows which glob was meant to cover the file.

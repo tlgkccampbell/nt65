@@ -230,6 +230,11 @@ internal sealed class Workspace
     /// Handles files that changed on disk, such as a project file, a source, or a binary an
     /// <c>.incbin</c> includes. Returns whether any of them is a file the workspace reads, and so
     /// whether diagnostics may have changed.
+    /// <para>
+    /// A folder that appears stands for every file beneath it, and a folder that is gone stands
+    /// for every file beneath it that the workspace was reading. An editor reports a folder that
+    /// is renamed or deleted once, and not each of its files.
+    /// </para>
     /// </summary>
     public bool ChangedOnDisk(IEnumerable<string> uris)
     {
@@ -238,7 +243,7 @@ internal sealed class Workspace
         lock (gate)
         {
             var changed = false;
-            foreach (var path in uris.Select(Uris.ToPath))
+            foreach (var path in Expanded(uris.Select(Uris.ToPath)))
             {
                 if (Paths.Normalized(path).Split('/')[^1] == ProjectFile.Name)
                 {
@@ -540,19 +545,48 @@ internal sealed class Workspace
 
     /// <summary>
     /// Returns every project file in <paramref name="root"/> and the folders beneath it, as logical
-    /// paths. Folders whose names start with <c>.</c>, and <c>node_modules</c> folders, are
-    /// skipped, because they hold no projects of the programmer's.
+    /// paths.
     /// </summary>
-    private static IEnumerable<string> ProjectFiles(string root)
+    private static IEnumerable<string> ProjectFiles(string root) =>
+        Folders(root)
+            .Select(directory => Path.Combine(directory, ProjectFile.Name))
+            .Where(File.Exists)
+            .Select(Paths.Normalized);
+
+    /// <summary>
+    /// Returns every file in <paramref name="root"/> and the folders beneath it, as logical paths.
+    /// </summary>
+    private static IEnumerable<string> FilesBeneath(string root)
+    {
+        foreach (var directory in Folders(root))
+        {
+            IEnumerable<string> files;
+            try
+            {
+                files = Directory.EnumerateFiles(directory).ToList();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+            foreach (var file in files)
+                yield return Paths.Normalized(file);
+        }
+    }
+
+    /// <summary>
+    /// Returns <paramref name="root"/> and every folder beneath it. Folders whose names start with
+    /// <c>.</c>, and <c>node_modules</c> folders, are skipped, because they hold nothing of the
+    /// programmer's.
+    /// </summary>
+    private static IEnumerable<string> Folders(string root)
     {
         var pending = new Stack<string>([root]);
         while (pending.TryPop(out var directory))
         {
             if (!Directory.Exists(directory))
                 continue;
-            var file = Path.Combine(directory, ProjectFile.Name);
-            if (File.Exists(file))
-                yield return Paths.Normalized(file);
+            yield return directory;
             IEnumerable<string> inner;
             try
             {
@@ -633,6 +667,35 @@ internal sealed class Workspace
         projects.Where(project => project.Owns(path))
             .OrderByDescending(project => Within(project.Root, path) ? project.Root.Length : -1)
             .FirstOrDefault();
+
+    /// <summary>
+    /// Returns the files that <paramref name="paths"/> stand for. A folder on disk stands for the
+    /// files beneath it. A path that is gone stands for the files beneath it that the workspace
+    /// was reading, or for itself when there are none. The caller holds the lock.
+    /// </summary>
+    private List<string> Expanded(IEnumerable<string> paths)
+    {
+        var files = new List<string>();
+        foreach (var path in paths)
+        {
+            if (Directory.Exists(path))
+            {
+                files.AddRange(FilesBeneath(path));
+                continue;
+            }
+            List<string> beneath = File.Exists(path)
+                ? []
+                : [.. projects.SelectMany(project => project.Reads())
+                    .Concat(loose.Finished?.Binaries ?? [])
+                    .Where(file => Within(path, file))
+                    .Distinct(StringComparer.Ordinal)];
+            if (beneath.Count > 0)
+                files.AddRange(beneath);
+            else
+                files.Add(path);
+        }
+        return files;
+    }
 
     /// <summary>Marks every program that names a changed file to be analyzed again.</summary>
     private void Invalidate(string path)
