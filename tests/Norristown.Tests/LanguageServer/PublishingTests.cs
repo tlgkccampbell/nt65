@@ -148,10 +148,10 @@ public sealed class PublishingTests
             "`rows` is never used", null);
         string[] signatures =
         [
-            Server.Signature([one]),
-            Server.Signature([one with { Range = one.Range with { End = new Position(1, 8) } }]),
-            Server.Signature([one with { Code = "unreachable" }]),
-            Server.Signature([one with { Tags = [DiagnosticTag.Unnecessary] }]),
+            DiagnosticsPublisher.Signature([one]),
+            DiagnosticsPublisher.Signature([one with { Range = one.Range with { End = new Position(1, 8) } }]),
+            DiagnosticsPublisher.Signature([one with { Code = "unreachable" }]),
+            DiagnosticsPublisher.Signature([one with { Tags = [DiagnosticTag.Unnecessary] }]),
         ];
 
         Assert.Equal(signatures.Length, signatures.Distinct(StringComparer.Ordinal).Count());
