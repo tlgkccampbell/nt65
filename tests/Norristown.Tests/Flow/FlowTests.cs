@@ -357,6 +357,30 @@ public sealed class FlowTests
     }
 
     /// <summary>
+    /// Checks that a loop that calls a routine is counted only when that routine leaves the counter
+    /// alone. A routine in the file whose body writes nothing to it is trusted, as is one whose
+    /// signature declares that it keeps it. A routine with no body here is trusted only that far.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc f {\n    nop\n    rts\n}\n", true)]
+    [InlineData(".proc f {\n    ldx #0\n    rts\n}\n", false)]
+    [InlineData(".proc f {\n    jsr g\n    rts\n}\n.proc g {\n    ldx #0\n    rts\n}\n", false)]
+    [InlineData(".proc f {\n    jsr g\n    rts\n}\n.proc g {\n    ldy #0\n    rts\n}\n", true)]
+    [InlineData(".proc f {\n    jsr f\n    rts\n}\n", false)]
+    [InlineData(".import f: proc\n", false)]
+    [InlineData(".import f: proc(keeps x)\n", true)]
+    [InlineData(".import f: proc(keeps y)\n", false)]
+    public void ACallThatMayWriteTheCounterStopsTheLoopBeingCounted(string callee, bool counted)
+    {
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n"
+            + callee + ".proc p {\n    ldx #4\n@loop:\n    jsr f\n    dex\n    bne @loop\n    rts\n}\n"));
+        Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
+        var p = analysis.Files.Single().Flow.Regions.Single(region => region.Routine.Name == "p");
+
+        Assert.Equal(counted, p.Cost.Maximum is not null);
+    }
+
+    /// <summary>
     /// Returns the problems reported for <paramref name="text"/>, compiled after two lines that
     /// declare the module and select the code segment.
     /// </summary>

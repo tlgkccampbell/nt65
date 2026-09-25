@@ -71,6 +71,11 @@ public sealed class ControlFlow
         var checks = new FlowChecks(model, layout, flow);
         var inline = Inline(model.Tree);
 
+        // Every routine's blocks are built before any loop is counted, because a loop that calls
+        // a routine in this file is counted only where that routine's body leaves the counter
+        // alone.
+        var built = new List<(Symbol Routine, List<Unit> Units, List<BasicBlock> Blocks, HashSet<Unit> InlineData)>();
+
         // A routine's bytes are one stream unless a nested segment block takes some of them
         // somewhere else. Fall-through stays inside a stream, but a jump may go from one to
         // another, so all of a routine's streams are one graph, its own stream first.
@@ -87,10 +92,15 @@ public sealed class ControlFlow
             foreach (var (at, call) in calls)
                 flow.relativeCalls[at] = call;
             flow.returnAddresses.UnionWith(returnAddresses);
+            built.Add((routine, units, blocks, inlineData));
+        }
 
+        var bodies = built.ToDictionary(each => each.Routine, each => (IReadOnlyList<BasicBlock>)each.Blocks);
+        foreach (var (routine, units, blocks, inlineData) in built)
+        {
             // The routine is entered at the label of its own name.
             var entered = blocks.Count > 0 && blocks[0].Label == routine;
-            CountedLoops.Find(model, layout, blocks);
+            CountedLoops.Find(model, layout, blocks, bodies);
 
             // A routine containing a line that layout could not lay out gets no count. The line
             // is missing from the stream, so counting the rest would pass off part as the whole.

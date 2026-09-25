@@ -12,7 +12,8 @@ namespace Norristown.Flow;
 /// where a routine's cycles go.
 /// <para>
 /// Only one shape is recognised. Each iteration ends with a <c>dex</c> or <c>dey</c> and then a
-/// <c>bne</c> or <c>bpl</c> back to the top, and nothing else in the loop writes that register.
+/// <c>bne</c> or <c>bpl</c> back to the top. Nothing else in the loop, and no routine it calls,
+/// writes that register.
 /// There is one way in, which loads the immediate, and one way out, which is the branch itself.
 /// Every other loop is left uncounted, with no upper bound, because a loop counted wrongly is
 /// worse than one not counted at all.
@@ -23,13 +24,16 @@ internal static class CountedLoops
     /// <summary>
     /// Finds every counted loop in <paramref name="blocks"/> and records its cost on its blocks.
     /// A loop inside another is handled first, so that the cost of one iteration of the
-    /// enclosing loop already includes what the inner loop costs.
+    /// enclosing loop already includes what the inner loop costs. <paramref name="bodies"/> holds
+    /// the blocks of every routine in the file, which shows what a routine the loop calls writes.
     /// </summary>
-    public static void Find(SemanticModel model, CodeLayout layout, IReadOnlyList<BasicBlock> blocks)
+    public static void Find(
+        SemanticModel model, CodeLayout layout, IReadOnlyList<BasicBlock> blocks,
+        IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies)
     {
         foreach (var loop in Loops.In(blocks))
         {
-            if (IterationCount(model, blocks, loop) is not { } iterations)
+            if (IterationCount(model, blocks, loop, bodies) is not { } iterations)
                 continue;
 
             // The loop is marked as counted while the cost of an iteration is worked out, so
@@ -47,7 +51,9 @@ internal static class CountedLoops
     /// Returns how many iterations a loop runs, or null when it is not a shape nt65 recognises.
     /// Every part of the shape has to hold, and anything unexpected leaves the loop uncounted.
     /// </summary>
-    private static int? IterationCount(SemanticModel model, IReadOnlyList<BasicBlock> blocks, Loop loop)
+    private static int? IterationCount(
+        SemanticModel model, IReadOnlyList<BasicBlock> blocks, Loop loop,
+        IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies)
     {
         // Each iteration ends with the decrement immediately followed by the branch back,
         // because anything between the two could set the flags the branch tests instead.
@@ -85,11 +91,13 @@ internal static class CountedLoops
         }
 
         // Nothing else in it may write the register, or its value would no longer follow
-        // from the immediate the loop started from.
+        // from the immediate the loop started from. That includes a routine the loop calls.
         for (var i = 0; i < blocks.Count; i++)
         {
             if (!loop.Inside[i])
                 continue;
+            if (MayWrite(blocks[i], loop, register, bodies))
+                return null;
             foreach (var step in InstructionsIn(blocks[i]))
             {
                 if (i == loop.Latch && counting.Contains(step.Key))
@@ -202,6 +210,61 @@ internal static class CountedLoops
                 blocks[i].LoopCycles = i == loop.Header ? cost : new CycleCount(0);
         }
     }
+
+    /// <summary>
+    /// Returns whether a call that <paramref name="block"/> makes may leave
+    /// <paramref name="register"/> holding something else. A call to a place nt65 cannot name,
+    /// or to a label of this routine outside the loop, may write anything.
+    /// </summary>
+    private static bool MayWrite(
+        BasicBlock block, Loop loop, Registers register, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies) =>
+        block.CallsUnknown
+        || block.Calls.Any(callee => !LeftAlone(callee, bodies, []).HasFlag(register))
+        || block.Successors.Any(edge => edge.Kind == EdgeKind.Call && !loop.Inside[edge.To]);
+
+    /// <summary>
+    /// Returns the index registers that a call to <paramref name="callee"/> surely leaves as they
+    /// were. Which registers a routine keeps is worked out only once the whole program has been
+    /// analyzed, which is after loops are counted. So a routine is trusted only where its
+    /// signature declares that it keeps a register, or where it has a body in this file that
+    /// nothing in, and nothing it calls, writes that register.
+    /// </summary>
+    /// <param name="callee">The routine called.</param>
+    /// <param name="bodies">The blocks of every routine in the file.</param>
+    /// <param name="visiting">
+    /// The routines whose bodies are being read further up. A routine that reaches itself is
+    /// trusted only as far as its signature says.
+    /// </param>
+    private static Registers LeftAlone(
+        Symbol callee, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies, HashSet<Symbol> visiting)
+    {
+        var declared = callee.Signature?.Keeps ?? Registers.None;
+        if (!bodies.TryGetValue(callee, out var body) || !visiting.Add(callee))
+            return declared;
+        var alone = Registers.X | Registers.Y;
+        foreach (var block in body)
+        {
+            if (block.CallsUnknown || block.Successors.Any(edge => edge.Kind == EdgeKind.Call))
+                alone = Registers.None;
+            foreach (var called in block.Calls)
+                alone &= LeftAlone(called, bodies, visiting);
+            if (block.RunsInto is { } into)
+                alone &= LeftAlone(into, bodies, visiting);
+            foreach (var step in InstructionsIn(block))
+                alone &= ~WrittenBy(Mnemonic(step));
+        }
+        visiting.Remove(callee);
+        return declared | alone;
+    }
+
+    /// <summary>
+    /// Returns the index registers an instruction may change. Changing the index width on the
+    /// 65816 clears their high bytes, so an instruction that may do that counts as writing both.
+    /// </summary>
+    private static Registers WrittenBy(MnemonicKind mnemonic) =>
+        mnemonic is MnemonicKind.Rep or MnemonicKind.Sep or MnemonicKind.Plp or MnemonicKind.Xce or MnemonicKind.Rti
+            ? Registers.X | Registers.Y
+            : Instructions.Facts(mnemonic).Writes & (Registers.X | Registers.Y);
 
     /// <summary>Returns whether a mnemonic may leave <paramref name="register"/> holding something else.</summary>
     private static bool Writes(MnemonicKind mnemonic, Registers register) =>
