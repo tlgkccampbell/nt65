@@ -86,6 +86,30 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
+    /// Choosing the configuration already active keeps the analysis the program has. The editor
+    /// sends every setting whenever any one of them changes, and a named configuration's settings
+    /// differ from the last analysis's, so analyzing again would redo the whole program.
+    /// </summary>
+    [Fact]
+    public async Task ChoosingTheActiveConfigurationAgainKeepsTheAnalysis()
+    {
+        using var root = new TempFolder("nt65-workspace-");
+        root.Write("nt65.json",
+            """{ "cpu": "6502", "files": ["*.nt65"], "configurations": { "debug": { "settings": { "DEBUG": 1 } } } }""");
+        root.Write("main.nt65", ".module main\n");
+        var main = Uris.ToPath(new Uri(root.PathOf("main.nt65")).AbsoluteUri);
+        var workspace = new Workspace();
+        workspace.Load(new Uri(root.FullName).AbsoluteUri, "debug");
+        var before = await workspace.AnalysisForAsync(main, TestTimeout.Token());
+
+        workspace.Configure("debug");
+
+        Assert.Same(before, await workspace.AnalysisForAsync(main, TestTimeout.Token()));
+        workspace.Configure(null);
+        Assert.NotSame(before, await workspace.AnalysisForAsync(main, TestTimeout.Token()));
+    }
+
+    /// <summary>
     /// An edit re-lexes the lines it touches and no others. The lines above and below keep the
     /// green nodes they had, which is the reuse the tree is built for.
     /// </summary>

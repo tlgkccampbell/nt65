@@ -142,12 +142,16 @@ internal sealed class Workspace
 
     /// <summary>
     /// Builds every project in the named configuration from now on, or with its own settings for
-    /// null.
+    /// null. Choosing the configuration already active changes nothing. The editor sends every
+    /// setting when any one changes, and analyzing again in a named configuration redoes the whole
+    /// program.
     /// </summary>
     public void Configure(string? active)
     {
         lock (gate)
         {
+            if (active == configuration)
+                return;
             configuration = active;
             ConfigureAll();
         }
