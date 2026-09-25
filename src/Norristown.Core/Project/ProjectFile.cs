@@ -183,8 +183,7 @@ public static class ProjectFile
             return new SettingValue(name, 1, span);
         if (Number(argument[(at + 1)..]) is not { } value)
         {
-            diagnostics.Add(new Diagnostic(span,
-                Catalogue.SettingNotANumber.Message(argument[(at + 1)..])));
+            diagnostics.Add(new Diagnostic(span, Catalogue.SettingNotANumber.Message(name)));
             return null;
         }
         return new Processor.SettingValue(name, value, span);

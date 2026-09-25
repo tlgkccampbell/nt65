@@ -231,7 +231,7 @@ public sealed class ProjectFileTests
     }
 
     [Theory]
-    [InlineData("DEBUG=yes", "`yes`: a setting's value must be a number")]
+    [InlineData("DEBUG=yes", "`DEBUG`: a setting's value must be a number")]
     [InlineData("2DEBUG=1", "`2DEBUG` is not a valid setting name: use letters, digits and `_`, optionally after a module path such as `hw::`")]
     public void ASettingValueThatIsNotOneIsReported(string argument, string message)
     {
