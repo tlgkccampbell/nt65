@@ -54,6 +54,10 @@ public static class LineMap
             Kind = OutputKind.LineMap,
             Source = output.Source,
             Dependencies = output.Dependencies,
+
+            // The map covers every module placed in the output, so a build of one of them writes
+            // the map along with the output.
+            Sources = output.Sources,
         };
     }
 

@@ -423,6 +423,7 @@ public sealed class BuildCommandTests : IDisposable
 
         Assert.Equal(ExitCode.Success, Run(app, "build", "part.nt65").Code);
         Assert.Contains("; .place part  main.nt65:8\n", root.Read("app/build/main.s"), StringComparison.Ordinal);
+        Assert.Contains("\"part.nt65\"", root.Read("app/build/main.s.lines"), StringComparison.Ordinal);
         Assert.True(Exists("app/build/part.s"));
 
         var (whole, deleted) = Run(app, "build");
