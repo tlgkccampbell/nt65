@@ -25,6 +25,22 @@ public sealed class LongLineTests
         Assert.Equal(Long.IndexOf(".select", StringComparison.Ordinal), hint.Range.Start.Character);
     }
 
+    /// <summary>
+    /// The line length the client sends as it connects applies from the first publish, before the
+    /// client pushes any settings.
+    /// </summary>
+    [Fact]
+    public async Task TheLineLengthGivenAtStartApplies()
+    {
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.StartAsync(TestClient.Capable(), timeout, lineLength: 40);
+        await client.OpenAsync("file:///c:/work/main.nt65", ".module main\n" + Long);
+
+        var published = await client.NextDiagnosticsAsync("file:///c:/work/main.nt65", timeout);
+
+        Assert.Contains(published.Diagnostics, d => d.Code == "long-line");
+    }
+
     [Theory]
     [InlineData(Long, 0)]
     [InlineData(Long, 100)]
