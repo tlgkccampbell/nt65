@@ -58,6 +58,13 @@ public sealed record ProjectSettings(
     public IReadOnlyList<BuildConfiguration> Configurations { get; init; } = [];
 
     /// <summary>
+    /// Gets the configuration a build uses when it chooses none, or null when such a build uses
+    /// the project's own settings. A project names one when its own settings cannot build, such
+    /// as when each configuration targets a different machine.
+    /// </summary>
+    public BuildConfiguration? Default { get; init; }
+
+    /// <summary>
     /// Gets the linker configs the build is linked with, in name order. When there are any, they
     /// declare the program's segments.
     /// </summary>
@@ -103,15 +110,15 @@ public sealed record ProjectSettings(
                 byName[link.Name] = link;
             return configured.Linked([.. byName.Values.OrderBy(link => link.Name, StringComparer.Ordinal)], FileDiagnostics);
         }
-        var named = Configurations.Select(configuration => $"`{configuration.Name}`").ToList();
-        var message = Catalogue.ConfigurationUnknown.Message(
-            name,
-            named.Count == 0
-                ? $"{ProjectFile.Name} names none"
-                : $"{ProjectFile.Name} names "
-                    + (named.Count == 1 ? named[0] : string.Join(", ", named.SkipLast(1)) + " and " + named[^1]));
+        var message = Catalogue.ConfigurationUnknown.Message(name, Listed(Configurations));
         return this with { Diagnostics = [.. Diagnostics, new Diagnostic(given, message)] };
     }
+
+    /// <summary>
+    /// Returns the settings a build uses when it chooses no configuration, which are those of the
+    /// <see cref="Default"/> configuration when the project names one, and its own otherwise.
+    /// </summary>
+    public ProjectSettings Defaulted() => Default is { } chosen ? Configured(chosen.Name, chosen.Declaration) : this;
 
     /// <summary>
     /// Returns these settings with <paramref name="values"/> added, each replacing any existing
@@ -125,6 +132,19 @@ public sealed record ProjectSettings(
         foreach (var value in values)
             byName[value.Name] = value;
         return this with { SettingValues = [.. byName.Values.OrderBy(value => value.Name, StringComparer.Ordinal)] };
+    }
+
+    /// <summary>
+    /// Returns the phrase that lists the names of <paramref name="configurations"/> in a message
+    /// about a name that is not among them.
+    /// </summary>
+    internal static string Listed(IReadOnlyList<BuildConfiguration> configurations)
+    {
+        var named = configurations.Select(configuration => $"`{configuration.Name}`").ToList();
+        return named.Count == 0
+            ? $"{ProjectFile.Name} names none"
+            : $"{ProjectFile.Name} names "
+                + (named.Count == 1 ? named[0] : string.Join(", ", named.SkipLast(1)) + " and " + named[^1]);
     }
 
     /// <summary>

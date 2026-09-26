@@ -30,8 +30,8 @@ internal sealed class WorkspaceProject
         analysis = new LiveAnalysis(analyzer);
         File = file;
         Root = Paths.Directory(file);
-        Settings = ProjectFile.Read(file, Workspace.Read(file) ?? "", Workspace.Read);
-        Own = Settings;
+        Own = ProjectFile.Read(file, Workspace.Read(file) ?? "", Workspace.Read);
+        Settings = Own.Defaulted();
     }
 
     /// <summary>Gets the project file, as a logical path.</summary>
@@ -67,12 +67,13 @@ internal sealed class WorkspaceProject
         Own.LinkedFiles.Any(linked => string.Equals(Paths.Normalized(linked), Paths.Normalized(path), FilePaths.Comparison));
 
     /// <summary>
-    /// Builds the project in the named configuration, or with its own settings for null. A name
-    /// the project does not have is reported against the project file.
+    /// Builds the project in the named configuration, or for null in its default configuration,
+    /// or with its own settings when it names no default. A name the project does not have is
+    /// reported against the project file.
     /// </summary>
     public void Configure(string? configuration)
     {
-        Settings = configuration is { Length: > 0 } ? Own.Configured(configuration, new Span(File, 1, 1, 2)) : Own;
+        Settings = configuration is { Length: > 0 } ? Own.Configured(configuration, new Span(File, 1, 1, 2)) : Own.Defaulted();
         Invalidate();
     }
 

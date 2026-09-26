@@ -86,6 +86,32 @@ public sealed class WorkspaceTests
     }
 
     /// <summary>
+    /// A project that names a <c>default</c> is analyzed in it when the editor chooses no
+    /// configuration, and when the editor chooses one that only another project has.
+    /// </summary>
+    [Fact]
+    public async Task AProjectWithoutTheActiveConfigurationIsAnalyzedInItsDefault()
+    {
+        using var root = new TempFolder("nt65-workspace-");
+        const string Refuses = ".module main\n.const TARGET ?= 0\n.if TARGET == 0 {\n    .error \"choose a target\"\n}\n";
+        root.Write("rom/nt65.json",
+            """{ "cpu": "6502", "files": ["*.nt65"], "default": "one", "configurations": { "one": { "settings": { "TARGET": 1 } } } }""");
+        root.Write("rom/main.nt65", Refuses);
+        root.Write("game/nt65.json",
+            """{ "cpu": "6502", "files": ["*.nt65"], "configurations": { "debug": {} } }""");
+        root.Write("game/main.nt65", ".module main\n");
+        var uri = new Uri(root.FullName).AbsoluteUri;
+        var main = Uris.ToPath(new Uri(root.PathOf("rom/main.nt65")).AbsoluteUri);
+        var workspace = new Workspace();
+
+        workspace.Load(uri);
+        Assert.Empty((await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics);
+
+        workspace.Load(uri, "debug");
+        Assert.Empty((await workspace.AnalysisForAsync(main, TestTimeout.Token())).Diagnostics);
+    }
+
+    /// <summary>
     /// Choosing the configuration already active keeps the analysis the program has. The editor
     /// sends every setting whenever any one of them changes, and a named configuration's settings
     /// differ from the last analysis's, so analyzing again would redo the whole program.

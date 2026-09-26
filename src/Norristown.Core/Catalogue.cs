@@ -3323,8 +3323,8 @@ public static class Catalogue
         "configuration-unknown",
         Severity.Error,
         "`{0}` is not a configuration: {1}",
-        "The name given to `--config` has to be one of the configurations declared under `configurations` in the "
-            + "project file. Check the spelling against the names listed.");
+        "The name given to `--config`, or to `default` in the project file, has to be one of the configurations "
+            + "declared under `configurations` in the project file. Check the spelling against the names listed.");
 
     internal static DiagnosticDescriptor ProjectSegmentNotAnObject { get; } = Entry(
         Area.TheProjectFile,

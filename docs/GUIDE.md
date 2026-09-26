@@ -661,7 +661,8 @@ joined to the one before it, so a bracket left open by mistake is reported where
 ```
 
 `nt65 build --config debug` chooses one, and the editor has a setting for which one it
-analyzes.
+analyzes. With none chosen, the project's own settings build. When they cannot, because each
+configuration is a different target, `"default": "name"` says which configuration builds instead.
 
 ## Expressions
 

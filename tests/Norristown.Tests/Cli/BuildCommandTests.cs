@@ -72,6 +72,37 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
+    /// Without <c>--config</c>, the configuration that <c>default</c> names builds, and
+    /// <c>--config</c> still chooses another.
+    /// </summary>
+    [Fact]
+    public void TheDefaultConfigurationBuildsWithoutConfig()
+    {
+        Project("""
+            {
+              "cpu": "6502",
+              "files": ["*.nt65"],
+              "out": "build/release",
+              "settings": { "DEBUG": 0 },
+              "default": "debug",
+              "configurations": {
+                "debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" },
+                "release": {}
+              }
+            }
+            """);
+        root.Write("app/main.nt65", Main.Replace(".use hw::BORDER", ".const BORDER = $d020", StringComparison.Ordinal));
+        var app = Path.Combine(root.FullName, "app");
+
+        Assert.Equal(ExitCode.Success, Run(app, "build").Code);
+        Assert.Contains("lda #$01", root.Read("app/build/debug/main.s"));
+        Assert.False(Exists("app/build/release/main.s"));
+
+        Assert.Equal(ExitCode.Success, Run(app, "build", "--config", "release").Code);
+        Assert.Contains("lda #$00", root.Read("app/build/release/main.s"));
+    }
+
+    /// <summary>
     /// An output whose module left the program is deleted on the next build, and a file nt65
     /// did not write is left alone, even where outputs go.
     /// </summary>

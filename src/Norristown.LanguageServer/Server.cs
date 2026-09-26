@@ -833,8 +833,8 @@ internal sealed class Server : IDisposable
             : LineBreaks.DefaultLength;
 
     /// <summary>
-    /// Returns the named configuration the client's <c>nt65</c> settings choose, or null for the
-    /// project's own settings.
+    /// Returns the named configuration the client's <c>nt65</c> settings choose, or null for each
+    /// project's default.
     /// </summary>
     private static string? ActiveConfiguration(JsonElement? settings) =>
         settings is { ValueKind: JsonValueKind.Object } options

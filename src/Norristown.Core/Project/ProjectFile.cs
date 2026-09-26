@@ -31,6 +31,7 @@ public static class ProjectFile
     private const string SegmentsKey = "segments";
     private const string RangesKey = "ranges";
     private const string ConfigurationsKey = "configurations";
+    private const string DefaultKey = "default";
     private const string LinksKey = "links";
     private const string ConfigKey = "config";
     private const string MemoryKey = "memory";
@@ -44,7 +45,7 @@ public static class ProjectFile
     private const string Data = "data";
 
     private static readonly string[] known =
-        [CpuKey, FilesKey, OutKey, SettingsKey, DiagnosticsKey, SpacesKey, SegmentsKey, RangesKey, LinksKey, ConfigurationsKey];
+        [CpuKey, FilesKey, OutKey, SettingsKey, DiagnosticsKey, SpacesKey, SegmentsKey, RangesKey, LinksKey, ConfigurationsKey, DefaultKey];
 
     /// <summary>
     /// Keys nt65 accepts and reads nothing from. <c>$schema</c> names the schema an editor
@@ -160,7 +161,12 @@ public static class ProjectFile
                 SegmentEntries = reader.Segments(root, keys),
             };
             var links = reader.Links(root, keys) ?? [];
-            settings = settings with { Configurations = reader.Configurations(root, keys) };
+            var configurations = reader.Configurations(root, keys);
+            settings = settings with
+            {
+                Configurations = configurations,
+                Default = reader.Default(root, keys, configurations),
+            };
             return settings.Linked(links, [.. diagnostics]);
         }
     }
@@ -456,6 +462,20 @@ public static class ProjectFile
                 });
             }
             return [.. read.OrderBy(configuration => configuration.Name, StringComparer.Ordinal)];
+        }
+
+        /// <summary>
+        /// Reads <c>default</c>, which names the configuration a build uses when it chooses none.
+        /// Returns null when the file gives no default, or names a configuration it does not have.
+        /// </summary>
+        public BuildConfiguration? Default(JsonElement root, Key keys, IReadOnlyList<BuildConfiguration> configurations)
+        {
+            if (String(root, keys, DefaultKey) is not { } name)
+                return null;
+            if (configurations.FirstOrDefault(configuration => configuration.Name == name) is { } chosen)
+                return chosen;
+            Report(keys[DefaultKey], Catalogue.ConfigurationUnknown.Message(name, ProjectSettings.Listed(configurations)));
+            return null;
         }
 
         /// <summary>

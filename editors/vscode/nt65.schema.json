@@ -66,8 +66,13 @@
       "type": "object",
       "additionalProperties": { "$ref": "#/definitions/configuration" },
       "propertyNames": { "pattern": "^[A-Za-z0-9_-]+$" },
-      "description": "Named builds of the program, chosen with `--config name`. A name is letters, digits, `_` and `-`; with none chosen the project's own settings build.",
+      "description": "Named builds of the program, chosen with `--config name`. A name is letters, digits, `_` and `-`; with none chosen, `default` builds, or the project's own settings when there is no `default`.",
       "examples": [{ "debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" } }]
+    },
+    "default": {
+      "type": "string",
+      "description": "The configuration to build when neither `--config` nor the editor chooses one. Give it when the project's own settings cannot build, such as when each configuration targets a different machine. Left out, the project's own settings build.",
+      "examples": ["applesoft"]
     }
   },
   "definitions": {

@@ -141,8 +141,9 @@ public static class BuildCommand
             : ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile), path => Linked(run.Root, path));
 
         var arguments = new List<Diagnostic>();
-        if (command.Configuration is { } configuration)
-            project = project.Configured(configuration, new Span("--config", 1, 1, configuration.Length + 1));
+        project = command.Configuration is { } configuration
+            ? project.Configured(configuration, new Span("--config", 1, 1, configuration.Length + 1))
+            : project.Defaulted();
         // `--cpu` gives the processor only when the project does not, so a Makefile's default
         // does not override a project that knows which processor it is for.
         if (project.Cpu is null && command.Cpu is not null)

@@ -192,6 +192,50 @@ public sealed class ProjectFileTests
         Assert.Equal(message, Assert.Single(configured.Diagnostics).Message);
     }
 
+    /// <summary>
+    /// A build that chooses no configuration uses the one <c>default</c> names, and a project that
+    /// names none builds with its own settings. The project's own settings are unchanged either way.
+    /// </summary>
+    [Fact]
+    public void TheDefaultConfigurationBuildsWhenNoneIsChosen()
+    {
+        var project = Read("""
+            {
+              "out": "build",
+              "settings": { "DEBUG": 0 },
+              "default": "debug",
+              "configurations": { "debug": { "settings": { "DEBUG": 1 }, "out": "build/debug" } }
+            }
+            """);
+
+        Assert.Empty(project.Diagnostics);
+        var defaulted = project.Defaulted();
+        Assert.Equal("build/debug", defaulted.Out);
+        Assert.Equal([("DEBUG", 1L)], defaulted.SettingValues.Select(value => (value.Name, value.Value)));
+        Assert.Equal([("DEBUG", 0L)], project.SettingValues.Select(value => (value.Name, value.Value)));
+
+        var own = Read("""{ "settings": { "DEBUG": 0 }, "configurations": { "debug": {} } }""");
+        Assert.Same(own, own.Defaulted());
+    }
+
+    /// <summary>
+    /// A <c>default</c> that names no configuration is reported at the key, and the project then
+    /// builds with its own settings.
+    /// </summary>
+    [Theory]
+    [InlineData("""{ "configurations": { "debug": {} }, "default": "ntsc" }""", "`ntsc` is not a configuration: nt65.json names `debug`")]
+    [InlineData("""{ "configurations": { "debug": {} }, "default": 1 }""", "`default` must be a string")]
+    public void ADefaultThatNamesNoConfigurationIsReported(string text, string message)
+    {
+        var project = Read(text);
+
+        var diagnostic = Assert.Single(project.Diagnostics);
+        Assert.Equal(message, diagnostic.Message);
+        Assert.Equal((1, "{ \"configurations\": { \"debug\": {} }, ".Length + 1), (diagnostic.Span.Line, diagnostic.Span.StartColumn));
+        Assert.Null(project.Default);
+        Assert.Same(project, project.Defaulted());
+    }
+
     /// <summary>A setting value a configuration gets wrong is reported where the configuration gives it.</summary>
     [Fact]
     public void AConfigurationsSettingValueIsReportedWhereItIsDeclared()

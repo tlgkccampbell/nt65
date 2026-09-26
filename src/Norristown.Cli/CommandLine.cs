@@ -5,7 +5,7 @@ namespace Norristown.Cli;
 /// <summary>Represents what <c>nt65 build</c> was asked for, read from its arguments.</summary>
 /// <param name="Project">The project file <c>--project</c> names, or null to look for one.</param>
 /// <param name="Configuration">
-/// The named configuration <c>--config</c> chooses, or null for the project's own settings.
+/// The named configuration <c>--config</c> chooses, or null for the project's default.
 /// </param>
 /// <param name="Cpu">The processor <c>--cpu</c> names, or null.</param>
 /// <param name="Settings">The setting values that <c>-D</c> adds or overrides, as given.</param>

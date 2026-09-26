@@ -147,8 +147,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Builds every project in the named configuration from now on, or with its own settings for
-    /// null. Choosing the configuration already active changes nothing. The editor sends every
+    /// Builds every project in the named configuration from now on, or in its default for null.
+    /// Choosing the configuration already active changes nothing. The editor sends every
     /// setting when any one changes, and analyzing again in a named configuration redoes the whole
     /// program.
     /// </summary>
@@ -741,8 +741,8 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Builds each project in the active configuration. A project that lacks it builds with its
-    /// own settings, unless no project has it at all, in which case every project reports the
+    /// Builds each project in the active configuration. A project that lacks it builds in its
+    /// default, unless no project has it at all, in which case every project reports the
     /// unknown name.
     /// </summary>
     private void ConfigureAll()

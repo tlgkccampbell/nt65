@@ -143,7 +143,7 @@ function cycleCounts(context) {
 
 async function selectConfiguration() {
   const names = await client.sendRequest('nt65/configurations', {});
-  const own = 'The project\'s own settings';
+  const own = 'Each project\'s default';
   const picked = await vscode.window.showQuickPick([own, ...names], { placeHolder: 'Configuration to analyze as' });
   if (picked === undefined) return;
   await vscode.workspace.getConfiguration('nt65')

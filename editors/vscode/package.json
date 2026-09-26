@@ -88,7 +88,7 @@
         "properties": {
           "config": {
             "type": "string",
-            "description": "The named configuration from nt65.json to build, such as \"debug\". Left out, the project's own settings build."
+            "description": "The named configuration from nt65.json to build, such as \"debug\". Left out, the project's `default` configuration builds, or its own settings when it names none."
           },
           "project": {
             "type": "string",
@@ -141,7 +141,7 @@
         "nt65.configuration": {
           "type": "string",
           "default": "",
-          "description": "The named configuration from nt65.json the editor analyzes the program as, such as \"debug\". Empty uses the project's own settings."
+          "description": "The named configuration from nt65.json the editor analyzes the program as, such as \"debug\". Empty uses each project's `default` configuration, or its own settings when it names none. A project that lacks the named configuration uses its default too."
         },
         "nt65.inlayHints.stateChanges": {
           "type": "boolean",

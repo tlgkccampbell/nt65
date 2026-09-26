@@ -633,7 +633,10 @@ A project is described by `nt65.json` in the project root. `nt65 build` reads it
   so that a release build can be stricter than the one being worked in; `--config name`
   chooses one, `-D` overrides on top of it, and with none chosen the project's own settings
   build. The editor's setting for the active configuration chooses the one a language server
-  analyzes.
+  analyzes; a project without that configuration builds as if none were chosen.
+- `default`: the configuration to build when none is chosen, for a project whose own settings
+  cannot build, such as one whose configurations are different targets. It must name one of
+  `configurations`.
 - `$schema`: accepted and ignored, so that a project file may name the schema an editor
   validates it against. Every other key nt65 does not know is an error.
 

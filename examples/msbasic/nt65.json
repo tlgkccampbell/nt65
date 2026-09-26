@@ -2,6 +2,7 @@
   "cpu": "6502",
   "files": ["src/**/*.nt65"],
   "out": "build",
+  "default": "applesoft",
   "configurations": {
     "cbmbasic1":  { "settings": { "defines::CBM1": 1 },       "links": { "rom": { "config": "cfg/cbmbasic1.cfg" } },  "out": "build/cbmbasic1" },
     "osi":        { "settings": { "defines::OSI": 1 },        "links": { "rom": { "config": "cfg/osi.cfg" } },        "out": "build/osi" },
