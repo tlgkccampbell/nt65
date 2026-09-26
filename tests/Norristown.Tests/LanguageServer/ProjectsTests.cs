@@ -12,6 +12,8 @@ public sealed class ProjectsTests : IDisposable
 {
     private const string Caller = ".module main\n.segment CODE\n.export .proc main {\n    jsr gfx::clear\n    nop\n    rts\n}\n";
 
+    private static readonly string[] Fixtures = ["fixtures/**/*"];
+
     private readonly TempFolder root = new("nt65-projects-");
 
     public void Dispose() => root.Dispose();
@@ -275,6 +277,45 @@ public sealed class ProjectsTests : IDisposable
         Assert.Equal(
             [(Uri("one/hw.nt65"), 1), (Uri("two/hw.nt65"), 1)],
             border.Select(location => (location.Uri, location.Range.Start.Line)).Order());
+    }
+
+    /// <summary>
+    /// A file the settings name for reporting only while open is reported while the client has
+    /// it open, as its project builds it, and cleared when the client closes it. Its project file
+    /// is not reported at all, while a project the settings do not name is reported as usual.
+    /// </summary>
+    [Fact]
+    public async Task AFileReportedOnlyWhileOpenIsClearedWhenClosed()
+    {
+        var timeout = TestTimeout.Token();
+        root.Write("fixtures/bad/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"], "setting": {} }""");
+        root.Write("fixtures/bad/main.nt65", Caller);
+        root.Write("zeta/nt65.json", """{ "cpu": "6502", "files": ["*.nt65"] }""");
+        root.Write("zeta/main.nt65", Caller);
+        await using var client = await TestClient.StartAsync(
+            TestClient.Capable(), timeout, rootUri: Uri(""),
+            diagnostics: new { onlyWhileOpen = Fixtures });
+
+        // Files are published in order of their paths, so by the time the project outside the
+        // fixtures is published, anything of the fixtures' would have been too.
+        var seen = new List<string>();
+        while (true)
+        {
+            var published = await client.NextDiagnosticsAsync(timeout);
+            seen.Add(published.Uri);
+            if (published.Uri == Uri("zeta/main.nt65"))
+            {
+                Assert.NotEmpty(published.Diagnostics);
+                break;
+            }
+        }
+        Assert.DoesNotContain(seen, uri => uri.Contains("/fixtures/", StringComparison.Ordinal));
+
+        Assert.Equal(["`gfx` is not declared, and no module `gfx` is in this build"],
+            await DiagnosticsAsync(client, "fixtures/bad/main.nt65", timeout));
+
+        await client.CloseAsync(Uri("fixtures/bad/main.nt65"));
+        Assert.Empty((await NextForAsync(client, "fixtures/bad/main.nt65", timeout)).Diagnostics);
     }
 
     private static IReadOnlyList<int> Dimmed(PublishDiagnosticsParams published) =>

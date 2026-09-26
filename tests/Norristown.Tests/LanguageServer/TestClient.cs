@@ -79,7 +79,7 @@ internal sealed class TestClient : IAsyncDisposable
     public static async Task<TestClient> StartAsync(
         object capabilities, CancellationToken cancellation, string? rootUri = null, string? configuration = null,
         string name = "test-client", Delay? delay = null, int? processId = null, object? inlayHints = null,
-        Analyzer? analyzer = null, int? lineLength = null)
+        Analyzer? analyzer = null, int? lineLength = null, object? diagnostics = null)
     {
         var client = new TestClient(delay, analyzer);
         client.Initialized = await client.rpc.InvokeWithParameterObjectAsync<InitializeResult>("initialize",
@@ -89,7 +89,7 @@ internal sealed class TestClient : IAsyncDisposable
                 clientInfo = new { name, version = "1.0" },
                 capabilities,
                 rootUri,
-                initializationOptions = new { configuration, inlayHints, lineLength },
+                initializationOptions = new { configuration, inlayHints, lineLength, diagnostics },
             },
             cancellation);
         await client.rpc.NotifyWithParameterObjectAsync("initialized", new { });

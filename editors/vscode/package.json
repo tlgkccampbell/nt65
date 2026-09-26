@@ -173,6 +173,14 @@
           "default": 100,
           "minimum": 0,
           "description": "Suggest laying out a call's arguments or a set one item to a line where a line is longer than this many columns. 0 turns the suggestion off."
+        },
+        "nt65.diagnostics.onlyWhileOpen": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Globs, relative to the workspace folder and in the form of `files` in nt65.json, naming files whose problems are shown only while they are open, such as `tests/fixtures/**/*`. Every other file of every project is reported whether or not it is open. The files are still analyzed with their projects."
         }
       }
     }

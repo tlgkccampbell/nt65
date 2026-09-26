@@ -176,6 +176,7 @@ internal sealed class Server : IDisposable
             ? [.. folders.Select(folder => folder.Uri)]
             : request.RootUri is { } root ? [root] : [];
         workspace.Load(roots, ActiveConfiguration(request.InitializationOptions));
+        workspace.PublishOnlyWhileOpen(OnlyWhileOpenOf(request.InitializationOptions));
         hints = HintSettings.Of(request.InitializationOptions);
         lineLength = LineLengthOf(request.InitializationOptions);
         client = ClientCapabilities.Of(request.Capabilities);
@@ -258,6 +259,7 @@ internal sealed class Server : IDisposable
         var configuration = ActiveConfiguration(settings);
         log.Write($"configuration: {configuration ?? "the project's own"}");
         workspace.Configure(configuration);
+        workspace.PublishOnlyWhileOpen(OnlyWhileOpenOf(settings));
 
         // Which hints are shown is a setting like any other, and the editor is holding hints
         // computed under the old value, so it is asked to fetch them again.
@@ -831,6 +833,23 @@ internal sealed class Server : IDisposable
             && given.ValueKind == JsonValueKind.Number && given.TryGetInt32(out var length) && length >= 0
             ? length
             : LineBreaks.DefaultLength;
+
+    /// <summary>
+    /// Returns the globs of the files whose diagnostics are published only while they are open,
+    /// from an editor's <c>nt65</c> settings. Settings that give none, or give something other
+    /// than a list, name no files, and an item that is not a string is skipped.
+    /// </summary>
+    private static IReadOnlyList<string> OnlyWhileOpenOf(JsonElement? settings) =>
+        settings is { ValueKind: JsonValueKind.Object } options
+            && options.TryGetProperty("diagnostics", out var diagnostics)
+            && diagnostics.ValueKind == JsonValueKind.Object
+            && diagnostics.TryGetProperty("onlyWhileOpen", out var globs)
+            && globs.ValueKind == JsonValueKind.Array
+            ? [.. globs.EnumerateArray()
+                .Where(glob => glob.ValueKind == JsonValueKind.String)
+                .Select(glob => glob.GetString()!)
+                .Where(glob => glob.Length > 0)]
+            : [];
 
     /// <summary>
     /// Returns the named configuration the client's <c>nt65</c> settings choose, or null for each

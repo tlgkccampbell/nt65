@@ -202,6 +202,7 @@ async function activate(context) {
         configuration: vscode.workspace.getConfiguration('nt65').get('configuration'),
         inlayHints: hintSettings(),
         lineLength: vscode.workspace.getConfiguration('nt65').get('lineLength'),
+        diagnostics: { onlyWhileOpen: vscode.workspace.getConfiguration('nt65').get('diagnostics.onlyWhileOpen') },
       },
       synchronize: {
         configurationSection: 'nt65',

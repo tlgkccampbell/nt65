@@ -3,5 +3,9 @@
   // Development Host, and when that lands while the host is still starting, the host aborts
   // ("Cannot toggle network tracking, please report this"). The client makes no network
   // requests, so the network view has nothing to show here anyway.
-  "debug.javascript.enableNetworkView": false
+  "debug.javascript.enableNetworkView": false,
+
+  // The test fixtures include programs that are wrong on purpose, for the tests to check what is
+  // reported about them. Their problems are shown while a fixture is open, not all the time.
+  "nt65.diagnostics.onlyWhileOpen": ["tests/fixtures/**/*"]
 }

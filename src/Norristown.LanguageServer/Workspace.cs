@@ -45,6 +45,11 @@ internal sealed class Workspace
     private IReadOnlyList<string> roots = [];
     private string? configuration;
 
+    // The globs, relative to each folder the client opened, of the files whose diagnostics are
+    // published only while they are open. A folder of test inputs that are wrong on purpose would
+    // otherwise fill the Problems panel.
+    private IReadOnlyList<string> onlyWhileOpen = [];
+
     // The diagnostics last published for each file, by logical path, with the analysis they came
     // from. A file whose program has not been analyzed again since gets the same list back, and
     // its suggestions are not looked for again.
@@ -160,6 +165,20 @@ internal sealed class Workspace
                 return;
             configuration = active;
             ConfigureAll();
+        }
+    }
+
+    /// <summary>
+    /// Publishes the diagnostics of the files that <paramref name="globs"/> name only while they
+    /// are open, from now on. Each glob is relative to each folder the client opened and has the
+    /// form of the <c>files</c> globs of a project file. The files are still analyzed as part of
+    /// their programs, so a file opened among them is reported on as its project builds it.
+    /// </summary>
+    public void PublishOnlyWhileOpen(IReadOnlyList<string> globs)
+    {
+        lock (gate)
+        {
+            onlyWhileOpen = globs;
         }
     }
 
@@ -470,7 +489,8 @@ internal sealed class Workspace
     /// Returns every file whose diagnostics are published, with those diagnostics. The files are
     /// each file of each project, each project file, and each open document that belongs to no
     /// project. A file two projects share is reported by the nearer project, which is the one
-    /// every other answer about the file comes from.
+    /// every other answer about the file comes from. A file that <see cref="PublishOnlyWhileOpen"/>
+    /// names is left out unless it is open.
     /// <para>
     /// Which project each file belongs to, and the version of each open document, are taken
     /// together with the files the analyses are of, so that nothing published mixes an analysis
@@ -482,8 +502,12 @@ internal sealed class Workspace
         var programs = new List<(WorkspaceProject? Project, Task<ProgramAnalysis> Analysis)>();
         Dictionary<string, WorkspaceProject?> owners;
         var versions = new Dictionary<string, int>(FilePaths.Comparer);
+        IReadOnlyList<string> folders;
+        IReadOnlyList<string> quiet;
         lock (gate)
         {
+            folders = roots;
+            quiet = onlyWhileOpen;
             foreach (var project in projects)
                 programs.Add((project, project.AnalysisAsync(open.Values, cancellation)));
             if (open.Values.Any(document => Owner(document.Tree.Path) is null))
@@ -517,6 +541,15 @@ internal sealed class Workspace
                     found[file.Tree.Path] = (analysis, file.Tree);
             }
         }
+        if (quiet.Count > 0)
+        {
+            foreach (var path in found.Keys.Where(path => !versions.ContainsKey(path)
+                && quiet.Any(glob => folders.Any(folder => SourceGlobs.Matches(folder, glob, path)))).ToList())
+            {
+                found.Remove(path);
+            }
+        }
+
         // The diagnostics depend on nothing but the analysis and the file, so a program that has
         // not been analyzed again since the last publish costs nothing to publish again.
         IReadOnlyDictionary<string, (ProgramAnalysis Analysis, IReadOnlyList<Diagnostic> Diagnostics)> before;
