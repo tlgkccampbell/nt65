@@ -13,12 +13,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 # Python 3 with Pillow: the first of the launcher, python3 and python that can import it,
-# since a machine may carry several Pythons and only one with Pillow installed.
+# since a machine may carry several Pythons and only one with Pillow installed. The one found is
+# named by its own path, because the launcher runs a script with the Python its `#!` line names,
+# which need not be the one that passed the check.
 if (-not $Python) {
     foreach ($candidate in 'py', 'python3', 'python') {
         if (Get-Command $candidate -ErrorAction SilentlyContinue) {
-            & $candidate -c 'import PIL' 2>$null
-            if ($LASTEXITCODE -eq 0) { $Python = $candidate; break }
+            $found = & $candidate -c 'import PIL, sys; print(sys.executable)' 2>$null
+            if ($LASTEXITCODE -eq 0) { $Python = $found; break }
         }
     }
     if (-not $Python) { Write-Error 'no Python with Pillow found: give one with -Python'; exit 1 }
