@@ -11,16 +11,20 @@ namespace Norristown.Cli;
 /// the program was built from, and each <c>.s</c> nt65 wrote has its line map beside it. A
 /// <c>.s</c> with no line map was not written by nt65, and is left alone.
 /// </para>
+/// <para>
+/// With <c>--labels</c>, it also writes a label file that names each address by its source path,
+/// which ld65's own label file cannot do for a name that is not exported.
+/// </para>
 /// </summary>
 public static class RemapCommand
 {
     /// <summary>
     /// Rewrites the debug file <paramref name="arguments"/> names, in place unless <c>--out</c>
-    /// gives somewhere else, and returns the exit code.
+    /// gives somewhere else, writes the label file <c>--labels</c> names, and returns the exit code.
     /// </summary>
     public static ExitCode Run(IReadOnlyList<string> arguments, string directory, TextWriter error)
     {
-        string? file = null, target = null;
+        string? file = null, target = null, labels = null;
         for (var i = 0; i < arguments.Count; i++)
         {
             switch (arguments[i])
@@ -30,6 +34,12 @@ public static class RemapCommand
                     break;
                 case "--out":
                     error.WriteLine("nt65: `--out` needs a file to write");
+                    return ExitCode.UsageError;
+                case "--labels" when i + 1 < arguments.Count:
+                    labels = arguments[++i];
+                    break;
+                case "--labels":
+                    error.WriteLine("nt65: `--labels` needs a file to write");
                     return ExitCode.UsageError;
                 default:
                     if (arguments[i].StartsWith('-') || file is not null)
@@ -59,12 +69,21 @@ public static class RemapCommand
         // ca65 records a `.s` path relative to the directory the build ran in. That is normally
         // this directory, so the map is looked for here first and then beside the debug file.
         var beside = Path.GetDirectoryName(path) ?? directory;
-        if (!DebugFile.TryRemap(File.ReadAllText(path), source => Map(source, directory, beside), out var remapped, out var problem))
+        var text = File.ReadAllText(path);
+        if (!DebugFile.TryRemap(text, source => Map(source, directory, beside), out var remapped, out var problem))
+        {
+            error.WriteLine($"{file}: error: {problem}");
+            return ExitCode.InputError;
+        }
+        string? named = null;
+        if (labels is not null && !DebugFile.TryLabels(text, source => Map(source, directory, beside), out named, out problem))
         {
             error.WriteLine($"{file}: error: {problem}");
             return ExitCode.InputError;
         }
         File.WriteAllText(target is null ? path : Path.GetFullPath(target, directory), remapped);
+        if (labels is not null)
+            File.WriteAllText(Path.GetFullPath(labels, directory), named);
         return ExitCode.Success;
     }
 

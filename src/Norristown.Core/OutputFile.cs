@@ -67,6 +67,13 @@ public sealed record OutputFile(string Path, string Text, IReadOnlyList<int> Lin
     public IReadOnlyList<OutputSource> Sources { get; init; } = [];
 
     /// <summary>
+    /// Gets the source path of each value the file defines, such as <c>wave::shown</c>, keyed by
+    /// the name the file gives it, such as <c>shown</c>. <see cref="Emit.LineMap"/> writes these
+    /// beside the output, so that a label file can name each address as the source does.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Names { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
     /// Gets the sources the file was generated from, which is just <see cref="Source"/> when the
     /// file holds only one module.
     /// </summary>

@@ -36,7 +36,7 @@ public sealed record CommandLine(
         usage: nt65 build [options] [<file.nt65>...]
                nt65 init [<dir>] [--cpu <cpu>]
                nt65 fmt [--check] [<file.nt65>...]
-               nt65 remap-dbg <file.dbg> [--out <file>]
+               nt65 remap-dbg <file.dbg> [--out <file>] [--labels <file>]
                nt65 explain [<diagnostic> | --markdown]
                nt65 lsp
                nt65 import-inc <file.inc> [-o <file.nt65>] [--module <name>]
@@ -55,7 +55,8 @@ public sealed record CommandLine(
 
         `remap-dbg` runs after the link: it makes the debug file ld65 wrote name the `.nt65`
         sources as well as the `.s` files, from the `.s.lines` map beside each one, in place
-        unless `--out` gives somewhere else.
+        unless `--out` gives somewhere else. `--labels` also writes a label file, in the form
+        ld65's `-Ln` writes and VICE reads, that names each address by its path, `wave::shown`.
 
         `explain` describes what a diagnostic means, which its one line has no room for; the name
         is the one in brackets after the message. Named nothing, it lists them; given

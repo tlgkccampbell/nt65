@@ -24,6 +24,10 @@ namespace Norristown.Emit;
 /// beside it, such as hand-written ca65 that the same program links, is left alone, which is
 /// also why running this a second time changes nothing.
 /// </para>
+/// <para>
+/// The same maps also name each value the program defines by its source path, from which
+/// <see cref="TryLabels"/> builds a label file for <c>nt65 remap-dbg --labels</c>.
+/// </para>
 /// </summary>
 public static class DebugFile
 {
@@ -133,6 +137,83 @@ public static class DebugFile
         return true;
     }
 
+    /// <summary>
+    /// Builds a label file from a debug file, in the form ld65 writes with <c>-Ln</c> and VICE
+    /// reads, with each value named by its source path, such as <c>wave::shown</c>.
+    /// <para>
+    /// ld65's own label file names a value the way the <c>.s</c> does. That is the linker name for
+    /// an export, but a name that is not exported keeps its spelling within its module, so two
+    /// modules' private names can be the same. The line maps give each name its path, which no two
+    /// values share. A name the maps do not give, such as a cheap local, is left out. A module
+    /// with no map, such as hand-written ca65, contributes its labels under their own names.
+    /// </para>
+    /// </summary>
+    /// <param name="text">The text of the debug file.</param>
+    /// <param name="map">
+    /// The function that returns the text of the line map beside the <c>.s</c> at the path it is
+    /// given, or null when there is none.
+    /// </param>
+    /// <param name="labels">The label file, or null when it could not be built.</param>
+    /// <param name="problem">What is wrong, or null when the label file was built.</param>
+    /// <returns>True if the label file was built.</returns>
+    public static bool TryLabels(
+        string text, Func<string, string?> map,
+        [NotNullWhen(true)] out string? labels, [NotNullWhen(false)] out string? problem)
+    {
+        labels = null;
+        problem = null;
+        var records = text.Split('\n').Select(Record.Parse).ToList();
+        if (!records.Any(record => record.Line.TrimEnd('\r') == Version))
+        {
+            problem = "it is not a version 2.0 ld65 debug file, the kind ld65 writes with `--dbgfile`";
+            return false;
+        }
+
+        // A file record names the modules assembled from it. Each module assembled from a `.s`
+        // with a map takes its names from that map.
+        var named = new Dictionary<int, IReadOnlyDictionary<string, string>>();
+        foreach (var record in records.Where(record => record.Keyword == "file"))
+        {
+            if (record["name"] is not { } path || map(path) is not { } beside)
+                continue;
+            if (!LineMap.TryRead(beside, out var lines, out var wrong))
+            {
+                problem = $"cannot read {path}{LineMap.Extension}, the line map nt65 wrote for {path}: {wrong}";
+                return false;
+            }
+            foreach (var module in (record["mod"] ?? "").Split('+').Select(Number).OfType<int>())
+                named[module] = lines.Names;
+        }
+        var scopes = records
+            .Where(record => record.Keyword == "scope" && Number(record["id"]) is not null && Number(record["mod"]) is not null)
+            .ToDictionary(record => Number(record["id"])!.Value, record => Number(record["mod"])!.Value);
+
+        var found = new SortedSet<(long Value, string Name)>(Comparer<(long Value, string Name)>.Create((a, b) =>
+            a.Value != b.Value ? a.Value.CompareTo(b.Value) : string.CompareOrdinal(a.Name, b.Name)));
+        foreach (var record in records.Where(record => record.Keyword == "sym" && record["type"] != "imp"))
+        {
+            if (record["name"] is not { } name || Hex(record["val"]) is not { } value)
+                continue;
+            if (Number(record["scope"]) is not { } scope || !scopes.TryGetValue(scope, out var module))
+                continue;
+            if (named.TryGetValue(module, out var names))
+            {
+                if (names.TryGetValue(name, out var path))
+                    found.Add((value, path));
+            }
+            else if (record["type"] == "lab")
+            {
+                found.Add((value, name));
+            }
+        }
+
+        var written = new StringBuilder();
+        foreach (var (value, name) in found)
+            written.Append(CultureInfo.InvariantCulture, $"al {value:X6} .{name}\n");
+        labels = written.ToString();
+        return true;
+    }
+
     /// <summary>Returns the debug file with the added records in place and the counts updated to match.</summary>
     private static string Written(
         IReadOnlyList<Record> records, IReadOnlyDictionary<int, (SourceLines Map, int[] Ids)> sources,
@@ -228,6 +309,15 @@ public static class DebugFile
         }
         return records.Count - 1;
     }
+
+    /// <summary>
+    /// Returns a field written as ld65 writes a value, such as <c>0x7E2388</c>, as a number, or
+    /// null when it is not one.
+    /// </summary>
+    private static long? Hex(string? field) =>
+        field is not null && field.StartsWith("0x", StringComparison.Ordinal)
+            && long.TryParse(field[2..], NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var value)
+            ? value : null;
 
     /// <summary>Returns a field as a number, or null when it is not a number.</summary>
     private static int? Number(string? field) =>

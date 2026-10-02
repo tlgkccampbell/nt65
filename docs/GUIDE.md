@@ -83,13 +83,19 @@ You assemble and link them as you would any ca65 source:
 nt65 build
 ca65 -g build/main.s -o build/main.o
 ld65 -C c64.cfg -o game.prg --dbgfile game.dbg build/main.o
-nt65 remap-dbg game.dbg
+nt65 remap-dbg game.dbg --labels game.lbl
 ```
 
 The last line is optional. Each `.s` is written with a `.s.lines` file beside it that maps
 every line of output back to the `.nt65` line it came from. `nt65 remap-dbg` adds that
 mapping to the debug file ld65 wrote, so a debugger such as Mesen or VICE shows your `.nt65`
 source. Without it the debug file still works; it just refers to the generated `.s`.
+
+`--labels` also writes a label file that names every address by its path in the source, such
+as `wave::shown`, in the format ld65's `-Ln` writes, which VICE's monitor reads with
+`-moncommands`. ld65's own label file names a name a module does not export as the `.s` spells
+it, `shown`, so two modules' private names can be the same in it; in nt65's they cannot. A
+cheap local, and a name a macro or a repetition declares, has no path and is left out.
 
 A build that finds an error writes nothing, so a half-built program never reaches ca65.
 
@@ -1650,7 +1656,7 @@ everything below works across modules.
 nt65 build [options] [file.nt65...]
 nt65 init [dir] [--cpu cpu]
 nt65 fmt [--check] [file.nt65...]
-nt65 remap-dbg file.dbg [--out file]
+nt65 remap-dbg file.dbg [--out file] [--labels file]
 nt65 explain [name | --markdown]
 nt65 import-inc file.inc [-o file.nt65] [--module name]
 nt65 lsp

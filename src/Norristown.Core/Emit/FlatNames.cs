@@ -215,6 +215,18 @@ public sealed class FlatNames
     }
 
     /// <summary>
+    /// Returns the path of each value this module's output defines, such as <c>wave::shown</c>,
+    /// keyed by the name the output gives it, such as <c>shown</c>. Only a name a path reaches is
+    /// listed, so a cheap local and a name an expansion declares are left out.
+    /// </summary>
+    internal IEnumerable<KeyValuePair<string, string>> Paths() =>
+        names
+            .Where(entry => entry.Key.IsReachableByPath && entry.Key.Module is not null && entry.Key.Kind is
+                SymbolKind.Label or SymbolKind.Constant or SymbolKind.AddressAlias or SymbolKind.Proc
+                or SymbolKind.ExternProc or SymbolKind.Member or SymbolKind.Data)
+            .Select(entry => KeyValuePair.Create(entry.Value, entry.Key.PathName));
+
+    /// <summary>
     /// Returns whether the symbol is declared in a macro body or a repetition, and so gets one
     /// name per expansion or iteration rather than a single name. Nothing outside the body can
     /// refer to it, so it can be renamed freely.

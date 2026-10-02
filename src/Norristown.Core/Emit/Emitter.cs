@@ -159,6 +159,7 @@ public sealed class Emitter
             Source = model.Tree.Path,
             SourceSize = SourceSize(model),
             LineSources = [.. emitter.lines.Select(line => line.Source)],
+            Names = SourcePaths([emitter]),
         };
     }
 
@@ -224,6 +225,7 @@ public sealed class Emitter
             LineSources = [.. lines.Select(line => line.Source)],
             LineFiles = [.. lines.Select(line => line.File)],
             Sources = sources,
+            Names = SourcePaths(emitters),
         };
     }
 
@@ -244,6 +246,18 @@ public sealed class Emitter
 
     /// <summary>Returns the size in bytes of a module's source, which the line map records.</summary>
     private static int SourceSize(SemanticModel model) => Encoding.UTF8.GetByteCount(model.Tree.Text);
+
+    /// <summary>
+    /// Returns the source path of each value that <paramref name="emitters"/> define, keyed by
+    /// its name in the output, which the line map records.
+    /// </summary>
+    private static Dictionary<string, string> SourcePaths(IEnumerable<Emitter> emitters)
+    {
+        var paths = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (name, path) in emitters.SelectMany(emitter => emitter.names.Paths()))
+            paths.TryAdd(name, path);
+        return paths;
+    }
 
     /// <summary>
     /// Formats an <c>.export</c> or <c>.import</c> of <paramref name="name"/> with the address

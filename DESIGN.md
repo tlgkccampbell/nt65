@@ -3765,8 +3765,11 @@ attaches a span to whichever line is in effect while bytes are generated, so a r
 label or a constant would cover nothing, which nothing can step to or break on, and a label's
 address is that of the bytes after it either way. The lines of a macro expansion map to the
 line of the call, the way C debuggers treat preprocessor macros, and a comment naming the
-call precedes the expansion. A module that produces no bytes at all — one of nothing but
-constants — is written with no map.
+call precedes the expansion. Last, one `name` per value the `.s` defines gives the spelling
+the `.s` uses and the path the source does, `name shown, wave::shown`; a cheap local, or a name
+an expansion declares, has no path and gets none. A module that produces no bytes at all — one
+of nothing but constants — maps no lines, and its map holds only its names; one that defines
+nothing either is written with no map.
 
 The map is put to work after the link. `ca65 -g` records the lines of the `.s` it assembles
 and ld65 copies them into the file `--dbgfile` names; `nt65 remap-dbg game.dbg` then reads
@@ -3777,6 +3780,12 @@ that line on each `sym` defined or used there. Only a module's `file` changes, t
 it was written from, because it names one file and the one worth naming is the source; for a
 translation unit of several modules, that is its root's, and the lines name the rest.
 Everything that was there stays, so a debugger that was showing the generated ca65 still can.
+
+`nt65 remap-dbg game.dbg --labels game.lbl` also writes a label file, in the format ld65's
+`-Ln` writes and VICE reads, from the debug file's symbols and the maps' `name` records. ld65's
+own names a private name as the `.s` spells it, so two modules' `shown` meet in it; this one
+names each by its path, `wave::shown`, which no two values share. A module with no map, such as
+hand-written ca65, contributes its labels under their own names.
 
 It needs nothing but the debug file, which names every `.s` the program was built from, and
 takes the paths as ca65 recorded them, which is from the directory a build runs in — where a

@@ -38,8 +38,10 @@ public sealed class BuildCommandTests : IDisposable
         Assert.Contains("from ../lib/vic.nt65.", root.Read("app/build/hw/vic.s"));
         Assert.Contains("file 0, \"src/main.nt65\"", root.Read("app/build/main.s.lines"));
 
-        // A module of nothing but constants generates no bytes, so nothing maps back to it.
-        Assert.False(Exists("app/build/hw/vic.s.lines"));
+        // A module of nothing but constants generates no bytes, so no line maps back to it, and
+        // its map only names its constants.
+        Assert.DoesNotContain("\nline ", root.Read("app/build/hw/vic.s.lines"));
+        Assert.Contains("name hw__vic__BORDER, hw::vic::BORDER\n", root.Read("app/build/hw/vic.s.lines"));
     }
 
     /// <summary>
@@ -122,7 +124,8 @@ public sealed class BuildCommandTests : IDisposable
         var (code, printed) = Run(app, "build");
 
         Assert.Equal(ExitCode.Success, code);
-        Assert.Equal("nt65: note: deleted build/hw/vic.s, which the program no longer writes\n", printed);
+        Assert.Equal("nt65: note: deleted build/hw/vic.s, which the program no longer writes\n"
+            + "nt65: note: deleted build/hw/vic.s.lines, which the program no longer writes\n", printed);
         Assert.False(Exists("app/build/hw/vic.s"));
         Assert.False(Directory.Exists(Path.Combine(app, "build", "hw")));
         Assert.True(Exists("app/build/main.s"));
@@ -158,6 +161,10 @@ public sealed class BuildCommandTests : IDisposable
               src/vic.nt65 \
               nt65.json
             build/hw/vic.s: \
+              src/main.nt65 \
+              src/vic.nt65 \
+              nt65.json
+            build/hw/vic.s.lines: \
               src/main.nt65 \
               src/vic.nt65 \
               nt65.json
