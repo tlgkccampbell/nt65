@@ -114,6 +114,28 @@
     rts
 }
 
+; Switching the mode writes only the carry. A routine entered in emulation mode found the high
+; bytes of X and Y zero, so going back to emulation mode leaves them as they were, and A is
+; whole across both switches, its high byte kept in B.
+.export .proc visits_native: emu, keeps a, x, y {
+    clc
+    xce
+    sec
+    xce
+    rts
+}
+
+; A routine entered in native mode with 16-bit index registers loses their high bytes when it
+; goes into emulation mode.
+.export .proc visits_emulation: native, a8, i16, keeps x, y {
+    sec
+    xce
+    clc
+    xce
+    rep #$10
+    rts ;! error[keeps-broken]: `visits_emulation` promises `keeps x, y`, but X, Y are not the same as on entry here: restore them before returning, or add `.state keeps x, y` at the point where the entry value is restored
+}
+
 ; A routine that widens and narrows again leaves the high bytes as it found them.
 .export .proc widens_and_back: i8, keeps x, y {
     rep #$10

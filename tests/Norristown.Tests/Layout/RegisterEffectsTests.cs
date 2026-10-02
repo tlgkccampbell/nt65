@@ -109,9 +109,9 @@ public sealed class RegisterEffectsTests
         Add(Registers.A | Registers.C, "adc", "sbc");
         Add(Registers.X, "ldx", "plx", "tax", "tsx", "tyx", "inx", "dex");
         Add(Registers.Y, "ldy", "ply", "tay", "txy", "iny", "dey");
-        Add(Registers.C, "cmp", "cpx", "cpy", "clc", "sec", "plp", "rti", "asl", "lsr", "rol", "ror", "rep", "sep");
+        Add(Registers.C, "cmp", "cpx", "cpy", "clc", "sec", "plp", "rti", "asl", "lsr", "rol", "ror", "rep", "sep", "xce");
         Add(Registers.A | Registers.X | Registers.Y, "mvn", "mvp");
-        Add(Registers.All, "xce", "brk", "cop");
+        Add(Registers.All, "brk", "cop");
 
         // Each undocumented opcode writes what the pair of documented instructions it combines
         // would write. `jam` halts the processor, so nothing it leaves behind is ever read.

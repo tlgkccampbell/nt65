@@ -191,10 +191,13 @@ public static class Instructions
         Fact(table, [Cmp, Cpx, Cpy, Clc, Sec, Plp, Rti, Rep, Sep], f => f with { Writes = Registers.C });
 
         // A block move counts down in A and walks X and Y along the two banks. Swapping the
-        // carry with the emulation flag truncates the index registers and hides half the
-        // accumulator, and a software interrupt runs a handler this program may not even contain.
+        // carry with the emulation flag writes the carry, and leaves A whole, with its high byte
+        // in B. Entering emulation mode zeroes the high bytes of X and Y, which the register
+        // walk works out from the widths, as it does for `sep`. A software interrupt runs a
+        // handler this program may not even contain.
         Fact(table, [Mvn, Mvp], f => f with { Writes = Registers.A | Registers.X | Registers.Y });
-        Fact(table, [Xce, Brk, Cop], f => f with { Writes = Registers.All });
+        Fact(table, [Xce], f => f with { Writes = Registers.C });
+        Fact(table, [Brk, Cop], f => f with { Writes = Registers.All });
 
         // What each instruction uses. A shift or an increment uses the accumulator only through
         // it, which the mode decides, so these are again the widest answers. A branch on the
