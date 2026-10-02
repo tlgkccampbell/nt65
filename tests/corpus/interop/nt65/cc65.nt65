@@ -4,7 +4,7 @@
 
 ; The pointers are two bytes each and the scratch byte is one, which the import says so that
 ; nt65 sizes them here rather than each module repeating what asm/runtime.s reserves.
-.export .import sp: zp .byte[2], ptr1: zp .byte[2], ptr2: zp .byte[2], tmp1: zp .byte
+.export .import c_sp: zp .byte[2], ptr1: zp .byte[2], ptr2: zp .byte[2], tmp1: zp .byte
 .export .import popa: proc(), popax: proc()
 
 ; Hand-written in asm/delay.s.

@@ -1536,7 +1536,7 @@ symbol, which is why they mix in one build without either knowing about the othe
 
 ```nt65
 .import _printf: proc()             ; a routine, with its signature
-.import sp: zp                      ; an address in zero page
+.import c_sp: zp                    ; an address in zero page
 .import actors: .type Actor[8]      ; storage, with its type
 .import VIC_BORDER = $D020          ; a value nt65 needs, checked by ld65 at link time
 ```

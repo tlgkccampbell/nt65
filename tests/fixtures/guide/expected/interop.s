@@ -11,7 +11,7 @@
 .export interop__report
 
 .import _printf: abs
-.importzp sp
+.importzp c_sp
 .import actors: abs
 .import VIC_BORDER: abs
 .assert VIC_BORDER = $d020, lderror, "VIC_BORDER is not $d020, which is what interop.nt65 was built against"
@@ -19,7 +19,7 @@
 .segment "CODE": absolute
 ; .proc report  interop.nt65:13
 interop__report:
-    lda z:sp
+    lda z:c_sp
     lda a:actors+14                 ; actors[2]::hp
     ldx #$28
     sta a:$d020                     ; VIC_BORDER

@@ -1,13 +1,13 @@
 ; Just enough of the cc65 runtime for this test (the real one comes from <target>.lib).
 .setcpu "65C02"
-.exportzp sp, ptr1, ptr2, tmp1
+.exportzp c_sp, ptr1, ptr2, tmp1
 .export popa, popax, pusha, pushax, __STARTUP__ : absolute = 1
 .import _main, __STACK_START__, __STACK_SIZE__
 .import __BSS_RUN__, __BSS_SIZE__
 .import __CONSTRUCTOR_TABLE__, __CONSTRUCTOR_COUNT__
 
 .segment "ZEROPAGE": zeropage
-sp:     .res 2
+c_sp:   .res 2
 ptr1:   .res 2
 ptr2:   .res 2
 tmp1:   .res 1
@@ -17,9 +17,9 @@ start:
         ldx #$FF
         txs
         lda #<(__STACK_START__ + __STACK_SIZE__)
-        sta sp
+        sta c_sp
         lda #>(__STACK_START__ + __STACK_SIZE__)
-        sta sp+1
+        sta c_sp+1
         ; constructors (cc65's condes runner, simplified: at most 1)
         lda #<__CONSTRUCTOR_COUNT__
         beq @noctor
@@ -33,13 +33,13 @@ callctor:
 
 .segment "CODE"
 pusha:  pha
-        lda sp
+        lda c_sp
         bne :+
-        dec sp+1
-:       dec sp
+        dec c_sp+1
+:       dec c_sp
         pla
         ldy #0
-        sta (sp),y
+        sta (c_sp),y
         rts
 pushax: pha
         txa
@@ -47,10 +47,10 @@ pushax: pha
         pla
         jmp pusha
 popa:   ldy #0
-        lda (sp),y
-        inc sp
+        lda (c_sp),y
+        inc c_sp
         bne :+
-        inc sp+1
+        inc c_sp+1
 :       rts
 popax:  jsr popa
         pha

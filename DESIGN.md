@@ -3522,7 +3522,7 @@ What another module's output does with a name depends on its kind:
 
 **Re-exports.** A module may make names it did not declare part of itself:
 
-- **An import** may be exported, `.export .import sp: zp`. Other modules use it as if they had
+- **An import** may be exported, `.export .import c_sp: zp`. Other modules use it as if they had
   declared the import, with its size, signature and checked value; each writes its own
   `.import`, the re-exporting module writes no ca65 export, and the `lderror` assertion of a
   checked import is written by each module that uses it, since each was built against the
@@ -3551,7 +3551,7 @@ points) are declared explicitly:
 .import _printf: proc(a8, i16)      ; a routine, with its signature (§7.3)
 .import zp_scratch: zp
 .import far_table: far
-.import sp: zp .byte[2]             ; storage, with what its bytes are
+.import c_sp: zp .byte[2]           ; storage, with what its bytes are
 .import actors: .type Actor[8]
 .import VIC_BORDER = $D020          ; a constant whose value nt65 needs; checked at link
 .proc CHROUT = $FFD2: a8, i8        ; a routine at a fixed address; emitted as a constant
@@ -3575,19 +3575,19 @@ On the 6502 and its CMOS variants the signature of a `proc(...)` import or an ex
 empty, because there is no state for it to declare. On the 65816 it may not (§7.3).
 
 **A typed import** says what the bytes another object defines are, in the element types a
-`.data` declaration is written with (§8): `.import sp: .byte[2]`, `.import actors: .type Actor[8]`.
+`.data` declaration is written with (§8): `.import c_sp: .byte[2]`, `.import actors: .type Actor[8]`.
 What it says is what nt65 works with, exactly as a `proc(...)` import's signature is: `.sizeof`
 and `.countof` answer from the element type and the count, an element is reached with `name[i]`,
 a record's fields are reached through it, `actors[2]::hp`, and each of those is the address the
 type works out, in the import's own address size. An element type carries no values — the bytes
-belong to whoever defines them — and it may be written after a size, `.import sp: zp .byte[2]`,
+belong to whoever defines them — and it may be written after a size, `.import c_sp: zp .byte[2]`,
 which is where an import of zero-page storage says both what it is and where it lives. The
 output is the same plain `.import` with the same address size: what the import says is checked
 nowhere, as a signature is checked nowhere, and getting it wrong is getting the other object's
 declaration wrong.
 
 - **ca65 modules** export symbols in the usual way. cc65's runtime library already
-  exports its zero-page variables, so `.import sp: zp` needs nothing more. An import keeps
+  exports its zero-page variables, so `.import c_sp: zp` needs nothing more. An import keeps
   its own name to the linker.
 - **Constants defined only in a ca65 include file**, such as hardware registers and
   struct offsets, reach nt65 two ways. Where the value has to stay the ca65 file's, a small

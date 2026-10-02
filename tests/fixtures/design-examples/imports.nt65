@@ -13,7 +13,7 @@
 .import _printf: proc(a8, i16)      ; a routine, with its signature
 .import zp_scratch: zp
 .import far_table: far
-.import sp: zp .byte[2]             ; storage, with what its bytes are
+.import c_sp: zp .byte[2]           ; storage, with what its bytes are
 .import actors: .type Actor[8]
 .import VIC_BORDER = $D020          ; a constant whose value nt65 needs; checked at link
 .proc CHROUT = $FFD2: a8, i8        ; a routine at a fixed address; emitted as a constant
@@ -23,7 +23,7 @@
     lda zp_scratch
     sta VIC_BORDER
     lda f:far_table
-    lda sp[1]
+    lda c_sp[1]
     ldx #.countof(actors)
     lda actors[2]::hp
     jmp _printf

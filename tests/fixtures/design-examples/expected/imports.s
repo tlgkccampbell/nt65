@@ -14,7 +14,7 @@
 .import _printf: abs
 .importzp zp_scratch
 .import far_table: far
-.importzp sp
+.importzp c_sp
 .import actors: abs
 .import VIC_BORDER: abs
 .assert VIC_BORDER = $d020, lderror, "VIC_BORDER is not $d020, which is what imports.nt65 was built against"
@@ -27,7 +27,7 @@ imports__print:
     lda z:zp_scratch
     sta a:$d020                     ; VIC_BORDER
     lda f:far_table
-    lda z:sp+1                      ; sp[1]
+    lda z:c_sp+1                    ; c_sp[1]
     .i16
     ldx #$08
     lda a:actors+8                  ; actors[2]::hp
