@@ -48,16 +48,17 @@ jobs:
           python-version: '3.x'
       - run: python -m pip install --quiet Pillow
 
-      # The pinned cc65: the tools, headers and asminc under .cache/cc65, and the source
-      # checkout under .cache/cc65-src, which the tests read. Both are determined entirely by
-      # the pinned commit, so the commit and the OS are the whole cache key. On a cache hit,
-      # build-cc65.ps1 sees the tools reporting the pinned commit and does nothing.
+      # The pinned cc65: the tools, headers, asminc and sim6502 library under .cache/cc65, and
+      # the source checkout under .cache/cc65-src, which the tests read. Both are determined
+      # entirely by the pinned commit and by what build-cc65.ps1 builds from it, so those and the
+      # OS are the whole cache key. On a cache hit, build-cc65.ps1 sees everything it builds
+      # there, with the tools reporting the pinned commit, and does nothing.
       - uses: actions/cache@v6
         with:
           path: |
             .cache/cc65
             .cache/cc65-src
-          key: cc65-${{ runner.os }}-${{ hashFiles('scripts/cc65.commit') }}
+          key: cc65-${{ runner.os }}-${{ hashFiles('scripts/cc65.commit', 'scripts/build-cc65.ps1') }}
 
       # Ubuntu carries make and gcc already. The Windows image carries MSYS2 but keeps it off
       # PATH; mingw64 goes first so gcc is the native toolchain, not the msys one. It goes on
