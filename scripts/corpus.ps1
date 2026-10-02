@@ -209,3 +209,26 @@ if ($vice) {
 }
 $ran = if ($vice) { 'its test passed' } else { 'its test did not run, because x64sc is not on the path' }
 Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'c64-demo', (Get-Item (Join-Path $demo 'build/demo.prg')).Length, $ran, $watch.Elapsed.TotalSeconds)
+
+# The Atari XEX builds with its own script. Where Atari800 is installed, its test loads the XEX
+# twice, once to run it for a hundred frames and once with BASIC in, and checks what each left in
+# memory.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$xex = Join-Path $root 'examples/atari-xex'
+& (Join-Path $xex 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & (Join-Path $xex 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
+    Write-Host 'atari-xex: the build failed' -ForegroundColor Red
+    exit 1
+}
+$atari800 = [bool](Get-Command atari800 -ErrorAction SilentlyContinue)
+if ($atari800) {
+    & (Join-Path $xex 'test.ps1') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & (Join-Path $xex 'test.ps1')
+        Write-Host 'atari-xex: its test failed' -ForegroundColor Red
+        exit 1
+    }
+}
+$ran = if ($atari800) { 'its test passed' } else { 'its test did not run, because atari800 is not on the path' }
+Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'atari-xex', (Get-Item (Join-Path $xex 'build/demo.xex')).Length, $ran, $watch.Elapsed.TotalSeconds)

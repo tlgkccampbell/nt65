@@ -133,6 +133,11 @@ on a stable raster whose cycle counts the build checks, a sprite multiplexer wit
 code, screens unpacked by an LZ4 decruncher that runs in the zero page, and a small SID music
 driver. Its test runs it in VICE.
 
+[`examples/atari-xex`](examples/atari-xex) is an Atari 800XL program written for nt65 whose
+subject is the XEX's loading: a system check and a loading screen that run while the rest
+loads, the program's own screen loaded over the loader, and colour bars drawn by display list
+interrupts and moved by a hook in the vertical blank. Its test runs it in Atari800.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and
