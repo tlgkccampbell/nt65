@@ -2591,10 +2591,11 @@ public static class Catalogue
         Area.ControlFlow,
         "next-target-not-a-table",
         Severity.Error,
-        "`{0}` is not a table of addresses: `.next` can name data only when it is declared with `.addr` or "
-            + "`.faraddr`",
+        "`{0}` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` "
+            + "values, directly or as members of records",
         "A `.next` that names data follows the code labels the data holds, so the data must be a table of "
-            + "addresses, declared with `.addr` or `.faraddr`.");
+            + "addresses: data declared with `.addr` or `.faraddr`, records whose type has members declared so, "
+            + "or mixed data made of either. In records, the other members are passed over.");
 
     internal static DiagnosticDescriptor NextSuccessorsKnown { get; } = Entry(
         Area.ControlFlow,

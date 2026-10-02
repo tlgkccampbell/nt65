@@ -13,6 +13,7 @@
 .export main__restore
 .export main__set
 .export main__table_jump
+.export main__record_jump
 .export main__relative
 .export main__far_relative
 .export main__first
@@ -100,7 +101,35 @@ table_jump__two:
     rts
 ; end of table_jump
 
-; .proc talk: a8, i8  main.nt65:96
+; .proc record_jump: a16, i16  main.nt65:103
+main__record_jump:
+    lda a:cmd
+    and #$00ff
+    tax
+    lda a:record_jump__entries,x
+    pha
+    rts
+
+record_jump__entries:
+record_jump__entries__first:
+    .addr (record_jump__one - $01)  ; target
+    .byte $02                       ; bank
+record_jump__entries__rest:
+    .addr (record_jump__two - $01)  ; target
+    .byte $03                       ; bank
+record_jump__entries__last:
+    .addr (record_jump__three - $01)  ; target
+    .byte $04                       ; bank
+
+record_jump__one:
+    rts
+record_jump__two:
+    rts
+record_jump__three:
+    rts
+; end of record_jump
+
+; .proc talk: a8, i8  main.nt65:132
 talk:
     jsr print
     .byte $68, $65, $6c, $6c, $6f, $00  ; "hello"
@@ -109,7 +138,7 @@ talk:
     rts
 ; end of talk
 
-; .proc relative: a8, i8  main.nt65:106
+; .proc relative: a8, i8  main.nt65:142
 main__relative:
     per relative__back - 1
     brl talk
@@ -117,7 +146,7 @@ relative__back:
     rts
 ; end of relative
 
-; .proc far_relative: far  main.nt65:113
+; .proc far_relative: far  main.nt65:149
 main__far_relative:
     phk
     per far_relative__back - 1
@@ -126,24 +155,24 @@ far_relative__back:
     rtl
 ; end of far_relative
 
-; .proc far_target: far  main.nt65:121
+; .proc far_target: far  main.nt65:157
 far_target:
     rtl
 ; end of far_target
 
-; .proc first: a16 -> a8  main.nt65:127
+; .proc first: a16 -> a8  main.nt65:163
 main__first:
     lda #$1234
     sep #$20
 ; end of first
-; .proc second: a8  main.nt65:132
+; .proc second: a8  main.nt65:168
 main__second:
     .a8
     lda #$12
     rts
 ; end of second
 
-; .proc patching: a8, i8  main.nt65:138
+; .proc patching: a8, i8  main.nt65:174
 main__patching:
     lda #$60
 patching__op:
@@ -152,7 +181,7 @@ patching__op:
     rts
 ; end of patching
 
-; .proc enter: a16 -> a8  main.nt65:150
+; .proc enter: a16 -> a8  main.nt65:186
 main__enter:
     .a16
     lda #$1234
@@ -163,7 +192,7 @@ enter__into:
     rts
 ; end of enter
 
-; .proc jumper: a8, i8  main.nt65:159
+; .proc jumper: a8, i8  main.nt65:195
 main__jumper:
     jmp enter__into
 ; end of jumper

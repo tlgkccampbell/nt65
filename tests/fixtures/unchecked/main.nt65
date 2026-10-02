@@ -7,7 +7,7 @@
 
 .import print: proc(inline .strz)
 .import beep: proc(inline 2)
-.export dispatch, nmi, restore, set, table_jump, relative, far_relative, first, second
+.export dispatch, nmi, restore, set, table_jump, record_jump, relative, far_relative, first, second
 .export patching, enter, jumper
 
 .segment BSS
@@ -89,6 +89,42 @@
 @one:
     rts
 @two:
+    rts
+}
+
+; A table of records, each a target less one and the bank it is in, as a far call through a
+; mapper reads one: `.next` follows the address members of every record, in mixed data, and
+; passes over the rest.
+.struct Entry {
+    target: .addr
+    bank:   .byte
+}
+
+.proc record_jump: a16, i16 {
+    lda cmd
+    and #$00ff
+    tax
+    lda entries,x
+    pha
+    rts
+    .next entries
+
+    .data entries {
+        .data first: .type Entry { target = @one - 1, bank = 2 }
+        .data rest:  .type Entry[] {
+            { target = @two - 1, bank = 3 }
+        }
+        .data last: .type Entry {
+            target = @three - 1
+            bank   = 4
+        }
+    }
+
+@one:
+    rts
+@two:
+    rts
+@three:
     rts
 }
 

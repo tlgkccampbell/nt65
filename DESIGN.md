@@ -1530,8 +1530,12 @@ label:
   one or more targets to a line. A target naming a list (§6.4), or data declared as addresses
   (`.addr` or `.faraddr`, or such a member of a `.data` block) whose items are all code
   labels, each optionally minus 1 as in an RTS dispatch table, stands for every one of those
-  labels, whether the items are written on the declaration's line or in its body. A target
-  naming data of any other type is an error that asks for the address type. `.next ?` ends
+  labels, whether the items are written on the declaration's line or in its body. Records
+  hold addresses too: a record or an array of records whose type has `.addr` or `.faraddr`
+  members stands for the values those members are given, at any depth, and passes over the
+  others, so a table of three-byte entries, an address less one and the bank it is in, is
+  named as it is. Mixed data stands for what each of its members holds. A target
+  naming data that holds no addresses is an error that asks for the address type. `.next ?` ends
   the path with nothing checked, and may stand after any statement. A `.next` that names
   targets after a statement whose successors nt65 already knows — an ordinary instruction, a
   direct `jsr` or `jmp` to a label or routine — is an error, since it could only contradict
@@ -5082,7 +5086,7 @@ annotation  := '.next' (target (',' target)* | items(target) | '?')
 fallthrough := '.fallthrough' path                    ; the last line of a proc's body, or of
                                                       ; a branch of an if-block ending it
 target      := path                                   ; or an ident parameter, in macros;
-                                                      ; a list, or data declared as addresses,
+                                                      ; a list, or data holding addresses,
                                                       ; stands for its labels
 path        := '::'? (ident | local) index? ('::' member-name index?)*
 index       := '[' expr ']'                           ; an element of a counted declaration

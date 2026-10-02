@@ -51,7 +51,7 @@ rts                                 ;! error[instruction-outside-a-routine]: an 
     lda #.sizeof(@here)                 ;! error[not-measurable]: `@here` is a label, which is only a position: `.sizeof` measures a `.data` declaration, a routine or a type
     lda #.countof(mixed)                ;! error[countof-has-no-elements]: `mixed` is mixed data, which has bytes and no elements: `.sizeof(mixed)` is how many bytes it takes
     jmp (bytes)
-    .next bytes                         ;! error[next-target-not-a-table]: `bytes` is not a table of addresses: `.next` can name data only when it is declared with `.addr` or `.faraddr`
+    .next bytes                         ;! error[next-target-not-a-table]: `bytes` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` values, directly or as members of records
 }
 
 ; A `.segment NAME` region belongs at file level; inside a block, a segment is braced.

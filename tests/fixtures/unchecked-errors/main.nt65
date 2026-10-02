@@ -28,7 +28,7 @@
 .segment CODE
 .proc dispatch: a8, i8 {
     jmp (handlers,x)
-    .next handlers          ;! error[next-target-not-a-table]: `handlers` is not a table of addresses: `.next` can name data only when it is declared with `.addr` or `.faraddr`
+    .next handlers          ;! error[next-target-not-a-table]: `handlers` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` values, directly or as members of records
 }
 
 ; A computed jump.

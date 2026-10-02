@@ -128,10 +128,33 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Returns whether a symbol is data declared as addresses, which is what a table of targets is.
+    /// Returns whether a symbol is data that holds addresses, which is what a table of targets is.
+    /// That is data declared with <c>.addr</c> or <c>.faraddr</c>, records whose type has a member
+    /// declared so, and mixed data with a member that is either.
     /// </summary>
-    internal static bool IsAddressData(Symbol symbol) =>
-        symbol is { Kind: SymbolKind.Data, Data: DataDirectiveSyntax element } && element.Directive.DirectiveKind is DirectiveKind.Addr or DirectiveKind.FarAddr;
+    internal static bool IsAddressData(Symbol symbol) => symbol switch
+    {
+        { Kind: not SymbolKind.Data } => false,
+        { Data: DataDirectiveSyntax element } => IsAddressElement(element)
+            || (element.IsRecord && symbol.Type is { } type && HoldsAddresses(type, [])),
+        { Data: null, Body: { } body } => body.Symbols.Any(IsAddressData),
+        _ => false,
+    };
+
+    /// <summary>Returns whether a directive's element type is <c>.addr</c> or <c>.faraddr</c>.</summary>
+    private static bool IsAddressElement(DataDirectiveSyntax element) =>
+        element.Directive.DirectiveKind is DirectiveKind.Addr or DirectiveKind.FarAddr;
+
+    /// <summary>
+    /// Returns whether a struct or union has a member declared as an address, directly or in a
+    /// record it holds. <paramref name="seen"/> holds the types already being asked about, so a
+    /// type that contains itself ends the walk.
+    /// </summary>
+    private static bool HoldsAddresses(Symbol type, HashSet<Symbol> seen) =>
+        type.IsLayout && seen.Add(type) && (type.Body?.Symbols ?? []).Any(member =>
+            member.Kind == SymbolKind.Member
+            && (member.Data is DataDirectiveSyntax element && IsAddressElement(element)
+                || member.Type is { } inner && HoldsAddresses(inner, seen)));
 
     /// <summary>
     /// Returns whether a statement is a call instruction, whether or not its operand names the
@@ -802,25 +825,95 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Returns the values of a table, which is data declared as addresses with <c>.addr</c> or
-    /// <c>.faraddr</c>, each paired with the <see cref="Expansion"/> it is in. Values in a body are
-    /// read from the expansions layout made of them, since each iteration of a repetition there
-    /// may emit a value differently. Any other symbol yields no values.
+    /// Returns the addresses a table holds, each paired with the <see cref="Expansion"/> it is in.
+    /// A table is data that <see cref="IsAddressData"/> accepts. Its addresses are the values of
+    /// an <c>.addr</c> or <c>.faraddr</c> declaration, the values of the address members of
+    /// records, and those of each member of mixed data in turn. Values in a body are read from the
+    /// expansions layout made of them, since each iteration of a repetition there may emit a value
+    /// differently. Any other symbol yields no values.
     /// </summary>
     private IEnumerable<(SyntaxNode Item, Expansion? On)> ItemsOfTable(Symbol target)
     {
-        if (!IsAddressData(target) || target.Data is not DataDirectiveSyntax element)
+        if (!IsAddressData(target))
             yield break;
+        if (target.Data is not DataDirectiveSyntax element)
+        {
+            foreach (var member in target.Body?.Symbols ?? [])
+            {
+                foreach (var item in ItemsOfTable(member))
+                    yield return item;
+            }
+            yield break;
+        }
+
+        var type = element.IsRecord ? target.Type : null;
         foreach (var value in DataLengths.ElementsOf(element))
-            yield return (value, null);
-        if (DataSyntax.BodyOf(element) is null)
+        {
+            foreach (var item in type is null ? [value] : AddressesIn(type, value))
+                yield return (item, null);
+        }
+        if (type is not null && element.Tail is BracedDataSyntax { Value: RecordValuesSyntax record })
+        {
+            foreach (var item in AddressesIn(type, record))
+                yield return (item, null);
+        }
+        if (DataSyntax.BodyOf(element) is not { } body)
             yield break;
+
+        // A single record's body holds its `member = value` lines; an array's holds records.
+        if (type is not null && body.BlockKind == BlockKind.RecordInitializer)
+        {
+            foreach (var item in AddressesIn(type, body.Members.Skip(1).OfType<LineSyntax>().Select(line => line.Statement)))
+                yield return (item, null);
+            yield break;
+        }
         foreach (var step in layout.Steps)
         {
             if (step.Statement is DataValuesSyntax values && DataSyntax.DirectiveOfValues(values) == element)
             {
                 foreach (var value in DataLengths.ElementsOf(values))
-                    yield return (value, step.On);
+                {
+                    foreach (var item in type is null ? [value] : AddressesIn(type, value))
+                        yield return (item, step.On);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the values a braced record gives the address members of <paramref name="type"/>.
+    /// </summary>
+    private static IEnumerable<SyntaxNode> AddressesIn(Symbol type, SyntaxNode record) =>
+        AddressesIn(type, record is RecordValuesSyntax values ? values.Members : []);
+
+    /// <summary>
+    /// Returns the values that <c>member = value</c> pairs give the address members of
+    /// <paramref name="type"/>, in the order the type declares its members. A member that is an
+    /// array of addresses gives each item of its list, and a member that is a record, or an array
+    /// of them, gives the addresses its own values hold. A member no value names holds zero, which
+    /// is no address of code, so it gives nothing.
+    /// </summary>
+    private static IEnumerable<SyntaxNode> AddressesIn(Symbol type, IEnumerable<StatementSyntax> pairs)
+    {
+        if (type.IsCyclic)
+            yield break;
+        var given = new Dictionary<string, SyntaxNode>(StringComparer.Ordinal);
+        foreach (var pair in pairs.OfType<MemberValueSyntax>())
+            given[pair.Name.Text] = pair.Value;
+        foreach (var member in type.Body?.Symbols ?? [])
+        {
+            if (member.Kind != SymbolKind.Member || given.GetValueOrDefault(member.Name) is not { } value)
+                continue;
+            var items = value is ValueListSyntax list ? [.. list.Values] : new[] { value };
+            foreach (var item in items)
+            {
+                if (member.Type is { IsLayout: true } inner)
+                {
+                    foreach (var address in AddressesIn(inner, item))
+                        yield return address;
+                }
+                else if (member.Data is DataDirectiveSyntax element && IsAddressElement(element))
+                    yield return item;
             }
         }
     }

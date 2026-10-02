@@ -977,7 +977,9 @@ cmd_fire:
 ```
 
 `.next handlers` would say the same, since every item of `handlers` is a code label, optionally
-minus one. `.next ?` says the path ends and nothing is checked.
+minus one. A table of records works the same way: where each entry is a struct with an `.addr`
+member, such as an address and the bank it is in, `.next` names the table and follows the
+address members. `.next ?` says the path ends and nothing is checked.
 
 The same annotation covers the `bit` skip trick, where one instruction's operand hides the
 next instruction:
