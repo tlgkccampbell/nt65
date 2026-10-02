@@ -10,7 +10,8 @@ namespace Norristown.Cli;
 /// It needs no program, because formatting depends only on one file's own lines and braces, so a
 /// file that names no module and belongs to no project can still be formatted. Given no files, it
 /// formats every file the project's <c>files</c> globs match, which suits a run over a whole
-/// repository.
+/// repository. Only those globs are read from the project file, so a problem with its links,
+/// segments or other settings is left for <c>nt65 build</c> to report.
 /// </para>
 /// </summary>
 public static class FormatCommand
@@ -55,25 +56,26 @@ public static class FormatCommand
                 return ExitCode.UsageError;
             }
             var root = Path.GetDirectoryName(projectFile)!;
-            var project = ProjectFile.Read(ProjectFile.Name, File.ReadAllText(projectFile));
+            var diagnostics = new List<Diagnostic>();
+            var globs = ProjectFile.Files(ProjectFile.Name, File.ReadAllText(projectFile), diagnostics);
 
-            // An error in the project file is why no files would be found, so it is reported
-            // in place of saying there are none.
-            var errors = project.Diagnostics.Where(d => d.Severity == Severity.Error).ToList();
+            // An error that leaves the globs unknown is why no files would be found, so it is
+            // reported in place of saying there are none.
+            var errors = diagnostics.Where(d => d.Severity == Severity.Error).ToList();
             if (errors.Count > 0)
             {
                 foreach (var d in errors)
                     error.WriteLine(Reported.Line(d, ProjectRoot.Shown(directory, projectFile), colour: false));
                 return ExitCode.InputError;
             }
-            files = [.. project.Files
+            files = [.. globs
                 .SelectMany(glob => SourceGlobs.Matching(root, glob))
                 .Select(path => Path.Combine(root, path))
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)];
             if (files.Count == 0)
             {
-                error.WriteLine(project.Files.Count == 0
+                error.WriteLine(globs.Count == 0
                     ? $"nt65: no files to format, and no `files` in {ProjectFile.Name}"
                     : $"nt65: no file matched the `files` globs in {ProjectFile.Name}");
                 return ExitCode.UsageError;

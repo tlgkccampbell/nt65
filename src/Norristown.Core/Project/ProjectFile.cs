@@ -107,35 +107,13 @@ public static class ProjectFile
     public static ProjectSettings Read(string path, string text, Func<string, string?> readFile)
     {
         var diagnostics = new List<Diagnostic>();
-        JsonDocument document;
-        try
-        {
-            document = JsonDocument.Parse(text, new JsonDocumentOptions
-            {
-                CommentHandling = options.CommentHandling,
-                AllowTrailingCommas = options.AllowTrailingCommas,
-            });
-        }
-        catch (JsonException exception)
-        {
-            var line = (int)(exception.LineNumber ?? 0);
-            var column = Column(text, line, (int)(exception.BytePositionInLine ?? 0));
-            diagnostics.Add(new Diagnostic(
-                new Span(path, line + 1, column + 1, column + 2),
-                Catalogue.ProjectJsonInvalid.Message(exception.Message.TrimEnd('.').Split(" LineNumber")[0])));
+        if (Parse(path, text, diagnostics) is not { } document)
             return ProjectSettings.None with { Diagnostics = diagnostics };
-        }
 
         using (document)
         {
             var root = document.RootElement;
             var reader = new Reader(path, text, diagnostics, readFile);
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                reader.Report(null, Catalogue.ProjectNotAnObject.Message(Name));
-                return ProjectSettings.None with { Diagnostics = diagnostics };
-            }
-
             var keys = Key.Scan(text);
             foreach (var property in root.EnumerateObject())
             {
@@ -172,6 +150,21 @@ public static class ProjectFile
     }
 
     /// <summary>
+    /// Reads only the <c>files</c> globs of the project described by <paramref name="text"/>, for
+    /// a command such as <c>nt65 fmt</c> that needs nothing else. <paramref name="path"/> is the
+    /// logical path that diagnostics use to refer to the file. Only problems that leave the globs
+    /// unknown are added to <paramref name="diagnostics"/>, so a link whose config is missing, or
+    /// any other setting that is wrong, does not stop the read.
+    /// </summary>
+    public static IReadOnlyList<string> Files(string path, string text, List<Diagnostic> diagnostics)
+    {
+        if (Parse(path, text, diagnostics) is not { } document)
+            return [];
+        using (document)
+            return new Reader(path, text, diagnostics, _ => null).Strings(document.RootElement, Key.Scan(text), FilesKey);
+    }
+
+    /// <summary>
     /// Reads one <c>-D NAME=value</c> from the command line, or reports what is wrong with it.
     /// <c>-D NAME</c> with no value gives the setting 1, as a flag.
     /// </summary>
@@ -193,6 +186,39 @@ public static class ProjectFile
             return null;
         }
         return new Processor.SettingValue(name, value, span);
+    }
+
+    /// <summary>
+    /// Parses <paramref name="text"/> as JSON and returns the document, or returns null when the
+    /// text is not JSON or its root is not an object. The problem is then added to
+    /// <paramref name="diagnostics"/>, at <paramref name="path"/>.
+    /// </summary>
+    private static JsonDocument? Parse(string path, string text, List<Diagnostic> diagnostics)
+    {
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(text, new JsonDocumentOptions
+            {
+                CommentHandling = options.CommentHandling,
+                AllowTrailingCommas = options.AllowTrailingCommas,
+            });
+        }
+        catch (JsonException exception)
+        {
+            var line = (int)(exception.LineNumber ?? 0);
+            var column = Column(text, line, (int)(exception.BytePositionInLine ?? 0));
+            diagnostics.Add(new Diagnostic(
+                new Span(path, line + 1, column + 1, column + 2),
+                Catalogue.ProjectJsonInvalid.Message(exception.Message.TrimEnd('.').Split(" LineNumber")[0])));
+            return null;
+        }
+
+        if (document.RootElement.ValueKind == JsonValueKind.Object)
+            return document;
+        document.Dispose();
+        diagnostics.Add(new Diagnostic(new Span(path, 1, 1, 2), Severity.Error, Catalogue.ProjectNotAnObject.Message(Name)));
+        return null;
     }
 
     /// <summary>

@@ -69,6 +69,28 @@ public sealed class FormatCommandTests : IDisposable
     }
 
     /// <summary>
+    /// Formatting reads only the project's <c>files</c>, so a link whose linker config is missing,
+    /// and the segment that then has nowhere to go, do not stop it. Those are for a build to report.
+    /// </summary>
+    [Fact]
+    public void AProjectWhoseLinksCannotBeReadStillFormats()
+    {
+        root.Write("nt65.json", """
+            {
+                "cpu": "65816",
+                "files": ["src/*.nt65"],
+                "links": { "rom": { "config": "missing.cfg" } },
+                "segments": { "ZEROPAGE": {} }
+            }
+            """);
+        root.Write("src/main.nt65", Crooked);
+
+        Assert.Equal((ExitCode.InputError, "src/main.nt65\n"), Run(root.FullName, "fmt", "--check"));
+        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "fmt"));
+        Assert.Equal(Straight, root.Read("src/main.nt65"));
+    }
+
+    /// <summary>
     /// Formatting needs no program, so a named file that belongs to no project still formats.
     /// With no file named and no project to take files from, there is nothing to format, and nt65
     /// reports that before printing the usage text.
@@ -89,6 +111,12 @@ public sealed class FormatCommandTests : IDisposable
         Assert.Equal(ExitCode.InputError, code);
         Assert.StartsWith("nt65.json:1:", printed);
         Assert.DoesNotContain("no files to format", printed);
+
+        // So is a `files` that is not a list of globs.
+        root.Write("nt65.json", """{ "files": "*.nt65" }""");
+        (code, printed) = Run(root.FullName, "fmt");
+        Assert.Equal(ExitCode.InputError, code);
+        Assert.StartsWith("nt65.json:1:3: error:", printed);
 
         (code, printed) = Run(root.FullName, "fmt", "--write");
         Assert.Equal((ExitCode.UsageError, "nt65: `--write` is not an option\nsee `nt65 --help`\n"), (code, printed));
