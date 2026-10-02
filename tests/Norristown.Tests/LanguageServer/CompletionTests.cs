@@ -89,6 +89,12 @@ public sealed class CompletionTests
         { "body", "    tone!(low, up, |", ["low", "high"], ["up"] },
         { "body", "    tone!(w = |", ["up", "down"], ["low"] },
 
+        // Where an argument of a function call starts, the function's parameters may be named.
+        { "body", "    lda #twice(|", ["n", "clear"], [] },
+        { "body", "    lda #twice(1 + |", ["clear"], ["n"] },
+        { "top", ".const X = twice(|", ["n", "clear"], [] },
+        { "top", ".const X = twice(\n    1, |", ["n", "clear"], [] },
+
         // In a condition, `.mode(p)` is compared with the modes the parameter allows, and a `one`
         // with its words.
         { "pick", "    .if .mode(src) == |", ["imm", "abs"], ["zp", "absx", "clear", "src"] },

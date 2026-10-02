@@ -66,7 +66,7 @@ public static class PaddedText
         if (value is CallExpressionSyntax { Callee: { } callee } call
             && model.SymbolOf(callee, on) is { Kind: SymbolKind.Charmap })
         {
-            return call.Arguments.Arguments is [var text] && IsText(text, model, on);
+            return call.Arguments.Arguments is [ExpressionSyntax text] && IsText(text, model, on);
         }
         return model.ValueOf(value, on).Kind == ValueKind.String;
     }

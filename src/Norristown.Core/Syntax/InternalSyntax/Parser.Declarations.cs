@@ -87,7 +87,7 @@ internal sealed partial class Parser
         };
     }
 
-    /// <summary>Parses <c>.func name(a, b) = expr</c>, a pure expression function.</summary>
+    /// <summary>Parses <c>.func name(a, b = 1) = expr</c>, a pure expression function.</summary>
     private GreenNode ParseFunc()
     {
         var keyword = Advance();
@@ -157,13 +157,51 @@ internal sealed partial class Parser
         return new ParameterListSyntax(openParen, parameters, closeParen);
     }
 
-    /// <summary>Parses one parameter of a <c>.func</c>, which is only its name.</summary>
+    /// <summary>
+    /// Parses one parameter of a <c>.func</c>, which is <c>name</c> or <c>name = default</c>.
+    /// A <c>: kind</c> after the name is reported and skipped, up to the <c>,</c>, <c>)</c> or
+    /// <c>=</c> that ends it, so the parameter keeps its place and nothing after it is reported
+    /// again.
+    /// </summary>
     private GreenNode? ParseParameter()
     {
-        if (AtName)
-            return new ParameterSyntax(Advance());
-        Report(Catalogue.ExpectedName.Message("a parameter name"));
-        return null;
+        if (!AtName)
+        {
+            Report(Catalogue.ExpectedName.Message("a parameter name"));
+            return null;
+        }
+        var name = Advance();
+        SkippedTokensSyntax? kind = null;
+        if (Kind == SyntaxKind.Colon)
+        {
+            Report(Catalogue.FunctionParameterKind);
+            kind = SkipKind();
+        }
+        if (Kind != SyntaxKind.Equals)
+            return new ParameterSyntax(name, kind, null, null);
+        return new ParameterSyntax(name, kind, Advance(), ParseExpression());
+    }
+
+    /// <summary>
+    /// Skips a parameter's <c>: kind</c> up to the <c>,</c>, <c>)</c> or <c>=</c> that ends it.
+    /// A kind such as <c>one(a, b)</c> holds parentheses and commas of its own, so only those
+    /// outside any parentheses it opens end it.
+    /// </summary>
+    private SkippedTokensSyntax SkipKind()
+    {
+        var skipped = new GreenListBuilder();
+        var depth = 0;
+        while (!AtEnd)
+        {
+            if (depth == 0 && Kind is SyntaxKind.Comma or SyntaxKind.CloseParen or SyntaxKind.Equals)
+                break;
+            if (Kind == SyntaxKind.OpenParen)
+                depth++;
+            else if (Kind == SyntaxKind.CloseParen)
+                depth--;
+            skipped.Add(Advance());
+        }
+        return Own(new SkippedTokensSyntax(skipped.ToList()));
     }
 
     private GreenNode ParseCpuDirective()

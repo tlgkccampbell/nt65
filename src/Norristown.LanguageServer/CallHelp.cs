@@ -67,11 +67,7 @@ internal static class CallHelp
                 return ForMacro(macro, before, open, end, argument);
             }
             if (open >= 1 && Completion.Callee(model, line, open) is { Kind: SymbolKind.Func } function)
-            {
-                return Help($"{function.Name}(", [.. function.ParameterSymbols.Select(parameter => parameter.Name)], ")",
-                    function.Items is [{ } body] ? $"`= {body.GetText().Trim()}`" : null,
-                    Math.Min(argument, Math.Max(0, function.ParameterSymbols.Count - 1)));
-            }
+                return ForFunction(function, before, open, end, argument);
             end = open;
         }
     }
@@ -89,7 +85,7 @@ internal static class CallHelp
     /// <param name="argument">The number of arguments before the one containing the caret.</param>
     public static MacroParameter? ParameterAt(
         Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument) =>
-        Active(macro, before, open, end, argument) is var active && active >= 0 && active < macro.Parameters.Count
+        ActiveIn(macro, before, open, end, argument) is var active && active >= 0 && active < macro.Parameters.Count
             ? macro.Parameters[active]
             : null;
 
@@ -105,15 +101,53 @@ internal static class CallHelp
                 .Select(parameter => parameter.GetTextOnOneLine()).ToList()
             : [.. macro.Parameters.Select(parameter => parameter.Name)];
         return Help(
-            $"{macro.Name}!(", declared, ")", macro.KindText, Math.Max(0, Active(macro, before, open, end, argument)));
+            $"{macro.Name}!(", declared, ")", macro.KindText, Math.Max(0, ActiveIn(macro, before, open, end, argument)));
+    }
+
+    /// <summary>
+    /// Returns signature help that shows a function's parameters, each with its default, and
+    /// marks the one the caret's argument is for, which a named argument names.
+    /// </summary>
+    private static Protocol.SignatureHelp ForFunction(
+        Symbol function, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
+    {
+        var parameters = function.ParameterSymbols;
+        var declared = parameters
+            .Select(parameter => parameter.Default is { } given ? $"{parameter.Name} = {given.GetTextOnOneLine()}" : parameter.Name)
+            .ToList();
+        var active = Active(
+            [.. parameters.Select(parameter => parameter.Name)], [.. Enumerable.Range(0, parameters.Count)],
+            before, open, end, argument);
+        return Help($"{function.Name}(", declared, ")",
+            function.Items is [{ } body] ? $"`= {body.GetText().Trim()}`" : null, Math.Max(0, active));
     }
 
     /// <summary>
     /// Returns the index among <paramref name="macro"/>'s parameters of the one the caret's
-    /// argument is for, or -1 if there is none.
+    /// argument is for, or -1 if there is none. A <c>block</c> parameter takes no position.
     /// </summary>
+    private static int ActiveIn(
+        Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument) =>
+        Active(
+            [.. macro.Parameters.Select(parameter => parameter.Name)],
+            [.. macro.Parameters.Select((parameter, index) => (parameter, index))
+                .Where(pair => !pair.parameter.IsBlock).Select(pair => pair.index)],
+            before, open, end, argument);
+
+    /// <summary>
+    /// Returns the index among <paramref name="names"/> of the parameter the caret's argument is
+    /// for, or -1 if there is none. An argument of the form <c>name = value</c> is for the
+    /// parameter it names, and any other argument is for the parameter at its position.
+    /// </summary>
+    /// <param name="names">The parameters' names, in the order they are declared.</param>
+    /// <param name="positional">The indexes of the parameters an argument may give by position.</param>
+    /// <param name="before">The tokens of the line before the caret.</param>
+    /// <param name="open">The index of the call's <c>(</c> among those tokens.</param>
+    /// <param name="end">The index where the argument containing the caret ends, exclusive.</param>
+    /// <param name="argument">The number of arguments before the one containing the caret.</param>
     private static int Active(
-        Symbol macro, IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
+        IReadOnlyList<string> names, IReadOnlyList<int> positional,
+        IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before, int open, int end, int argument)
     {
         // The argument the caret is in starts after the last comma at this depth.
         var start = end;
@@ -131,10 +165,8 @@ internal static class CallHelp
             start = i;
         }
         if (start + 1 < end && before[start + 1].Kind == SyntaxKind.Equals)
-            return macro.Parameters.ToList().FindIndex(parameter => parameter.Name == before[start].Text);
-        var inParentheses = macro.Parameters.Select((parameter, index) => (parameter, index))
-            .Where(pair => !pair.parameter.IsBlock).Select(pair => pair.index).ToList();
-        return argument < inParentheses.Count ? inParentheses[argument] : inParentheses.Count > 0 ? inParentheses[^1] : -1;
+            return names.ToList().IndexOf(before[start].Text);
+        return argument < positional.Count ? positional[argument] : positional.Count > 0 ? positional[^1] : -1;
     }
 
     /// <summary>

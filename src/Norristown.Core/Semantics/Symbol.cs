@@ -132,6 +132,12 @@ public sealed class Symbol
     /// <summary>Gets a function's parameters, in order, as the symbols its body names.</summary>
     public IReadOnlyList<Symbol> ParameterSymbols { get; internal set => field = Unfrozen(value); } = [];
 
+    /// <summary>
+    /// Gets the default of a function's parameter, which a call that leaves the parameter out gives
+    /// it, or null when the parameter has none. Its names resolve where the function is declared.
+    /// </summary>
+    public ExpressionSyntax? Default { get; internal set => field = Unfrozen(value); }
+
     /// <summary>Gets a macro's parameters, in declaration order.</summary>
     public IReadOnlyList<MacroParameter> Parameters { get; internal set => field = Unfrozen(value); } = [];
 

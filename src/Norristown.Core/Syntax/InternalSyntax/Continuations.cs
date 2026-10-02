@@ -8,20 +8,20 @@ namespace Norristown.Syntax.InternalSyntax;
 /// expression can be written across several lines. The line break becomes trivia on the token
 /// before it, and the joined line is lexed text like any other, which the parser reads as one.
 /// <para>
-/// Only an expression's brackets, a macro call's arguments and a macro's or a function's
-/// parameters may hold a line break, which the parser checks. Joining is decided from the tokens
-/// alone, so a line that the parser will refuse is still joined, and the parser says why. To keep
-/// an unclosed bracket from swallowing the rest of the file, a line that starts a statement of its
-/// own is never joined to the one before it. Such a line is blank, or starts with <c>}</c>, a
-/// directive, an instruction, a macro call, a label or a constant. A line holding only a comment
-/// is joined, so the parts of a long expression can be explained.
+/// Only an expression's brackets, a call's or a macro call's arguments and a macro's or a
+/// function's parameters may hold a line break, which the parser checks. Joining is decided from
+/// the tokens alone, so a line that the parser will refuse is still joined, and the parser says
+/// why. To keep an unclosed bracket from swallowing the rest of the file, a line that starts a
+/// statement of its own is never joined to the one before it. Such a line is blank, or starts with
+/// <c>}</c>, a directive, an instruction, a macro call, a label or a constant. A line holding only
+/// a comment is joined, so the parts of a long expression can be explained.
 /// </para>
 /// <para>
 /// Two shapes are joined only in some places, and only the innermost open bracket decides where.
 /// A named argument or a parameter's default, <c>count = 3</c>, starts the way a constant does,
-/// and is joined where that bracket opens a macro call's arguments or a list of parameters. A
-/// parameter's kind, <c>count: const</c>, starts the way a label does, and is joined where that
-/// bracket opens a list of parameters and a word or a name follows the <c>:</c>.
+/// and is joined where that bracket opens a call's or a macro call's arguments or a list of
+/// parameters. A parameter's kind, <c>count: const</c>, starts the way a label does, and is joined
+/// where that bracket opens a list of parameters and a word or a name follows the <c>:</c>.
 /// </para>
 /// </summary>
 internal static class Continuations
@@ -90,17 +90,24 @@ internal static class Continuations
     /// <summary>
     /// Returns the kind of list the <c>(</c> at <paramref name="at"/> opens. It opens a macro
     /// call's arguments after <c>name!</c>, and a list of parameters after the name that
-    /// <c>.macro</c> or <c>.func</c> declares, whatever comes before the directive.
+    /// <c>.macro</c> or <c>.func</c> declares, whatever comes before the directive. After any
+    /// other identifier it opens a call's arguments, since a name directly before a <c>(</c> is
+    /// read as a call wherever it is not the first token of the line, and at the start of a
+    /// line it is a call or a mistake. An instruction's <c>lda (ptr),y</c> has a mnemonic
+    /// before its <c>(</c>, not an identifier.
     /// </summary>
     private static BracketKind Opens(ImmutableArray<GreenToken> tokens, int at)
     {
-        if (at < 2)
+        if (at < 1)
             return BracketKind.Expression;
-        if (Lines.IsMacroCall(tokens, at - 2))
+        if (at >= 2 && Lines.IsMacroCall(tokens, at - 2))
             return BracketKind.MacroArguments;
-        return Lines.IsName(tokens[at - 1].Kind) && tokens[at - 2].DirectiveKind is DirectiveKind.Macro or DirectiveKind.Func
-            ? BracketKind.Parameters
-            : BracketKind.Expression;
+        if (at >= 2 && Lines.IsName(tokens[at - 1].Kind)
+            && tokens[at - 2].DirectiveKind is DirectiveKind.Macro or DirectiveKind.Func)
+        {
+            return BracketKind.Parameters;
+        }
+        return tokens[at - 1].Kind == SyntaxKind.Identifier ? BracketKind.Arguments : BracketKind.Expression;
     }
 
     /// <summary>
@@ -110,9 +117,9 @@ internal static class Continuations
     /// </summary>
     /// <param name="line">The line that may continue the one before it.</param>
     /// <param name="innermost">
-    /// The kind of list the innermost open bracket opens. In a macro call's arguments a line may
-    /// also start with a named argument, and in a list of parameters with a parameter's kind or
-    /// its default.
+    /// The kind of list the innermost open bracket opens. In a call's or a macro call's arguments
+    /// a line may also start with a named argument, and in a list of parameters with a
+    /// parameter's kind or its default.
     /// </param>
     private static bool Joins(GreenLine line, BracketKind innermost) => line.LineKind switch
     {
@@ -125,7 +132,7 @@ internal static class Continuations
 
         // `count = 3` is a named argument or a default there. `?=` names neither, so it stays a
         // setting.
-        LineKind.Constant => innermost is BracketKind.MacroArguments or BracketKind.Parameters
+        LineKind.Constant => innermost is BracketKind.Arguments or BracketKind.MacroArguments or BracketKind.Parameters
             && line.Tokens[1].Kind == SyntaxKind.Equals,
 
         // `count: const` gives a parameter's kind there. A kind is a word or an enum's name, so a
@@ -189,8 +196,14 @@ internal static class Continuations
     /// <summary>Specifies the kind of list an open bracket holds, which decides what may start a line inside it.</summary>
     private enum BracketKind
     {
-        /// <summary>The brackets of an expression, which are a group, a call's arguments, a set or an index.</summary>
+        /// <summary>
+        /// The brackets of an expression, which are a group, a built-in function's arguments, a set
+        /// or an index.
+        /// </summary>
         Expression,
+
+        /// <summary>A call's arguments, after the name of the <c>.func</c> or charmap it calls.</summary>
+        Arguments,
 
         /// <summary>A macro call's arguments, after <c>name!</c>.</summary>
         MacroArguments,

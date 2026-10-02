@@ -115,17 +115,37 @@ internal sealed partial class Parser
         }
         var name = Advance();
         if (Kind == SyntaxKind.OpenParen)
-            return new CallExpressionSyntax(null, name, ParseArgumentList());
+            return new CallExpressionSyntax(null, name, ParseArgumentList(name));
         Report(Catalogue.ExpectedParenthesis.Message($"`(` after `{name.Text}`"));
         return new ErrorExpressionSyntax(name);
     }
 
-    private ArgumentListSyntax ParseArgumentList()
+    /// <summary>
+    /// Parses the arguments of a call. <paramref name="builtin"/> is the built-in function called,
+    /// or null for a call by name, which a <c>.func</c> or a charmap answers.
+    /// </summary>
+    private ArgumentListSyntax ParseArgumentList(GreenToken? builtin = null)
     {
         var openParen = Advance();
-        var arguments = Kind is not SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseExpression) : null;
+        var arguments = Kind is not SyntaxKind.CloseParen && !AtEnd
+            ? ParseSeparatedList(() => ParseCallArgument(builtin))
+            : null;
         var closeParen = Require(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
         return new ArgumentListSyntax(openParen, arguments, closeParen);
+    }
+
+    /// <summary>
+    /// Parses one argument of a call, which is an expression or a parameter's name followed by
+    /// <c>=</c> and an expression. A built-in function takes its arguments by position only, so a
+    /// named one is reported there and kept, which leaves the rest of the call to read as usual.
+    /// </summary>
+    private GreenNode ParseCallArgument(GreenToken? builtin)
+    {
+        if (!AtName || Next != SyntaxKind.Equals)
+            return ParseExpression();
+        if (builtin is not null)
+            Report(Catalogue.BuiltinArgumentNamed.Message(builtin.Text));
+        return new NamedArgumentSyntax(Advance(), Advance(), ParseExpression());
     }
 
     /// <summary>

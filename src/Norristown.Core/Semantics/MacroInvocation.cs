@@ -50,6 +50,7 @@ public sealed class MacroInvocation
         var listed = new Dictionary<Symbol, List<SyntaxNode>>();
         var next = 0;
         var named = false;
+        var misplaced = false;
 
         foreach (var argument in call.Arguments?.Arguments ?? [])
         {
@@ -62,6 +63,7 @@ public sealed class MacroInvocation
             if (named)
             {
                 Report(argument.Span, Catalogue.ArgumentAfterANamedOne);
+                misplaced = true;
                 continue;
             }
             BindPositional(argument);
@@ -197,7 +199,10 @@ public sealed class MacroInvocation
                 invocation.byParameter[parameter.Symbol] = arguments[^1];
             }
             invocation.Arguments = arguments;
-            if (missing.Count > 0)
+
+            // A positional argument after a named one is most likely the one that is missing, and
+            // it has been reported already.
+            if (missing.Count > 0 && !misplaced)
             {
                 Report(NameSpan(call),
                     Catalogue.ArgumentMissing.Message(

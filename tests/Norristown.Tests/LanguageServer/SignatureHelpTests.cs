@@ -6,6 +6,9 @@ namespace Norristown.Tests.LanguageServer;
 /// <summary>Tests the signature help an editor shows while the arguments of a call are typed.</summary>
 public sealed class SignatureHelpTests
 {
+    // A function with a default, declared on the line before the call a test writes.
+    private const string Scaled = ".func scaled(value, factor = 2) = value * factor\n";
+
     public static TheoryData<string, string, string, int> Calls => new()
     {
         { "body", "    poke!(|", "poke!(address: expr, value: const = 0)", 0 },
@@ -22,6 +25,13 @@ public sealed class SignatureHelpTests
         { "top", ".const X = .switch(1,\n    [1], |", ".switch(value, set, result, ...)", 2 },
         { "top", ".const X = .strsub(\"HELLO\", 1, |", ".strsub(text, start, count)", 2 },
         { "top", ".const X = .strcat(\"A\", 1, 2, |", ".strcat(part, ...)", 0 },
+
+        // A function's signature shows its defaults, and a named argument is for the parameter it names.
+        { "top", Scaled + ".const X = scaled(|", "scaled(value, factor = 2)", 0 },
+        { "top", Scaled + ".const X = scaled(1, |", "scaled(value, factor = 2)", 1 },
+        { "top", Scaled + ".const X = scaled(factor = |", "scaled(value, factor = 2)", 1 },
+        { "top", Scaled + ".const X = scaled(factor = 3, value = |", "scaled(value, factor = 2)", 0 },
+        { "top", Scaled + ".const X = scaled(\n    1,\n    factor = |", "scaled(value, factor = 2)", 1 },
     };
 
     [Theory]

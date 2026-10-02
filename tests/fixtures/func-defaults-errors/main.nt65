@@ -1,0 +1,43 @@
+; What is wrong with a `.func`'s parameters or with the arguments a call gives them. Each is
+; reported once, where it is, and the rest of the line reads as usual.
+.module main
+
+.func scaled(value, factor = 2) = value * factor
+
+; A kind belongs to a macro's parameter. The parameter is still declared, so the call below
+; has the right number of arguments.
+.func typed(v: expr) = v + 1    ;! error[function-parameter-kind]: a `.func` parameter takes no kind: a kind belongs to a `.macro` parameter, and a function's argument is always a value
+
+; A kind that holds parentheses and commas of its own is skipped whole, on a list that
+; continues across lines too.
+.func listed(
+    first: one(a, b),    ;! error[function-parameter-kind]: a `.func` parameter takes no kind: a kind belongs to a `.macro` parameter, and a function's argument is always a value
+    second = 3
+) = first + second
+
+; A macro call follows the same rules, and reports the same way.
+.macro note(pitch, frames = 1) {
+    .byte pitch, frames
+}
+
+.charmap screen {
+    'A'..'Z' = 1
+}
+
+.segment RODATA
+.data fine {
+    .byte typed(1)
+    .byte listed(1)
+}
+
+.data mistakes {
+    .byte scaled(1, scale = 3)              ;! error[parameter-unknown]: `scaled` has no parameter called `scale`
+    .byte scaled(1, value = 3)              ;! error[argument-given-twice]: parameter `value` is given twice
+    .byte scaled(factor = 3, factor = 4, value = 1)  ;! error[argument-given-twice]: parameter `factor` is given twice
+    .byte scaled(factor = 3, 1)             ;! error[argument-after-a-named-one]: a positional argument cannot follow a named one
+    .byte scaled(factor = 3)                ;! error[argument-missing]: `scaled` needs an argument for `value`
+    .byte scaled(1, 2, 3)                   ;! error[argument-count]: `scaled` takes 1 to 2 arguments, and this call gives more
+    .byte screen(text = "HI")               ;! error[charmap-argument-named]: `screen` is a charmap, which takes one argument, the text it maps, by position
+    .byte .strlen(text = "HI")              ;! error[builtin-argument-named]: `.strlen` takes its arguments by position: a built-in function has no named parameters
+    note!(frames = 2, 60)                   ;! error[argument-after-a-named-one]: a positional argument cannot follow a named one
+}

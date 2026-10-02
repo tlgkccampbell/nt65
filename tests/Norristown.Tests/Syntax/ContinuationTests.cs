@@ -37,6 +37,7 @@ public sealed class ContinuationTests
     [InlineData(".const X = (1\n.const Y = 2\n")]
     [InlineData(".const X = (1\nthere:\n")]
     [InlineData(".const X = .select(1,\n    count = 2)\n")]
+    [InlineData(".const X = (f(1)\n    count = 2)\n")]
     [InlineData(".proc main {\n    pair!(1\n    lda #2\n}\n")]
     public void ALineThatStartsAStatementIsNotJoined(string text)
     {
@@ -129,6 +130,46 @@ public sealed class ContinuationTests
         Assert.Equal("a + b", function.Body.GetText());
         Assert.NotSame(tree.GetLine(2), tree.GetLine(3));
         Assert.Empty(tree.Diagnostics);
+    }
+
+    /// <summary>
+    /// Checks that a call's arguments continue, a named argument first on its line included,
+    /// because the <c>(</c> directly after a name opens a call's arguments.
+    /// </summary>
+    [Fact]
+    public void ACallsArgumentsContinue()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".const X = scaled(\n    1,      ; the value\n    factor = 2)\n.const Y = 1\n");
+
+        Assert.Same(tree.GetLine(0), tree.GetLine(2));
+        var constant = Assert.IsType<ConstantDeclarationSyntax>(tree.GetLine(0).Statement);
+        var call = Assert.IsType<CallExpressionSyntax>(constant.Value);
+        var named = Assert.IsType<NamedArgumentSyntax>(call.Arguments.Arguments[1]);
+        Assert.Equal("factor", named.Name.Text);
+        Assert.NotSame(tree.GetLine(2), tree.GetLine(3));
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    /// <summary>
+    /// Checks that a kind on a function's parameter is reported once, at its <c>:</c>, and skipped
+    /// to the end of the parameter, so the parameter, the ones after it and a list continued
+    /// across lines all read as they would without it.
+    /// </summary>
+    [Fact]
+    public void AKindOnAFunctionsParameterIsReportedOnce()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".func f(\n    v: one(a, b),\n    w = 1) = v + w\n");
+
+        Assert.Same(tree.GetLine(0), tree.GetLine(2));
+        var function = Assert.IsType<FuncDeclarationSyntax>(tree.GetLine(0).Statement);
+        var parameters = function.Parameters!.Parameters;
+        Assert.Equal(["v", "w"], parameters.Select(parameter => parameter.Name.Text));
+        Assert.Equal(": one(a, b)", parameters[0].SkippedTokens?.GetText().Trim());
+        Assert.Equal("1", parameters[1].Default?.GetText().Trim());
+        Assert.Equal("v + w", function.Body.GetText());
+        var diagnostic = Assert.Single(tree.Diagnostics);
+        Assert.Equal("function-parameter-kind", diagnostic.Id);
+        Assert.Equal((2, 6, 7), (diagnostic.Span.Line, diagnostic.Span.StartColumn, diagnostic.Span.EndColumn));
     }
 
     [Fact]

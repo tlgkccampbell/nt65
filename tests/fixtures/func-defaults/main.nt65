@@ -1,0 +1,74 @@
+; Defaults and named arguments of `.func`, which follow the rules of a macro's. A call gives
+; its positional arguments first, then may name parameters, and a parameter it leaves out
+; takes its default.
+.module main
+
+.use lib::scaled
+
+.const WIDTH = 40
+
+; A default names a constant declared where the function is.
+.func row(y, width = WIDTH) = y * width
+
+; A header may continue across lines, with a default on a line of its own.
+.func clamp(
+    value,
+    low = 0,
+    high = 255
+) = .max(low, .min(value, high))
+
+; A function that gives text, with a defaulted parameter.
+.func label(text, mark = "*") = .strcat(mark, text, mark)
+
+; A default may come before a parameter without one. That parameter is then given by name, or
+; by position after the defaulted one.
+.func span(first = 1, last) = last - first
+
+.const LEVEL ?= 2
+.func above(value, floor = 1) = value > floor
+
+.segment RODATA
+.data rows {
+    .byte row(1)                ; 40
+    .byte row(2, 3)             ; 6
+    .byte row(2, width = 4)     ; 8
+    .byte row(width = 5, y = 3) ; 15
+}
+
+.data clamped {
+    .byte clamp(300)
+    .byte clamp(-4)
+    .byte clamp(7, high = 5)
+    .byte clamp(7, low = 9)
+    ; A call may continue across lines, with a named argument on a line of its own.
+    .byte clamp(
+        120,
+        high = 100
+    )
+}
+
+.data titles {
+    .byte label("menu")
+    .byte label("menu", mark = "-")
+}
+
+.data spans {
+    .byte span(last = 9)
+    .byte span(3, 9)
+}
+
+; A condition may call a function with a default and a named argument, since the
+; configuration decides both.
+.if above(LEVEL) {
+    .data deep: .byte 1
+}
+.if above(LEVEL, floor = 5) {
+    .data deeper: .byte 2
+}
+
+; A function another module exports, called with and without its default.
+.data scales {
+    .byte scaled(3)
+    .byte scaled(3, factor = 5)
+    .byte scaled(factor = 1, value = 7)
+}

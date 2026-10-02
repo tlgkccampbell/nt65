@@ -236,7 +236,9 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   or one that starts with `}`, a directive, an instruction, a macro call, a label or a constant.
   Two shapes are exceptions, and only the innermost open bracket decides where they apply. A
   named argument or a default, `count = 2`, starts as a constant does and is joined where that
-  bracket is a macro call's `(` or a list of parameters. A parameter's kind, `count: const`,
+  bracket is a call's or a macro call's `(` or a list of parameters; a call's `(` is the one
+  directly after a name, as in `scaled(`, and a built-in's is not, since a built-in takes no
+  named argument. A parameter's kind, `count: const`,
   starts as a label does and is joined where that bracket is a list of parameters and a word or a
   name follows the `:`; a label alone or before an instruction still starts a statement there.
   The rule holds inside a macro call's arguments and a list of parameters otherwise, so a line
@@ -2568,6 +2570,27 @@ not anything calls them. A function
 is exported and used across modules like a constant, and the output writes each call as
 its parenthesized body, or as its value where nt65 has one.
 
+**Defaults and named arguments** work as a macro's do (§11.2). A parameter may have a default,
+whose names resolve where the function is declared, so a caller in another module gets the
+declaring module's constant. After its positional arguments a call may name parameters, each at
+most once, and a parameter the call leaves out takes its default:
+
+```nt65
+.const WIDTH = 40
+.func row(y, width = WIDTH) = y * width
+
+.data rows {
+    .byte row(1)                ; 40
+    .byte row(2, 3)             ; 6
+    .byte row(2, width = 4)     ; 8
+    .byte row(width = 5, y = 3) ; 15
+}
+```
+
+A parameter takes no kind, since a function's argument is always a value, so `(v: expr)` is an
+error. A charmap applied as `screen("HI")` and a built-in such as `.strsub` take their arguments
+by position, and naming one is an error.
+
 **A function may return text.** A call is text when its body is: a string, a text constant, a
 parameter given text, `.select` choosing text, `.strsub` or `.strcat` (§8). It is then usable
 wherever a string is, and the output writes its bytes, as it writes a literal's. A call is
@@ -2989,7 +3012,9 @@ inputs changed.
 - **Defaults and named arguments.** A parameter may have a default, `(count = 1)`, whose
   names resolve where the macro is declared. After its positional arguments a call may
   name parameters, `actor!(40, hp = 5)`; `=` never appears in an expression, so this is
-  unambiguous.
+  unambiguous. Each parameter is given at most once, by position or by name, and one without a
+  default must be given. A parameter with a default may come before one without, which a call
+  then gives by name or by position after it. A `.func` follows the same rules (§9).
 - **Operands.** An argument is an expression unless it is braced. `{buf,x}`,
   `{(ptr),y}`, `{(ptr)}` and `{#$1234}` are operands; an unbraced `(ptr)` is the
   expression `ptr`, and passing one to an `operand` parameter is an error, since it reads
@@ -3896,7 +3921,7 @@ alone and without an assembler:
   macro bodies and block arguments, without expanding a macro, and through qualified names,
   `.use`, `as` and re-exports: a rename across modules rewrites the `.use` items that name
   the symbol, and leaves a name `as` gave alone), the member names a record gives values
-  included. A segment name leads to where it is declared: each linked config line that places
+  and the parameters a named argument names included. A segment name leads to where it is declared: each linked config line that places
   it, answered for every project that builds the file, since a library's `CODE` is each
   platform's `CODE`;
 - colour every name by what it refers to, so `Joy::A` is an enum member and not a register. A
@@ -3958,7 +3983,8 @@ alone and without an assembler:
   to; in a `.use` the modules and what they export; in an operand or an expression the names
   in scope, what `.use` brought in, the built-in functions and how a number that is not plain
   digits is written; in a signature or a `.state`
-  its items and the signature sets; in a macro call its parameters as named arguments; and
+  its items and the signature sets; in a macro call or a `.func` call its parameters as named
+  arguments; and
   nothing at all inside a comment or a text. It also shows, inside a macro call, a `.func`
   call or a `.select`, what it takes and which argument the caret is in. What is offered is
   ordered by how near it is: the labels of the routine the caret is in, then the file's names,
@@ -5036,7 +5062,8 @@ member-name := ident | register | mnemonic
 charmap     := '.charmap' ident '{' NL (expr ('..' expr)? '=' expr NL)* '}'
                                                       ; characters, or a range of them
 list        := '.list' ident '{' NL (expr (',' expr)* NL)* '}'
-func        := '.func' ident '(' (ident (',' ident)*)? ')' '=' expr
+func        := '.func' ident '(' (func-param (',' func-param)*)? ')' '=' expr
+func-param  := ident ('=' expr)?                       ; no kind: the argument is a value
 scope       := '.scope' ident? '{' NL body '}'
 segment     := '.segment' ident '{' NL (item* | body) '}'
 body        := (item | label-line | instr | data | macro-call | assertion | ensure | frame
@@ -5112,8 +5139,10 @@ expr        := unary (binop unary)*                   ; precedence, and where pa
                                                       ; are required, in §9
 unary       := ('+' | '-' | '~' | '!' | '<' | '>' | '^')* primary
 primary     := number | char | string | cpu-name | '*' | '(' expr ')'
-             | path ('(' (expr (',' expr)*)? ')')?    ; a charmap applied, or a .func call
+             | path ('(' (call-arg (',' call-arg)*)? ')')?  ; a charmap applied, or a .func call
              | builtin '(' (expr (',' expr)*)? ')'
+call-arg    := (member-name '=')? expr                ; named only in a .func call, after
+                                                      ; the positional ones
              | '[' (range (',' range)*)? ']'           ; a set: after .in, or a .switch arm
 range       := expr ('..' expr)?
 binop       := '*' | '/' | '.mod' | '+' | '-' | '<<' | '>>' | '<' | '<=' | '>' | '>='

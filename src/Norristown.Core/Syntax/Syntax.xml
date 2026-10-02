@@ -121,7 +121,7 @@
   <Node Name="ArgumentListSyntax" Base="SyntaxNode">
     <Kind Name="ArgumentList"/>
     <TypeComment>
-      <summary>Represents <c>(a, b)</c>, the arguments of a call or of a macro call.</summary>
+      <summary>Represents <c>(a, b = 1)</c>, the arguments of a call or of a macro call.</summary>
     </TypeComment>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
@@ -132,8 +132,8 @@
     <Field Name="Arguments" Type="SeparatedSyntaxList&lt;SyntaxNode&gt;">
       <PropertyComment>
         <summary>
-          Gets the arguments. A call's arguments are expressions; a macro call's may also be braced
-          operands and named arguments.
+          Gets the arguments. A call's arguments are expressions and named arguments, and a macro
+          call's may also be braced operands.
         </summary>
       </PropertyComment>
     </Field>
@@ -1100,7 +1100,8 @@
     <Kind Name="FuncDeclaration"/>
     <TypeComment>
       <summary>
-        Represents a <c>.func name(a, b) = expr</c> line, which declares a pure expression function.
+        Represents a <c>.func name(a, b = 1) = expr</c> line, which declares a pure expression
+        function.
       </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
@@ -1884,7 +1885,10 @@
   <Node Name="NamedArgumentSyntax" Base="SyntaxNode">
     <Kind Name="NamedArgument"/>
     <TypeComment>
-      <summary>Represents <c>name = argument</c>, a macro argument given by name.</summary>
+      <summary>
+        Represents <c>name = argument</c>, an argument that a call or a macro call gives by the name
+        of its parameter.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
@@ -2066,7 +2070,7 @@
   <Node Name="ParameterListSyntax" Base="SyntaxNode">
     <Kind Name="ParameterList"/>
     <TypeComment>
-      <summary>Represents <c>(a, b)</c>, the parameters of a <c>.func</c>.</summary>
+      <summary>Represents <c>(a, b = 1)</c>, the parameters of a <c>.func</c>.</summary>
     </TypeComment>
     <Field Name="OpenParenToken" Type="SyntaxToken">
       <PropertyComment>
@@ -2090,7 +2094,10 @@
   <Node Name="ParameterSyntax" Base="SyntaxNode">
     <Kind Name="Parameter"/>
     <TypeComment>
-      <summary>Represents one parameter of a <c>.func</c>, which is only its name.</summary>
+      <summary>
+        Represents one parameter of a <c>.func</c>, in the form <c>name</c> or <c>name = default</c>.
+        A function's argument is always a value, so a parameter takes no kind.
+      </summary>
     </TypeComment>
     <Field Name="Name" Type="SyntaxToken">
       <PropertyComment>
@@ -2099,6 +2106,25 @@
       <Kind Name="Identifier"/>
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
+    </Field>
+    <Field Name="SkippedTokens" Type="SkippedTokensSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the <c>: kind</c> the parser skipped after the name, or null if there is none. A kind
+          belongs to a <c>.macro</c> parameter, and is reported here.
+        </summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="EqualsToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>=</c> token before the default, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Equals"/>
+    </Field>
+    <Field Name="Default" Type="ExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>Gets the value a call that leaves the parameter out gives it, or null if there is none.</summary>
+      </PropertyComment>
     </Field>
   </Node>
 

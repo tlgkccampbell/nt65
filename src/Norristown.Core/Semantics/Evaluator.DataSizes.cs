@@ -463,10 +463,9 @@ internal sealed partial class Evaluator
             return BuiltText(operand);
         }
 
-        var given = call.Arguments.Arguments;
-        if (given.Count != 1)
+        if (call.Arguments.Arguments is not [ExpressionSyntax given])
             return null;
-        var text = Evaluate(given[0]);
+        var text = Evaluate(given);
         var characters = text.Kind switch
         {
             ValueKind.String => text.Text!.Select(c => (int)c),

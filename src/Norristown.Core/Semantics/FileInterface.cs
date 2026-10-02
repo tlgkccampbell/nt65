@@ -104,7 +104,7 @@ internal static class FileInterface
         foreach (var parameter in symbol.Parameters)
             text.Append($"{indent}parameter {parameter.Symbol.Name} {parameter.Accepts} {parameter.Default?.GetText()} {parameter.Empty}\n");
         foreach (var parameter in symbol.ParameterSymbols)
-            text.Append($"{indent}parameter {parameter.Name}\n");
+            text.Append($"{indent}parameter {parameter.Name} {parameter.Default?.GetText()}\n");
         foreach (var (callee, _) in symbol.Calls)
             text.Append($"{indent}calls {callee.Tree.Path} {callee.QualifiedName}\n");
         foreach (var (used, _) in symbol.Uses)
@@ -114,6 +114,7 @@ internal static class FileInterface
             .Concat(symbol.Items)
             .Concat(symbol.Entries)
             .Concat(symbol.Parameters.Select(parameter => parameter.Default))
+            .Concat(symbol.ParameterSymbols.Select(parameter => parameter.Default))
             .OfType<SyntaxNode>()
             .ToList();
         foreach (var node in declaredNodes)

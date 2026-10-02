@@ -522,10 +522,18 @@ internal sealed partial class Evaluator
 
             // A function has no value of its own, but its body is read once with nothing given,
             // so that functions calling each other in a ring are reported whether or not
-            // anything calls them.
+            // anything calls them. The defaults are read with it, since a default may call the
+            // function too.
             case SymbolKind.Func when symbol.Items.Count > 0 && Reporting:
                 using (Evaluating(symbol, context with { ReadingBody = true }))
+                {
                     Evaluate(symbol.Items[0]);
+                    foreach (var parameter in symbol.ParameterSymbols)
+                    {
+                        if (parameter.Default is { } given)
+                            Evaluate(given);
+                    }
+                }
                 return;
             case SymbolKind.Constant when symbol.FollowsPrevious:
                 symbol.Value = Number(Follows(symbol));

@@ -337,8 +337,8 @@ internal static class Completion
 
     /// <summary>
     /// Offers what may go where an expression or a macro's argument goes. An argument of a macro
-    /// call is offered what its parameter takes, and where an argument starts, the parameters it
-    /// may name. A comparison with a parameter's argument is offered the words that parameter
+    /// call is offered what its parameter takes. Where an argument of a macro call or of a
+    /// <c>.func</c> call starts, the parameters it may name are offered. A comparison with a parameter's argument is offered the words that parameter
     /// accepts. Anywhere else a name may follow, the start of an expression is offered.
     /// </summary>
     /// <returns>Always true, since this is the last handler and recognizes every place.</returns>
@@ -364,6 +364,8 @@ internal static class Completion
                 Accepted(model, taking, items);
         }
 
+        FunctionParameters(model, line, items);
+
         // The words of a comparison replace the expression rather than joining it.
         if (Compared(model, line) is var (name, accepts, isMode))
         {
@@ -379,6 +381,27 @@ internal static class Completion
         if (!Ends(before[^1].Kind))
             AddExpression(program, model, line, items);
         return true;
+    }
+
+    /// <summary>
+    /// Offers the parameters of the <c>.func</c> whose call the caret is in, as named arguments,
+    /// where an argument starts.
+    /// </summary>
+    private static void FunctionParameters(SemanticModel model, LineContext line, Dictionary<string, Suggestion> items)
+    {
+        var before = line.Before;
+        if (line.OpenCall() is not { Open: >= 1 } call
+            || before[^1].Kind is not (SyntaxKind.OpenParen or SyntaxKind.Comma)
+            || Callee(model, line, call.Open) is not { Kind: SymbolKind.Func } function)
+        {
+            return;
+        }
+        foreach (var parameter in function.ParameterSymbols)
+        {
+            items.TryAdd(parameter.Name, new Suggestion(
+                SuggestionSource.Symbol, Protocol.CompletionItemKind.Property,
+                "parameter", parameter.Name + " = ", Band: Suggestion.InScope, Order: 1));
+        }
     }
 
     /// <summary>
@@ -618,7 +641,10 @@ internal static class Completion
             return;
         }
         if (!Ends(operand[^1].Kind))
+        {
+            FunctionParameters(model, line, items);
             AddExpression(program, model, line, items);
+        }
     }
 
     /// <summary>

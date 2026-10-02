@@ -236,7 +236,7 @@ public static class DataLengths
         if (operand is CallExpressionSyntax { Callee: { } callee } call
             && model.SymbolOf(callee, on) is { Kind: SymbolKind.Charmap })
         {
-            return call.Arguments.Arguments is [var given] ? TextOf(given, model, on) : null;
+            return call.Arguments.Arguments is [ExpressionSyntax given] ? TextOf(given, model, on) : null;
         }
         return model.ValueOf(operand, on) is { Kind: ValueKind.String, Text: { } text } ? text : null;
     }

@@ -188,8 +188,10 @@ internal static class TextMateGrammar
             // it, so it is not the last name before the brace as a repetition's is.
             TextMateRule.Scoped($@"(?i)(\.multiproc)\s+(?:{Word}\s*::\s*)*({Word})\s*,\s*({Word})",
                 Directive, Identifier, Constant),
+            // A function's parameters are found as a macro's are, and the names in a default are
+            // uses. A parameter takes no kind, so the grammar does not scope a `: kind` there.
             TextMateRule.Block($@"(?i)(\.func)\s+({Word})\s*(\()", @"\)", [Directive, Function],
-                [TextMateRule.Scoped($@"\b({Word})", Parameter), include]),
+                [parentheses, TextMateRule.Scoped($@"(?:(?<=[(,])|^)\s*({Word})(?=\s*[,):=])", Parameter), include]),
 
             // A declaration's name, after the directive that declares it.
             TextMateRule.Scoped($@"(?i)(\.proc)\s+({Word})", Directive, Function),
@@ -220,6 +222,11 @@ internal static class TextMateGrammar
             TextMateRule.Block($@"\b({Word})\s*(!)\s*(\()", @"\)", [Macro, Operator],
                 [parentheses, TextMateRule.Scoped($@"\s*({Word})(?=\s*=(?!=))", Parameter), include]),
             TextMateRule.Scoped($@"\b({Word})(?=\s*!(?!=))", Macro),
+
+            // A call by name, whose named arguments are the parameters of the `.func` it calls. It
+            // comes after mnemonics and registers, so `lda (ptr),y` is still an instruction.
+            TextMateRule.Block($@"\b({Word})\s*(\()", @"\)", [Identifier, null],
+                [parentheses, TextMateRule.Scoped($@"\s*({Word})(?=\s*=(?!=))", Parameter), include]),
             new TextMateRule(Match: @"\b" + Word, Name: Identifier),
             new TextMateRule(Match: @"->|\.\.|<<|>>|<=|>=|==|!=|&&|\|\||\^\^|[-+*/&|^~!<>=#?]", Name: Operator),
         ]);

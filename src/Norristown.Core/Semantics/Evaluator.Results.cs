@@ -28,7 +28,9 @@ internal sealed partial class Evaluator
     /// Determines whether <paramref name="function"/> is closed. Its body may name only its own
     /// parameters, constants, members, lists, charmaps and other closed functions, and may call
     /// only closed built-ins. A repetition's name, which a function declared inside the
-    /// repetition may read, is not allowed. A function that reaches itself is never closed.
+    /// repetition may read, is not allowed. Its defaults are held to the same rule, since a call to
+    /// the function from another closed one may take them. A function that reaches itself is
+    /// never closed.
     /// </summary>
     private bool IsClosed(Symbol function) => IsClosed(function, []);
 
@@ -38,7 +40,9 @@ internal sealed partial class Evaluator
             return false;
         try
         {
-            return IsClosed(function.Items[0], function, visiting);
+            return IsClosed(function.Items[0], function, visiting)
+                && function.ParameterSymbols.All(parameter =>
+                    parameter.Default is not { } given || IsClosed(given, function, visiting));
         }
         finally
         {
@@ -66,6 +70,9 @@ internal sealed partial class Evaluator
                     return false;
                 }
                 return call.Arguments.Arguments.All(argument => IsClosed(argument, function, visiting));
+
+            case NamedArgumentSyntax named:
+                return IsClosed(named.Value, function, visiting);
 
             case ParenthesizedExpressionSyntax or UnaryExpressionSyntax or BinaryExpressionSyntax
                 or SetExpressionSyntax or RangeSyntax:

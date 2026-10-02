@@ -421,6 +421,16 @@ public static class Catalogue
             + "`const`, `ident`, `operand`, `one(...)`, `list(...)` or `block`, or the name of an enum. A "
             + "parameter that declares no kind takes an expression.");
 
+    internal static DiagnosticDescriptor FunctionParameterKind { get; } = Entry(
+        Area.ReadingALine,
+        "function-parameter-kind",
+        Severity.Error,
+        "a `.func` parameter takes no kind: a kind belongs to a `.macro` parameter, and a function's argument is "
+            + "always a value",
+        "A macro parameter may say what kind of argument it takes, such as a name, an operand or a block, because a "
+            + "macro writes its arguments into code. A function's arguments are only ever values, so its parameters "
+            + "are bare names, with a default if they need one: `.func scaled(value, factor = 2) = value * factor`.");
+
     internal static DiagnosticDescriptor ExpectedStateItem { get; } = Entry(
         Area.ReadingALine,
         "expected-state-item",
@@ -587,6 +597,14 @@ public static class Catalogue
         "`{0}` is not a function",
         "The built-in functions are a fixed set. A function the program declares is a `.func`, and its name "
             + "has no leading `.`.");
+
+    internal static DiagnosticDescriptor BuiltinArgumentNamed { get; } = Entry(
+        Area.ReadingALine,
+        "builtin-argument-named",
+        Severity.Error,
+        "`{0}` takes its arguments by position: a built-in function has no named parameters",
+        "A call to a `.func` may give an argument by its parameter's name, as `scaled(3, factor = 4)`. A built-in "
+            + "function's parameters have no names, so each of its arguments is given in its place.");
 
     // Names
 
@@ -1274,12 +1292,13 @@ public static class Catalogue
             + "names, so neither has a size. An import can be measured once it states its type, as in `.import "
             + "name: .byte[n]`.");
 
-    internal static DiagnosticDescriptor FunctionArgumentCount { get; } = Entry(
+    internal static DiagnosticDescriptor CharmapArgumentNamed { get; } = Entry(
         Area.Values,
-        "function-argument-count",
+        "charmap-argument-named",
         Severity.Error,
-        "`{0}` takes {1} argument(s), and {2} were given",
-        "A `.func` takes exactly the parameters it declares. There are no defaults and no overloads.");
+        "`{0}` is a charmap, which takes one argument, the text it maps, by position",
+        "A charmap is applied as a call, `screen(\"HI\")`, but it is not a `.func` and has no named parameters, so "
+            + "its one argument is given without a name.");
 
     internal static DiagnosticDescriptor ConditionIsText { get; } = Entry(
         Area.Values,
@@ -1656,7 +1675,7 @@ public static class Catalogue
         "parameter-unknown",
         Severity.Error,
         "`{0}` has no parameter called `{1}`",
-        "A named argument names a parameter the macro declares.");
+        "A named argument names a parameter that the macro or the `.func` declares.");
 
     internal static DiagnosticDescriptor BlockParameterUnknown { get; } = Entry(
         Area.Macros,
@@ -1677,7 +1696,8 @@ public static class Catalogue
         "argument-missing",
         Severity.Error,
         "`{0}` needs an argument for {1}",
-        "A parameter with no default must be given an argument at every call, by position or by name.");
+        "A parameter with no default must be given an argument at every call, by position or by name. This holds "
+            + "for a macro's parameters and a `.func`'s alike.");
 
     internal static DiagnosticDescriptor ArgumentAfterANamedOne { get; } = Entry(
         Area.Macros,
@@ -1692,7 +1712,7 @@ public static class Catalogue
         "argument-count",
         Severity.Error,
         "`{0}` takes {1}, and this call gives more",
-        "The call gives more positional arguments than the macro has parameters to bind them to.");
+        "The call gives more positional arguments than the macro or the `.func` has parameters to bind them to.");
 
     internal static DiagnosticDescriptor BlockArgumentInParentheses { get; } = Entry(
         Area.Macros,

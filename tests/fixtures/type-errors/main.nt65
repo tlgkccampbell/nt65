@@ -53,7 +53,7 @@
 .data both: .type Value { b = 1, w = 2 }  ;! error[union-many-members-given]: `Value` is a union, whose members all start at offset 0, so it takes a value for at most one of them
 .data mistakes {
     .byte screen("hi")  ;! error[charmap-has-no-entry]: charmap `screen` has no entry for `h`
-    .byte twice(1, 2)   ;! error[function-argument-count]: `twice` takes 1 argument(s), and 2 were given
+    .byte twice(1, 2)   ;! error[argument-count]: `twice` takes 1 argument(s), and this call gives more
     .align 100          ;! error[align-boundary-not-power-of-two]: an `.align` boundary must be a power of two from 1 to $10000, not 100
     .byte Point::z      ;! error[not-declared-in]: `z` is not declared in `Point`; did you mean `x`?
 }

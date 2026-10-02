@@ -72,9 +72,11 @@ public sealed class SemanticModel
             .Concat(expanded)
             .Concat(Namesakes(References))
             .Distinct()];
+        // A function's parameter that a named argument names is no symbol to the linker either.
         ExternalSymbols = [.. Used
             .Where(symbol => symbol.Tree != tree && !symbol.IsSetting
-                && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter))];
+                && symbol.Kind is not (SymbolKind.Member or SymbolKind.Macro or SymbolKind.MacroParameter)
+                && symbol.Scope.Owner is not { Kind: SymbolKind.Func })];
     }
 
     /// <summary>Gets the file this model describes.</summary>

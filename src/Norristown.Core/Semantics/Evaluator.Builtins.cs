@@ -61,9 +61,11 @@ internal sealed partial class Evaluator
         var given = call.Arguments.Arguments;
         if (mode == EvaluationMode.Conditions)
             return InCondition(call, given, conditions!);
-        if (call.Callee is { } callee)
-            return Applied(callee, given);
-        if (call.Function is not { Kind: SyntaxKind.Directive } function)
+        if (call.Callee is not null)
+            return Applied(call);
+
+        // A built-in takes its arguments by position, and the parser has reported a named one.
+        if (call.Function is not { Kind: SyntaxKind.Directive } function || given.Any(argument => argument is NamedArgumentSyntax))
             return Value.Unknown;
 
         var kind = call.BuiltinKind;
@@ -433,8 +435,9 @@ internal sealed partial class Evaluator
         if (call.Function is not { Kind: SyntaxKind.Directive } function)
         {
             // A `.func` or a charmap called by name. Its arguments are evaluated here, so that
-            // what they use is checked as the rest of the condition is.
-            var values = given.Select(Evaluate).ToArray();
+            // what they use is checked as the rest of the condition is. A named argument's value
+            // is evaluated, and the configuration matches it to its parameter by its name.
+            var values = given.Select(argument => Evaluate(argument is NamedArgumentSyntax named ? named.Value : argument)).ToArray();
             if (asked.Call(call, values) is not { } decided)
                 return Value.Unknown;
             if (decided.Why is { } why)
@@ -539,29 +542,27 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Evaluates a call to a charmap or a function by name. A charmap maps one character to its
     /// byte. A function evaluates its body with each parameter bound to the argument it was
-    /// given. A function whose evaluation needs its own value is reported as a cycle, as a
-    /// constant's would be.
+    /// given, or to its default when the call leaves it out. A function whose evaluation needs its
+    /// own value is reported as a cycle, as a constant's would be. A call whose arguments do not
+    /// match the parameters has no value, and the binder has reported why.
     /// </summary>
-    private Value Applied(NameExpressionSyntax callee, IReadOnlyList<SyntaxNode> given)
+    private Value Applied(CallExpressionSyntax call)
     {
-        if (SymbolOf(callee) is not { } symbol)
+        if (SymbolOf(call.Callee!) is not { } symbol)
             return Value.Unknown;
 
         if (symbol.Kind == SymbolKind.Charmap)
         {
             var mapped = Map(symbol);
-            return given.Count == 1 && Evaluate(given[0]) is { Kind: ValueKind.Number } character
+            return call.Arguments.Arguments is [ExpressionSyntax only] && Evaluate(only) is { Kind: ValueKind.Number } character
                 && Mapped(mapped, character.Number) is { } b
                 ? Value.Of(b)
                 : Value.Unknown;
         }
 
-        if (symbol.Kind != SymbolKind.Func || symbol.Items.Count == 0)
-            return Value.Unknown;
-        if (symbol.ParameterSymbols.Count != given.Count)
+        if (symbol.Kind != SymbolKind.Func || symbol.Items.Count == 0
+            || FunctionArguments.Match(symbol, call) is not { } given)
         {
-            Report(callee, Catalogue.FunctionArgumentCount.Message(
-                symbol.Name, symbol.ParameterSymbols.Count, given.Count));
             return Value.Unknown;
         }
         if (evaluating.Contains(symbol))
@@ -570,7 +571,19 @@ internal sealed partial class Evaluator
             return Value.Unknown;
         }
 
-        var values = given.Select(Evaluate).ToArray();
+        // A default belongs to the function, so a default that calls the function again is a
+        // cycle, and is evaluated as part of it. An argument the call gives is the caller's.
+        var values = new Value[given.Count];
+        for (var i = 0; i < given.Count; i++)
+        {
+            if (given[i] != symbol.ParameterSymbols[i].Default)
+            {
+                values[i] = Evaluate(given[i]);
+                continue;
+            }
+            using (Evaluating(symbol))
+                values[i] = Evaluate(given[i]);
+        }
 
         // A closed function called again with the same arguments gives the result it gave before.
         var kept = KeepsResults ? FunctionResults.For(resolved) : null;

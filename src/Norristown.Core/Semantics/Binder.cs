@@ -1485,14 +1485,22 @@ internal sealed partial class Binder
         var inside = new Scope(ScopeKind.Type, null, scope, symbol);
         symbol.Body = inside;
 
+        // A default appears in the header, so it resolves where the function is declared, as a
+        // macro's default does, rather than in the body where the parameters are.
+        IReadOnlyList<ParameterSyntax> declaredParameters = statement.Parameters is { } list ? list.Parameters : [];
+        foreach (var declared in declaredParameters)
+            CollectUses(declared.Default);
+
         var outer = scope;
         scope = inside;
         var parameters = new List<Symbol>();
-        IReadOnlyList<ParameterSyntax> declaredParameters = statement.Parameters is { } list ? list.Parameters : [];
         foreach (var declared in declaredParameters)
         {
             if (Declare(declared.Name, SymbolKind.Constant) is { } parameter)
+            {
+                parameter.Default = declared.Default;
                 parameters.Add(parameter);
+            }
         }
         symbol.ParameterSymbols = parameters;
         CollectUses(body);
@@ -1547,6 +1555,14 @@ internal sealed partial class Binder
                 called.Add(symbol);
 
             var invocation = MacroInvocation.Of(call, symbol, tree, diagnostics, at.Lookup);
+
+            // A named argument is a reference to the parameter it names, as it is in a call to a
+            // `.func`, so renaming the parameter renames it too.
+            foreach (var named in call.Arguments?.Arguments.OfType<NamedArgumentSyntax>() ?? [])
+            {
+                if (symbol.Parameters.FirstOrDefault(parameter => parameter.Name == named.Name.Text) is { } parameter)
+                    references.Add(new SymbolReference(parameter.Symbol, named.Name.Span, false, InMacro: inside is not null));
+            }
             var argumentUses = new List<Use>();
             var outer = scope;
             scope = at;

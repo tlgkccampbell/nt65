@@ -285,8 +285,8 @@ internal static class InlayHints
 
     /// <summary>
     /// Adds hints naming the parameter each positional argument of a call is for. No hint is given
-    /// for an argument that is itself the parameter's name, for a macro call that uses named
-    /// arguments, or for a callee with fewer than two parameters, where there is nothing to wonder
+    /// for an argument that is itself the parameter's name, for a call that uses named arguments,
+    /// or for a callee with fewer than two parameters, where there is nothing to wonder
     /// about.
     /// </summary>
     private static void Arguments(SemanticModel model, LineSyntax line, List<Protocol.InlayHint> hints)
@@ -339,13 +339,15 @@ internal static class InlayHints
 
     /// <summary>
     /// Returns the arguments of a call to a <c>.func</c> that get a parameter-name hint, each
-    /// with its parameter's name. A <c>.func</c> call's arguments are always positional.
+    /// with its parameter's name. A call that names any of its arguments already says which
+    /// parameter each is for, so it gets no hints, as such a macro call gets none.
     /// </summary>
     private static IReadOnlyList<(string Parameter, SyntaxNode Argument)> Given(
         SemanticModel model, CallExpressionSyntax call)
     {
         if (model.SymbolOf(call.Callee!) is not { Kind: SymbolKind.Func } function
-            || function.ParameterSymbols.Count < 2)
+            || function.ParameterSymbols.Count < 2
+            || call.Arguments.Arguments.Any(argument => argument is NamedArgumentSyntax))
         {
             return [];
         }

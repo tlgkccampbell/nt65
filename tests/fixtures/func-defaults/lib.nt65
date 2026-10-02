@@ -1,0 +1,9 @@
+; An exported function with a default. The default names a constant of this module, and
+; resolves here, where the function is declared, whichever module calls it.
+.module lib
+
+.export scaled, FACTOR
+
+.const FACTOR = 2
+
+.func scaled(value, factor = FACTOR) = value * factor

@@ -689,7 +689,8 @@ public sealed class Configuration
         /// <summary>
         /// Returns what the configuration makes of a call to a function the program declares, with
         /// the values of its arguments. An argument the configuration does not decide has already
-        /// been passed on, so the call is only unknown.
+        /// been passed on, so the call is only unknown. A parameter the call leaves out takes its
+        /// default.
         /// </summary>
         private Decision? Call(CallExpressionSyntax call, IReadOnlyList<Value> arguments)
         {
@@ -702,15 +703,66 @@ public sealed class Configuration
                 return Decision.Not(new Undecided(UndecidedCause.Unknown, [], callee.GetText().Trim()));
             if (entries.GetValueOrDefault(symbol) is not Entry.Function function)
                 return Decide(symbol);
-            var names = function.Declaration.Parameters?.Parameters.Select(parameter => parameter.Name.Text).ToList() ?? [];
-            if (names.Count != arguments.Count || arguments.Any(value => value.Kind == ValueKind.Unknown) || !evaluating.Add(symbol))
+            IReadOnlyList<ParameterSyntax> parameters = function.Declaration.Parameters?.Parameters ?? [];
+            if (arguments.Any(value => value.Kind == ValueKind.Unknown) || !evaluating.Add(symbol))
                 return Decision.Of(Value.Unknown);
+            try
+            {
+                if (Bind(call.Arguments.Arguments, arguments, parameters) is not { } bound)
+                    return Decision.Of(Value.Unknown);
+
+                // A parameter the call leaves out takes its default, whose names resolve where the
+                // function is declared, so it is read without the parameters.
+                foreach (var parameter in parameters)
+                {
+                    if (bound.ContainsKey(parameter.Name.Text))
+                        continue;
+                    if (parameter.Default is not { } given)
+                        return Decision.Of(Value.Unknown);
+                    var taken = Probe(given, symbol, null, null);
+                    if (taken.Why is not null)
+                        return taken;
+                    bound[parameter.Name.Text] = taken.Value;
+                }
+                return Probe(function.Declaration.Body, symbol, bound, null);
+            }
+            finally
+            {
+                evaluating.Remove(symbol);
+            }
+        }
+
+        /// <summary>
+        /// Returns the value each parameter a call gives an argument binds, by its name, or null
+        /// when the arguments do not match the parameters, which the binder reports. Positional
+        /// arguments bind in order, and named ones after them bind by name, each at most once.
+        /// </summary>
+        private static Dictionary<string, Value>? Bind(
+            IReadOnlyList<SyntaxNode> given, IReadOnlyList<Value> values, IReadOnlyList<ParameterSyntax> parameters)
+        {
             var bound = new Dictionary<string, Value>(StringComparer.Ordinal);
-            for (var i = 0; i < names.Count; i++)
-                bound[names[i]] = arguments[i];
-            var decision = Probe(function.Declaration.Body, symbol, bound, null);
-            evaluating.Remove(symbol);
-            return decision;
+            var named = false;
+            for (var i = 0; i < given.Count; i++)
+            {
+                if (given[i] is NamedArgumentSyntax argument)
+                {
+                    named = true;
+                    if (!parameters.Any(parameter => parameter.Name.Text == argument.Name.Text)
+                        || !bound.TryAdd(argument.Name.Text, values[i]))
+                    {
+                        return null;
+                    }
+                }
+                else if (named || i >= parameters.Count)
+                {
+                    return null;
+                }
+                else
+                {
+                    bound[parameters[i].Name.Text] = values[i];
+                }
+            }
+            return bound;
         }
 
         /// <summary>

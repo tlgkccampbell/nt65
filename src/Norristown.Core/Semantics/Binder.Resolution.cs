@@ -78,6 +78,8 @@ internal sealed partial class Binder
             if (!use.Last)
                 steps.Add((references.Count, at, symbol, token));
             references.Add(new SymbolReference(symbol, token.Span, false, place.IsAlias, IsStep: !use.Last, InMacro: inMacro));
+            if (use.Last && CallNaming(token) is { } call)
+                MatchArguments(call, symbol, inMacro);
 
             // A path to a member is an offset into the symbols it walks through, so those count
             // as used too: `oam::x` is the address of `oam` plus the offset of `x`.
@@ -94,6 +96,40 @@ internal sealed partial class Binder
                 Report(token.Span, Catalogue.NameAloneOnALine.Message(token.Text, symbol.KindPhrase));
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the call whose callee ends with <paramref name="token"/>, or null when the token
+    /// is not the last name of a callee.
+    /// </summary>
+    private static CallExpressionSyntax? CallNaming(SyntaxToken token) =>
+        token.Parent is IdentifierNameSyntax { Parent: NameExpressionSyntax name }
+            && name.Parent is CallExpressionSyntax call && call.Callee == name
+            ? call
+            : null;
+
+    /// <summary>
+    /// Checks the arguments of <paramref name="call"/> against <paramref name="callee"/>, the
+    /// symbol its name resolved to. The function's parameters are known once the whole program
+    /// is read, so a call in one file is checked against a function in another here. A named
+    /// argument becomes a reference to the parameter it names, which hover, rename and the other
+    /// requests about names then find. A charmap takes its one argument by position.
+    /// </summary>
+    private void MatchArguments(CallExpressionSyntax call, Symbol callee, bool inMacro)
+    {
+        if (callee.Kind == SymbolKind.Charmap)
+        {
+            foreach (var argument in call.Arguments.Arguments.OfType<NamedArgumentSyntax>())
+                Report(argument.Name.Span, Catalogue.CharmapArgumentNamed.Message(callee.Name));
+            return;
+        }
+        if (callee.Kind != SymbolKind.Func || callee.Items.Count == 0)
+            return;
+        FunctionArguments.Match(
+            callee, call,
+            (span, message) => Report(span, message),
+            (argument, parameter) => references.Add(
+                new SymbolReference(parameter, argument.Name.Span, false, InMacro: inMacro)));
     }
 
     /// <summary>

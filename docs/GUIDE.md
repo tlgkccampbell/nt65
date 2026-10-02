@@ -584,7 +584,10 @@ because the string would end early.
   itself. It is a number or a text, never an address: an address is declared as what is there,
   `.data TXTPTR: .addr = CHRGOT + 1` or `.proc CHROUT = $ffd2`.
 - **A `.func`** takes values, not tokens. `rgb15(1 + 1, 0, 0)` passes 2, where a ca65
-  `.define` would substitute the text `1 + 1` and let precedence decide what it meant.
+  `.define` would substitute the text `1 + 1` and let precedence decide what it meant. A
+  parameter may have a default, and a call may name arguments after its positional ones, as a
+  macro call does: with `.func scaled(value, factor = 2) = value * factor`, `scaled(3)` is 6
+  and `scaled(3, factor = 4)` is 12.
 - **A setting** is a constant declared with `?=`, whose value is a default the build may
   change. The build sets it by its path, `-D audio::VOICES=4` or `"audio::VOICES": 4` under
   `settings` in `nt65.json`, or by its name alone, `-D DEBUG=1`, when no other module has a
@@ -638,9 +641,9 @@ holds:
 ```
 
 **Long expressions.** A line whose `(` or `[` is still open at its end continues onto the next,
-as the `.switch` above does, and each line may have a comment. A macro call's arguments continue
-the same way, `name = value` arguments included, and so do the parameters of a `.macro` or a
-`.func`, `name: kind` and `name = default` included:
+as the `.switch` above does, and each line may have a comment. A macro call's arguments and a
+`.func` call's continue the same way, `name = value` arguments included, and so do the
+parameters of a `.macro` or a `.func`, `name = default` included, and a macro's `name: kind`:
 
 ```nt65
 .func scaled(
@@ -874,7 +877,7 @@ error somewhere inside the expansion.
 
 **Defaults and named arguments.** `.macro note(pitch: const, frames: const = 1)` gives
 `frames` a default, and a call can name its arguments after the positional ones:
-`note!(C4, frames = 8)`.
+`note!(C4, frames = 8)`. A `.func` takes defaults and named arguments by the same rules.
 
 **Lists of words.** A `list` parameter with `.each` replaces ca65's recursive macros:
 
