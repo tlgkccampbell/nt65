@@ -359,7 +359,8 @@ internal sealed partial class Parser
     /// <summary>
     /// Parses <c>.export</c> before a declaration, which exports what the declaration declares,
     /// or <c>.export</c> with a list of names, such as
-    /// <c>.export a, outer::inner, K: abs, init as "_init"</c>. An exported declaration parses
+    /// <c>.export a, outer::inner, K: abs, init as "_init"</c>, or <c>.export {</c>, which opens an
+    /// item block for the names. An exported declaration parses
     /// exactly as it would without the <c>.export</c>. The line holds the <c>.export</c> token, not
     /// the declaration.
     /// </summary>
@@ -375,7 +376,7 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.Directive)
         {
             Report(Catalogue.ExportDeclaresNothing.Message(Current.Text));
-            return new ExportDirectiveSyntax(export, null);
+            return new ExportDirectiveSyntax(export, null, null);
         }
         if (AtName && Next is SyntaxKind.Equals or SyntaxKind.QuestionEquals)
         {
@@ -386,7 +387,10 @@ internal sealed partial class Parser
             return new ConstantDeclarationSyntax(keyword, name, equals, ParseExpression());
         }
 
-        return new ExportDirectiveSyntax(export, ParseSeparatedList(ParseExportItem));
+        if (Kind == SyntaxKind.OpenBrace)
+            return new ExportDirectiveSyntax(export, null, Advance());
+        var items = ParseSeparatedList(ParseExportItem);
+        return new ExportDirectiveSyntax(export, items, ParseItemsBrace(export, items is not null));
     }
 
     /// <summary>
@@ -467,8 +471,9 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Parses <c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or
-    /// <c>.use a::b as c</c>. A path always starts from the root of the module hierarchy, and
-    /// names a module, or a module and a name in it.
+    /// <c>.use a::b as c</c>, or <c>.use a::{</c>, which opens an item block for the names. A path
+    /// always starts from the root of the module hierarchy, and names a module, or a module and a
+    /// name in it.
     /// </summary>
     private GreenNode ParseUse()
     {
@@ -481,7 +486,7 @@ internal sealed partial class Parser
         if (!named)
         {
             return new UseDirectiveSyntax(
-                keyword, path, colonColonToken: null, starToken: null, openBraceToken: null, items: null,
+                keyword, path, colonColonToken: null, starToken: null, openBraceToken: null, inlineItems: null,
                 closeBraceToken: null, asKeyword: null, alias: null);
         }
 
@@ -491,11 +496,19 @@ internal sealed partial class Parser
             if (Kind == SyntaxKind.Star)
             {
                 return new UseDirectiveSyntax(
-                    keyword, path, colonColon, starToken: Advance(), openBraceToken: null, items: null,
+                    keyword, path, colonColon, starToken: Advance(), openBraceToken: null, inlineItems: null,
                     closeBraceToken: null, asKeyword: null, alias: null);
             }
 
+            // `a::{` at the end of a line opens an item block, which holds the names on its
+            // lines rather than between braces on this one.
             var openBrace = Advance();
+            if (opensBlock && AtEnd)
+            {
+                return new UseDirectiveSyntax(
+                    keyword, path, colonColon, starToken: null, openBrace, inlineItems: null, closeBraceToken: null,
+                    asKeyword: null, alias: null);
+            }
             var items = ParseSeparatedList(ParseUseItem);
 
             // The `{` is present, so the closing `}` gets a slot whether or not the source contains
@@ -506,7 +519,7 @@ internal sealed partial class Parser
         }
         var (asKeyword, alias) = ParseUseAlias();
         return new UseDirectiveSyntax(
-            keyword, path, colonColonToken: null, starToken: null, openBraceToken: null, items: null,
+            keyword, path, colonColonToken: null, starToken: null, openBraceToken: null, inlineItems: null,
             closeBraceToken: null, asKeyword, alias);
     }
 
@@ -557,10 +570,17 @@ internal sealed partial class Parser
         return new NameExpressionSyntax(null, new GreenSeparatedList(parts.ToImmutable()));
     }
 
+    /// <summary>
+    /// Parses <c>.import</c> with a list of imports, such as <c>.import a, b: far</c>, or
+    /// <c>.import {</c>, which opens an item block for them.
+    /// </summary>
     private GreenNode ParseImport()
     {
         var keyword = Advance();
-        return new ImportDirectiveSyntax(keyword, ParseSeparatedList(ParseImportItem));
+        if (Kind == SyntaxKind.OpenBrace)
+            return new ImportDirectiveSyntax(keyword, null, Advance());
+        var items = ParseSeparatedList(ParseImportItem);
+        return new ImportDirectiveSyntax(keyword, items, ParseItemsBrace(keyword, items is not null));
     }
 
     /// <summary>

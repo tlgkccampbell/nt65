@@ -608,6 +608,14 @@ public sealed class Emitter
             return;
         }
 
+        // An item block is part of its directive, which writes what it would write with its
+        // items on its own line.
+        if (SyntaxFacts.IsItemBlock(kind))
+        {
+            WalkLine(block.Opener);
+            return;
+        }
+
         // One record spread over several lines is written where its line is, as one directive
         // per member. The lines of values belong to the record and write nothing themselves.
         if (kind == BlockKind.RecordInitializer)

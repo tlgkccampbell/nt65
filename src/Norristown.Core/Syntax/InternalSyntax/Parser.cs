@@ -387,6 +387,18 @@ internal sealed partial class Parser
                 return ParseMemberValueLine();
             case BlockKind.DataBody:
                 return ParseDataValuesLine();
+
+            // An item block's lines hold what the directive would otherwise list on its own line,
+            // read by the same item parser.
+            case BlockKind.ExportItems:
+                return Finish(new ExportItemsSyntax(ParseSeparatedList(ParseExportItem)));
+            case BlockKind.ImportItems:
+                return Finish(new ImportItemsSyntax(ParseSeparatedList(ParseImportItem)));
+            case BlockKind.UseItems:
+                return Finish(new UseItemsSyntax(ParseSeparatedList(ParseUseItem)));
+            case BlockKind.NextTargets:
+                return Finish(new NextTargetsSyntax(ParseSeparatedList(
+                    () => ParseTarget(Catalogue.ExpectedLabel.Message("a label flow continues at")))));
             default:
                 break;
         }
@@ -563,6 +575,23 @@ internal sealed partial class Parser
     /// brace is expected.
     /// </summary>
     private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Message("`{`"));
+
+    /// <summary>
+    /// Returns the <c>{</c> after a list directive's own items, which opens an item block, or null
+    /// when the line has none. A directive gives its items on its line or in the block, so a
+    /// <c>{</c> after items is reported, and the items of both are kept.
+    /// <see cref="SyntaxFacts.IsItemBlock"/> describes item blocks.
+    /// </summary>
+    /// <param name="keyword">The directive, which the message names.</param>
+    /// <param name="listed">Whether the directive gives items on its own line.</param>
+    private GreenToken? ParseItemsBrace(GreenToken keyword, bool listed)
+    {
+        if (Kind != SyntaxKind.OpenBrace)
+            return null;
+        if (listed)
+            ReportOnce(Catalogue.ItemsOnLineAndInBlock.Message(keyword.Text));
+        return Advance();
+    }
 
     /// <summary>
     /// Parses the items of a comma-separated list and the commas between them as one list, or

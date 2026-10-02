@@ -887,7 +887,8 @@
     <TypeComment>
       <summary>
         Represents an <c>.export</c> line, such as
-        <c>.export a, outer::inner, K: abs, init as "_init"</c>, which lists names to export.
+        <c>.export a, outer::inner, K: abs, init as "_init"</c>, which lists names to export, or
+        <c>.export {</c>, which lists them in the item block it opens.
       </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
@@ -896,11 +897,36 @@
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
-    <Field Name="Items" Type="SeparatedSyntaxList&lt;ExportItemSyntax&gt;">
+    <Field Name="InlineItems" Type="SeparatedSyntaxList&lt;ExportItemSyntax&gt;">
       <PropertyComment>
-        <summary>Gets the exported names.</summary>
+        <summary>Gets the exported names on the directive's own line.</summary>
       </PropertyComment>
     </Field>
+    <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>{</c> that ends <c>.export {</c> and opens its item block, or null.</summary>
+      </PropertyComment>
+      <Kind Name="OpenBrace"/>
+    </Field>
+    <Member Name="ItemBlock" Type="BlockSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the item block that the line opens, whose lines list the directive's items, or
+          null when the line opens none. <see cref="SyntaxFacts.IsItemBlock"/> describes item
+          blocks.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemBlockOf(this)]]></Read>
+    </Member>
+    <Member Name="Items" Type="IReadOnlyList&lt;ExportItemSyntax&gt;">
+      <PropertyComment>
+        <summary>
+          Gets every exported name, those on the directive's own line followed by those on the lines of
+          its item block.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemsOf<ExportItemsSyntax, ExportItemSyntax>(this, InlineItems, line => line.Items)]]></Read>
+    </Member>
   </Node>
 
   <Node Name="ExportItemSyntax" Base="SyntaxNode">
@@ -940,6 +966,27 @@
       </PropertyComment>
       <Kind Name="StringLiteral"/>
     </Field>
+  </Node>
+
+  <Node Name="ExportItemsSyntax" Base="StatementSyntax">
+    <Kind Name="ExportItems"/>
+    <TypeComment>
+      <summary>
+        Represents one line of the item block that <c>.export {</c> opens, which holds one or more
+        comma-separated names to export.
+      </summary>
+    </TypeComment>
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;ExportItemSyntax&gt;">
+      <PropertyComment>
+        <summary>Gets the names to export.</summary>
+      </PropertyComment>
+    </Field>
+    <Member Name="Directive" Type="ExportDirectiveSyntax" Optional="true">
+      <PropertyComment>
+        <summary>Gets the directive whose item block holds the line, or null outside one.</summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemDirectiveOf<ExportDirectiveSyntax>(this)]]></Read>
+    </Member>
   </Node>
 
   <AbstractNode Name="ExpressionSyntax" Base="SyntaxNode">
@@ -1160,7 +1207,8 @@
     <Kind Name="ImportDirective"/>
     <TypeComment>
       <summary>
-        Represents an <c>.import</c> line, such as <c>.import a, b: far, c: proc(a8 -&gt; a8)</c>.
+        Represents an <c>.import</c> line, such as <c>.import a, b: far, c: proc(a8 -&gt; a8)</c>,
+        or <c>.import {</c>, which lists the imports in the item block it opens.
       </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
@@ -1169,11 +1217,36 @@
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
-    <Field Name="Items" Type="SeparatedSyntaxList&lt;ImportItemSyntax&gt;">
+    <Field Name="InlineItems" Type="SeparatedSyntaxList&lt;ImportItemSyntax&gt;">
       <PropertyComment>
-        <summary>Gets the imported names.</summary>
+        <summary>Gets the imported names on the directive's own line.</summary>
       </PropertyComment>
     </Field>
+    <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>{</c> that ends <c>.import {</c> and opens its item block, or null.</summary>
+      </PropertyComment>
+      <Kind Name="OpenBrace"/>
+    </Field>
+    <Member Name="ItemBlock" Type="BlockSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the item block that the line opens, whose lines list the directive's items, or
+          null when the line opens none. <see cref="SyntaxFacts.IsItemBlock"/> describes item
+          blocks.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemBlockOf(this)]]></Read>
+    </Member>
+    <Member Name="Items" Type="IReadOnlyList&lt;ImportItemSyntax&gt;">
+      <PropertyComment>
+        <summary>
+          Gets every imported name, those on the directive's own line followed by those on the lines of
+          its item block.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemsOf<ImportItemsSyntax, ImportItemSyntax>(this, InlineItems, line => line.Items)]]></Read>
+    </Member>
   </Node>
 
   <Node Name="ImportItemSyntax" Base="SyntaxNode">
@@ -1240,6 +1313,27 @@
       </PropertyComment>
       <Kind Name="Identifier"/>
     </Field>
+  </Node>
+
+  <Node Name="ImportItemsSyntax" Base="StatementSyntax">
+    <Kind Name="ImportItems"/>
+    <TypeComment>
+      <summary>
+        Represents one line of the item block that <c>.import {</c> opens, which holds one or more
+        comma-separated imports.
+      </summary>
+    </TypeComment>
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;ImportItemSyntax&gt;">
+      <PropertyComment>
+        <summary>Gets the imports.</summary>
+      </PropertyComment>
+    </Field>
+    <Member Name="Directive" Type="ImportDirectiveSyntax" Optional="true">
+      <PropertyComment>
+        <summary>Gets the directive whose item block holds the line, or null outside one.</summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemDirectiveOf<ImportDirectiveSyntax>(this)]]></Read>
+    </Member>
   </Node>
 
   <Node Name="ImportSignatureSyntax" Base="SyntaxNode">
@@ -1816,7 +1910,10 @@
   <Node Name="NextDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="NextDirective"/>
     <TypeComment>
-      <summary>Represents a <c>.next @a, gfx::init</c> or <c>.next ?</c> line.</summary>
+      <summary>
+        Represents a <c>.next @a, gfx::init</c> or <c>.next ?</c> line, or <c>.next {</c>, which
+        lists the labels in the item block it opens.
+      </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
       <PropertyComment>
@@ -1830,11 +1927,57 @@
       </PropertyComment>
       <Kind Name="Question"/>
     </Field>
+    <Field Name="InlineTargets" Type="SeparatedSyntaxList&lt;NameExpressionSyntax&gt;">
+      <PropertyComment>
+        <summary>Gets the labels where execution continues that are on the directive's own line.</summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>{</c> that ends <c>.next {</c> and opens its item block, or null.</summary>
+      </PropertyComment>
+      <Kind Name="OpenBrace"/>
+    </Field>
+    <Member Name="ItemBlock" Type="BlockSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the item block that the line opens, whose lines list the directive's items, or
+          null when the line opens none. <see cref="SyntaxFacts.IsItemBlock"/> describes item
+          blocks.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemBlockOf(this)]]></Read>
+    </Member>
+    <Member Name="Targets" Type="IReadOnlyList&lt;NameExpressionSyntax&gt;">
+      <PropertyComment>
+        <summary>
+          Gets every label where execution continues, those on the directive's own line followed by those on the lines of
+          its item block.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemsOf<NextTargetsSyntax, NameExpressionSyntax>(this, InlineTargets, line => line.Targets)]]></Read>
+    </Member>
+  </Node>
+
+  <Node Name="NextTargetsSyntax" Base="StatementSyntax">
+    <Kind Name="NextTargets"/>
+    <TypeComment>
+      <summary>
+        Represents one line of the item block that <c>.next {</c> opens, which holds one or more
+        comma-separated labels where execution continues.
+      </summary>
+    </TypeComment>
     <Field Name="Targets" Type="SeparatedSyntaxList&lt;NameExpressionSyntax&gt;">
       <PropertyComment>
         <summary>Gets the labels where execution continues.</summary>
       </PropertyComment>
     </Field>
+    <Member Name="Directive" Type="NextDirectiveSyntax" Optional="true">
+      <PropertyComment>
+        <summary>Gets the directive whose item block holds the line, or null outside one.</summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemDirectiveOf<NextDirectiveSyntax>(this)]]></Read>
+    </Member>
   </Node>
 
   <Node Name="NumberExpressionSyntax" Base="LiteralExpressionSyntax">
@@ -2766,7 +2909,8 @@
     <TypeComment>
       <summary>
         Represents a <c>.use a::b</c>, <c>.use a::{b, c as d}</c>, <c>.use a::*</c> or
-        <c>.use a::b as c</c> line.
+        <c>.use a::b as c</c> line, or <c>.use a::{</c>, which lists the names in the item block
+        it opens.
       </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
@@ -2797,20 +2941,24 @@
     </Field>
     <Field Name="OpenBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
-        <summary>Gets the <c>{</c> token of <c>a::{b, c}</c>, or null.</summary>
+        <summary>
+          Gets the <c>{</c> token of <c>a::{b, c}</c>, or the one that ends <c>a::{</c> and opens
+          its item block, or null.
+        </summary>
       </PropertyComment>
       <Kind Name="OpenBrace"/>
     </Field>
-    <Field Name="Items" Type="SeparatedSyntaxList&lt;UseItemSyntax&gt;">
+    <Field Name="InlineItems" Type="SeparatedSyntaxList&lt;UseItemSyntax&gt;">
       <PropertyComment>
-        <summary>Gets the names in the braces of <c>a::{b, c}</c>.</summary>
+        <summary>Gets the names in the braces of <c>a::{b, c}</c> on the directive's own line.</summary>
       </PropertyComment>
     </Field>
     <Field Name="CloseBraceToken" Type="SyntaxToken" Optional="true">
       <PropertyComment>
         <summary>
           Gets the <c>}</c> token of <c>a::{b, c}</c>. It is missing if the <c>{</c> is present and
-          the source does not reach the <c>}</c>, and it is null for a line that has no braces.
+          the source does not reach the <c>}</c>, and it is null for a line that has no braces or
+          whose <c>{</c> opens an item block.
         </summary>
       </PropertyComment>
       <Kind Name="CloseBrace"/>
@@ -2829,6 +2977,25 @@
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
     </Field>
+    <Member Name="ItemBlock" Type="BlockSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the item block that the line opens, whose lines list the directive's items, or
+          null when the line opens none. <see cref="SyntaxFacts.IsItemBlock"/> describes item
+          blocks.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemBlockOf(this)]]></Read>
+    </Member>
+    <Member Name="Items" Type="IReadOnlyList&lt;UseItemSyntax&gt;">
+      <PropertyComment>
+        <summary>
+          Gets every name in braces, those on the directive's own line followed by those on the lines of
+          its item block.
+        </summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemsOf<UseItemsSyntax, UseItemSyntax>(this, InlineItems, line => line.Items)]]></Read>
+    </Member>
   </Node>
 
   <Node Name="UseItemSyntax" Base="SyntaxNode">
@@ -2858,6 +3025,27 @@
       <Kind Name="Register"/>
       <Kind Name="Mnemonic"/>
     </Field>
+  </Node>
+
+  <Node Name="UseItemsSyntax" Base="StatementSyntax">
+    <Kind Name="UseItems"/>
+    <TypeComment>
+      <summary>
+        Represents one line of the item block that <c>.use path::{</c> opens, which holds one or more
+        comma-separated names to bring in.
+      </summary>
+    </TypeComment>
+    <Field Name="Items" Type="SeparatedSyntaxList&lt;UseItemSyntax&gt;">
+      <PropertyComment>
+        <summary>Gets the names to bring in.</summary>
+      </PropertyComment>
+    </Field>
+    <Member Name="Directive" Type="UseDirectiveSyntax" Optional="true">
+      <PropertyComment>
+        <summary>Gets the directive whose item block holds the line, or null outside one.</summary>
+      </PropertyComment>
+      <Read><![CDATA[BlockSyntax.ItemDirectiveOf<UseDirectiveSyntax>(this)]]></Read>
+    </Member>
   </Node>
 
   <Node Name="ValueListSyntax" Base="SyntaxNode">

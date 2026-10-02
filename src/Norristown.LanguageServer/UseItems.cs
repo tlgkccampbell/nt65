@@ -69,7 +69,38 @@ internal static class UseItems
                 return [Edits.RemoveLines(model.Tree, line.Index, line.Index)];
             return [Rewritten(model.Tree, line, [.. line.Items.Where(item => item.Name != name)])];
         }
+        return WithoutInBlock(model.Tree, name);
+    }
+
+    /// <summary>
+    /// Returns the edits that stop <paramref name="name"/> being brought in by a <c>.use</c> that
+    /// lists its names in an item block. The whole block is removed when the name is its only
+    /// item, the item's line when the name is that line's only item, and otherwise the item alone.
+    /// </summary>
+    private static IReadOnlyList<Edit> WithoutInBlock(SyntaxTree tree, string name)
+    {
+        foreach (var child in tree.Root.Members)
+        {
+            if (child is not BlockSyntax { BlockKind: BlockKind.UseItems, Opener.Statement: UseDirectiveSyntax { IsExported: false } use } block
+                || use.Items.FirstOrDefault(item => Brought(item) == name) is not { Parent: UseItemsSyntax line } found)
+            {
+                continue;
+            }
+            if (use.Items.Count == 1)
+                return [Edits.RemoveLines(tree, block.LineIndex, tree.GetLineIndex(block.FullSpan.End - 1))];
+            var index = tree.GetLineIndex(line.Span.Start);
+            if (line.Items.Count == 1)
+                return [Edits.RemoveLines(tree, index, index)];
+            var kept = line.Items.Where(item => item != found).Select(Spelled);
+            var span = new TextSpan(line.Items[0].Span.Start, line.Items[^1].Span.End - line.Items[0].Span.Start);
+            return [new Edit(tree, span, string.Join(", ", kept))];
+        }
         return [];
+
+        static string Brought(UseItemSyntax item) => (item.Alias ?? item.Name).Text;
+
+        static string Spelled(UseItemSyntax item) =>
+            item.Alias is { IsMissing: false } alias ? $"{item.Name.Text} as {alias.Text}" : item.Name.Text;
     }
 
     /// <summary>

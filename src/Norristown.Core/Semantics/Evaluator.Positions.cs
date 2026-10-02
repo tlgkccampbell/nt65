@@ -170,6 +170,10 @@ internal sealed partial class Evaluator
                 case BlockKind.Macro or BlockKind.Struct or BlockKind.Union or BlockKind.Enum
                     or BlockKind.Charmap or BlockKind.List:
                     break;
+
+                // An item block is part of its directive's statement, which writes nothing.
+                case var kind when SyntaxFacts.IsItemBlock(kind):
+                    break;
                 default:
                     writes.Add(new Write(null, block.Span, null, true));
                     break;

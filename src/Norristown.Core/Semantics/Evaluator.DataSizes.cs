@@ -181,6 +181,7 @@ internal sealed partial class Evaluator
     {
         BlockKind.Data => RoomForMixed(nested),
         BlockKind.DataBody or BlockKind.RecordInitializer => BytesOnLine(nested.Opener.Statement),
+        var kind when SyntaxFacts.IsItemBlock(kind) => BytesOnLine(nested.Opener.Statement),
         _ => null,
     };
 

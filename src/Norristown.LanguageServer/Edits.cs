@@ -101,7 +101,8 @@ internal static class Edits
 
     /// <summary>
     /// Returns the last top-level line whose statement is a <typeparamref name="T"/>, or -1 if
-    /// there is none.
+    /// there is none. A statement that opens an item block ends where its block does, so the
+    /// block's last line stands for it.
     /// </summary>
     public static int LastLine<T>(SyntaxTree tree) where T : StatementSyntax
     {
@@ -110,6 +111,8 @@ internal static class Edits
         {
             if (child is LineSyntax { Statement: T } line)
                 found = line.LineIndex;
+            else if (child is BlockSyntax { Opener.Statement: T } block && SyntaxFacts.IsItemBlock(block.BlockKind))
+                found = tree.GetLineIndex(block.FullSpan.End - 1);
         }
         return found;
     }

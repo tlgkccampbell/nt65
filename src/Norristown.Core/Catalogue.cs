@@ -174,6 +174,32 @@ public static class Catalogue
             + "lines of their own, and its closing `}` stands alone on its line. This keeps the structure of a "
             + "file readable from its indentation and braces alone.");
 
+    internal static DiagnosticDescriptor ItemsOnLineAndInBlock { get; } = Entry(
+        Area.ReadingALine,
+        "items-on-line-and-in-block",
+        Severity.Error,
+        "`{0}` gives its items on its line or in the block its `{{` opens, not both",
+        "A directive whose operand is a list, such as `.export`, `.import`, `.use` or `.next`, gives the list on "
+            + "its own line, or ends its line with `{` and gives the items on the lines of the block, one or more "
+            + "to a line. A line that does both splits one list over two places. Move the items on the line into "
+            + "the block, or remove the `{` and the block.");
+
+    internal static DiagnosticDescriptor ItemBlockEmpty { get; } = Entry(
+        Area.ReadingALine,
+        "item-block-empty",
+        Severity.Error,
+        "`{0}` opens a block of items and lists none in it",
+        "A block of items holds what the directive would otherwise list on its own line, one or more items to a "
+            + "line. A block with no items says nothing. Give the items, or remove the directive and its block.");
+
+    internal static DiagnosticDescriptor ItemBlockHoldsABlock { get; } = Entry(
+        Area.ReadingALine,
+        "item-block-holds-a-block",
+        Severity.Error,
+        "a block of `{0}` items holds only items, not a block of its own",
+        "Each line of a block of items lists one or more of the directive's items, separated by commas, as the "
+            + "directive's own line would. A line that opens a block, such as an `.if`, belongs outside it.");
+
     internal static DiagnosticDescriptor Ca65Spelling { get; } = Entry(
         Area.ReadingALine,
         "ca65-spelling",

@@ -141,12 +141,14 @@ public static class SyntaxFacts
         [DirectiveKind.MultiProc] = new(
             SyntaxKind.MultiProcDeclaration, new(Declarations, RoutineOrExpanded), BlockKind.MultiProc, Exportable: true),
         [DirectiveKind.Scope] = new(SyntaxKind.ScopeDeclaration, new(Declarations), BlockKind.Scope, Exportable: true),
-        [DirectiveKind.Export] = new(SyntaxKind.ExportDirective, new(Declarations, Expanded)),
-        [DirectiveKind.Import] = new(SyntaxKind.ImportDirective, new(Declarations, Expanded), Exportable: true),
+        [DirectiveKind.Export] = new(SyntaxKind.ExportDirective, new(Declarations, Expanded), BlockKind.ExportItems),
+        [DirectiveKind.Import] = new(
+            SyntaxKind.ImportDirective, new(Declarations, Expanded), BlockKind.ImportItems, Exportable: true),
         [DirectiveKind.Module] = new(
             SyntaxKind.ModuleDirective, new(DirectiveContexts.Items, Required: DirectiveNesting.FirstLine)),
         [DirectiveKind.Place] = new(SyntaxKind.PlaceDirective, new(DirectiveContexts.Items, DirectiveNesting.PastFileLevel)),
-        [DirectiveKind.Use] = new(SyntaxKind.UseDirective, new(Declarations, DirectiveNesting.NameScope), Exportable: true),
+        [DirectiveKind.Use] = new(
+            SyntaxKind.UseDirective, new(Declarations, DirectiveNesting.NameScope), BlockKind.UseItems, Exportable: true),
 
         // The element types give the size of one element. `.type T` is the only other element
         // type, and its size is that of T. Every multi-byte integer width has a big-endian
@@ -187,7 +189,7 @@ public static class SyntaxFacts
         [DirectiveKind.Error] = new(SyntaxKind.ErrorDirective, new(Declarations)),
         [DirectiveKind.Warning] = new(SyntaxKind.ErrorDirective, new(Declarations)),
         [DirectiveKind.Macro] = new(SyntaxKind.MacroDeclaration, new(Declarations, RoutineOrExpanded), BlockKind.Macro, Exportable: true),
-        [DirectiveKind.Next] = new(SyntaxKind.NextDirective, new(DirectiveContexts.Code)),
+        [DirectiveKind.Next] = new(SyntaxKind.NextDirective, new(DirectiveContexts.Code), BlockKind.NextTargets),
         [DirectiveKind.Fallthrough] = new(
             SyntaxKind.FallthroughDirective, new(DirectiveContexts.Code, Expanded, DirectiveNesting.Routine)),
         [DirectiveKind.Patch] = new(SyntaxKind.PatchDirective, new(DirectiveContexts.Code)),
@@ -291,6 +293,16 @@ public static class SyntaxFacts
         directiveRows.TryGetValue(directive, out var row) ? row.Block : BlockKind.Unknown;
 
     /// <summary>
+    /// Checks whether <paramref name="kind"/> is an item block. A directive whose operand is a
+    /// comma-separated list may end its line with <c>{</c> in place of the list, and give the
+    /// items on the lines of the block that follows, one or more to a line. Such a block is part
+    /// of its directive's statement. It opens no scope, holds no code, and adds nothing to what
+    /// surrounds the lines after it.
+    /// </summary>
+    public static bool IsItemBlock(BlockKind kind) =>
+        kind is BlockKind.ExportItems or BlockKind.ImportItems or BlockKind.UseItems or BlockKind.NextTargets;
+
+    /// <summary>
     /// Returns the kind of node a directive at the start of a line parses to, or
     /// <see cref="SyntaxKind.None"/>.
     /// </summary>
@@ -361,15 +373,16 @@ public static class SyntaxFacts
     /// Returns what surrounds a line inside <paramref name="block"/>, combining that block and
     /// every block around it. A null block is a file's top level, which nothing surrounds. The
     /// body of a <c>.multiproc</c> is a routine that is repeated once for each member of its enum,
-    /// so it counts as both. The result never includes <see cref="DirectiveNesting.FirstLine"/>,
-    /// which depends on the line rather than on the blocks.
+    /// so it counts as both. An item block adds nothing, because it is part of its directive's
+    /// statement, as <see cref="IsItemBlock"/> describes. The result never includes
+    /// <see cref="DirectiveNesting.FirstLine"/>, which depends on the line rather than on the blocks.
     /// </summary>
     public static DirectiveNesting NestingWithin(BlockSyntax? block)
     {
         var nesting = DirectiveNesting.None;
         for (SyntaxNode? at = block; at is not null; at = at.Parent)
         {
-            if (at is not BlockSyntax around)
+            if (at is not BlockSyntax around || IsItemBlock(around.BlockKind))
                 continue;
             nesting |= DirectiveNesting.Block | around.BlockKind switch
             {

@@ -316,6 +316,8 @@ bare-identifier lines, the kind of block that encloses it:
 | any other expression | list items inside `.list` (§6.4), values inside a data body (§8), an error elsewhere |
 | `}` | block close, optionally continuing with `.else {`, `.elseif expr {` or a macro's next block, `name {` |
 
+A line inside an item block (below) holds its directive's items, whatever its first tokens.
+
 **Block structure is a layer over lines, not part of parsing them.** A line whose last
 token is `{` opens a block, unless that `{` is inside a parenthesis still open on the
 line, so a half-typed `m!({` does not swallow the rest of the file; a line whose first
@@ -326,6 +328,35 @@ therefore a per-line value of +1, −1 or 0, and the tree is recovered from a pr
 looking inside any line. Every block opener is a keyword line, a macro call or a
 continuation line, which gives error recovery an anchor when braces are unbalanced
 mid-edit; there are no bare `{` blocks, `.scope {` serves that purpose.
+
+**A list may be given in a block.** A directive whose operand is a comma-separated list may
+end its line with `{` in place of the list, and give the items in the **item block** that
+follows, one or more to a line, separated by commas as they would be on the directive's line.
+`.export`, `.import`, `.use` and `.next` take this form:
+
+```nt65
+.export {
+    init, update                    ; a comment on any line
+    draw
+}
+.import {
+    frame, timer: far
+    vsync: proc(a8 -> a8)
+}
+.use hw::ppu::{
+    PPUCTRL, PPUMASK
+    OAMADDR as oam
+}
+```
+
+An item block belongs to its directive's statement: the directive stands where its line does,
+the block opens no scope and holds no code, and every line in it lists items, so it holds no
+block of its own. A block that lists nothing is an error, and so is a line that gives items
+and also opens a block. The block is the only braced form: `.export { a, b }` is an error,
+because a block's `{` ends its line. The one exception is `.use`'s `a::{b, c}`, which is the
+one-line form of this rule, its braces holding what the block would. A list is the same list
+in either form, so binding, the editor and the output all read one list. A `.list` body
+(§6.4) and a data body (§8) are blocks of the same shape, one or more items to a line.
 
 A `.segment NAME` line with no brace and no size is a **region** line (§5.2). At file level
 it opens a block with no brace, which holds every line up to the next region line or the end
@@ -1493,7 +1524,8 @@ label:
   merge of their exits. Anywhere else a routine named is a jump to its first byte, checked
   like a tail call: it says where flow goes, and never that the routine is the one written
   next. Targets may be cheap locals, scoped paths (`gfx::init`) and, inside a macro body,
-  `ident` parameters. A target naming a list (§6.4), or data declared as addresses
+  `ident` parameters, and a long list of them may go in an item block (§4), `.next {` with
+  one or more targets to a line. A target naming a list (§6.4), or data declared as addresses
   (`.addr` or `.faraddr`, or such a member of a `.data` block) whose items are all code
   labels, each optionally minus 1 as in an RTS dispatch table, stands for every one of those
   labels, whether the items are written on the declaration's line or in its body. A target
@@ -3342,7 +3374,14 @@ lists names:
 
 The list form is for what cannot carry `.export` itself: an interior label (`.export again`
 inside `.proc clear`, or `clear::again` outside it), a member, an address size and a linker
-name.
+name. A long list goes in an item block (§4), one or more names to a line:
+
+```nt65
+.export {
+    fill_page, clear::again
+    K: abs, init as "_init"
+}
+```
 
 - **Exporting a named scope** exports what it declares, through the named scopes inside it.
   It stops at a routine's interior labels, which are exported one by one, and never exports
@@ -3368,6 +3407,16 @@ and are never visible any other way:
     jsr snd_init
     lda p::thing
     rts
+}
+```
+
+The braces of `hw::{BORDER, set_border}` are the one-line form of an item block: a `.use`
+path that ends in `::{` lists its names on the lines that follow.
+
+```nt65
+.use hw::ppu::{
+    PPUCTRL, PPUMASK
+    OAMADDR as oam
 }
 ```
 
@@ -3446,6 +3495,16 @@ points) are declared explicitly:
 .import actors: .type Actor[8]
 .import VIC_BORDER = $D020          ; a constant whose value nt65 needs; checked at link
 .proc CHROUT = $FFD2: a8, i8        ; a routine at a fixed address; emitted as a constant
+```
+
+Several imports may share one `.import`, separated by commas, or be listed in an item block
+(§4), one or more to a line:
+
+```nt65
+.import {
+    zp_scratch: zp, far_table: far
+    _printf: proc(a8, i16)
+}
 ```
 
 An imported address may say which segment it is in, `.import spc_entry: abs in SPCIMAGE`, and
@@ -4989,7 +5048,8 @@ assertion   := '.state' state                         ; not near, far, inline, a
 ensure      := '.ensure' width (',' width)*           ; other state items parse, and are errors
 width       := 'a8' | 'a16' | 'i8' | 'i16'
 frame       := '.frame' ident ':' path
-annotation  := '.next' (target (',' target)* | '?')     ; after a conditional branch, its
+annotation  := '.next' (target (',' target)* | items(target) | '?')
+                                                      ; after a conditional branch, its
                                                       ; own target only: always taken
              | '.patch' target
 fallthrough := '.fallthrough' path                    ; the last line of a proc's body, or of
@@ -5031,16 +5091,18 @@ contents    := item*                                  ; at item level
              | body                                   ; inside a proc
              | value-line* | mixed*                   ; in a data body
              | enum-member*                           ; in an enum body
-export      := '.export' export-item (',' export-item)*
+items(x)    := '{' NL (x (',' x)* NL)+ '}'              ; an item block (§4): one or more
+                                                      ; items to a line
+export      := '.export' (export-item (',' export-item)* | items(export-item))
              | '.export' (const | config | data-decl | proc | multiproc | extern-proc | scope | macro | enum
                | struct | union | charmap | list | func | signature | import | use)
                                                       ; a re-exported use names what it
                                                       ; re-exports: no '::' '*'
 export-item := module-path (':' size)? ('as' string)?
 use         := '.use' module-path (('::' '*') | ('::' '{' use-item (',' use-item)* '}')
-               | ('as' ident))?                       ; at a module's top level
+               | ('::' items(use-item)) | ('as' ident))?  ; at a module's top level
 use-item    := ident ('as' ident)?
-import      := '.import' import-item (',' import-item)*
+import      := '.import' (import-item (',' import-item)* | items(import-item))
 import-item := ident (':' import-type ('in' ident)?)?    ; `in` a segment
              | ident '=' expr                        ; checked import
 import-type := size | 'proc' '(' state? ('->' state)? ')'

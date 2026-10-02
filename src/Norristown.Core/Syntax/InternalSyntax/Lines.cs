@@ -171,9 +171,13 @@ internal static class Lines
         };
 
         // `.export .proc init {` opens the same kind of block as the declaration after `.export`.
+        // `.export` before a directive that declares nothing is an error, and opens no block of
+        // its own: only the names it lists go in a block of items.
         if (kind == LineKind.Directive && tokens[0].DirectiveKind == DirectiveKind.Export
-            && IsExportedDeclaration(tokens, 1))
+            && tokens[1].Kind == SyntaxKind.Directive)
         {
+            if (!IsExportedDeclaration(tokens, 1))
+                return BlockKind.Unknown;
             start = 1;
         }
         var token = tokens[start];

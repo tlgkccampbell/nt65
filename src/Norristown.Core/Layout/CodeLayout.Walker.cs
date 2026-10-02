@@ -164,6 +164,14 @@ public sealed partial class CodeLayout
             if (kind is BlockKind.Macro or BlockKind.Struct or BlockKind.Union or BlockKind.Enum)
                 return;
 
+            // An item block is part of its directive, which is laid out as the one statement it is
+            // whichever form its items take.
+            if (SyntaxFacts.IsItemBlock(kind))
+            {
+                Statement(block.Opener.Statement);
+                return;
+            }
+
             // A block argument belongs to the call. The line that opens it is the call, which is
             // laid out here, and its lines are laid out where the body splices them.
             if (kind == BlockKind.MacroBlock)

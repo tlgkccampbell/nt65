@@ -602,6 +602,9 @@ internal sealed partial class Binder
             case BlockKind.RecordInitializer:
                 BindInitializer(opener, lines);
                 return;
+            case var items when SyntaxFacts.IsItemBlock(items):
+                BindItemBlock(block, opener);
+                return;
             case BlockKind.If:
                 // Anything an included branch declares belongs to the scope around it. The
                 // condition is read for its names so that an editor can follow a setting or a
@@ -1107,6 +1110,30 @@ internal sealed partial class Binder
         Declare(name, kind, value: null, entries: [.. bodies.OfType<CharmapEntrySyntax>()]);
         foreach (var line in bodies)
             CollectUses(line);
+    }
+
+    /// <summary>
+    /// Binds a directive that opens an item block. The directive reads the items on the block's
+    /// lines as its own, so binding the directive binds them. A block nested inside, which no item
+    /// line can be, and a block that lists nothing are reported here.
+    /// </summary>
+    private void BindItemBlock(BlockSyntax block, StatementSyntax opener)
+    {
+        CheckAnnotation(block.Opener, opener);
+        BindStatement(opener);
+        var directive = block.Opener.Tokens
+            .First(token => token.Kind == SyntaxKind.Directive && SyntaxFacts.BlockKindOf(token.DirectiveKind) == block.BlockKind)
+            .Text;
+        var listed = false;
+        foreach (var member in block.Members.Skip(1))
+        {
+            if (member is BlockSyntax nested)
+                Report(nested.Opener.Tokens[0].Span, Catalogue.ItemBlockHoldsABlock.Message(directive));
+            else if (member is LineSyntax { Statement: not (BlankLineSyntax or BlockCloseLineSyntax) })
+                listed = true;
+        }
+        if (!listed)
+            Report(block.Opener.Tokens.Last(token => token.Kind == SyntaxKind.OpenBrace).Span, Catalogue.ItemBlockEmpty.Message(directive));
     }
 
     /// <summary>
@@ -1684,7 +1711,12 @@ internal sealed partial class Binder
 
         // A declaration that follows `.export` exports what it declares. The parameters of an
         // exported macro or function appear inside it and are not exported with it.
-        var declaring = name.Parent is ImportItemSyntax ? name.Parent.Parent : name.Parent;
+        var declaring = name.Parent switch
+        {
+            ImportItemSyntax { Parent: ImportItemsSyntax line } => line.Directive,
+            ImportItemSyntax item => item.Parent,
+            var parent => parent,
+        };
         if (declaring is StatementSyntax { ExportToken: { } export })
             exportedDeclarations.Add((symbol, export.Span));
         return symbol;
@@ -2005,7 +2037,11 @@ internal sealed partial class Binder
         /// rather than constants.
         /// </summary>
         /// <param name="node">The annotation.</param>
-        public override void VisitNextDirective(NextDirectiveSyntax node) => binder.CollectUses(node);
+        public override void VisitNextDirective(NextDirectiveSyntax node)
+        {
+            foreach (var target in node.Targets)
+                binder.CollectUses(target);
+        }
 
         /// <inheritdoc cref="VisitNextDirective"/>
         public override void VisitPatchDirective(PatchDirectiveSyntax node) => binder.CollectUses(node);

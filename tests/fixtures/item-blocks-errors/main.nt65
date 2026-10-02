@@ -1,0 +1,56 @@
+; The mistakes a list directive's item block can hold.
+.module main
+
+.cpu 6502
+
+; A directive gives its items on its line or in a block, and a block's `{` ends its line.
+.export { first, second }           ;! error[block-brace-ends-the-line]: a block's `{` must end its line: move `first` and the rest to the next line, and put `}` on a line of its own
+.export first, second {             ;! error[items-on-line-and-in-block]: `.export` gives its items on its line or in the block its `{` opens, not both
+    third
+}
+
+; A block that lists nothing, and one that holds a block of its own.
+.import {                           ;! error[item-block-empty]: `.import` opens a block of items and lists none in it
+}
+.export {
+    first
+    .if 1 {                         ;! error[item-block-holds-a-block]: a block of `.export` items holds only items, not a block of its own
+        second
+    }
+}
+
+; Each line holds the directive's items and nothing else.
+.export {
+    first, second
+    .byte 1                         ;! error[expected-name]: expected a name to export
+}
+.import {
+    far_thing: huge                 ;! error[expected-address-size]: expected `zp`, `abs`, `far`, `proc(...)` or what the data is
+}
+
+.segment CODE
+.proc first {
+    jmp (second)
+    .next {
+        @there, 2                   ;! error[expected-label]: expected a label flow continues at
+    }
+@there:
+    rts
+}
+
+; A `.use` lists its names in a block only where a `.use` may stand.
+.proc second {
+    .use other::{                   ;! error[use-misplaced]: `.use` belongs at the top level of a module
+        name
+    }
+    rts
+}
+
+.proc third {
+    jsr first
+    .next ? {                       ;! error[items-on-line-and-in-block]: `.next` gives its items on its line or in the block its `{` opens, not both
+        @back
+    }
+@back:
+    rts
+}

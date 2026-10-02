@@ -323,14 +323,14 @@ internal sealed partial class Binder
     {
         var path = statement.Path.Names;
         var glob = statement.StarToken is not null;
-        var items = statement.Items;
+        var braced = statement.OpenBraceToken is not null;
         var alias = statement.Alias;
         if (path.Length == 0)
             return;
         Resolution? place = null;
         for (var i = 0; i < path.Length && (i == 0 || place is not null); i++)
         {
-            var last = i == path.Length - 1 && !glob && items.Count == 0;
+            var last = i == path.Length - 1 && !glob && !braced;
             place = Resolve(new Use(path[i], fileScope, Path: true, First: i == 0, Last: last), place);
             if (place?.Symbol is { } symbol)
                 references.Add(new SymbolReference(symbol, path[i].Span, false, InUse: true));
@@ -357,12 +357,12 @@ internal sealed partial class Binder
             }
             return;
         }
-        if (items.Count == 0)
+        if (!braced)
         {
             BringIn(alias ?? path[^1], target, alias is not null, statement.IsExported);
             return;
         }
-        foreach (var useItem in items)
+        foreach (var useItem in statement.Items)
         {
             var name = useItem.Name;
             var itemAlias = useItem.Alias;

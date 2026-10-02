@@ -1,0 +1,44 @@
+; DESIGN.md's item blocks in the modules section: the names a module exports, imports and brings
+; in, each listed in a block.
+.module game
+
+.cpu 65816
+
+.use hw::ppu::{
+    PPUCTRL, PPUMASK
+    OAMADDR as oam
+}
+
+.export {
+    fill_page, clear::again
+    K: abs, init as "_init"
+}
+
+.import {
+    zp_scratch: zp, far_table: far
+    _printf: proc(a8, i16)
+}
+
+.const K = $1234
+
+.segment CODE
+.proc fill_page: a8, i8 {
+    lda #0
+    sta zp_scratch
+    sta PPUCTRL
+    sta PPUMASK
+    sta oam
+    rts
+}
+
+.proc clear: a8, i16 {
+    again:
+    .state a8, i16, native
+    lda far_table
+    jsr _printf
+    rts
+}
+
+.proc init: a8, i8 {
+    rts
+}

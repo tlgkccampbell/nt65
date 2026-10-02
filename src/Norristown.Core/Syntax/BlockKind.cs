@@ -75,4 +75,28 @@ public enum BlockKind
     /// A block passed as an argument to a macro call, either the first block or a continuation.
     /// </summary>
     MacroBlock,
+
+    /// <summary>
+    /// <c>.export {</c>, whose lines each list one or more names to export. It is an item block,
+    /// as <see cref="SyntaxFacts.IsItemBlock"/> describes.
+    /// </summary>
+    ExportItems,
+
+    /// <summary>
+    /// <c>.import {</c>, whose lines each list one or more imports. It is an item block, as
+    /// <see cref="SyntaxFacts.IsItemBlock"/> describes.
+    /// </summary>
+    ImportItems,
+
+    /// <summary>
+    /// <c>.use path::{</c>, whose lines each list one or more names to bring in from the path. It
+    /// is an item block, as <see cref="SyntaxFacts.IsItemBlock"/> describes.
+    /// </summary>
+    UseItems,
+
+    /// <summary>
+    /// <c>.next {</c>, whose lines each list one or more labels where execution continues. It is
+    /// an item block, as <see cref="SyntaxFacts.IsItemBlock"/> describes.
+    /// </summary>
+    NextTargets,
 }

@@ -51,6 +51,52 @@ public sealed partial class BlockSyntax : SyntaxNode
 
     private GreenBlock GreenBlock => (GreenBlock)Green;
 
+    /// <summary>
+    /// Returns the item block that the line holding <paramref name="directive"/> opens, or null
+    /// when the line opens none. <see cref="SyntaxFacts.IsItemBlock"/> describes item blocks.
+    /// </summary>
+    internal static BlockSyntax? ItemBlockOf(StatementSyntax directive) =>
+        directive.FirstAncestorOrSelf<LineSyntax>() is { Parent: BlockSyntax block } line
+            && block.Opener == line && SyntaxFacts.IsItemBlock(block.BlockKind)
+            ? block
+            : null;
+
+    /// <summary>
+    /// Returns the directive whose item block holds <paramref name="line"/>, or null when no item
+    /// block holds it or its directive is not a <typeparamref name="T"/>.
+    /// </summary>
+    /// <typeparam name="T">The kind of directive.</typeparam>
+    /// <param name="line">The statement of one line of the block.</param>
+    internal static T? ItemDirectiveOf<T>(StatementSyntax line) where T : StatementSyntax =>
+        line.Parent?.Parent is BlockSyntax block && SyntaxFacts.IsItemBlock(block.BlockKind)
+            ? block.Opener.Statement as T ?? (block.Opener.Statement as LabeledLineSyntax)?.Statement as T
+            : null;
+
+    /// <summary>
+    /// Returns every item a list directive gives, which are the items on its own line followed by
+    /// those on the lines of the item block it opens.
+    /// </summary>
+    /// <typeparam name="TLine">The statement each line of the item block parses to.</typeparam>
+    /// <typeparam name="TItem">The type of one item.</typeparam>
+    /// <param name="directive">The directive.</param>
+    /// <param name="inline">The items on the directive's own line.</param>
+    /// <param name="itemsOf">Returns the items on one line of the block.</param>
+    internal static IReadOnlyList<TItem> ItemsOf<TLine, TItem>(
+        StatementSyntax directive, SeparatedSyntaxList<TItem> inline, Func<TLine, SeparatedSyntaxList<TItem>> itemsOf)
+        where TLine : StatementSyntax
+        where TItem : SyntaxNode
+    {
+        if (ItemBlockOf(directive) is not { } block)
+            return inline;
+        var items = new List<TItem>(inline);
+        foreach (var member in block.Members)
+        {
+            if (member is LineSyntax { Statement: TLine line })
+                items.AddRange(itemsOf(line));
+        }
+        return items;
+    }
+
     /// <inheritdoc/>
     private protected override void CollectDiagnostics(List<Diagnostic> result) =>
         Tree.CollectLines(LineIndex, LastLineIndex, result);

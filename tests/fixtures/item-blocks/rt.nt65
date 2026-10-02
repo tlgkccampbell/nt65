@@ -1,0 +1,16 @@
+; The imports of a hand-written ca65 module, listed in an item block and re-exported, so that a
+; module that uses them imports them as if it had declared them. A re-export lists the names it
+; brings in the same way.
+.module rt
+
+.cpu 6502
+
+.export .import {
+    host_tick: zp, host_flags: zp
+    host_print: proc()
+    HOST_VERSION = $0102            ; checked at link
+}
+
+.export .use hw::{
+    BACKGROUND as background
+}

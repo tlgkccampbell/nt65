@@ -198,16 +198,21 @@ internal sealed partial class Parser
     /// <summary>
     /// Parses <c>.next @a, gfx::init</c>, which names the labels execution can continue at after
     /// the statement above, or <c>.next ?</c>, which ends the path so that nothing beyond it is
-    /// checked.
+    /// checked. <c>.next {</c> opens an item block for the labels.
     /// </summary>
     private GreenNode ParseNext()
     {
         var keyword = Advance();
         if (Kind == SyntaxKind.Question)
-            return new NextDirectiveSyntax(keyword, Advance(), null);
-        return new NextDirectiveSyntax(
-            keyword, null, ParseSeparatedList(() => ParseTarget(Catalogue.ExpectedLabel.Message(
-                "a label flow continues at, or `?`"))));
+        {
+            var question = Advance();
+            return new NextDirectiveSyntax(keyword, question, null, ParseItemsBrace(keyword, listed: true));
+        }
+        if (Kind == SyntaxKind.OpenBrace)
+            return new NextDirectiveSyntax(keyword, null, null, Advance());
+        var targets = ParseSeparatedList(
+            () => ParseTarget(Catalogue.ExpectedLabel.Message("a label flow continues at, or `?`")));
+        return new NextDirectiveSyntax(keyword, null, targets, ParseItemsBrace(keyword, targets is not null));
     }
 
     /// <summary>

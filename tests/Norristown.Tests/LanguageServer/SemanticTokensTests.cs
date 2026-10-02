@@ -117,6 +117,45 @@ public sealed class SemanticTokensTests
     }
 
     /// <summary>
+    /// A name a list directive gives in an item block is classified as it would be on the
+    /// directive's own line.
+    /// </summary>
+    [Fact]
+    public async Task ANameInAnItemBlockIsClassified()
+    {
+        const string Text = """
+            .module main
+            .cpu 6502
+            .export {
+                main
+            }
+            .segment ZEROPAGE
+            .data vector: .word
+            .segment CODE
+            .proc main {
+                jmp (vector)
+                .next {
+                    @move
+                }
+            @move:
+                rts
+            }
+            """;
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.StartAsync(timeout);
+        await client.OpenAsync(Uri, Text);
+        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+
+        var tokens = Decode(client.Initialized.Capabilities.SemanticTokensProvider!.Legend, Text,
+            await client.SemanticTokensAsync(Uri, timeout));
+
+        Assert.Equal(
+            ["main function", "vector variable declaration", "main function declaration", "vector variable", "@move label",
+                "@move label declaration"],
+            tokens);
+    }
+
+    /// <summary>
     /// A change in one file can change what a name in another refers to, so a client that
     /// supports refresh requests is asked to refetch every document's tokens.
     /// </summary>

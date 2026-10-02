@@ -222,6 +222,32 @@ public sealed class FixesTests
     }
 
     /// <summary>
+    /// A name a <c>.use</c> lists in an item block and nothing names is removed from its line, and
+    /// a line or a block left with nothing to list goes with it.
+    /// </summary>
+    [Theory]
+    [InlineData(".use gfx::{\n    clear, fill\n}\n", ".use gfx::{\n    clear\n}\n")]
+    [InlineData(".use gfx::{\n    clear\n    fill  ; spare\n}\n", ".use gfx::{\n    clear\n}\n")]
+    [InlineData(".use gfx::{\n    fill\n}\n.use gfx::clear\n", ".use gfx::clear\n")]
+    public async Task AUseItemInABlockNothingNamesIsOfferedForRemoval(string uses, string kept)
+    {
+        const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
+        const string Rest = ".segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n";
+        var main = ".module main\n" + uses + Rest;
+        var workspace = new Workspace();
+        workspace.Open(new TextDocumentItem("file:///c:/work/gfx.nt65", "nt65", 1, Gfx));
+        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, main));
+        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token());
+        var model = analysis.ModelFor(document.Tree.Path)!;
+
+        var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
+        Assert.Equal("`fill` is brought in and nothing names it: the `.use` item may go", brought.Message);
+
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
+        Assert.Equal(".module main\n" + kept + Rest, Editing.Apply(main, action.Edit!.Changes[Uri]));
+    }
+
+    /// <summary>
     /// A missing bracket is inserted where the syntax tree holds a place for the missing token.
     /// The position comes from that token rather than from the end of the text, so on a line with
     /// a trailing comment the brace is inserted before the comment rather than after it.

@@ -118,6 +118,45 @@
           ]
         },
         {
+          "begin": "(?i)(\\.import)\\s*\\{(?=\\s*(?:;.*)?$)",
+          "end": "\\}",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "begin": "\\(",
+              "end": "\\)",
+              "patterns": [
+                {
+                  "include": "#line"
+                }
+              ]
+            },
+            {
+              "match": "(?:^|,)\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*=(?!=))",
+              "captures": {
+                "1": {
+                  "name": "variable.other.constant.nt65"
+                }
+              }
+            },
+            {
+              "match": "(?:^|,)\\s*([A-Za-z_][A-Za-z0-9_]*)",
+              "captures": {
+                "1": {
+                  "name": "variable.other.readwrite.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
           "begin": "(?i)(\\.import)\\b",
           "end": "$",
           "beginCaptures": {
@@ -148,6 +187,28 @@
               "captures": {
                 "1": {
                   "name": "variable.other.readwrite.nt65"
+                }
+              }
+            },
+            {
+              "include": "#line"
+            }
+          ]
+        },
+        {
+          "begin": "(?i)(\\.export)\\s*\\{(?=\\s*(?:;.*)?$)",
+          "end": "\\}",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.control.directive.nt65"
+            }
+          },
+          "patterns": [
+            {
+              "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*:(?!:))",
+              "captures": {
+                "1": {
+                  "name": "variable.other.nt65"
                 }
               }
             },

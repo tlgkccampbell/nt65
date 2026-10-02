@@ -243,6 +243,9 @@ public enum SyntaxKind : byte
     /// </summary>
     ExportItem,
 
+    /// <summary>One line of an <c>.export</c> block, holding comma-separated items.</summary>
+    ExportItems,
+
     /// <summary><c>.module hw::vic</c>, which names the module a file declares.</summary>
     ModuleDirective,
 
@@ -255,11 +258,17 @@ public enum SyntaxKind : byte
     /// <summary>One name in the braces of a <c>.use</c>, with the name it is imported under.</summary>
     UseItem,
 
+    /// <summary>One line of a <c>.use path::{</c> block, holding comma-separated items.</summary>
+    UseItems,
+
     /// <summary><c>.import a: zp, b = $10</c>.</summary>
     ImportDirective,
 
     /// <summary>One item of an <c>.import</c>.</summary>
     ImportItem,
+
+    /// <summary>One line of an <c>.import</c> block, holding comma-separated items.</summary>
+    ImportItems,
 
     /// <summary><c>proc(a8, i16 -&gt; a8)</c> in an <c>.import</c>.</summary>
     ImportSignature,
@@ -405,6 +414,9 @@ public enum SyntaxKind : byte
     /// above.
     /// </summary>
     NextDirective,
+
+    /// <summary>One line of a <c>.next</c> block, holding comma-separated labels.</summary>
+    NextTargets,
 
     /// <summary>
     /// <c>.fallthrough next</c>, which names the routine that every path reaching the end of this

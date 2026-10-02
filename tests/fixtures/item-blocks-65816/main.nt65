@@ -1,0 +1,38 @@
+; DESIGN.md's first example of item blocks: each directive whose operand is a list gives it in
+; a block, one or more items to a line.
+.module main
+
+.cpu 65816
+
+.export {
+    init, update                    ; a comment on any line
+    draw
+}
+.import {
+    frame, timer: far
+    vsync: proc(a8 -> a8)
+}
+.use hw::ppu::{
+    PPUCTRL, PPUMASK
+    OAMADDR as oam
+}
+
+.segment CODE
+.proc init: a8, i8 {
+    lda #0
+    sta PPUCTRL
+    sta PPUMASK
+    sta oam
+    rts
+}
+
+.proc update: a8, i8 {
+    lda frame
+    ora timer
+    jsr vsync
+    rts
+}
+
+.proc draw: a8, i8 {
+    rts
+}

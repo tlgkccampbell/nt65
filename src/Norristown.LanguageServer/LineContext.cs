@@ -121,6 +121,15 @@ internal sealed class LineContext
         var lineStart = tree.LineStarts[line];
         var tokens = Lexed(tree, lineStart, position);
 
+        // A line of an item block lists what its directive's line would, so it is read as if it
+        // followed the line that opens the block. The `{` stays, so that the line is never the
+        // start of a statement, and in `.use path::{` the names are those inside the braces.
+        if (Edits.BlockAround(tree, line) is { BlockKind: var kind } items && SyntaxFacts.IsItemBlock(kind)
+            && items.LineIndex != line)
+        {
+            tokens.InsertRange(0, TokensOf(tree, items.LineIndex));
+        }
+
         // A name that runs right up to the caret is the one being typed. A `.` on its own lexes
         // as a bad token rather than a directive, but it is the start of one all the same.
         var partial = tokens.Count > 0
@@ -254,6 +263,10 @@ internal sealed class LineContext
                 this with { Context = ContextKind.Code },
             BlockKind.Scope or BlockKind.Segment or BlockKind.Region or BlockKind.If
                 or BlockKind.Repeat or BlockKind.Each => this,
+
+            // An item block's lines are read as part of its directive's line, which is in the
+            // context around the block.
+            var kind when SyntaxFacts.IsItemBlock(kind) => this,
             BlockKind.Data => this with { Context = ContextKind.Data },
             BlockKind.DataBody or BlockKind.List or BlockKind.Charmap => this with { Context = ContextKind.Values },
             BlockKind.RecordInitializer =>

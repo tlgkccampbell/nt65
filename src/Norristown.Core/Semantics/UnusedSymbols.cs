@@ -138,7 +138,7 @@ public static class UnusedSymbols
         for (var index = 0; index < tree.LineCount; index++)
         {
             var line = tree.GetLine(index);
-            if (line.Statement.Kind == SyntaxKind.UseDirective)
+            if (line.Statement.Kind is SyntaxKind.UseDirective or SyntaxKind.UseItems)
                 continue;
 
             // A token counts as a name standing on its own unless the token before it is `::`,

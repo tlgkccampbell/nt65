@@ -162,10 +162,19 @@ internal static class TextMateGrammar
             // An import declares names, each first in its item. Each name is a constant given a
             // value, or an address. A routine's signature is in brackets of its own. "First in its
             // item" is a lookbehind, as it is for a macro's parameters, because to VS Code's
-            // tokenizer `\G` means only "just after the block opened".
+            // tokenizer `\G` means only "just after the block opened". In an item block, an item
+            // starts a line or follows a comma.
+            TextMateRule.Block(@"(?i)(\.import)\s*\{(?=\s*(?:;.*)?$)", @"\}", [Directive],
+                [parentheses, TextMateRule.Scoped($@"(?:^|,)\s*({Word})(?=\s*=(?!=))", Constant),
+                    TextMateRule.Scoped($@"(?:^|,)\s*({Word})", Variable), include]),
             TextMateRule.Block($@"(?i)(\.import)\b", "$", [Directive],
                 [parentheses, TextMateRule.Scoped($@"(?i)(?<=\.import\s|,)\s*({Word})(?=\s*=(?!=))", Constant),
                     TextMateRule.Scoped($@"(?i)(?<=\.import\s|,)\s*({Word})", Variable), include]),
+
+            // An export's item block names what it exports, so a name before a `:` there is
+            // followed by its size, and is not a label.
+            TextMateRule.Block(@"(?i)(\.export)\s*\{(?=\s*(?:;.*)?$)", @"\}", [Directive],
+                [TextMateRule.Scoped($@"^\s*({Word})(?=\s*:(?!:))", Identifier), include]),
 
             // The word after a module name's `:` says whether the module may be placed.
             TextMateRule.Block($@"(?i)(\.module)\b", "$", [Directive],

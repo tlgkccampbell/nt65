@@ -106,8 +106,8 @@ internal sealed partial class Ca65Oracle
             seed.Append('\0').Append(name).Append('\0').Append(Convert.ToHexStringLower(SHA256.HashData(content)));
         var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(seed.ToString())));
         var cached = cacheDirectory is null ? null : Path.Combine(cacheDirectory, key + ".txt");
-        if (cached is not null && File.Exists(cached))
-            return new AssemblyResult(true, "", [.. File.ReadAllText(cached).Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)]);
+        if (cached is not null && Cached(cached) is { } counts)
+            return new AssemblyResult(true, "", [.. counts.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)]);
 
         var work = Directory.CreateTempSubdirectory("nt65-ca65-");
         try
@@ -241,12 +241,31 @@ internal sealed partial class Ca65Oracle
     }
 
     /// <summary>
+    /// Returns the cache entry <paramref name="cached"/>, or null when there is none. Identical
+    /// sources share one entry, and on Windows a read fails while another thread's
+    /// <see cref="Store"/> moves the entry into place. That read is treated as a miss, and the
+    /// source is assembled again.
+    /// </summary>
+    private static string? Cached(string cached)
+    {
+        try
+        {
+            return File.Exists(cached) ? File.ReadAllText(cached) : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Stores <paramref name="text"/> as the cache entry <paramref name="cached"/>. Identical
     /// sources share one entry, and threads or other test runs may write or read it at once, so
     /// each writes a temporary file and moves it into place. On Windows the move fails while
     /// another process has the entry open. The entry is keyed by content, so one that is already
     /// there holds the same text, and the temporary file is dropped.
     /// </summary>
+
     private static void Store(string cached, string text)
     {
         var temp = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";

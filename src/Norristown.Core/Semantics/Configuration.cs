@@ -205,7 +205,8 @@ public sealed class Configuration
     /// <summary>
     /// Returns the statements that are at the file level of <paramref name="container"/> and
     /// under no condition. A statement in a <c>.segment</c> region or block is at file level,
-    /// because a segment leaves names in the scope around it.
+    /// because a segment leaves names in the scope around it. A directive that opens an item block
+    /// is at file level where its block is, and its items are its own.
     /// </summary>
     private static IEnumerable<StatementSyntax> FileLevel(SyntaxNode container)
     {
@@ -219,6 +220,10 @@ public sealed class Configuration
             {
                 foreach (var inner in FileLevel(segment))
                     yield return inner;
+            }
+            else if (child is BlockSyntax { BlockKind: var kind } items && SyntaxFacts.IsItemBlock(kind))
+            {
+                yield return items.Opener.Statement;
             }
         }
     }

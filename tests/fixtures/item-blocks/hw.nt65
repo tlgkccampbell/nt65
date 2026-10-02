@@ -1,0 +1,24 @@
+; A module that lists its exports in an item block, one or more to a line, with a comment on any
+; line.
+.module hw
+
+.cpu 6502
+
+.export {
+    BORDER, BACKGROUND              ; registers
+    set_border
+    init as "_hw_init"              ; a linker name of its own
+}
+
+.const BORDER     = $D020
+.const BACKGROUND = $D021
+
+.segment CODE
+.proc set_border {
+    sta BORDER
+    rts
+}
+
+.proc init {
+    rts
+}

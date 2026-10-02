@@ -1,0 +1,62 @@
+; Each directive whose operand is a list gives its items in a block here, one or more to a line,
+; with a comment on any line. The output is what the same lists written on one line would give.
+.module main
+
+.cpu 6502
+
+.use hw::{
+    BORDER, BACKGROUND
+    set_border as border            ; renamed
+}
+.use rt::{
+    host_tick, host_flags
+    host_print
+}
+
+.import {
+    vsync: proc()
+    frame: zp, scratch: zp
+}
+
+.segment ZEROPAGE
+.data vector: .word
+
+.segment CODE
+.export {
+    main
+}
+
+.proc main {
+    lda #0
+    sta BORDER
+    sta BACKGROUND
+    sta rt::background              ; re-exported from a block
+    jsr border
+    jsr hw::init
+    lda host_tick
+    ora host_flags
+    sta frame
+    sta scratch
+    lda #<rt::HOST_VERSION
+    jsr host_print
+    jsr vsync
+    jmp dispatch
+}
+
+.proc dispatch {
+    jmp (vector)
+    .next {
+        @move, @fire                ; two on a line
+        @jump
+    }
+
+@move:
+    lda #1
+    rts
+@fire:
+    lda #2
+    rts
+@jump:
+    lda #3
+    rts
+}

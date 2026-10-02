@@ -39,6 +39,14 @@ public sealed class CompletionTests
         { "top", ".use hw::|", ["vic"], ["gfx"] },
         { "top", ".use gfx::{|", ["SCREEN", "Sprite", "clear"], ["hw", "helper"] },
 
+        // A line of an item block is offered what its directive's own line would be, so the
+        // block of a `.use` offers what is in the braces of the one-line form.
+        { "top", ".use gfx::{\n    |\n}", ["SCREEN", "Sprite", "clear"], ["hw", "helper"] },
+        { "top", ".use gfx::{\n    SCREEN, |\n}", ["Sprite", "clear"], ["hw", "helper"] },
+        { "top", ".export {\n    |\n}", ["main", "twice"], ["lda", ".proc"] },
+        { "top", ".import {\n    io: |\n}", ["zp", "abs", "far", "proc"], ["clear"] },
+        { "body", "    .next {\n        |\n    }", ["@loop", "main"], ["lda", ".state"] },
+
         // An operand may name anything in scope, anything a `.use` brought in, or a module to
         // start a path from.
         { "body", "    lda |", ["@loop", "clear", "gfx", "main", "twice", "vic"], ["poke", "fast", "lda"] },

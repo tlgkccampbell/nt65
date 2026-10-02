@@ -49,8 +49,8 @@ public sealed class SeparatedListParsingTests
     {
         var line = Line(source);
         var export = Assert.IsType<ExportDirectiveSyntax>(line.Statement);
-        Assert.Equal(items, export.Items.Count);
-        Assert.Equal(separators, export.Items.SeparatorCount);
+        Assert.Equal(items, export.InlineItems.Count);
+        Assert.Equal(separators, export.InlineItems.SeparatorCount);
         Assert.Equal(left, line.SkippedTokens?.GetText() ?? "");
     }
 

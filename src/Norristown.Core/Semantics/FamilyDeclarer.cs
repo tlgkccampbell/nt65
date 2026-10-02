@@ -119,7 +119,7 @@ internal sealed class FamilyDeclarer(
                 globs.Add(module);
             return;
         }
-        if (use.Items.Count == 0)
+        if (use.OpenBraceToken is null)
         {
             BringIn(use.Alias ?? path[^1], target);
             return;

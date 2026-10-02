@@ -1,0 +1,12 @@
+; The registers that the item blocks of the other modules bring in.
+.module hw::ppu
+
+.cpu 65816
+
+.export {
+    PPUCTRL, PPUMASK, OAMADDR
+}
+
+.const PPUCTRL = $2000
+.const PPUMASK = $2001
+.const OAMADDR = $2003

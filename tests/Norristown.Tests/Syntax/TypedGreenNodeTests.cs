@@ -86,7 +86,7 @@ public sealed class TypedGreenNodeTests
         const string text = ".export a, b";
         var tokens = HandBuilt.Tokens(text);
         var green = new Green.ExportDirectiveSyntax(
-            tokens[0], new GreenSeparatedList([Item(tokens[1]), tokens[2], Item(tokens[3])]));
+            tokens[0], new GreenSeparatedList([Item(tokens[1]), tokens[2], Item(tokens[3])]), null);
         var export = Assert.IsType<ExportDirectiveSyntax>(HandBuilt.Over(text, green));
 
         var items = HandBuilt.SeparatedList<ExportItemSyntax>(export, 1);
@@ -138,7 +138,7 @@ public sealed class TypedGreenNodeTests
     {
         var tokens = HandBuilt.Tokens(".export");
         var export = Assert.IsType<ExportDirectiveSyntax>(
-            HandBuilt.Over(".export", new Green.ExportDirectiveSyntax(tokens[0], null)));
+            HandBuilt.Over(".export", new Green.ExportDirectiveSyntax(tokens[0], null, null)));
 
         Assert.Empty(export.Items);
         Assert.Empty(HandBuilt.SeparatedList<ExportItemSyntax>(export, 1));
@@ -184,7 +184,8 @@ public sealed class TypedGreenNodeTests
                 new Green.ExportItemSyntax(Name(tokens[1]), null, null, null, null),
                 tokens[2],
                 new Green.ExportItemSyntax(Name(tokens[3]), null, null, null, null),
-            ])));
+            ]),
+            null));
 
         Assert.Equal(
             [

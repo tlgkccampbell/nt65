@@ -40,16 +40,20 @@ public static class Annotations
     /// the nearest statement above the annotation among its siblings, skipping blank lines and
     /// the other annotations of the same statement. A macro call that opens a block argument
     /// appears among the siblings as a block rather than a line, and the call is the block's
-    /// first line.
+    /// first line. A <c>.next</c> that opens an item block appears among the siblings as that
+    /// block, whether it is the annotation or one of the others above it.
     /// </summary>
     public static LineSyntax? Annotated(LineSyntax line)
     {
-        if (line.Parent is not { } container)
+        SyntaxNode self = line.Parent is BlockSyntax { BlockKind: BlockKind.NextTargets } own && own.Opener == line ? own : line;
+        if (self.Parent is not { } container)
             return null;
         var siblings = container.ChildNodes;
-        for (var i = siblings.IndexOf(line) - 1; i >= 0; i--)
+        for (var i = siblings.IndexOf(self) - 1; i >= 0; i--)
         {
             var above = siblings[i];
+            if (above is BlockSyntax { BlockKind: BlockKind.NextTargets })
+                continue;
             if (above is BlockSyntax { BlockKind: BlockKind.MacroBlock } block)
                 return block.Opener;
             if (above is not LineSyntax { Statement: var statement } candidate)

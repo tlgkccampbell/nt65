@@ -40,7 +40,7 @@ internal static class ModuleSyntax
         var path = use.Path.Names;
         if (path.Length == 0 || use.StarToken is not null)
             yield break;
-        if (use.Items.Count == 0)
+        if (use.OpenBraceToken is null)
         {
             yield return new ProgramSymbols.Reexport((use.Alias ?? path[^1]).Text, [.. path.Select(part => part.Text)]);
             yield break;
