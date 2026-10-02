@@ -33,8 +33,8 @@
 .data card_name: .byte petscii_lower("card.prg.02")
 
 .data files: .type BankFile[] {
-    { bank = <.bankof(draw::box), name = draw_name, length = .sizeof(draw_name) }
-    { bank = <.bankof(card::card), name = card_name, length = .sizeof(card_name) }
+    { bank = .bankof(draw::box), name = draw_name, length = .sizeof(draw_name) }
+    { bank = .bankof(card::card), name = card_name, length = .sizeof(card_name) }
 }
 
 ; Writes a text through CHROUT.
@@ -60,7 +60,7 @@
     jsr load
     bcs @failed
     print!(loaded)
-    lda #<.bankof(card::card)
+    lda #.bankof(card::card)
     sta RAM_BANK
     ldx #<card::card
     ldy #>card::card

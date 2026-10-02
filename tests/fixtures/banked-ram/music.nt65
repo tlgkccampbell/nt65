@@ -1,0 +1,9 @@
+; A routine in a bank of its own, which another module maps by name and calls.
+.module music
+
+.export play
+
+.segment TOOLS
+.proc play {
+    rts
+}

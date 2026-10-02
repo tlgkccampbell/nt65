@@ -30,7 +30,7 @@
 ; Calls a routine in the drawing code's RAM bank, and maps the script's bank again once it has
 ; returned. The routine cannot see the script, because both banks are at the same addresses.
 .macro banked(routine: ident) {
-    lda #<.bankof(routine)
+    lda #.bankof(routine)
     sta RAM_BANK
     jsr routine
     lda bank

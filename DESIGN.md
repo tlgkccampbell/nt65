@@ -542,13 +542,19 @@ As with spaces, a name that cannot be seen may still be used as a value: an imme
 told where to go that way.
 
 **Which bank to map.** `.bankof(x)` is the `bank` attribute that the config gives the memory
-area holding `x`, a routine, a label or data in a segment. It is ca65's `.bank(x)` in the output,
-and ld65 works it out, so it is a link-time value like `.loadof`. Code that maps a switchable
-bank by writing its number to a register, such as the Commander X16's RAM bank at `$00`, names
-what it is about to reach rather than a number kept in step with the config by hand:
+area `x` runs in, where `x` is a routine, a label or data in a segment. It is the run area, not
+the load area, because that is the area ca65's `.bank` reads; for a segment that loads and runs
+in one area they are the same. ld65 works it out, so it is a link-time value like `.loadof`, and
+an `.if` cannot test it. The output writes it as `.lobyte(.bank(x))`: ca65 gives `.bank(x)` the
+address size of `x`, which no byte holds, so the low byte is taken, as ca65's documentation does,
+and every mapper's bank numbers fit it. A constant, a declaration at a constant address, a scope,
+an element or an expression is in no segment, and naming one is `bank-has-no-segment`. Code that
+maps a switchable bank by writing its number to a register, such as the Commander X16's RAM bank
+at `$00` or an NES mapper's bank register, names what it is about to reach rather than a number
+kept in step with the config by hand:
 
 ```nt65
-lda #<.bankof(draw::box)
+lda #.bankof(draw::box)
 sta RAM_BANK
 jsr draw::box
 ```

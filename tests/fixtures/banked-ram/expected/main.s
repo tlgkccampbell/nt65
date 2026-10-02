@@ -13,13 +13,15 @@
 .export main__banks
 .export main__call_box
 
+.import music__play: abs
+
 RAM_BANK = $00
 
 .segment "ZEROPAGE": zeropage
 saved: .res 1
 
 .segment "TOOLS": absolute
-; .proc box  main.nt65:15
+; .proc box  main.nt65:16
 main__draw__box:
     nop
 draw__box__inside:
@@ -30,14 +32,16 @@ draw__box__inside:
 main__table: .byte 1, 2, 3
 
 .segment "RODATA": absolute
-main__banks: .byte <.bank(main__draw__box), <.bank(main__table), <.bank(draw__box__inside)
+main__banks: .byte .lobyte(.bank(main__draw__box)), .lobyte(.bank(main__table)), .lobyte(.bank(draw__box__inside)), .lobyte(.bank(music__play))
+
+.assert .lobyte(.bank(main__table)) <> .lobyte(.bank(music__play)), lderror, "the tables and the music share a window, so their banks differ"
 
 .segment "CODE": absolute
-; .proc call_box  main.nt65:30
+; .proc call_box  main.nt65:34
 main__call_box:
     lda z:RAM_BANK
     sta z:saved
-    lda #<.bank(main__draw__box)
+    lda #.lobyte(.bank(main__draw__box))
     sta z:RAM_BANK
     jsr main__draw__box
     lda z:saved

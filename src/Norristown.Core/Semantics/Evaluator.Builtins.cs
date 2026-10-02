@@ -85,7 +85,7 @@ internal sealed partial class Evaluator
             case BuiltinKind.Loadof or BuiltinKind.Runof:
                 return Value.Unknown;
             case BuiltinKind.Bankof:
-                return Banked(function, given);
+                return Banked(given);
             case BuiltinKind.Endof or BuiltinKind.Spanof:
                 return Extent(kind, given);
             case BuiltinKind.Mincycles or BuiltinKind.Maxcycles:
@@ -178,10 +178,10 @@ internal sealed partial class Evaluator
 
     /// <summary>
     /// Returns the value of <c>.bankof</c>, after checking that it names something a segment
-    /// holds. The bank is the one the linker configuration gives that segment's memory area, which
-    /// ld65 reads, so the call never has a value here.
+    /// holds. The bank is the one the linker configuration gives the memory area that segment runs
+    /// in, which ld65 reads, so the call never has a value here.
     /// </summary>
-    private Value Banked(SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
+    private Value Banked(IReadOnlyList<SyntaxNode> arguments)
     {
         // A name that names nothing has been reported already, and a parameter or a binding
         // names something only in an expansion.
@@ -191,12 +191,13 @@ internal sealed partial class Evaluator
             return Value.Unknown;
         var held = banked is { Kind: SymbolKind.Label or SymbolKind.Proc or SymbolKind.ImportedAddress }
             or { Kind: SymbolKind.Data, Segment: not null };
-        if (named is not { IsIndexed: false } || !held)
-        {
-            Report(function, Catalogue.BuiltinArguments.Message(
-                SyntaxFacts.TextOf(BuiltinKind.Bankof),
-                $"{SyntaxFacts.Builtin(BuiltinKind.Bankof).Takes}, and `{arguments[0].GetText().Trim()}` is not one"));
-        }
+        if (named is { IsIndexed: false } && held)
+            return Value.Unknown;
+        var text = arguments[0].GetText().Trim();
+        var what = named is { IsIndexed: false } && banked is not null
+            ? $"`{text}` is {banked.KindPhrase}{(banked.IsAddress ? " at a constant address" : "")}"
+            : $"`{text}` is not the name of a routine, a label or data";
+        Report(arguments[0], Catalogue.BankHasNoSegment.Message(what));
         return Value.Unknown;
     }
 

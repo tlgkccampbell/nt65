@@ -1,6 +1,7 @@
 ; Banked RAM on a 65C02, as the Commander X16 has it: two banks at $A000, one mapped at a time
 ; by the register at $00. `.bankof` is the `bank` the linked config gives the memory area a name
-; is in, which ld65 works out, so code in the fixed area maps a bank by name.
+; runs in, which ld65 works out, so code in the fixed area maps a bank by name. ca65 gives its
+; `.bank` the address size of the name, so the output takes the low byte.
 .module main
 
 .export draw, call_box, banks
@@ -23,14 +24,17 @@
 .export .data table: .byte 1, 2, 3
 
 .segment RODATA
-.data banks: .byte <.bankof(draw::box), <.bankof(table), <.bankof(draw::box::inside)
+; The bank of each name, as data. A name in another module is imported, and ld65 answers for it.
+.data banks: .byte .bankof(draw::box), .bankof(table), .bankof(draw::box::inside), .bankof(music::play)
+
+.assert .bankof(table) != .bankof(music::play), "the tables and the music share a window, so their banks differ"
 
 .segment CODE
 ; Maps the bank that holds `draw::box`, calls it, and maps the bank that was there before.
 .proc call_box {
     lda RAM_BANK
     sta saved
-    lda #<.bankof(draw::box)        ; the bank the config puts draw::box in
+    lda #.bankof(draw::box)        ; the bank the config puts draw::box in
     sta RAM_BANK
     jsr draw::box
     lda saved

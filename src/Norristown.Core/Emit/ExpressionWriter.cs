@@ -616,12 +616,12 @@ internal sealed class ExpressionWriter(
             return;
         }
 
-        // `.bankof(name)` is ca65's `.bank(name)`, which ld65 answers from the memory area that
-        // holds the name.
-        if (call.BuiltinKind == BuiltinKind.Bankof && call.Function is { } bankof)
+        // `.bankof(name)` is ca65's `.bank(name)`, which ld65 answers from the memory area the
+        // name runs in. ca65 gives that call the address size of the name, which no byte holds, so
+        // the bank is written as its low byte, which is how ca65's own documentation writes it.
+        if (call.BuiltinKind == BuiltinKind.Bankof && call.Arguments.Arguments is [var banked])
         {
-            rewriter.Replacements[bankof.Position] = ".bank";
-            Substitute(call.Arguments, rewriter, nested: false);
+            rewriter.Replace(call, $".lobyte(.bank({Substituted(banked, rewriter.Comments)}))");
             return;
         }
 

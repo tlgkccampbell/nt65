@@ -113,6 +113,7 @@
         "assert-level",
         "asserted-item-not-restored",
         "assertion-failed",
+        "bank-has-no-segment",
         "bank-invalid",
         "bank-mismatch",
         "banks-not-a-list",

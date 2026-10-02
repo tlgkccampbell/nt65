@@ -347,15 +347,17 @@ the trampoline is told where to go. nt65 tracks no mapper state: code in the fix
 name anything, and nothing is reported where the config does not say where a segment runs.
 
 A config can give each such memory area a `bank` attribute, the number the program writes to
-its mapper to show it. `.bankof(name)` is that number for the area that holds `name`, which
-ld65 works out, so code in the fixed bank maps a bank by naming what it is about to call or
-read:
+its mapper to show it. `.bankof(name)` is that number for the area `name` runs in, which ld65
+works out, so code in the fixed bank maps a bank by naming what it is about to call or read:
 
 ```nt65
-lda #<.bankof(draw::box)        ; the bank the config puts draw::box in
+lda #.bankof(draw::box)         ; the bank the config puts draw::box in
 sta RAM_BANK
 jsr draw::box
 ```
+
+Only ld65 knows the number, so nt65 writes it for ld65 to work out, as a byte, and an `.if`
+cannot test it; check it with an `.assert`.
 
 **A segment's bytes are one run.** ca65 writes each segment's bytes in the order they appear
 in the file, whichever `.segment` line put them there, and nt65 reads the file the same way.

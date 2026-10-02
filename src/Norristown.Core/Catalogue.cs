@@ -1246,6 +1246,16 @@ public static class Catalogue
             + "routine. The name given refers to something that takes none, such as a constant, so there is "
             + "nothing to measure.");
 
+    internal static DiagnosticDescriptor BankHasNoSegment { get; } = Entry(
+        Area.Values,
+        "bank-has-no-segment",
+        Severity.Error,
+        "{0}, so `.bankof` has no memory area to give the bank of",
+        "`.bankof(name)` is the `bank` attribute that the linker configuration gives the memory area the name's "
+            + "segment runs in, which is the area ca65's `.bank` reads, not the one it is loaded from. ld65 finds "
+            + "the area from the segment, so the argument must be a routine, a label or data in a segment, not a "
+            + "constant, a declaration at a constant address, a scope, an element or an expression.");
+
     internal static DiagnosticDescriptor CountofHasNoElements { get; } = Entry(
         Area.Values,
         "countof-has-no-elements",

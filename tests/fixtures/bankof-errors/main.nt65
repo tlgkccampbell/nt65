@@ -1,6 +1,7 @@
 ; `.bankof` takes the name of something a segment holds, because the bank is the one the linker
-; config gives that segment's memory area. A constant, a routine or data at a constant address,
-; a scope, an element of an array and a number are in no segment.
+; config gives the memory area that segment runs in. A constant, a routine or data at a constant
+; address, a scope, an element of an array and a number are in no segment. Only ld65 knows the
+; bank, so a build's condition cannot ask for it.
 .module main
 .cpu 65c02
 
@@ -15,12 +16,16 @@
 .data table: .byte[4] { 1, 2, 3, 4 }
 
 .data banks {
-    .byte <.bankof(LIMIT)           ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `LIMIT` is not one
-    .byte <.bankof(CHROUT)          ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `CHROUT` is not one
-    .byte <.bankof(PORT)            ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `PORT` is not one
-    .byte <.bankof(tools)           ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `tools` is not one
-    .byte <.bankof(table[1])        ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `table[1]` is not one
-    .byte <.bankof($A000)           ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `$A000` is not one
-    .byte <.bankof()                ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds
-    .byte <.bankof(table)
+    .byte .bankof(LIMIT)            ;! error[bank-has-no-segment]: `LIMIT` is a constant, so `.bankof` has no memory area to give the bank of
+    .byte .bankof(CHROUT)           ;! error[bank-has-no-segment]: `CHROUT` is an extern routine at a constant address, so `.bankof` has no memory area to give the bank of
+    .byte .bankof(PORT)             ;! error[bank-has-no-segment]: `PORT` is an address alias at a constant address, so `.bankof` has no memory area to give the bank of
+    .byte .bankof(tools)            ;! error[bank-has-no-segment]: `tools` is a scope, so `.bankof` has no memory area to give the bank of
+    .byte .bankof(table[1])         ;! error[bank-has-no-segment]: `table[1]` is not the name of a routine, a label or data, so `.bankof` has no memory area to give the bank of
+    .byte .bankof($A000)            ;! error[bank-has-no-segment]: `$A000` is not the name of a routine, a label or data, so `.bankof` has no memory area to give the bank of
+    .byte .bankof()                 ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds
+    .byte .bankof(table)
+}
+
+.if .bankof(table) {                ;! error[condition-uses-a-measurement]: an `.if` cannot test `.bankof(table)`, which uses a measurement of a declaration; check it with `.assert`
+    .data never: .byte 0
 }

@@ -50,7 +50,8 @@ public sealed class CatalogueAreaTests
         ]),
         ("Values",
         [
-            "arithmetic-overflow", "binding-not-over-an-enum", "builtin-arguments", "charmap-argument-named",
+            "arithmetic-overflow", "bank-has-no-segment", "binding-not-over-an-enum", "builtin-arguments",
+            "charmap-argument-named",
             "charmap-has-no-entry",
             "condition-is-text", "condition-names-the-program", "condition-uses-a-conditional-declaration",
             "condition-uses-a-measurement", "constant-names-an-address", "countof-has-no-elements",
