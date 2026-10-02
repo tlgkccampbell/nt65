@@ -30,15 +30,16 @@ $runner = Join-Path $root "tests/Norristown.Tests/bin/$configuration/net10.0/Nor
 if ($Benchmark) {
     # The test project enables the server garbage collector, which suits the suite but not an
     # editor. The timings are meant to show what an edit costs in the shipped binaries, so they
-    # run with the workstation collector those binaries use.
-    $savedGc = $env:DOTNET_gcServer
+    # run with the workstation collector and without the tiered PGO that those binaries use.
+    $savedGc, $savedPgo = $env:DOTNET_gcServer, $env:DOTNET_TieredPGO
     try {
         $env:DOTNET_gcServer = '0'
+        $env:DOTNET_TieredPGO = '0'
         & $runner -noLogo -trait 'Category=Benchmark' -parallelMode none -showLiveOutput
         exit $LASTEXITCODE
     }
     finally {
-        $env:DOTNET_gcServer = $savedGc
+        $env:DOTNET_gcServer, $env:DOTNET_TieredPGO = $savedGc, $savedPgo
     }
 }
 
@@ -54,8 +55,8 @@ if ($Fixture -and -not $Ca65) { $runnerArgs += '-class', 'Norristown.Tests.Fixtu
 
 # Tiered PGO is turned off. It instruments tier-0 code to collect a profile for tier-1
 # compilation, and a suite of short tests rarely calls anything often enough to recoup that
-# cost, so most of the run would execute the slower instrumented code. The
-# benchmarks above keep PGO on, because the shipped binaries do.
+# cost, so most of the run would execute the slower instrumented code. The command line
+# turns it off for the same reason.
 $saved = $env:NT65_FIXTURE, $env:NT65_UPDATE, $env:NT65_THOROUGH, $env:DOTNET_TieredPGO
 try {
     $env:DOTNET_TieredPGO = '0'

@@ -9,6 +9,9 @@
     <PackageId>nt65</PackageId>
     <Description>The Norristown Assembler: transpiles nt65, an assembly language for the 6502 family and the 65816, to ca65.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- Tiered PGO instruments code to collect a profile before optimizing it. A build is over in
+         a second or two, too soon to recoup that, and runs about a quarter faster without it. -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Norristown.Core\Norristown.Core.csproj" />
