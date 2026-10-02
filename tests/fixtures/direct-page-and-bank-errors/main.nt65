@@ -51,6 +51,22 @@
     rts
 }
 
+; Registers declared as data at their address are constant addresses too, through a field and
+; an element as well as by name.
+.struct Port {
+    low:  .byte
+    high: .byte
+}
+
+.data ports: .type Port[4] = $2104
+
+.proc mirrored_record: a8, i8, dbr = $7e {
+    sta ports[1]::high      ;! error[range-bank-mismatch]: $2107 is reachable only from banks $00-$3f, $80-$bf, but B is $7e here
+    sta ports::low,x        ;! error[range-bank-mismatch]: $2104 is reachable only from banks $00-$3f, $80-$bf, but B is $7e here
+    sta f:ports[1]::high
+    rts
+}
+
 ; A standard segment, once declared, is checked like any other.
 .proc standard: a8, i8, dp = 0, dbr = $00 {
     lda temp                ;! error[direct-page-mismatch]: `temp` is in segment "ZEROPAGE", which expects the direct page at $2000, but D is $0000 here

@@ -935,7 +935,9 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Returns the offset that a path of members adds up to. A type contributes nothing, and a
     /// member contributes its own offset. A path that starts at an instance is an address, which
-    /// only the linker knows, so it has no value here and is emitted symbolically instead.
+    /// only the linker knows, so it has no value here and is emitted symbolically instead. Data
+    /// found elsewhere at a constant address is the exception: its address is that constant, so
+    /// a path through it is a number, as the data's own name is.
     /// </summary>
     private Value OffsetAlong(NameExpressionSyntax name)
     {
@@ -944,6 +946,11 @@ internal sealed partial class Evaluator
         {
             if (!resolved.TryGetValue((name.Tree, token.Span.Start), out var part))
                 continue;
+            if (part.Kind == SymbolKind.AddressAlias && ValueOfSymbol(part).AsNumber() is { } at)
+            {
+                offset += at;
+                continue;
+            }
             if (part.IsAddress)
                 return Value.Unknown;
             if (part.Kind != SymbolKind.Member)
