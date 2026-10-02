@@ -27,6 +27,10 @@ public sealed class CHeader
     // with the C type; anything else is declared as bytes.
     private readonly HashSet<Symbol> defined = [];
 
+    // The routines and data declarations C cannot name, each with what it is, which the header
+    // lists in a comment at its end.
+    private readonly List<(Symbol Symbol, string What)> leftOut = [];
+
     private CHeader(ProgramModel program, List<Diagnostic> diagnostics)
     {
         this.program = program;
@@ -35,7 +39,8 @@ public sealed class CHeader
 
     /// <summary>
     /// Returns the header for <paramref name="program"/>, guarded by a macro made from
-    /// <paramref name="fileName"/>. Anything C cannot use is reported as a warning.
+    /// <paramref name="fileName"/>. Exported data whose type C cannot name is reported as a
+    /// warning, and a routine or data declaration whose name C cannot use is listed in a comment.
     /// </summary>
     public static string Write(ProgramModel program, string fileName, List<Diagnostic> diagnostics)
     {
@@ -140,6 +145,18 @@ public sealed class CHeader
             Line("#endif");
         }
 
+        // An export C cannot name is most often one only assembly uses, such as a routine a ca65
+        // stub registers as a constructor, so it is not reported. The comment is where someone
+        // looking for a name C reports as undeclared will find out why it is missing.
+        if (leftOut.Count > 0)
+        {
+            Line("");
+            Line("/* These exports are left out, because C names only a linker name that starts with _.");
+            foreach (var (symbol, what) in leftOut)
+                Line($"   {symbol.OutputName}, a {what}: export it as \"_{symbol.Name}\" to declare it here.");
+            Line("*/");
+        }
+
         Line("");
         Line($"#endif /* {guard} */");
     }
@@ -218,15 +235,14 @@ public sealed class CHeader
     /// <summary>
     /// Returns whether C can name <paramref name="symbol"/>. cc65 puts <c>_</c> in front of every
     /// C name, so a routine or data declaration that C uses is exported under a name that starts
-    /// with an underscore. When C cannot name the symbol, a diagnostic is reported.
+    /// with an underscore. A symbol C cannot name is kept for the comment that lists what the
+    /// header leaves out.
     /// </summary>
     private bool Reachable(Symbol symbol, string what)
     {
         if (symbol.OutputName.StartsWith('_'))
             return true;
-        var span = symbol.ExportSpan is { } at ? symbol.Tree.GetSpan(at) : symbol.DeclarationSpan;
-        diagnostics.Add(new Diagnostic(span,
-            Catalogue.CHeaderNameLeftOut.Message(symbol.PathName, symbol.OutputName, what, symbol.Name)));
+        leftOut.Add((symbol, what));
         return false;
     }
 

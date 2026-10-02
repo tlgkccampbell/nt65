@@ -130,7 +130,6 @@
         "builtin-argument-named",
         "builtin-arguments",
         "byte-operator-needs-parentheses",
-        "c-header-name-left-out",
         "c-header-untyped",
         "ca65-block-end",
         "ca65-spelling",

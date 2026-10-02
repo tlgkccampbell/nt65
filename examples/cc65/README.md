@@ -98,6 +98,5 @@ extern unsigned char crc_table_hi[256];
 
 nt65 has no `.constructor`. A routine that cc65's start-up code runs is registered by a ca65
 stub that calls it, which is all `asm/constructor.s` is. `crc::init` is exported under the name
-nt65 gives it, `crc__init`, which C cannot use, so the header would warn that it leaves it out.
-Nothing in C calls it, so `nt65.json` turns that warning off with
-`"c-header-name-left-out": "off"`.
+nt65 gives it, `crc__init`, which C cannot use. Nothing in C calls it, so the header leaves it
+out and lists it in a comment at its end, without a warning.

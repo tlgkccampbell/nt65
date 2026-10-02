@@ -3256,16 +3256,6 @@ public static class Catalogue
             + "exported, so the header cannot name it and declares the data as an `unsigned char` array of the "
             + "same size. Export the type to give the data its C type.");
 
-    internal static DiagnosticDescriptor CHeaderNameLeftOut { get; } = Entry(
-        Area.Output,
-        "c-header-name-left-out",
-        Severity.Warning,
-        "the C header leaves out {2} `{0}`: its linker name `{1}` has no leading `_`, so C cannot name it; export "
-            + "it `as \"_{3}\"`",
-        "cc65 puts an underscore in front of every C name, so C code can refer to an assembly symbol only when its "
-            + "linker name starts with `_`. Export it under a name that does, with `as \"_name\"`, or turn this "
-            + "warning off in the project's `diagnostics` if C does not need it.");
-
     internal static DiagnosticDescriptor ExportNameTaken { get; } = Entry(
         Area.Output,
         "export-name-taken",

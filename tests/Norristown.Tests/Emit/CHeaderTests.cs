@@ -134,11 +134,12 @@ public sealed class CHeaderTests
 
     /// <summary>
     /// cc65 puts <c>_</c> in front of the linker name of every C routine or data declaration, so an
-    /// export whose linker name does not start with one is left out with a warning. Data whose
-    /// type is not exported is declared as bytes, also with a warning.
+    /// export whose linker name does not start with one is left out. It is listed in a comment
+    /// with no warning, because assembly is often its only user. Data whose type is not exported
+    /// is declared as bytes, with a warning.
     /// </summary>
     [Fact]
-    public void WhatCCannotNameIsLeftOutWithAWarning()
+    public void WhatCCannotNameIsListedInAComment()
     {
         var (header, problems) = Header(("m.nt65", """
             .module m
@@ -155,14 +156,17 @@ public sealed class CHeaderTests
             """));
 
         Assert.Equal(
-            [
-                "m.nt65:2: warning: the C header leaves out routine `m::clear`: its linker name `m__clear` has no leading `_`, "
-                    + "so C cannot name it; export it `as \"_clear\"`",
-                "m.nt65:7: warning: `player` has type `m::Hidden`, which is not exported, so the C header declares `player` as bytes",
-            ],
+            ["m.nt65:7: warning: `player` has type `m::Hidden`, which is not exported, so the C header declares `player` as bytes"],
             problems);
         Assert.Contains("extern unsigned char player[2];", header);
-        Assert.DoesNotContain("clear", header);
+        Assert.DoesNotContain("void clear", header);
+        Assert.Contains(
+            """
+            /* These exports are left out, because C names only a linker name that starts with _.
+               m__clear, a routine: export it as "_clear" to declare it here.
+            */
+            """.ReplaceLineEndings("\n"),
+            header);
     }
 
     private static (string Header, IReadOnlyList<string> Problems) Header(params (string Path, string Text)[] files)

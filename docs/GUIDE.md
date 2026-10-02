@@ -1553,8 +1553,8 @@ is kept as a comment saying so.
 declarations for cc65: structs member by member with their sizes checked, enums, constants,
 and `extern` data and routines. C and nt65 then share one definition of each type. A routine
 or data declaration appears in it only when its linker name starts with cc65's underscore,
-`.export fill as "_fill"`, which C then calls `fill`; each one left out gets a warning saying
-so.
+`.export fill as "_fill"`, which C then calls `fill`. A comment at the end of the header lists
+each one left out, so a name C reports as undeclared can be found there.
 
 **Start-up code.** nt65 has no `.constructor`, `.destructor` or `.interruptor`. A routine that
 cc65's runtime should run at start-up is registered by a small ca65 file that calls it.
