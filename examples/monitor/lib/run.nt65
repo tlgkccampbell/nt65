@@ -61,9 +61,9 @@
         ldy #0
     @word:
         jsr space
-        lda registers::ac+1,y
+        lda registers::ac::high,y
         jsr print_byte
-        lda registers::ac,y
+        lda registers::ac::low,y
         jsr print_byte
         iny
         iny
@@ -140,22 +140,22 @@
         pha
         lda registers::db
         pha
-        lda registers::dp+1
+        lda registers::dp::high
         pha
-        lda registers::dp
+        lda registers::dp::low
         pha
         pld
         ; The registers are loaded at 16 bits, which the flags then narrow as they say.
         clc
         xce
         rep #$30
-        ldx registers::xr
-        ldy registers::yr
+        ldx registers::xr::word
+        ldy registers::yr::word
         sep #$20
         lda registers::e
         lsr a                       ; the carry is E, for the XCE
         rep #$20
-        lda registers::ac
+        lda registers::ac::word
         xce
         plb
         plp
@@ -168,16 +168,16 @@
         clc
         xce                         ; the carry is E
         rep #$30
-        sta f:registers::ac
+        sta f:registers::ac::word
         txa
-        sta f:registers::xr
+        sta f:registers::xr::word
         tya
-        sta f:registers::yr
+        sta f:registers::yr::word
         tdc
-        sta f:registers::dp
+        sta f:registers::dp::word
         tsc
         inc a                       ; past the flags pushed above
-        sta f:registers::sp
+        sta f:registers::sp::word
         sep #$30
         lda #0
         rol a

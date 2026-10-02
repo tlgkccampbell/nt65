@@ -1,4 +1,4 @@
-; The commands that read and write memory: M, : and F.
+; The commands that read and write memory: M, :, F and, on the 65816, T.
 .module monitor::memory
 
 .use platform::{putc, text, running, COLUMNS}
@@ -8,6 +8,10 @@
 .use monitor::parse
 
 .export dump, write, fill, range, last
+.if .target(65816) {
+    .export transfer
+    .use monitor::macros::difference
+}
 
 ; Returns the width of a line of M that shows n bytes. The line holds a colon and the address,
 ; then a space and two digits for each byte, then a space and one character for each byte.
@@ -22,10 +26,22 @@
 
 .assert line_width(BYTES_PER_LINE) < COLUMNS, "a line of M must fit on the screen"
 
+.if .target(65816) {
+    ; The banks of a block move, in the order an instruction holds them.
+    .struct Banks {
+        destination: .byte
+        source:      .byte
+    }
+}
+
 .segment BSS
 .data last:  .byte[ADDRESS_SIZE]    ; the last address a command reaches
 .data with:  .byte                  ; what F fills with
 .data count: .byte                  ; the bytes : wrote
+.if .target(65816) {
+    .data destination: .byte[ADDRESS_SIZE]  ; where T copies to
+    .data banks:       .type Banks          ; the banks `block_move` moves between
+}
 
 .segment CODE
 ; M [from [to]]: shows memory from `from`, or from where the last M or D stopped, up to `to`,
@@ -67,32 +83,162 @@
     rts
 }
 
-; F from to byte: fills memory from `from` up to and including `to` with `byte`.
-.proc fill: running {
-    jsr parse::number
-    mov_address!(addr, parse::value)
-    jsr parse::number
-    mov_address!(last, parse::value)
-    jsr parse::byte
-    sta with
-    jsr parse::expect_end
-    compare_address!(last, addr)
-    bcc @backwards
-    ldy #0
-@next:
-    lda with
-    poke!(addr)
-    .repeat ADDRESS_SIZE, i {
-        lda addr + i
-        cmp last + i
-        bne @on
+.if .target(65816) {
+    ; F from to byte: fills memory from `from` up to and including `to` with `byte`. The two
+    ; must be in one bank. The first byte is written, and a block move copies each byte to the
+    ; one after it, which carries the first along to `to`.
+    .proc fill: running {
+        jsr parse::number
+        mov_address!(addr, parse::value)
+        jsr parse::number
+        mov_address!(last, parse::value)
+        jsr parse::byte
+        sta with
+        jsr parse::expect_end
+        compare_address!(last, addr)
+        bcc @bad
+        lda addr+2
+        cmp last+2
+        bne @bad                    ; a block move stays in its banks
+        sta banks::source
+        sta banks::destination
+        lda with
+        ldy #0
+        poke!(addr)
+        clc
+        xce
+        difference!(last, addr)     ; the bytes after the first
+        beq @done
+        dec a                       ; less one, as a block move counts
+        .ensure i16
+        ldx addr
+        txy
+        iny
+        clc
+        jsr block_move
+    @done:
+        sec
+        xce
+        rts
+    @bad:
+        jmp monitor::error
     }
-    rts
-@on:
-    inc_address!(addr)
-    jmp @next
-@backwards:
-    jmp monitor::error
+
+    ; T from to address: copies the bytes from `from` up to and including `to` to `address`.
+    ; `from` and `to` must be in one bank, and the copy must end in the bank it starts in. The
+    ; bytes may overlap, because a copy to a higher address in the same bank starts with the
+    ; last byte.
+    .proc transfer: running {
+        jsr parse::number
+        mov_address!(addr, parse::value)
+        jsr parse::number
+        mov_address!(last, parse::value)
+        jsr parse::number
+        mov_address!(destination, parse::value)
+        jsr parse::expect_end
+        compare_address!(last, addr)
+        bcc @bad
+        lda addr+2
+        cmp last+2
+        bne @bad                    ; a block move stays in its banks
+        sta banks::source
+        lda destination+2
+        sta banks::destination
+        clc
+        xce
+        difference!(last, addr)     ; the bytes to copy, less one, as a block move counts
+        .ensure i16
+        tax
+        clc
+        adc destination
+        bcs @too_far                ; the copy would run past the end of the bank
+        tay                         ; the copy's last byte
+        txa
+        ldx destination
+        cpx addr
+        bcs @backward               ; the copy is at or above the bytes it copies
+        ldx addr
+        ldy destination
+        clc
+        jsr block_move
+        bra @done
+    @backward:
+        ldx last
+        sec
+        jsr block_move
+    @done:
+        sec
+        xce
+        rts
+    @too_far:
+        sec
+        xce
+    @bad:
+        jmp monitor::error
+    }
+
+    ; Moves A + 1 bytes from X in bank `banks::source` to Y in bank `banks::destination`. With
+    ; the carry clear it uses `mvn`, which starts with the first byte, and with the carry set
+    ; `mvp`, which starts with the last, so X and Y are then the last bytes of each. A block
+    ; move leaves B at the destination bank, so the routine pulls back the B it was called with.
+    ; It writes the banks into its own instructions, so it runs from RAM, where a platform
+    ; whose code is in ROM copies the segment `RAMCODE` before the monitor starts.
+    .segment RAMCODE {
+        .proc block_move: running, native, a16, i16 {
+            pha
+            .ensure a8
+            lda banks::source
+            sta @forward+2
+            .patch @forward
+            sta @backward+2
+            .patch @backward
+            lda banks::destination
+            sta @forward+1
+            .patch @forward
+            sta @backward+1
+            .patch @backward
+            .ensure a16
+            pla
+            phb
+            bcs @backward
+        @forward:
+            mvn #0, #0
+            plb
+            rts
+        @backward:
+            mvp #0, #0
+            plb
+            rts
+        }
+    }
+} .else {
+    ; F from to byte: fills memory from `from` up to and including `to` with `byte`.
+    .proc fill: running {
+        jsr parse::number
+        mov_address!(addr, parse::value)
+        jsr parse::number
+        mov_address!(last, parse::value)
+        jsr parse::byte
+        sta with
+        jsr parse::expect_end
+        compare_address!(last, addr)
+        bcc @backwards
+        ldy #0
+    @next:
+        lda with
+        poke!(addr)
+        .repeat ADDRESS_SIZE, i {
+            lda addr + i
+            cmp last + i
+            bne @on
+        }
+        rts
+    @on:
+        inc_address!(addr)
+        jmp @next
+    @backwards:
+        jmp monitor::error
+    }
 }
 
 ; Reads [from [to]]: `from`, if it is there, into `addr`, and `to` into `last`. Returns with

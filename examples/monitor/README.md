@@ -5,9 +5,10 @@ from the start rather than ported: it shows memory, changes it, disassembles it,
 in it. The monitor itself knows nothing about the machine it runs on. Each machine is a
 *platform* that supplies a handful of routines. There are four: the Commodore 64 and the NES,
 with a 6502, and the Apple IIGS and the Super NES, with a 65816, on which the monitor reaches all
-sixteen megabytes, shows the 65816's registers and disassembles all of its instructions. The
-Super NES and the NES have no keyboard, so the monitor draws one on the screen and types on it
-with the joypad. The two share that keyboard, the text screen and the font.
+sixteen megabytes, shows the 65816's registers, disassembles all of its instructions, and
+copies and fills memory with its block moves. The IIGS also loads and saves files through
+ProDOS 8. The Super NES and the NES have no keyboard, so the monitor draws one on the screen
+and types on it with the joypad. The two share that keyboard, the text screen and the font.
 
 ```text
 NT65 MONITOR
@@ -80,11 +81,14 @@ first two digits are its bank.
 |---|---|
 | `M [from [to]]` | shows memory, eight bytes to a line on the C64, sixteen on the IIGS and four on the Super NES and the NES, from `from`, or from where the last `M` or `D` stopped; eight lines unless told where to stop |
 | `:address byte...` | writes up to as many bytes from `address` as a line of `M` shows |
-| `F from to byte` | fills memory from `from` up to and including `to` |
+| `F from to byte` | fills memory from `from` up to and including `to`; on the 65816 the two must be in one bank |
+| `T from to address` | on the 65816, copies the bytes from `from` up to and including `to` to `address`; `from` and `to` must be in one bank, and the copy must end in the bank it starts in |
 | `D [from [to]]` | disassembles, from `from` or from where the last `M` or `D` stopped; sixteen instructions unless told where to stop |
 | `G [address]` | calls `address`, or the PC shown by `R`, with the registers `R` shows; the code comes back to the monitor with `RTS` or `BRK`, or on the 65816 with `RTL` or `BRK` |
 | `R` | shows the registers, as a `BRK` or the last `G` left them |
-| `X` | leaves the monitor, or on the Super NES and the NES, which have nothing to leave it for, stops |
+| `L name [address]` | on the IIGS, reads the file `name` into memory at `address`, or at the address it was saved from, in bank 0; `M` and `D` then go on from there |
+| `S name from to` | on the IIGS, writes the bytes from `from` up to and including `to`, in bank 0, to the file `name`, as a `BIN` file whose load address is `from`, replacing a file of that name |
+| `X` | leaves the monitor, on the IIGS for ProDOS's program selector, or on the Super NES and the NES, which have nothing to leave it for, stops |
 | `?` | lists the commands |
 
 A line of `M` is itself a `:` command. On the C64, move the cursor up to one, change a byte and
@@ -98,6 +102,15 @@ which the IIGS's 80-column screen has room for; the Super NES's 32 columns show 
 the second from `DP`. A line of `D` with a nine-character operand, such as `LDA $123456,X`, is
 33 columns wide with a space between the bytes. On the Super NES the bytes run together, as in
 `BF563412`, so that every line of `D` fits in its 32 columns.
+
+On the 65816, `F` writes its first byte and then copies each byte to the one after it with
+`MVN`, which carries the first byte along. `T` copies with `MVN`, or with `MVP`, from the last
+byte, where the copy is above the bytes it copies in the same bank, so the two may overlap.
+
+On the IIGS a name for `L` and `S` is a ProDOS pathname, which without a volume is found in the
+prefix. Where nothing has set a prefix, the monitor sets it to the volume ProDOS last read. An
+error from ProDOS is shown as `ERROR` and its number, such as `ERROR 46` for a file that is not
+there.
 
 A command the monitor cannot read gets a `?`.
 
@@ -154,9 +167,12 @@ label file that gives VICE's own monitor the program's names, so `d monitor__mai
 disassembles the monitor's entry.
 
 [MAME](https://www.mamedev.org/) runs the IIGS's, with the `apple2gs` ROM set in the `roms`
-folder beside MAME. The IIGS boots with no disk, and once the firmware says it found none,
-`apple2gs-session.lua` loads the file into memory as BRUN would and enters it. `X` then goes to
-BASIC.SYSTEM, which is not there, so close MAME instead.
+folder beside MAME. The IIGS boots ProDOS 8 from a disk, which, like the ROMs, is kept outside
+the repository: `-Disk` names it, and by default it is `.cache/prodos/ProDOS_2_4.dsk` in this
+repository's root. The script copies it to `build/apple2gs/disk.dsk` the first time, and MAME
+runs that copy, so files `S` writes are there the next time. When ProDOS enters the first
+system program on the disk, `apple2gs-session.lua` loads the monitor over it, as BRUN would, and
+enters the monitor instead. `X` goes to ProDOS's program selector.
 
 MAME also runs the Super NES's, as a cartridge, with the `snes` ROM set in the `roms` folder,
 which is the sound CPU's boot ROM, `spc700.rom`. MAME's keys for the joypad are the arrow keys
@@ -166,31 +182,36 @@ and the Super NES's reset starts it again.
 MAME runs the NES's as a cartridge too, and needs no ROM set for it. Its keys for the NES's
 joypad are the arrow keys for the d-pad, Alt for A, Ctrl for B, 5 for SELECT and 1 for START.
 
-On a real IIGS, or to have `X` return to BASIC, the file is a binary that loads at `$2000`. Put
-it on a ProDOS disk as a `BIN` file whose load address is `$2000`, with a disk image tool such
-as CiderPress II, and run it from BASIC.SYSTEM with `BRUN MONITOR`. The platform reads the
-registers of a `BRK` where ROM 3's firmware saves them, and has been tried only on ROM 3.
+On a real IIGS the file is a binary that loads at `$2000`. Put it on a ProDOS disk as a `BIN`
+file whose load address is `$2000`, with a disk image tool such as CiderPress II, and run it
+from BASIC.SYSTEM with `BRUN MONITOR`. The platform reads the registers of a `BRK` where ROM 3's
+firmware saves them, and has been tried only on ROM 3.
 
 ## Testing it
 
 `./test.ps1` runs the sessions in `tests/<platform>` in each platform's emulator, all of them
-at once, and checks the screen each leaves; the twenty-three take about four seconds. A session is
+at once, and checks the screen each leaves; the twenty-six take about seven seconds. A session is
 the screen as it should be. The lines that start with the prompt, `.`, are what is typed; the
 rest is what the monitor answers. So a new session is written by typing its commands, each on a
 line of its own after a `.`, and running `./test.ps1 -Update -Session name` to fill in the
 answers, which are then read and checked by hand. `-Platform` runs only the platforms it names,
-and `-Vice` and `-Mame` name the emulators when `x64sc` and `mame` are not on the path.
+`-Vice` and `-Mame` name the emulators when `x64sc` and `mame` are not on the path, and `-Disk`
+names the IIGS's ProDOS disk, as it does for `run.ps1`.
 
 For the C64, the script types a session with the `keybuf` command of VICE's monitor, as soon as
 the program reaches `monitor::main`; saves screen memory when it reaches `platform::exit`; and
 leaves through VICE's debug cartridge, with a `POKE 55295,0` typed after the `X` that ends
 every session. A session that never reaches its `X` stops after 20 million cycles, and fails.
 
-For the IIGS, MAME runs `apple2gs-session.lua`, which loads the file as it does for `run.ps1`.
-MAME's debugger, with no window, stops the machine at `monitor::main`, where the script types
-the session through MAME's natural keyboard, and at `platform::exit`, where it reads the
-80-column screen and quits. A session that never reaches its `X` stops after a minute of the
-IIGS's time, and fails.
+For the IIGS, MAME runs `apple2gs-session.lua`, which boots ProDOS from a copy of the disk made
+for the session alone, and loads the file as it does for `run.ps1`. The IIGS platform marks two
+places with `WDM`, an instruction that does nothing on the 65816 and is there for debuggers:
+`read_line`, before it reads a line, and `exit`, before it leaves. Its operand says which.
+MAME's debugger, with no window, stops the machine at every `WDM`. At the first the script
+types the session's next line through MAME's natural keyboard, so that no key is pressed while
+ProDOS is busy with the disk, and at the second it reads the 80-column screen and quits. The
+script needs no label from the build. A session that never reaches its `X` stops after a minute
+of the IIGS's time, and fails.
 
 For the Super NES and the NES, MAME runs `joypad-session.lua`, which types each line on the
 on-screen keyboard as someone with the joypad would. It reads the keyboard's layout from the cartridge,
@@ -225,9 +246,12 @@ editor a library file shows as part of the first platform's program.
 - `lib/monitor.nt65`: the command loop, the table of commands and `?`, the registers of the
   program being debugged, which are the 65816's on the 65816, and what a platform must supply,
   in the comment at its top.
-- `lib/parse.nt65`: the line the platform reads, and reading hex numbers from it.
+- `lib/parse.nt65`: the line the platform reads, and reading hex numbers from it. On the 65816
+  a number is built in a frame on the stack, at 16 bits.
 - `lib/text.nt65`: writing text, hex and new lines, in terms of the platform's `putc`.
-- `lib/memory.nt65`: `M`, `:` and `F`.
+- `lib/memory.nt65`: `M`, `:`, `F` and `T`. On the 65816 `F` and `T` move bytes with
+  `block_move`, which writes the banks into its own `MVN` and `MVP`, and so is in the segment
+  `RAMCODE`, which a platform must place in RAM.
 - `lib/disasm.nt65`: `D`.
 - `lib/opcodes.nt65`: the 6502's instructions or the 65816's, as data.
 - `lib/run.nt65`: `G` and `R`.
@@ -255,9 +279,12 @@ editor a library file shows as part of the first platform's program.
   the 80-column screen. A `BRK` in either mode reaches the Apple II's BRK vector at `$3F0` after
   the firmware has saved every register at its full width in bank `$E1`, and the platform copies
   them from there. It re-exports `nt65::apple2::normal`, which comes with nt65, as `text`.
+  `read_line` and `exit` start with a `WDM` hook for the test harness.
+- `apple2gs/src/prodos.nt65`: `L` and `S`, through ProDOS 8's MLI. Each call's parameters are a
+  record whose struct lays them out as ProDOS reads them.
 - `apple2gs/apple2gs.cfg`: the linker configuration, which loads the file at `$2000`, below
   BASIC.SYSTEM, and puts its zero page at `$FA` to `$FF`, which the firmware, Applesoft and
-  ProDOS leave free.
+  ProDOS leave free, and the 1024 bytes ProDOS keeps an open file in at the start of a page.
 
 ### What the Super NES and the NES share
 
@@ -296,7 +323,9 @@ Each machine supplies what differs: `platform::video`, which shows the screen, a
 - `snes/src/header.nt65`: the cartridge's header and the interrupt vectors, as records.
 - `snes/src/snes.nt65`: the ports the platform uses, and the joypad's buttons as an enum.
 - `snes/snes.cfg`: the linker configuration, a LoROM cartridge of 32K in bank 0, with the direct
-  page in page 0, the stack in page 1 and the variables in the rest of the first 8K of RAM.
+  page in page 0, the stack in page 1 and the variables in the rest of the first 8K of RAM. The
+  cartridge holds `RAMCODE`, which runs in that RAM too, and which the start code copies there
+  with a block move.
 
 ### The NES
 
@@ -321,11 +350,12 @@ Each machine supplies what differs: `platform::video`, which shows the screen, a
 1. A folder with an `nt65.json` whose `files` are its own and `../lib/*.nt65`, giving its
    `cpu` and linking its linker configuration under `links`, which declares its segments.
 2. A module named `platform` that exports `running`, `text`, `NEWLINE`, `COLUMNS`,
-   `LINE_LENGTH`, `putc`, `read_line` and `exit`, as the comment at the top of
-   `lib/monitor.nt65` describes them. The module also starts the monitor. It gets the machine
-   ready, sends a `BRK` to `monitor::broke` with the registers stored in `monitor::registers`,
-   and jumps to `monitor::main`.
-3. A linker configuration, an entry in `build.ps1`'s table of platforms, and sessions in
+   `LINE_LENGTH`, `DISK`, `putc`, `read_line` and `exit`, and `load` and `save` where `DISK` is
+   true, as the comment at the top of `lib/monitor.nt65` describes them. The module also starts
+   the monitor. It gets the machine ready, sends a `BRK` to `monitor::broke` with the registers
+   stored in `monitor::registers`, and jumps to `monitor::main`.
+3. A linker configuration, which on the 65816 places `RAMCODE` in RAM, an entry in `build.ps1`'s
+   table of platforms, and sessions in
    `tests/<platform>` with an entry in `test.ps1`'s table, which says which emulator runs it
    and names the function that starts a session there. `test.ps1` drives VICE for the C64 and
    reads its screen, and MAME for the IIGS, the Super NES and the NES, with a script for the
@@ -377,3 +407,24 @@ the joypad at each one. Another machine with a joypad and a screen of 2bpp tiles
 - **Structure instead of convention.** Records for the registers, a list and an `.assert` that
   keep the commands and their letters in step, `noreturn` on the routines that never come back,
   and `.next` where a jump goes through a table.
+- **One call for every command.** On the 65816 the command loop calls the command with
+  `JSR (handlers,X)`, and `.next commands` names every routine it may reach, so nt65 checks each
+  command's entry against the state at the call and merges their exits after it. The commands
+  that only some builds have are items of the list under `.if`.
+- **The data bank followed through a block move.** A block move leaves B at its destination.
+  `block_move` writes its banks into its own `MVN` and `MVP`, which `.patch` acknowledges, so
+  nt65 knows B only as unknown after them, and the `PLB` that follows is what lets the routine
+  return with B at 0, as `running` says.
+- **Widths set where they are needed.** `F`, `T` and the number reader go into native mode for
+  their 16-bit arithmetic. The `difference` macro makes A 16 bits wide with `.ensure`, which
+  writes a `REP` only where A is not already that wide.
+- **Locals on the stack.** The 65816's number reader builds its number in a `.frame` laid out as
+  a struct, whose members are addressed `n::low,s` and `n::high,s`, wherever the pushes leave
+  them.
+- **Two views of one register.** The 65816's saved registers are `.union`s of a word and two
+  bytes. `G` and the BRK handlers store each register whole, and `R` reads it a byte at a time.
+- **Calls that return past their parameters.** Each ProDOS call is `JSR MLI` followed by the
+  call's number and the address of its parameters, which the MLI's signature declares as
+  `inline 3`, so nt65 checks that every call is followed by exactly three bytes.
+- **A hook for the harness.** `WDM` does nothing on the 65816. The IIGS marks where it reads a
+  line and where it leaves with one, and the test harness stops at each with MAME's debugger.

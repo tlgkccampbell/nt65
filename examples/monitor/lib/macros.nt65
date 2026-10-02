@@ -6,6 +6,9 @@
 .use monitor::text::print_byte
 
 .export mov_address, add_address, inc_address, compare_address, peek, poke, print_address
+.if .target(65816) {
+    .export difference
+}
 
 ; Copies the address at `src` to `dest`.
 .macro mov_address(dest: operand, src: operand) {
@@ -47,6 +50,17 @@
     .repeat ADDRESS_SIZE - 1, i {
         lda left + (i + 1)
         sbc right + (i + 1)
+    }
+}
+
+.if .target(65816) {
+    ; Leaves `to` - `from` in A, where each is the low word of an address, with Z set if they
+    ; are the same. The subtraction is 16 bits wide, which needs native mode.
+    .macro difference(to: operand, from: operand) {
+        .ensure a16
+        sec
+        lda to
+        sbc from
     }
 }
 

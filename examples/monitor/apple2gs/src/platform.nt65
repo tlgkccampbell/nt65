@@ -1,17 +1,20 @@
 ; This module runs the monitor on the Apple IIGS, as a binary file that BRUN runs from
-; BASIC.SYSTEM. The monitor runs in emulation mode, because the firmware's routines need it. The
-; firmware reads each line and writes each character, on the 80-column screen. A BRK in either
-; mode comes in through the Apple II's BRK vector, after the firmware has saved every register
-; at its full width.
+; BASIC.SYSTEM, under ProDOS 8. The monitor runs in emulation mode, because the firmware's
+; routines and ProDOS need it. The firmware reads each line and writes each character, on the
+; 80-column screen, and ProDOS reads and writes the files of L and S. A BRK in either mode comes
+; in through the Apple II's BRK vector, after the firmware has saved every register at its full
+; width.
 .module platform
 
 .cpu 65816
 
 .use monitor::{registers, Registers}
 .use monitor::parse::line
+.use platform::prodos
 .use nt65::apple2::normal_lower
 
-.export COLUMNS, LINE_LENGTH, NEWLINE, putc, read_line, exit, start
+.export COLUMNS, LINE_LENGTH, NEWLINE, DISK, putc, read_line, exit, start
+.export .use platform::prodos::{load, save}
 ; The firmware's routines are called in emulation mode, and BASIC.SYSTEM runs with D and B at 0.
 .export .signature running = emu, dp = 0, dbr = 0
 .export .use nt65::apple2::normal as text   ; the firmware reads and writes normal video
@@ -20,16 +23,17 @@
 .const COLUMNS     = 80             ; the 80-column screen
 .const LINE_LENGTH = COLUMNS        ; a row of the screen
 .const NEWLINE     = $8D            ; RETURN, in normal video
+.const DISK        = 1              ; L and S, through ProDOS
 
 .proc putc = $FDED: running, reads a, keeps x, y     ; COUT
 .proc GETLN1 = $FD6F: running, reads none            ; reads a line into INPUT, without a prompt
 .proc EIGHTY = $C300: running, reads a               ; turns the 80-column screen on, and writes A there
 .proc HOME = $FC58: running, reads none              ; clears the screen
-.proc DOSWARM = $03D0: running, noreturn, reads none ; BASIC.SYSTEM's warm start
 
 .const INPUT  = $0200               ; where GETLN1 reads a line to, ended by RETURN
 .const PROMPT = $33                 ; what GETLN writes when it starts a line again
 .const BRKV   = $03F0               ; where the firmware goes on a BRK
+.const ROMIN  = $C082               ; reading it shows the ROM in place of the language card's RAM
 
 ; The firmware saves the registers of a BRK at this address in bank $E1, as `Saved` lays them
 ; out. This is where ROM 3 keeps them.
@@ -49,6 +53,14 @@
 
 .assert Registers::db - Registers::ac == Saved::sr - Saved::ac, "A, X, Y, S and D must be saved as the monitor keeps them"
 
+; The hooks the monitor marks with `wdm`, which does nothing on a IIGS but which an emulator's
+; debugger can stop at. The operand says which hook it is. The test harness types each line of
+; a session at `reading`, and reads the screen at `leaving`.
+.enum Hook {
+    reading = 1                     ; the monitor is about to read a line
+    leaving = 2                     ; the monitor is about to leave
+}
+
 .segment BSS
 .data old_brk: .addr
 .data length:  .byte
@@ -56,6 +68,10 @@
 ; BRUN enters the file at its first byte, which is here.
 .segment STARTUP
 .proc start: running, noreturn {
+    ; The firmware's routines are in the ROM, which BRUN leaves in place. Something else may
+    ; have left ProDOS's language card RAM there instead, which the 80-column firmware would
+    ; overwrite with a copy of the ROM when it starts.
+    bit ROMIN
     lda BRKV
     sta old_brk
     lda BRKV+1
@@ -69,6 +85,7 @@
     lda #text(' ')
     jsr EIGHTY
     jsr HOME
+    jsr prodos::prepare
     jmp monitor::main
 }
 
@@ -76,6 +93,7 @@
 
 .segment CODE
 .proc read_line: running {
+    wdm #Hook::reading
     jsr GETLN1
     stx length
     ldx #0
@@ -98,13 +116,14 @@
     rts
 }
 
-; Puts back the BRK vector and returns to BASIC.
+; Puts back the BRK vector and leaves for ProDOS's program selector.
 .proc exit: running, noreturn {
     lda old_brk
     sta BRKV
     lda old_brk+1
     sta BRKV+1
-    jmp DOSWARM
+    wdm #Hook::leaving
+    jmp prodos::quit
 }
 
 ; Copies the registers the firmware saved into `registers`, in emulation mode, with D and B at 0.

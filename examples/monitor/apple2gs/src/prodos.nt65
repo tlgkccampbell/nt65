@@ -1,0 +1,350 @@
+; This module reads and writes files through ProDOS 8, for the monitor's L and S. A program calls
+; ProDOS through its machine language interface, the MLI, with a `jsr` followed by three bytes:
+; the number of the call and the address of its parameters. The MLI returns past those bytes,
+; which is what `inline 3` in its signature declares, so nt65 checks that every call is followed
+; by exactly three bytes of data. ProDOS 8 reaches only bank 0, so a file is read into and
+; written from there.
+.module platform::prodos
+
+.cpu 65816
+
+.use platform::{text, running}
+.use monitor::addr
+.use monitor::parse
+.use monitor::text::{print, print_byte, newline}
+
+.export load, save, prepare, quit
+
+; The MLI carries out the call written after the `jsr`. It returns with the carry clear, or with
+; the carry set and the error's number in A.
+.proc MLI = $BF00: running, inline 3, reads none
+
+.const DEVNUM   = $BF30             ; the unit ProDOS last read from, as ON_LINE takes it
+.const MAX_PATH = 64                ; the longest pathname ProDOS takes
+.const BINARY   = $06               ; the file type of a binary file, whose aux type is its address
+.const UNLOCKED = $C3               ; an access that lets a file be read, written, renamed and destroyed
+.const SEEDLING = $01               ; the storage type CREATE takes for a file
+
+; The numbers of the calls the monitor makes.
+.enum Call {
+    quit       = $65
+    create     = $C0
+    destroy    = $C1
+    file_info  = $C4                ; GET_FILE_INFO
+    on_line    = $C5
+    set_prefix = $C6
+    get_prefix = $C7
+    open       = $C8
+    read       = $CA
+    write      = $CB
+    close      = $CC
+    get_eof    = $D1
+}
+
+; The parameters of each call, as ProDOS lays them out. Each starts with the number of
+; parameters that follow.
+.struct Path {                      ; DESTROY, GET_PREFIX and SET_PREFIX
+    count:    .byte
+    pathname: .addr
+}
+
+.struct Create {
+    count:        .byte
+    pathname:     .addr
+    access:       .byte
+    file_type:    .byte
+    aux_type:     .word
+    storage_type: .byte
+    date:         .word
+    time:         .word
+}
+
+.struct FileInfo {                  ; GET_FILE_INFO
+    count:        .byte
+    pathname:     .addr
+    access:       .byte
+    file_type:    .byte
+    aux_type:     .word
+    storage_type: .byte
+    blocks:       .word
+    modified:     .word[2]
+    created:      .word[2]
+}
+
+.struct OnLine {
+    count:  .byte
+    unit:   .byte
+    buffer: .addr
+}
+
+.struct Open {
+    count:     .byte
+    pathname:  .addr
+    buffer:    .addr                ; the 1024 bytes ProDOS keeps the open file's blocks in
+    reference: .byte
+}
+
+.struct Transfer {                  ; READ and WRITE
+    count:       .byte
+    reference:   .byte
+    buffer:      .addr
+    request:     .word
+    transferred: .word
+}
+
+.struct Close {
+    count:     .byte
+    reference: .byte
+}
+
+.struct Eof {                       ; GET_EOF
+    count:     .byte
+    reference: .byte
+    eof:       .faraddr
+}
+
+.struct Quit {
+    count:     .byte
+    kind:      .byte
+    reserved:  .addr
+    reserved2: .byte
+    reserved3: .addr
+}
+
+.segment BSS
+.data path: .byte[1 + MAX_PATH]     ; a pathname as ProDOS takes it: its length, then its characters
+
+.segment BUFFER
+.data file_buffer: .byte[1024]      ; the open file's, which must start a page
+
+.segment DATA
+.data destroying: .type Path { count = 1, pathname = path }
+.data prefix:     .type Path { count = 1, pathname = path }
+.data creating:   .type Create {
+    count        = 7
+    pathname     = path
+    access       = UNLOCKED
+    file_type    = BINARY
+    storage_type = SEEDLING
+}
+.data info:      .type FileInfo { count = 10, pathname = path }
+.data online:    .type OnLine { count = 2, buffer = path + 1 }
+.data opening:   .type Open { count = 3, pathname = path, buffer = file_buffer }
+.data moving:    .type Transfer { count = 4 }
+.data closing:   .type Close { count = 1 }
+.data measuring: .type Eof { count = 2 }
+.data quitting:  .type Quit { count = 4 }
+
+.segment CODE
+; L name [address]: reads the file `name` into memory at `address`, or at the address it was
+; saved from, which is its aux type, and leaves M and D to go on from there. The address must be
+; in bank 0.
+.proc load: running {
+    jsr read_path
+    jsr MLI
+    .byte Call::file_info
+    .addr info
+    bcs @failed
+    lda info::aux_type
+    sta moving::buffer
+    lda info::aux_type+1
+    sta moving::buffer+1
+    jsr parse::blanks
+    beq @open
+    jsr parse::number
+    jsr parse::expect_end
+    lda parse::value+2
+    bne @bad                        ; ProDOS 8 reads only into bank 0
+    lda parse::value
+    sta moving::buffer
+    lda parse::value+1
+    sta moving::buffer+1
+@open:
+    jsr open
+    bcs @failed
+    jsr MLI
+    .byte Call::get_eof
+    .addr measuring
+    bcs @failed
+    lda measuring::eof+2
+    bne @too_big                    ; more than bank 0 holds
+    lda measuring::eof
+    sta moving::request
+    lda measuring::eof+1
+    sta moving::request+1
+    jsr MLI
+    .byte Call::read
+    .addr moving
+    bcs @failed
+    jsr close
+    bcs @failed
+    lda moving::buffer
+    sta addr
+    lda moving::buffer+1
+    sta addr+1
+    lda #0
+    sta addr+2
+    rts
+@too_big:
+    lda #$4D                        ; ProDOS's own number for a position past the end
+@failed:
+    jmp failed
+@bad:
+    jmp monitor::error
+}
+
+; S name from to: writes the bytes from `from` up to and including `to` to the file `name`, as a
+; binary file whose aux type is `from`. A file of that name is replaced. Both addresses must be
+; in bank 0.
+.proc save: running {
+    jsr read_path
+    jsr parse::number
+    lda parse::value
+    sta moving::buffer
+    sta creating::aux_type
+    lda parse::value+1
+    sta moving::buffer+1
+    sta creating::aux_type+1
+    lda parse::value+2
+    bne @bad                        ; ProDOS 8 writes only from bank 0
+    jsr parse::number
+    jsr parse::expect_end
+    lda parse::value+2
+    bne @bad
+    ; The length is `to` - `from` + 1, and `to` must not be below `from`.
+    sec
+    lda parse::value
+    sbc moving::buffer
+    sta moving::request
+    lda parse::value+1
+    sbc moving::buffer+1
+    sta moving::request+1
+    bcc @bad
+    inc moving::request
+    bne @length
+    inc moving::request+1
+    beq @bad                        ; all 65,536 bytes, which a request cannot count
+@length:
+    jsr MLI                         ; a file that is not there is not an error here
+    .byte Call::destroy
+    .addr destroying
+    jsr MLI
+    .byte Call::create
+    .addr creating
+    bcs @failed
+    jsr open
+    bcs @failed
+    jsr MLI
+    .byte Call::write
+    .addr moving
+    bcs @failed
+    jsr close
+    bcs @failed
+    rts
+@failed:
+    jmp failed
+@bad:
+    jmp monitor::error
+}
+
+; Sets ProDOS's prefix to the volume it last read from, where no prefix is set, so that a
+; pathname that names no volume, as L and S are usually given, is found there. ProDOS sets one
+; when it starts a program from a disk, but not when something else starts the monitor.
+.proc prepare: running {
+    jsr MLI
+    .byte Call::get_prefix
+    .addr prefix
+    bcs @done
+    lda path
+    bne @done                       ; a prefix is already set
+    lda DEVNUM
+    sta online::unit
+    jsr MLI                         ; writes the unit and the name's length, then the name, after `path`
+    .byte Call::on_line
+    .addr online
+    bcs @done
+    ; The prefix is the volume's name after a slash, which takes the place of the unit.
+    lda path+1
+    and #$0F
+    beq @done
+    tax
+    inx
+    stx path
+    lda #'/'
+    sta path+1
+    jsr MLI
+    .byte Call::set_prefix
+    .addr prefix
+@done:
+    rts
+}
+
+; Leaves the monitor for ProDOS's program selector, which runs the next program.
+.proc quit: running, noreturn {
+    jsr MLI
+    .byte Call::quit
+    .addr quitting
+    .next ?
+}
+
+; Reads a pathname after any spaces into `path`, as ProDOS takes it: its length, then its
+; characters in ASCII. It ends at a space or at the end of the line.
+.proc read_path: running {
+    jsr parse::blanks
+    beq @bad
+    ldy #0
+@next:
+    and #$7F                        ; normal video's character as its ASCII
+    sta path+1,y
+    iny
+    cpy #MAX_PATH
+    beq @bad
+    jsr parse::skip
+    ldx parse::at
+    lda parse::line,x
+    beq @done
+    cmp #text(' ')
+    bne @next
+@done:
+    sty path
+    rts
+@bad:
+    jmp monitor::error
+}
+
+; Opens the file in `path`, and gives its reference number to the calls that use it. Returns
+; with the carry set and the error in A if it failed.
+.proc open: running {
+    jsr MLI
+    .byte Call::open
+    .addr opening
+    bcs @done
+    lda opening::reference
+    sta moving::reference
+    sta measuring::reference
+    sta closing::reference
+@done:
+    rts
+}
+
+; Closes the file `open` opened. Returns with the carry set and the error in A if it failed.
+.proc close: running {
+    jsr MLI
+    .byte Call::close
+    .addr closing
+    rts
+}
+
+; Writes the ProDOS error in A, as `ERROR` and its number, after closing every file, so that a
+; command that failed part-way through leaves nothing open.
+.proc failed: running {
+    pha
+    lda #0
+    sta closing::reference          ; reference 0 closes every file
+    jsr close
+    jsr print
+    .strz text("ERROR ")
+    pla
+    jsr print_byte
+    jmp newline
+}

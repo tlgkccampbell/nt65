@@ -1,13 +1,15 @@
 # Runs the monitor for a platform in its emulator, to try it by hand. Build first with build.ps1.
 # The C64's runs in VICE, with the label file for VICE's monitor. The IIGS's runs in MAME, which
-# boots with no disk and then loads the file as BRUN would; `X` goes to BASIC.SYSTEM, which is
-# not there, so close MAME instead. The Super NES's and the NES's run in MAME as cartridges, with
-# the joypad on MAME's keys for it.
+# boots ProDOS from a copy of the disk -Disk names and then loads the file as BRUN would; `X`
+# goes to ProDOS's program selector. The copy is kept in the build folder, so the files L and S
+# read and write stay there from one run to the next. The Super NES's and the NES's run in MAME
+# as cartridges, with the joypad on MAME's keys for it.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('c64', 'apple2gs', 'snes', 'nes')][string]$Platform,
     [string]$Vice,
-    [string]$Mame
+    [string]$Mame,
+    [string]$Disk = (Join-Path $PSScriptRoot '../../.cache/prodos/ProDOS_2_4.dsk')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,6 +43,11 @@ if ($cartridges[$Platform]) {
 
 $image = Join-Path $build 'monitor.bin'
 if (-not (Test-Path $image)) { throw "apple2gs is not built: run build.ps1 first" }
+$copy = Join-Path $build 'disk.dsk'
+if (-not (Test-Path $copy)) {
+    if (-not (Test-Path $Disk)) { throw "no ProDOS disk at ${Disk}: give one with -Disk" }
+    Copy-Item $Disk $copy
+}
 $script = Join-Path $build 'run.lua'
 @(
     "session = { image = [[$image]], load = 0x2000 }"
@@ -48,5 +55,5 @@ $script = Join-Path $build 'run.lua'
     "assert(loadfile([[$(Join-Path $PSScriptRoot 'apple2gs-session.lua')]], 't', _ENV))()"
 ) | Set-Content $script
 Start-Process $mame -WorkingDirectory $build -ArgumentList @(
-    'apple2gs', '-rompath', "`"$roms`"", '-window', '-skip_gameinfo',
-    '-autoboot_script', "`"$script`"")
+    'apple2gs', '-rompath', "`"$roms`"", '-flop1', "`"$copy`"", '-window', '-skip_gameinfo',
+    '-debug', '-debugger', 'none', '-autoboot_script', "`"$script`"")

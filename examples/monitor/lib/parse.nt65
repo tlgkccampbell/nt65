@@ -8,7 +8,7 @@
 .use platform::{text, running}
 .use monitor::{error, ADDRESS_SIZE}
 
-.export LINE_SIZE, line, value, begin, skip, blanks, number, byte, expect_end
+.export LINE_SIZE, line, at, value, begin, skip, blanks, number, byte, expect_end
 
 .const LINE_SIZE = platform::LINE_LENGTH + 1  ; the longest line the platform reads, and its zero
 
@@ -59,39 +59,98 @@
     rts
 }
 
-; Reads a number of one to four hex digits into `value`, after any spaces, or one to six on
-; the 65816.
-.proc number: running, keeps y {
-    lda #0
-    .repeat ADDRESS_SIZE, i {
-        sta value + i
+.if .target(65816) {
+    ; The number `number` builds on the stack, as two words. Six digits fill `low` and the low
+    ; byte of `high`, and the high byte of `high` stays zero.
+    .struct Number {
+        low:  .word
+        high: .word
     }
-    jsr blanks
-    jsr digit
-    bcs @bad
-@next:
-    ldx value + (ADDRESS_SIZE - 1)
-    cpx #$10
-    bcs @bad                        ; a digit more than an address holds
-    ; Four shifts make room for the digit in the low four bits.
-    ldx #4
-@shift:
-    asl value
-    .repeat ADDRESS_SIZE - 1, i {
-        rol value + (i + 1)
+
+    ; Reads a number of one to six hex digits into `value`, after any spaces. The number is built
+    ; on the stack, a digit at a time, in native mode with A 16 bits wide.
+    .proc number: running, keeps y {
+        pea 0
+        pea 0
+        .frame n: Number
+        jsr blanks
+        jsr digit
+        bcs @bad
+    @next:
+        tax                         ; the digit
+        lda n::high,s
+        cmp #$10
+        bcs @bad                    ; a digit more than an address holds
+        clc
+        xce
+        .ensure a16
+        ; Four shifts make room for the digit in the low four bits.
+        .repeat 4 {
+            lda n::low,s
+            asl a
+            sta n::low,s
+            lda n::high,s
+            rol a
+            sta n::high,s
+        }
+        txa
+        ora n::low,s
+        sta n::low,s
+        sec
+        xce
+        jsr skip
+        ldx at
+        lda line,x
+        jsr digit
+        bcc @next
+        clc
+        xce
+        .ensure a16
+        lda n::low,s
+        sta value
+        .ensure a8
+        lda n::high,s
+        sta value+2
+        sec
+        xce
+        .repeat .sizeof(Number) {
+            pla
+        }
+        rts
+    @bad:
+        jmp error
     }
-    dex
-    bne @shift
-    ora value
-    sta value
-    jsr skip
-    ldx at
-    lda line,x
-    jsr digit
-    bcc @next
-    rts
-@bad:
-    jmp error
+} .else {
+    ; Reads a number of one to four hex digits into `value`, after any spaces.
+    .proc number: running, keeps y {
+        lda #0
+        sta value
+        sta value+1
+        jsr blanks
+        jsr digit
+        bcs @bad
+    @next:
+        ldx value+1
+        cpx #$10
+        bcs @bad                    ; a digit more than an address holds
+        ; Four shifts make room for the digit in the low four bits.
+        ldx #4
+    @shift:
+        asl value
+        rol value+1
+        dex
+        bne @shift
+        ora value
+        sta value
+        jsr skip
+        ldx at
+        lda line,x
+        jsr digit
+        bcc @next
+        rts
+    @bad:
+        jmp error
+    }
 }
 
 ; Reads a number that fits in a byte into A.

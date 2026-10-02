@@ -20,7 +20,7 @@
 .use monitor::text::print
 .use platform::{screen, keyboard, video}
 
-.export COLUMNS, LINE_LENGTH, NEWLINE, DELETE, exit, halt
+.export COLUMNS, LINE_LENGTH, NEWLINE, DELETE, DISK, exit, halt
 .export start, nmi_native, nmi_emulation, brk_native, brk_emulation, ignore
 .export .use platform::screen::putc
 .export .use platform::keyboard::read_line
@@ -36,6 +36,7 @@
 .const LINE_LENGTH = COLUMNS - 2    ; a row, after the prompt and with room for the cursor
 .const NEWLINE     = $0D            ; RETURN, which is outside `text`
 .const DELETE      = $7F            ; what the keyboard's DEL key types
+.const DISK        = 0              ; no L or S
 
 .segment CODE
 ; Starts the monitor on a reset, with the screen blank, NMIs off and the S-CPU in emulation mode.
@@ -46,6 +47,17 @@
     txs
     pea 0
     pld
+    ; The code in RAMCODE writes into its own instructions, so it runs from a copy in RAM. The
+    ; copy is a block move, which leaves B at the bank it copied to, so B is set after it.
+    clc
+    xce
+    .ensure a16, i16
+    lda #.spanof(RAMCODE) - 1
+    ldx #.loadof(RAMCODE)
+    ldy #.runof(RAMCODE)
+    mvn #^.loadof(RAMCODE), #^.runof(RAMCODE)
+    sec
+    xce
     lda #0
     pha
     plb
@@ -125,21 +137,21 @@
 ; Takes a BRK in emulation mode. The S-CPU has pushed the PC past the BRK and P, and no program
 ; bank, which is not known.
 .proc brk_emulation: interrupt, emu {
-    sta f:registers::ac
+    sta f:registers::ac::low
     xba
-    sta f:registers::ac+1
+    sta f:registers::ac::high
     txa
-    sta f:registers::xr
+    sta f:registers::xr::low
     tya
-    sta f:registers::yr
+    sta f:registers::yr::low
     lda #0
-    sta f:registers::xr+1           ; X and Y are 8 bits wide in emulation mode
-    sta f:registers::yr+1
+    sta f:registers::xr::high       ; X and Y are 8 bits wide in emulation mode
+    sta f:registers::yr::high
     sta f:registers::pc+2
     tdc
-    sta f:registers::dp
+    sta f:registers::dp::low
     xba
-    sta f:registers::dp+1
+    sta f:registers::dp::high
     phb
     pla
     sta f:registers::db
@@ -147,10 +159,10 @@
     tsc
     clc
     adc #3
-    sta f:registers::sp
+    sta f:registers::sp::low
     xba
     adc #0
-    sta f:registers::sp+1
+    sta f:registers::sp::high
     lda 1,s
     sta f:registers::sr
     lda 2,s
@@ -173,18 +185,18 @@
 ; Takes a BRK in native mode. The S-CPU has pushed the program bank, the PC past the BRK and P.
 .proc brk_native: interrupt, native {
     rep #$30
-    sta f:registers::ac
+    sta f:registers::ac::word
     txa                             ; at 16 bits, whose high byte is 0 if X was 8 bits wide
-    sta f:registers::xr
+    sta f:registers::xr::word
     tya
-    sta f:registers::yr
+    sta f:registers::yr::word
     tdc
-    sta f:registers::dp
+    sta f:registers::dp::word
     ; S before the BRK, which pushed four bytes.
     tsc
     clc
     adc #4
-    sta f:registers::sp
+    sta f:registers::sp::word
     lda 2,s
     sec
     sbc #2

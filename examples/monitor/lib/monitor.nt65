@@ -16,12 +16,18 @@
 ;                       shows, and whether the 65816's registers fit on one line of R. The
 ;                       monitor's conditions test it, so the configuration must decide it.
 ;   LINE_LENGTH         The length of the longest line that `read_line` reads.
+;   DISK                Whether the platform reads and writes files, with `load` and `save`.
+;                       The monitor's conditions test it, as they test `COLUMNS`.
 ;   putc: keeps x, y    Writes the character in A, which is a capital letter, a digit, a
 ;                       punctuation mark, a space or `NEWLINE`, in `text`.
 ;   read_line           Reads a line from the keyboard into `parse::line`, as at most
 ;                       `parse::LINE_SIZE` - 1 characters followed by a zero. It leaves the
 ;                       cursor at the start of the next line.
 ;   exit: noreturn      Leaves the monitor for whatever ran it.
+;   load                Carries out L, which reads a file into memory. Only a platform
+;                       whose `DISK` is true supplies it.
+;   save                Carries out S, which writes memory to a file. Only a platform whose
+;                       `DISK` is true supplies it.
 ;
 ; The platform also starts the monitor. Its start code prepares the machine and arranges for a
 ; BRK to reach `broke`, with the registers the BRK found stored in `registers`. It then jumps to
@@ -36,18 +42,31 @@
 .use monitor::{parse, memory, disasm, run}
 
 .export main, broke, error, Registers, registers, addr, ADDRESS_SIZE
+.if .target(65816) {
+    .export Register
+}
 
 .const ADDRESS_SIZE = .select(.target(65816), 3, 2)  ; the bytes of an address
 
 ; The registers of the program being debugged, as a BRK left them or `G` will start them.
 .if .target(65816) {
+    ; A 16-bit register, which `G` and the platform's BRK handlers store whole, and which `R`
+    ; reads a byte at a time.
+    .union Register {
+        word: .word
+        .struct {
+            low:  .byte
+            high: .byte
+        }
+    }
+
     .struct Registers {
         pc: .faraddr                ; with the program bank as its third byte
-        ac: .word
-        xr: .word
-        yr: .word
-        sp: .word
-        dp: .word
+        ac: .type Register
+        xr: .type Register
+        yr: .type Register
+        sp: .type Register
+        dp: .type Register
         db: .byte
         sr: .byte
         e:  .byte                   ; 1 in emulation mode
@@ -64,20 +83,38 @@
 }
 
 ; Each command is a letter and the routine that carries it out. A routine starts with the
-; parser just past its letter, and returns when it is done, or jumps to `error`.
+; parser just past its letter, and returns when it is done, or jumps to `error`. T needs the
+; 65816's block moves, and L and S a platform with a disk.
 .list commands {
     memory::dump                    ; M [from [to]]
     memory::write                   ; :address byte...
     memory::fill                    ; F from to byte
+    .if .target(65816) {
+        memory::transfer            ; T from to address
+    }
     disasm::list                    ; D [from [to]]
     run::go                         ; G [address]
     run::show                       ; R
+    .if platform::DISK {
+        platform::load              ; L name [address]
+        platform::save              ; S name from to
+    }
     platform::exit                  ; X
     help                            ; ?
 }
 
 .segment RODATA
-.data letters:  .byte text("M:FDGRX?")
+.data letters: .byte[] {
+    text("M:F")
+    .if .target(65816) {
+        text('T')
+    }
+    text("DGR")
+    .if platform::DISK {
+        text("LS")
+    }
+    text("X?")
+}
 .data handlers: .addr commands
 
 .assert .sizeof(letters) == .countof(commands), "every command needs a letter"
@@ -101,11 +138,13 @@
     dex
     bpl @clear
     lda home
-    sta registers::sp
     .if .target(65816) {
+        sta registers::sp::low
         lda #1                      ; the stack is in page 1, and the monitor in emulation mode
-        sta registers::sp+1
+        sta registers::sp::high
         sta registers::e
+    } .else {
+        sta registers::sp
     }
     jsr print
     .strz text("NT65 MONITOR")
@@ -132,24 +171,33 @@
     jmp error
 @found:
     jsr parse::skip
-    jsr dispatch
-    jmp prompt
-}
-
-; Carries out command X; the command's own RTS returns to `prompt`.
-.proc dispatch: running {
     txa
     asl a
     tax
-    lda handlers,x
-    sta @vector
-    lda handlers+1,x
-    sta @vector+1
-    jmp (@vector)
-    .next commands
+    .if .target(65816) {
+        ; Every command returns here, and the state after the call is what their exits agree on.
+        jsr (handlers,x)
+        .next commands
+    } .else {
+        jsr dispatch
+    }
+    jmp prompt
+}
 
-    .segment BSS {
-    @vector: .res 2
+.if !.target(65816) {
+    ; Carries out the command whose offset in `handlers` is in X. The command's own RTS returns
+    ; to `prompt`. The 6502 has no `jsr (t,x)`, so the call jumps through a vector instead.
+    .proc dispatch: running {
+        lda handlers,x
+        sta @vector
+        lda handlers+1,x
+        sta @vector+1
+        jmp (@vector)
+        .next commands
+
+        .segment BSS {
+        @vector: .res 2
+        }
     }
 }
 
@@ -168,6 +216,11 @@
     jsr print
     .strz text("F FROM TO BYTE  FILL MEMORY")
     jsr newline
+    .if .target(65816) {
+        jsr print
+        .strz text("T FROM TO ADDR  COPY MEMORY")
+        jsr newline
+    }
     jsr print
     .strz text("D [FROM [TO]]   DISASSEMBLE")
     jsr newline
@@ -177,6 +230,14 @@
     jsr print
     .strz text("R               SHOW REGISTERS")
     jsr newline
+    .if platform::DISK {
+        jsr print
+        .strz text("L NAME [ADDR]   LOAD A FILE")
+        jsr newline
+        jsr print
+        .strz text("S NAME FROM TO  SAVE A FILE")
+        jsr newline
+    }
     jsr print
     .strz text("X               EXIT THE MONITOR")
     jsr newline

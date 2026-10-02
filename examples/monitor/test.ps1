@@ -1,13 +1,15 @@
 # Runs the monitor's sessions in emulators and checks what each leaves on the screen. Build
 # first with build.ps1. A session is tests/<platform>/<name>.txt: the screen as it should be, in
 # which the lines that start with the monitor's `.` prompt are what is typed. -Update writes
-# each screen as it came out instead. Exits 1 if any session differs or does not finish.
+# each screen as it came out instead. Exits 1 if any session differs or does not finish. -Disk
+# names the ProDOS 8 boot disk the IIGS's sessions start from, each from a copy of its own.
 [CmdletBinding()]
 param(
     [string[]]$Platform = @(),
     [string[]]$Session = @(),
     [string]$Vice,
     [string]$Mame,
+    [string]$Disk = (Join-Path $PSScriptRoot '../../.cache/prodos/ProDOS_2_4.dsk'),
     [switch]$Update
 )
 
@@ -21,7 +23,7 @@ $platforms = [ordered]@{
     c64      = @{ Emulator = 'x64sc'; Given = $Vice; Image = 'monitor.prg'; Run = 'Start-Vice'
                   Start = 'monitor__main'; End = 'platform__exit'; Screen = '0400 07e7'; Columns = 40 }
     apple2gs = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.bin'; Run = 'Start-Apple2gs'
-                  Load = 0x2000; Start = 'monitor__main'; End = 'platform__exit' }
+                  Load = 0x2000 }
     snes     = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.sfc'; Run = 'Start-Joypad'
                   System = 'snes'; Space = 'P1 Y' }
     nes      = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.nes'; Run = 'Start-Joypad'
@@ -65,16 +67,16 @@ function Start-Vice($settings, $emulator, $image, $labels, $lines, $screen, $wor
 }
 
 # Starts MAME's IIGS on a session, with a script that sets what apple2gs-session.lua is to do and
-# runs it.
+# runs it. The IIGS boots ProDOS from a copy of the disk, which the session may write files to.
 function Start-Apple2gs($settings, $emulator, $image, $labels, $lines, $screen, $work, $name) {
     $typed = ($lines | ForEach-Object { $_ + '\r' }) -join ''
     $script = Join-Path $work "$name.lua"
+    $copy = Join-Path $work "$name.dsk"
+    Copy-Item $Disk $copy -Force
     @(
         'session = {'
         "    image = [[$image]],"
         "    load = 0x$('{0:X4}' -f $settings.Load),"
-        "    start = 0x$($labels[$settings.Start]),"
-        "    finish = 0x$($labels[$settings.End]),"
         "    typed = `"$typed`","
         "    screen = [[$screen]],"
         '}'
@@ -84,9 +86,9 @@ function Start-Apple2gs($settings, $emulator, $image, $labels, $lines, $screen, 
     # The ROMs are looked for beside MAME. What MAME writes of its own goes in the work folder,
     # and a session stops after a minute of the IIGS's time.
     $roms = Join-Path (Split-Path $emulator) 'roms'
-    $arguments = @('apple2gs', '-rompath', "`"$roms`"", '-video', 'none', '-sound', 'none', '-nothrottle',
-                   '-skip_gameinfo', '-nonvram_save', '-seconds_to_run', '60', '-debug', '-debugger', 'none',
-                   '-autoboot_script', "`"$script`"")
+    $arguments = @('apple2gs', '-rompath', "`"$roms`"", '-flop1', "`"$copy`"", '-video', 'none', '-sound', 'none',
+                   '-nothrottle', '-skip_gameinfo', '-nonvram_save', '-seconds_to_run', '60', '-debug',
+                   '-debugger', 'none', '-autoboot_script', "`"$script`"")
     Start-Process $emulator -ArgumentList $arguments -PassThru -WindowStyle Hidden -WorkingDirectory $work `
         -RedirectStandardOutput (Join-Path $work "$name.log")
 }
@@ -135,6 +137,7 @@ $runs = foreach ($p in $platforms.Keys) {
     $build = Join-Path $PSScriptRoot "build/$p"
     $image = Join-Path $build $settings.Image
     if (-not (Test-Path $image)) { throw "$p is not built: run build.ps1 first" }
+    if ($p -eq 'apple2gs' -and -not (Test-Path $Disk)) { throw "no ProDOS disk at ${Disk}: give one with -Disk" }
     $labels = @{}
     foreach ($line in Get-Content (Join-Path $build 'monitor.lbl')) {
         $_, $address, $name = $line -split ' '
