@@ -1,4 +1,6 @@
-; The C caller (c/main.c), written as cc65 would compile it, since cc65 is not available.
+; The program's entry: a caller written by hand the way cc65 compiles calls, which stores what
+; nt65's routines and tables give back in RESULT for sim.py to dump. c/main.c is compiled against
+; the same header, but the image links no cc65 runtime library, so this module stands in for it.
 .setcpu "65C02"
 .export _main
 .import pushax, pusha
