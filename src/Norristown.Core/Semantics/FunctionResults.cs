@@ -13,22 +13,35 @@ namespace Norristown.Semantics;
 /// data declaration's values are evaluated by each check that layout makes and again as they
 /// are written out, so a table built by functions is otherwise evaluated many times over.
 /// </para>
+/// <para>
+/// It also remembers which functions can return text. Sizing data asks of every call whether it
+/// is text, and a function that can only return a number answers that without being called.
+/// </para>
 /// </summary>
 internal sealed class FunctionResults
 {
     private static readonly ConditionalWeakTable<object, FunctionResults> ByNames = new();
 
     private readonly ConcurrentDictionary<Symbol, bool> closed = new();
+    private readonly ConcurrentDictionary<Symbol, bool> text = new();
     private readonly ConcurrentDictionary<Call, Value> results = new();
 
     /// <summary>Returns the results kept for the analysis whose resolved names are <paramref name="names"/>.</summary>
     public static FunctionResults For(object names) => ByNames.GetValue(names, static _ => new FunctionResults());
 
     /// <summary>
-    /// Checks whether <paramref name="function"/> is closed, asking <paramref name="decide"/> the
-    /// first time and remembering the answer.
+    /// Checks whether <paramref name="function"/> is closed, asking <paramref name="decide"/>,
+    /// which is given <paramref name="argument"/>, the first time and remembering the answer.
     /// </summary>
-    public bool IsClosed(Symbol function, Func<Symbol, bool> decide) => closed.GetOrAdd(function, decide);
+    public bool IsClosed<TArgument>(Symbol function, Func<Symbol, TArgument, bool> decide, TArgument argument) =>
+        closed.GetOrAdd(function, decide, argument);
+
+    /// <summary>
+    /// Checks whether <paramref name="function"/> can return text, asking <paramref name="decide"/>,
+    /// which is given <paramref name="argument"/>, the first time and remembering the answer.
+    /// </summary>
+    public bool MayBeText<TArgument>(Symbol function, Func<Symbol, TArgument, bool> decide, TArgument argument) =>
+        text.GetOrAdd(function, decide, argument);
 
     /// <summary>Returns the result kept for a call, or null when none is kept.</summary>
     public Value? Find(Symbol function, Value[] arguments) =>

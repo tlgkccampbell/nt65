@@ -494,7 +494,9 @@ internal sealed partial class Evaluator
     /// these. Returns null for anything that is not text, and for text holding a character above
     /// <c>$ff</c>, which only a charmap turns into a byte and which is reported where it appears.
     /// Nothing else is evaluated here, because this runs while a declaration is being sized, and
-    /// evaluating a value that measures that same declaration would recurse.
+    /// evaluating a value that measures that same declaration would recurse. A call to a function
+    /// that can only return a number is not evaluated either, so a table of such calls is sized
+    /// without calling anything.
     /// </summary>
     private IReadOnlyList<long>? BuiltText(SyntaxNode operand)
     {
@@ -504,6 +506,9 @@ internal sealed partial class Evaluator
                 return BytesIn(parenthesized.Expression);
             case CallExpressionSyntax when ChoiceArguments(operand) is not null:
                 return ChosenBy(operand) is { } chosen ? BytesIn(chosen) : null;
+            case CallExpressionSyntax { Callee: { } callee } when SymbolOf(callee) is { Kind: SymbolKind.Func } function
+                && mode != EvaluationMode.Conditions && !MayBeText(function):
+                return null;
             case CallExpressionSyntax { BuiltinKind: BuiltinKind.Strsub or BuiltinKind.Strcat }:
             case CallExpressionSyntax { Callee: { } callee } when SymbolOf(callee) is { Kind: SymbolKind.Func }:
             case NameExpressionSyntax name when SymbolOf(name) is { Kind: SymbolKind.MacroParameter or SymbolKind.Binding }:

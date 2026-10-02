@@ -58,7 +58,8 @@ internal sealed partial class Evaluator
     /// </summary>
     private Value Call(CallExpressionSyntax call)
     {
-        var given = call.Arguments.Arguments;
+        // The arguments are read as a list by everything below, so they are boxed as one once.
+        IReadOnlyList<SyntaxNode> given = call.Arguments.Arguments;
         if (mode == EvaluationMode.Conditions)
             return InCondition(call, given, conditions!);
         if (call.Callee is not null)
@@ -102,8 +103,7 @@ internal sealed partial class Evaluator
             // A condition in an expansion asks about the CPU in the same way the build's
             // conditions do.
             case BuiltinKind.Target or BuiltinKind.Has when configuration is not null:
-                return Configuration.AboutTheCpu(kind, function, given, configuration.Cpu,
-                    (_, message) => Report(function, message));
+                return AboutTheCpu(kind, function, given, configuration.Cpu);
 
             // `.target`, `.has`, `.defined` and the three built-ins only a macro body uses
             // (`.mode`, `.empty`, `.exprof`) are handled before this point, each by the pass that
@@ -112,6 +112,13 @@ internal sealed partial class Evaluator
                 return Plain(kind, function, given);
         }
     }
+
+    /// <summary>
+    /// Returns what <c>.target</c> or <c>.has</c> says about <paramref name="cpu"/>, reporting a
+    /// problem with the call at <paramref name="function"/>.
+    /// </summary>
+    private Value AboutTheCpu(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> given, Cpu cpu) =>
+        Configuration.AboutTheCpu(kind, function, given, cpu, (_, message) => Report(function, message));
 
     /// <summary>
     /// Checks whether a call gives <paramref name="kind"/> as many arguments as its row of
@@ -304,7 +311,9 @@ internal sealed partial class Evaluator
     /// </summary>
     private Value Plain(BuiltinKind kind, SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
     {
-        var values = arguments.Select(Evaluate).ToArray();
+        var values = new Value[arguments.Count];
+        for (var i = 0; i < values.Length; i++)
+            values[i] = Evaluate(arguments[i]);
         return kind switch
         {
             BuiltinKind.Sqrt or BuiltinKind.Muldiv or BuiltinKind.Sin or BuiltinKind.Cos => Worked(kind, function, values),
@@ -614,7 +623,7 @@ internal sealed partial class Evaluator
 
         // A closed function called again with the same arguments gives the result it gave before.
         var kept = KeepsResults ? FunctionResults.For(resolved) : null;
-        if (kept is not null && !kept.IsClosed(symbol, IsClosed))
+        if (kept is not null && !kept.IsClosed(symbol, static (function, evaluator) => evaluator.IsClosed(function), this))
             kept = null;
         if (kept?.Find(symbol, values) is { } known)
             return known;

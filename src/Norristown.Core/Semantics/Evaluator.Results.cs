@@ -3,7 +3,8 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Decides which functions are closed, whose calls <see cref="FunctionResults"/> may keep.
+/// Decides which functions are closed, whose calls <see cref="FunctionResults"/> may keep, and
+/// which functions can return text.
 /// </summary>
 internal sealed partial class Evaluator
 {
@@ -85,11 +86,8 @@ internal sealed partial class Evaluator
 
     private bool IsClosedName(NameExpressionSyntax name, Symbol function, HashSet<Symbol> visiting)
     {
-        if (name.IsIndexed || name.LastPart is not { } last
-            || !resolved.TryGetValue((name.Tree, last.Name.Span.Start), out var symbol))
-        {
+        if (ResolvedInBody(name) is not { } symbol)
             return false;
-        }
         return symbol.Kind switch
         {
             // A parameter is a constant too, whose value is the argument the call binds.
@@ -98,4 +96,55 @@ internal sealed partial class Evaluator
             _ => false,
         };
     }
+
+    /// <summary>
+    /// Determines whether a call to <paramref name="function"/> can return text, judged from its
+    /// body alone. Arithmetic, a number and a built-in that computes a number never give text, so
+    /// a function whose body is one of these is a number for any arguments. Anything else, such
+    /// as a name, which may be a parameter given text, counts as possibly text. A function that
+    /// reaches itself counts as possibly text too.
+    /// </summary>
+    private bool MayBeText(Symbol function) =>
+        FunctionResults.For(resolved).MayBeText(function, static (symbol, evaluator) => evaluator.MayBeText(symbol, []), this);
+
+    private bool MayBeText(Symbol function, HashSet<Symbol> visiting)
+    {
+        if (function.Items.Count == 0 || !visiting.Add(function))
+            return true;
+        try
+        {
+            return MayBeText(function.Items[0], visiting);
+        }
+        finally
+        {
+            visiting.Remove(function);
+        }
+    }
+
+    private bool MayBeText(SyntaxNode node, HashSet<Symbol> visiting) => node switch
+    {
+        // An operator reads its operands as numbers, and refuses text.
+        NumberExpressionSyntax or CharacterExpressionSyntax or UnaryExpressionSyntax or BinaryExpressionSyntax => false,
+        ParenthesizedExpressionSyntax parenthesized => MayBeText(parenthesized.Expression, visiting),
+
+        // A charmap maps one character to its byte.
+        CallExpressionSyntax { Callee: { } callee } => ResolvedInBody(callee) switch
+        {
+            { Kind: SymbolKind.Charmap } => false,
+            { Kind: SymbolKind.Func } called => MayBeText(called, visiting),
+            _ => true,
+        },
+        CallExpressionSyntax call => call.BuiltinKind is BuiltinKind.None or BuiltinKind.Strsub or BuiltinKind.Strcat
+            or BuiltinKind.Select or BuiltinKind.Switch or BuiltinKind.Exprof,
+        _ => true,
+    };
+
+    /// <summary>
+    /// Returns the symbol a name in a function's body resolved to, or null for an indexed name
+    /// and for a name that resolved to nothing.
+    /// </summary>
+    private Symbol? ResolvedInBody(NameExpressionSyntax name) =>
+        !name.IsIndexed && name.LastPart is { } last && resolved.TryGetValue((name.Tree, last.Name.Span.Start), out var symbol)
+            ? symbol
+            : null;
 }
