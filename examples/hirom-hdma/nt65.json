@@ -1,0 +1,25 @@
+{
+  "cpu": "65816",
+  "files": ["src/*.nt65"],
+  "out": "build",
+  "links": {
+    "sfc": {
+      "config": "hirom.cfg",
+      "memory": {
+        "ZP":    { "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
+        "LORAM": { "mirrors": ["$01-$3f", "$7e", "$80-$bf"] },
+        "DATA0": { "mirrors": ["$40"] },
+        "CODE0": { "mirrors": ["$00", "$40", "$80"] },
+        "ENTRY": { "mirrors": ["$40", "$80", "$c0"] },
+        "BANK1": { "mirrors": ["$41"] }
+      }
+    }
+  },
+  "segments": {
+    "ZEROPAGE": { "dp": 0 }
+  },
+  "ranges": {
+    "$2100-$21ff": ["$00-$3f", "$80-$bf"],
+    "$4200-$43ff": ["$00-$3f", "$80-$bf"]
+  }
+}

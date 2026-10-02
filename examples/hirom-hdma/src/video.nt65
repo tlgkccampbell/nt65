@@ -1,0 +1,140 @@
+; This module sets up BG1 in mode 0, with a wall of blocks on a tilemap of 32 by 32 tiles. Each
+; block is 16 by 16 dots, four tiles, and every other block is left out, so the backdrop shows
+; through. The tiles, the tilemap and the palette are in the first half of bank $C0, which only
+; banks $C0 and $40 see, so DMA reads them from there, and the code reads the DMAs' settings with
+; long addresses.
+.module video
+
+.cpu 65816
+
+.use snes::*
+.use main::std
+
+.export setup
+
+.const MAP   = $0000                ; the word address in VRAM of BG1's tilemap
+.const TILES = $1000                ; the word address in VRAM of BG1's tile 0
+
+; The colors of a block.
+.enum Shade {
+    clear                           ; color 0, the backdrop, which HDMA sets on each line
+    face
+    light                           ; the top and left edges
+    dark                            ; the bottom and right edges
+}
+
+; Returns the shade of a dot of a block, where x and y run from 0 to 15.
+.func shade(x, y) = .select((x == 0) || (y == 0), Shade::light,
+    .select((x == 15) || (y == 15), Shade::dark, Shade::face))
+
+; Returns the dot at column c of row r of tile t's quarter of a block, in bitplane p, at its bit
+; of the plane's byte. Bit 7 is the leftmost dot.
+.func dot(t, r, c, p) = ((shade((t & 1) * 8 + c, (t >> 1) * 8 + r) >> p) & 1) << (7 - c)
+
+; Returns one bitplane of row r of tile t's quarter of a block.
+.func plane(t, r, p) = (dot(t, r, 0, p) | dot(t, r, 1, p) | dot(t, r, 2, p) | dot(t, r, 3, p)
+    | dot(t, r, 4, p) | dot(t, r, 5, p) | dot(t, r, 6, p) | dot(t, r, 7, p))
+
+; Returns the tile at column x and row y of the tilemap: a quarter of a block, or the empty tile 0
+; where the block is left out.
+.func cell(x, y) = .select(((x >> 1) + (y >> 1)) & 1, 1 + (x & 1) + (y & 1) * 2, 0)
+
+.segment RODATA
+; The tiles, two bits to a dot: the empty tile, then the four quarters of a block, each tile eight
+; rows of the two planes of a row.
+.data tiles: .byte[5 * 16] {
+    .repeat 16 {
+        0
+    }
+    .repeat 4, t {
+        .repeat 8, r {
+            plane(t, r, 0), plane(t, r, 1)
+        }
+    }
+}
+
+; The tilemap, 32 by 32 tiles, each word a tile in palette 0.
+.data map: .word[32 * 32] {
+    .repeat 32, row {
+        .repeat 32, column {
+            cell(column, row)
+        }
+    }
+}
+
+; The palette, in the order of `Shade`.
+.data palette: .word[] {
+    rgb(0, 0, 0)
+    rgb(12, 15, 21)
+    rgb(26, 28, 31)
+    rgb(4, 5, 10)
+}
+
+; The settings of a DMA, as the first seven of a channel's registers take them.
+.struct Transfer {
+    mode:   .byte
+    port:   .byte
+    source: .faraddr
+    length: .word
+}
+
+.data load_map: .type Transfer {
+    mode   = DMA_TWO_PORTS
+    port   = <VMDATAL
+    source = map
+    length = .sizeof(map)
+}
+
+.data load_tiles: .type Transfer {
+    mode   = DMA_TWO_PORTS
+    port   = <VMDATAL
+    source = tiles
+    length = .sizeof(tiles)
+}
+
+.data load_palette: .type Transfer {
+    mode   = DMA_ONE_PORT
+    port   = <CGDATA
+    source = palette
+    length = .sizeof(palette)
+}
+
+; Runs the DMA that `settings`, a `Transfer`, describes, on channel 0.
+.macro dma(settings) {
+    ldx #.sizeof(Transfer) - 1
+@copy:
+    lda f:settings,x
+    sta channels,x
+    dex
+    bpl @copy
+    lda #1
+    sta MDMAEN
+}
+
+.segment CODE
+; Clears the S-PPU's ports, sets BG1 up and shows it, and loads its tiles, its tilemap and the
+; palette. The screen must be in forced blank, and stays in it.
+.proc setup: std {
+    ldx #$33
+@clear:
+    stz INIDISP,x                   ; every port from $2101 to $2133
+    dex
+    bne @clear
+    lda #>MAP
+    sta BG1SC
+    lda #TILES >> 12
+    sta BG12NBA
+    lda #STEP_HIGH
+    sta VMAIN
+    ldx #MAP
+    stx VMADDL
+    dma!(load_map)
+    ldx #TILES
+    stx VMADDL
+    dma!(load_tiles)
+    stz CGADD
+    dma!(load_palette)
+    lda #BG1
+    sta TM
+    rts
+}

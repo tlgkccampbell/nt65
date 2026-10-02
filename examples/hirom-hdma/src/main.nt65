@@ -1,0 +1,92 @@
+; This module starts the demo, runs its main loop and takes its NMI. The demo shows a wall of
+; blocks on BG1, over a backdrop whose color changes from line to line, and the wall waves from
+; side to side. Both effects are HDMA, which `hdma` sets up. Once the screen is on, the main loop
+; works out the wave's next frame while HDMA shows this one, and the NMI swaps them.
+;
+; The code runs in bank $C0, at FastROM speed, but B is $80 for most of it. Bank $C0 sees neither
+; the ports nor the first 8K of RAM, and bank $80 sees both, as well as the half of bank $C0 that
+; holds the code. What only bank $C0 sees, the first half of it, is read with long addresses.
+.module main
+
+.cpu 65816
+
+.use snes::*
+
+.export start, nmi, frames
+; The state the demo runs in: A is 8 bits, X and Y are 16, D is 0 and B is $80.
+.export .signature std = a8, i16, dp = 0, dbr = $80
+
+.segment BSS
+.data frames: .dword                ; the frames since the screen came on
+
+.segment CODE
+; Sets the hardware up and turns the screen on, then works out each frame's wave for good. The
+; vectors' stub jumps here from bank $00 as a reset leaves the S-CPU, in emulation mode.
+.proc start: emu, dp?, dbr?, noreturn {
+    clc
+    xce
+    rep #$18                        ; X and Y are 16 bits, and the arithmetic binary
+    ldx #$1FFF
+    txs
+    pea 0
+    pld
+    lda #$80
+    pha
+    plb
+    lda #FORCED_BLANK
+    sta INIDISP
+    stz NMITIMEN
+    stz HDMAEN
+    lda #FASTROM
+    sta MEMSEL
+    ldx #0
+    stx frames
+    stx frames + 2
+    jsr video::setup
+    jsl gradient::build
+    jsl wave::prepare
+    jsr hdma::start
+    lda #FULL_BRIGHT
+    sta INIDISP
+    lda #VBLANK_NMI
+    sta NMITIMEN
+@frame:
+    jsl wave::build
+@wait:
+    wai
+    lda wave::ready                 ; the NMI clears it once it shows the buffer
+    bne @wait
+    bra @frame
+}
+
+; Counts the frame and shows the wave's next buffer, if it is ready. The S-CPU takes the NMI at
+; the start of each vblank, through the stub in bank $00.
+.proc nmi: interrupt, native {
+    rep #$30
+    pha
+    phx
+    phy
+    phb
+    phd
+    pea 0
+    pld
+    sep #$20
+    lda #$80
+    pha
+    plb
+    lda RDNMI
+    rep #$20
+    inc frames
+    bne @counted
+    inc frames + 2
+@counted:
+    sep #$20
+    jsl wave::show
+    rep #$30
+    pld
+    plb
+    ply
+    plx
+    pla
+    rti
+}

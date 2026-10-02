@@ -142,6 +142,11 @@ interrupts and moved by a hook in the vertical blank. Its test runs it in Atari8
 with the Rockwell bit instructions: code in one RAM bank draws a script kept in another, both
 loaded by the KERNAL, through the VERA's two data ports. Its test runs it in x16emu.
 
+[`examples/hirom-hdma`](examples/hirom-hdma) is a Super NES demo written for nt65 as a HiROM
+cartridge at FastROM speed: a wall that waves on a backdrop shaded line by line, both by HDMA,
+with code and data in two 64K banks, far calls between them and the data bank changed to reach
+each. The configuration checks every bank it reaches. Its test runs it in MAME.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and

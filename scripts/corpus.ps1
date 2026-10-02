@@ -254,3 +254,25 @@ if ($x16emu) {
 }
 $ran = if ($x16emu) { 'its test passed' } else { 'its test did not run, because x16emu is not on the path' }
 Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'x16', (Get-Item (Join-Path $card 'build/card.prg')).Length, $ran, $watch.Elapsed.TotalSeconds)
+
+# The HiROM demo's own script builds it and writes its header's checksum. Where MAME is installed,
+# its test runs it for 150 frames and checks its HDMA channels, its ramp and the screen.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$hirom = Join-Path $root 'examples/hirom-hdma'
+& (Join-Path $hirom 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & (Join-Path $hirom 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
+    Write-Host 'hirom-hdma: the build failed' -ForegroundColor Red
+    exit 1
+}
+$mame = [bool](Get-Command mame -ErrorAction SilentlyContinue)
+if ($mame) {
+    & (Join-Path $hirom 'test.ps1') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & (Join-Path $hirom 'test.ps1')
+        Write-Host 'hirom-hdma: its test failed' -ForegroundColor Red
+        exit 1
+    }
+}
+$ran = if ($mame) { 'its test passed' } else { 'its test did not run, because mame is not on the path' }
+Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'hirom-hdma', (Get-Item (Join-Path $hirom 'build/hirom-hdma.sfc')).Length, $ran, $watch.Elapsed.TotalSeconds)

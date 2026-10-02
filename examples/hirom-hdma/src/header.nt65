@@ -1,0 +1,87 @@
+; This module holds the cartridge's header, which the Super NES's emulators and copiers read at
+; $FFC0 of bank $00, the interrupt vectors after it, and the stubs that the vectors point at.
+;
+; A vector is sixteen bits, so the S-CPU starts each handler in bank $00. There the HiROM sees
+; the second half of the cartridge's first bank, which is where this module's segments are. Each
+; stub jumps long on into bank $C0, where the rest of the program runs at FastROM speed. Nothing
+; returns to a stub, so a long jump to a near routine is right here.
+.module header
+
+.cpu 65816
+
+.use main::{start, nmi}
+
+.const HIROM_FAST    = $31          ; the map mode of a HiROM cartridge, at FastROM speed
+.const ROM_128K      = 7            ; the size of the ROM, as log2 of its kilobytes
+.const NORTH_AMERICA = 1
+
+; The header, from $FFC0.
+.struct Header {
+    title:      .res 21, ' '        ; in ASCII
+    map_mode:   .byte
+    cart_type:  .byte               ; 0 for a cartridge that holds only ROM
+    rom_size:   .byte
+    ram_size:   .byte
+    region:     .byte
+    developer:  .byte
+    version:    .byte
+    complement: .word               ; the checksum with every bit flipped
+    checksum:   .word               ; the sum of every byte of the ROM, which build.ps1 writes
+}
+
+; A mode's vectors. The 65816 reads the native mode's from $FFE0 and emulation mode's from $FFF0.
+.struct Vectors {
+    unused: .res 4
+    cop:    .addr
+    brk:    .addr                   ; native mode only; in emulation mode a BRK uses `irq`
+    abort:  .addr
+    nmi:    .addr
+    reset:  .addr                   ; emulation mode only, which is the mode a reset starts in
+    irq:    .addr
+}
+
+.assert .sizeof(Header) == $20, "the header must run from $FFC0 to $FFE0"
+.assert .sizeof(Vectors) == $10, "each mode has sixteen bytes of vectors"
+
+.segment ENTRY
+; Starts the demo on a reset, in emulation mode.
+.proc power_on: emu, dp?, dbr?, noreturn {
+    sei
+    jml start
+}
+
+; Takes the NMI at the start of each vblank.
+.proc vblank: interrupt, native {
+    jml nmi
+}
+
+; Takes the interrupts the demo never asks for.
+.proc ignore: interrupt {
+    rti
+}
+
+.segment HEADER
+.data header: .type Header {
+    title      = "NT65 HIROM HDMA"
+    map_mode   = HIROM_FAST
+    rom_size   = ROM_128K
+    region     = NORTH_AMERICA
+    complement = $FFFF              ; a checksum of 0, until build.ps1 writes the real one
+}
+
+.segment VECTORS
+.data native: .type Vectors {
+    cop   = ignore
+    brk   = ignore
+    abort = ignore
+    nmi   = vblank
+    irq   = ignore
+}
+
+.data emulation: .type Vectors {
+    cop   = ignore
+    abort = ignore
+    nmi   = ignore
+    reset = power_on
+    irq   = ignore
+}

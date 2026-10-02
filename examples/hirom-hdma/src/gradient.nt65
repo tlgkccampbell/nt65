@@ -1,0 +1,153 @@
+; This module shades the backdrop from the top of the screen to the bottom. HDMA sets color 0 on
+; every line from a table in bank $7E, which `build` works out once, before the screen comes on,
+; from a few colors that the table passes through. The colors and the code that builds the table
+; are in bank $C1.
+.module gradient
+
+.cpu 65816
+
+.use snes::*
+.use main::std
+
+.export ramp, build
+
+.const SPAN  = 32                   ; the lines from one key color to the next
+.const SPANS = wave::LINES / SPAN
+
+.assert SPANS * SPAN == wave::LINES, "the spans fill the screen"
+.assert SPAN <= HDMA_MOST, "an HDMA entry that repeats has at most 127 lines"
+.assert SPAN == 32, "from_key works out a step over 32 lines"
+
+; What HDMA writes for a line: the number of color 0, twice to CGADD, then the color, low byte
+; first, to CGDATA.
+.struct Line {
+    number: .byte
+    again:  .byte
+    color:  .word
+}
+
+; One entry of the table, for a span.
+.struct Span {
+    count: .byte                    ; HDMA_REPEAT | SPAN
+    lines: .type Line[SPAN]
+}
+
+; The table, which ends with a count of 0.
+.struct Ramp {
+    spans: .type Span[SPANS]
+    end:   .byte
+}
+
+.segment RODATA1
+; The key colors, one at the top of each span and one past the bottom of the screen, as 24-bit
+; RGB with eight bits to a part, the way a paint program writes them. A color has five bits to a
+; part, its top five.
+.data keys: .long[SPANS + 1] {
+    $081040                         ; night
+    $102878
+    $3050A8
+    $6878C0
+    $B890B0
+    $F0A078
+    $F87838
+    $A03018                         ; dusk
+}
+
+.const BLUE  = 0                    ; the offsets of a key's parts, low byte first
+.const GREEN = 1
+.const RED   = 2
+
+.segment ZEROPAGE
+.data level: .word[3]               ; each part, from BLUE up, as 5.8 fixed point
+.data step:  .word[3]               ; what each part changes by from one line to the next
+.data color: .word
+
+.segment WRAM
+.data ramp: .type Ramp
+
+.segment CODE1
+; Builds `ramp` from the key colors. B is $7E, where the ramp is, while it builds, and the keys
+; are read with long addresses.
+.proc build: std, far {
+    phb
+    lda #.bankbyte(ramp)
+    pha
+    plb
+    rep #$20
+    ldx #0                          ; the key at the top of the span, as its offset in `keys`
+    ldy #0                          ; where the span's entry goes, as its offset in `ramp`
+@span:
+    jsr from_key
+    sep #$20
+    lda #HDMA_REPEAT | SPAN
+    sta ramp,y                      ; the entry's count
+    rep #$20
+    iny
+    lda #SPAN                       ; the lines left in the span
+@line:
+    pha
+    lda #0
+    sta ramp + Line::number,y       ; both bytes, `number` and `again`
+    lda level[BLUE]
+    and #$1F00
+    asl a
+    asl a
+    sta color
+    lda level[GREEN]
+    and #$1F00
+    lsr a
+    lsr a
+    lsr a
+    tsb color
+    lda level[RED]
+    xba
+    and #$001F
+    ora color
+    sta ramp + Line::color,y
+    .repeat 3, part {
+        lda level[part]
+        clc
+        adc step[part]
+        sta level[part]
+    }
+    .repeat .sizeof(Line) {
+        iny
+    }
+    pla
+    dec a
+    bne @line
+    inx
+    inx
+    inx
+    cpx #3 * SPANS                  ; the last key starts no span
+    bne @span
+    sep #$20
+    lda #0
+    sta ramp::end
+    plb
+    rtl
+}
+
+; Sets each part's level to the key color at X, and its step to what takes it to the next key in
+; SPAN lines.
+.proc from_key: a16, i16, dp = 0 {
+    .repeat 3, part {
+        lda f:keys + part + 3,x
+        and #$00F8
+        sta step[part]
+        lda f:keys + part,x
+        and #$00F8
+        sta level[part]
+        lda step[part]
+        sec
+        sbc level[part]
+        sta step[part]              ; eight times the parts' difference: a 32nd of it, in 5.8
+        lda level[part]
+        xba
+        lsr a
+        lsr a
+        lsr a
+        sta level[part]
+    }
+    rts
+}

@@ -1,0 +1,155 @@
+; This module waves BG1 from side to side, by setting its horizontal scroll on every line with
+; HDMA. The scrolls are worked out a frame ahead, into one of two buffers in bank $7E, while HDMA
+; reads the other. The channel runs in indirect mode: its table is in ROM, one for each buffer,
+; and points into the buffer, so the NMI changes buffers by changing tables.
+.module wave
+
+.cpu 65816
+
+.use snes::*
+.use main::{std, frames}
+
+.export LINES, tables, scrolls, prepare, build, show, ready
+
+.const LINES  = 224                 ; the lines of the screen
+.const HALF   = LINES / 2           ; the lines of each of a table's two entries
+.const PHASES = 128                 ; the frames the wave takes to come round again
+
+.assert HALF <= HDMA_MOST, "an HDMA entry that repeats has at most 127 lines"
+
+; The scroll on a line is the sum of two waves, one long and slow and one short and quick. Each
+; moves on by its step from one line to the next. From one frame to the next, the long wave moves
+; on 2 and the short wave back 6, so both come round a whole number of times in PHASES frames.
+.const LONG_STEP  = 2
+.const SHORT_STEP = 9
+
+.segment RODATA1
+; The two waves, in dots, each a whole turn in 256 steps of its angle.
+.data long_wave: .word[256] {
+    .repeat 256, angle {
+        .sin(angle, 256, 7)
+    }
+}
+
+.data short_wave: .word[256] {
+    .repeat 256, angle {
+        .sin(angle, 256, 2)
+    }
+}
+
+; The HDMA tables, one for each buffer. Each has two entries of HALF lines, which point at the
+; halves of the buffer, and the 0 that ends it. An entry is its count and an address.
+.const TABLE = 2 * 3 + 1
+
+.data tables {
+    .repeat 2, buffer {
+        .repeat 2, half {
+            .byte HDMA_REPEAT | HALF
+            .word .loword(scrolls) + (buffer * LINES + half * HALF) * 2
+        }
+        .byte 0
+    }
+}
+
+.assert .sizeof(tables) == 2 * TABLE, "each table is TABLE bytes"
+
+.segment ZEROPAGE
+.data long_angle:  .word            ; the long wave's angle on the line being worked out
+.data short_angle: .word
+.data left:        .word            ; the lines left to work out
+
+.segment BSS
+.data shown: .byte                  ; the buffer HDMA reads, 0 or 1
+.data ready: .byte                  ; 1 once the other buffer is ready to be shown
+
+.segment WRAM
+.data scrolls: .word[2 * LINES]     ; the buffers, one after the other
+
+.segment CODE1
+; Works the scrolls out into the front buffer, which is the one HDMA starts with, before the
+; screen comes on.
+.proc prepare: std, far {
+    lda #1
+    sta shown
+    stz ready
+    jml build
+}
+
+; Works the scrolls out into the buffer that is not shown, for the phase that the frame count
+; gives, and says it is ready. B is $C1, where the waves are, while it works, and the buffer is
+; written with long addresses.
+.proc build: std, far {
+    phb
+    phk
+    plb
+    rep #$20
+    lda f:frames
+    and #PHASES - 1
+    asl a                           ; on 2 a frame
+    sta long_angle
+    asl a
+    clc
+    adc long_angle
+    eor #$FFFF
+    inc a                           ; back 6 a frame
+    sta short_angle
+    ldx #0
+    lda f:shown                     ; in the low byte
+    lsr a
+    bcs @front                      ; the back buffer is shown, so this works out the front
+    ldx #LINES * 2
+@front:
+    lda #LINES
+    sta left
+@line:
+    lda long_angle
+    and #$00FF
+    asl a
+    tay
+    lda long_wave,y
+    pha
+    lda short_angle
+    and #$00FF
+    asl a
+    tay
+    pla
+    clc
+    adc short_wave,y
+    sta f:scrolls,x
+    lda long_angle
+    clc
+    adc #LONG_STEP
+    sta long_angle
+    lda short_angle
+    clc
+    adc #SHORT_STEP
+    sta short_angle
+    inx
+    inx
+    dec left
+    bne @line
+    sep #$20
+    lda #1
+    sta f:ready
+    plb
+    rtl
+}
+
+; Shows the buffer that `build` made ready, from the next frame on, by pointing the wave's HDMA
+; channel at that buffer's table. The NMI calls this in vblank.
+.proc show: std, far {
+    lda ready
+    beq @done
+    stz ready
+    lda shown
+    eor #1
+    sta shown
+    ldx #.loword(tables)
+    lsr a
+    bcc @point
+    ldx #.loword(tables) + TABLE
+@point:
+    stx channels[hdma::WAVE]::address
+@done:
+    rtl
+}

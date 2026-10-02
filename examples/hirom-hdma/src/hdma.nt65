@@ -1,0 +1,66 @@
+; This module starts the HDMA channels, one for each effect, from channel 1 up. Channel 0 is left
+; for DMA. The effects' tables are in different banks, the wave's in ROM in bank $C1 and the
+; ramp in RAM in bank $7E, so each channel is given the bank of its table as well as its address.
+; The wave's channel is in indirect mode, and is given the bank of the scrolls its table points
+; at too.
+.module hdma
+
+.cpu 65816
+
+.use snes::*
+.use main::std
+
+.export WAVE, start
+
+; The effects, in the order of their channels.
+.list tables {
+    wave::tables
+    gradient::ramp
+}
+
+.const FIRST = 1                    ; the channel of the first effect
+.const WAVE  = FIRST                ; the wave's channel
+
+; Each effect's channel settings, beside the code that reads them, in the half of bank $C0 that
+; bank $80 sees.
+.segment CODE
+.data modes:    .byte HDMA_INDIRECT | DMA_TWICE, DMA_TWICE_TWO
+.data ports:    .byte <BG1HOFS, <CGADD
+.data lows:     .lobytes tables
+.data highs:    .hibytes tables
+.data banks:    .bankbytes tables
+.data indirect: .byte .bankbyte(wave::scrolls), 0  ; the ramp's channel is not indirect
+
+.assert (.sizeof(modes) == .sizeof(banks) && .sizeof(ports) == .sizeof(banks)
+    && .sizeof(indirect) == .sizeof(banks)), "each effect has each setting"
+
+; Sets each effect's channel up and turns them on. HDMA starts with the next frame.
+.proc start: std {
+    ldy #0                          ; the effect
+    ldx #FIRST * .sizeof(Channel)   ; its channel's registers, as their offset from channel 0's
+@effect:
+    lda modes,y
+    sta channels::mode,x
+    lda ports,y
+    sta channels::port,x
+    lda lows,y
+    sta channels::address,x
+    lda highs,y
+    sta channels::address + 1,x
+    lda banks,y
+    sta channels::bank,x
+    lda indirect,y
+    sta channels::indirect,x
+    rep #$20
+    txa
+    clc
+    adc #.sizeof(Channel)
+    tax
+    sep #$20
+    iny
+    cpy #.sizeof(banks)
+    bne @effect
+    lda #((1 << .sizeof(banks)) - 1) << FIRST
+    sta HDMAEN
+    rts
+}
