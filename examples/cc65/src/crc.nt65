@@ -1,0 +1,101 @@
+; unsigned __fastcall__ crc16(const void* p, unsigned n);
+;
+; The CRC-16 that XMODEM's successors and many file formats use, which is also called
+; CRC-16/CCITT-FALSE: the polynomial $1021, starting from $FFFF, with no reflection and no final
+; XOR. It works a byte at a time from two tables of 256 bytes, which a constructor builds before
+; main runs.
+.module crc
+
+.use runtime::{popax, ptr1, ptr2, tmp1, tmp2}
+
+.export crc16 as "_crc16", table_lo as "_crc_table_lo", table_hi as "_crc_table_hi"
+.export POLY as "_CRC_POLY", INIT as "_CRC_INIT"
+
+; asm/constructor.s registers this with cc65's start-up code. C does not call it, so it keeps the
+; name nt65 gives it rather than one C could use.
+.export init
+
+.const POLY = $1021
+.const INIT = $FFFF
+
+.segment BSS
+; The CRC of each byte value on its own, starting from 0, split into its low and high bytes.
+.data table_lo: .byte[256]
+.data table_hi: .byte[256]
+
+.segment ONCE
+; Builds the tables. The CRC of a byte value is the value in the high byte, shifted left eight
+; times, with the polynomial XORed in after each shift that carries a bit out.
+.proc init {
+    ldx #0
+@entry:
+    stx ptr1+1
+    lda #0
+    sta ptr1
+    ldy #8
+@bit:
+    asl ptr1
+    rol ptr1+1
+    bcc @next
+    lda ptr1
+    eor #<POLY
+    sta ptr1
+    lda ptr1+1
+    eor #>POLY
+    sta ptr1+1
+@next:
+    dey
+    bne @bit
+    lda ptr1
+    sta table_lo,x
+    lda ptr1+1
+    sta table_hi,x
+    inx
+    bne @entry
+    rts
+}
+
+.segment CODE
+; Returns the CRC of n bytes from p in A, the low byte, and X, the high byte. Each byte is XORed
+; with the high byte of the CRC so far to pick an entry, and the CRC moves up a byte with that
+; entry XORed in.
+.proc crc16 {
+    sta ptr2
+    stx ptr2+1                      ; n
+    jsr popax
+    sta ptr1
+    stx ptr1+1                      ; p
+    lda #<INIT
+    sta tmp1                        ; the CRC's low byte
+    lda #>INIT
+    sta tmp2                        ; and its high byte
+    ldy #0
+    lda ptr2
+    ora ptr2+1
+    beq @done
+@byte:
+    lda (ptr1),y
+    eor tmp2
+    tax
+    lda tmp1
+    eor table_hi,x
+    sta tmp2
+    lda table_lo,x
+    sta tmp1
+    iny
+    bne @count
+    inc ptr1+1
+@count:
+    lda ptr2
+    bne @low
+    dec ptr2+1
+@low:
+    dec ptr2
+    lda ptr2
+    ora ptr2+1
+    bne @byte
+@done:
+    lda tmp1
+    ldx tmp2
+    rts
+}

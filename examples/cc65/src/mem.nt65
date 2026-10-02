@@ -1,0 +1,55 @@
+; void __fastcall__ memfill(void* p, unsigned char v, unsigned n);
+.module mem
+
+.use runtime::{c_sp, ptr1, ptr2, tmp1}
+
+.export memfill as "_memfill"
+
+.segment CODE
+; Fills n bytes from p with v. C passes n, the last argument, in A and X, and leaves v and p on
+; the C stack, v on top. The routine reads both where they lie and then drops all three bytes at
+; once, which is quicker than calling popa and then popax.
+.proc memfill {
+    sta ptr2
+    stx ptr2+1
+    ldy #0
+    lda (c_sp),y
+    sta tmp1                        ; v
+    iny
+    lda (c_sp),y
+    sta ptr1
+    iny
+    lda (c_sp),y
+    sta ptr1+1                      ; p
+    lda c_sp
+    clc
+    adc #3
+    sta c_sp
+    bcc @dropped
+    inc c_sp+1
+@dropped:
+    lda tmp1
+    ldy #0
+    ldx ptr2+1                      ; the whole pages
+    beq @tail
+@page:
+    ; A page is 256 stores, four to a turn of the loop, so Y wraps to 0 at the end of one.
+    .repeat 4 {
+        sta (ptr1),y
+        iny
+    }
+    bne @page
+    inc ptr1+1
+    dex
+    bne @page
+@tail:
+    ldx ptr2                        ; the bytes after them
+    beq @done
+@byte:
+    sta (ptr1),y
+    iny
+    dex
+    bne @byte
+@done:
+    rts
+}

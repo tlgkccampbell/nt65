@@ -1,0 +1,30 @@
+; unsigned char __fastcall__ str_upper(char* s);
+.module str
+
+.use runtime::ptr1
+
+.export str_upper as "_str_upper"
+
+; Hand-written in asm/upcase.s, which is ca65 source of the program's own. It returns the
+; character in A as a capital, and leaves X and Y as they were.
+.import upcase: proc(reads a, keeps x, y)
+
+.segment CODE
+; Changes the lowercase ASCII letters of the string at s to capitals, in place, and returns the
+; string's length. The string must be shorter than 256 characters.
+.proc str_upper {
+    sta ptr1
+    stx ptr1+1
+    ldy #0
+@next:
+    lda (ptr1),y
+    beq @done
+    jsr upcase
+    sta (ptr1),y
+    iny
+    bne @next
+@done:
+    tya
+    ldx #0
+    rts
+}

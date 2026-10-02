@@ -1,0 +1,12 @@
+; The parts of cc65's runtime library that the routines use. Each module that uses one of these
+; imports it, under its own name, and the linker finds it in sim6502.lib.
+.module runtime
+
+; The C stack pointer, and the scratch bytes in the zero page that cc65 leaves free for an
+; assembly routine to use without saving them.
+.export .import c_sp: zp .byte[2], ptr1: zp .byte[2], ptr2: zp .byte[2]
+.export .import tmp1: zp .byte, tmp2: zp .byte
+
+; popa removes a byte from the C stack and returns it in A. popax removes two bytes and returns
+; them in A, the low byte, and X, the high byte.
+.export .import popa: proc(), popax: proc()

@@ -136,6 +136,18 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host ("   {0,-11} {1,7} targets in {2:0.0}s, each the original ROM" -f 'msbasic', 10, $watch.Elapsed.TotalSeconds)
 
+# The cc65 example is C that calls nt65, built with cl65 and run in sim65, whose exit code is the
+# number of the C program's checks that failed.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$said = & (Join-Path $root 'examples/cc65/build.ps1') -Nt65 $nt65 -Cl65 (Join-Path $bin "cl65$exe") `
+    -Sim65 (Join-Path $bin "sim65$exe") 6>&1 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0) {
+    Write-Host $said.Trim()
+    Write-Host 'cc65: the build failed or a check in the C program failed' -ForegroundColor Red
+    exit 1
+}
+Write-Host ("   {0,-11} {1,7} passed in sim65 in {2:0.0}s" -f 'cc65', 'checks', $watch.Elapsed.TotalSeconds)
+
 # The monitor builds once per platform, from a library each platform's project shares, and each
 # platform's sessions run where its emulator is installed: VICE for the C64, MAME for the IIGS,
 # the Super NES and the NES.

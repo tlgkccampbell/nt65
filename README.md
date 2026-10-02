@@ -124,6 +124,10 @@ start: a library that knows nothing of the machine it runs on, and a project for
 that supplies what it needs: the Commodore 64, the Apple IIGS with its 65816, and the Super NES,
 typed on with the joypad. Its sessions run in VICE and MAME.
 
+[`examples/cc65`](examples/cc65) is a C program, built with cc65, that calls a memory fill, a
+checksum and a string routine written in nt65, through the header `nt65 build --c-header`
+writes. It checks their answers in sim65, cc65's own simulator.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and
@@ -134,7 +138,7 @@ is Git Bash.
 
 ```text
 dotnet build Norristown.slnx        # the command, the language server and the tests
-pwsh scripts/build-cc65.ps1         # cc65, ca65 and ld65 at the pinned commit, into .cache/cc65
+pwsh scripts/build-cc65.ps1         # cc65 and its tools at the pinned commit, into .cache/cc65
 pwsh scripts/test.ps1               # the fast suite: units, fixtures and the server
 pwsh scripts/test.ps1 -Ca65         # the output assembled with the pinned ca65
 pwsh scripts/gate.ps1               # all of the above, and the extension's client

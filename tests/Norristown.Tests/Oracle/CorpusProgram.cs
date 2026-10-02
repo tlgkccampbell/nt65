@@ -38,9 +38,11 @@ internal sealed record CorpusProgram(
     /// converts its assets with Python before nt65 can read their sizes, links a second image
     /// with a second configuration, and assembles its hand-written ca65 with no CPU. The msbasic
     /// example is ten programs, one per configuration, each with its own linker configuration
-    /// and a matching image. The gate builds both end to end.
+    /// and a matching image. The cc65 example is linked by cl65 against cc65's runtime library
+    /// and its target's own linker configuration, neither of which is in the repository. The
+    /// gate builds all three end to end.
     /// </summary>
-    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "lorom-template", "msbasic" };
+    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "cc65", "lorom-template", "msbasic" };
 
     /// <summary>
     /// Returns every corpus program and example, or only those whose name contains NT65_FIXTURE

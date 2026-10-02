@@ -1,0 +1,11 @@
+{
+  "cpu": "6502",
+  "files": ["src/*.nt65"],
+  "out": "build/gen",
+  "segments": {
+    "ONCE": { "size": "abs" }
+  },
+  "diagnostics": {
+    "c-header-name-left-out": "off"
+  }
+}
