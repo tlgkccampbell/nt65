@@ -9,10 +9,16 @@
 # for steps PowerShell can run, and it wants a clean build, not the incremental build the
 # Makefile exists for.
 #
+# Each program builds, and runs its test, in a process of its own, all at once. A program's
+# build and its emulator sessions touch only its own directory, so nothing is shared between
+# them, and the step takes as long as its slowest program rather than all of them together.
+# The output is held back and printed in the order below once every program has finished.
+#
 # -Nt65 names an nt65 built somewhere else, for when an editor's language server holds the
-# usual build output open and it cannot be rebuilt in place.
+# usual build output open and it cannot be rebuilt in place. -Only builds one program, which
+# is how each of those processes is started, and is also a quick way to check one by hand.
 [CmdletBinding()]
-param([string]$Configuration = 'Debug', [string]$Nt65)
+param([string]$Configuration = 'Debug', [string]$Nt65, [string]$Only)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -31,9 +37,7 @@ foreach ($tool in $nt65, $ca65, $ld65) {
 }
 
 # A clean run of ca65, cc65 or ld65 prints nothing, so any output counts as a failure unless
-# -MayWarn is given. `nt65 build` is allowed to warn — the interop program's C header
-# deliberately warns about two routines whose linker names are not valid C identifiers — and
-# its output is printed either way.
+# -MayWarn is given. `nt65 build` is allowed to warn, and its output is printed either way.
 function Run([string]$exe, [string[]]$arguments, [switch]$MayWarn) {
     $said = (& $exe @arguments 2>&1 | Out-String).Trim()
     $failed = $LASTEXITCODE -ne 0 -or (-not $MayWarn -and $said.Length -gt 0)
@@ -51,6 +55,31 @@ function Run([string]$exe, [string[]]$arguments, [switch]$MayWarn) {
 function Sources([string]$directory, [string]$pattern) {
     if (-not (Test-Path $directory)) { return @() }
     Get-ChildItem $directory -Filter $pattern -Recurse -File | Sort-Object FullName
+}
+
+# Runs one of an example's own scripts with its output held back, and prints that output and
+# the failure only when the script fails.
+function Quietly([string]$script, [hashtable]$arguments, [string]$failure) {
+    $said = & $script @arguments *>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host $said.Trim()
+        Write-Host $failure -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Builds an example with its own script and, where its emulator is installed, runs its test,
+# then reports the image's size and whether the test ran.
+function Example([string]$name, [string]$emulator, [string]$image) {
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    $directory = Join-Path $root "examples/$name"
+    Quietly (Join-Path $directory 'build.ps1') @{ Nt65 = $nt65; Ca65 = $ca65; Ld65 = $ld65 } "${name}: the build failed"
+    $ready = [bool](Get-Command $emulator -ErrorAction SilentlyContinue)
+    if ($ready) {
+        Quietly (Join-Path $directory 'test.ps1') @{} "${name}: its test failed"
+    }
+    $ran = if ($ready) { 'its test passed' } else { "its test did not run, because $emulator is not on the path" }
+    Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f $name, (Get-Item (Join-Path $directory $image)).Length, $ran, $watch.Elapsed.TotalSeconds)
 }
 
 # Each program: its directory, the arguments to `nt65 build`, where the generated ca65 lands,
@@ -71,7 +100,7 @@ $programs = @(
        HandWritten = 'spc'; HandWrittenCpu = 'none'; Prepare = 'tools/convert.ps1' }
 )
 
-foreach ($program in $programs) {
+function Build([hashtable]$program) {
     $watch = [Diagnostics.Stopwatch]::StartNew()
     Push-Location (Join-Path $root $program.Directory)
     try {
@@ -125,176 +154,104 @@ foreach ($program in $programs) {
     }
 }
 
+$examples = [ordered]@{}
+foreach ($program in $programs) {
+    $examples[$program.Name] = [scriptblock]::Create("Build `$programs[$($examples.Count)]")
+}
+
 # msbasic builds ten targets, each a configuration of one program, and checks each image
 # against the original ROM's hash; its own script knows the targets and the comparison.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-& (Join-Path $root 'examples/msbasic/build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & (Join-Path $root 'examples/msbasic/build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
-    Write-Host 'msbasic: a target failed or differs from its original' -ForegroundColor Red
-    exit 1
+$examples['msbasic'] = {
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    Quietly (Join-Path $root 'examples/msbasic/build.ps1') @{ Nt65 = $nt65; Ca65 = $ca65; Ld65 = $ld65 } `
+        'msbasic: a target failed or differs from its original'
+    Write-Host ("   {0,-11} {1,7} targets in {2:0.0}s, each the original ROM" -f 'msbasic', 10, $watch.Elapsed.TotalSeconds)
 }
-Write-Host ("   {0,-11} {1,7} targets in {2:0.0}s, each the original ROM" -f 'msbasic', 10, $watch.Elapsed.TotalSeconds)
 
 # The cc65 example is C that calls nt65, built with cl65 and run in sim65, whose exit code is the
 # number of the C program's checks that failed.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$said = & (Join-Path $root 'examples/cc65/build.ps1') -Nt65 $nt65 -Cl65 (Join-Path $bin "cl65$exe") `
-    -Sim65 (Join-Path $bin "sim65$exe") 6>&1 2>&1 | Out-String
-if ($LASTEXITCODE -ne 0) {
-    Write-Host $said.Trim()
-    Write-Host 'cc65: the build failed or a check in the C program failed' -ForegroundColor Red
-    exit 1
+$examples['cc65'] = {
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    Quietly (Join-Path $root 'examples/cc65/build.ps1') @{ Nt65 = $nt65; Cl65 = (Join-Path $bin "cl65$exe"); Sim65 = (Join-Path $bin "sim65$exe") } `
+        'cc65: the build failed or a check in the C program failed'
+    Write-Host ("   {0,-11} {1,7} passed in sim65 in {2:0.0}s" -f 'cc65', 'checks', $watch.Elapsed.TotalSeconds)
 }
-Write-Host ("   {0,-11} {1,7} passed in sim65 in {2:0.0}s" -f 'cc65', 'checks', $watch.Elapsed.TotalSeconds)
 
 # The SNROM template builds once per mapper, each a configuration of one program with its own
 # driver and linker configuration, and checks each image against the original ca65 build's hash;
 # its own script converts the tiles and knows the objects, their order and the comparison.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$snrom = Join-Path $root 'examples/snrom-template/build.ps1'
-& $snrom -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & $snrom -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
-    Write-Host 'snrom-template: a mapper failed or differs from the original' -ForegroundColor Red
-    exit 1
+$examples['snrom-template'] = {
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    Quietly (Join-Path $root 'examples/snrom-template/build.ps1') @{ Nt65 = $nt65; Ca65 = $ca65; Ld65 = $ld65 } `
+        'snrom-template: a mapper failed or differs from the original'
+    Write-Host ("   {0,-11} {1,7} mappers in {2:0.0}s, each the original image" -f 'snrom', 2, $watch.Elapsed.TotalSeconds)
 }
-Write-Host ("   {0,-11} {1,7} mappers in {2:0.0}s, each the original image" -f 'snrom', 2, $watch.Elapsed.TotalSeconds)
 
 # The monitor builds once per platform, from a library each platform's project shares, and each
 # platform's sessions run where its emulator is installed: VICE for the C64, MAME for the IIGS,
 # the Super NES and the NES.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$monitor = Join-Path $root 'examples/monitor'
-& (Join-Path $monitor 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & (Join-Path $monitor 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
-    Write-Host 'monitor: a platform failed to build' -ForegroundColor Red
-    exit 1
-}
-$emulators = [ordered]@{ c64 = 'x64sc'; apple2gs = 'mame'; snes = 'mame'; nes = 'mame' }
-$ready = @($emulators.Keys | Where-Object { Get-Command $emulators[$_] -ErrorAction SilentlyContinue })
-if ($ready.Count -gt 0) {
-    & (Join-Path $monitor 'test.ps1') -Platform $ready | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        & (Join-Path $monitor 'test.ps1') -Platform $ready
-        Write-Host 'monitor: a session differs or did not finish' -ForegroundColor Red
-        exit 1
+$examples['monitor'] = {
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    $monitor = Join-Path $root 'examples/monitor'
+    Quietly (Join-Path $monitor 'build.ps1') @{ Nt65 = $nt65; Ca65 = $ca65; Ld65 = $ld65 } 'monitor: a platform failed to build'
+    $emulators = [ordered]@{ c64 = 'x64sc'; apple2gs = 'mame'; snes = 'mame'; nes = 'mame' }
+    $ready = @($emulators.Keys | Where-Object { Get-Command $emulators[$_] -ErrorAction SilentlyContinue })
+    if ($ready.Count -gt 0) {
+        Quietly (Join-Path $monitor 'test.ps1') @{ Platform = $ready } 'monitor: a session differs or did not finish'
     }
-}
-$ran = if ($ready.Count -gt 0) { "its sessions passed on $($ready -join ', ')" } else { 'no sessions ran' }
-Write-Host ("   {0,-11} {1,7} built, {2} in {3:0.0}s" -f 'monitor', "$($emulators.Count) platforms", $ran, $watch.Elapsed.TotalSeconds)
-foreach ($p in $emulators.Keys | Where-Object { $_ -notin $ready }) {
-    Write-Host ("   {0,-11} {1,7} sessions did not run, because {2} is not on the path" -f '', $p, $emulators[$p]) -ForegroundColor Yellow
+    $ran = if ($ready.Count -gt 0) { "its sessions passed on $($ready -join ', ')" } else { 'no sessions ran' }
+    Write-Host ("   {0,-11} {1,7} built, {2} in {3:0.0}s" -f 'monitor', "$($emulators.Count) platforms", $ran, $watch.Elapsed.TotalSeconds)
+    foreach ($p in $emulators.Keys | Where-Object { $_ -notin $ready }) {
+        Write-Host ("   {0,-11} {1,7} sessions did not run, because {2} is not on the path" -f '', $p, $emulators[$p]) -ForegroundColor Yellow
+    }
 }
 
 # The C64 demo packs its screens before nt65 measures them, so its own script builds it. Where
 # VICE is installed, its test runs it for a hundred frames and checks what it left in memory.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$demo = Join-Path $root 'examples/c64-demo'
-& (Join-Path $demo 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & (Join-Path $demo 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
-    Write-Host 'c64-demo: the build failed' -ForegroundColor Red
-    exit 1
-}
-$vice = [bool](Get-Command x64sc -ErrorAction SilentlyContinue)
-if ($vice) {
-    & (Join-Path $demo 'test.ps1') | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        & (Join-Path $demo 'test.ps1')
-        Write-Host 'c64-demo: its test failed' -ForegroundColor Red
-        exit 1
-    }
-}
-$ran = if ($vice) { 'its test passed' } else { 'its test did not run, because x64sc is not on the path' }
-Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'c64-demo', (Get-Item (Join-Path $demo 'build/demo.prg')).Length, $ran, $watch.Elapsed.TotalSeconds)
+$examples['c64-demo'] = { Example 'c64-demo' 'x64sc' 'build/demo.prg' }
 
 # The Atari XEX builds with its own script. Where Atari800 is installed, its test loads the XEX
 # twice, once to run it for a hundred frames and once with BASIC in, and checks what each left in
 # memory.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$xex = Join-Path $root 'examples/atari-xex'
-& (Join-Path $xex 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & (Join-Path $xex 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
-    Write-Host 'atari-xex: the build failed' -ForegroundColor Red
-    exit 1
-}
-$atari800 = [bool](Get-Command atari800 -ErrorAction SilentlyContinue)
-if ($atari800) {
-    & (Join-Path $xex 'test.ps1') | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        & (Join-Path $xex 'test.ps1')
-        Write-Host 'atari-xex: its test failed' -ForegroundColor Red
-        exit 1
-    }
-}
-$ran = if ($atari800) { 'its test passed' } else { 'its test did not run, because atari800 is not on the path' }
-Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'atari-xex', (Get-Item (Join-Path $xex 'build/demo.xex')).Length, $ran, $watch.Elapsed.TotalSeconds)
+$examples['atari-xex'] = { Example 'atari-xex' 'atari800' 'build/demo.xex' }
 
 # The X16 card is a PRG and a file for each RAM bank it loads, so its own script builds it. Where
 # x16emu is installed, its test runs it without a window and checks the screen and the banks.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$card = Join-Path $root 'examples/x16'
-& (Join-Path $card 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & (Join-Path $card 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
-    Write-Host 'x16: the build failed' -ForegroundColor Red
-    exit 1
-}
-$x16emu = [bool](Get-Command x16emu -ErrorAction SilentlyContinue)
-if ($x16emu) {
-    & (Join-Path $card 'test.ps1') | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        & (Join-Path $card 'test.ps1')
-        Write-Host 'x16: its test failed' -ForegroundColor Red
-        exit 1
-    }
-}
-$ran = if ($x16emu) { 'its test passed' } else { 'its test did not run, because x16emu is not on the path' }
-Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'x16', (Get-Item (Join-Path $card 'build/card.prg')).Length, $ran, $watch.Elapsed.TotalSeconds)
+$examples['x16'] = { Example 'x16' 'x16emu' 'build/card.prg' }
 
 # The HiROM demo's own script builds it and writes its header's checksum. Where MAME is installed,
 # its test runs it for 150 frames and checks its HDMA channels, its ramp and the screen.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$hirom = Join-Path $root 'examples/hirom-hdma'
-& (Join-Path $hirom 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & (Join-Path $hirom 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
-    Write-Host 'hirom-hdma: the build failed' -ForegroundColor Red
-    exit 1
-}
-$mame = [bool](Get-Command mame -ErrorAction SilentlyContinue)
-if ($mame) {
-    & (Join-Path $hirom 'test.ps1') | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        & (Join-Path $hirom 'test.ps1')
-        Write-Host 'hirom-hdma: its test failed' -ForegroundColor Red
-        exit 1
-    }
-}
-$ran = if ($mame) { 'its test passed' } else { 'its test did not run, because mame is not on the path' }
-Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'hirom-hdma', (Get-Item (Join-Path $hirom 'build/hirom-hdma.sfc')).Length, $ran, $watch.Elapsed.TotalSeconds)
+$examples['hirom-hdma'] = { Example 'hirom-hdma' 'mame' 'build/hirom-hdma.sfc' }
 
 # The MMC3 cartridge builds with its own script. Where MAME is installed, its test runs it for two
 # hundred frames and checks what it left in memory and what MAME saw on the bus.
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$mmc3 = Join-Path $root 'examples/mmc3'
-& (Join-Path $mmc3 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    & (Join-Path $mmc3 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
-    Write-Host 'mmc3: the build failed' -ForegroundColor Red
-    exit 1
-}
-$mame = [bool](Get-Command mame -ErrorAction SilentlyContinue)
-if ($mame) {
-    & (Join-Path $mmc3 'test.ps1') | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        & (Join-Path $mmc3 'test.ps1')
-        Write-Host 'mmc3: its test failed' -ForegroundColor Red
+$examples['mmc3'] = { Example 'mmc3' 'mame' 'build/mmc3.nes' }
+
+if ($Only) {
+    if (-not $examples.Contains($Only)) {
+        Write-Host "no such program: $Only (one of $($examples.Keys -join ', '))" -ForegroundColor Red
         exit 1
     }
+    & $examples[$Only]
+    exit 0
 }
-$ran = if ($mame) { 'its test passed' } else { 'its test did not run, because mame is not on the path' }
-Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'mmc3', (Get-Item (Join-Path $mmc3 'build/mmc3.nes')).Length, $ran, $watch.Elapsed.TotalSeconds)
+
+# Every program's process starts at once. Each one's output, standard error included, is
+# collected whole so that programs finishing together do not interleave their lines.
+$pwsh = (Get-Process -Id $PID).Path
+$script = $PSCommandPath
+$finished = @($examples.Keys) | ForEach-Object -ThrottleLimit $examples.Count -Parallel {
+    $said = & $using:pwsh -NoProfile -File $using:script -Configuration $using:Configuration -Nt65 $using:nt65 -Only $_ 2>&1 | Out-String
+    [pscustomobject]@{ Name = $_; Code = $LASTEXITCODE; Said = $said.TrimEnd() }
+}
+
+$failed = $false
+foreach ($name in $examples.Keys) {
+    $result = $finished | Where-Object Name -eq $name
+    if ($result.Said.Length -gt 0) { Write-Host $result.Said }
+    if ($result.Code -ne 0) {
+        Write-Host "${name}: failed" -ForegroundColor Red
+        $failed = $true
+    }
+}
+if ($failed) { exit 1 }
