@@ -1,0 +1,17 @@
+; A constant is exported as wide as its value, but ca65 refuses `: far` on any CPU but the
+; 65816. A wider constant for a 65C02, such as an address in the Commander X16's video memory, is
+; exported without a size, and ca65 sizes it from its value.
+.module main
+
+.cpu 65c02
+
+.export .const VRAM  = $1B000       ; a 17-bit address in video memory
+.export .const SMALL = $12
+.export .const WORD  = $1234
+
+.segment CODE
+.export .proc point {
+    lda #.bankbyte(VRAM)
+    ldx #.hibyte(VRAM)
+    rts
+}

@@ -383,9 +383,13 @@ public sealed class Emitter
                 continue;
             exported.Add(symbol);
 
-            // A constant is as wide as its value, which is how ca65 sizes one it is given.
+            // A constant is as wide as its value, which is how ca65 sizes one it is given. ca65
+            // refuses `: far` on every CPU but the 65816, so a wider constant for another CPU, such
+            // as a video address on the X16, is exported without a size and ca65 sizes it.
             var size = symbol.ExportSize
                 ?? Implicit(symbol.IsAddress ? symbol.AddressSize : symbol.Value.ImpliedAddressSize());
+            if (size == AddressSize.Far && !symbol.IsAddress && layout.Cpu != Cpu.Wdc65816)
+                size = null;
             directives.Add(LinkageDirective(".export", size, NameOf(symbol)));
 
             // Another module that measures the declaration refers to its end label, so that is
