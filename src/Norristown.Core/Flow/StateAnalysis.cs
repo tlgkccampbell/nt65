@@ -39,6 +39,10 @@ public sealed class StateAnalysis : IProcessorStates
     // the file.
     private Dictionary<(SyntaxTree Tree, int Position), FlowState>? anyExpansion;
 
+    // The block moves whose banks a `.patch` says the program writes, built when the analysis
+    // first meets a block move.
+    private HashSet<StepKey>? patchedMoves;
+
     private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges)
     {
         this.model = model;
@@ -799,11 +803,15 @@ public sealed class StateAnalysis : IProcessorStates
     /// <summary>
     /// Returns the destination bank of <c>mvn #src, #dst</c>, which is where it leaves the data
     /// bank. The destination is a constant, or <c>^sym</c>, the bank of a symbol whose segment
-    /// declares one.
+    /// declares one. A block move that a <c>.patch</c> names leaves the data bank unknown, because
+    /// the program writes its banks while it runs and the operands written in the source are only
+    /// placeholders.
     /// </summary>
     private StateValue MovedTo(Step step)
     {
-        if (StepOperands.Of(model, step) is not ImmediateOperandSyntax { SecondValue: { } destination })
+        patchedMoves ??= PatchedMoves();
+        if (patchedMoves.Contains(step.Key)
+            || StepOperands.Of(model, step) is not ImmediateOperandSyntax { SecondValue: { } destination })
             return StateValue.Unknown;
         if (model.ValueOf(destination, step.On).AsNumber() is { } bank and >= 0 and <= 0xff)
             return StateValue.Of(bank);
@@ -811,6 +819,41 @@ public sealed class StateAnalysis : IProcessorStates
             && Targets.Of(model, named, step.On)?.Symbol is { } symbol && checks.SegmentOf(symbol)?.Bank is { } home
                 ? StateValue.Of(home)
                 : StateValue.Unknown;
+    }
+
+    /// <summary>
+    /// Returns the block moves in the file that stand on a label a <c>.patch</c> names, which are
+    /// the ones whose banks the program writes.
+    /// </summary>
+    private HashSet<StepKey> PatchedMoves()
+    {
+        var targets = new HashSet<Symbol>();
+        foreach (var step in layout.Steps)
+        {
+            foreach (var patch in flow.AnnotationsOf(step).OfType<PatchDirectiveSyntax>())
+            {
+                foreach (var target in Annotations.TargetsOf(patch))
+                {
+                    if (Targets.Of(model, target, step.On)?.Symbol is { } symbol)
+                        targets.Add(symbol);
+                }
+            }
+        }
+
+        var moves = new HashSet<StepKey>();
+        var labelled = false;
+        foreach (var step in layout.Steps)
+        {
+            if (step.Label is { } label)
+            {
+                labelled |= targets.Contains(label);
+                continue;
+            }
+            if (labelled && step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Mvn or MnemonicKind.Mvp })
+                moves.Add(step.Key);
+            labelled = false;
+        }
+        return moves;
     }
 
     /// <summary>

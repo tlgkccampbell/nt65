@@ -125,6 +125,16 @@
     rts                     ;! error[asserted-item-not-restored]: `rts`: `changes` declares `dp*`, so D must be what it was on entry, but here it may not be
 }
 
+; A block move whose banks the program writes leaves B at a bank nothing knows, whatever the
+; operands written here say.
+.proc patched: a8, i16, dbr = $00 {
+    sta @move+1
+    .patch @move
+@move:
+    mvn #$00, #$00
+    rts                     ;! error[return-state-mismatch]: `rts`: `patched` declares it returns with `dbr = $00`, but B is not known here
+}
+
 ; A `.state` asserts as well as sets.
 .proc asserts: a8, i8, dbr = $00 -> a8, i8, dp?, dbr? {
     .state dbr = $7e        ;! error[state-value-mismatch]: `.state dbr = $7e` does not match: B is $00 here

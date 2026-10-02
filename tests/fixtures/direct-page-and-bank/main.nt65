@@ -4,7 +4,7 @@
 
 .cpu 65816
 
-.export hud, setup, pushed, keep, registers, ppu, from_k, caller, move, relay, fast, tail, standard, anywhere, from_one
+.export hud, setup, pushed, keep, registers, ppu, from_k, caller, move, move_between, relay, fast, tail, standard, anywhere, from_one
 
 ; A segment declared in a file may give its direct page by a constant.
 .const HUD_PAGE = $0300
@@ -114,6 +114,19 @@
 ; A block move leaves the data bank at its destination.
 .proc move: a16, i16 -> a16, i16, dbr = $7e {
     mvn #$00, #$7e
+    sta score
+    rts
+}
+
+; A block move whose banks the program writes leaves B unknown, so a routine that moves between
+; banks it is given saves B and pulls it back.
+.proc move_between: a8, i16, dbr = $7e {
+    sta @move+1
+    .patch @move
+    phb
+@move:
+    mvn #$00, #$00
+    plb
     sta score
     rts
 }

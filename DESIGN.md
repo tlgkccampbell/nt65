@@ -1803,7 +1803,7 @@ idioms that load D and B from constants and treats everything else as unknown:
 | `lda #const`, `pha`, `plb`, with A 8-bit | B = const |
 | `phk` then `plb` | B = the home bank of the enclosing segment |
 | `pld`, `plb` that pull a D or B saved by `phd`, `phb` (the analysis stack, §7.3) | the saved value |
-| `mvn #s, #d`, `mvp #s, #d` | B = d; for `#^sym`, the home bank of `sym`'s segment, when it declares one |
+| `mvn #s, #d`, `mvp #s, #d` | B = d; for `#^sym`, the home bank of `sym`'s segment, when it declares one; unknown when the move stands on a label a `.patch` names, whose banks the program writes |
 | calls, returns, merges, `xce` | as for widths (§7.3); `xce` leaves D and B alone |
 | any other `tcd`, `pld`, `plb` | unknown |
 
