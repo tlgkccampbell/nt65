@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Numerics;
 
@@ -36,6 +37,12 @@ public static class IntegerMath
     private const int Bits = 192;
 
     /// <summary>
+    /// The most results <see cref="Scaled"/> keeps. Each is a few dozen bytes, so this bounds the
+    /// memory kept for a process that, like the language server, outlives many builds.
+    /// </summary>
+    private const int MostKept = 1 << 16;
+
+    /// <summary>
     /// π/2 as a fraction with <see cref="Bits"/> bits after the point. It is a literal rather than
     /// a computed value, so that it is the same number on every machine and in every release.
     /// </summary>
@@ -43,6 +50,16 @@ public static class IntegerMath
         "01921fb54442d18469898cc51701b839a252049c1114cf98e8",
         NumberStyles.AllowHexSpecifier,
         CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Holds the results <see cref="Scaled"/> has computed, keyed by its arguments. A table of
+    /// sines takes the same few angles over and over, and each series costs dozens of operations
+    /// on 192-bit numbers.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(long Numerator, long Denominator, long Scale), long?> Kept = new();
+
+    // How many results have been offered to Kept. Once this passes MostKept, no more are kept.
+    private static int keeping;
 
     /// <summary>
     /// Returns a value indicating whether the trigonometric functions accept
@@ -137,8 +154,23 @@ public static class IntegerMath
     /// Returns the sine of <c>numerator/denominator</c> of a turn, times <paramref name="scale"/>
     /// and rounded. The quarter the angle lands in decides which series is computed and with which
     /// sign. This keeps every series within the first quarter turn, where it converges fastest.
+    /// A result is kept, until <see cref="MostKept"/> are, and the same arguments get it again.
     /// </summary>
     private static long? Scaled(long numerator, long denominator, long scale)
+    {
+        if (Kept.TryGetValue((numerator, denominator, scale), out var kept))
+            return kept;
+        var result = Computed(numerator, denominator, scale);
+        if (Interlocked.Increment(ref keeping) <= MostKept)
+            Kept.TryAdd((numerator, denominator, scale), result);
+        return result;
+    }
+
+    /// <summary>
+    /// Returns the sine of <c>numerator/denominator</c> of a turn, times <paramref name="scale"/>
+    /// and rounded, computed from its series.
+    /// </summary>
+    private static long? Computed(long numerator, long denominator, long scale)
     {
         var quarter = (int)(4 * numerator / denominator);
         var into = (4 * numerator) % denominator;
