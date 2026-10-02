@@ -13,6 +13,7 @@
 
 lib__SCREEN = $0400
 .import lib__tiles: abs
+.import lib__tiles__end: abs
 
 .segment "ZEROPAGE": zeropage
 ptr: .res 2
@@ -45,5 +46,17 @@ delay__loop_2:
     dex
     bne delay__loop_2
     ; end of delay!
+    ; measure!(lib::tiles)  main.nt65:21
+    lda #<lib__tiles__end
+    ldx #<(lib__tiles__end - lib__tiles)
+    ; end of measure!
+    ; measure!(table)  main.nt65:22
+    lda #<table__end
+    ldx #<(table__end - table)
+    ; end of measure!
     rts
 ; end of main
+
+.segment "RODATA": absolute
+table: .byte 1, 2, 3
+table__end:

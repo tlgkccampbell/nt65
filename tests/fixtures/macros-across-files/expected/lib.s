@@ -10,8 +10,10 @@
 
 .export lib__SCREEN
 .export lib__tiles
+.export lib__tiles__end
 
 lib__SCREEN = $0400
 
 .segment "RODATA": absolute
 lib__tiles: .byte 0, 1, 2, 3
+lib__tiles__end:

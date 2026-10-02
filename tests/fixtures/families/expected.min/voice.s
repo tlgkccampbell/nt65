@@ -10,6 +10,7 @@
 
 .export voice__dispatch
 .export voice__run
+.export voice__reset
 
 Channel__pulse1 = $00
 Channel__pulse2 = $01
@@ -62,3 +63,33 @@ voice__run:
     jsr play__triangle
     rts
 ; end of run
+
+Setting__volume = $00
+Setting__pitch = $01
+
+.segment "RODATA": absolute
+defaults:
+    .byte $0f                       ; volume
+    .byte $28                       ; pitch
+    .byte $08                       ; volume
+    .byte $14                       ; pitch
+
+.segment "BSS": absolute
+current__volume: .res 2
+current__pitch:  .res 2
+
+.segment "CODE": absolute
+; .proc reset: a8, i8  voice.nt65:70
+voice__reset:
+    .i8
+    ldy #$02
+    lda defaults,y                  ; defaults::setting
+    sta a:current__volume + 1
+    lda a:defaults                  ; defaults[0]::setting
+    sta a:current__volume
+    lda defaults+1,y                ; defaults::setting
+    sta a:current__pitch + 1
+    lda a:defaults+1                ; defaults[0]::setting
+    sta a:current__pitch
+    rts
+; end of reset

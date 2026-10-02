@@ -2,7 +2,7 @@
 
 ; A macro another module exports is brought in to be called; what its body names is the
 ; other module's, and needs nothing brought in here.
-.use lib::{set16, delay}
+.use lib::{set16, delay, measure}
 
 .segment ZEROPAGE
 .data ptr: .word
@@ -18,5 +18,10 @@
     set16!(ptr, lib::SCREEN)
     delay!(4)
     delay!(8)
+    measure!(lib::tiles)
+    measure!(table)
     rts
 }
+
+.segment RODATA
+.data table: .byte 1, 2, 3

@@ -2,7 +2,7 @@
 ; written into whichever module called it, with whatever it uses brought in there.
 .module lib
 
-.export set16, delay, SCREEN, tiles
+.export set16, delay, measure, SCREEN, tiles
 
 .const SCREEN = $0400
 
@@ -24,4 +24,11 @@
     lda tiles
     dex
     bne @loop
+}
+
+; A body that measures the declaration it is given. The end each call writes is that of the
+; declaration the call names, which the module that declares it labels and exports.
+.macro measure(item: ident) {
+    lda #<.endof(item)
+    ldx #<.spanof(item)
 }

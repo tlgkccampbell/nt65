@@ -196,7 +196,8 @@ internal sealed class BoundNames
     /// <summary>
     /// Returns the symbol that <c>actions::c</c> names when <c>c</c> walks an enum. This is the
     /// member of <c>actions</c> named after the enum member that <c>c</c> is bound to in the
-    /// current iteration. Outside any iteration, as when an editor asks, it names nothing.
+    /// current iteration. Where <c>actions</c> is data of a record type, it is the field of that
+    /// name. Outside any iteration, as when an editor asks, it names nothing.
     /// </summary>
     private Symbol? Namesake(
         NameExpressionSyntax name, int last, Symbol binding, out (NameExpressionSyntax At, DiagnosticMessage Message)? problem)
@@ -206,7 +207,7 @@ internal sealed class BoundNames
         var names = name.Names;
         for (var i = last - 1; i >= 0 && container is null; i--)
             Resolved.TryGetValue((name.Tree, names[i].Span.Start), out container);
-        if (container?.Body is not { } body)
+        if (container is null || Lookup.BodyOf(container) is not { } body)
             return null;
 
         if (!Members.TryGetValue(binding, out var member))

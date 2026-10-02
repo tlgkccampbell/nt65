@@ -550,6 +550,10 @@ internal sealed class ExpressionWriter(
         {
             if (model.SymbolAt(token) is not { } part)
                 continue;
+
+            // A repetition's binding at the end of the path names the field of its member's name.
+            if (part.Kind == SymbolKind.Binding && token == name.Names[^1])
+                part = model.SymbolOf(name, Expansion) ?? part;
             if (part.Kind == SymbolKind.Member)
                 offset += part.Value.AsNumber() ?? 0;
             else if (part.IsAddress)
@@ -603,9 +607,10 @@ internal sealed class ExpressionWriter(
         }
 
         // `.endof(f)` and `.spanof(f)` describe layout rather than shape, so they are written
-        // as the addresses they are and resolved by ca65 and ld65.
-        if (Extents.Is(call, model, out var span) && Extents.MeasuredBy(call) is { } named
-            && model.SymbolOf(named) is { } measured && (ends.Contains(measured) || measured.Tree != model.Tree))
+        // as the addresses they are and resolved by ca65 and ld65. In a macro body, `f` is what
+        // the call being written gave the parameter.
+        if (Extents.Is(call, model, out var span, Expansion) && Extents.MeasuredBy(call) is { } named
+            && model.SymbolOf(named, Expansion) is { } measured && (ends.Contains(measured) || measured.Tree != model.Tree))
         {
             rewriter.Replace(call, span ? $"({EndLabelOf(measured)} - {NameOf(measured)})" : EndLabelOf(measured));
             return;

@@ -41,4 +41,41 @@
     rts
 }
 
-.export dispatch, run
+; A record's fields are reached the same way: a path through data of a record type that ends
+; in the binding names the field of the member's name, at the record's offset for that field.
+.enum Setting {
+    volume
+    pitch
+}
+
+.struct Settings {
+    volume: .byte
+    pitch:  .byte
+}
+
+.segment RODATA
+.data defaults: .type Settings[] {
+    { volume = 15, pitch = 40 }
+    { volume = 8, pitch = 20 }
+}
+
+.segment BSS
+.scope current {
+    .each Setting, setting {
+        .data setting: .byte[2]
+    }
+}
+
+.segment CODE
+.proc reset: a8, i8 {
+    ldy #.sizeof(Settings)
+    .each Setting, setting {
+        lda defaults::setting,y         ; defaults+1,y for `pitch`
+        sta current::setting + 1
+        lda defaults[0]::setting        ; defaults+1 for `pitch`
+        sta current::setting
+    }
+    rts
+}
+
+.export dispatch, run, reset
