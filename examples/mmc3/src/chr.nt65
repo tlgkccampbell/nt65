@@ -1,0 +1,274 @@
+; This module holds the cartridge's character ROM, which the MMC3 maps into the PPU's pattern
+; tables a bank at a time. Every tile here is drawn below as a picture, and nt65 turns the
+; pictures into tiles as it compiles them.
+;
+; Each bank's number is in the MMC3's 1K units, as `.bankof` gives it from `mmc3.cfg`. The
+; background's tiles are at $0000 to $0FFF, in two 2K banks, which the MMC3's R0 and R1 choose by
+; their even numbers. The playfield shows the land bank through R0 and one of the four water
+; banks through R1, a different one every few frames, which is how its water moves. The status
+; bar shows the font bank through R0, which the IRQ switches to where the playfield ends. The
+; sprite's tiles are at $1000, in the 1K bank R2 chooses, which R3 to R5 choose too.
+;
+; Tile 0 is blank, in the background's color, in the font bank and the land bank alike. The row
+; of the playfield above the status bar is all tile 0, so the line on which the IRQ switches
+; banks shows the same whichever bank it is drawn from.
+.module chr
+
+.cpu 6502
+
+.export text, font, land, water_0, sprite, SKY, GRASS, GROUND, WATER, SHIP
+
+; The status bar's characters, as the font's tiles. The digits are followed directly by the
+; letters, so a hexadecimal digit's tile is its value plus one.
+.charmap text {
+    ' '      = 0
+    '0'..'9' = 1
+    'A'..'Z' = 11
+}
+
+; The background's tiles in the land bank and the water banks, which R0 and R1 map to tiles 0
+; to 127 and 128 to 255.
+.const SKY    = 1
+.const GRASS  = 2
+.const GROUND = 3
+.const WATER  = 128
+
+.const SHIP = 0                     ; the sprite's tile
+
+.assert text('Z') < 128, "the font must fit the bank R0 maps"
+.assert text('9') + 1 == text('A'), "a hexadecimal digit's tile must be its value plus one"
+
+; The font, as a type specimen lays it out, in bands of eight characters, each eight dots wide
+; and eight high, with `#` for a dot that shows. The tiles follow the bands in the order the
+; charmap gives them.
+
+; space 0 1 2 3 4 5 6
+.list band_0 {
+    "..........###......#......###....#####......#....#####.....##..."
+    ".........#...#....##.....#...#......#......##....#........#....."
+    ".........#..##.....#.........#.....#......#.#....####....#......"
+    ".........#.#.#.....#........#.......#....#..#........#...####..."
+    ".........##..#.....#.......#.........#...#####.......#...#...#.."
+    ".........#...#.....#......#......#...#......#....#...#...#...#.."
+    "..........###.....###....#####....###.......#.....###.....###..."
+    "................................................................"
+}
+
+; 7 8 9 A B C D E
+.list band_1 {
+    ".#####....###.....###.....###....####.....###....###.....#####.."
+    ".....#...#...#...#...#...#...#...#...#...#...#...#..#....#......"
+    "....#....#...#...#...#...#...#...#...#...#.......#...#...#......"
+    "...#......###.....####...#####...####....#.......#...#...####..."
+    "..#......#...#.......#...#...#...#...#...#.......#...#...#......"
+    "..#......#...#......#....#...#...#...#...#...#...#..#....#......"
+    "..#.......###.....##.....#...#...####.....###....###.....#####.."
+    "................................................................"
+}
+
+; F G H I J K L M
+.list band_2 {
+    ".#####....###....#...#....###......###...#...#...#.......#...#.."
+    ".#.......#...#...#...#.....#........#....#..#....#.......##.##.."
+    ".#.......#.......#...#.....#........#....#.#.....#.......#.#.#.."
+    ".####....#.###...#####.....#........#....##......#.......#.#.#.."
+    ".#.......#...#...#...#.....#........#....#.#.....#.......#...#.."
+    ".#.......#...#...#...#.....#.....#..#....#..#....#.......#...#.."
+    ".#........####...#...#....###.....##.....#...#...#####...#...#.."
+    "................................................................"
+}
+
+; N O P Q R S T U
+.list band_3 {
+    ".#...#....###....####.....###....####.....####...#####...#...#.."
+    ".#...#...#...#...#...#...#...#...#...#...#.........#.....#...#.."
+    ".##..#...#...#...#...#...#...#...#...#...#.........#.....#...#.."
+    ".#.#.#...#...#...####....#...#...####.....###......#.....#...#.."
+    ".#..##...#...#...#.......#.#.#...#.#.........#.....#.....#...#.."
+    ".#...#...#...#...#.......#..#....#..#........#.....#.....#...#.."
+    ".#...#....###....#........##.#...#...#...####......#......###..."
+    "................................................................"
+}
+
+; V W X Y Z
+.list band_4 {
+    ".#...#...#...#...#...#...#...#...#####.........................."
+    ".#...#...#...#...#...#...#...#.......#.........................."
+    ".#...#...#...#....#.#.....#.#.......#..........................."
+    ".#...#...#.#.#.....#.......#.......#............................"
+    ".#...#...#.#.#....#.#......#......#............................."
+    "..#.#....#.#.#...#...#.....#.....#.............................."
+    "...#......#.#....#...#.....#.....#####.........................."
+    "................................................................"
+}
+
+; The bands, top to bottom.
+.list bands {
+    band_0
+    band_1
+    band_2
+    band_3
+    band_4
+}
+
+; The background's tiles and the sprite's, each eight rows of eight dots, with the digit of each
+; dot's color: 0 is the background's color, and 1 to 3 the colors of the tile's palette.
+
+; The sky, in color 1 of the playfield's palette.
+.list sky {
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+    "11111111"
+}
+
+; The top of the land, its grass against the sky.
+.list grass {
+    "11211121"
+    "12221222"
+    "22222222"
+    "22222222"
+    "22222222"
+    "22222222"
+    "22222222"
+    "22222222"
+}
+
+; The land below the grass.
+.list ground {
+    "22222222"
+    "22222222"
+    "22222222"
+    "22222222"
+    "22222222"
+    "22222222"
+    "22222222"
+    "22222222"
+}
+
+; The water, in its first frame. Each frame after it is the same picture moved two dots to the
+; right, around to the left.
+.list water {
+    "33333333"
+    "11333311"
+    "33333333"
+    "33333333"
+    "33333333"
+    "33311333"
+    "33333333"
+    "33333333"
+}
+
+; The ship, as a sprite.
+.list ship {
+    "...33..."
+    "..3223.."
+    "..3223.."
+    ".312213."
+    "31111113"
+    "33333333"
+    ".2....2."
+    "........"
+}
+
+; Returns 1 where the dot at `at` in a row of the font's bands shows, and 0 where it does not.
+.func dot(row, at) = .strat(row, at) == '#'
+
+; Returns the two dots from `at` in a row of a band, as a number whose bit 1 is the leftmost.
+.func pair(row, at) = (dot(row, at) << 1) | dot(row, at + 1)
+
+; Returns the eight dots from `at` in a row of a band, as a byte whose bit 7 is the leftmost.
+.func dots(row, at) = (pair(row, at) << 6) | (pair(row, at + 2) << 4) | (pair(row, at + 4) << 2) | pair(row, at + 6)
+
+; Returns bit `p` of the color of the dot at `at` in a row of a picture, where `.` is color 0.
+.func shade(row, at, p) = .select(.strat(row, at) == '.', 0, ((.strat(row, at) - '0') >> p) & 1)
+
+; Returns plane `p` of the two dots from `at` in a row of a picture.
+.func shades(row, at, p) = (shade(row, at, p) << 1) | shade(row, at + 1, p)
+
+; Returns plane `p` of a row of a picture, as a byte whose bit 7 is the leftmost dot.
+.func plane(row, p) = (shades(row, 0, p) << 6) | (shades(row, 2, p) << 4) | (shades(row, 4, p) << 2) | shades(row, 6, p)
+
+; Returns a byte rotated `n` bits to the right, from 0 to 7.
+.func rotated(v, n) = ((v >> n) | (v << (8 - n))) & $FF
+
+; Writes a picture as a tile: its eight rows of plane 0, and then its eight rows of plane 1.
+.macro tile(picture) {
+    .each picture, row {
+        .byte plane(row, 0)
+    }
+    .each picture, row {
+        .byte plane(row, 1)
+    }
+}
+
+; Writes the water's frame `frame`, the picture moved two dots to the right for each frame.
+.macro water_frame(frame) {
+    .each water, row {
+        .byte rotated(plane(row, 0), 2 * frame)
+    }
+    .each water, row {
+        .byte rotated(plane(row, 1), 2 * frame)
+    }
+}
+
+.segment CHRFONT
+; The font's tiles, which show in color 3, on the background's color.
+.data font: .byte[.countof(bands) * 8 * 16] {
+    .each bands, band {
+        .repeat 8, glyph {
+            .each band, row {
+                dots(row, glyph * 8)
+            }
+            .each band, row {
+                dots(row, glyph * 8)
+            }
+        }
+    }
+}
+
+.segment CHRLAND
+; The playfield's tiles, in the order of SKY, GRASS and GROUND, after the blank tile 0.
+.data land {
+    .res 16
+    tile!(sky)
+    tile!(grass)
+    tile!(ground)
+}
+
+.assert .spanof(land) == (GROUND + 1) * 16, "the land's tiles must be where their numbers say"
+
+; The water's four frames are in banks two apart, so a frame's bank is the first one's and twice
+; its number.
+.assert .bankof(water_1) == .bankof(water_0) + 2, "the water's frames must be in banks two apart"
+.assert .bankof(water_2) == .bankof(water_0) + 4, "the water's frames must be in banks two apart"
+.assert .bankof(water_3) == .bankof(water_0) + 6, "the water's frames must be in banks two apart"
+
+.segment CHRWATER0
+.data water_0 {
+    water_frame!(0)
+}
+
+.segment CHRWATER1
+.data water_1 {
+    water_frame!(1)
+}
+
+.segment CHRWATER2
+.data water_2 {
+    water_frame!(2)
+}
+
+.segment CHRWATER3
+.data water_3 {
+    water_frame!(3)
+}
+
+.segment CHRSPRITE
+.data sprite {
+    tile!(ship)
+}

@@ -276,3 +276,25 @@ if ($mame) {
 }
 $ran = if ($mame) { 'its test passed' } else { 'its test did not run, because mame is not on the path' }
 Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'hirom-hdma', (Get-Item (Join-Path $hirom 'build/hirom-hdma.sfc')).Length, $ran, $watch.Elapsed.TotalSeconds)
+
+# The MMC3 cartridge builds with its own script. Where MAME is installed, its test runs it for two
+# hundred frames and checks what it left in memory and what MAME saw on the bus.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$mmc3 = Join-Path $root 'examples/mmc3'
+& (Join-Path $mmc3 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & (Join-Path $mmc3 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
+    Write-Host 'mmc3: the build failed' -ForegroundColor Red
+    exit 1
+}
+$mame = [bool](Get-Command mame -ErrorAction SilentlyContinue)
+if ($mame) {
+    & (Join-Path $mmc3 'test.ps1') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & (Join-Path $mmc3 'test.ps1')
+        Write-Host 'mmc3: its test failed' -ForegroundColor Red
+        exit 1
+    }
+}
+$ran = if ($mame) { 'its test passed' } else { 'its test did not run, because mame is not on the path' }
+Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'mmc3', (Get-Item (Join-Path $mmc3 'build/mmc3.nes')).Length, $ran, $watch.Elapsed.TotalSeconds)

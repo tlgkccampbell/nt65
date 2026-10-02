@@ -1,0 +1,104 @@
+; This module drives the MMC3's banks, for the main thread and for the interrupt handlers alike.
+;
+; The MMC3 has eight bank registers, R0 to R7, behind one pair of ports. A write to BANK_SELECT
+; chooses a register, and the next write to BANK_DATA sets it. Switching a bank takes both
+; writes, so an interrupt that comes between them and switches a bank of its own leaves
+; BANK_SELECT choosing its register, not the interrupted code's. The interrupted code's write to
+; BANK_DATA then sets the wrong register.
+;
+; So every write to BANK_SELECT goes through `select`, a shadow of what the port was last told:
+; the shadow is written first and the port after. An interrupt handler that switches banks keeps
+; the shadow on the stack, and when it is done writes it back to the shadow and the port, so the
+; code it broke into finds BANK_SELECT as it left it, whichever instruction it was broken at.
+; The program banks at $8000 and $A000 have shadows too, written before they are switched, so a
+; handler that maps banks of its own can put back the ones the main thread had mapped.
+;
+; A program bank is chosen by its number, which is the `bank` that `mmc3.cfg` gives its memory
+; area, and `.bankof(name)` is the number of the bank a name runs in.
+.module mmc3
+
+.cpu 6502
+
+.export Register
+.export BANK_SELECT, BANK_DATA, MIRRORING, IRQ_LATCH, IRQ_RELOAD, IRQ_DISABLE, IRQ_ENABLE
+.export id_8000, id_a000, select, window_8000, window_a000
+.export set, map_8000, map_a000, push_banks, pull_banks
+
+; The MMC3's ports, each of which takes its even or its odd address in a range of 8K.
+.const BANK_SELECT = $8000          ; which register BANK_DATA sets, and the banking modes
+.const BANK_DATA   = $8001          ; the bank of the register BANK_SELECT chose
+.const MIRRORING   = $A000          ; 0 for vertical mirroring, 1 for horizontal
+.const IRQ_LATCH   = $C000          ; the line counter's value after it is reloaded
+.const IRQ_RELOAD  = $C001          ; reloads the counter at the next line
+.const IRQ_DISABLE = $E000          ; turns the IRQ off, and acknowledges it
+.const IRQ_ENABLE  = $E001          ; turns the IRQ on
+
+; The bank registers. With BANK_SELECT's mode bits 0, as this program leaves them, R0 and R1
+; map 2K character banks at $0000 and $0800, R2 to R5 map 1K banks at $1000 to $1C00, and R6
+; and R7 map program banks at $8000 and $A000.
+.enum Register {
+    chr_0000
+    chr_0800
+    chr_1000
+    chr_1400
+    chr_1800
+    chr_1c00
+    prg_8000
+    prg_a000
+}
+
+; The first byte of the banks at $8000 and $A000. Each program bank that is mapped there starts
+; with its own number, as `.bankof` gives it, so reading this says which bank is mapped.
+.data id_8000: .byte = $8000
+.data id_a000: .byte = $A000
+
+.segment ZEROPAGE
+.data select:      .byte            ; what BANK_SELECT was last told, or is about to be
+.data window_8000: .byte            ; the program bank the main thread has at $8000
+.data window_a000: .byte            ; and at $A000
+
+.segment CODE
+; Maps program bank A in at $8000.
+.proc map_8000: reads a, keeps y {
+    sta window_8000
+    ldx #Register::prg_8000
+    .fallthrough set
+}
+
+; Sets register X to bank A, writing the shadow `select` before BANK_SELECT.
+.proc set: reads a, x, keeps a, x, y {
+    stx select
+    stx BANK_SELECT
+    sta BANK_DATA
+    rts
+}
+
+; Maps program bank A in at $A000.
+.proc map_a000: reads a, keeps y {
+    sta window_a000
+    ldx #Register::prg_a000
+    jmp set
+}
+
+; Pushes the shadows of BANK_SELECT and of the program banks, for an interrupt handler that is
+; about to switch banks. `pull_banks!` puts them back.
+.macro push_banks() {
+    lda select
+    pha
+    lda window_8000
+    pha
+    lda window_a000
+    pha
+}
+
+; Maps back the program banks `push_banks!` pushed, and then sets BANK_SELECT and its shadow as
+; they were, so the code the interrupt broke into finds both as it left them.
+.macro pull_banks() {
+    pla
+    jsr map_a000
+    pla
+    jsr map_8000
+    pla
+    sta select
+    sta BANK_SELECT
+}

@@ -1,0 +1,12 @@
+; What the cartridge holds after 200 frames, and what MAME saw. test.ps1 -Update writes it.
+main::frames     00C8
+main::errors     00
+main::scroll     00C8
+main::oam[0]     97 00 00 AA
+audio::drums     08
+audio::offset    1B
+status::rows     "  FRAME 00C8            DRUMS 08"
+                 "  SWITCHES ....        ERRORS 00"
+split line       192
+drum bytes read  1928
+screen           B93D1681

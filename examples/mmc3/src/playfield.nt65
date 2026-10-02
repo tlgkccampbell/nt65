@@ -1,0 +1,125 @@
+; This module draws the playfield: hills and water across both nametables, which the NMI
+; scrolls through a dot a frame. The code is in program bank 0, at $8000, and the land's heights
+; are in bank 3, at $A000, so both must be mapped to call `draw`.
+;
+; The nametables mirror vertically, so the left one is at $2000 and the right one at $2400, and
+; the playfield is 64 columns of 23 rows across the two. Below it the row at line 184 is blank,
+; and the six rows below that are the status bar's, which `status` writes in the left nametable.
+.module playfield
+
+.cpu 6502
+
+.use nes::*
+.use chr::{SKY, GRASS, GROUND, WATER}
+
+.export draw, heights, ROWS
+
+.const COLUMNS   = 64               ; across both nametables
+.const ROWS      = 23               ; the playfield's rows, from the top
+.const SEA_LEVEL = 16               ; the first row of water, where the land is lower
+.const ALL_ROWS  = 30               ; a nametable's rows
+
+; The attributes' palettes, which choose the playfield's palette above the status bar's rows and
+; the status bar's palette in them, the last 16 of a nametable's 64 attributes.
+.const PLAYFIELD_ATTRIBUTES = 48
+.const STATUS_PALETTES      = %01_01_01_01
+
+.segment ZEROPAGE
+.data height: .byte                 ; the row of the land's top in the column `draw` draws
+
+.segment BANK0
+.data id: .byte .bankof(id)
+
+.assert id == $8000, "a program bank must start with its number"
+
+; Draws the playfield into both nametables, a column at a time from the top down, and sets their
+; attributes. The PPU must be drawing nothing, with its NMI off.
+.proc draw {
+    lda #DOWN
+    sta PPUCTRL
+    ldx #0
+@column:
+    ; The column's top, in the left nametable for columns 0 to 31 and the right one after.
+    txa
+    and #32
+    lsr a
+    lsr a
+    lsr a
+    ora #>NAMETABLE_0
+    sta PPUADDR
+    txa
+    and #31
+    sta PPUADDR
+    lda heights,x
+    sta height
+    ldy #0
+@row:
+    lda #SKY
+    cpy height
+    beq @top
+    bcs @under
+    cpy #SEA_LEVEL
+    bcc @put
+    lda #WATER
+    jmp @put
+@top:
+    lda #GRASS
+    cpy #SEA_LEVEL + 1              ; land under water has no grass
+    bcc @put
+@under:
+    lda #GROUND
+@put:
+    sta PPUDATA
+    iny
+    cpy #ROWS
+    bne @row
+    lda #0                          ; the blank row and the status bar's
+@blank:
+    sta PPUDATA
+    iny
+    cpy #ALL_ROWS
+    bne @blank
+    inx
+    cpx #COLUMNS
+    bne @column
+
+    lda #ACROSS
+    sta PPUCTRL
+    ldx #>(NAMETABLE_0 + ATTRIBUTES)
+    jsr attributes
+    ldx #>(NAMETABLE_1 + ATTRIBUTES)
+    .fallthrough attributes
+}
+
+; Sets the attributes of the nametable whose attributes start in VRAM page X.
+.proc attributes: reads x {
+    stx PPUADDR
+    lda #<ATTRIBUTES
+    sta PPUADDR
+    lda #0
+    ldy #PLAYFIELD_ATTRIBUTES
+@playfield:
+    sta PPUDATA
+    dey
+    bne @playfield
+    lda #STATUS_PALETTES
+    ldy #64 - PLAYFIELD_ATTRIBUTES
+@status:
+    sta PPUDATA
+    dey
+    bne @status
+    rts
+}
+
+.segment BANK3
+.data map_id: .byte .bankof(map_id)
+
+.assert map_id == $A000, "a program bank must start with its number"
+
+; The row of the land's top in each column, across both nametables. Two waves of the land make
+; its hills, which meet themselves where the playfield scrolls around.
+.data heights: .byte[COLUMNS] {
+    .repeat COLUMNS, c {
+        14 + .sin(c, COLUMNS, 4) + .sin(3 * c, COLUMNS, 2)
+    }
+}

@@ -147,6 +147,13 @@ cartridge at FastROM speed: a wall that waves on a backdrop shaded line by line,
 with code and data in two 64K banks, far calls between them and the data bank changed to reach
 each. The configuration checks every bank it reaches. Its test runs it in MAME.
 
+[`examples/mmc3`](examples/mmc3) is an NES cartridge on the MMC3 written for nt65: program banks
+that nt65 knows from the linker configuration can never be mapped together, every bank chosen by
+`.bankof`, a status bar split by the MMC3's scanline IRQ, character banks switched for the split
+and for the water, a tune played from banks the NMI maps, and a drum the DMC plays from a sample.
+The interrupts switch banks in the middle of the main loop's switches without breaking them. Its
+test runs it in MAME.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and

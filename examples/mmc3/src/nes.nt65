@@ -1,0 +1,62 @@
+; This module names the NES's ports that the program uses, with the names the NESdev wiki gives
+; them, and the bits it sets in them.
+.module nes
+
+.cpu 6502
+
+; The PPU's ports.
+.export .const PPUCTRL   = $2000    ; the NMI, the sprites' pattern table and the nametable shown
+.export .const PPUMASK   = $2001    ; what the PPU draws
+.export .const PPUSTATUS = $2002    ; whether vblank has started; reading it resets the latch
+.export .const OAMADDR   = $2003    ; where in OAM a DMA starts
+.export .const PPUSCROLL = $2005    ; written twice, across and then down
+.export .const PPUADDR   = $2006    ; the VRAM address, written twice, high byte first
+.export .const PPUDATA   = $2007    ; a byte of VRAM, after which the address steps
+
+; The APU's ports, and the joypads'.
+.export .const PULSE1_VOLUME = $4000  ; pulse 1's duty and volume
+.export .const PULSE1_SWEEP  = $4001  ; pulse 1's sweep
+.export .const PULSE1_LOW    = $4002  ; the low byte of pulse 1's period
+.export .const PULSE1_HIGH   = $4003  ; the period's high bits and the length counter
+.export .const DMC_FREQ      = $4010  ; the sample channel's rate, its loop and its IRQ
+.export .const DMC_RAW       = $4011  ; the sample channel's output level
+.export .const DMC_START     = $4012  ; where the sample starts, as (address - $C000) / 64
+.export .const DMC_LENGTH    = $4013  ; how long the sample is, as (bytes - 1) / 16
+.export .const OAMDMA        = $4014  ; written with a page, whose 256 bytes it copies to OAM
+.export .const SND_CHN       = $4015  ; which channels play
+.export .const JOY1          = $4016  ; written to latch the joypads, and read for joypad 1's buttons
+.export .const FRAME_COUNTER = $4017  ; the APU's frame counter, and its IRQ
+
+.export .const NMI_ON     = $80     ; PPUCTRL: an NMI at the start of each vblank
+.export .const SPRITES_HI = $08     ; PPUCTRL: the sprites' tiles are at $1000
+.export .const ACROSS     = $00     ; PPUCTRL: PPUDATA steps one tile across
+.export .const DOWN       = $04     ; PPUCTRL: PPUDATA steps one tile down
+.export .const SHOW_ALL   = $1E     ; PPUMASK: the background and the sprites, in every column
+.export .const IRQ_OFF    = $40     ; FRAME_COUNTER: the frame counter never raises an IRQ
+.export .const PULSE1     = $01     ; SND_CHN: pulse 1 plays
+.export .const DMC        = $10     ; SND_CHN: the sample plays, from its start
+
+.export .const NAMETABLE_0 = $2000  ; the VRAM address of the left nametable
+.export .const NAMETABLE_1 = $2400  ; and of the right one, beside it
+.export .const ATTRIBUTES  = $03C0  ; where a nametable's attributes start in it
+.export .const PALETTE     = $3F00  ; the VRAM address of the palettes
+
+; The joypad's buttons, as `joypad::read` leaves them, from A in bit 7 to right in bit 0.
+.export .enum Button {
+    right    = $01
+    left     = $02
+    down     = $04
+    up       = $08
+    start    = $10
+    select   = $20
+    b_button = $40
+    a_button = $80
+}
+
+; A sprite's four bytes in OAM.
+.export .struct Sprite {
+    top:        .byte               ; one less than its top line
+    tile:       .byte
+    attributes: .byte               ; its palette, and whether it is flipped
+    left:       .byte               ; its left dot
+}

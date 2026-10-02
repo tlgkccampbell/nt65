@@ -1,0 +1,49 @@
+; This module reads joypad 1, in a way the sample channel cannot spoil.
+;
+; While a sample plays, the DMC reads it from ROM a byte at a time, taking the bus from the CPU
+; for a few cycles to do so. On the NTSC NES, a read of JOY1 that the DMC's read lands on is made
+; twice, which sends one of the joypad's buttons and loses it, so every button after it comes
+; in one place early. `read` therefore reads the joypad until two reads in a row agree, which
+; they do once neither was spoiled.
+.module joypad
+
+.cpu 6502
+
+.use nes::JOY1
+
+.export read, buttons
+
+.segment ZEROPAGE
+.data buttons: .byte                ; the buttons held, as `nes::Button` lays them out
+.data first:   .byte                ; the read that the next one must agree with
+.data bits:    .byte                ; the buttons `read_once` has read so far
+
+.segment CODE
+; Reads the buttons of joypad 1 into `buttons`, as `nes::Button` lays them out.
+.proc read: keeps y {
+    jsr read_once
+@again:
+    sta first
+    jsr read_once
+    cmp first
+    bne @again
+    sta buttons
+    rts
+}
+
+; Returns in A the buttons of joypad 1 that are held. The joypad sends A, B, SELECT, START, up,
+; down, left and right, one to a read. Each goes in at bit 0 and moves up, so A ends at bit 7.
+.proc read_once: keeps y {
+    lda #1
+    sta JOY1                        ; latch the buttons
+    sta bits                        ; a 1 that moves out of bit 7 once all eight are in
+    lsr a
+    sta JOY1                        ; and send them
+@button:
+    lda JOY1
+    lsr a
+    rol bits
+    bcc @button
+    lda bits
+    rts
+}

@@ -1,0 +1,352 @@
+; This module starts the program, runs its main loop and takes its two interrupts.
+;
+; A frame goes like this. The NMI, at the start of vblank, copies the sprite and the status bar's
+; text to the PPU, maps the playfield's character banks, scrolls the playfield, sets the MMC3's
+; IRQ for the line where the status bar starts, and then plays the tune from banks of its own.
+; The IRQ, at the end of the playfield, maps the font's character bank and scrolls back to the
+; left, so the status bar stays still under the moving playfield.
+;
+; The main loop, once a frame, reads the joypad, steers the ship and writes the status bar's text
+; from banks of its own. For the rest of the frame it switches program banks over and over and
+; checks each, so that the interrupts come in the middle of its switches all the time. Each time
+; a bank is not the one it asked for counts in `errors`, which stays 0 because every switch goes
+; through the shadows `mmc3` keeps.
+.module main
+
+.cpu 6502
+
+.use nes::*
+.use mmc3::{Register, set, map_8000, map_a000, push_banks, pull_banks}
+.use mmc3::{BANK_SELECT, MIRRORING, IRQ_LATCH, IRQ_RELOAD, IRQ_DISABLE, IRQ_ENABLE}
+.use chr::{font, land, water_0, sprite}
+
+.export reset, nmi, irq, frames, switches, errors, oam
+
+; The first line of the status bar, below the playfield and its blank row. The status bar's first
+; row is blank too, and its text starts on the row after.
+.const STATUS_LINE = (playfield::ROWS + 1) * 8
+
+; The nametable row of the status bar's text.
+.const STATUS_ROW = playfield::ROWS + 2
+
+; The MMC3's IRQ counter counts lines as the PPU fetches their sprites' tiles, near the end of
+; each line, and the IRQ comes when it reaches 0. The NMI reloads it with SPLIT, which the
+; counter takes at the end of the line before the picture, so the IRQ comes at the end of line
+; SPLIT - 1, and the handler's writes land early on line SPLIT. In MAME the IRQ comes a line
+; later. Either way the writes land in the two blank rows, which look the same in either bank
+; and at any scroll, before the status bar's text.
+.const SPLIT = STATUS_LINE - 1
+
+.const SHIP_TOP  = 151              ; the ship's top line, less one, as OAM has it
+.const SHIP_LEFT = 120              ; the ship's left dot, at the start
+
+.segment ZEROPAGE
+.data frames:   .word               ; counts the frames, one at each NMI
+.data scroll:   .word               ; the playfield's scroll, from 0 to 511 dots
+.data seen:     .byte               ; the frame the main loop last ran in
+.data switches: .word               ; counts the main loop's rounds of bank switches
+.data errors:   .byte               ; counts the banks that were not the ones asked for
+
+.segment OAM
+.data oam: .type Sprite[64]         ; the sprites, which the NMI copies to the PPU's OAM
+
+.segment STARTUP
+; Starts the program on a reset. Only the last program bank is sure to be at $E000 until the
+; MMC3's banking modes are set, so this is there, and sets them before it goes on into `start`,
+; in the bank at $C000.
+.proc reset: noreturn {
+    sei
+    cld
+    ldx #$FF
+    txs
+    inx
+    stx PPUCTRL
+    stx PPUMASK
+    stx DMC_FREQ                    ; no sample IRQ
+    stx IRQ_DISABLE
+    stx mmc3::select
+    stx BANK_SELECT                 ; the modes with banks 6 and 7 at $C000 and $E000
+    lda #IRQ_OFF
+    sta FRAME_COUNTER
+    jmp start
+}
+
+.segment CODE
+; Clears RAM, sets the MMC3 and the PPU up, draws the playfield and starts the tune, with the
+; screen off. The PPU takes two frames to wake.
+.proc start: noreturn {
+    bit PPUSTATUS                   ; a vblank that started before the reset does not count
+@first:
+    bit PPUSTATUS
+    bpl @first
+    lda #0
+    tax
+@clear:
+    sta $0000,x
+    sta $0100,x
+    sta $0300,x
+    sta $0400,x
+    sta $0500,x
+    sta $0600,x
+    sta $0700,x
+    inx
+    bne @clear
+    lda #$FF                        ; below the screen, hidden
+@hide:
+    sta oam,x
+    inx
+    bne @hide
+@second:
+    bit PPUSTATUS
+    bpl @second
+
+    jsr setup
+    lda #.bankof(playfield::draw)
+    jsr map_8000
+    lda #.bankof(playfield::heights)
+    jsr map_a000
+    jsr playfield::draw
+    lda #.bankof(audio::update)
+    jsr map_8000
+    jsr audio::init
+
+    lda #SHIP_TOP
+    sta oam[0]::top
+    lda #chr::SHIP
+    sta oam[0]::tile
+    lda #0
+    sta oam[0]::attributes
+    lda #SHIP_LEFT
+    sta oam[0]::left
+
+    lda #NMI_ON | SPRITES_HI
+    sta PPUCTRL
+    cli
+    .fallthrough loop
+}
+
+; Reads the joypad, steers the ship and writes the status bar's text, and then switches banks
+; until the next frame.
+.proc loop: noreturn {
+    jsr joypad::read
+    jsr steer
+    lda #.bankof(status::update)
+    jsr map_8000
+    lda #.bankof(status::labels)
+    jsr map_a000
+    jsr status::update
+    lda frames
+    sta seen
+@shuffle:
+    jsr shuffle
+    lda frames
+    cmp seen
+    beq @shuffle
+    jmp loop
+}
+
+; Sets the nametables' mirroring and the sprite's character banks, and loads the palettes.
+.proc setup {
+    lda #0                          ; vertical, so the nametables are side by side
+    sta MIRRORING
+    lda #.bankof(sprite)
+    ldx #Register::chr_1000
+@sprites:
+    jsr set
+    inx
+    cpx #Register::chr_1c00 + 1
+    bne @sprites
+
+    lda #>PALETTE
+    sta PPUADDR
+    lda #<PALETTE
+    sta PPUADDR
+    ldx #0
+@color:
+    lda palettes,x
+    sta PPUDATA
+    inx
+    cpx #.sizeof(palettes)
+    bne @color
+    rts
+    .segment RODATA {
+        ; The background's palettes, the playfield's and the status bar's, and the sprite's.
+        .data palettes: .byte[] {
+            $0F, $22, $1A, $12          ; black, the sky, the land and the water
+            $0F, $00, $10, $30          ; black and the font's white
+            $0F, $0F, $0F, $0F
+            $0F, $0F, $0F, $0F
+            $0F, $16, $27, $30          ; the ship's red, orange and white
+        }
+    }
+}
+
+; Moves the ship a dot to the right or the left for each frame the joypad is held that way.
+.proc steer {
+    lda joypad::buttons
+    and #Button::right
+    beq @left
+    inc oam[0]::left
+@left:
+    lda joypad::buttons
+    and #Button::left
+    beq @done
+    dec oam[0]::left
+@done:
+    rts
+}
+
+; Maps each program bank at $8000 and at $A000 in turn, checks by its first byte that each is the
+; bank asked for, and counts one in `errors` for each that is not. Counts the round in `switches`.
+.proc shuffle {
+    ldy #0
+@bank:
+    lda windows_8000,y
+    jsr map_8000
+    lda mmc3::id_8000
+    cmp windows_8000,y
+    beq @a000
+    inc errors
+@a000:
+    lda windows_a000,y
+    jsr map_a000
+    lda mmc3::id_a000
+    cmp windows_a000,y
+    beq @next
+    inc errors
+@next:
+    iny
+    cpy #.sizeof(windows_8000)
+    bne @bank
+    inc switches
+    bne @done
+    inc switches + 1
+@done:
+    rts
+    .segment RODATA {
+        ; The program banks that run at $8000 and at $A000, each named by something in it.
+        .data windows_8000: .byte[] {
+            .bankof(playfield::draw)
+            .bankof(audio::update)
+            .bankof(status::update)
+        }
+        .data windows_a000: .byte[] {
+            .bankof(playfield::heights)
+            .bankof(audio::tune)
+            .bankof(status::labels)
+        }
+    }
+}
+
+; Takes the NMI, at the start of vblank, and readies the next frame.
+.proc nmi: interrupt {
+    pha
+    txa
+    pha
+    tya
+    pha
+    push_banks!()
+    lda #0
+    sta OAMADDR
+    lda #>oam
+    sta OAMDMA
+    jsr show_status
+
+    ; The playfield's character banks: the land, and the water's frame, which moves on every
+    ; eight frames.
+    ldx #Register::chr_0000
+    lda #.bankof(land)
+    jsr set
+    lda frames
+    lsr a
+    lsr a
+    and #%110
+    clc
+    adc #.bankof(water_0)
+    ldx #Register::chr_0800
+    jsr set
+
+    lda scroll + 1                  ; the nametable the scroll starts in
+    ora #NMI_ON | SPRITES_HI
+    sta PPUCTRL
+    lda scroll
+    sta PPUSCROLL
+    lda #0
+    sta PPUSCROLL
+    lda #SHOW_ALL
+    sta PPUMASK
+
+    sta IRQ_DISABLE                 ; acknowledges an IRQ that is still waiting
+    lda #SPLIT
+    sta IRQ_LATCH
+    sta IRQ_RELOAD
+    sta IRQ_ENABLE
+
+    inc scroll
+    bne @tune
+    lda scroll + 1
+    eor #1
+    sta scroll + 1
+@tune:
+    lda #.bankof(audio::update)
+    jsr map_8000
+    lda #.bankof(audio::tune)
+    jsr map_a000
+    jsr audio::update
+    pull_banks!()
+
+    inc frames
+    bne @done
+    inc frames + 1
+@done:
+    pla
+    tay
+    pla
+    tax
+    pla
+    rti
+}
+
+; Copies the status bar's text into its two rows of the left nametable.
+.proc show_status {
+    bit PPUSTATUS                   ; PPUADDR's next write is its high byte
+    lda #>(NAMETABLE_0 + STATUS_ROW * status::COLUMNS)
+    sta PPUADDR
+    lda #<(NAMETABLE_0 + STATUS_ROW * status::COLUMNS)
+    sta PPUADDR
+    ldx #0
+@tile:
+    lda status::rows,x
+    sta PPUDATA
+    inx
+    cpx #.sizeof(status::rows)
+    bne @tile
+    rts
+}
+
+; Takes the MMC3's IRQ, at the end of the playfield. Maps the font's character bank, and scrolls
+; to the left nametable's left edge for the status bar. The IRQ may come in the middle of a
+; switch of the main thread's, so BANK_SELECT and its shadow are put back as they were.
+.proc irq: interrupt {
+    pha
+    txa
+    pha
+    sta IRQ_DISABLE                 ; acknowledges the IRQ
+    lda #NMI_ON | SPRITES_HI        ; the left nametable
+    sta PPUCTRL
+    lda #0
+    sta PPUSCROLL
+    sta PPUSCROLL
+    lda mmc3::select
+    pha
+    ldx #Register::chr_0000
+    lda #.bankof(font)
+    jsr set
+    pla
+    sta mmc3::select
+    sta BANK_SELECT
+    pla
+    tax
+    pla
+    rti
+}

@@ -1,0 +1,91 @@
+; This module writes the status bar's two rows of text into `rows`, from which the NMI copies them
+; into the left nametable. The code is in program bank 2, at $8000, and the rows' text is in bank
+; 5, at $A000, so the main thread maps both to call `update`.
+.module status
+
+.cpu 6502
+
+.use chr::text
+.use main::{frames, switches, errors}
+.use audio::drums
+
+.export update, rows, labels, COLUMNS
+
+.const COLUMNS = 32                 ; a row of the nametable
+
+.segment BSS
+.data rows: .byte[2 * COLUMNS]      ; the status bar's two rows, as the font's tiles
+
+.segment BANK2
+.data id: .byte .bankof(id)
+
+.assert id == $8000, "a program bank must start with its number"
+
+; Writes the status bar's rows: the text from `labels`, with the frame count, the drums played,
+; the main thread's bank switches and the errors it found in them, in hexadecimal.
+.proc update {
+    ldx #0
+@copy:
+    lda labels,x
+    sta rows,x
+    inx
+    cpx #.sizeof(labels)
+    bne @copy
+    ldx #labels::frame - labels
+    lda frames + 1
+    jsr hex
+    lda frames
+    jsr hex
+    ldx #labels::drums - labels
+    lda drums
+    jsr hex
+    ldx #labels::switches - labels
+    lda switches + 1
+    jsr hex
+    lda switches
+    jsr hex
+    ldx #labels::errors - labels
+    lda errors
+    .fallthrough hex
+}
+
+; Writes A as two hexadecimal digits at X in `rows`, and moves X past them.
+.proc hex: reads a, x {
+    pha
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    jsr digit
+    pla
+    .fallthrough digit
+}
+
+; Writes the low four bits of A as a hexadecimal digit at X in `rows`, and moves X past it.
+.proc digit: reads a, x {
+    and #$0F
+    clc
+    adc #text('0')                  ; the letters follow the digits
+    sta rows,x
+    inx
+    rts
+}
+
+.segment BANK5
+.data labels_id: .byte .bankof(labels_id)
+
+.assert labels_id == $A000, "a program bank must start with its number"
+
+; The status bar's rows, with a place for each number.
+.data labels {
+    .byte text("  FRAME ")
+    .data frame: .byte text("0000")
+    .byte text("            DRUMS ")
+    .data drums: .byte text("00")
+    .byte text("  SWITCHES ")
+    .data switches: .byte text("0000")
+    .byte text("        ERRORS ")
+    .data errors: .byte text("00")
+}
+
+.assert .sizeof(labels) == .sizeof(rows), "the labels must fill the status bar's rows"

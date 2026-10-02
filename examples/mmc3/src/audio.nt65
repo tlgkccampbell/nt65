@@ -1,0 +1,155 @@
+; This module plays the tune: an arpeggio on pulse 1, with a drum on the sample channel on some
+; of its steps. The code is in program bank 1, at $8000, and the tune is in bank 4, at $A000. The
+; NMI maps both, calls `update` once a frame, and maps back what the main thread had.
+;
+; The drum is a sample, which the DMC reads from ROM by itself while it plays. The DMC can only
+; read a sample from $C000 on, at a multiple of 64 bytes, so the drum is not in the tune's bank
+; but in the DMC segment, which `mmc3.cfg` puts at the start of the fixed bank at $C000 and
+; aligns to 64 bytes.
+.module audio
+
+.cpu 6502
+
+.use nes::*
+
+.export init, update, drums, drum, tune
+
+.const CPU_HZ      = 1789773        ; the NTSC NES's CPU clock
+.const STEP_FRAMES = 8              ; the frames each step of the tune lasts
+.const DUTY_VOLUME = $B6            ; PULSE1_VOLUME: half duty, held, at a constant volume of 6
+.const NO_SWEEP    = $08            ; PULSE1_SWEEP: no sweep, and every period plays
+.const RATE        = $0F            ; DMC_FREQ: the fastest rate, 33.1 kHz, with no IRQ or loop
+.const MIDDLE      = $40            ; DMC_RAW: the level the drum starts from
+
+; A sample's length is a multiple of 16 bytes, and one more.
+.const DRUM_LENGTH = 15 * 16 + 1
+
+; The notes' frequencies, in hertz.
+.const F3 = 175
+.const G3 = 196
+.const A3 = 220
+.const B3 = 247
+.const C4 = 262
+.const D4 = 294
+.const E4 = 330
+.const F4 = 349
+.const G4 = 392
+.const A4 = 440
+.const C5 = 523
+
+; Returns the period that makes a pulse channel play a frequency.
+.func pitch(hz) = .muldiv(CPU_HZ, 1, 16 * hz) - 1
+
+; A step of the tune.
+.struct Step {
+    period: .word                   ; pulse 1's period
+    drum:   .byte                   ; 1 when the drum plays on the step
+}
+
+.segment BSS
+.data tick:   .byte                 ; the frames left in the step playing
+.data offset: .byte                 ; where the next step is in `tune`
+.data drums:  .byte                 ; how many drums have started
+
+.segment DMC
+; The drum: a tone of 518 Hz that dies away. Each byte moves the DMC's level by two for each 1
+; bit and back by two for each 0. A byte with more 1s than 0s rises and one with fewer falls, so
+; four of each in turn make a wave, which grows weaker as the two kinds come closer to even.
+.data drum: .byte[DRUM_LENGTH] {
+    .repeat DRUM_LENGTH, i {
+        .select((i / 4) .mod 2 == 0, ones(4 + strength(i)), ones(4 - strength(i)))
+    }
+}
+
+; Returns how far from even the bytes are at byte `i` of the drum, from 4 down to 0.
+.func strength(i) = 4 - i * 5 / DRUM_LENGTH
+
+; Returns a byte with its low `n` bits set.
+.func ones(n) = (1 << n) - 1
+
+.segment BANK1
+.data id: .byte .bankof(id)
+
+.assert id == $8000, "a program bank must start with its number"
+
+; Turns on pulse 1 and sets the sample channel up to play the drum, and starts the tune at its
+; first step.
+.proc init {
+    lda #PULSE1
+    sta SND_CHN
+    lda #NO_SWEEP
+    sta PULSE1_SWEEP
+    lda #RATE
+    sta DMC_FREQ
+    lda #MIDDLE
+    sta DMC_RAW
+    lda #<((drum - $C000) / 64)
+    sta DMC_START
+    lda #(DRUM_LENGTH - 1) / 16
+    sta DMC_LENGTH
+    lda #1
+    sta tick
+    lda #0
+    sta offset
+    rts
+}
+
+; Counts the step's frames, and once they have passed, plays the next step: its note on pulse 1,
+; and the drum if the step has it.
+.proc update {
+    dec tick
+    bne @done
+    lda #STEP_FRAMES
+    sta tick
+    ldx offset
+    lda #DUTY_VOLUME
+    sta PULSE1_VOLUME
+    lda tune::period,x
+    sta PULSE1_LOW
+    lda tune::period + 1,x
+    sta PULSE1_HIGH
+    lda tune::drum,x
+    beq @next
+    lda #PULSE1                     ; stops the sample channel,
+    sta SND_CHN
+    lda #PULSE1 | DMC               ; and starts it again from the drum's first byte
+    sta SND_CHN
+    inc drums
+@next:
+    txa
+    clc
+    adc #.sizeof(Step)
+    cmp #.sizeof(tune)
+    bne @same
+    lda #0
+@same:
+    sta offset
+@done:
+    rts
+}
+
+.segment BANK4
+.data tune_id: .byte .bankof(tune_id)
+
+.assert tune_id == $A000, "a program bank must start with its number"
+
+; The tune, an arpeggio over four chords, with the drum on the first beat of each and the last
+; beat of the last.
+.data tune: .type Step[] {
+    { period = pitch(C4), drum = 1 }
+    { period = pitch(E4) }
+    { period = pitch(G4) }
+    { period = pitch(C5) }
+    { period = pitch(A3), drum = 1 }
+    { period = pitch(C4) }
+    { period = pitch(E4) }
+    { period = pitch(A4) }
+    { period = pitch(F3), drum = 1 }
+    { period = pitch(A3) }
+    { period = pitch(C4) }
+    { period = pitch(F4) }
+    { period = pitch(G3), drum = 1 }
+    { period = pitch(B3) }
+    { period = pitch(D4) }
+    { period = pitch(G4), drum = 1 }
+}
