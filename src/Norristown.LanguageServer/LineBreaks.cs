@@ -15,15 +15,17 @@ namespace Norristown.LanguageServer;
 /// within the line length, so a long expression gets as many levels as it needs. A
 /// <c>.switch</c> keeps its value beside its opening bracket and each set beside its result. A
 /// line is indented one step past the line its innermost open bracket opened on, as the
-/// formatter lays it out.
+/// formatter lays it out. An item that starts with an instruction's name stays on the line
+/// before it, since a line that starts with one is a statement of its own.
 /// </para>
 /// <para>
-/// Only an expression's brackets, a macro call's arguments and a list of parameters may hold a
-/// line break, so the brackets laid out are those of a call's or a macro call's arguments, of a
-/// set and of a list of parameters. With the caret anywhere in a macro call's arguments or in a
-/// list of parameters, the whole list is laid out. Neither refactoring is offered where what it
-/// lays out holds a comment, which it would have to drop. The titles say "expression" for those
-/// lists too, since they are laid out alike.
+/// Only an expression's brackets, a call's or a macro call's arguments and a list of parameters
+/// may hold a line break, so the brackets laid out are those of a call's or a macro call's
+/// arguments, of a set and of a list of parameters. With the caret anywhere in a macro call's
+/// arguments or in a list of parameters, the whole list is laid out. Neither refactoring is
+/// offered where what it lays out holds a comment, which it would have to drop. The titles say
+/// "expression" for those lists too, since they are laid out alike. A list directive's items
+/// break into an item block instead, which <see cref="ItemBlocks"/> provides.
 /// </para>
 /// </summary>
 internal static class LineBreaks
@@ -45,7 +47,7 @@ internal static class LineBreaks
             yield break;
         var source = tree.Text[whole.Span.Start..whole.Span.End];
         var laid = Laid(tree, whole, lineLength, broken: true);
-        if (laid != source && laid.Contains('\n', StringComparison.Ordinal))
+        if (laid != source && laid.Contains('\n', StringComparison.Ordinal) && Rejoins(tree, whole, laid))
             yield return new Change("Lay out the expression across lines", CodeActionKinds.Rewrite, [new Edit(tree, whole.Span, laid)]);
         if (source.AsSpan().ContainsAny('\r', '\n'))
         {
@@ -74,8 +76,11 @@ internal static class LineBreaks
                 continue;
             }
             var source = tree.Text[whole.Span.Start..whole.Span.End];
-            if (Laid(tree, whole, lineLength, broken: true) is var laid && laid != source && laid.Contains('\n', StringComparison.Ordinal))
+            if (Laid(tree, whole, lineLength, broken: true) is var laid && laid != source
+                && laid.Contains('\n', StringComparison.Ordinal) && Rejoins(tree, whole, laid))
+            {
                 return whole.Span;
+            }
         }
         return null;
     }
@@ -95,6 +100,20 @@ internal static class LineBreaks
             Edits.IndentOf(tree, tree.GetLine(line).LineIndex).Length);
         writer.Write([.. whole.DescendantTokens().Where(token => !token.IsMissing)], broken);
         return writer.ToString();
+    }
+
+    /// <summary>
+    /// Checks whether <paramref name="laid"/> in place of <paramref name="whole"/> reads back as
+    /// one line, with no error the line did not already have. The layout starts no line that the
+    /// parser would not join to the line before it, and this makes sure of it.
+    /// </summary>
+    private static bool Rejoins(SyntaxTree tree, SyntaxNode whole, string laid)
+    {
+        var line = tree.GetLineIndex(whole.Span.Start);
+        var changed = tree.WithChange(new TextChange(whole.Span.Start, whole.Span.Length, laid));
+        var joined = changed.GetLine(line);
+        return joined.Position == changed.GetLine(line + laid.Count(c => c == '\n')).Position
+            && (!joined.ContainsDiagnostics || tree.GetLine(line).ContainsDiagnostics);
     }
 
     /// <summary>
@@ -249,7 +268,7 @@ internal static class LineBreaks
             {
                 for (var i = 0; i < items.Count; i++)
                 {
-                    NewLine(inner);
+                    Break(inner, items[i], i > 0);
                     Write(TokensOf(items[i]), broken: false);
                     if (i + 1 < items.Count)
                         text.Append(',');
@@ -273,7 +292,7 @@ internal static class LineBreaks
                 }
                 if ((items.Count - 1) % 2 == 1)
                 {
-                    NewLine(inner);
+                    Break(inner, items[^1], spaced: true);
                     Write(TokensOf(items[^1]), broken: false);
                 }
             }
@@ -298,6 +317,20 @@ internal static class LineBreaks
         /// <summary>Returns the tokens of a node that the source holds.</summary>
         private static List<SyntaxToken> TokensOf(SyntaxNode node) =>
             [.. node.DescendantTokens().Where(token => !token.IsMissing)];
+
+        /// <summary>
+        /// Starts a new line indented by <paramref name="indent"/> for <paramref name="item"/>,
+        /// unless the item starts with an instruction's name. A line that starts with one starts a
+        /// statement of its own rather than continuing the line before it, so such an item follows
+        /// the one before it, after a space where <paramref name="spaced"/> asks for one.
+        /// </summary>
+        private void Break(int indent, SyntaxNode item, bool spaced)
+        {
+            if (item.GetFirstToken() is not { Kind: SyntaxKind.Mnemonic })
+                NewLine(indent);
+            else if (spaced)
+                text.Append(' ');
+        }
 
         /// <summary>Starts a new line indented by <paramref name="indent"/>.</summary>
         private void NewLine(int indent)

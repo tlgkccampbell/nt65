@@ -37,18 +37,19 @@ public static class Catalogue
 
     /// <summary>
     /// Gets the suggestion the editor shows on a line longer than its setting allows, where an
-    /// expression could be laid out across lines. Like <see cref="OmittedBranch"/>,
-    /// it is the editor's own, and no build reports it.
+    /// expression could be laid out across lines or a list directive's items written as a block.
+    /// Like <see cref="OmittedBranch"/>, it is the editor's own, and no build reports it.
     /// </summary>
     public static DiagnosticDescriptor LongLine { get; } = Entry(
         Area.Output,
         "long-line",
         Severity.Info,
-        "this line is longer than {0} columns: its expression can be laid out across lines",
+        "this line is longer than {0} columns: it can be laid out across lines",
         "The formatter keeps the line breaks a file has and adds none, so a long line stays long until it is "
             + "broken. Where an expression's calls and sets could go one item to a line, the editor suggests it, "
-            + "and the refactoring there lays the expression out. The limit is the editor's `nt65.lineLength` "
-            + "setting, and 0 turns the suggestion off.");
+            + "and the refactoring there lays the expression out. Where the items of an `.export`, `.import`, "
+            + "`.use` or `.next` run past the limit, the editor suggests writing them as an item block, one to a "
+            + "line. The limit is the editor's `nt65.lineLength` setting, and 0 turns the suggestion off.");
 
     // Reading a line
 

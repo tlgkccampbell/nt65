@@ -172,7 +172,7 @@
           "type": "integer",
           "default": 100,
           "minimum": 0,
-          "description": "Suggest laying out a call's arguments or a set one item to a line where a line is longer than this many columns. 0 turns the suggestion off."
+          "description": "Suggest laying out a call's arguments, a set or a list of parameters one item to a line, or writing the items of an `.export`, `.import`, `.use` or `.next` as a block, where a line is longer than this many columns. 0 turns the suggestion off."
         },
         "nt65.diagnostics.onlyWhileOpen": {
           "type": "array",

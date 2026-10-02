@@ -47,8 +47,8 @@ internal static class Lsp
 
     /// <summary>
     /// Returns a suggestion for each line of <paramref name="tree"/> longer than
-    /// <paramref name="lineLength"/> with an expression that could be laid out across lines, over
-    /// that expression.
+    /// <paramref name="lineLength"/> with an expression that could be laid out across lines, or a
+    /// list directive whose items could be written as a block, over that expression or directive.
     /// </summary>
     private static IEnumerable<Protocol.Diagnostic> LongLines(SyntaxTree tree, int lineLength)
     {
@@ -56,8 +56,11 @@ internal static class Lsp
         {
             var width = tree.Text.AsSpan(tree.LineStarts[line], tree.GetLineEnd(line) - tree.LineStarts[line])
                 .TrimEnd("\r\n").Length;
-            if (width <= lineLength || LineBreaks.Breakable(tree, line, lineLength) is not { } span)
+            if (width <= lineLength
+                || (ItemBlocks.Breakable(tree, line, lineLength) ?? LineBreaks.Breakable(tree, line, lineLength)) is not { } span)
+            {
                 continue;
+            }
             yield return new Protocol.Diagnostic(
                 ToRange(tree, span),
                 Protocol.DiagnosticSeverity.Hint,

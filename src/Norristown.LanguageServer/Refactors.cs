@@ -20,6 +20,7 @@ namespace Norristown.LanguageServer;
 /// <item>Extract code into a routine.</item>
 /// <item>Convert ca65 to nt65.</item>
 /// <item>Lay out an expression across lines, or join it onto one.</item>
+/// <item>Write a list directive's items as a block, or on one line.</item>
 /// </list>
 /// <para>
 /// Each is offered only where it would change something, and each is computed from the analysis
@@ -57,6 +58,7 @@ internal static class Refactors
             .. ExtractProc.In(analysis, model, range),
             .. Ca65Conversion.In(model, range),
             .. LineBreaks.In(model, caret, lineLength),
+            .. ItemBlocks.In(model, line),
         ];
     }
 
