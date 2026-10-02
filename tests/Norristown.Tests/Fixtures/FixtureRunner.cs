@@ -169,7 +169,7 @@ internal static class FixtureRunner
                     + $"{source.Path}:{model.Tree.GetLineIndex(call.Position) + 1}";
                 if (!Reported(after).SequenceEqual(was))
                     yield return $"{where} reports {string.Join("; ", Reported(after).Except(was))}";
-                else if (Assembled(analysis, project, source.Path) != Assembled(after, project, source.Path))
+                else if (!SameLengths(Assembled(analysis, project, source.Path), Assembled(after, project, source.Path)))
                     yield return $"{where} changes what it assembles to";
             }
         }
@@ -188,10 +188,48 @@ internal static class FixtureRunner
     /// than the ca65 text that expresses it. A label the expansion no longer uses is therefore
     /// not a difference.
     /// </summary>
-    private static string Assembled(ProgramAnalysis analysis, ProjectSettings project, string path) =>
+    private static IReadOnlyList<int>? Assembled(ProgramAnalysis analysis, ProjectSettings project, string path) =>
         Compiler.EmitFile(analysis, project, path) is { } output
-            ? string.Join(",", output.LineBytes.Where(bytes => bytes != 0))
-            : "nothing";
+            ? [.. output.LineBytes.Where(bytes => bytes != 0)]
+            : null;
+
+    /// <summary>
+    /// Checks whether two files' line lengths, as <see cref="Assembled"/> gives them, describe the
+    /// same bytes. They do where they are equal, and also where one merges runs of the other's
+    /// lines. The emitter folds a repetition whose iterations differ only in its counter into a
+    /// ca65 <c>.repeat</c>, whose line counts the whole block, while a written-out call has a line
+    /// for each iteration.
+    /// </summary>
+    private static bool SameLengths(IReadOnlyList<int>? before, IReadOnlyList<int>? after) =>
+        before is null || after is null
+            ? before is null && after is null
+            : Merges(before, after) || Merges(after, before);
+
+    /// <summary>
+    /// Checks whether each of <paramref name="coarse"/>'s lengths is the sum of a run of
+    /// <paramref name="fine"/>'s, in order, using every one of them. A length nt65 cannot
+    /// predict, -1, matches only itself.
+    /// </summary>
+    private static bool Merges(IReadOnlyList<int> coarse, IReadOnlyList<int> fine)
+    {
+        var next = 0;
+        foreach (var length in coarse)
+        {
+            if (length < 0)
+            {
+                if (next >= fine.Count || fine[next] != length)
+                    return false;
+                next++;
+                continue;
+            }
+            var sum = 0;
+            while (sum < length && next < fine.Count && fine[next] > 0)
+                sum += fine[next++];
+            if (sum != length)
+                return false;
+        }
+        return next == fine.Count;
+    }
 
     /// <summary>
     /// Returns whether a call is inside a macro body, where its arguments are not known.

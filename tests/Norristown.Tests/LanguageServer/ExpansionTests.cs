@@ -20,6 +20,15 @@ public sealed class ExpansionTests
             return (analysis, analysis.File("main.nt65"));
         });
 
+    /// <summary>The fixture of repetitions inside macro bodies, read once for every test here.</summary>
+    private static readonly Lazy<(ProgramAnalysis Analysis, Norristown.Semantics.SemanticModel Model)> Repetitions =
+        new(() =>
+        {
+            var text = Repo.ReadText(Repo.Path("tests", "fixtures", "macro-repetitions", "main.nt65"));
+            var analysis = Analysis.Program(("main.nt65", text));
+            return (analysis, analysis.File("main.nt65"));
+        });
+
     /// <summary>
     /// An expansion reads as the programmer would have written it, with an operand argument
     /// substituted whole, index included.
@@ -88,6 +97,44 @@ public sealed class ExpansionTests
             phy
             """,
             Expanded("push!(a, x, y)"));
+    }
+
+    /// <summary>
+    /// Every repetition in a body is shown one iteration at a time, so the name a repetition binds
+    /// is no longer declared where the lines go. Each use of it is shown as what it stands for in
+    /// that iteration: the item of a list, in parentheses inside a larger expression, the number of
+    /// a `.repeat`, and the member of an enum.
+    /// </summary>
+    [Fact]
+    public void ARepetitionsNameIsShownAsItsValueInEachIteration()
+    {
+        Assert.Equal(
+            """
+            .byte dots("..#.")
+            .byte dots(".###")
+            .byte dots("#.#.")
+            """,
+            Expanded("picture!(arrow)", repetitions: true));
+        Assert.Equal(
+            """
+            .byte 0, 0 * 2, 10 - 0
+            .byte 1, 1 * 2, 10 - 1
+            .byte 2, 2 * 2, 10 - 2
+            """,
+            Expanded("ramp!(3)", repetitions: true));
+        Assert.Equal(
+            """
+            .byte 2 * 4
+            .byte (1 + 2) * 4
+            .byte (-1) * 4
+            """,
+            Expanded("scaled!(4)", repetitions: true));
+        Assert.Equal(
+            """
+            .byte Voice::pulse
+            .byte Voice::noise
+            """,
+            Expanded("voices!()", repetitions: true));
     }
 
     /// <summary>A block argument is the caller's own code, spliced where the body names it.</summary>
@@ -203,14 +250,21 @@ public sealed class ExpansionTests
         return false;
     }
 
-    /// <summary>Returns the expansion of the call at the text <paramref name="find"/>, as one string.</summary>
-    private static string Expanded(string find, IReadOnlyList<int>? into = null) =>
-        string.Join("\n", At(find, into).Lines);
+    /// <summary>
+    /// Returns the expansion of the call at the text <paramref name="find"/>, as one string. The
+    /// call is in the macros fixture, or in the macro-repetitions fixture where
+    /// <paramref name="repetitions"/> is true.
+    /// </summary>
+    private static string Expanded(string find, IReadOnlyList<int>? into = null, bool repetitions = false) =>
+        string.Join("\n", At(find, into, repetitions).Lines);
 
-    /// <summary>Returns the expansion of the call at the text <paramref name="find"/>.</summary>
-    private static MacroExpansion At(string find, IReadOnlyList<int>? into = null)
+    /// <summary>
+    /// Returns the expansion of the call at the text <paramref name="find"/>, in the macros
+    /// fixture or, where <paramref name="repetitions"/> is true, in the macro-repetitions fixture.
+    /// </summary>
+    private static MacroExpansion At(string find, IReadOnlyList<int>? into = null, bool repetitions = false)
     {
-        var (analysis, model) = Macros.Value;
+        var (analysis, model) = repetitions ? Repetitions.Value : Macros.Value;
         var at = model.Tree.Text.IndexOf(find, StringComparison.Ordinal);
         Assert.True(at >= 0, $"the fixture writes no {find}");
         var expansion = MacroExpansion.At(analysis, model, at, into);

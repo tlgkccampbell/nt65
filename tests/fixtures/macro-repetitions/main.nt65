@@ -1,0 +1,75 @@
+; Repetitions inside macro bodies whose names are used in the body's statements. Writing out a
+; call unrolls each repetition, so every use of a repetition's name becomes the value it has in
+; that iteration: a number for a `.repeat`, the item for an `.each` over a list, and the member
+; for an `.each` over an enum.
+.module main
+
+.cpu 6502
+
+.enum Voice {
+    pulse
+    noise = 3
+}
+
+; Rows of a picture, one character to a dot.
+.list arrow {
+    "..#."
+    ".###"
+    "#.#."
+}
+
+.list steps {
+    2
+    1 + 2
+    -1
+}
+
+; Returns 1 where the dot at `at` in a row shows.
+.func dot(row, at) = .strat(row, at) == '#'
+
+; Returns a row's four dots, as a number whose bit 3 is the leftmost.
+.func dots(row) = (dot(row, 0) << 3) | (dot(row, 1) << 2) | (dot(row, 2) << 1) | dot(row, 3)
+
+; An `.each` over a list the call names, whose name each row of the body uses.
+.macro picture(rows) {
+    .each rows, row {
+        .byte dots(row)
+    }
+}
+
+; A `.repeat` whose index the body uses, alone and inside a larger expression.
+.macro ramp(count) {
+    .repeat count, i {
+        .byte i, i * 2, 10 - i
+    }
+}
+
+; An `.each` over a list of expressions, each of which is used inside a larger one.
+.macro scaled(by) {
+    .each steps, step {
+        .byte step * by
+    }
+}
+
+; An `.each` over an enum, whose name stands for each member in turn.
+.macro voices() {
+    .each Voice, v {
+        .byte v
+    }
+}
+
+.segment RODATA
+.data shape {
+    picture!(arrow)
+}
+.data slope {
+    ramp!(3)
+}
+.data scales {
+    scaled!(4)
+}
+.data channels {
+    voices!()
+}
+
+.export shape, slope, scales, channels

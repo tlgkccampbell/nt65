@@ -442,12 +442,26 @@ internal sealed class MacroExpansion
         {
             if (edits.Any(edit => edit.Key <= name.Span.Start && edit.Value.End >= name.Span.End))
                 continue;
-            if (model.SymbolOf(name) is not { Kind: SymbolKind.MacroParameter, Parameter: { } parameter })
-                continue;
-            if (Given(parameter, name, at) is { } replacement)
-                edits[name.Span.Start] = (name.Span.End, replacement);
-            else
-                Refuse($"the argument for `{parameter.Name}` cannot be substituted as text here");
+            switch (model.SymbolOf(name))
+            {
+                case { Kind: SymbolKind.MacroParameter, Parameter: { } parameter }:
+                    if (Given(parameter, name, at) is { } replacement)
+                        edits[name.Span.Start] = (name.Span.End, replacement);
+                    else
+                        Refuse($"the argument for `{parameter.Name}` cannot be substituted as text here");
+                    break;
+
+                // The expansion unrolls every repetition in the body, so a repetition's name is
+                // no longer declared where the lines are written, and each use of it becomes the
+                // value it has in this iteration.
+                case { Kind: SymbolKind.Binding } binding
+                    when model.BindingsOf(at) is { } bound && bound.TryGetValue(binding, out var iteration):
+                    if (Iterated(iteration, name) is { } value)
+                        edits[name.Span.Start] = (name.Span.End, value);
+                    else
+                        Refuse($"what `{binding.Name}` stands for in this iteration cannot be written as text here");
+                    break;
+            }
         }
 
         var built = new StringBuilder();
@@ -495,6 +509,34 @@ internal sealed class MacroExpansion
         return name.Parent is ExpressionSyntax && unbraced is BinaryExpressionSyntax or UnaryExpressionSyntax
             ? $"({text})"
             : text;
+    }
+
+    /// <summary>
+    /// Returns the text that replaces one use of a repetition's name in an iteration, or null
+    /// where it has none. That is the member's path for an <c>.each</c> over an enum, the item's
+    /// text for an <c>.each</c> over a list, and the number for a <c>.repeat</c>. Either of the
+    /// last two is in parentheses where it would be read differently inside a larger expression.
+    /// An item written in another file is used only where it names nothing, because its names
+    /// would be looked up again here.
+    /// </summary>
+    private string? Iterated(Expansion.Bound iteration, NameExpressionSyntax name)
+    {
+        var inside = name.Parent is ExpressionSyntax;
+        if (iteration.Member is { } member)
+            return member.Tree == model.Tree ? member.QualifiedName : "::" + member.PathName;
+        if (iteration.Item is { } item)
+        {
+            if (item.Tree != model.Tree && Under(item).OfType<NameExpressionSyntax>().Any())
+                return null;
+            var text = item.GetTextOnOneLine();
+            return inside && item is BinaryExpressionSyntax or UnaryExpressionSyntax ? $"({text})" : text;
+        }
+        if (iteration.Value is { Kind: ValueKind.Number } counted)
+        {
+            var number = counted.Number.ToString(CultureInfo.InvariantCulture);
+            return inside && counted.Number < 0 ? $"({number})" : number;
+        }
+        return null;
     }
 
     /// <summary>Adds one line of the expansion.</summary>
