@@ -1,0 +1,25 @@
+
+
+     #   #   #####    ####   #####
+     ##  #     #     #       #
+     # # #     #     ####    ####
+     #  ##     #     #   #       #
+     #   #     #      ###    ####
+
+
+           A ONE-SCREEN DEMO
+      WRITTEN IN NT65 FOR THE C64
+
+
+
+
+
+
+
+
+     RASTER BARS ON A STABLE RASTER
+        SIXTEEN SPRITES ON EIGHT
+        SCREENS PACKED WITH LZ4
+         AND A LITTLE SID TUNE
+
+

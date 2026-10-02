@@ -1,0 +1,39 @@
+; The demo's start and its main loop. The start unpacks the screen and its colours, sets up the
+; objects and the music, and hands the frame to the raster interrupts. The main loop then moves
+; and sorts the objects once a frame, while the interrupts show them and play the music.
+.module main
+
+.cpu 6502
+
+.use c64::{vic, Colour, SCREEN, COLOURS}
+.use lz4::unpack
+
+.export start
+
+; The BASIC line's SYS lands here.
+.segment STARTUP
+.proc start: noreturn {
+    lda #Colour::black
+    sta vic::BORDER
+    sta vic::PAPER
+    jsr lz4::install
+    unpack!(screens::title, SCREEN)
+    unpack!(screens::colours, COLOURS)
+    jsr plex::init
+    jsr music::init
+    jsr raster::install
+    jmp loop
+}
+
+.segment CODE
+
+; Waits for the next frame, and then moves the objects and sorts them for it.
+.proc loop: noreturn {
+    lda raster::frames
+@wait:
+    cmp raster::frames
+    beq @wait
+    jsr plex::update
+    jsr plex::sort
+    jmp loop
+}

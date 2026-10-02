@@ -1,0 +1,173 @@
+; The raster interrupts that run the frame. A frame's interrupts come in this order:
+;
+;   top      line TOP         asks for `stable` two lines on, and waits for it
+;   stable   line TOP + 2     starts on the same cycle every frame, draws the colour bars in
+;                             the top border, and shows the first eight sprites
+;   plex     as it asks       shows the other sprites, each when its sprite comes free
+;   bottom   line BOTTOM      plays the music, counts the frame, and runs the KERNAL's handler
+;
+; Each handler is entered from the KERNAL's interrupt entry, through CINV, and points CINV at
+; the next one.
+.module raster
+
+.cpu 6502
+
+.use c64::{vic, cia1, cia2, kernal, Colour, CYCLES}
+
+.export install, bottom, frames, BOTTOM
+
+.const TOP    = 16                  ; a line of the top border, above the bars
+.const BOTTOM = 250                 ; the line after the last line of the screen's characters
+.const BARS   = 24                  ; the colour bars, one to a line
+
+; The cycles a bar's line spends waiting, which the assertion after the code keeps in step with
+; the line's 63.
+.const WAIT = 48
+
+; The cycle of its line on which `stable` starts, or one later, as VICE shows it. The interrupt
+; takes 7 cycles once the `nop` it came during has finished, and the KERNAL's entry takes 29.
+.const ARRIVES = 38
+
+; The `nop`s `stable` waits through before it reads the raster, which put the second read on the
+; last cycle of the line when `stable` started on ARRIVES.
+.const SETTLE = 3
+
+.segment ZEROPAGE
+.data frames: .byte                 ; counts the frames, one at each `bottom`
+.data stack:  .byte                 ; the stack pointer in `top`, which `stable` goes back to
+
+.segment BSS
+.data old: .addr                    ; where CINV pointed before, which is the KERNAL's handler
+
+.segment CODE
+
+; Turns off the CIAs' interrupts, which the KERNAL counts the jiffy clock with, and points CINV
+; and the VIC-II's raster interrupt at `bottom`.
+.proc install {
+    sei
+    lda #%01111111                  ; clears every CIA interrupt's enable bit
+    sta cia1::ICR
+    sta cia2::ICR
+    lda cia1::ICR                   ; acknowledges any that are waiting
+    lda cia2::ICR
+    lda kernal::CINV
+    sta old
+    lda kernal::CINV + 1
+    sta old + 1
+    lda #<bottom
+    sta kernal::CINV
+    lda #>bottom
+    sta kernal::CINV + 1
+    lda #BOTTOM
+    sta vic::RASTER
+    lda vic::CONTROL
+    and #%01111111                  ; the ninth bit of the line
+    sta vic::CONTROL
+    lda #%0001                      ; the raster interrupt
+    sta vic::IRQ_MASK
+    sta vic::IRQ_FLAG
+    cli
+    rts
+}
+
+; Plays the frame's music and counts the frame, and then goes on into the KERNAL's own handler,
+; which reads the keyboard and counts the jiffy clock once a frame, as it did before.
+.proc bottom: interrupt {
+    lda #%0001
+    sta vic::IRQ_FLAG
+    jsr music::play
+    inc frames
+    lda #TOP
+    sta vic::RASTER
+    lda #<top
+    sta kernal::CINV
+    lda #>top
+    sta kernal::CINV + 1
+    jmp (old)
+    .next ?                         ; the KERNAL's handler, which returns from the interrupt
+}
+
+; Makes the next interrupt start on a known cycle. This one comes in late by however long the
+; instruction it broke into had left to run, which varies by several cycles. It asks for
+; `stable` two lines on and runs `nop`s until it comes, so that `stable` comes in late by no
+; more than the one cycle of a `nop`. The next line would be too soon: by the time the KERNAL's
+; entry and this have run, it has started.
+.proc top: interrupt {
+    lda #TOP + 2
+    sta vic::RASTER
+    lda #%0001
+    sta vic::IRQ_FLAG
+    lda #<stable
+    sta kernal::CINV
+    lda #>stable
+    sta kernal::CINV + 1
+    tsx
+    stx stack
+    cli
+    .repeat 32 {
+        nop
+    }
+    jmp kernal::EXIT                ; not reached: `stable` comes in during the `nop`s
+}
+
+.segment TIMED
+
+; The code that counts cycles is on a page of its own, so that no branch in it crosses a page,
+; which would cost a cycle.
+.align 256
+
+; Starts on a cycle that is the same every frame, and draws a bar's colour on the border at the
+; same cycle of each of BARS lines.
+.proc stable: interrupt {
+    ldx stack                       ; drops what this interrupt pushed, and keeps `top`'s
+    txs
+    lda #%0001
+    sta vic::IRQ_FLAG
+    .repeat SETTLE {
+        nop
+    }
+    sample:
+    ; The interrupt came in a cycle late or not. If not, the line has not changed between
+    ; these two reads, and the branch takes the extra cycle; if so, it has, and it does not.
+    lda vic::RASTER
+    cmp vic::RASTER
+    beq steady
+    steady:
+    ldx #0
+    line:
+    lda bars,x
+    sta vic::BORDER
+    .repeat WAIT / 2 {
+        nop
+    }
+    inx
+    cpx #BARS
+    back:
+    bne line
+    turn:
+    jsr plex::first
+    jmp kernal::EXIT
+}
+
+; A bar's line takes a raster line's 63 cycles, with the 3 of the branch back, which is taken
+; and never crosses a page. The one cycle the rest may cost is the read of `bars` crossing a
+; page, which it never does.
+.assert .mincycles(stable::line, stable::back) + 3 == CYCLES, "a bar's line is not a raster line"
+.assert .maxcycles(stable::line, stable::back) + 2 == CYCLES, "only reading `bars` may cost more"
+.assert (>stable::line) == (>stable::turn), "the branch back crosses a page"
+.assert (>bars) == (>(.endof(bars) - 1)), "`bars` crosses a page"
+
+; Reading the raster twice takes the line change into account only if the second read comes on
+; the line's last cycle when `stable` comes in on ARRIVES. That read is 7 cycles after `sample`.
+.assert ARRIVES + .mincycles(stable, stable::sample) + 7 == CYCLES - 1, "the raster read is off"
+.assert .maxcycles(stable, stable::sample) == .mincycles(stable, stable::sample), "the wait varies"
+
+.align 32
+.data bars: .byte[BARS] {
+    Colour::blue, Colour::light_blue, Colour::cyan, Colour::white
+    Colour::cyan, Colour::light_blue, Colour::blue, Colour::black
+    Colour::brown, Colour::orange, Colour::yellow, Colour::white
+    Colour::yellow, Colour::orange, Colour::brown, Colour::black
+    Colour::red, Colour::light_red, Colour::purple, Colour::white
+    Colour::purple, Colour::light_red, Colour::red, Colour::black
+}

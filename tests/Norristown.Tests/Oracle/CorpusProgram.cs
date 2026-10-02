@@ -41,9 +41,10 @@ internal sealed record CorpusProgram(
     /// and a matching image. The cc65 example is linked by cl65 against cc65's runtime library
     /// and its target's own linker configuration, neither of which is in the repository. The
     /// SNROM template converts its tiles with Python and is two programs, one per mapper, each
-    /// with its own linker configuration. The gate builds all four end to end.
+    /// with its own linker configuration. The C64 demo packs its screens before nt65 can read
+    /// their sizes. The gate builds all five end to end.
     /// </summary>
-    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "cc65", "lorom-template", "msbasic", "snrom-template" };
+    private static readonly HashSet<string> BuiltOnlyByTheirScripts = new(StringComparer.Ordinal) { "c64-demo", "cc65", "lorom-template", "msbasic", "snrom-template" };
 
     /// <summary>
     /// Returns every corpus program and example, or only those whose name contains NT65_FIXTURE

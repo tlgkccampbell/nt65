@@ -1,0 +1,9 @@
+; What the demo holds after 100 frames, at the top of its main loop. test.ps1 -Update writes it.
+raster::frames        65
+music::step           0C
+music::tick           04
+sid                   ED 15 00 06 40 09 A4 E2 04 00 00 21 08 80 CE 22 00 00 81 02 00 00 00 00 0F
+plex::order           02 0B 07 0E 06 09 04 0A 03 0F 01 05 08 0C 00 0D
+plex::objects::xpos   8D 8E 2E 39 45 6C 83 5C AB E5 DB 36 63 A4 54 95
+plex::objects::xhigh  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+plex::objects::ypos   AB 89 44 88 80 97 70 59 99 7F 81 4E 9F B6 64 88

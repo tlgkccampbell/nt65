@@ -128,6 +128,11 @@ typed on with the joypad. Its sessions run in VICE and MAME.
 checksum and a string routine written in nt65, through the header `nt65 build --c-header`
 writes. It checks their answers in sim65, cc65's own simulator.
 
+[`examples/c64-demo`](examples/c64-demo) is a one-screen C64 demo written for nt65: colour bars
+on a stable raster whose cycle counts the build checks, a sprite multiplexer with self-modifying
+code, screens unpacked by an LZ4 decruncher that runs in the zero page, and a small SID music
+driver. Its test runs it in VICE.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and

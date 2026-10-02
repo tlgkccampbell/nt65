@@ -1,0 +1,185 @@
+; A decruncher for data packed in the LZ4 block format, which tools/pack.ps1 writes. The data
+; is a run of sequences. A sequence is a token byte, the literals it counts, which are copied
+; as they stand, and then a match: a two-byte offset back into what has been unpacked, from
+; which as many bytes again as the token counts are copied. The last sequence has no match.
+;
+; The decruncher runs in the zero page. It is loaded with the rest of the program, `install`
+; copies it to where the linker placed it to run, and its three pointers are the operands of
+; its own instructions, so moving one on is an `inc` of the zero page.
+.module lz4
+
+.cpu 6502
+
+.export install, unpack, source, finish, target, run
+
+.segment ZEROPAGE
+.data finish: .addr                 ; the address just past the packed data
+.data token:  .byte                 ; the sequence's token
+.data count:  .word                 ; how many bytes a run of literals or a match copies
+.data offset: .byte                 ; the low byte of a match's offset, while the high is read
+
+; Unpacks the data declared as `packed` to the address `to`. The data ends where its declaration
+; does.
+.macro unpack(packed: ident, to: expr) {
+    lda #<packed
+    sta source
+    lda #>packed
+    sta source + 1
+    lda #<.endof(packed)
+    sta finish
+    lda #>.endof(packed)
+    sta finish + 1
+    lda #<to
+    sta target
+    lda #>to
+    sta target + 1
+    jsr run
+}
+
+; Copies the decruncher from where the program was loaded to the zero page, where it runs.
+.segment CODE
+.proc install {
+    ldx #<.spanof(UNPACK)
+@copy:
+    lda .loadof(UNPACK) - 1,x
+    sta .runof(UNPACK) - 1,x
+    dex
+    bne @copy
+    rts
+}
+
+; Reads a count whose first part is the nibble in A. A nibble of 15 says that more follows, in
+; bytes that each add to it, up to one that is not 255. Returns the count in `count`, and the
+; same count as `counter` gives it.
+.proc length {
+    sta count
+    ldx #0
+    stx count + 1
+    cmp #15
+    bne counter
+@more:
+    jsr get
+    tax
+    clc
+    adc count
+    sta count
+    bcc @added
+    inc count + 1
+@added:
+    cpx #255
+    beq @more
+    .fallthrough counter
+}
+
+; Returns `count` in X and Y as the loops that copy count it: X is the low byte, and Y the
+; number of times X runs down to zero, so the loop's `dex` and `dey` together count `count`.
+.proc counter {
+    ldx count
+    ldy count + 1
+    txa
+    beq @whole
+    iny
+@whole:
+    rts
+}
+
+; The rest runs in the zero page. `length` and `counter` run once a sequence, and stay where
+; they were loaded, which leaves the zero page to what runs once a byte.
+.segment UNPACK
+
+; Unpacks the sequences from `source` up to `finish`, writing them from `target` on.
+.proc run {
+@sequence:
+    jsr get
+    sta token
+    lsr a                           ; the literals' count is the high nibble
+    lsr a
+    lsr a
+    lsr a
+    beq @last                       ; no literals
+    jsr length
+@literal:
+    jsr get
+    jsr put
+    dex
+    bne @literal
+    dey
+    bne @literal
+@last:
+    lda source                      ; the data ends after the literals of its last sequence
+    cmp finish
+    bne @match
+    lda source + 1
+    cmp finish + 1
+    bne @match
+    rts
+@match:
+    jsr get                         ; the match starts `offset` bytes before `target`
+    sta offset
+    lda target
+    sec
+    sbc offset
+    sta from + 1
+    .patch from
+    jsr get                         ; which keeps the carry from the low byte
+    sta offset
+    lda target + 1
+    sbc offset
+    sta from + 2
+    .patch from
+    lda token                       ; the match's count is the low nibble, and 4 more
+    and #$0F
+    jsr length
+    lda count
+    clc
+    adc #4
+    sta count
+    bcc @counted
+    inc count + 1
+@counted:
+    jsr counter
+    from:
+    lda $FFFF                       ; the operand is where the match is copied from
+    inc from + 1
+    .patch from
+    bne @same_page
+    inc from + 2
+    .patch from
+@same_page:
+    jsr put
+    dex
+    bne from
+    dey
+    bne from
+    jmp @sequence
+}
+
+; Returns the next byte of the packed data in A, and moves `source` past it. Keeps X and Y.
+.proc get: keeps x, y {
+    fetch:
+    lda $FFFF                       ; the operand is `source`
+    inc fetch + 1
+    .patch fetch
+    bne @done
+    inc fetch + 2
+    .patch fetch
+@done:
+    rts
+}
+
+; Writes A to `target`, and moves `target` past it. Keeps X and Y.
+.proc put: keeps x, y {
+    store:
+    sta $FFFF                       ; the operand is `target`
+    inc store + 1
+    .patch store
+    bne @done
+    inc store + 2
+    .patch store
+@done:
+    rts
+}
+
+; The pointers, which are the operands of the instructions that use them.
+.data source: .addr = get::fetch + 1
+.data target: .addr = put::store + 1

@@ -1,0 +1,11 @@
+; The screen and its colours, packed by tools/pack.ps1 from screens/title.txt and
+; screens/colours.txt, which build.ps1 runs before nt65 reads the files' sizes.
+.module screens
+
+.cpu 6502
+
+.export title, colours
+
+.segment RODATA
+.data title:   .incbin "../build/screens/title.lz4"
+.data colours: .incbin "../build/screens/colours.lz4"

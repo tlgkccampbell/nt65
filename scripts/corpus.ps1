@@ -187,3 +187,25 @@ Write-Host ("   {0,-11} {1,7} built, {2} in {3:0.0}s" -f 'monitor', "$($emulator
 foreach ($p in $emulators.Keys | Where-Object { $_ -notin $ready }) {
     Write-Host ("   {0,-11} {1,7} sessions did not run, because {2} is not on the path" -f '', $p, $emulators[$p]) -ForegroundColor Yellow
 }
+
+# The C64 demo packs its screens before nt65 measures them, so its own script builds it. Where
+# VICE is installed, its test runs it for a hundred frames and checks what it left in memory.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$demo = Join-Path $root 'examples/c64-demo'
+& (Join-Path $demo 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & (Join-Path $demo 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
+    Write-Host 'c64-demo: the build failed' -ForegroundColor Red
+    exit 1
+}
+$vice = [bool](Get-Command x64sc -ErrorAction SilentlyContinue)
+if ($vice) {
+    & (Join-Path $demo 'test.ps1') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & (Join-Path $demo 'test.ps1')
+        Write-Host 'c64-demo: its test failed' -ForegroundColor Red
+        exit 1
+    }
+}
+$ran = if ($vice) { 'its test passed' } else { 'its test did not run, because x64sc is not on the path' }
+Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'c64-demo', (Get-Item (Join-Path $demo 'build/demo.prg')).Length, $ran, $watch.Elapsed.TotalSeconds)

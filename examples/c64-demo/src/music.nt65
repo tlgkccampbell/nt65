@@ -1,0 +1,170 @@
+; A small music driver for the SID, which `raster::bottom` calls once a frame. The tune is a loop
+; of STEPS steps, each TEMPO frames long, and each part plays on a voice of its own. A part is
+; written as a tracker shows it, a step to a cell: `C-4` is C in octave 4, `C#4` the C sharp
+; above it, and `---` a rest. A note sounds from the start of its step until a few frames
+; before the next, when its gate is released so that the next note starts its envelope again.
+.module music
+
+.cpu 6502
+
+.use c64::sid
+
+.export init, play, step, tick
+
+.const STEPS   = 16                 ; the steps in the loop
+.const TEMPO   = 8                  ; the frames in a step
+.const RELEASE = 2                  ; the frames before a step's end at which its notes let go
+.const GATE    = %0001              ; the control register's gate bit
+
+; The parts, each on the voice of its number.
+.enum Part {
+    lead
+    bass
+    drum
+}
+
+; How a part sounds.
+.struct Sound {
+    waveform: .byte                 ; the control register's waveform bits
+    attack:   .byte                 ; attack and decay
+    sustain:  .byte                 ; sustain and release
+    pulse:    .word                 ; the pulse waveform's width, out of 4096
+}
+
+; Returns a part's notes, a cell of four characters to each step.
+.func track(part) = .switch(part,
+    [Part::lead], "E-4 --- G-4 --- A-4 --- G-4 E-4 D-4 --- E-4 --- --- --- B-3 --- ",
+    [Part::bass], "E-2 E-2 --- E-3 E-2 --- D-2 D-3 C-2 C-2 --- C-3 D-2 --- D-3 --- ",
+    "C-5 --- C-4 --- C-5 --- C-4 C-5 C-5 --- C-4 --- C-5 C-5 C-4 C-4 ")
+
+; Returns the note of step i of a part's track: 0 for a rest, and otherwise 1 more than the
+; semitones from the C of octave 0.
+.func cell(text, i) = .select(.strat(text, 4 * i) == '-', 0,
+    1 + 12 * (.strat(text, 4 * i + 2) - '0') + semitone(.strat(text, 4 * i))
+    + (.strat(text, 4 * i + 1) == '#'))
+
+; Returns the semitones from C up to a note's letter.
+.func semitone(letter) = .switch(letter,
+    ['C'], 0,
+    ['D'], 2,
+    ['E'], 4,
+    ['F'], 5,
+    ['G'], 7,
+    ['A'], 9,
+    11)
+
+; Returns the SID's frequency for a note numbered as `cell` numbers them, on a PAL machine:
+; the frequency of its semitone in octave 7, halved once for each octave below that.
+.func frequency(note) = octave7((note - 1) .mod 12) >> (7 - (note - 1) / 12)
+
+; Returns the SID's frequency for a semitone of octave 7, which is its pitch in hertz times
+; 2 to the 24th over the PAL machine's clock of 985248 hertz.
+.func octave7(semitone) = .switch(semitone,
+    [0], 35641,
+    [1], 37760,
+    [2], 40005,
+    [3], 42384,
+    [4], 44904,
+    [5], 47574,
+    [6], 50403,
+    [7], 53401,
+    [8], 56576,
+    [9], 59940,
+    [10], 63504,
+    67280)
+
+.segment RODATA
+.data sounds: .type Sound[] {
+    { waveform = $40, attack = $09, sustain = $A4, pulse = $0600 } ; pulse
+    { waveform = $20, attack = $08, sustain = $80, pulse = 0 }     ; sawtooth
+    { waveform = $80, attack = $02, sustain = $00, pulse = 0 }     ; noise
+}
+
+.assert .countof(sounds) == .countof(Part), "a part without a sound, or a sound without a part"
+
+; Each part's notes, the parts one after the other.
+.data notes: .byte[] {
+    .each Part, p {
+        .repeat STEPS, i {
+            cell(track(p), i)
+        }
+    }
+}
+
+; The SID's frequency for each note, the first for a rest, which nothing plays.
+.data frequencies: .word[] {
+    0
+    .repeat 6 * 12, n {
+        frequency(n + 1)
+    }
+}
+
+.segment ZEROPAGE
+.data tick: .byte                   ; the frames left in the step
+.data step: .byte                   ; the step playing
+
+.segment CODE
+
+; Sets every part's voice to its sound, the volume to full, and the tune to start at its first
+; step at the next frame.
+.proc init {
+    .each Part, p {
+        lda sounds[p]::attack
+        sta sid::voices[p]::attack
+        lda sounds[p]::sustain
+        sta sid::voices[p]::sustain
+        lda sounds[p]::pulse
+        sta sid::voices[p]::pulse
+        lda sounds[p]::pulse + 1
+        sta sid::voices[p]::pulse + 1
+    }
+    lda #15
+    sta sid::VOLUME
+    lda #STEPS - 1                  ; the next frame starts step 0
+    sta step
+    lda #1
+    sta tick
+    rts
+}
+
+; Plays a frame: releases the notes when the step is nearly over, and starts the next step's
+; notes when it is over.
+.proc play {
+    dec tick
+    beq @step
+    lda tick
+    cmp #RELEASE
+    bne @done
+    .each Part, p {
+        lda sounds[p]::waveform
+        sta sid::voices[p]::control
+    }
+@done:
+    rts
+@step:
+    lda #TEMPO
+    sta tick
+    ldx step
+    inx
+    cpx #STEPS
+    bne @going
+    ldx #0
+@going:
+    stx step
+    .each Part, p {
+        ldy notes + p * STEPS,x
+        beq @rest                   ; a rest starts nothing
+        tya
+        asl a
+        tay
+        lda frequencies,y
+        sta sid::voices[p]::frequency
+        lda frequencies + 1,y
+        sta sid::voices[p]::frequency + 1
+        lda sounds[p]::waveform
+        ora #GATE
+        sta sid::voices[p]::control
+    @rest:
+    }
+    rts
+}
