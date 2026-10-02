@@ -194,10 +194,10 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
       "")
   ```
 
-  Only an expression's own brackets and a macro call's arguments may hold a line break: a
-  group's parentheses, a call's arguments, a set (§9), an index, and the parentheses of
-  `name!(...)`, which look like a call's and continue the same way, with a trailing block
-  argument after the `)` as usual:
+  Only an expression's own brackets, a macro call's arguments and a list of parameters may hold
+  a line break: a group's parentheses, a call's arguments, a set (§9), an index, the parentheses
+  of `name!(...)`, which look like a call's and continue the same way, with a trailing block
+  argument after the `)` as usual, and the parameters of a `.macro` or a `.func`:
 
   ```nt65
   fill!(
@@ -205,6 +205,24 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
       (SCREEN >> 8) + 1,          ; what
       count = 2) {                ; a named argument, then the block
       nop
+  }
+  ```
+
+  A list of parameters holds a break anywhere inside its parentheses, so a parameter's kind, its
+  default and the parentheses of a kind such as `operand(...)` or `one(...)` may each continue.
+  The `{` of a macro and the `=` and body of a function follow the `)` on its line:
+
+  ```nt65
+  .export .macro store(
+      address: operand(abs,
+          zp),                        ; where, its modes across two lines
+      value: const(0..255) = 0,       ; what
+      ; a comment on a line of its own
+      times: one(once, twice),        ; how often
+      pad = 0) {                      ; a default first on its line
+      lda #value
+      sta address
+      ...
   }
   ```
 
@@ -216,10 +234,14 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   unclosed bracket cannot swallow the rest of the file,
   a line that starts a statement of its own is never joined to the one before it: a blank line,
   or one that starts with `}`, a directive, an instruction, a macro call, a label or a constant.
-  The one exception is a named argument, `count = 2`, which starts as a constant does and is
-  joined where the innermost open bracket is a macro call's `(`. The rule holds inside a macro
-  call's arguments otherwise, so a line there may not start with a name that is a mnemonic, such
-  as an argument `inx` on a line of its own; such an argument goes on the line before.
+  Two shapes are exceptions, and only the innermost open bracket decides where they apply. A
+  named argument or a default, `count = 2`, starts as a constant does and is joined where that
+  bracket is a macro call's `(` or a list of parameters. A parameter's kind, `count: const`,
+  starts as a label does and is joined where that bracket is a list of parameters and a word or a
+  name follows the `:`; a label alone or before an instruction still starts a statement there.
+  The rule holds inside a macro call's arguments and a list of parameters otherwise, so a line
+  there may not start with a name that is a mnemonic, such as an argument `inx` on a line of its
+  own; such an argument goes on the line before.
   A line holding only a comment is joined. The layout indents a continuing line one step past
   the line its innermost open bracket opened on, so each line that leaves a bracket open adds a
   level, and a line that starts with a closing bracket goes back to the margin of the line that

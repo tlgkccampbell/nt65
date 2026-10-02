@@ -64,6 +64,32 @@ public sealed class FormatterTests
     }
 
     /// <summary>
+    /// A macro's parameters continue as a call's arguments do, a step in from the <c>.macro</c>
+    /// line, and the body is a step in from that line too.
+    /// </summary>
+    [Fact]
+    public void AMacrosParametersAreIndentedAsACallsArgumentsAre()
+    {
+        Assert.Equal("""
+            .module main
+            .macro m(
+                a: one(x,
+                    y),
+                b = 1) {
+                nop
+            }
+            """, Formatted("""
+            .module main
+            .macro m(
+            a: one(x,
+            y),
+                      b = 1) {
+            nop
+            }
+            """));
+    }
+
+    /// <summary>
     /// A <c>.segment NAME</c> region opens a block with no brace, holding the rest of the file,
     /// so what follows one is laid out at the region line's margin.
     /// </summary>

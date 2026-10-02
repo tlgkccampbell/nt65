@@ -102,7 +102,7 @@ internal static class CallHelp
     {
         var declared = macro.Definition is BlockSyntax definition
             ? ((definition.Opener.Statement as MacroDeclarationSyntax)?.Parameters?.Parameters ?? [])
-                .Select(parameter => parameter.GetText().Trim()).ToList()
+                .Select(parameter => parameter.GetTextOnOneLine()).ToList()
             : [.. macro.Parameters.Select(parameter => parameter.Name)];
         return Help(
             $"{macro.Name}!(", declared, ")", macro.KindText, Math.Max(0, Active(macro, before, open, end, argument)));

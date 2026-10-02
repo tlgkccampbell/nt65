@@ -639,12 +639,21 @@ holds:
 
 **Long expressions.** A line whose `(` or `[` is still open at its end continues onto the next,
 as the `.switch` above does, and each line may have a comment. A macro call's arguments continue
-the same way, `name = value` arguments included. Only those brackets carry a line on: the
-parentheses of `(ptr),y` stay on one line, in an instruction and in a braced argument alike.
-A line that starts a statement of its own, such as an instruction or a directive, is never
-joined to the one before it, so a bracket left open by mistake is reported where it is. That
-holds inside a macro call too, so an argument named like an instruction, such as `inx`, does
-not start a line there.
+the same way, `name = value` arguments included, and so do the parameters of a `.macro` or a
+`.func`, `name: kind` and `name = default` included:
+
+```nt65
+.func scaled(
+    value,                          ; the value
+    factor) = value * factor        ; and what it is multiplied by
+```
+
+Only those brackets carry a line on: the parentheses of `(ptr),y` stay on one line, in an
+instruction and in a braced argument alike. A line that starts a statement of its own, such as
+an instruction or a directive, is never joined to the one before it, so a bracket left open by
+mistake is reported where it is. That holds inside a macro call and a list of parameters too, so
+an argument or a parameter named like an instruction, such as `inx`, does not start a line
+there.
 
 **CPU tests.** `.if .has(phx)` holds on every CPU that has the `phx` instruction, and
 `.target(65c02)` names one CPU exactly. The CPU is part of the configuration.

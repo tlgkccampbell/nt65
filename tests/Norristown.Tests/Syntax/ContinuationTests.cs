@@ -46,6 +46,25 @@ public sealed class ContinuationTests
         Assert.Contains(tree.Diagnostics, diagnostic => diagnostic.Id == "expected-parenthesis");
     }
 
+    /// <summary>
+    /// Checks that a line shaped like a parameter's kind joins only where the innermost open
+    /// bracket is a list of parameters, and only when a kind follows its <c>:</c>. A label alone
+    /// or before an instruction still starts a statement there.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc main {\n    pair!(1,\n    second: expr)\n}\n")]
+    [InlineData(".macro m(first,\nloop:\n    nop\n")]
+    [InlineData(".macro m(first,\nloop: lda #1\n")]
+    [InlineData(".macro m(first = (1,\n    second: expr)) {\n}\n")]
+    [InlineData(".macro m(first,\n    lda #1\n")]
+    public void ALineInParametersThatStartsAStatementIsNotJoined(string text)
+    {
+        var tree = SyntaxTree.Parse("main.nt65", text);
+
+        Assert.NotSame(tree.GetLine(0), tree.GetLine(1));
+        Assert.NotEmpty(tree.Diagnostics);
+    }
+
     [Theory]
     [InlineData(".proc main {\n    lda (ptr\n    ),y\n}\n")]
     [InlineData(".proc main {\n    pair!({(ptr\n        ),y}, 2)\n}\n")]
@@ -72,6 +91,43 @@ public sealed class ContinuationTests
         Assert.Equal(SyntaxKind.MacroCall, tree.GetLine(1).Statement.Kind);
         Assert.Equal(BlockKind.MacroBlock, tree.GetLine(1).OpensBlockKind);
         Assert.NotSame(tree.GetLine(4), tree.GetLine(5));
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    /// <summary>
+    /// Checks that a macro's parameters continue as a macro call's arguments do. A line inside
+    /// them may start with a parameter's kind or its default, a kind's own parentheses may hold a
+    /// break, and the <c>{</c> after them opens the macro's block.
+    /// </summary>
+    [Theory]
+    [InlineData(".macro m(   ; first\n    a: operand(abs,\n        zp),\n    ; alone\n    b = 2) {\n    nop\n}\n", 4)]
+    [InlineData(".export .macro m(\n    a,\n    b: ::gfx::Kind) {\n    nop\n}\n", 2)]
+    [InlineData(".macro m(\n    a: const(0..\n        15) = 1,\n    body: block = {}\n) {\n    nop\n}\n", 4)]
+    public void AMacrosParametersContinue(string text, int last)
+    {
+        var tree = SyntaxTree.Parse("main.nt65", text);
+
+        Assert.Same(tree.GetLine(0), tree.GetLine(last));
+        Assert.Equal(SyntaxKind.MacroDeclaration, tree.GetLine(0).Statement.Kind);
+        Assert.Equal(BlockKind.Macro, tree.GetLine(0).OpensBlockKind);
+        Assert.NotSame(tree.GetLine(last), tree.GetLine(last + 1));
+        Assert.Empty(tree.Diagnostics);
+    }
+
+    /// <summary>
+    /// Checks that a function's parameters continue, and that the <c>=</c> and the body after them
+    /// belong to the same declaration.
+    /// </summary>
+    [Fact]
+    public void AFunctionsParametersContinue()
+    {
+        var tree = SyntaxTree.Parse("main.nt65", ".func f(\n    a,      ; the first\n    b) = a + b\n.word f(1, 2)\n");
+
+        Assert.Same(tree.GetLine(0), tree.GetLine(2));
+        var function = Assert.IsType<FuncDeclarationSyntax>(tree.GetLine(0).Statement);
+        Assert.Equal(2, function.Parameters!.Parameters.Count);
+        Assert.Equal("a + b", function.Body.GetText());
+        Assert.NotSame(tree.GetLine(2), tree.GetLine(3));
         Assert.Empty(tree.Diagnostics);
     }
 

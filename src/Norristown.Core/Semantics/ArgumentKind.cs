@@ -88,9 +88,9 @@ public sealed record ArgumentKind(ParameterKind Kind, IReadOnlyList<string> Word
         ParameterKind.One => $"one({string.Join(", ", Words)})",
         ParameterKind.List => $"list({Element?.ToString() ?? "expr"})",
         ParameterKind.Const when Low is not null && High is not null =>
-            $"const({Low.GetText().Trim()}..{High.GetText().Trim()})",
+            $"const({Low.GetTextOnOneLine()}..{High.GetTextOnOneLine()})",
         ParameterKind.Operand when Words.Count > 0 => $"operand({string.Join(", ", Words)})",
-        ParameterKind.Enum => Enum?.GetText().Trim() ?? "expr",
+        ParameterKind.Enum => Enum?.GetTextOnOneLine() ?? "expr",
         _ => Kind.ToString().ToLowerInvariant(),
     };
 

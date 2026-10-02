@@ -54,6 +54,16 @@ public sealed class TextMateGrammarTests
         .macro typed(p: const(0..15), q: operand(imm, zp, nope), r: Joy, s: list(one(a, lda)), t: gfx::Kind, u: ident = x) {
         }
         .func twice(n, m) = n * 2
+        .macro long(
+            first: operand(imm,
+                zp),
+            second = (1 +
+                2),
+            third) {
+        }
+        .func spread(
+            a,
+            b) = a + b
         .export .proc main: a8, dp = 0 {
         }
         .proc far = $1234

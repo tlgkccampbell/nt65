@@ -28,7 +28,7 @@ internal static class ParameterKinds
     public static string Takes(ArgumentKind kind) => kind.Kind switch
     {
         ParameterKind.Const when kind is { Low: { } low, High: { } high } =>
-            $"a constant from {low.GetText().Trim()} to {high.GetText().Trim()}",
+            $"a constant from {low.GetTextOnOneLine()} to {high.GetTextOnOneLine()}",
         ParameterKind.Const => "a constant",
         ParameterKind.Ident => "a name",
         ParameterKind.Operand when kind.Words.Count > 0 =>

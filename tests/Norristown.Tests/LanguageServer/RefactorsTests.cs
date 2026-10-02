@@ -144,6 +144,27 @@ public sealed class RefactorsTests
         Assert.Equal(Main, Editing.Apply(Laid, joined.Edit!.Changes[Uri]));
     }
 
+    /// <summary>
+    /// A macro's and a function's parameters are laid out as a call's arguments are, from
+    /// anywhere inside them, a default included, and join back onto one line.
+    /// </summary>
+    [Theory]
+    [InlineData(".macro pair(first: const, second = (1 + 2)) {\n    .byte first, second\n}\n", "1 +",
+        ".macro pair(\n    first: const,\n    second = (1 + 2)) {\n    .byte first, second\n}\n")]
+    [InlineData(".func sum(first, second) = first + second\n", "first,",
+        ".func sum(\n    first,\n    second) = first + second\n")]
+    public void ParametersAreLaidOutAndJoined(string declaration, string at, string laid)
+    {
+        const string Module = ".module main\n";
+
+        var action = Single(Module + declaration, at, "Lay out the expression across lines");
+        Assert.Equal(Module + laid, Editing.Apply(Module + declaration, action.Edit!.Changes[Uri]));
+        Assert.Equal(Module + laid, Norristown.Syntax.Formatter.Format(Norristown.Syntax.SyntaxTree.Parse("main.nt65", Module + laid)));
+
+        var joined = Single(Module + laid, at, "Join the expression onto one line");
+        Assert.Equal(Module + declaration, Editing.Apply(Module + laid, joined.Edit!.Changes[Uri]));
+    }
+
     /// <summary>Organizing sorts the <c>.use</c> items and removes any that nothing names.</summary>
     [Fact]
     public void TheUseItemsAreOrderedAndWhatNothingNamesGoes()

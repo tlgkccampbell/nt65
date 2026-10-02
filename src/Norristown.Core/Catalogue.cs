@@ -536,12 +536,14 @@ public static class Catalogue
         Area.ReadingALine,
         "continuation-outside-expression",
         Severity.Error,
-        "a line continues onto the next only inside an expression's brackets or a macro call's arguments",
-        "A line whose `(` or `[` is still open at its end continues onto the next, so a long expression or macro "
-            + "call can be written across lines. Only an expression's own brackets and a macro call's arguments may "
-            + "hold a line break: a group's parentheses, a call's or a macro call's arguments, a set and an index. "
-            + "The parentheses of an operand such as `(ptr),y`, written in an instruction or in a braced argument "
-            + "like `{(ptr),y}`, and a data declaration's count stay on one line.");
+        "a line continues onto the next only inside an expression's brackets, a macro call's arguments or a list of parameters",
+        "A line whose `(` or `[` is still open at its end continues onto the next, so a long expression, macro "
+            + "call or list of parameters can be written across lines. Only an expression's own brackets, a macro "
+            + "call's arguments and a macro's or a function's parameters may hold a line break: a group's "
+            + "parentheses, a call's or a macro call's arguments, a set, an index, and the parentheses after the "
+            + "name that `.macro` or `.func` declares. The parentheses of an operand such as `(ptr),y`, written in "
+            + "an instruction or in a braced argument like `{(ptr),y}`, and a data declaration's count stay on one "
+            + "line.");
 
     internal static DiagnosticDescriptor ByteOperatorNeedsParentheses { get; } = Entry(
         Area.ReadingALine,

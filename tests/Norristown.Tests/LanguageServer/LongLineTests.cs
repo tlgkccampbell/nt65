@@ -25,6 +25,20 @@ public sealed class LongLineTests
         Assert.Equal(Long.IndexOf(".select", StringComparison.Ordinal), hint.Range.Start.Character);
     }
 
+    /// <summary>A long macro header is suggested over its parameters, which may be laid out.</summary>
+    [Fact]
+    public void ALongMacroHeaderIsSuggestedOverItsParameters()
+    {
+        const string Header = ".macro fill(destination: operand, value: const = 0, count: const = 1) {\n    nop\n}\n";
+        var tree = SyntaxTree.Parse("main.nt65", ".module main\n" + Header);
+
+        var hint = Assert.Single(Lsp.ToDiagnostics([], tree, Configuration.Everything, 40));
+
+        Assert.Equal("long-line", hint.Code);
+        Assert.Equal(1, hint.Range.Start.Line);
+        Assert.Equal(Header.IndexOf('(', StringComparison.Ordinal), hint.Range.Start.Character);
+    }
+
     /// <summary>
     /// The line length the client sends as it connects applies from the first publish, before the
     /// client pushes any settings.

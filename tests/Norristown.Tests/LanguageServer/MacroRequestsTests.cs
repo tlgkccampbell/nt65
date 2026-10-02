@@ -272,6 +272,47 @@ public sealed class MacroRequestsTests
         Assert.Equal("variable", at[(16, 32)]);
     }
 
+    /// <summary>
+    /// A parameter declared on a line its list continues onto is found, described, renamed and
+    /// gone to as one on the macro's first line is, and a call's signature help shows the
+    /// parameters on one line.
+    /// </summary>
+    [Fact]
+    public async Task AParameterOnAContinuedLineIsAParameterLikeAnyOther()
+    {
+        const string Continued = """
+            .module main
+            .macro poke(
+                address: operand,   ; where
+                value: const(0..255) = (1 +
+                    2)) {           ; what
+                lda #value
+                sta address
+            }
+            .segment CODE
+            .export .proc main {
+                poke!($10, 1)
+                rts
+            }
+            """;
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Continued));
+
+        var definition = await client.DefinitionAsync(Uri, Locate.At(Continued, "lda #v|alue"), timeout);
+        Assert.Equal(3, definition?.Range.Start.Line);
+
+        var hover = await client.HoverAsync(Uri, Locate.At(Continued, "v|alue: const"), timeout);
+        Assert.Contains("const(0..255)", hover?.Contents.Value, StringComparison.Ordinal);
+
+        var edit = await client.RenameAsync(Uri, Locate.At(Continued, "add|ress: operand"), "target", timeout);
+        Assert.NotNull(edit);
+        Assert.Equal([2, 6], edit.Changes[Uri].Select(change => change.Range.Start.Line).Order());
+
+        var help = await client.RequestAsync<SignatureHelp?>("textDocument/signatureHelp",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(Uri), Locate.At(Continued, "poke!($10, |1")), timeout);
+        Assert.Equal("poke!(address: operand, value: const(0..255) = (1 + 2))", help?.Signatures[0].Label);
+    }
+
     private static Task<TestClient> OpenAsync(CancellationToken timeout) =>
         TestClient.OpenedAsync(timeout, (Uri, Source));
 }

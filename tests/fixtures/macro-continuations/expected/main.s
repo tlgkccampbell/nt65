@@ -20,20 +20,26 @@ buf: .res 256
 SCREEN = $0400
 
 .segment "CODE": absolute
-; .proc main  main.nt65:51
+; .proc main  main.nt65:76
 main__main:
-    ; fill!({buf,x}, (SCREEN >> 8) + 1, count = 2)  main.nt65:52
+    ; fill!({buf,x}, (SCREEN >> 8) + 1, count = 2)  main.nt65:77
     lda #((SCREEN >> 8) + 1)
     ldx #2
     sta a:buf,x
     nop
     ; end of fill!
-    ; fill!({ptr}, (SCREEN >> 8) + 1, count = 2)  main.nt65:58
+    ; fill!({ptr}, (SCREEN >> 8) + 1, count = 2)  main.nt65:83
     lda #((SCREEN >> 8) + 1)
     ldx #2
     sta z:ptr
     ; end of fill!
-    ; if!(eq)  main.nt65:64
+    ; store!({ptr}, scaled(2, 3), times = twice, pad = 1)  main.nt65:89
+    lda #$06                        ; scaled(2, 3)
+    sta z:ptr
+    sta z:ptr
+    nop
+    ; end of store!
+    ; if!(eq)  main.nt65:90
     bne if__skip
     lda #0
     jmp if__done
@@ -46,7 +52,7 @@ if__done:
 
 .segment "RODATA": absolute
 main__greeting:
-    ; message!(2, "HI")  main.nt65:75
+    ; message!(2, "HI")  main.nt65:101
     .byte 2
     .byte $48, $49, $00             ; "HI"
     ; end of message!

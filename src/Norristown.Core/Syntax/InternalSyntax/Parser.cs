@@ -116,10 +116,12 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Reports each line break of a joined line that stands outside an expression's brackets.
-    /// The breaks inside a group's parentheses, a call's or a macro call's arguments, a set or an
-    /// index are the ones the language allows. A braced operand among a macro call's arguments is
-    /// an operand, so it holds a break only where an operand would. Each report goes on the token
-    /// before the break, and is held by the statement, as a diagnostic no inner node claimed is.
+    /// The breaks inside a group's parentheses, a call's or a macro call's arguments, a set, an
+    /// index, or a macro's or a function's parameters are the ones the language allows. The
+    /// parameters' parentheses hold a break anywhere inside them, within a parameter too. A braced
+    /// operand among a macro call's arguments is an operand, so it holds a break only where an
+    /// operand would. Each report goes on the token before the break, and is held by the
+    /// statement, as a diagnostic no inner node claimed is.
     /// </summary>
     private void CheckLineBreaks(GreenNode statement)
     {
@@ -163,6 +165,7 @@ internal sealed partial class Parser
         // way about: what its braces hold is an operand, and only its `}` stands among the
         // arguments.
         var brackets = node.Kind is SyntaxKind.ParenthesizedExpression or SyntaxKind.SetExpression or SyntaxKind.ElementIndex
+                or SyntaxKind.MacroParameterList or SyntaxKind.ParameterList
             || (node.Kind == SyntaxKind.ArgumentList && call);
         var braces = node.Kind == SyntaxKind.BracedOperand;
         var calls = node.Kind is SyntaxKind.CallExpression or SyntaxKind.MacroCall;

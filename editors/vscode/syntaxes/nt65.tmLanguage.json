@@ -105,7 +105,7 @@
               ]
             },
             {
-              "match": "(?<=[(,])\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*[,):=])",
+              "match": "(?:(?<=[(,])|^)\\s*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*[,):=])",
               "captures": {
                 "1": {
                   "name": "variable.parameter.nt65"

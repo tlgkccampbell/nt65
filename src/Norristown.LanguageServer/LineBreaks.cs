@@ -5,9 +5,10 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Provides the refactorings that lay out a whole expression or a macro call's arguments across
-/// lines, or join them back onto one. The formatter keeps the line breaks a file has and adds none, so where a long expression
-/// breaks is the programmer's choice, and these make it in one step.
+/// Provides the refactorings that lay out a whole expression, a macro call's arguments, or a
+/// macro's or a function's parameters across lines, or join them back onto one. The formatter
+/// keeps the line breaks a file has and adds none, so where a long expression breaks is the
+/// programmer's choice, and these make it in one step.
 /// <para>
 /// Laying out breaks every outermost call's arguments and every outermost set in the expression,
 /// one item to a line. A call or set inside those is broken too where it does not fit on its line
@@ -17,11 +18,12 @@ namespace Norristown.LanguageServer;
 /// formatter lays it out.
 /// </para>
 /// <para>
-/// Only an expression's brackets and a macro call's arguments may hold a line break, so the
-/// brackets laid out are those of a call's or a macro call's arguments and of a set. With the
-/// caret anywhere in a macro call's arguments, the whole argument list is laid out. Neither
-/// refactoring is offered where what it lays out holds a comment, which it would have to drop.
-/// The titles say "expression" for a macro call's arguments too, since the two are laid out alike.
+/// Only an expression's brackets, a macro call's arguments and a list of parameters may hold a
+/// line break, so the brackets laid out are those of a call's or a macro call's arguments, of a
+/// set and of a list of parameters. With the caret anywhere in a macro call's arguments or in a
+/// list of parameters, the whole list is laid out. Neither refactoring is offered where what it
+/// lays out holds a comment, which it would have to drop. The titles say "expression" for those
+/// lists too, since they are laid out alike.
 /// </para>
 /// </summary>
 internal static class LineBreaks
@@ -97,8 +99,8 @@ internal static class LineBreaks
 
     /// <summary>
     /// Returns what the caret is in that may be laid out, or null when the caret is in nothing
-    /// that may be. That is the arguments of the macro call the caret is in, or else the outermost
-    /// expression of its statement that holds the caret.
+    /// that may be. That is the arguments of the macro call or the list of parameters the caret
+    /// is in, or else the outermost expression of its statement that holds the caret.
     /// </summary>
     private static SyntaxNode? WholeAt(SyntaxTree tree, int caret)
     {
@@ -109,8 +111,11 @@ internal static class LineBreaks
             node is not null and not StatementSyntax;
             node = node.Parent)
         {
-            if (node is ExpressionSyntax || node is ArgumentListSyntax { Parent: MacroCallSyntax })
+            if (node is ExpressionSyntax or ArgumentListSyntax { Parent: MacroCallSyntax }
+                or MacroParameterListSyntax or ParameterListSyntax)
+            {
                 whole = node;
+            }
         }
         return whole;
     }
@@ -135,7 +140,8 @@ internal static class LineBreaks
 
     /// <summary>
     /// Returns the brackets and the items of <paramref name="node"/>, where it is a call's or a
-    /// macro call's arguments or a set whose brackets are both in the source, or null otherwise.
+    /// macro call's arguments, a set or a list of parameters whose brackets are both in the
+    /// source, or null otherwise.
     /// </summary>
     private static Group? Brackets(SyntaxNode? node)
     {
@@ -147,17 +153,21 @@ internal static class LineBreaks
             ArgumentListSyntax { Parent: MacroCallSyntax } arguments => new Group(
                 arguments.OpenParenToken, [.. arguments.Arguments], arguments.CloseParenToken, false),
             SetExpressionSyntax set => new Group(set.OpenBracketToken, [.. set.Items], set.CloseBracketToken, false),
+            MacroParameterListSyntax parameters => new Group(
+                parameters.OpenParenToken, [.. parameters.Parameters], parameters.CloseParenToken, false),
+            ParameterListSyntax parameters => new Group(
+                parameters.OpenParenToken, [.. parameters.Parameters], parameters.CloseParenToken, false),
             _ => null,
         };
         return found is { Open.IsMissing: false, Close.IsMissing: false } ? found : null;
     }
 
     /// <summary>
-    /// Represents the brackets of a call's or a macro call's arguments or of a set, and the items
-    /// between them.
+    /// Represents the brackets of a call's or a macro call's arguments, of a set or of a list of
+    /// parameters, and the items between them.
     /// </summary>
     /// <param name="Open">The opening bracket.</param>
-    /// <param name="Items">The arguments or values.</param>
+    /// <param name="Items">The arguments, values or parameters.</param>
     /// <param name="Close">The closing bracket.</param>
     /// <param name="IsSwitch">Whether the brackets are a <c>.switch</c>'s, whose items are its value and its arms.</param>
     private sealed record Group(SyntaxToken Open, IReadOnlyList<SyntaxNode> Items, SyntaxToken Close, bool IsSwitch);

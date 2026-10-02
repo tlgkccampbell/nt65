@@ -152,8 +152,12 @@ internal static class TextMateGrammar
                 [members, TextMateRule.Scoped($@"^\s*({Word})", EnumMember), include]),
             layout,
             TextMateRule.Block($@"(?i)(\.type)\b", "$", [Directive], [record, include]),
+            // A macro's parameters may continue across lines, so a parameter is first in its item
+            // after the `(` or a `,`, or first on its line, where it wins the tie with a label or
+            // a constant declaration by coming first.
             TextMateRule.Block($@"(?i)(\.macro)\s+({Word})\s*(\()", @"\)", [Directive, Macro],
-                [new TextMateRule(Begin: ":", End: @"(?=[,)=])", Patterns: [kind]), parentheses, TextMateRule.Scoped($@"(?<=[(,])\s*({Word})(?=\s*[,):=])", Parameter), include]),
+                [new TextMateRule(Begin: ":", End: @"(?=[,)=])", Patterns: [kind]), parentheses,
+                    TextMateRule.Scoped($@"(?:(?<=[(,])|^)\s*({Word})(?=\s*[,):=])", Parameter), include]),
 
             // An import declares names, each first in its item. Each name is a constant given a
             // value, or an address. A routine's signature is in brackets of its own. "First in its

@@ -8,17 +8,20 @@ namespace Norristown.Syntax.InternalSyntax;
 /// expression can be written across several lines. The line break becomes trivia on the token
 /// before it, and the joined line is lexed text like any other, which the parser reads as one.
 /// <para>
-/// Only an expression's brackets and a macro call's arguments may hold a line break, which the
-/// parser checks. Joining is decided from the tokens alone, so a line that the parser will refuse
-/// is still joined, and the parser says why. To keep an unclosed bracket from swallowing the rest
-/// of the file, a line that starts a statement of its own is never joined to the one before it.
-/// Such a line is blank, or starts with <c>}</c>, a directive, an instruction, a macro call, a
-/// label or a constant. A line holding only a comment is joined, so the parts of a long
-/// expression can be explained.
+/// Only an expression's brackets, a macro call's arguments and a macro's or a function's
+/// parameters may hold a line break, which the parser checks. Joining is decided from the tokens
+/// alone, so a line that the parser will refuse is still joined, and the parser says why. To keep
+/// an unclosed bracket from swallowing the rest of the file, a line that starts a statement of its
+/// own is never joined to the one before it. Such a line is blank, or starts with <c>}</c>, a
+/// directive, an instruction, a macro call, a label or a constant. A line holding only a comment
+/// is joined, so the parts of a long expression can be explained.
 /// </para>
 /// <para>
-/// One shape is joined in a single place. A named argument, <c>count = 3</c>, starts the way a
-/// constant does, and is joined where the innermost open bracket is a macro call's <c>(</c>.
+/// Two shapes are joined only in some places, and only the innermost open bracket decides where.
+/// A named argument or a parameter's default, <c>count = 3</c>, starts the way a constant does,
+/// and is joined where that bracket opens a macro call's arguments or a list of parameters. A
+/// parameter's kind, <c>count: const</c>, starts the way a label does, and is joined where that
+/// bracket opens a list of parameters and a word or a name follows the <c>:</c>.
 /// </para>
 /// </summary>
 internal static class Continuations
@@ -37,7 +40,7 @@ internal static class Continuations
         var lines = ImmutableArray.CreateBuilder<GreenLine>(physical.Length);
         var starts = ImmutableArray.CreateBuilder<int>(physical.Length);
         Dictionary<GreenLine, GreenLine>? joinedBefore = null;
-        var open = new Stack<bool>();
+        var open = new Stack<BracketKind>();
         for (var i = 0; i < physical.Length;)
         {
             var first = i;
@@ -68,32 +71,50 @@ internal static class Continuations
 
     /// <summary>
     /// Updates <paramref name="open"/>, the brackets open, with the brackets on
-    /// <paramref name="line"/>. Each bracket is held as a value indicating whether it opens a macro
-    /// call's arguments. A closing bracket with none open is left for the parser to report.
+    /// <paramref name="line"/>. Each bracket is held as the kind of list it opens. A closing
+    /// bracket with none open is left for the parser to report.
     /// </summary>
-    private static void Track(GreenLine line, Stack<bool> open)
+    private static void Track(GreenLine line, Stack<BracketKind> open)
     {
         var tokens = line.Tokens;
         for (var i = 0; i < tokens.Length; i++)
         {
             var kind = tokens[i].Kind;
             if (kind is SyntaxKind.OpenParen or SyntaxKind.OpenBracket)
-                open.Push(kind == SyntaxKind.OpenParen && i >= 2 && Lines.IsMacroCall(tokens, i - 2));
+                open.Push(kind == SyntaxKind.OpenParen ? Opens(tokens, i) : BracketKind.Expression);
             else if (kind is SyntaxKind.CloseParen or SyntaxKind.CloseBracket && open.Count > 0)
                 open.Pop();
         }
     }
 
     /// <summary>
+    /// Returns the kind of list the <c>(</c> at <paramref name="at"/> opens. It opens a macro
+    /// call's arguments after <c>name!</c>, and a list of parameters after the name that
+    /// <c>.macro</c> or <c>.func</c> declares, whatever comes before the directive.
+    /// </summary>
+    private static BracketKind Opens(ImmutableArray<GreenToken> tokens, int at)
+    {
+        if (at < 2)
+            return BracketKind.Expression;
+        if (Lines.IsMacroCall(tokens, at - 2))
+            return BracketKind.MacroArguments;
+        return Lines.IsName(tokens[at - 1].Kind) && tokens[at - 2].DirectiveKind is DirectiveKind.Macro or DirectiveKind.Func
+            ? BracketKind.Parameters
+            : BracketKind.Expression;
+    }
+
+    /// <summary>
     /// Returns a value indicating whether <paramref name="line"/> may continue the line before
-    /// it: it holds only a comment, or it starts with what may stand inside an expression.
+    /// it: it holds only a comment, or it starts with what may stand inside the innermost bracket
+    /// open.
     /// </summary>
     /// <param name="line">The line that may continue the one before it.</param>
-    /// <param name="inMacroCall">
-    /// Whether the innermost bracket open is a macro call's <c>(</c>, where a line may also start
-    /// with a named argument.
+    /// <param name="innermost">
+    /// The kind of list the innermost open bracket opens. In a macro call's arguments a line may
+    /// also start with a named argument, and in a list of parameters with a parameter's kind or
+    /// its default.
     /// </param>
-    private static bool Joins(GreenLine line, bool inMacroCall) => line.LineKind switch
+    private static bool Joins(GreenLine line, BracketKind innermost) => line.LineKind switch
     {
         LineKind.Blank => line.Tokens[0].LeadingTrivia.Any(trivia => trivia.Kind == SyntaxKind.CommentTrivia),
 
@@ -102,8 +123,15 @@ internal static class Continuations
         LineKind.Directive => line.Tokens[0].DirectiveKind == DirectiveKind.None,
         LineKind.Expression or LineKind.BareIdentifier => true,
 
-        // `count = 3` is a named argument there. `?=` names no argument, so it stays a setting.
-        LineKind.Constant => inMacroCall && line.Tokens[1].Kind == SyntaxKind.Equals,
+        // `count = 3` is a named argument or a default there. `?=` names neither, so it stays a
+        // setting.
+        LineKind.Constant => innermost is BracketKind.MacroArguments or BracketKind.Parameters
+            && line.Tokens[1].Kind == SyntaxKind.Equals,
+
+        // `count: const` gives a parameter's kind there. A kind is a word or an enum's name, so a
+        // label followed by an instruction, a directive or nothing still starts a statement.
+        LineKind.Label => innermost == BracketKind.Parameters && Lines.IsName(line.Tokens[0].Kind)
+            && line.Tokens[2].Kind is SyntaxKind.Identifier or SyntaxKind.ColonColon,
         _ => false,
     };
 
@@ -156,5 +184,18 @@ internal static class Continuations
         foreach (var diagnostic in token.Diagnostics)
             extended.Report(diagnostic);
         return extended;
+    }
+
+    /// <summary>Specifies the kind of list an open bracket holds, which decides what may start a line inside it.</summary>
+    private enum BracketKind
+    {
+        /// <summary>The brackets of an expression, which are a group, a call's arguments, a set or an index.</summary>
+        Expression,
+
+        /// <summary>A macro call's arguments, after <c>name!</c>.</summary>
+        MacroArguments,
+
+        /// <summary>The parameters of a <c>.macro</c> or a <c>.func</c>.</summary>
+        Parameters,
     }
 }

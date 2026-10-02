@@ -1,5 +1,6 @@
 ; A macro call's arguments continue onto the next line while its `(` is open, as a `.func`
-; call's do, so a long call is written across lines with a comment on each.
+; call's do, so a long call is written across lines with a comment on each. A macro's and a
+; function's parameters continue the same way.
 .module main
 
 .cpu 65c02
@@ -26,6 +27,30 @@
     .byte length
     .strz text
 }
+
+; Parameters across lines, each with its comment. A line may start with a parameter's kind or
+; its default, and a kind's own parentheses may hold a break.
+.export .macro store(
+    address: operand(abs,
+        zp),                        ; where, its modes across two lines
+    value: const(0..255) = 0,       ; what
+    ; a comment on a line of its own
+    times: one(once, twice),        ; how often
+    pad = 0) {                      ; a default first on its line
+    lda #value
+    sta address
+    .if times == twice {
+        sta address
+    }
+    .if pad != 0 {
+        nop
+    }
+}
+
+; A function's parameters continue too, and its body follows the `)` on the last line.
+.func scaled(
+    value,                          ; the value
+    factor) = value * factor        ; and what it is multiplied by
 
 ; Two blocks, the second named by its continuation and defaulting to empty.
 .macro if(c: one(eq, ne, cs, cc), then: block, else: block = {}) {
@@ -61,6 +86,7 @@
         1,                          ; the value, itself across two lines
         ; a comment on a line of its own
         count = 2)                  ; a named argument
+    store!({ptr}, scaled(2, 3), times = twice, pad = 1)
     if!(                            ; a block argument after arguments across lines
         eq) {
         lda #0
