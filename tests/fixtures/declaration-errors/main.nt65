@@ -19,6 +19,20 @@
 .data long:  .addr[2] {             ;! error[element-count-mismatch]: this array is declared with 2 elements, but 3 given
     0, 0, 0
 }
+; Empty braces give no values, whether they close on the declaration's line or the next.
+.data empty_line:  .byte[4] { }     ;! error[element-count-mismatch]: this array is declared with 4 elements, but 0 given
+.data empty_tight: .byte[4] {}      ;! error[element-count-mismatch]: this array is declared with 4 elements, but 0 given
+.data empty_body:  .byte[4] {       ;! error[element-count-mismatch]: this array is declared with 4 elements, but 0 given
+}
+.data no_points:      .type Point[2] { }  ;! error[element-count-mismatch]: this array is declared with 2 elements, but 0 given
+.data no_points_body: .type Point[2] {    ;! error[element-count-mismatch]: this array is declared with 2 elements, but 0 given
+}
+.data empty_any:      .byte[] { }   ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.byte[n]` to reserve n elements
+.data empty_any_body: .byte[] {     ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.byte[n]` to reserve n elements
+}
+; Without a count, empty braces are one record that sets no member.
+.data blank_point: .type Point { }
+
 .data none:    .word[]              ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.word[n]` to reserve n elements
 .data padding: .res 4               ;! error[res-not-a-declaration]: a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros where no values are given
 

@@ -33,7 +33,9 @@ internal sealed partial class Parser
             }
             else
             {
-                tail = new BracedDataSyntax(ParseBracedValue());
+                // Braces after a count hold the array's elements, so empty ones give none, as an
+                // empty body does. Only a single record's empty braces set no member.
+                tail = new BracedDataSyntax(ParseBracedValue(emptyIsList: count is not null || !record));
             }
         }
         else if (!AtEnd && !(elsewhere && Kind == SyntaxKind.Equals))
@@ -180,20 +182,21 @@ internal sealed partial class Parser
     /// <summary>
     /// Parses <c>{ member = value, … }</c>, a record, or <c>{ value, … }</c>, a list of elements.
     /// No expression contains <c>=</c>, so the first item decides which one it is, and
-    /// <c>{}</c> is a record that sets no member.
+    /// <c>{}</c> is a record that sets no member, unless <paramref name="emptyIsList"/> makes it a
+    /// list with no elements.
     /// </summary>
-    private GreenNode ParseBracedValue()
+    private GreenNode ParseBracedValue(bool emptyIsList = false)
     {
         nesting++;
-        var value = TooDeeplyNested() ?? ParseBraced();
+        var value = TooDeeplyNested() ?? ParseBraced(emptyIsList);
         nesting--;
         return value;
     }
 
     /// <summary>Parses a braced value, once there is room on the stack to read one.</summary>
-    private GreenNode ParseBraced()
+    private GreenNode ParseBraced(bool emptyIsList)
     {
-        var record = Next == SyntaxKind.CloseBrace
+        var record = (Next == SyntaxKind.CloseBrace && !emptyIsList)
             || (index + 2 < tokens.Length
                 && tokens[index + 1].Kind is SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic
                 && tokens[index + 2].Kind == SyntaxKind.Equals);

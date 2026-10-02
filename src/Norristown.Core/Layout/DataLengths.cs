@@ -243,9 +243,9 @@ public static class DataLengths
 
     /// <summary>
     /// Checks an array's element count. The count must be a constant, and when values are given
-    /// it must match the number of values. A short table is exactly the mistake a count is there to
-    /// catch, so values are never padded out to it, except for a single text, which is padded
-    /// with zeros to the declared count.
+    /// it must match the number of values, and <c>[]</c> needs at least one value. A short table
+    /// is exactly the mistake a count is there to catch, so values are never padded out to it,
+    /// except for a single text, which is padded with zeros to the declared count.
     /// </summary>
     private static void CheckCount(DataDirectiveSyntax directive, SemanticModel model, List<Diagnostic>? diagnostics, Expansion? on)
     {
@@ -254,7 +254,8 @@ public static class DataLengths
         var (declared, given) = model.ElementsOf(directive, on);
         if (count.Count is not { } countExpression)
         {
-            if (given is null && directive.Tail is not BracedDataSyntax && DataSyntax.BodyOf(directive) is null)
+            // Values nt65 cannot count, such as a macro call's, leave the count unknown, not empty.
+            if (given == 0 || (given is null && directive.Tail is not BracedDataSyntax && DataSyntax.BodyOf(directive) is null))
             {
                 Report(count, model, diagnostics, on,
                     Catalogue.ElementCountEmpty.Message(directive.Directive.Text));
