@@ -600,6 +600,7 @@ public sealed class SyntaxTree
     {
         (BlockKind.DataBody, BlockKind.If or BlockKind.Repeat or BlockKind.Each) => BlockKind.DataBody,
         (BlockKind.Enum, BlockKind.If) => BlockKind.Enum,
+        (BlockKind.List, BlockKind.If) => BlockKind.List,
         _ => block,
     };
 

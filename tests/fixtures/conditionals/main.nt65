@@ -74,6 +74,18 @@
     main, trace
 }
 
+; A list's items may stand under an `.if` too, and only the branch the build takes adds to it.
+; With `DEBUG`, `steps` is `main`, `trace` and `main`, and without it `main` four times.
+.list steps {
+    main
+    .if DEBUG {
+        trace
+    } .else {
+        main, main
+    }
+    main
+}
+
 ; A member may stand under an `.if` in the enum, so one set of names varies by configuration
 ; where the names are listed. The condition tests the configuration, as every `.if` outside a
 ; turn does, and a member with no value of its own is still the one before it taken plus one:
@@ -99,6 +111,8 @@
         h - 1                   ; an RTS dispatch table
     }
 }
+
+.data step_table: .addr steps
 
 .data commands: .byte[] {
     .each Cmd, c {

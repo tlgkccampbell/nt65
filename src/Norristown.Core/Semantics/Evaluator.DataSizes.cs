@@ -518,64 +518,139 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Lays out a structure or a union. Each member gets its offset and size, and the type takes
     /// its own size from them. A union puts every member at offset zero and is as big as its
-    /// largest member.
+    /// largest member. An anonymous struct or union inside the type declares its members in the
+    /// type's scope, but it is laid out as one member of the type, and its own members are laid
+    /// out within it. So a union of a word and an anonymous struct of two bytes puts the second
+    /// byte at offset 1.
     /// </summary>
     private void LayOut(Symbol type)
     {
-        long offset = 0;
-        long largest = 0;
+        var root = new MemberGroup(type.Kind == SymbolKind.Union);
+        var groups = new Dictionary<BlockSyntax, MemberGroup>();
         long members = 0;
         foreach (var member in type.Body?.Symbols ?? [])
         {
             if (member.Kind != SymbolKind.Member)
                 continue;
-            // The type a member names is worth keeping on it. Emission walks into it, and
-            // nothing else would have resolved it unless a path happened to reach through.
-            member.Type ??= (member.Data as DataDirectiveSyntax)?.Type is { } named ? SymbolOf(named) : null;
-
-            // A member reserves room and holds no value, so an operand is reported rather than
-            // silently ignored. For example, `colors: .word 16`, meant as sixteen words, would
-            // reserve two bytes.
-            var room = member.Data is DataDirectiveSyntax data
-                && (DataSyntax.IsElementType(data) || data.Directive.DirectiveKind == DirectiveKind.Res)
-                ? RoomFor(data)
-                : null;
-            if (member.Data is DataDirectiveSyntax element && DataSyntax.IsElementType(element))
+            var group = root;
+            foreach (var block in AnonymousBlocksAround(member))
             {
-                var spelled = element.Directive.Text;
-                SyntaxNode? valued = element.Tail switch
+                if (!groups.TryGetValue(block, out var inner))
                 {
-                    InlineDataSyntax { Values: [var first, ..] } => first,
-                    BracedDataSyntax braced => braced.Value,
-                    _ => null,
-                };
-                if (valued is not null)
-                {
-                    Report(valued, Catalogue.MemberHasNoValue.Message(member.Name, spelled));
+                    inner = new MemberGroup(block.BlockKind == BlockKind.Union);
+                    groups.Add(block, inner);
+                    group.Items.Add(inner);
                 }
-                else if (element.Count is { Count: null } count)
-                {
-                    Report(count, Catalogue.MemberCountNotANumber.Message(member.Name, spelled));
-                }
+                group = inner;
             }
-            if (room is null)
-            {
-                Report(member.DeclarationSpan, Catalogue.MemberReservesNothing.Message(member.Name), []);
-                continue;
-            }
-
-            member.Value = Value.Of(type.Kind == SymbolKind.Union ? 0 : offset);
-            member.Size = room.Value.Bytes;
-            member.Count = room.Value.Elements;
-            evaluated.Add(member);
-            if (type.Kind == SymbolKind.Union)
-                largest = Math.Max(largest, room.Value.Bytes);
-            else
-                offset += room.Value.Bytes;
+            group.Items.Add(member);
             members++;
         }
-        type.Size = type.Kind == SymbolKind.Union ? largest : offset;
+        type.Size = Place(root, 0);
         type.Count = members;
+    }
+
+    /// <summary>
+    /// Returns the anonymous <c>.struct</c> and <c>.union</c> blocks that hold a member, from the
+    /// outermost to the innermost, stopping at the named type the member belongs to.
+    /// </summary>
+    private static List<BlockSyntax> AnonymousBlocksAround(Symbol member)
+    {
+        var blocks = new List<BlockSyntax>();
+        for (var node = member.Data?.Parent; node is not null; node = node.Parent)
+        {
+            if (node is not BlockSyntax { BlockKind: BlockKind.Struct or BlockKind.Union } block)
+                continue;
+            if (block.Opener.Statement is not TypeDeclarationSyntax { Name: null })
+                break;
+            blocks.Insert(0, block);
+        }
+        return blocks;
+    }
+
+    /// <summary>
+    /// Gives each member of a group its offset, starting from <paramref name="start"/>, and
+    /// returns the room the group takes. A structure's members follow one another, and a union's
+    /// all start at <paramref name="start"/>.
+    /// </summary>
+    private long Place(MemberGroup group, long start)
+    {
+        long offset = start;
+        long largest = 0;
+        foreach (var item in group.Items)
+        {
+            var at = group.IsUnion ? start : offset;
+            var room = item is MemberGroup inner ? Place(inner, at) : PlaceMember((Symbol)item, at);
+            if (room is not { } bytes)
+                continue;
+            if (group.IsUnion)
+                largest = Math.Max(largest, bytes);
+            else
+                offset += bytes;
+        }
+        return group.IsUnion ? largest : offset - start;
+    }
+
+    /// <summary>
+    /// Gives a member of a structure or a union its offset, size and count, and returns the room
+    /// it takes, or null when it reserves none, which is reported.
+    /// </summary>
+    private long? PlaceMember(Symbol member, long offset)
+    {
+        // The type a member names is worth keeping on it. Emission walks into it, and nothing
+        // else would have resolved it unless a path happened to reach through.
+        member.Type ??= (member.Data as DataDirectiveSyntax)?.Type is { } named ? SymbolOf(named) : null;
+
+        // A member reserves room and holds no value, so an operand is reported rather than
+        // silently ignored. For example, `colors: .word 16`, meant as sixteen words, would
+        // reserve two bytes.
+        var room = member.Data is DataDirectiveSyntax data
+            && (DataSyntax.IsElementType(data) || data.Directive.DirectiveKind == DirectiveKind.Res)
+            ? RoomFor(data)
+            : null;
+        if (member.Data is DataDirectiveSyntax element && DataSyntax.IsElementType(element))
+        {
+            var spelled = element.Directive.Text;
+            SyntaxNode? valued = element.Tail switch
+            {
+                InlineDataSyntax { Values: [var first, ..] } => first,
+                BracedDataSyntax braced => braced.Value,
+                _ => null,
+            };
+            if (valued is not null)
+            {
+                Report(valued, Catalogue.MemberHasNoValue.Message(member.Name, spelled));
+            }
+            else if (element.Count is { Count: null } count)
+            {
+                Report(count, Catalogue.MemberCountNotANumber.Message(member.Name, spelled));
+            }
+        }
+        if (room is null)
+        {
+            Report(member.DeclarationSpan, Catalogue.MemberReservesNothing.Message(member.Name), []);
+            return null;
+        }
+
+        member.Value = Value.Of(offset);
+        member.Size = room.Value.Bytes;
+        member.Count = room.Value.Elements;
+        evaluated.Add(member);
+        return room.Value.Bytes;
+    }
+
+    /// <summary>
+    /// Represents a structure or a union being laid out, or an anonymous one inside it. Its items
+    /// are its members, as symbols, and the anonymous groups inside it, in the order they are
+    /// written.
+    /// </summary>
+    private sealed class MemberGroup(bool isUnion)
+    {
+        /// <summary>Gets a value indicating whether the group is a union.</summary>
+        public bool IsUnion { get; } = isUnion;
+
+        /// <summary>Gets the group's members and the groups inside it.</summary>
+        public List<object> Items { get; } = [];
     }
 
     /// <summary>

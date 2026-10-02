@@ -57,6 +57,8 @@ main__dispatch:
     .addr main - 1
     .addr trace - 1
 
+step_table: .addr main, main, main, main  ; steps
+
 main__commands:
     .byte $00
     .byte $01
@@ -78,26 +80,26 @@ main__grid:
 COLUMNS = 40
 
 .segment "CODE": absolute
-; .proc indented  main.nt65:134
+; .proc indented  main.nt65:148
 main__indented:
     lda #1
     rts
 ; end of indented
 
-; .proc move  main.nt65:146
+; .proc move  main.nt65:160
 actions__move:
     rts
 ; end of move
-; .proc fire  main.nt65:149
+; .proc fire  main.nt65:163
 actions__fire:
     jmp actions__move
 ; end of fire
-; .proc wait  main.nt65:157
+; .proc wait  main.nt65:171
 actions__wait:
     rts
 ; end of wait
 
-; .proc slow  main.nt65:164
+; .proc slow  main.nt65:178
 main__slow:
     ldx #$00 + 1
 slow__delay:
@@ -123,7 +125,7 @@ slow__skip_3:
     rts
 ; end of slow
 
-; .proc run_all  main.nt65:178
+; .proc run_all  main.nt65:192
 main__run_all:
     jsr actions__move
     jsr actions__fire

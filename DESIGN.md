@@ -968,7 +968,9 @@ offset in the scope `Point` (`Point::x` is 0, `Point::y` is 2) with a byte size
 (`.sizeof(Point::y)` is 2) and a count (`.countof(Player::colors)` is 4), and
 `.sizeof(Point)` is the total. Members of a record member are reachable through it:
 `Player::pos::y` is 2. An anonymous `.struct { }` inside a struct groups members without
-introducing a scope. A **union** is a struct in which every member is at offset 0 and the
+introducing a scope. Inside a union it is one member, whose own members follow one another
+from offset 0, so a union of a `.word` and an anonymous struct of two `.byte`s names the
+word's two halves. A **union** is a struct in which every member is at offset 0 and the
 size is that of the largest member. Member names may be register names or mnemonics (§4).
 
 **Data of a type.** `.data name: .type T` declares one record and `.type T[n]` an array of
@@ -2705,7 +2707,7 @@ about.
 
 `.if` and `.repeat` are allowed at item level, inside procs, and in `.data` bodies, where
 their lines are values (§8). `.if` is allowed in an `.enum` body too, where its lines are
-members (§6.3); a repetition is not, because a member's name is written, never computed.
+members (§6.3), and in a `.list` body, where its lines are items (§6.4); a repetition is not, because a member's name is written, never computed.
 `.multiproc` is allowed where `.proc` is, and nowhere else.
 
 **Conditions test the configuration, not the program.** An `.if` decides which declarations

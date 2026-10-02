@@ -1087,15 +1087,24 @@ internal sealed partial class Binder
     /// <summary>
     /// Declares a <c>.charmap</c> or a <c>.list</c>, whose lines are entries rather than
     /// declarations, as one symbol holding them. A list's items name symbols, and those names
-    /// belong to the scope the list appears in.
+    /// belong to the scope the list appears in. A list's items may stand under an <c>.if</c>, and
+    /// only the branches the build takes add to it.
     /// </summary>
     private void DeclareCollected(StatementSyntax opener, SymbolKind kind, ImmutableArray<SyntaxNode> lines)
     {
         var bodies = new List<StatementSyntax>();
-        for (var i = 1; i < lines.Length; i++)
+        Collect(lines, 1);
+
+        void Collect(ImmutableArray<SyntaxNode> within, int from)
         {
-            if (lines[i] is LineSyntax { Statement: CharmapEntrySyntax or ListItemsSyntax } line)
-                bodies.Add(line.Statement);
+            for (var i = from; i < within.Length; i++)
+            {
+                if (within[i] is LineSyntax { Statement: CharmapEntrySyntax or ListItemsSyntax } line)
+                    bodies.Add(line.Statement);
+                else if (kind == SymbolKind.List && within[i] is BlockSyntax { BlockKind: BlockKind.If } branch
+                    && configuration.Includes(branch))
+                    Collect(branch.Members, 1);
+            }
         }
 
         if (NameToken(opener) is not { } name)

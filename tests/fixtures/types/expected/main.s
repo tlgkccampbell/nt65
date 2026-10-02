@@ -11,6 +11,7 @@
 .export main__sizes
 .export main__counts
 .export main__offs
+.export main__halves
 .export main__plain
 .export main__mapped
 .export main__one
@@ -42,6 +43,7 @@ actors: .res 39                     ; Player
 main__sizes:  .byte $0d, $04, $02
 main__counts: .byte $03, $03
 main__offs:   .byte $02, $04, $02   ; Player::pos::y, Player::hp, Point::y
+main__halves: .byte $00, $01, $02   ; Pair::low, Pair::high
 
 main__plain:  .byte $48, $49        ; "HI"
 main__mapped: .byte $08, $09, $00   ; screen("HI@")
@@ -73,7 +75,7 @@ main__part: .incbin "sprites.bin", 6, 4
 cursor: .res 13                     ; Player
 
 .segment "CODE": absolute
-; .proc main  main.nt65:91
+; .proc main  main.nt65:102
 main__main:
 
     lda a:player+4                  ; player::hp
