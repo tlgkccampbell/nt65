@@ -1,0 +1,51 @@
+; The program's screen, its display list and its text, which the last load segment writes over
+; the loading screen. It is loaded as it is shown, so the program has only to point ANTIC at it
+; and fill in two numbers.
+.module display
+
+.cpu 6502
+
+.use atari::antic
+.use nt65::atari::screen
+
+.export list, time, count, BANDS
+
+.const BANDS = 2                    ; the bands of colour bars, each drawn by a display list interrupt
+
+.segment SCREEN
+
+; The screen as ANTIC draws it. The line before each band of bars raises the interrupt that
+; draws them, on the 16 blank lines after it.
+.data list {
+    .byte antic::BLANK8, antic::BLANK8, antic::BLANK8 | antic::DLI
+    .byte antic::BLANK8, antic::BLANK8
+    .byte antic::LARGE | antic::LMS
+    .addr title
+    .byte antic::BLANK8
+    .byte antic::TEXT | antic::LMS
+    .addr rows
+    .repeat ROWS - 1 {
+        .byte antic::TEXT
+    }
+    .byte antic::BLANK8 | antic::DLI
+    .byte antic::BLANK8, antic::BLANK8
+    .byte antic::JVB
+    .addr list
+}
+
+.data title: .byte[20] { screen("      NT65 XEX") }
+
+.data rows {
+    .data intro:  .byte[40] { screen("  A XEX of four load segments:") }
+    .data check:  .byte[40] { screen("  $0600  checks the machine   INITAD") }
+    .data loader: .byte[40] { screen("  $A000  says Loading...     INITAD") }
+    .data main:   .byte[40] { screen("  $2000  the program         INITAD") }
+    .data over:   .byte[40] { screen("  $A000  this screen, over the loader") }
+    .res 40                         ; a blank row
+    .data status: .byte[40] { screen("  Loaded in 000 frames. Frame 0000.") }
+}
+
+.const ROWS = .sizeof(rows) / 40
+
+.data time:  .byte[3] = rows::status + 12  ; the frames the load took, in decimal
+.data count: .byte[4] = rows::status + 30  ; the frames since the program started, in hex

@@ -1,0 +1,63 @@
+; The first load segment, which checks that the program fits before any of the rest loads. It is
+; in page 6, which no DOS uses, so it can run whatever DOS loaded it. A machine with a cartridge
+; such as BASIC in, or a DOS whose buffers reach past where the program starts, gets a message in
+; ATASCII on the screen DOS left, and goes back to DOS.
+.module syscheck
+
+.cpu 6502
+
+.use atari::{os, cio}
+.use nt65::atari::atascii
+
+.export run
+
+.const PROGRAM = $2000              ; where MAIN loads, the lowest address the program uses
+.const TOP     = $C0                ; RAMTOP with no cartridge in, when $A000 to $BFFF is RAM
+
+.segment SYSCHK
+
+; Returns if the program fits. If not, writes why and goes back to DOS, which stops the load.
+.proc run {
+    lda os::RAMTOP
+    cmp #TOP
+    bcc @cartridge
+    lda #<PROGRAM                   ; PROGRAM - MEMLO borrows if DOS reaches past PROGRAM
+    cmp os::MEMLO
+    lda #>PROGRAM
+    sbc os::MEMLO + 1
+    bcc @dos
+    rts
+@cartridge:
+    ldy #messages::cartridge - messages
+    lda #.sizeof(messages::cartridge)
+    jmp fail
+@dos:
+    ldy #messages::dos - messages
+    lda #.sizeof(messages::dos)
+    jmp fail
+}
+
+; Writes the message at offset Y in `messages`, A bytes of it, and goes back to DOS.
+.proc fail: noreturn {
+    sta cio::channels[0]::length
+    tya
+    clc
+    adc #<messages
+    sta cio::channels[0]::buffer
+    lda #>messages
+    adc #0
+    sta cio::channels[0]::buffer + 1
+    lda #0
+    sta cio::channels[0]::length + 1
+    lda #cio::PUT_CHARS
+    sta cio::channels[0]::command
+    ldx #0                          ; channel 0, the screen editor, which DOS writes to
+    jsr os::CIOV
+    jmp (os::DOSVEC)
+    .next ?                         ; DOS, which does not come back
+}
+
+.data messages {
+    .data cartridge: .byte atascii("This program needs BASIC off: hold OPTION as the machine starts."), cio::EOL
+    .data dos:       .byte atascii("This DOS leaves too little memory for this program."), cio::EOL
+}

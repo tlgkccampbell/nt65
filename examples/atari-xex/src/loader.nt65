@@ -1,0 +1,64 @@
+; The loading screen, which DOS's loader calls into twice while the program loads: `show` as soon
+; as this segment is in, and `hide` once MAIN is. It is loaded at the addresses the program's own
+; screen loads at afterwards, so none of it is left once the load is done. All the program sees
+; of it is the two frame counts in the zero page.
+.module loader
+
+.cpu 6502
+
+.use atari::{antic, os, wait_frame}
+.use nt65::atari::screen
+
+.export show, hide, started, finished
+
+.segment ZEROPAGE
+.data started:  .byte               ; the frame `show` came in on, from os::RTCLOK
+.data finished: .byte               ; the frame `hide` came in on
+
+.segment LOADER
+
+; Notes the frame, and puts the loading screen up in place of the one DOS left.
+.proc show {
+    lda os::RTCLOK
+    sta started
+    wait_frame!()
+    lda #<list
+    sta os::SDLSTL
+    lda #>list
+    sta os::SDLSTL + 1
+    lda #$94                        ; blue
+    sta os::COLOR2
+    sta os::COLOR4
+    lda #$0E                        ; white
+    sta os::COLOR1
+    sta os::COLOR0
+    rts
+}
+
+; Notes the frame, and turns the screen off before the program's screen is loaded over this
+; one. ANTIC reads the display list a line at a time, and would read whatever was half loaded.
+.proc hide {
+    lda os::RTCLOK
+    sta finished
+    lda #0
+    sta os::SDMCTL
+    wait_frame!()                   ; the vertical blank copies SDMCTL into ANTIC
+    rts
+}
+
+; The loading screen as ANTIC draws it: the title and the message, in the middle of the screen.
+.data list {
+    .repeat 9 {
+        .byte antic::BLANK8
+    }
+    .byte antic::LARGE | antic::LMS
+    .addr title
+    .byte antic::BLANK8
+    .byte antic::TEXT | antic::LMS
+    .addr message
+    .byte antic::JVB
+    .addr list
+}
+
+.data title:   .byte[20] { screen("      NT65 XEX") }
+.data message: .byte[40] { screen("               Loading...") }

@@ -1,0 +1,125 @@
+; The colour bars, and the interrupts that draw and move them. A display list interrupt draws each
+; band, one colour a line, and the vertical blank moves the bars on a line each frame and counts
+; the frames.
+;
+; The vertical blank's part is the deferred one, which the operating system runs after its own
+; work in the vertical blank, through VVBLKD. `vbi` goes on to where VVBLKD pointed before, which
+; is the operating system's exit, so anything hooked there earlier still runs.
+.module bars
+
+.cpu 6502
+
+.use atari::{antic, gtia, os}
+.use display::BANDS
+
+.export install, frames
+
+.const LINES    = 16                ; the lines of each band, all blank, one colour to a line
+.const PERIOD   = 16                ; the lines before a band's colours repeat
+.const DEFERRED = 7                 ; os::SETVBV's number for VVBLKD
+
+.segment ZEROPAGE
+.data frames: .word                 ; counts the frames, one at each `vbi`
+.data band:   .byte                 ; the bands drawn so far this frame
+.data phase:  .byte                 ; how far the bars have moved, from 0 to PERIOD - 1
+
+.segment BSS
+.data old: .addr                    ; where VVBLKD pointed before, which is the operating system's exit
+
+.segment CODE
+
+; Starts the count and the bars from 0, points the display list interrupt at `dli`, hooks `vbi`
+; into the deferred vertical blank, and turns the display list interrupt on.
+.proc install {
+    lda #0
+    sta frames
+    sta frames + 1
+    sta band
+    sta phase
+    lda #<dli
+    sta os::VDSLST
+    lda #>dli
+    sta os::VDSLST + 1
+    lda os::VVBLKD
+    sta old
+    lda os::VVBLKD + 1
+    sta old + 1
+    ldy #<vbi
+    ldx #>vbi
+    lda #DEFERRED
+    jsr os::SETVBV
+    lda #antic::NMI_DLI
+    sta antic::NMIEN
+    rts
+}
+
+; Draws the next band on the LINES lines after the one that raised it, and then puts the
+; background back.
+.proc dli: interrupt {
+    pha
+    txa
+    pha
+    tya
+    pha
+    lda band                        ; this band's colours start at band * 2 * PERIOD + phase
+    .repeat 5 {
+        asl a
+    }
+    clc
+    adc phase
+    tax
+    ldy #LINES
+@line:
+    lda colours,x
+    sta antic::WSYNC
+    sta gtia::COLBK
+    inx
+    dey
+    bne @line
+    lda os::COLOR4
+    sta antic::WSYNC
+    sta gtia::COLBK
+    inc band
+    pla
+    tay
+    pla
+    tax
+    pla
+    rti
+}
+
+; Starts the next frame's bands from the first, moves the bars on a line, and counts the frame.
+.proc vbi: interrupt {
+    lda #0
+    sta band
+    ldx phase
+    inx
+    cpx #PERIOD
+    bne @moved
+    ldx #0
+@moved:
+    stx phase
+    inc frames
+    bne @counted
+    inc frames + 1
+@counted:
+    jmp (old)
+    .next ?                         ; the operating system's exit, which returns from the interrupt
+}
+
+; Returns the luminance of a band's line i, which rises and falls over PERIOD lines.
+.func luminance(i) = .select(i .mod PERIOD < PERIOD / 2, i .mod PERIOD, PERIOD - 1 - i .mod PERIOD) * 2
+
+; Each band's colours, twice over, so that a band read from `phase` on never runs off the end.
+; The top band is light blue and the bottom one orange.
+.data colours: .byte[BANDS * 2 * PERIOD] {
+    .repeat 2 * PERIOD, i {
+        $90 | luminance(i)
+    }
+    .repeat 2 * PERIOD, i {
+        $20 | luminance(i)
+    }
+}
+
+.assert 2 * PERIOD == 32, "`dli` multiplies the band by 32 with five shifts"
+.assert BANDS * 2 * PERIOD <= 256, "`dli` indexes `colours` with X"

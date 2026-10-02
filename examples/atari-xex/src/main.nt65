@@ -1,0 +1,101 @@
+; The program, which RUNAD starts once every segment is in. By then the loading screen is off and
+; the program's own is loaded where it was, so the start has only to point ANTIC at it, say how
+; long the load took, and set the interrupts going. The main loop then shows the frame count.
+.module main
+
+.cpu 6502
+
+.use atari::{antic, os}
+.use nt65::atari::screen
+
+.export start
+
+.segment CODE
+
+; Shows the program's screen, which `loader::hide` left turned off, and starts the bars.
+.proc start: noreturn {
+    lda #<display::list
+    sta os::SDLSTL
+    lda #>display::list
+    sta os::SDLSTL + 1
+    lda #$00                        ; black
+    sta os::COLOR4
+    lda #$84                        ; blue
+    sta os::COLOR2
+    lda #$0E                        ; white
+    sta os::COLOR1
+    lda #$1C                        ; gold
+    sta os::COLOR0
+    jsr show_load_time
+    jsr bars::install
+    lda #antic::NORMAL
+    sta os::SDMCTL
+    .fallthrough loop
+}
+
+; Waits for the next frame, and shows its count.
+.proc loop: noreturn {
+    lda bars::frames
+@wait:
+    cmp bars::frames
+    beq @wait
+    lda bars::frames + 1
+    ldx #0
+    jsr show_hex
+    lda bars::frames
+    ldx #2
+    jsr show_hex
+    jmp loop
+}
+
+; Shows how many frames passed between `loader::show` and `loader::hide`, in decimal.
+.proc show_load_time {
+    lda loader::finished
+    sec
+    sbc loader::started
+    ldx #0
+@hundreds:
+    cmp #100
+    bcc @tens
+    sbc #100
+    inx
+    bne @hundreds
+@tens:
+    ldy digits,x
+    sty display::time
+    ldx #0
+@more:
+    cmp #10
+    bcc @ones
+    sbc #10
+    inx
+    bne @more
+@ones:
+    ldy digits,x
+    sty display::time + 1
+    tax
+    ldy digits,x
+    sty display::time + 2
+    rts
+}
+
+; Shows A as two hex digits in `display::count`, X places in.
+.proc show_hex {
+    pha
+    lsr a
+    lsr a
+    lsr a
+    lsr a
+    tay
+    lda digits,y
+    sta display::count,x
+    pla
+    and #$0F
+    tay
+    lda digits,y
+    sta display::count + 1,x
+    rts
+}
+
+.segment RODATA
+.data digits: .byte screen("0123456789ABCDEF")

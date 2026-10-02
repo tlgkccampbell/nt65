@@ -1,0 +1,83 @@
+; The parts of the Atari 800XL and XE the program uses: ANTIC and GTIA, the operating system's
+; shadows of their registers, its vectors, and the routines it publishes, with a scope for each.
+;
+; The operating system copies each shadow into its chip's register once a frame, in the vertical
+; blank, so a program that writes a shadow changes the screen from the next frame on.
+.module atari
+
+.cpu 6502
+
+.export wait_frame
+
+; ANTIC's registers, and the instructions of a display list, which ANTIC reads one at a time to
+; draw the screen.
+.export .scope antic {
+    .const WSYNC = $D40A            ; a write holds the CPU until the end of the line
+    .const NMIEN = $D40E            ; bit 7 enables the display list interrupt, bit 6 the vertical blank's
+
+    .const BLANK8 = $70             ; eight blank lines
+    .const TEXT   = $02             ; a line of 40 characters, each 8 lines high
+    .const LARGE  = $07             ; a line of 20 characters, each 16 lines high and two pixels wide
+    .const LMS    = $40             ; with a mode, says the line's memory starts at the address after it
+    .const DLI    = $80             ; with any line, interrupts the CPU at its last line
+    .const JVB    = $41             ; waits for the vertical blank, then starts the list at the address after it
+
+    .const NORMAL  = %00100010      ; os::SDMCTL: the display list and a normal playfield
+    .const NMI_DLI = %11000000      ; NMIEN: the display list interrupt and the vertical blank's
+}
+
+; GTIA's colour registers. A colour is a hue in the high nibble and a luminance in the low.
+.export .scope gtia {
+    .const COLBK = $D01A            ; the border, and blank lines
+}
+
+; The operating system's variables, shadows and vectors, and its routines.
+.export .scope os {
+    .const DOSVEC = $000A           ; where DOS is entered, or the loader when there is no DOS
+    .const RTCLOK = $0014           ; the low byte of the frame counter, which the vertical blank counts up
+    .const RAMTOP = $006A           ; the page after the last of RAM, below any cartridge
+
+    .data VDSLST: .addr = $0200     ; where the display list interrupt goes
+    .data VVBLKD: .addr = $0224     ; the deferred vertical blank, which ends by jumping to XITVBV at $E462
+
+    .const SDMCTL = $022F           ; what ANTIC fetches; 0 turns the screen off
+    .data SDLSTL: .addr = $0230     ; the display list's address
+    .const COLOR0 = $02C4           ; the characters of a LARGE line
+    .const COLOR1 = $02C5           ; the characters' luminance in a TEXT line
+    .const COLOR2 = $02C6           ; the background of a TEXT line
+    .const COLOR4 = $02C8           ; gtia::COLBK's shadow
+    .data MEMLO: .addr = $02E7      ; the first address DOS leaves free
+
+    ; Points the vector that A names at the routine whose address is in Y (low) and X (high): 6
+    ; names the immediate vertical blank, 7 the deferred, and 1 to 5 the countdown timers.
+    .proc SETVBV = $E45C: reads a, x, y
+    .proc CIOV   = $E456: reads x   ; the central I/O routine, for the channel whose control block is at X
+}
+
+; The control block of an I/O channel, which a program fills in and hands to os::CIOV.
+.export .struct Iocb {
+    handler: .byte
+    unit:    .byte
+    command: .byte
+    status:  .byte
+    buffer:  .addr
+    put:     .addr
+    length:  .word
+    aux:     .byte[6]
+}
+
+; The eight channels' control blocks, and what CIO is asked to do with them.
+.export .scope cio {
+    .data channels: .type Iocb[8] = $0340
+    .const PUT_CHARS = $0B          ; writes `length` bytes from `buffer`
+    .const EOL       = $9B          ; ATASCII's end of line
+}
+
+; Waits for the operating system's vertical blank to pass, after which there is most of a frame
+; before it next copies the shadows into the chips.
+.macro wait_frame() {
+    lda os::RTCLOK
+@wait:
+    cmp os::RTCLOK
+    beq @wait
+}

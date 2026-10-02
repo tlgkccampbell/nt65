@@ -1,0 +1,8 @@
+{
+  "cpu": "6502",
+  "files": ["src/*.nt65"],
+  "out": "build",
+  "links": {
+    "xex": { "config": "xex.cfg" }
+  }
+}
