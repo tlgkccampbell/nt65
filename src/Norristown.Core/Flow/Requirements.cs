@@ -102,6 +102,26 @@ internal sealed class Requirements
     }
 
     /// <summary>
+    /// Returns whether control may enter the run of blocks that falls through into a block. A
+    /// label opens a block even where nothing ends the one before it, so a run of data labels is a
+    /// chain of blocks that only fall into each other. Control enters the chain where a block in it
+    /// is the routine's entry, is declared, or is reached by anything other than falling in.
+    /// </summary>
+    private static bool Enters(IReadOnlyList<BasicBlock> blocks, BasicBlock last)
+    {
+        for (var block = last; ; block = blocks[block.Index - 1])
+        {
+            if (block.Index == 0 || block.IsDeclared
+                || block.Predecessors.Any(from => !block.IsFallenInto || from != block.Index - 1))
+            {
+                return true;
+            }
+            if (!block.IsFallenInto)
+                return false;
+        }
+    }
+
+    /// <summary>
     /// Returns how source inside <paramref name="from"/> names <paramref name="routine"/>. That is
     /// its own name where the two are declared in one scope, and its qualified name anywhere else.
     /// </summary>
@@ -301,7 +321,7 @@ internal sealed class Requirements
     /// </summary>
     private void CheckEnd(FlowRegion region, BasicBlock last, bool own)
     {
-        if (last.Index != 0 && !last.IsFallenInto && last.Predecessors.Count == 0 && !last.IsDeclared)
+        if (!Enters(region.Blocks, last))
             return;
 
         var routine = region.Routine.DisplayName;

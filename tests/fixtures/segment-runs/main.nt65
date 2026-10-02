@@ -56,3 +56,16 @@
 .export .proc tail {
     rts
 }
+
+; Data labels in a block after the routine's return open blocks that only fall into each
+; other. Nothing enters the first, so the routine does not run off the end of the block.
+.segment CODE
+.export .proc draw {
+    lda table1
+    lda table2
+    rts
+    .segment RODATA {
+        .data table1: .byte 1, 2
+        .data table2: .byte 3, 4
+    }
+}

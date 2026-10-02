@@ -17,6 +17,7 @@
 .export main__far_apart
 .export main__scratch
 .export main__tail
+.export main__draw
 
 .segment "CODE": absolute
 ; .proc first  main.nt65:12
@@ -71,3 +72,16 @@ main__scratch: .byte 0
 main__tail:
     rts
 ; end of tail
+
+; .proc draw  main.nt65:63
+main__draw:
+    lda a:draw__table1
+    lda a:draw__table2
+    rts
+
+.pushseg
+.segment "RODATA": absolute
+draw__table1: .byte 1, 2
+draw__table2: .byte 3, 4
+.popseg
+; end of draw

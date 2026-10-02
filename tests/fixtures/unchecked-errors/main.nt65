@@ -153,6 +153,17 @@
     .byte $ea               ;! error[routine-runs-off-the-end]: `onto_data` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine it runs into, or use `.next ?` to end the path
 }
 
+; A jump into a segment block, whose code then runs off the end of the block.
+.proc into_block: a8, i8 {
+    jmp @inside
+    .segment DATA {
+    @inside:
+        nop
+    @after:
+        nop                 ;! error[routine-runs-off-the-end]: `into_block` runs off the end of a segment block into whatever that segment holds next: add a `.next` saying where flow goes, or use `.next ?` to end the path
+    }
+}
+
 ; Falling off the end, and a `.fallthrough` naming a routine that is not the next one written.
 .proc falls: a8, i8 {
     nop
