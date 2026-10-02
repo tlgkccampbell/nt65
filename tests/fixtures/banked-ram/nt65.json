@@ -1,0 +1,5 @@
+{
+  "cpu": "r65c02",
+  "files": ["*.nt65"],
+  "links": { "prg": { "config": "banks.cfg" } }
+}

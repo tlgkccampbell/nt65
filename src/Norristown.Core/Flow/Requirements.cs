@@ -130,13 +130,14 @@ internal sealed class Requirements
 
     /// <summary>
     /// Returns whether a name is only measured rather than used as an address, as it is inside
-    /// <c>.sizeof</c>, <c>.endof</c> or <c>.spanof</c>.
+    /// <c>.sizeof</c>, <c>.endof</c> or <c>.spanof</c>, or asked which bank it is in, as it is
+    /// inside <c>.bankof</c>.
     /// </summary>
     private static bool Measured(NameExpressionSyntax name, SyntaxNode statement)
     {
         for (var node = name.Parent; node is not null && node != statement; node = node.Parent)
         {
-            if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Sizeof or BuiltinKind.Endof or BuiltinKind.Spanof })
+            if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Sizeof or BuiltinKind.Endof or BuiltinKind.Spanof or BuiltinKind.Bankof })
             {
                 return true;
             }

@@ -541,6 +541,18 @@ As with spaces, a name that cannot be seen may still be used as a value: an imme
 `#<name` or `#>name` and data such as `.addr name` are never reported, since a trampoline is
 told where to go that way.
 
+**Which bank to map.** `.bankof(x)` is the `bank` attribute that the config gives the memory
+area holding `x`, a routine, a label or data in a segment. It is ca65's `.bank(x)` in the output,
+and ld65 works it out, so it is a link-time value like `.loadof`. Code that maps a switchable
+bank by writing its number to a register, such as the Commander X16's RAM bank at `$00`, names
+what it is about to reach rather than a number kept in step with the config by hand:
+
+```nt65
+lda #<.bankof(draw::box)
+sta RAM_BANK
+jsr draw::box
+```
+
 The address size is what nt65 uses to size references to symbols in that segment
 (§7.2), so keeping it in one place means sizing depends on a small table rather than on
 a fold over every file.
@@ -1606,7 +1618,7 @@ The third directive is about the end of a routine rather than a statement:
 | `rts` used as a jump | a block pushes a code label and then returns | `.next` on the `rts` |
 | a routine that returns past inline data: `jsr print` then `.strz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.strz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary |
-| label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof` or `.spanof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
+| label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof`, `.spanof` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next |
 | a conditional branch that is always taken: `bne L ; always`, `bcs` over inline text | the flags are known where the branch stands, which nt65 does not work out | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
@@ -2502,7 +2514,7 @@ is an expression like any other.
 
 `*` is the current address. Built-in functions: `.lobyte(e)`, `.hibyte(e)`,
 `.bankbyte(e)`, `.loword(e)`, `.hiword(e)`, `.sizeof(x)` and `.countof(x)` (§6.3, §8),
-`.endof(x)` and `.spanof(x)` (§7.6), `.loadof(S)`, `.runof(S)` and `.spanof(S)` of a segment (§5.2), `.mincycles(from, to)` and `.maxcycles(from, to)` (§7.6),
+`.endof(x)` and `.spanof(x)` (§7.6), `.loadof(S)`, `.runof(S)` and `.spanof(S)` of a segment and `.bankof(x)` (§5.2), `.mincycles(from, to)` and `.maxcycles(from, to)` (§7.6),
 `.strlen(s)`, `.strat(s, i)`, `.strsub(s, start, count)` and `.strcat(part, ...)` (§8), `.min(a, b)`,
 `.max(a, b)`, `.sqrt(n)`, `.muldiv(a, b, c)`, `.sin(angle, turn, scale)` and
 `.cos(angle, turn, scale)` (below), `.addrsize(x)`, the address size in bytes (1, 2 or 3) that
@@ -2715,7 +2727,7 @@ exist, so nt65 answers it before it reads any declaration, and its condition may
 the configuration alone decides:
 
 - literals, operators, and every built-in that does not measure a declaration, which excludes
-  `.sizeof`, `.countof`, `.endof`, `.spanof`, `.loadof`, `.runof`, `.mincycles`,
+  `.sizeof`, `.countof`, `.endof`, `.spanof`, `.loadof`, `.runof`, `.bankof`, `.mincycles`,
   `.maxcycles` and the built-ins only a macro body has;
 - settings (below);
 - constants, functions and enum members declared at file level, outside every block, whose

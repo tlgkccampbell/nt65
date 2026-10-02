@@ -346,6 +346,17 @@ bank. Taking the address as a value, `#<name` or `.addr name`, is fine, because 
 the trampoline is told where to go. nt65 tracks no mapper state: code in the fixed bank may
 name anything, and nothing is reported where the config does not say where a segment runs.
 
+A config can give each such memory area a `bank` attribute, the number the program writes to
+its mapper to show it. `.bankof(name)` is that number for the area that holds `name`, which
+ld65 works out, so code in the fixed bank maps a bank by naming what it is about to call or
+read:
+
+```nt65
+lda #<.bankof(draw::box)        ; the bank the config puts draw::box in
+sta RAM_BANK
+jsr draw::box
+```
+
 **A segment's bytes are one run.** ca65 writes each segment's bytes in the order they appear
 in the file, whichever `.segment` line put them there, and nt65 reads the file the same way.
 A routine at the end of one `CODE` region is followed by whatever the next `CODE` region
@@ -740,7 +751,8 @@ come from a script can sit beside the code that reads it:
 `.cos` is the same a quarter turn on.
 
 The other built-in functions are `.lobyte`, `.hibyte`, `.bankbyte`, `.loword`, `.hiword`,
-`.min`, `.max`, `.addrsize` (1, 2 or 3 for an address's size), `.has`,
+`.min`, `.max`, `.addrsize` (1, 2 or 3 for an address's size), `.bankof` (in
+[Segments](#segments)), `.has`,
 `.target`, `.select`, `.switch`, the size functions of [Data has a type](#data-has-a-type), the text
 functions of [Text](#text), and `.mincycles` and `.maxcycles`, which are in [Cycle counts and
 branch range](#cycle-counts-and-branch-range).

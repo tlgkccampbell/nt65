@@ -1,0 +1,26 @@
+; `.bankof` takes the name of something a segment holds, because the bank is the one the linker
+; config gives that segment's memory area. A constant, a routine or data at a constant address,
+; a scope, an element of an array and a number are in no segment.
+.module main
+.cpu 65c02
+
+.const LIMIT = 4
+.proc CHROUT = $FFD2
+.data PORT: .byte = $9F23
+.scope tools {
+    .const COUNT = 2
+}
+
+.segment RODATA
+.data table: .byte[4] { 1, 2, 3, 4 }
+
+.data banks {
+    .byte <.bankof(LIMIT)           ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `LIMIT` is not one
+    .byte <.bankof(CHROUT)          ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `CHROUT` is not one
+    .byte <.bankof(PORT)            ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `PORT` is not one
+    .byte <.bankof(tools)           ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `tools` is not one
+    .byte <.bankof(table[1])        ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `table[1]` is not one
+    .byte <.bankof($A000)           ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds, and `$A000` is not one
+    .byte <.bankof()                ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds
+    .byte <.bankof(table)
+}

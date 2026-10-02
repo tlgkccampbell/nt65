@@ -616,6 +616,15 @@ internal sealed class ExpressionWriter(
             return;
         }
 
+        // `.bankof(name)` is ca65's `.bank(name)`, which ld65 answers from the memory area that
+        // holds the name.
+        if (call.BuiltinKind == BuiltinKind.Bankof && call.Function is { } bankof)
+        {
+            rewriter.Replacements[bankof.Position] = ".bank";
+            Substitute(call.Arguments, rewriter, nested: false);
+            return;
+        }
+
         // `.exprof(p)` is replaced by the expression inside the operand the call passed as `p`
         // (`5` for `{#5}`, `ptr` for `{(ptr),y}`), unless it is a constant, which the path
         // below writes as a number.

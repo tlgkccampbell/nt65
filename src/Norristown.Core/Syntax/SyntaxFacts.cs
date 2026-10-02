@@ -61,6 +61,7 @@ public static class SyntaxFacts
         new(BuiltinKind.Spanof, 1, 1, "the name of a routine, data or a segment"),
         new(BuiltinKind.Loadof, 1, 1, "a segment"),
         new(BuiltinKind.Runof, 1, 1, "a segment"),
+        new(BuiltinKind.Bankof, 1, 1, "the name of a routine, a label or data that a segment holds"),
         new(BuiltinKind.Strlen, 1, 1, "one text", Arithmetic: true),
         new(BuiltinKind.Strat, 2, 2, "`.strat(text, index)`: a text and a number", Arithmetic: true),
         new(BuiltinKind.Strsub, 3, 3, "`.strsub(text, start, count)`: a text and two numbers", Arithmetic: true),

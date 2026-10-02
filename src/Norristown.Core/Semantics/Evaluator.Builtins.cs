@@ -84,6 +84,8 @@ internal sealed partial class Evaluator
             // `.loadof` and `.runof` never have a value here.
             case BuiltinKind.Loadof or BuiltinKind.Runof:
                 return Value.Unknown;
+            case BuiltinKind.Bankof:
+                return Banked(function, given);
             case BuiltinKind.Endof or BuiltinKind.Spanof:
                 return Extent(kind, given);
             case BuiltinKind.Mincycles or BuiltinKind.Maxcycles:
@@ -172,6 +174,30 @@ internal sealed partial class Evaluator
         }
         layoutReads++;
         return kind == BuiltinKind.Spanof && spans?.Invoke(laid) is { } span ? Value.Of(span) : Value.Unknown;
+    }
+
+    /// <summary>
+    /// Returns the value of <c>.bankof</c>, after checking that it names something a segment
+    /// holds. The bank is the one the linker configuration gives that segment's memory area, which
+    /// ld65 reads, so the call never has a value here.
+    /// </summary>
+    private Value Banked(SyntaxToken function, IReadOnlyList<SyntaxNode> arguments)
+    {
+        // A name that names nothing has been reported already, and a parameter or a binding
+        // names something only in an expansion.
+        var named = arguments[0] as NameExpressionSyntax;
+        var banked = SymbolOf(arguments[0]);
+        if ((named is not null && banked is null) || banked?.Kind is SymbolKind.MacroParameter or SymbolKind.Binding)
+            return Value.Unknown;
+        var held = banked is { Kind: SymbolKind.Label or SymbolKind.Proc or SymbolKind.ImportedAddress }
+            or { Kind: SymbolKind.Data, Segment: not null };
+        if (named is not { IsIndexed: false } || !held)
+        {
+            Report(function, Catalogue.BuiltinArguments.Message(
+                SyntaxFacts.TextOf(BuiltinKind.Bankof),
+                $"{SyntaxFacts.Builtin(BuiltinKind.Bankof).Takes}, and `{arguments[0].GetText().Trim()}` is not one"));
+        }
+        return Value.Unknown;
     }
 
     /// <summary>

@@ -44,6 +44,12 @@ public enum BuiltinKind
     /// <summary><c>.runof(segment)</c>: the address a segment runs at.</summary>
     Runof,
 
+    /// <summary>
+    /// <c>.bankof(name)</c>: the <c>bank</c> that the linker configuration gives the memory area
+    /// a routine, a label or data is in.
+    /// </summary>
+    Bankof,
+
     /// <summary><c>.strlen(text)</c>: the length of a text.</summary>
     Strlen,
 

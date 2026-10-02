@@ -40,8 +40,8 @@ public sealed class BuiltinTableTests
         Assert.Equal(
             [
                 ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof", ".endof", ".spanof",
-                ".loadof", ".runof", ".strlen", ".strat", ".strsub", ".strcat", ".min", ".max", ".addrsize", ".target",
-                ".has", ".select", ".switch", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles",
+                ".loadof", ".runof", ".bankof", ".strlen", ".strat", ".strsub", ".strcat", ".min", ".max", ".addrsize",
+                ".target", ".has", ".select", ".switch", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles",
                 ".maxcycles", ".mode", ".byteof", ".exprof", ".empty",
             ],
             SyntaxFacts.Builtins.Select(builtin => builtin.Name));
