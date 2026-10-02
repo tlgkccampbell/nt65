@@ -1,0 +1,81 @@
+; A macro call's arguments continue onto the next line while its `(` is open, as a `.func`
+; call's do, so a long call is written across lines with a comment on each.
+.module main
+
+.cpu 65c02
+
+.segment ZEROPAGE
+.data ptr: .word
+
+.segment BSS
+.data buf: .byte[256]
+
+.const SCREEN = $0400
+
+; Arguments of the kinds a line may start with, a braced operand, an expression and a
+; parameter's name, and a block that may follow them.
+.macro fill(dest: operand, value, count: const = 1, body: block = {}) {
+    lda #value
+    ldx #count
+    sta dest
+    body
+}
+
+; Text given to a parameter, written as bytes.
+.macro message(length, text) {
+    .byte length
+    .strz text
+}
+
+; Two blocks, the second named by its continuation and defaulting to empty.
+.macro if(c: one(eq, ne, cs, cc), then: block, else: block = {}) {
+    .if c == eq {
+        bne @skip
+    } .elseif c == ne {
+        beq @skip
+    } .elseif c == cs {
+        bcc @skip
+    } .else {
+        bcs @skip
+    }
+    then
+    .if !.empty(else) {
+        jmp @done
+    }
+@skip:
+    else
+@done:
+}
+
+.segment CODE
+.export .proc main {
+    fill!(
+        {buf,x},                    ; where
+        (SCREEN >> 8) + 1,          ; what
+        count = 2) {                ; a named argument, then the block
+        nop
+    }
+    fill!(
+        {ptr},                    ; where the value goes
+        (SCREEN >> 8) +
+        1,                          ; the value, itself across two lines
+        ; a comment on a line of its own
+        count = 2)                  ; a named argument
+    if!(                            ; a block argument after arguments across lines
+        eq) {
+        lda #0
+    } else {
+        inx
+    }
+    rts
+}
+
+.segment RODATA
+.data greeting {
+    message!(
+        2,                          ; the length
+        "HI")                       ; the text
+}
+
+; Exported, so that what the file only declares counts as used.
+.export greeting

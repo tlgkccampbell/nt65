@@ -400,6 +400,43 @@ public abstract class SyntaxNode
     /// </summary>
     public string GetText() => Tree.Text.Substring(Span.Start, Span.Length);
 
+    /// <summary>
+    /// Returns the node's text over <see cref="Span"/> on one line. Where the node continues
+    /// across lines, each line break becomes one space, together with the comments and the
+    /// indentation around it. A break right after an opening bracket or right before a closing
+    /// one becomes nothing, so <c>m!(</c> followed by <c>a)</c> on the next line reads <c>m!(a)</c>.
+    /// </summary>
+    public string GetTextOnOneLine()
+    {
+        var text = GetText();
+        if (!text.Contains('\n') && !text.Contains('\r'))
+            return text;
+        var built = new System.Text.StringBuilder();
+        SyntaxToken? previous = null;
+        foreach (var token in DescendantTokens())
+        {
+            if (token.IsMissing || token.Kind == SyntaxKind.EndOfLine)
+                continue;
+            if (previous is { } before)
+            {
+                var gap = before.TrailingTrivia.Concat(token.LeadingTrivia).ToList();
+                if (!gap.Exists(trivia => trivia.Kind == SyntaxKind.LineBreakTrivia))
+                {
+                    foreach (var trivia in gap)
+                        built.Append(trivia.Text);
+                }
+                else if (before.Kind is not (SyntaxKind.OpenParen or SyntaxKind.OpenBracket)
+                    && token.Kind is not (SyntaxKind.CloseParen or SyntaxKind.CloseBracket))
+                {
+                    built.Append(' ');
+                }
+            }
+            built.Append(token.Text);
+            previous = token;
+        }
+        return built.ToString();
+    }
+
     /// <summary>Returns the node's kind and range, for debugging.</summary>
     public override string ToString() => $"{Kind} at {FullSpan}";
 

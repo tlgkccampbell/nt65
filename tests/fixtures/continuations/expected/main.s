@@ -19,7 +19,7 @@ Mode__absy = $04
 WIDTH = ((1 + 2) + 3)
 
 .segment "RODATA": absolute
-text:  .byte $2c, $58, $2c, $59, 0  ; closing(Mode::zpx), closing( Mode::absy)
+text:  .byte $2c, $58, $2c, $59, 0  ; closing(Mode::zpx), closing(Mode::absy)
 flags: .byte $01
 
 .segment "CODE": absolute

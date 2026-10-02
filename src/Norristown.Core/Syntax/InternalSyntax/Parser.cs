@@ -116,9 +116,10 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Reports each line break of a joined line that stands outside an expression's brackets.
-    /// The breaks inside a group's parentheses, a call's arguments, a set or an index are the ones
-    /// the language allows. Each report goes on the token before the break, and is held by the
-    /// statement, as a diagnostic no inner node claimed is.
+    /// The breaks inside a group's parentheses, a call's or a macro call's arguments, a set or an
+    /// index are the ones the language allows. A braced operand among a macro call's arguments is
+    /// an operand, so it holds a break only where an operand would. Each report goes on the token
+    /// before the break, and is held by the statement, as a diagnostic no inner node claimed is.
     /// </summary>
     private void CheckLineBreaks(GreenNode statement)
     {
@@ -142,7 +143,9 @@ internal sealed partial class Parser
     /// </summary>
     /// <param name="node">The node or token to search.</param>
     /// <param name="inside">Whether the node is inside an expression's brackets.</param>
-    /// <param name="call">Whether the node is part of a call, whose argument list is an expression's.</param>
+    /// <param name="call">
+    /// Whether the node is part of a call or a macro call, whose argument list may hold a break.
+    /// </param>
     /// <param name="offset">Where the node starts in the line.</param>
     /// <param name="breaks">The breaks found outside an expression's brackets.</param>
     private static void FindBreaks(GreenNode node, bool inside, bool call, ref int offset, List<(int, int)> breaks)
@@ -156,15 +159,20 @@ internal sealed partial class Parser
         }
 
         // A bracket's own `(` or `[` is followed by what is inside it, and its closer by what is
-        // outside, so only the slots before the last are inside.
+        // outside, so only the slots before the last are inside. A braced operand is the other
+        // way about: what its braces hold is an operand, and only its `}` stands among the
+        // arguments.
         var brackets = node.Kind is SyntaxKind.ParenthesizedExpression or SyntaxKind.SetExpression or SyntaxKind.ElementIndex
             || (node.Kind == SyntaxKind.ArgumentList && call);
+        var braces = node.Kind == SyntaxKind.BracedOperand;
+        var calls = node.Kind is SyntaxKind.CallExpression or SyntaxKind.MacroCall;
         for (var i = 0; i < node.SlotCount; i++)
         {
             if (node.GetSlot(i) is not { } slot)
                 continue;
-            var within = brackets ? i < node.SlotCount - 1 || inside : inside;
-            FindBreaks(slot, within, node.Kind == SyntaxKind.CallExpression, ref offset, breaks);
+            var last = i == node.SlotCount - 1;
+            var within = brackets ? !last || inside : braces ? last && inside : inside;
+            FindBreaks(slot, within, calls, ref offset, breaks);
         }
     }
 

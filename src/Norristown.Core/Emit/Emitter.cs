@@ -763,8 +763,8 @@ public sealed class Emitter
         // The `{` of a trailing block belongs to the block rather than to the call, and the
         // comment names the call. The comment that closes the expansion names the macro alone,
         // because the arguments are above it and repeating them would only make the block
-        // harder to see.
-        var callText = call.GetText().Trim().TrimEnd('{').TrimEnd();
+        // harder to see. A call whose arguments continue across lines is named on one.
+        var callText = call.GetTextOnOneLine().TrimEnd('{').TrimEnd();
         var called = callText.IndexOf('!') is var bang && bang > 0 ? callText[..(bang + 1)] : callText;
         Line($"{Body}; {callText}  {Where(call)}");
 

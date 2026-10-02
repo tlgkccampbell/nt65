@@ -194,13 +194,32 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
       "")
   ```
 
-  Only an expression's own brackets may hold a line break: a group's parentheses, a call's
-  arguments, a set (§9) and an index. The parentheses of an operand such as `(ptr),y`, a macro
-  call's arguments and a data declaration's count stay on one line, and a break in them is an
+  Only an expression's own brackets and a macro call's arguments may hold a line break: a
+  group's parentheses, a call's arguments, a set (§9), an index, and the parentheses of
+  `name!(...)`, which look like a call's and continue the same way, with a trailing block
+  argument after the `)` as usual:
+
+  ```nt65
+  fill!(
+      {buf,x},                    ; where
+      (SCREEN >> 8) + 1,          ; what
+      count = 2) {                ; a named argument, then the block
+      nop
+  }
+  ```
+
+  The parentheses of an operand such as `(ptr),y`, in an instruction or inside a braced argument
+  such as `{(ptr),y}`, and a data declaration's count stay on one line, and a break in them is an
   error. Joining is decided above the lexer, from the brackets on each line, and the parser then
-  reads the joined lines as one. So that an unclosed bracket cannot swallow the rest of the file,
+  reads the joined lines as one; to the block layer, too, the joined lines are one line, so a
+  braced argument balances within it and a `{` at its end opens a block argument. So that an
+  unclosed bracket cannot swallow the rest of the file,
   a line that starts a statement of its own is never joined to the one before it: a blank line,
   or one that starts with `}`, a directive, an instruction, a macro call, a label or a constant.
+  The one exception is a named argument, `count = 2`, which starts as a constant does and is
+  joined where the innermost open bracket is a macro call's `(`. The rule holds inside a macro
+  call's arguments otherwise, so a line there may not start with a name that is a mnemonic, such
+  as an argument `inx` on a line of its own; such an argument goes on the line before.
   A line holding only a comment is joined. The layout indents a continuing line one step past
   the line its innermost open bracket opened on, so each line that leaves a bracket open adds a
   level, and a line that starts with a closing bracket goes back to the margin of the line that

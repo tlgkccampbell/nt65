@@ -125,6 +125,25 @@ public sealed class RefactorsTests
         Assert.Equal(".module main\n.export X\n.const X = 2 .in [\n    1,\n    2]\n", Editing.Apply(Set, values.Edit!.Changes[Uri]));
     }
 
+    /// <summary>
+    /// A macro call's arguments are laid out as a call's are, from anywhere inside them, and join
+    /// back onto one line.
+    /// </summary>
+    [Fact]
+    public void AMacroCallsArgumentsAreLaidOutAndJoined()
+    {
+        const string Macro = ".module main\n.macro pair(first, second) {\n    .byte first, second\n}\n.segment RODATA\n";
+        const string Main = Macro + ".data d {\n    pair!(1, (2 + 3))\n}\n.export d\n";
+        const string Laid = Macro + ".data d {\n    pair!(\n        1,\n        (2 + 3))\n}\n.export d\n";
+
+        var action = Single(Main, "2 +", "Lay out the expression across lines");
+        Assert.Equal(Laid, Editing.Apply(Main, action.Edit!.Changes[Uri]));
+        Assert.Equal(Laid, Norristown.Syntax.Formatter.Format(Norristown.Syntax.SyntaxTree.Parse("main.nt65", Laid)));
+
+        var joined = Single(Laid, "1,", "Join the expression onto one line");
+        Assert.Equal(Main, Editing.Apply(Laid, joined.Edit!.Changes[Uri]));
+    }
+
     /// <summary>Organizing sorts the <c>.use</c> items and removes any that nothing names.</summary>
     [Fact]
     public void TheUseItemsAreOrderedAndWhatNothingNamesGoes()

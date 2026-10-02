@@ -214,7 +214,7 @@ internal sealed class MacroExpansion
         {
             if (given.Expression is not { } value)
                 return null;
-            var text = value.GetText().Trim();
+            var text = value.GetTextOnOneLine();
             var whole = value is BinaryExpressionSyntax or UnaryExpressionSyntax ? $"({text})" : text;
             return given.Offset switch
             {
@@ -225,11 +225,11 @@ internal sealed class MacroExpansion
         }
 
         if (given.Offset == 0)
-            return given.Operand.GetText().Trim();
+            return given.Operand.GetTextOnOneLine();
         if (given.Expression is not { } addressed)
             return null;
         var index = given.Index is { } register ? "," + register.Text : "";
-        var address = addressed.GetText().Trim();
+        var address = addressed.GetTextOnOneLine();
         return given.Offset > 0
             ? string.Create(CultureInfo.InvariantCulture, $"{address}+{given.Offset}{index}")
             : string.Create(CultureInfo.InvariantCulture, $"{address}{given.Offset}{index}");
@@ -436,7 +436,7 @@ internal sealed class MacroExpansion
         foreach (var exprOf in Under(statement).OfType<CallExpressionSyntax>().Where(Operands.IsExprOf))
         {
             if (model.ExprOf(exprOf, at) is { } inner)
-                edits[exprOf.Span.Start] = (exprOf.Span.End, "(" + inner.GetText().Trim() + ")");
+                edits[exprOf.Span.Start] = (exprOf.Span.End, "(" + inner.GetTextOnOneLine() + ")");
         }
         foreach (var name in Under(statement).OfType<NameExpressionSyntax>())
         {
@@ -491,7 +491,7 @@ internal sealed class MacroExpansion
         }
 
         var unbraced = (value as BracedOperandSyntax)?.Operand ?? value;
-        var text = unbraced.GetText().Trim();
+        var text = unbraced.GetTextOnOneLine();
         return name.Parent is ExpressionSyntax && unbraced is BinaryExpressionSyntax or UnaryExpressionSyntax
             ? $"({text})"
             : text;

@@ -13,6 +13,8 @@ public sealed class SignatureHelpTests
         { "body", "    poke!(value = |", "poke!(address: expr, value: const = 0)", 1 },
         { "body", "    poke!(twice(|", "twice(n)", 0 },
         { "body", "    poke!(twice(1), |", "poke!(address: expr, value: const = 0)", 1 },
+        { "body", "    poke!(          ; where\n        SCREEN, |", "poke!(address: expr, value: const = 0)", 1 },
+        { "body", "    poke!(\n        SCREEN,\n        value = |", "poke!(address: expr, value: const = 0)", 1 },
         { "top", ".const X = .select(1, 2, |", ".select(condition, chosen, otherwise)", 2 },
         { "top", ".const X = .switch(1, |", ".switch(value, set, result, ...)", 1 },
         { "top", ".const X = .switch(1, [1, 2], |", ".switch(value, set, result, ...)", 2 },

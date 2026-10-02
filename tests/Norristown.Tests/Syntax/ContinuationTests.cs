@@ -36,6 +36,8 @@ public sealed class ContinuationTests
     [InlineData(".const X = (1\n}\n")]
     [InlineData(".const X = (1\n.const Y = 2\n")]
     [InlineData(".const X = (1\nthere:\n")]
+    [InlineData(".const X = .select(1,\n    count = 2)\n")]
+    [InlineData(".proc main {\n    pair!(1\n    lda #2\n}\n")]
     public void ALineThatStartsAStatementIsNotJoined(string text)
     {
         var tree = SyntaxTree.Parse("main.nt65", text);
@@ -46,7 +48,7 @@ public sealed class ContinuationTests
 
     [Theory]
     [InlineData(".proc main {\n    lda (ptr\n    ),y\n}\n")]
-    [InlineData(".proc main {\n    pair!(1,\n        2)\n}\n")]
+    [InlineData(".proc main {\n    pair!({(ptr\n        ),y}, 2)\n}\n")]
     public void OnlyAnExpressionsBracketsHoldALineBreak(string text)
     {
         var tree = SyntaxTree.Parse("main.nt65", text);
@@ -54,6 +56,23 @@ public sealed class ContinuationTests
         var diagnostic = Assert.Single(tree.Diagnostics);
         Assert.Equal("continuation-outside-expression", diagnostic.Id);
         Assert.Equal(2, diagnostic.Span.Line);
+    }
+
+    /// <summary>
+    /// Checks that a macro call's arguments continue as a call's do. A line inside them may start
+    /// with a braced operand or a named argument, and a block argument after them opens its block.
+    /// </summary>
+    [Fact]
+    public void AMacroCallsArgumentsContinue()
+    {
+        var tree = SyntaxTree.Parse("main.nt65",
+            ".proc main {\n    pair!(   ; first\n        {ptr,x},\n        ; alone\n        second = 2) {\n        nop\n    }\n}\n");
+
+        Assert.Same(tree.GetLine(1), tree.GetLine(4));
+        Assert.Equal(SyntaxKind.MacroCall, tree.GetLine(1).Statement.Kind);
+        Assert.Equal(BlockKind.MacroBlock, tree.GetLine(1).OpensBlockKind);
+        Assert.NotSame(tree.GetLine(4), tree.GetLine(5));
+        Assert.Empty(tree.Diagnostics);
     }
 
     [Fact]

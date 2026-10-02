@@ -8,12 +8,17 @@ namespace Norristown.Syntax.InternalSyntax;
 /// expression can be written across several lines. The line break becomes trivia on the token
 /// before it, and the joined line is lexed text like any other, which the parser reads as one.
 /// <para>
-/// Only an expression's brackets may hold a line break, which the parser checks. Joining is
-/// decided from the tokens alone, so a line that the parser will refuse is still joined, and the
-/// parser says why. To keep an unclosed bracket from swallowing the rest of the file, a line that
-/// starts a statement of its own is never joined to the one before it. Such a line is blank, or
-/// starts with <c>}</c>, a directive, an instruction, a macro call, a label or a constant. A
-/// line holding only a comment is joined, so the parts of a long expression can be explained.
+/// Only an expression's brackets and a macro call's arguments may hold a line break, which the
+/// parser checks. Joining is decided from the tokens alone, so a line that the parser will refuse
+/// is still joined, and the parser says why. To keep an unclosed bracket from swallowing the rest
+/// of the file, a line that starts a statement of its own is never joined to the one before it.
+/// Such a line is blank, or starts with <c>}</c>, a directive, an instruction, a macro call, a
+/// label or a constant. A line holding only a comment is joined, so the parts of a long
+/// expression can be explained.
+/// </para>
+/// <para>
+/// One shape is joined in a single place. A named argument, <c>count = 3</c>, starts the way a
+/// constant does, and is joined where the innermost open bracket is a macro call's <c>(</c>.
 /// </para>
 /// </summary>
 internal static class Continuations
@@ -32,15 +37,16 @@ internal static class Continuations
         var lines = ImmutableArray.CreateBuilder<GreenLine>(physical.Length);
         var starts = ImmutableArray.CreateBuilder<int>(physical.Length);
         Dictionary<GreenLine, GreenLine>? joinedBefore = null;
+        var open = new Stack<bool>();
         for (var i = 0; i < physical.Length;)
         {
             var first = i;
-            var depth = 0;
-            Track(physical[i], ref depth);
+            open.Clear();
+            Track(physical[i], open);
             i++;
-            while (depth > 0 && i < physical.Length && Joins(physical[i]))
+            while (open.Count > 0 && i < physical.Length && Joins(physical[i], open.Peek()))
             {
-                Track(physical[i], ref depth);
+                Track(physical[i], open);
                 i++;
             }
             starts.Add(first);
@@ -61,17 +67,20 @@ internal static class Continuations
     }
 
     /// <summary>
-    /// Updates <paramref name="depth"/>, the number of brackets open, with the brackets on
-    /// <paramref name="line"/>. A closing bracket with none open is left for the parser to report.
+    /// Updates <paramref name="open"/>, the brackets open, with the brackets on
+    /// <paramref name="line"/>. Each bracket is held as a value indicating whether it opens a macro
+    /// call's arguments. A closing bracket with none open is left for the parser to report.
     /// </summary>
-    private static void Track(GreenLine line, ref int depth)
+    private static void Track(GreenLine line, Stack<bool> open)
     {
-        foreach (var token in line.Tokens)
+        var tokens = line.Tokens;
+        for (var i = 0; i < tokens.Length; i++)
         {
-            if (token.Kind is SyntaxKind.OpenParen or SyntaxKind.OpenBracket)
-                depth++;
-            else if (token.Kind is SyntaxKind.CloseParen or SyntaxKind.CloseBracket && depth > 0)
-                depth--;
+            var kind = tokens[i].Kind;
+            if (kind is SyntaxKind.OpenParen or SyntaxKind.OpenBracket)
+                open.Push(kind == SyntaxKind.OpenParen && i >= 2 && Lines.IsMacroCall(tokens, i - 2));
+            else if (kind is SyntaxKind.CloseParen or SyntaxKind.CloseBracket && open.Count > 0)
+                open.Pop();
         }
     }
 
@@ -79,7 +88,12 @@ internal static class Continuations
     /// Returns a value indicating whether <paramref name="line"/> may continue the line before
     /// it: it holds only a comment, or it starts with what may stand inside an expression.
     /// </summary>
-    private static bool Joins(GreenLine line) => line.LineKind switch
+    /// <param name="line">The line that may continue the one before it.</param>
+    /// <param name="inMacroCall">
+    /// Whether the innermost bracket open is a macro call's <c>(</c>, where a line may also start
+    /// with a named argument.
+    /// </param>
+    private static bool Joins(GreenLine line, bool inMacroCall) => line.LineKind switch
     {
         LineKind.Blank => line.Tokens[0].LeadingTrivia.Any(trivia => trivia.Kind == SyntaxKind.CommentTrivia),
 
@@ -87,6 +101,9 @@ internal static class Continuations
         // are not the directives that start a statement.
         LineKind.Directive => line.Tokens[0].DirectiveKind == DirectiveKind.None,
         LineKind.Expression or LineKind.BareIdentifier => true,
+
+        // `count = 3` is a named argument there. `?=` names no argument, so it stays a setting.
+        LineKind.Constant => inMacroCall && line.Tokens[1].Kind == SyntaxKind.Equals,
         _ => false,
     };
 

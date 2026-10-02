@@ -61,7 +61,7 @@ internal static class InlineMacro
         }
 
         var first = tree.GetLineIndex(call.Position);
-        var last = Last(tree, call, first);
+        var last = Last(tree, call);
         var indent = Edits.IndentOf(tree, first);
 
         // What the body declares is local to each expansion, and two expansions in one routine
@@ -83,13 +83,13 @@ internal static class InlineMacro
         new(title, CodeActionKinds.Rewrite, [], Refused: why);
 
     /// <summary>
-    /// Returns the last line the call covers, which is its own line or the end of the last block
-    /// argument it opens.
+    /// Returns the last line the call covers. That is the end of the last block argument it opens,
+    /// or else the last line its arguments continue onto.
     /// </summary>
-    private static int Last(SyntaxTree tree, MacroCallSyntax call, int first)
+    private static int Last(SyntaxTree tree, MacroCallSyntax call)
     {
         var blocks = Macros.BlocksOf(call);
-        return blocks.Count == 0 ? first : tree.GetLineIndex(blocks[^1].FullSpan.End - 1);
+        return tree.GetLineIndex(blocks.Count == 0 ? call.Span.End - 1 : blocks[^1].FullSpan.End - 1);
     }
 
     /// <summary>

@@ -1,11 +1,15 @@
-; Only an expression's brackets may hold a line break. An operand's parentheses and a macro
-; call's arguments stay on one line.
+; Only an expression's brackets and a macro call's arguments may hold a line break. An operand's
+; parentheses stay on one line, in an instruction and in a braced argument alike.
 .module main
 
 .cpu 6502
 
 .macro pair(first, second) {
-    .byte first, second
+    .byte first, second             ;! error[value-too-wide]: $012c does not fit in this directive
+}
+
+.macro load(source: operand) {
+    lda source
 }
 
 .segment ZEROPAGE
@@ -13,12 +17,16 @@
 
 .segment CODE
 .export .proc main {
-    lda (ptr                        ;! error[continuation-outside-expression]: a line continues onto the next only inside the parentheses or brackets of an expression
+    lda (ptr                        ;! error[continuation-outside-expression]: a line continues onto the next only inside an expression's brackets or a macro call's arguments
     ),y
+    load!({(ptr                     ;! error[continuation-outside-expression]: a line continues onto the next only inside an expression's brackets or a macro call's arguments
+    ),y})
     rts
     .next ?
-    pair!(1,                        ;! error[continuation-outside-expression]: a line continues onto the next only inside the parentheses or brackets of an expression
-        2)
+    pair!(1,                        ; a value too wide, reported in the body
+        300)
+    pair!(5,                        ;! error[expected-expression]: expected an expression
+    .byte 6
     .byte (3                        ;! error[expected-parenthesis]: expected `)`
     .byte 4
     .next ?

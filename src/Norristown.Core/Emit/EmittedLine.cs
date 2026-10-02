@@ -59,12 +59,24 @@ internal sealed partial record EmittedLine(
 
     /// <summary>
     /// Returns source text on one line, for a comment. Where the source continues an expression
-    /// across lines, each line break, the comment before it and the indentation after it become
-    /// one space.
+    /// or a macro call's arguments across lines, each line break becomes one space, together with
+    /// the comments and comment-only lines around it and the indentation after it. A break right
+    /// after an opening bracket or right before a closing one becomes nothing, so a call written
+    /// with <c>m!(</c> on a line of its own reads <c>m!(a)</c>.
     /// </summary>
-    public static string OneLine(string text) =>
-        text.Contains('\n') || text.Contains('\r') ? Breaks().Replace(text, " ") : text;
+    public static string OneLine(string text)
+    {
+        if (!text.Contains('\n') && !text.Contains('\r'))
+            return text;
+        return Breaks().Replace(text, match =>
+        {
+            var end = match.Index + match.Length;
+            var opens = match.Index > 0 && text[match.Index - 1] is '(' or '[';
+            var closes = end < text.Length && text[end] is ')' or ']';
+            return opens || closes ? "" : " ";
+        });
+    }
 
-    [GeneratedRegex(@"[ \t]*(;[^\r\n]*)?(\r\n?|\n)[ \t]*")]
+    [GeneratedRegex(@"[ \t]*(?:(?:;[^\r\n]*)?(?:\r\n?|\n)[ \t]*)+")]
     private static partial Regex Breaks();
 }

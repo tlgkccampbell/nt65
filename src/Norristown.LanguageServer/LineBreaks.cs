@@ -5,8 +5,8 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Provides the refactorings that lay out a whole expression across lines, or join it back onto
-/// one. The formatter keeps the line breaks a file has and adds none, so where a long expression
+/// Provides the refactorings that lay out a whole expression or a macro call's arguments across
+/// lines, or join them back onto one. The formatter keeps the line breaks a file has and adds none, so where a long expression
 /// breaks is the programmer's choice, and these make it in one step.
 /// <para>
 /// Laying out breaks every outermost call's arguments and every outermost set in the expression,
@@ -17,9 +17,11 @@ namespace Norristown.LanguageServer;
 /// formatter lays it out.
 /// </para>
 /// <para>
-/// Only an expression's brackets may hold a line break, so the brackets laid out are those of a
-/// call's arguments and of a set; a macro call's arguments are not an expression's. Neither
-/// refactoring is offered where the expression holds a comment, which it would have to drop.
+/// Only an expression's brackets and a macro call's arguments may hold a line break, so the
+/// brackets laid out are those of a call's or a macro call's arguments and of a set. With the
+/// caret anywhere in a macro call's arguments, the whole argument list is laid out. Neither
+/// refactoring is offered where what it lays out holds a comment, which it would have to drop.
+/// The titles say "expression" for a macro call's arguments too, since the two are laid out alike.
 /// </para>
 /// </summary>
 internal static class LineBreaks
@@ -82,7 +84,7 @@ internal static class LineBreaks
     /// whether or not they fit, as laying out asks; without it, only what does not fit is broken,
     /// which with no limit is nothing, as joining asks.
     /// </summary>
-    private static string Laid(SyntaxTree tree, ExpressionSyntax whole, int lineLength, bool broken)
+    private static string Laid(SyntaxTree tree, SyntaxNode whole, int lineLength, bool broken)
     {
         var line = tree.GetLineIndex(whole.Span.Start);
         var writer = new Writer(
@@ -94,20 +96,21 @@ internal static class LineBreaks
     }
 
     /// <summary>
-    /// Returns the whole expression the caret is in, which is the outermost expression of its
-    /// statement that holds it, or null when the caret is in none.
+    /// Returns what the caret is in that may be laid out, or null when the caret is in nothing
+    /// that may be. That is the arguments of the macro call the caret is in, or else the outermost
+    /// expression of its statement that holds the caret.
     /// </summary>
-    private static ExpressionSyntax? WholeAt(SyntaxTree tree, int caret)
+    private static SyntaxNode? WholeAt(SyntaxTree tree, int caret)
     {
         if (tree.Text.Length == 0)
             return null;
-        ExpressionSyntax? whole = null;
+        SyntaxNode? whole = null;
         for (var node = tree.Root.FindToken(Math.Min(caret, tree.Text.Length - 1)).Parent;
             node is not null and not StatementSyntax;
             node = node.Parent)
         {
-            if (node is ExpressionSyntax expression)
-                whole = expression;
+            if (node is ExpressionSyntax || node is ArgumentListSyntax { Parent: MacroCallSyntax })
+                whole = node;
         }
         return whole;
     }
@@ -116,7 +119,7 @@ internal static class LineBreaks
     /// Checks whether <paramref name="whole"/> has a call or a set with something to lay out, and
     /// no comment inside it that laying it out would drop.
     /// </summary>
-    private static bool CanLayOut(ExpressionSyntax whole)
+    private static bool CanLayOut(SyntaxNode whole)
     {
         if (!((IEnumerable<SyntaxNode>)[whole, .. whole.DescendantNodes()]).Any(node => Brackets(node) is { Items.Count: > 1 }))
             return false;
@@ -131,8 +134,8 @@ internal static class LineBreaks
     }
 
     /// <summary>
-    /// Returns the brackets and the items of <paramref name="node"/>, where it is a call's
-    /// arguments or a set whose brackets are both in the source, or null otherwise.
+    /// Returns the brackets and the items of <paramref name="node"/>, where it is a call's or a
+    /// macro call's arguments or a set whose brackets are both in the source, or null otherwise.
     /// </summary>
     private static Group? Brackets(SyntaxNode? node)
     {
@@ -141,6 +144,8 @@ internal static class LineBreaks
             ArgumentListSyntax { Parent: CallExpressionSyntax call } arguments => new Group(
                 arguments.OpenParenToken, [.. arguments.Arguments], arguments.CloseParenToken,
                 call.BuiltinKind == BuiltinKind.Switch),
+            ArgumentListSyntax { Parent: MacroCallSyntax } arguments => new Group(
+                arguments.OpenParenToken, [.. arguments.Arguments], arguments.CloseParenToken, false),
             SetExpressionSyntax set => new Group(set.OpenBracketToken, [.. set.Items], set.CloseBracketToken, false),
             _ => null,
         };
@@ -148,7 +153,8 @@ internal static class LineBreaks
     }
 
     /// <summary>
-    /// Represents the brackets of a call's arguments or of a set, and the items between them.
+    /// Represents the brackets of a call's or a macro call's arguments or of a set, and the items
+    /// between them.
     /// </summary>
     /// <param name="Open">The opening bracket.</param>
     /// <param name="Items">The arguments or values.</param>

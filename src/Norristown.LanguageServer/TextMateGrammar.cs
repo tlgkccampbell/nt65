@@ -201,9 +201,11 @@ internal static class TextMateGrammar
             new TextMateRule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Registers)})\b", Name: Register),
 
             // A macro call, after mnemonics and registers, which keep their scope even before a
-            // `!`. Its named arguments are its parameters.
+            // `!`. Its named arguments are its parameters. The arguments may continue across
+            // lines, so a named argument's match starts with the space before it, where a
+            // constant declaration's would on a line of its own, and wins the tie.
             TextMateRule.Block($@"\b({Word})\s*(!)\s*(\()", @"\)", [Macro, Operator],
-                [parentheses, TextMateRule.Scoped($@"({Word})(?=\s*=(?!=))", Parameter), include]),
+                [parentheses, TextMateRule.Scoped($@"\s*({Word})(?=\s*=(?!=))", Parameter), include]),
             TextMateRule.Scoped($@"\b({Word})(?=\s*!(?!=))", Macro),
             new TextMateRule(Match: @"\b" + Word, Name: Identifier),
             new TextMateRule(Match: @"->|\.\.|<<|>>|<=|>=|==|!=|&&|\|\||\^\^|[-+*/&|^~!<>=#?]", Name: Operator),
