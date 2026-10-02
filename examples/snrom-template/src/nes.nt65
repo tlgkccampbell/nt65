@@ -1,0 +1,58 @@
+;
+; NES I/O definitions
+; Copyright 2010 Damian Yerrick
+;
+; Copying and distribution of this file, with or without
+; modification, are permitted in any medium without royalty provided
+; the copyright notice and this notice are preserved in all source
+; code copies.  This file is offered as-is, without any warranty.
+;
+.module nes
+
+.cpu 6502
+
+.export .const PPUCTRL    = $2000
+.export .const NT_2000    = $00
+.export .const NT_2400    = $01
+.export .const NT_2800    = $02
+.export .const NT_2C00    = $03
+.export .const VRAM_DOWN  = $04
+.export .const OBJ_0000   = $00
+.export .const OBJ_1000   = $08
+.export .const OBJ_8X16   = $20
+.export .const BG_0000    = $00
+.export .const BG_1000    = $10
+.export .const VBLANK_NMI = $80
+
+.export .const PPUMASK   = $2001
+.export .const LIGHTGRAY = $01
+.export .const BG_OFF    = $00
+.export .const BG_CLIP   = $08
+.export .const BG_ON     = $0A
+.export .const OBJ_OFF   = $00
+.export .const OBJ_CLIP  = $10
+.export .const OBJ_ON    = $14
+.export .const TINT_R    = $20
+.export .const TINT_G    = $40
+.export .const TINT_B    = $80
+
+.export .const PPUSTATUS = $2002
+.export .const OAMADDR   = $2003
+; Don't worry about $2004; let OAM_DMA do the work for you.
+.export .const PPUSCROLL = $2005
+.export .const PPUADDR   = $2006
+.export .const PPUDATA   = $2007
+
+.export .const OAM_DMA = $4014
+.export .const SNDCHN  = $4015
+.export .const P1      = $4016
+.export .const P2      = $4017
+
+.export .const KEY_A      = %10000000
+.export .const KEY_B      = %01000000
+.export .const KEY_SELECT = %00100000
+.export .const KEY_START  = %00010000
+.export .const KEY_UP     = %00001000
+.export .const KEY_DOWN   = %00000100
+.export .const KEY_LEFT   = %00000010
+.export .const KEY_RIGHT  = %00000001

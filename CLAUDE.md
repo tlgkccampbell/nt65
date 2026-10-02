@@ -58,6 +58,7 @@ analyzer checks this either.
 - Keep sentences under about 35 words. Keep every *why*: change a comment's shape, not its
   substance.
 
-Comments in the examples ported from ca65 projects we do not own, `examples/msbasic` and
-`examples/lorom-template`, come from upstream sources; leave them as they are. The monitor
+Comments in the examples ported from ca65 projects we do not own, `examples/msbasic`,
+`examples/lorom-template` and `examples/snrom-template`, come from upstream sources; leave them
+as they are. The monitor
 example is nt65's own program, and its comments follow this section like any other code.

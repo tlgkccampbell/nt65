@@ -1,0 +1,163 @@
+;
+; MMC1 driver for NES
+; Copyright 2011 Damian Yerrick
+;
+; Copying and distribution of this file, with or without
+; modification, are permitted in any medium without royalty provided
+; the copyright notice and this notice are preserved in all source
+; code copies.  This file is offered as-is, without any warranty.
+;
+.module mmc1
+
+.cpu 6502
+
+.use mapper::MMC1
+.use main::{nmi_handler, irq_handler}
+.use init::reset_handler
+
+; Each bank has 16384 bytes: 16368 for you to use as you wish and
+; 16 for a piece of code that puts the mapper in a predictable state.
+; This code needs to be repeated in all the banks because we don't
+; necessarily know which bank is switched in at power-on or reset.
+;
+; Writing a value with bit 7 true (that is, $80-$FF) to any MMC1
+; port causes the PRG bank mode to be set to fixed $C000 and
+; switchable $8000, which causes 'reset' to show up in $C000-$FFFF.
+; And on most discrete logic mappers (AOROM 7, BNROM 34, GNROM 66),
+; and Crazy Climber UNROM (180), writing a value with bits 5-0 true
+; (that is, $3F, $7F, $BF, $FF) switches in the last PRG bank, but
+; it has to be written to a ROM address that has the same value.
+.macro resetstub(resetstub_entry: ident) {
+    sei
+    ldx #$FF
+    txs
+    stx $FFF2  ; Writing $80-$FF anywhere in $8000-$FFFF resets MMC1
+    jmp reset_handler
+    .addr nmi_handler, resetstub_entry, irq_handler
+}
+
+.if MMC1 {
+    .export setPRGBank, setMMC1BankMode, lastPRGBank, lastBankMode
+
+    .segment INESHDR {
+        .data header {
+            .byte "NES",$1A  ; magic signature
+            .byte 16         ; size of PRG ROM in 16384 byte units
+            .byte 0          ; size of CHR ROM in 8192 byte units
+            .byte $12        ; lower mapper nibble, enable SRAM
+            .byte $00        ; upper mapper nibble
+        }
+    }
+
+    .segment ZEROPAGE {
+        .data lastPRGBank:  .byte
+        .data lastBankMode: .byte
+    }
+
+    .segment STUB00 {
+        .proc resetstub00: noreturn {
+            resetstub!(resetstub00)
+        }
+    }
+    .segment STUB01 {
+        .proc resetstub01: noreturn {
+            resetstub!(resetstub01)
+        }
+    }
+    .segment STUB02 {
+        .proc resetstub02: noreturn {
+            resetstub!(resetstub02)
+        }
+    }
+    .segment STUB03 {
+        .proc resetstub03: noreturn {
+            resetstub!(resetstub03)
+        }
+    }
+    .segment STUB04 {
+        .proc resetstub04: noreturn {
+            resetstub!(resetstub04)
+        }
+    }
+    .segment STUB05 {
+        .proc resetstub05: noreturn {
+            resetstub!(resetstub05)
+        }
+    }
+    .segment STUB06 {
+        .proc resetstub06: noreturn {
+            resetstub!(resetstub06)
+        }
+    }
+    .segment STUB07 {
+        .proc resetstub07: noreturn {
+            resetstub!(resetstub07)
+        }
+    }
+    .segment STUB08 {
+        .proc resetstub08: noreturn {
+            resetstub!(resetstub08)
+        }
+    }
+    .segment STUB09 {
+        .proc resetstub09: noreturn {
+            resetstub!(resetstub09)
+        }
+    }
+    .segment STUB10 {
+        .proc resetstub10: noreturn {
+            resetstub!(resetstub10)
+        }
+    }
+    .segment STUB11 {
+        .proc resetstub11: noreturn {
+            resetstub!(resetstub11)
+        }
+    }
+    .segment STUB12 {
+        .proc resetstub12: noreturn {
+            resetstub!(resetstub12)
+        }
+    }
+    .segment STUB13 {
+        .proc resetstub13: noreturn {
+            resetstub!(resetstub13)
+        }
+    }
+    .segment STUB14 {
+        .proc resetstub14: noreturn {
+            resetstub!(resetstub14)
+        }
+    }
+    .segment STUB15 {
+        .proc resetstub15: noreturn {
+            resetstub!(resetstub15)
+        }
+    }
+
+    .segment CODE {
+        ; To write to one of the four registers on MMC1, write bits 0 through
+        ; 3 to D0 of any mapper port address ($8000-$FFFF), then write bit 4
+        ; to D0 at the correct address (e.g. $E000-$FFFF).
+        ; The typical sequence is sta lsr sta lsr sta lsr sta lsr sta.
+        .proc setPRGBank {
+            sta lastPRGBank
+            .repeat 4 {
+                sta $E000
+                lsr a
+            }
+            sta $E000
+            rts
+        }
+
+        .proc setMMC1BankMode {
+            sta lastBankMode
+            .repeat 4 {
+                sta $8000
+                lsr a
+            }
+            sta $8000
+            rts
+        }
+    }
+}

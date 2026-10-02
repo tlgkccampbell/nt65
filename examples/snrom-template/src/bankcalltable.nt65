@@ -1,0 +1,63 @@
+.module bankcalltable
+
+.cpu 6502
+
+.use mapper::{setPRGBank, lastPRGBank}
+.use player::draw_player_sprite_far
+.use chrram::load_chr_ram_far
+
+.export bankcall, bankrts
+.export draw_player_sprite, load_chr_ram
+
+; Each entry of the table is the entry point within the bank, less 1
+; for the rts that jumps there, and which bank the method is in.
+.struct Entry {
+    entrypoint: .addr
+    banknumber: .byte
+}
+
+.segment ZEROPAGE
+.data bankcallsaveA: .byte
+
+.segment CODE
+; Inter-bank method calling system.  There is a table of up to 85
+; different methods that can be called from a different PRG bank.
+; Typical usage:
+;   ldx #move_character
+;   jsr bankcall
+.proc bankcall {
+    sta bankcallsaveA
+    lda lastPRGBank
+    pha
+    lda bankcall_table+2,x
+    jsr setPRGBank
+    lda bankcall_table+1,x
+    pha
+    lda bankcall_table,x
+    pha
+    lda bankcallsaveA
+    rts
+    .next bankcall_table
+}
+
+; Functions in the bankcall_table MUST NOT exit with 'rts'.
+; Instead, they MUST exit with 'jmp bankrts'.
+.proc bankrts {
+    sta bankcallsaveA
+    pla
+    jsr setPRGBank
+    lda bankcallsaveA
+    rts
+}
+
+.segment RODATA
+; Each of these entries gives the external name of the method
+; (loaded into X before bankcall), the entry point within the bank,
+; and which bank the method is in.
+.data bankcall_table {
+    .data draw_player_sprite: .type Entry { entrypoint = draw_player_sprite_far-1, banknumber = 2 }
+    .data load_chr_ram:       .type Entry { entrypoint = load_chr_ram_far-1, banknumber = 13 }
+}
+
+.const draw_player_sprite = bankcall_table::draw_player_sprite - bankcall_table
+.const load_chr_ram       = bankcall_table::load_chr_ram - bankcall_table

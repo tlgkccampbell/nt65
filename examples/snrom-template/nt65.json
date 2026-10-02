@@ -1,0 +1,10 @@
+{
+  "cpu": "6502",
+  "files": ["src/*.nt65"],
+  "out": "build",
+  "default": "snrom",
+  "configurations": {
+    "snrom": { "settings": { "MMC1": 1 }, "links": { "rom": { "config": "snrom2mbit.cfg" } }, "out": "build/snrom" },
+    "uorom": { "settings": { "MMC1": 0 }, "links": { "rom": { "config": "uorom2mbit.cfg" } }, "out": "build/uorom" }
+  }
+}

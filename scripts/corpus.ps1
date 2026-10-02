@@ -148,6 +148,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host ("   {0,-11} {1,7} passed in sim65 in {2:0.0}s" -f 'cc65', 'checks', $watch.Elapsed.TotalSeconds)
 
+# The SNROM template builds once per mapper, each a configuration of one program with its own
+# driver and linker configuration, and checks each image against the original ca65 build's hash;
+# its own script converts the tiles and knows the objects, their order and the comparison.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$snrom = Join-Path $root 'examples/snrom-template/build.ps1'
+& $snrom -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & $snrom -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
+    Write-Host 'snrom-template: a mapper failed or differs from the original' -ForegroundColor Red
+    exit 1
+}
+Write-Host ("   {0,-11} {1,7} mappers in {2:0.0}s, each the original image" -f 'snrom', 2, $watch.Elapsed.TotalSeconds)
+
 # The monitor builds once per platform, from a library each platform's project shares, and each
 # platform's sessions run where its emulator is installed: VICE for the C64, MAME for the IIGS,
 # the Super NES and the NES.

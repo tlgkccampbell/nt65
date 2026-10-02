@@ -1,0 +1,82 @@
+;
+; UNROM driver for NES
+; Copyright 2011-2015 Damian Yerrick
+;
+; Copying and distribution of this file, with or without
+; modification, are permitted in any medium without royalty provided
+; the copyright notice and this notice are preserved in all source
+; code copies.  This file is offered as-is, without any warranty.
+;
+.module unrom
+
+.cpu 6502
+
+.use mapper::MMC1
+.use main::{nmi_handler, irq_handler}
+.use init::reset_handler
+
+.if !MMC1 {
+    .export setPRGBank, setMMC1BankMode, lastPRGBank, lastBankMode
+
+    .segment INESHDR {
+        .data header {
+            .byte "NES",$1A  ; magic signature
+            .byte 16         ; size of PRG ROM in 16384 byte units
+            .byte 0          ; size of CHR ROM in 8192 byte units
+            .byte $21        ; lower mapper nibble, vertical mirroring
+            .byte $00        ; upper mapper nibble
+        }
+    }
+
+    .segment ZEROPAGE {
+        .data lastPRGBank:  .byte
+        .data lastBankMode: .byte
+    }
+
+    ; Each bank has 16384 bytes: 16368 for you to use as you wish and
+    ; 16 for a piece of code that puts the mapper in a predictable state.
+    ; This code needs to be repeated in all the banks because we don't
+    ; necessarily know which bank is switched in at power-on or reset.
+    ;
+    ; On most discrete logic mappers (AOROM 7, BNROM 34, GNROM 66, and
+    ; Crazy Climber UNROM 180), writing a value with bits 5-0 true
+    ; (that is, $3F, $7F, $BF, $FF) switches in the last PRG bank, but
+    ; it has to be written to a ROM address that has the same value.
+    .segment STUB15 {
+        .proc resetstub_entry: noreturn {
+            sei
+            ldx #$FF
+            txs
+            stx $FFF2  ; Writing $80-$FF anywhere in $8000-$FFFF resets MMC1
+            jmp reset_handler
+            .addr nmi_handler, resetstub_entry, irq_handler
+        }
+    }
+
+    .segment CODE {
+        ;;
+        ; Changes $8000-$BFFF to point to a 16384 byte chunk of PRG ROM
+        ; starting at $4000 * A.
+        .proc setPRGBank {
+            sta lastPRGBank
+            tay
+            sta identity16,y
+            rts
+        }
+
+        ; No-op
+        .proc setMMC1BankMode {
+            rts
+        }
+    }
+
+    .segment RODATA {
+        ; To avoid bus conflicts, bankswitch needs to write a value
+        ; to a ROM address that already contains that value.
+        .data identity16: .byte[] {
+            .repeat 16, I {
+                I
+            }
+        }
+    }
+}

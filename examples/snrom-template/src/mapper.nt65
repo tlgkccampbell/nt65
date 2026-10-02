@@ -1,0 +1,14 @@
+; The interface the two mapper drivers share. mmc1 drives the MMC1 of SGROM and SNROM, and
+; unrom, which implements a subset of the same interface, drives UNROM and UOROM. MMC1 chooses
+; the driver, and the iNES header with it.
+.module mapper
+
+.cpu 6502
+
+.export .const MMC1 ?= 1
+
+.if MMC1 {
+    .export .use mmc1::{setPRGBank, setMMC1BankMode, lastPRGBank, lastBankMode}
+} .else {
+    .export .use unrom::{setPRGBank, setMMC1BankMode, lastPRGBank, lastBankMode}
+}
