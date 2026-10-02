@@ -501,7 +501,9 @@ so a misspelled name is caught before ld65 runs.
 segments from them. Each entry of a config's `SEGMENTS` block declares a segment. It is `zp`
 when its `type` is `zp` or it runs wholly in $0000–$00FF, as code copied into page zero does,
 and `abs` otherwise. Its home bank is the bank of the address it runs at: its own `start`, or
-its memory area's, when the whole area is in one bank. A value that depends on ld65's command
+its memory area's, when the whole area is in one bank. It runs in the memory area its `run`
+names, or its `load` without one, and nt65 records the addresses that area covers, which is
+what decides which segments can see each other (below). A value that depends on ld65's command
 line, such as `%S`, is unknown, never guessed, and a bank nt65 cannot tell is left for the
 project file to give. A standard segment a config places is declared there, at its standard
 size. In such a project a region, a block, an import's `in`, or a `.loadof` or `.runof` that
@@ -514,6 +516,30 @@ segment two links place must agree on its size, space, bank and mirrors. nt65 do
 which modules go into which link: that list belongs to the build, and copying it into the
 project would be one more thing to keep in step. One name therefore means one segment across
 a program's links.
+
+**What code can see.** Whether code in one segment can reach an address in another is one
+question, answered from the segment table and the linked configs alone. nt65 tracks no mapper
+state and models no memory behaviour, and the rule is the same on every processor:
+
+- **Another address space is never seen** (below).
+- **An alternative is never seen.** Two memory areas of one config that cover the same
+  addresses are alternatives: the switchable banks of a cartridge mapper all at `$8000`, or two
+  disk overlays with one load address. Only one is mapped at a time, so code in a segment that
+  runs in one can never reach a segment that runs in the other. A `jsr`, `jmp`, branch, long
+  branch, `jsl` or `jml` to a name there is an error, and so is an operand that reads or
+  writes memory through one, `jmp (ptr)` and `lda f:name` included, and a `.next` or `.patch`
+  that names one. The fix is code that both can see, such as a trampoline in a fixed bank.
+  A segment that nothing is an alternative to, such as the fixed bank, is seen from all of
+  them and sees all of them. Areas that only partly overlap are not alternatives: a config
+  often gives a program area more room than the program fills, running on into the area its
+  variables live in, and ld65 accepts that. A segment whose area nt65 cannot place, because
+  a start or size depends on the command line or the project has no `links`, is never reported.
+- **Another home bank is not seen by a near transfer** on the 65816 (§7.5). A long one reaches
+  it, so the fix there is `jsl` or `jml`.
+
+As with spaces, a name that cannot be seen may still be used as a value: an immediate such as
+`#<name` or `#>name` and data such as `.addr name` are never reported, since a trampoline is
+told where to go that way.
 
 The address size is what nt65 uses to size references to symbols in that segment
 (§7.2), so keeping it in one place means sizing depends on a small table rather than on
@@ -1797,8 +1823,11 @@ values, the merged stack keeps its depth and forgets the values.
 - operands that do not use B are exempt: long operands (`f:`), `jmp` and `jsr` (the
   program bank K), `jmp (abs)` and `jml [abs]` (a pointer in bank 0), `jmp (abs,x)` and
   `jsr (abs,x)` (K), and `pea` and `per` (no memory access);
-- `jsr`, `jmp` and branches to a routine or a label whose segment declares a home bank
-  different from the caller's segment's are an error, with `jsl`/`jml` as the fix;
+- `jsr`, `jmp` and branches, long branches such as `jeq` included, to a routine or a label
+  whose segment declares a home bank different from the caller's segment's are an error, with
+  `jsl`/`jml` as the fix. This is what code can see (§5.2) for a near transfer, so it is checked
+  where layout checks reach, in code nothing reaches too, and a segment that is an alternative
+  to the caller's is reported as that instead, since no long form reaches it either;
 - `jml` to a near routine is an error unless it lands in a bank other than the home bank of
   the code making it. A long jump into another bank is how a FastROM reset stub in bank `$00`
   reaches code in bank `$80`, and since the routine's `rts` then stays in its own bank, it is

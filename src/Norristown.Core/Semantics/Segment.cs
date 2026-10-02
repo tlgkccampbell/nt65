@@ -43,6 +43,13 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     public IReadOnlyList<Span> Placements { get; init; } = [];
 
     /// <summary>
+    /// Gets the memory areas the project's linked configurations run the segment in, one for each
+    /// configuration whose area has a start and a size nt65 can work out. It is empty for a
+    /// program without <c>links</c>, and a segment with no known area is never found out of reach.
+    /// </summary>
+    public IReadOnlyList<RunArea> Runs { get; init; } = [];
+
+    /// <summary>
     /// Gets a value indicating whether a linked configuration gives the segment
     /// <c>define = yes</c>, so that ld65 defines the symbols <c>.loadof</c>, <c>.runof</c> and
     /// <c>.spanof</c> stand for.
@@ -63,6 +70,24 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
         Bank == bank || Mirrors.Any(mirror => bank >= mirror.First && bank <= mirror.Last);
 
     /// <summary>
+    /// Returns the pair of memory areas that keep code in this segment from ever seeing
+    /// <paramref name="other"/>, or null when no configuration runs the two in different areas that
+    /// cover the same addresses.
+    /// </summary>
+    public (RunArea Here, RunArea There)? Excluding(Segment other)
+    {
+        foreach (var here in Runs)
+        {
+            foreach (var there in other.Runs)
+            {
+                if (here.Excludes(there))
+                    return (here, there);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Formats the segment's banks for a message, such as <c>in bank $7e</c>, or <c>in bank $7e
     /// and mirrored in banks $00-$3f, $80-$bf</c>.
     /// </summary>
@@ -76,7 +101,8 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     public bool Equals(Segment? other) =>
         other is not null && Name == other.Name && Size == other.Size && Declaration == other.Declaration
         && DirectPage == other.DirectPage && Bank == other.Bank && Mirrors.SequenceEqual(other.Mirrors)
-        && Space == other.Space && Placements.SequenceEqual(other.Placements) && IsDefined == other.IsDefined
+        && Space == other.Space && Placements.SequenceEqual(other.Placements) && Runs.SequenceEqual(other.Runs)
+        && IsDefined == other.IsDefined
         && Addition == other.Addition;
 
     /// <inheritdoc/>

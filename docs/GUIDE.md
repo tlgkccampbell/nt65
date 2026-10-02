@@ -337,6 +337,15 @@ link, and so is `.loadof` of a segment the config does not give `define = yes`. 
 linked twice, such as a cartridge and a music file, names both configs, and a segment they
 both place must be the same in each.
 
+**Banks and overlays cannot see each other.** When a linked config runs two segments in
+different memory areas that cover the same addresses, such as the switchable banks of a
+cartridge mapper or two disk overlays with one load address, only one of them is ever mapped.
+Code in one that jumps to, calls, branches to, reads or writes anything in the other is an
+error, on every processor. Go through code both can see, such as a trampoline in the fixed
+bank. Taking the address as a value, `#<name` or `.addr name`, is fine, because that is how
+the trampoline is told where to go. nt65 tracks no mapper state: code in the fixed bank may
+name anything, and nothing is reported where the config does not say where a segment runs.
+
 **A segment's bytes are one run.** ca65 writes each segment's bytes in the order they appear
 in the file, whichever `.segment` line put them there, and nt65 reads the file the same way.
 A routine at the end of one `CODE` region is followed by whatever the next `CODE` region
@@ -1360,6 +1369,10 @@ where B is known to be a bank that cannot see it. Where D or B is unknown, nothi
 reported; a routine that declares them in its signature, `dp = 0, dbr = $7e`, makes them
 known. nt65 recognizes the usual idioms that set D and B: `pea $2100` then `pld`,
 `lda #$7e` / `pha` / `plb`, and `phk` / `plb`.
+
+A `jsr`, `jmp` or branch to a segment whose home bank is not the caller's is an error too: it
+is the same question as a switchable bank (see Segments), what the code can see, and here the
+answer is `jsl` or `jml`.
 
 Hardware registers that only some banks can see are described in `nt65.json`:
 

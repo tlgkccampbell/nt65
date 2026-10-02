@@ -121,9 +121,10 @@ internal sealed class StateChecks
 
     /// <summary>
     /// Reports a diagnostic where the memory an operand reaches through the direct page or the
-    /// data bank disagrees with what the segments and the project's <c>ranges</c> declare. It also
-    /// reports a near transfer to a segment in another bank. Where either side is not declared or
-    /// not known, nothing is reported, because the checks are opt-in by declaration.
+    /// data bank disagrees with what the segments and the project's <c>ranges</c> declare. Where
+    /// either side is not declared or not known, nothing is reported, because the checks are
+    /// opt-in by declaration. A near transfer to a segment in another bank is a matter of reach,
+    /// which layout checks.
     /// </summary>
     public void CheckMemory(Step step, MnemonicKind mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
     {
@@ -150,15 +151,6 @@ internal sealed class StateChecks
                         symbol.DisplayName, segment.Name, StateValue.Hex(page, 4), StateValue.Hex(state.D.Value, 4)));
                 }
             }
-            return;
-        }
-
-        // A near transfer stays in the program bank, so a target in a segment in another bank
-        // is out of its reach.
-        if (mnemonic != MnemonicKind.Per && (chosen is AddressingMode.Relative or AddressingMode.RelativeLong
-            || (chosen == AddressingMode.Absolute && Instructions.Facts(mnemonic).Control is Control.Jumps or Control.Calls)))
-        {
-            CheckNearBank(step, mnemonic, chosen);
             return;
         }
 
@@ -587,35 +579,6 @@ internal sealed class StateChecks
         }
         diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
             [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")]));
-    }
-
-    /// <summary>
-    /// Reports a <c>jsr</c>, <c>jmp</c> or branch to a label or a routine whose segment declares a
-    /// bank other than the one the code around it declares. Both sides have to declare a bank.
-    /// </summary>
-    private void CheckNearBank(Step step, MnemonicKind mnemonic, AddressingMode mode)
-    {
-        if (BankOf(step.Segment) is not { IsKnown: true } here
-            || Targets.Of(model, Transfers.TargetOf(step.Statement, mode), step.On)?.Symbol is not { } target
-            || SegmentOf(target) is not { Bank: { } there } segment || there == here.Value)
-        {
-            return;
-        }
-        // A conditional branch has no long form to reach with, so what reaches the other bank
-        // is a `jml` the opposite branch skips.
-        var reaches = mnemonic switch
-        {
-            MnemonicKind.Jsr => "use `jsl`",
-            MnemonicKind.Jmp or MnemonicKind.Bra or MnemonicKind.Brl => "use `jml`",
-            _ => "a branch cannot leave its bank, so branch the other way around a `jml` to it",
-        };
-        Report(step, Catalogue.JumpLeavesBank.Message(
-            SyntaxFacts.TextOf(mnemonic),
-            StateValue.Hex(here.Value, 2),
-            target.DisplayName,
-            segment.Name,
-            StateValue.Hex(there, 2),
-            reaches));
     }
 
     /// <summary>

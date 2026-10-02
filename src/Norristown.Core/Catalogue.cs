@@ -2194,6 +2194,23 @@ public static class Catalogue
             + "space is only a number. Take its value as an immediate (`#<name`) or put it in data. To reach the "
             + "bytes as this processor holds them, before they are sent across, use `.loadof`.");
 
+    internal static DiagnosticDescriptor SegmentNotVisible { get; } = Entry(
+        Area.Placement,
+        "segment-not-visible",
+        Severity.Error,
+        "{0} in segment \"{1}\", which is never mapped together with segment \"{2}\": `{3}` runs them in memory "
+            + "areas `{4}` and `{5}` at the same addresses; go through code both can see, such as a trampoline in a "
+            + "fixed bank",
+        "A linked configuration that runs two segments in different memory areas covering the same addresses, "
+            + "such as the switchable banks of a cartridge mapper or disk overlays that share a load address, means "
+            + "that only one of them is mapped at a time. Code in one can never jump to, call, branch to, read or write "
+            + "anything in the other, because whatever it reaches at that address is its own area. Go through "
+            + "code that both can see, such as a routine in a fixed bank that maps the other bank and calls it. "
+            + "Taking the address as an immediate (`#<name`, `#>name`) or holding it in data is allowed, because "
+            + "that is how such a trampoline is told where to go. nt65 decides this only from where the "
+            + "configuration places segments. Areas that only partly overlap are not taken to be alternatives, and "
+            + "nothing is reported where nt65 cannot tell where a segment runs.");
+
     internal static DiagnosticDescriptor SpaceUndeclared { get; } = Entry(
         Area.Placement,
         "space-undeclared",
@@ -3088,7 +3105,7 @@ public static class Catalogue
         Area.ProcessorState,
         "jump-leaves-bank",
         Severity.Error,
-        "`{0}` cannot leave bank {1}, and `{2}` is in segment \"{3}\" in bank {4}: {5}",
+        "`{0}` cannot leave bank {1}, and {2} is in segment \"{3}\" in bank {4}: {5}",
         "`jsr`, `jmp` and the branches change only the 16-bit address and keep the program bank, so they cannot "
             + "reach code in a segment that the project places in another bank. Use `jsl` or `jml`, which set the "
             + "bank too; a conditional branch has no long form, so branch on the opposite condition around a `jml` "

@@ -227,6 +227,27 @@ public sealed class SegmentTable
     public AddressSpace? SpaceOf(string? name) =>
         name is not null && Find(name)?.Space is { } space ? spaces.GetValueOrDefault(space) : null;
 
+    /// <summary>
+    /// Returns whether code in segment <paramref name="from"/> can reach an address in segment
+    /// <paramref name="to"/>. Another address space is never reached. A segment that a linked
+    /// configuration runs in another memory area covering the same addresses as the code's own is
+    /// never mapped at the same moment, so nothing reaches it either. A segment in another home bank is reached only by a
+    /// long jump or call. What nt65 cannot tell, such as a bank or an area that nothing gives, is
+    /// taken to be seen, so that nothing unknown is reported.
+    /// </summary>
+    public SegmentReach Reach(string? from, string? to)
+    {
+        if (from is null || to is null || from == to)
+            return SegmentReach.Seen;
+        if (SpaceOf(from)?.Name != SpaceOf(to)?.Name)
+            return SegmentReach.OtherSpace;
+        if (Find(from) is not { } here || Find(to) is not { } there)
+            return SegmentReach.Seen;
+        if (here.Excluding(there) is not null)
+            return SegmentReach.NeverMapped;
+        return here.Bank is { } bank && there.Bank is { } other && bank != other ? SegmentReach.OtherBank : SegmentReach.Seen;
+    }
+
     /// <summary>Returns the space <paramref name="name"/>, or null when nothing declares it.</summary>
     public AddressSpace? FindSpace(string name) => spaces.GetValueOrDefault(name);
 

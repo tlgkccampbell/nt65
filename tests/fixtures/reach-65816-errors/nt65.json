@@ -1,0 +1,5 @@
+{
+  "cpu": "65816",
+  "files": ["*.nt65"],
+  "links": { "rom": { "config": "rom.cfg" } }
+}

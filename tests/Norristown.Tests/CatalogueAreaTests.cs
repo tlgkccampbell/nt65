@@ -100,8 +100,8 @@ public sealed class CatalogueAreaTests
             "padding-outside-a-routine", "segment-attribute-not-constant", "segment-attribute-out-of-range",
             "segment-attribute-twice", "segment-block-redundant", "segment-declared-twice", "segment-dp-not-zp",
             "segment-mirror-invalid", "segment-mirrors-need-a-bank", "segment-not-defined", "segment-not-linked",
-            "segment-standard-size", "segment-undeclared", "space-not-a-name", "space-undeclared",
-            "transfer-to-another-space",
+            "segment-not-visible", "segment-standard-size", "segment-undeclared", "space-not-a-name",
+            "space-undeclared", "transfer-to-another-space",
         ]),
         ("Instructions",
         [

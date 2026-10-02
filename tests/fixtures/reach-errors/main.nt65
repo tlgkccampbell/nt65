@@ -1,0 +1,96 @@
+; Code cannot reach a segment that its linked config runs in another memory area at the same
+; addresses, because the two are never mapped at once. A fixed bank sees every switchable bank,
+; and a switchable bank sees the fixed bank. Taking an address as a value is always allowed.
+.module main
+
+.export start
+
+.segment ZEROPAGE
+.data ptr: .word
+
+.segment BANK01
+.proc far_routine {
+    rts
+}
+
+.data far_table: .byte 1, 2, 3
+
+.segment BANK00
+.proc near_routine {
+    jsr far_routine         ;! error[segment-not-visible]: `jsr` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    lda far_table           ;! error[segment-not-visible]: `far_table` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    sta far_table,x         ;! error[segment-not-visible]: `far_table` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    beq far_routine         ;! error[segment-not-visible]: `beq` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    jne far_routine         ;! error[segment-not-visible]: `jne` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+
+    ; The bytes of an address are values, which is how a trampoline is told where to go.
+    lda #<far_routine
+    ldx #>far_routine
+    jsr bankcall
+    rts
+}
+
+.proc tail_call {
+    jmp far_routine         ;! error[segment-not-visible]: `jmp` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+}
+
+; A `.next` names where an indirect jump goes, and those places have to be in sight too.
+.proc dispatch {
+    jmp (ptr)
+    .next near_routine, far_routine     ;! error[segment-not-visible]: `.next` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+}
+
+; The fixed bank is mapped beside whichever switchable bank is, so nothing it names is reported:
+; which bank is mapped is the program's to know. A table in it may name what is in either.
+.segment CODE
+.proc start {
+    jsr near_routine
+    jsr far_routine
+    lda far_table
+    jsr overlay_one
+    jmp (ptr)
+    .next near_routine, far_routine
+}
+
+.proc bankcall {
+    sta ptr
+    stx ptr + 1
+    jmp (ptr)
+    .next ?
+}
+
+.segment RODATA
+.data routines {
+    .addr near_routine, far_routine
+}
+
+; Two overlays that load at the same address are never in memory together.
+.segment OVERLAY1
+.proc overlay_one {
+    jsr overlay_two         ;! error[segment-not-visible]: `jsr` targets `overlay_two` in segment "OVERLAY2", which is never mapped together with segment "OVERLAY1": `rom.cfg` runs them in memory areas `OVL2` and `OVL1` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    jsr loader
+    rts
+}
+
+.segment OVERLAY2
+.proc overlay_two {
+    rts
+}
+
+; Where the command line gives the address, nt65 cannot tell what overlaps, so it reports nothing.
+.segment LOADER
+.proc loader {
+    jsr overlay_one
+    jsr far_routine
+    rts
+}
+
+; Areas that only partly overlap are not taken to be alternatives.
+.segment VARIABLES
+.data counter: .byte
+
+.segment PROGRAM
+.proc count {
+    inc counter
+    rts
+}

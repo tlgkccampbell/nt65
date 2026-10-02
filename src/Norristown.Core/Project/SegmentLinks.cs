@@ -8,9 +8,9 @@ namespace Norristown.Project;
 /// links, each entry of <c>segments</c> declares a segment. With them, the linked configurations
 /// declare the segments, and <c>segments</c> adds only what a configuration has no word for.
 /// <para>
-/// A configuration gives a segment's size and its home bank. The segment is <c>zp</c> when its
-/// <c>type</c> is <c>zp</c> or it runs wholly in page zero, and its home bank is the bank of the
-/// address it runs at. A segment that several links place must agree on every fact nt65 uses,
+/// A configuration gives a segment's size, its home bank and the memory area it runs in. The
+/// segment is <c>zp</c> when its <c>type</c> is <c>zp</c> or it runs wholly in page zero, and its
+/// home bank is the bank of the address it runs at. A segment that several links place must agree on every fact nt65 uses,
 /// because nt65 analyzes each module once, whichever links it goes into.
 /// </para>
 /// </summary>
@@ -110,7 +110,7 @@ public static class SegmentLinks
 
     /// <summary>
     /// Returns the segment one link's configuration places, with the size its type gives, the
-    /// bank it runs in, and the space and mirrors of the memory area it runs in.
+    /// bank it runs in, the memory area it runs in and that area's space and mirrors.
     /// </summary>
     private static Placed Derived(
         Link link, LinkerConfig.PlacedSegment placed, LinkerConfig config, Dictionary<string, Link.Area> areas)
@@ -124,6 +124,9 @@ public static class SegmentLinks
             Space = note?.Space ?? link.Space,
             Mirrors = note?.Mirrors ?? [],
             Placements = [placed.Declaration],
+            Runs = area is { Start: { } first, Size: { } length } && length > 0
+                ? [new RunArea(config.Path, area.Name, first, first + length - 1, area.Declaration)]
+                : [],
             IsDefined = placed.Defines,
         };
         return new Placed(segment, config.Path, note);
@@ -189,6 +192,7 @@ public static class SegmentLinks
         {
             Bank = first.Bank ?? segment.Bank,
             Placements = [.. first.Placements, .. segment.Placements],
+            Runs = [.. first.Runs, .. segment.Runs],
             IsDefined = first.IsDefined || segment.IsDefined,
         };
     }

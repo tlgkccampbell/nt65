@@ -439,6 +439,7 @@
         "segment-name-quoted",
         "segment-not-defined",
         "segment-not-linked",
+        "segment-not-visible",
         "segment-region-misplaced",
         "segment-standard-size",
         "segment-undeclared",

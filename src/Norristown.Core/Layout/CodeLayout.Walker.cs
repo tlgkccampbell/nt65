@@ -478,7 +478,7 @@ public sealed partial class CodeLayout
             var direct = operand is not null && ThroughDirectPage(operand) ? DirectOffset(mnemonic, operand, mode, state) : null;
             if (cpu == Cpu.Wdc65816 && operand is not null && mode != AddressingMode.Immediate)
                 CheckDirectPageSymbols(mnemonic, operand, mode);
-            CheckSpaces(mnemonic, operand, mode);
+            CheckReach(mnemonic, operand, mode);
             var timing = Cycles.Of(cpu, statement.MnemonicKind, mode, state);
             IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
             Laid(statement, new LineLayout(
@@ -527,6 +527,7 @@ public sealed partial class CodeLayout
                 Report(target, Catalogue.TargetTooFar.Message(mnemonic.Text));
                 return;
             }
+            CheckReach(mnemonic, target);
 
             var over = lengthened.Contains(StepKey.Of(statement, expansion));
             var length = Instructions.Length(AddressingMode.Relative)

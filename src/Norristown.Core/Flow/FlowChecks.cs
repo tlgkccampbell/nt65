@@ -133,13 +133,13 @@ internal sealed class FlowChecks
 
     /// <summary>
     /// Reports each annotation target that is not somewhere code can be. What an annotation names
-    /// has to be a label, a routine, or a list or a table of them. Which kind a name is becomes
-    /// known only once every symbol has a value, so this is checked here rather than where the
-    /// name was resolved.
+    /// has to be a label, a routine, or a list or a table of them, in a segment the annotated code
+    /// can see. Which kind a name is becomes known only once every symbol has a value, so this is
+    /// checked here rather than where the name was resolved.
     /// </summary>
     private void CheckTargets(IReadOnlyList<ControlFlow.Unit> units)
     {
-        foreach (var annotation in units.SelectMany(unit => unit.Annotations.Select(a => (unit.Step.On, a))))
+        foreach (var annotation in units.SelectMany(unit => unit.Annotations.Select(a => (unit.Step.On, unit.Step.Segment, a))))
         {
             foreach (var targetName in Annotations.TargetsOf(annotation.a))
             {
@@ -151,6 +151,17 @@ internal sealed class FlowChecks
                         ControlFlow.IsAddressData(target.Symbol)
                             ? Catalogue.NextTableHasNoLabels.Message(target.Symbol.DisplayName)
                             : Catalogue.NextTargetNotATable.Message(target.Symbol.DisplayName)));
+                    continue;
+                }
+                if (target.Symbol.IsAddress
+                    && model.Segments.Reach(annotation.Segment, target.Symbol.Segment) == SegmentReach.NeverMapped)
+                {
+                    var (here, there) = model.Segments.Find(annotation.Segment!)!
+                        .Excluding(model.Segments.Find(target.Symbol.Segment!)!)!.Value;
+                    var what = $"`{target.Symbol.QualifiedName}`";
+                    diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span), Catalogue.SegmentNotVisible.Message(
+                        annotation.a is PatchDirectiveSyntax ? what : $"`{Annotations.Format(annotation.a)}` targets {what}",
+                        target.Symbol.Segment!, annotation.Segment!, there.Config, there.Area, here.Area)));
                     continue;
                 }
                 if (target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
