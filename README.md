@@ -138,6 +138,10 @@ subject is the XEX's loading: a system check and a loading screen that run while
 loads, the program's own screen loaded over the loader, and colour bars drawn by display list
 interrupts and moved by a hook in the vertical blank. Its test runs it in Atari800.
 
+[`examples/x16`](examples/x16) is a card for the Commander X16 written for nt65, for the 65C02
+with the Rockwell bit instructions: code in one RAM bank draws a script kept in another, both
+loaded by the KERNAL, through the VERA's two data ports. Its test runs it in x16emu.
+
 ## Building from source
 
 Needs the .NET SDK named in `global.json` and PowerShell 7. The pinned cc65 needs git, make and

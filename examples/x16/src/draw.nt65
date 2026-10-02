@@ -1,0 +1,157 @@
+; Draws boxes and text on the text screen, writing video memory through the VERA's two data
+; ports. The module's code is in RAM bank 1, and everything it reads is outside the banked
+; window: its variables are in the zero page and the text it draws is in `line`, in main memory.
+.module draw
+
+.cpu r65c02
+
+.use x16::{vera, text as screen}
+
+.export column, row, width, height, colour, style, line, box, text
+
+; Screen codes of the lowercase and uppercase characters for the lines of a box.
+.const HORIZONTAL   = $40
+.const VERTICAL     = $5D
+.const TOP_LEFT     = $70
+.const TOP_RIGHT    = $6E
+.const BOTTOM_LEFT  = $6D
+.const BOTTOM_RIGHT = $7D
+
+.const REVERSED = $80               ; a screen code with bit 7 set shows in reverse
+
+.assert .lobyte(screen::MAP) == 0 && screen::ROW == 256, "`locate` adds a row to the high byte"
+
+.segment ZEROPAGE
+.data column: .byte                 ; where the next box or text starts
+.data row:    .byte
+.data width:  .byte                 ; the next box's size, in cells
+.data height: .byte
+.data colour: .byte                 ; the colours of what is drawn
+.data style:  .byte                 ; bit 0 set draws text in reverse
+
+.segment BSS
+.data line: .byte[screen::COLUMNS + 1]  ; the text to draw, in screen codes, ending with a zero
+
+.segment DRAWHEAD
+.data load_address: .word x16::BANKED
+
+.segment DRAW
+
+; Draws a box `width` cells wide and `height` tall in `colour`, with its top left corner at
+; `column` and `row`. The inside of the box is left as it is.
+.proc box {
+    ldx column
+    ldy row
+    lda #vera::STEP_1
+    jsr locate
+    lda #TOP_LEFT
+    ldy #TOP_RIGHT
+    jsr rule
+    ldx column
+    jsr side
+    lda column
+    clc
+    adc width
+    dec a                           ; the right-hand column
+    tax
+    jsr side
+    lda row
+    clc
+    adc height
+    dec a                           ; the bottom row
+    tay
+    ldx column
+    lda #vera::STEP_1
+    jsr locate
+    lda #BOTTOM_LEFT
+    ldy #BOTTOM_RIGHT
+    jmp rule
+}
+
+; Writes `line` from the cell at `column` and `row` on, in `colour`, and in reverse when bit 0
+; of `style` is set.
+.proc text {
+    ldx column
+    ldy row
+    lda #vera::STEP_1
+    jsr locate
+    ldy #0
+@next:
+    lda line,y
+    beq @done
+    bbr0 style, @plain
+    ora #REVERSED
+@plain:
+    jsr put
+    iny
+    bra @next
+@done:
+    rts
+}
+
+; Draws one side of a box, in column X, from the row below its top edge to the row above its
+; bottom edge. Port 0 writes each cell's screen code and port 1 its colours, both stepping down
+; a row at a time.
+.proc side: reads x {
+    ldy row
+    iny
+    lda #vera::STEP_256
+    jsr locate
+    lda #vera::ADDRSEL
+    tsb vera::CTRL                  ; port 1's address
+    lda #vera::STEP_256
+    jsr locate
+    inc vera::ADDR_L                ; the cell's colours, after its screen code
+    lda #vera::ADDRSEL
+    trb vera::CTRL                  ; port 0's again
+    ldy height
+    dey
+    dey
+@down:
+    lda #VERTICAL
+    sta vera::DATA0
+    lda colour
+    sta vera::DATA1
+    dey
+    bne @down
+    rts
+}
+
+; Points the data port that CTRL selects at the screen code of the cell in column X of row Y,
+; stepping by the increment in A.
+.proc locate: reads a, x, y, keeps x, y {
+    ora #.bankbyte(screen::MAP)
+    sta vera::ADDR_H
+    txa
+    asl a
+    sta vera::ADDR_L
+    tya
+    clc
+    adc #.hibyte(screen::MAP)
+    sta vera::ADDR_M
+    rts
+}
+
+; Draws a box's top or bottom edge from where port 0 points: the corner in A, a line across to
+; the corner in Y, and that corner.
+.proc rule: reads a, y {
+    jsr put
+    ldx width
+    dex
+    dex
+@across:
+    lda #HORIZONTAL
+    jsr put
+    dex
+    bne @across
+    tya
+    .fallthrough put
+}
+
+; Writes the screen code in A and `colour` to the cell port 0 points at.
+.proc put: reads a, keeps x, y {
+    sta vera::DATA0
+    lda colour
+    sta vera::DATA0
+    rts
+}

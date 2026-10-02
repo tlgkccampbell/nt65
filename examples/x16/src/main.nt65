@@ -1,0 +1,127 @@
+; The card's start. It loads the two banks' files, runs the card's script, and goes back to
+; BASIC with both banks as BASIC left them.
+.module main
+
+.cpu r65c02
+
+.use x16::{RAM_BANK, ROM_BANK, kernal}
+.use nt65::cbm::petscii_lower
+
+.export start
+
+; A file that loads into a RAM bank of its own.
+.struct BankFile {
+    bank:   .byte
+    name:   .addr
+    length: .byte
+}
+
+.segment ZEROPAGE
+.data message: .addr                ; the text `puts` writes
+
+.segment RODATA
+.data title {
+    .byte kernal::CLEAR, kernal::LOWER_CASE ; the characters `petscii_lower` is written for
+    .byte petscii_lower("A card for the Commander X16"), kernal::NEWLINE, 0
+}
+.data loading: .byte kernal::NEWLINE, petscii_lower("Loading the banks..."), 0
+.data loaded:  .byte petscii_lower(" done."), kernal::NEWLINE, 0
+.data failed:  .byte petscii_lower(" failed."), kernal::NEWLINE, 0
+
+; The files' names are the program's, with each bank's number after it, as ld65 writes them.
+.data draw_name: .byte petscii_lower("card.prg.01")
+.data card_name: .byte petscii_lower("card.prg.02")
+
+.data files: .type BankFile[] {
+    { bank = <.bankof(draw::box), name = draw_name, length = .sizeof(draw_name) }
+    { bank = <.bankof(card::card), name = card_name, length = .sizeof(card_name) }
+}
+
+; Writes a text through CHROUT.
+.macro print(text: ident) {
+    ldx #<text
+    ldy #>text
+    jsr puts
+}
+
+; The BASIC line's SYS lands here.
+.segment STARTUP
+.proc start {
+    lda ROM_BANK
+    pha
+    lda RAM_BANK
+    pha
+    stz ROM_BANK                    ; bank 0, the KERNAL's, whose jump table goes straight to it
+    lda #0                          ; 80 columns by 60 rows
+    clc
+    jsr kernal::SCREEN_MODE
+    print!(title)
+    print!(loading)
+    jsr load
+    bcs @failed
+    print!(loaded)
+    lda #<.bankof(card::card)
+    sta RAM_BANK
+    ldx #<card::card
+    ldy #>card::card
+    jsr script::run
+    bra @done
+@failed:
+    print!(failed)
+@done:
+    pla
+    sta RAM_BANK
+    pla
+    sta ROM_BANK
+    rts
+}
+
+.segment CODE
+
+; Loads each of `files` into its RAM bank, and returns with carry set if one failed to load.
+.proc load {
+    ldx #0
+@next:
+    lda files::bank,x
+    sta RAM_BANK                    ; LOAD fills the bank mapped when it starts
+    phx                             ; the KERNAL's routines use X and Y
+    ldy files::name+1,x
+    lda files::name,x
+    pha
+    lda files::length,x
+    plx                             ; the name's low byte
+    jsr kernal::SETNAM
+    lda #1                          ; the logical file
+    ldx #kernal::DISK
+    ldy #kernal::TO_HEADER
+    jsr kernal::SETLFS
+    lda #0                          ; load rather than verify
+    jsr kernal::LOAD
+    plx
+    bcs @done
+    txa
+    clc
+    adc #.sizeof(BankFile)
+    tax
+    cpx #.sizeof(files)
+    bne @next
+    clc
+@done:
+    rts
+}
+
+; Writes the text at X (low byte) and Y (high byte) through CHROUT, up to a zero.
+.proc puts: reads x, y {
+    stx message
+    sty message+1
+@next:
+    lda (message)
+    beq @done
+    jsr kernal::CHROUT
+    inc message
+    bne @next
+    inc message+1
+    bra @next
+@done:
+    rts
+}

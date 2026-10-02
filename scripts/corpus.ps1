@@ -232,3 +232,25 @@ if ($atari800) {
 }
 $ran = if ($atari800) { 'its test passed' } else { 'its test did not run, because atari800 is not on the path' }
 Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'atari-xex', (Get-Item (Join-Path $xex 'build/demo.xex')).Length, $ran, $watch.Elapsed.TotalSeconds)
+
+# The X16 card is a PRG and a file for each RAM bank it loads, so its own script builds it. Where
+# x16emu is installed, its test runs it without a window and checks the screen and the banks.
+$watch = [Diagnostics.Stopwatch]::StartNew()
+$card = Join-Path $root 'examples/x16'
+& (Join-Path $card 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    & (Join-Path $card 'build.ps1') -Nt65 $nt65 -Ca65 $ca65 -Ld65 $ld65
+    Write-Host 'x16: the build failed' -ForegroundColor Red
+    exit 1
+}
+$x16emu = [bool](Get-Command x16emu -ErrorAction SilentlyContinue)
+if ($x16emu) {
+    & (Join-Path $card 'test.ps1') | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & (Join-Path $card 'test.ps1')
+        Write-Host 'x16: its test failed' -ForegroundColor Red
+        exit 1
+    }
+}
+$ran = if ($x16emu) { 'its test passed' } else { 'its test did not run, because x16emu is not on the path' }
+Write-Host ("   {0,-11} {1,7:N0} bytes, {2} in {3:0.0}s" -f 'x16', (Get-Item (Join-Path $card 'build/card.prg')).Length, $ran, $watch.Elapsed.TotalSeconds)

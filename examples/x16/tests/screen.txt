@@ -1,0 +1,21 @@
+A card for the Commander X16
+
+Loading the banks... done.
+
+ready.
+sys65533
+          +----------------------------------------------------------+
+          |                                                          |
+          |    Commander X16                                         |
+          |                                                          |
+          |   This card was drawn by code in RAM bank 1, from a      |
+          |   script in RAM bank 2. The KERNAL loaded each bank      |
+          |   from a file of its own, beside the program.            |
+          |                                                          |
+          |   Written in nt65 for the 65C02, with the Rockwell       |
+          |   bit instructions, and assembled by ca65.               |
+          |                                                          |
+          |   nt65 checks that neither bank reaches into the other.  |
+          |                                                          |
+          |                                                          |
+          +----------------------------------------------------------+

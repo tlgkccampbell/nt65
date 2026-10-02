@@ -1,0 +1,92 @@
+; The parts of the Commander X16 the card uses: the two bank registers, the VERA video chip's
+; registers and its text screen, and the KERNAL routines the card calls.
+.module x16
+
+.cpu r65c02
+
+; The RAM bank mapped at $A000 to $BFFF. Bank 0 is the KERNAL's, and the rest are free.
+.export .data RAM_BANK: .byte = $00
+
+; The ROM bank mapped at $C000 to $FFFF. Every ROM bank has the KERNAL's jump table, but only in
+; bank 0 does it lead straight to the KERNAL rather than through a bank switch.
+.export .data ROM_BANK: .byte = $01
+
+.export .const BANKED = $A000       ; where the RAM bank appears
+
+; The VERA's registers, as they are when CTRL's DCSEL is 0. Each of its two data ports reads or
+; writes video memory at the port's own address, and then moves the address on by the port's
+; increment. CTRL's ADDRSEL bit chooses whose address ADDR_L, ADDR_M and ADDR_H show.
+.export .scope vera {
+    .data ADDR_L: .byte = $9F20
+    .data ADDR_M: .byte = $9F21
+    .data ADDR_H: .byte = $9F22     ; bit 16 of the address, and the increment in bits 4 to 7
+    .data DATA0:  .byte = $9F23
+    .data DATA1:  .byte = $9F24
+    .data CTRL:   .byte = $9F25     ; ADDRSEL in bit 0
+
+    .const ADDRSEL = %0000_0001
+
+    ; The values of ADDR_H's increment field that the card uses.
+    .const STEP_1   = 1 << 4        ; the next byte
+    .const STEP_256 = 9 << 4        ; the same column of the next row
+}
+
+; The text screen, as the KERNAL sets it up: a map of 128 by 64 cells from $1B000 in video
+; memory, two bytes to a cell, a screen code and then its colours. The screen shows the first
+; 80 columns and 60 rows of it.
+.export .scope text {
+    .const MAP     = $1B000
+    .const ROW     = 256            ; the bytes from one row of the map to the next
+    .const COLUMNS = 80
+}
+
+; A cell's colours: the background in the high nibble, the foreground in the low.
+.export .func colours(foreground, background) = (background << 4) | foreground
+
+.export .enum Colour {
+    black
+    white
+    red
+    cyan
+    purple
+    green
+    blue
+    yellow
+    orange
+    brown
+    light_red
+    dark_grey
+    grey
+    light_green
+    light_blue
+    light_grey
+}
+
+; The KERNAL's routines, through its jump table.
+.export .scope kernal {
+    ; Sets the logical file in A, the device in X and the secondary address in Y.
+    .proc SETLFS = $FFBA: reads a, x, y
+
+    ; Sets the file name: its length in A, and its address in X (low byte) and Y (high byte).
+    .proc SETNAM = $FFBD: reads a, x, y
+
+    ; Loads the file SETLFS and SETNAM describe, and returns with carry set on an error.
+    .proc LOAD = $FFD5: reads a, x, y
+
+    ; Writes the PETSCII character in A.
+    .proc CHROUT = $FFD2: reads a, keeps x, y
+
+    ; With carry clear, sets the screen mode in A.
+    .proc SCREEN_MODE = $FF5F: reads a, c
+
+    .const DISK = 8                 ; the first disk drive, the host's file system in the emulator
+
+    ; A LOAD's secondary address 1 loads a file where the first two bytes of the file say. A load
+    ; into $A000 and up goes into the RAM bank selected at the time.
+    .const TO_HEADER = 1
+
+    ; The characters CHROUT takes as commands.
+    .const CLEAR      = $93
+    .const LOWER_CASE = $0E         ; switches to the lowercase and uppercase characters
+    .const NEWLINE    = $0D
+}

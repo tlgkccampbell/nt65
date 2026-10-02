@@ -1,0 +1,61 @@
+; The card's script, which `script::run` draws. It is in RAM bank 2, and each operation is a
+; macro that writes its byte and the bytes it takes.
+.module card
+
+.cpu r65c02
+
+.use script::{Op, REVERSE}
+.use x16::{Colour, colours}
+.use nt65::cbm::screen_lower
+
+.export card
+
+; Moves to a column and a row of the screen.
+.macro at(column: const(0..79), row: const(0..59)) {
+    .byte Op::at, column, row
+}
+
+; Sets the colours of what comes next.
+.macro paint(foreground: Colour, background: Colour) {
+    .byte Op::colour, colours(foreground, background)
+}
+
+; Draws a box with its top left corner where the last `at!` moved to.
+.macro box(width: const(3..80), height: const(3..60)) {
+    .byte Op::box, width, height
+}
+
+; Writes a line of text, and moves down a row.
+.macro text(line) {
+    .byte Op::text, screen_lower(line), 0
+}
+
+; Writes a line of text in reverse, and moves down a row.
+.macro reverse(line) {
+    .byte Op::text | REVERSE, screen_lower(line), 0
+}
+
+.segment CARDHEAD
+.data load_address: .word x16::BANKED
+
+.segment CARD
+.data card {
+    paint!(Colour::yellow, Colour::blue)
+    at!(10, 6)
+    box!(60, 15)
+    paint!(Colour::white, Colour::blue)
+    at!(14, 8)
+    reverse!(" Commander X16 ")
+    at!(14, 10)
+    text!("This card was drawn by code in RAM bank 1, from a")
+    text!("script in RAM bank 2. The KERNAL loaded each bank")
+    text!("from a file of its own, beside the program.")
+    at!(14, 14)
+    paint!(Colour::light_green, Colour::blue)
+    text!("Written in nt65 for the 65C02, with the Rockwell")
+    text!("bit instructions, and assembled by ca65.")
+    at!(14, 17)
+    paint!(Colour::cyan, Colour::blue)
+    text!("nt65 checks that neither bank reaches into the other.")
+    .byte Op::end
+}

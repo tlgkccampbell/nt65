@@ -1,0 +1,135 @@
+; Runs a card's script. A script is a run of operations, each a byte naming the operation and
+; then the bytes it takes. The script is in one RAM bank and the code that draws is in another,
+; both at $A000, so each operation reads what it takes while the script's bank is mapped, and
+; maps the drawing code's bank only to call it.
+.module script
+
+.cpu r65c02
+
+.use x16::RAM_BANK
+
+.export Op, REVERSE, run
+
+; The operations, with the bytes each takes after it.
+.enum Op {
+    at                              ; the column and the row where the next box or text starts
+    colour                          ; the colours of what comes next
+    box                             ; a box's width and height
+    text                            ; screen codes up to a zero, and on to the next row
+    end                             ; the end of the script
+}
+
+.const REVERSE = $80                ; set in a `text` operation's byte, draws the text in reverse
+
+.segment ZEROPAGE
+.data pc: .addr                     ; the script's next byte
+
+.segment BSS
+.data bank: .byte                   ; the script's RAM bank
+
+; Calls a routine in the drawing code's RAM bank, and maps the script's bank again once it has
+; returned. The routine cannot see the script, because both banks are at the same addresses.
+.macro banked(routine: ident) {
+    lda #<.bankof(routine)
+    sta RAM_BANK
+    jsr routine
+    lda bank
+    sta RAM_BANK
+}
+
+.segment CODE
+
+; Runs the script at X (low byte) and Y (high byte) to its end. The script's RAM bank must be
+; the one mapped.
+.proc run: reads x, y {
+    stx pc
+    sty pc+1
+    lda RAM_BANK
+    sta bank
+@next:
+    jsr step
+    bcc @next
+    rts
+}
+
+; Runs the next operation, and returns with carry set when it was the end.
+.proc step {
+    jsr fetch
+    rmb0 draw::style
+    bit #REVERSE
+    beq @dispatch
+    smb0 draw::style
+    and #~REVERSE & $FF
+@dispatch:
+    asl a
+    tax
+    jmp (handlers,x)
+    .next handlers
+
+    .segment RODATA {
+        .data handlers: .addr[] {
+            .each Op, op {
+                ops::op
+            }
+        }
+    }
+}
+
+; Returns the script's next byte in A, and moves `pc` past it.
+.proc fetch: keeps x, y {
+    lda (pc)
+    inc pc
+    bne @done
+    inc pc+1
+@done:
+    rts
+}
+
+; The operations, each named after its member of `Op`. Each returns with carry clear, but for
+; `end`, which sets it.
+.scope ops {
+    .proc at {
+        jsr fetch
+        sta draw::column
+        jsr fetch
+        sta draw::row
+        clc
+        rts
+    }
+
+    .proc colour {
+        jsr fetch
+        sta draw::colour
+        clc
+        rts
+    }
+
+    .proc box {
+        jsr fetch
+        sta draw::width
+        jsr fetch
+        sta draw::height
+        banked!(draw::box)
+        clc
+        rts
+    }
+
+    .proc text {
+        ldx #0
+    @copy:
+        jsr fetch
+        sta draw::line,x
+        inx
+        cmp #0
+        bne @copy
+        banked!(draw::text)
+        inc draw::row
+        clc
+        rts
+    }
+
+    .proc end {
+        sec
+        rts
+    }
+}

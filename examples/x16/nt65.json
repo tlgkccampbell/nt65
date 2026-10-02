@@ -1,0 +1,8 @@
+{
+  "cpu": "r65c02",
+  "files": ["src/*.nt65"],
+  "out": "build",
+  "links": {
+    "prg": { "config": "x16.cfg" }
+  }
+}
