@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -21,6 +22,13 @@ internal sealed class BoundNames
     /// </summary>
     public const int ForwardingLimit = 64;
 
+    // What each kind of binding holds, each made when the first name is bound that way. Most
+    // queries bind nothing, or only values, and a query is made for every value in a table.
+    private Dictionary<Symbol, Value>? values;
+    private Dictionary<Symbol, SyntaxNode>? items;
+    private Dictionary<Symbol, Symbol>? members;
+    private Dictionary<Symbol, MacroArgument>? given;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="BoundNames"/> class, with each name in
     /// <paramref name="bound"/> taking what it is bound to there.
@@ -33,7 +41,9 @@ internal sealed class BoundNames
 
         // A repetition's binding takes its value for the current iteration, just as a
         // function's parameter takes its argument's.
-        foreach (var (symbol, value) in bound ?? new Dictionary<Symbol, Expansion.Bound>())
+        if (bound is null)
+            return;
+        foreach (var (symbol, value) in bound)
         {
             if (value.Argument is { } argument)
                 Given[symbol] = argument;
@@ -56,25 +66,25 @@ internal sealed class BoundNames
     /// Gets the value that each bound name has, such as a function's parameter in the call being
     /// evaluated or a repetition's index.
     /// </summary>
-    public Dictionary<Symbol, Value> Values { get; } = [];
+    public Dictionary<Symbol, Value> Values => values ??= [];
 
     /// <summary>
     /// Gets the list item that each name an <c>.each</c> bound stands for. Such a name is replaced
     /// by the item itself wherever it appears, not just by the item's value.
     /// </summary>
-    public Dictionary<Symbol, SyntaxNode> Items { get; } = [];
+    public Dictionary<Symbol, SyntaxNode> Items => items ??= [];
 
     /// <summary>
     /// Gets the enum member each repetition binding is bound to in the current iteration. A path
     /// that ends in the binding reaches the container's member of that enum member's name.
     /// </summary>
-    public Dictionary<Symbol, Symbol> Members { get; } = [];
+    public Dictionary<Symbol, Symbol> Members => members ??= [];
 
     /// <summary>
     /// Gets what each macro parameter was given, for the built-ins that ask about the argument
     /// rather than about its value.
     /// </summary>
-    public Dictionary<Symbol, MacroArgument> Given { get; } = [];
+    public Dictionary<Symbol, MacroArgument> Given => given ??= [];
 
     /// <summary>
     /// Returns the symbol that a node refers to when the node is a name, or null otherwise,
@@ -122,12 +132,26 @@ internal sealed class BoundNames
     /// </summary>
     public SyntaxNode? BoundItem(NameExpressionSyntax name)
     {
-        if (Items.Count == 0 || name.SimpleName is not { } only)
+        if (items is not { Count: > 0 } || name.SimpleName is not { } only)
             return null;
         return Resolved.TryGetValue((name.Tree, only.Span.Start), out var symbol)
-            && Items.TryGetValue(symbol, out var item)
+            && items.TryGetValue(symbol, out var item)
             ? item
             : null;
+    }
+
+    /// <summary>Gets the value a name is bound to, when it is bound to one.</summary>
+    public bool TryGetValue(Symbol symbol, out Value value)
+    {
+        value = default;
+        return values?.TryGetValue(symbol, out value) == true;
+    }
+
+    /// <summary>Gets the enum member a repetition's name is bound to, when it is bound to one.</summary>
+    public bool TryGetMember(Symbol symbol, [NotNullWhen(true)] out Symbol? member)
+    {
+        member = null;
+        return members?.TryGetValue(symbol, out member) == true;
     }
 
     /// <summary>
@@ -148,11 +172,11 @@ internal sealed class BoundNames
     /// </summary>
     public MacroArgument? Argument(SyntaxNode name)
     {
-        var argument = Parameter(name) is { } parameter ? Given.GetValueOrDefault(parameter) : null;
+        var argument = Parameter(name) is { } parameter ? given?.GetValueOrDefault(parameter) : null;
         for (var steps = 0; steps < ForwardingLimit && argument?.Value is NameExpressionSyntax passed; steps++)
         {
             if (Parameter(passed) is not { Kind: SymbolKind.MacroParameter } outer
-                || !Given.TryGetValue(outer, out var next))
+                || given is null || !given.TryGetValue(outer, out var next))
             {
                 break;
             }
@@ -210,9 +234,9 @@ internal sealed class BoundNames
         if (container is null || Lookup.BodyOf(container) is not { } body)
             return null;
 
-        if (!Members.TryGetValue(binding, out var member))
+        if (!TryGetMember(binding, out var member))
         {
-            if (Items.ContainsKey(binding) || Values.ContainsKey(binding))
+            if (items?.ContainsKey(binding) == true || values?.ContainsKey(binding) == true)
                 problem = (name, Catalogue.BindingNotOverAnEnum.Message(binding.Name));
             return null;
         }

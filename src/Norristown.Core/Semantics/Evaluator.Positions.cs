@@ -92,9 +92,9 @@ internal sealed partial class Evaluator
     private List<Write> WritesOf(SyntaxTree tree)
     {
         var key = (tree, context.Written is not null);
-        var plain = context is { Choosing: 0, ReadingBody: false } && placing.Count == 0;
+        var plain = context is { Choosing: 0, ReadingBody: false } && placing is not { Count: > 0 };
         var shared = plain && context.Written is null && mode == EvaluationMode.Query ? walks : null;
-        if (plain && writesOf.TryGetValue(key, out var kept))
+        if (plain && writesOf is not null && writesOf.TryGetValue(key, out var kept))
             return kept;
         if (shared is not null && shared.TryGetValue(tree, out var queried))
             return queried;
@@ -105,7 +105,7 @@ internal sealed partial class Evaluator
             Writes(tree.Root.Members, 0, null, writes);
         if (!plain || problems != problemsBefore || unfinishedReads != readsBefore)
             return writes;
-        writesOf[key] = writes;
+        (writesOf ??= [])[key] = writes;
         if (layoutReads == layoutBefore)
             shared?.TryAdd(tree, writes);
         return writes;
@@ -301,7 +301,7 @@ internal sealed partial class Evaluator
 
         // A declaration whose size is being computed may be asked about by code inside it. The
         // distance is then unknown, rather than the question recursing.
-        if (outermost.Definition is not BlockSyntax body || !placing.Add(outermost))
+        if (outermost.Definition is not BlockSyntax body || !(placing ??= []).Add(outermost))
             return null;
         long offset = 0;
         bool? found;

@@ -42,7 +42,7 @@ internal sealed partial class Evaluator
     // that did not change, whose values are kept and not evaluated again. `unchangedReads`
     // collects the ones this file's symbols read.
     private readonly Func<Symbol, bool> unchanged;
-    private readonly HashSet<Symbol> unchangedReads = [];
+    private HashSet<Symbol>? unchangedReads;
 
     // Decides what a name and a call may mean in a build's condition. Only an evaluator for
     // conditions has one.
@@ -53,7 +53,7 @@ internal sealed partial class Evaluator
     // The declarations and operands already reported for a value wider than ca65 can hold. The
     // steps of the same expression around that value are the same mistake, so only the first is
     // reported.
-    private readonly HashSet<object> wide = [];
+    private HashSet<object>? wide;
 
     // Whether a chain of definitions deeper than MaximumDepth has been reported.
     private bool tooDeep;
@@ -65,16 +65,16 @@ internal sealed partial class Evaluator
     // The literals already reported for holding a character outside ASCII. A macro body is
     // evaluated once per call, but each literal in it is one piece of source and is reported
     // once.
-    private readonly HashSet<SyntaxNode> outsideAscii = [];
+    private HashSet<SyntaxNode>? outsideAscii;
 
     // The data declarations being searched for a location inside them, so that a question
     // about one from code inside it gets an unknown answer rather than recursing.
-    private readonly HashSet<Symbol> placing = [];
+    private HashSet<Symbol>? placing;
 
     // The symbols whose evaluation has started and not finished. A symbol leaves the stack of
     // `evaluating` between the steps of its evaluation, so a read of it there sees only what the
     // steps so far have given it. `unfinishedReads` counts such reads.
-    private readonly HashSet<Symbol> unfinished = [];
+    private HashSet<Symbol>? unfinished;
     private int unfinishedReads;
 
     // How many times evaluation has asked for something only layout knows, whether or not the
@@ -84,7 +84,7 @@ internal sealed partial class Evaluator
     // What each file emits to each segment, in order, as a walk that met nothing uncertain found
     // it. The key also says whether the walk was checking an expression the output writes as it
     // stands, which is when a value too wide for ca65 is a problem.
-    private readonly Dictionary<(SyntaxTree Tree, bool Written), List<Write>> writesOf = [];
+    private Dictionary<(SyntaxTree Tree, bool Written), List<Write>>? writesOf;
 
     // What each file emits to each segment, kept with a model across the evaluators that answer
     // queries about it, when the caller keeps one there.
@@ -147,7 +147,7 @@ internal sealed partial class Evaluator
             EvaluationMode.Report, inputs, (diagnostic, owner) => owned.Add((diagnostic, owner)), unchanged);
         foreach (var symbol in symbols)
             evaluator.EvaluateSymbol(symbol);
-        return evaluator.unchangedReads;
+        return evaluator.unchangedReads ?? [];
     }
 
     /// <summary>
@@ -309,7 +309,7 @@ internal sealed partial class Evaluator
         if (value.AsNumber() is { } number && !FitsCa65(number))
         {
             problems++;
-            if (wide.Add(within))
+            if ((wide ??= []).Add(within))
                 Report(node, TooWide(number));
         }
         return value;
@@ -325,7 +325,7 @@ internal sealed partial class Evaluator
     /// </summary>
     private void CheckAscii(LiteralExpressionSyntax literal)
     {
-        if (!literal.Token.Text.Any(c => c > 127) || InCharmapOrData(literal) || !outsideAscii.Add(literal))
+        if (!literal.Token.Text.Any(c => c > 127) || InCharmapOrData(literal) || !(outsideAscii ??= []).Add(literal))
             return;
         Report(literal, Catalogue.TextNotAscii);
     }
@@ -446,7 +446,7 @@ internal sealed partial class Evaluator
     {
         if (unchanged(symbol))
         {
-            unchangedReads.Add(symbol);
+            (unchangedReads ??= []).Add(symbol);
             return;
         }
         using (Enter(context with { Owner = symbol }))
@@ -463,7 +463,7 @@ internal sealed partial class Evaluator
         }
         if (!evaluated.Add(symbol))
         {
-            if (unfinished.Contains(symbol))
+            if (unfinished?.Contains(symbol) == true)
                 unfinishedReads++;
             return;
         }
@@ -478,7 +478,7 @@ internal sealed partial class Evaluator
             unfinishedReads++;
             return;
         }
-        unfinished.Add(symbol);
+        (unfinished ??= []).Add(symbol);
         try
         {
             EvaluateOnce(symbol);
@@ -537,7 +537,7 @@ internal sealed partial class Evaluator
                 return;
             case SymbolKind.Constant when symbol.FollowsPrevious:
                 symbol.Value = Number(Follows(symbol));
-                if (symbol.Value.AsNumber() is { } counted && !FitsCa65(counted) && wide.Add(symbol))
+                if (symbol.Value.AsNumber() is { } counted && !FitsCa65(counted) && (wide ??= []).Add(symbol))
                     Report(symbol.DeclarationSpan, TooWide(counted), []);
                 return;
             default:
@@ -848,9 +848,9 @@ internal sealed partial class Evaluator
         // now. The value copied when the binding was made is unknown whenever the enum's file
         // has not been evaluated yet, and which files have been evaluated depends on their
         // order.
-        if (names.Members.TryGetValue(symbol, out var member))
+        if (names.TryGetMember(symbol, out var member))
             return Indexed(name, ValueOfSymbol(member));
-        if (names.Values.TryGetValue(symbol, out var argument))
+        if (names.TryGetValue(symbol, out var argument))
             return Indexed(name, argument);
         return Indexed(name, symbol.Kind == SymbolKind.Member ? OffsetAlong(name) : ValueOfSymbol(symbol));
     }

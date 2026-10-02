@@ -30,6 +30,12 @@ public sealed class SemanticModel
     // it answers a lookup at a position.
     private readonly ProgramSymbols program;
 
+    // The expansion whose bindings were asked for last, with those bindings. A walk asks several
+    // questions about each line it reaches, all on the same expansion, and a table built by a
+    // repetition has a line for every value. The pair is replaced as a whole, so a thread that
+    // reads it sees the bindings of the expansion beside them.
+    private Tuple<Expansion, IReadOnlyDictionary<Symbol, Expansion.Bound>>? lastBindings;
+
     internal SemanticModel(
         SyntaxTree tree,
         SegmentTable segments,
@@ -369,15 +375,30 @@ public sealed class SemanticModel
     /// expansion. Where two levels bind the same name the innermost wins, though that never
     /// happens.
     /// <para>
-    /// This is computed each time rather than kept, because an expansion is identified by the
-    /// call it expands and by nothing derived from it. That way, two walkers that reach the same
-    /// line agree about which <see cref="Expansion"/> of it they are on.
+    /// This is computed from the expansion rather than kept on it, because an expansion is
+    /// identified by the call it expands and by nothing derived from it. That way, two walkers
+    /// that reach the same line agree about which <see cref="Expansion"/> of it they are on. Only
+    /// the bindings of the expansion last asked about are kept here, for the next question about
+    /// the same line.
     /// </para>
     /// </summary>
     public IReadOnlyDictionary<Symbol, Expansion.Bound>? BindingsOf(Expansion? on)
     {
         if (on is null)
             return null;
+        if (lastBindings is { } last && ReferenceEquals(last.Item1, on))
+            return last.Item2;
+        var bound = Bound(on);
+        lastBindings = Tuple.Create(on, bound);
+        return bound;
+    }
+
+    /// <summary>
+    /// Returns what every name bound at <paramref name="on"/> and at the levels around it is
+    /// bound to, computed afresh.
+    /// </summary>
+    private IReadOnlyDictionary<Symbol, Expansion.Bound> Bound(Expansion on)
+    {
         var bound = new Dictionary<Symbol, Expansion.Bound>();
         for (var level = on; level is not null; level = level.Outer)
         {
