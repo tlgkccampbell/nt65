@@ -1,0 +1,24 @@
+; The XEX's records, what the program holds at RUNAD and after 100 frames, and the screen
+; when BASIC is in. test.ps1 -Update writes it.
+load     $0600-$06B8 SYSCHK
+initad   $0600 syscheck::run
+load     $A000-$A083 LOADER
+initad   $A000 loader::show
+load     $2000-$214C CODE RODATA
+initad   $A025 loader::hide
+load     $A000-$A143 SCREEN
+runad    $20B7 main::start
+start loader::started   03
+start loader::finished  04
+start os::SDMCTL        00
+start os::COLOR2        94
+after os::SDMCTL        22
+after os::SDLSTL        display::list
+after os::VDSLST        bars::dli
+after os::VVBLKD        bars::vbi
+after bars::frames      63 00
+after bars::band        02
+after bars::phase       03
+after status row          Loaded in 001 frames. Frame 0063.
+refused screen row 0      This program needs BASIC off: hold OPT
+refused screen row 1      ION as the machine starts.
