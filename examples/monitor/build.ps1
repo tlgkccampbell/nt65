@@ -58,10 +58,10 @@ foreach ($p in $Platform) {
         }
         $image = Join-Path $out $settings.Image
         $stem = [IO.Path]::ChangeExtension($image, $null).TrimEnd('.')
-        # The label file is VICE's, for its monitor; the debug file points at the .nt65 sources.
-        Run $Ld65 (@('-C', $settings.Config, '-o', $image, '-m', "$stem.map", '-Ln', "$stem.lbl",
-                     '--dbgfile', "$stem.dbg") + $objects)
-        Run $Nt65 @('remap-dbg', "$stem.dbg")
+        # The debug file points at the .nt65 sources. The label file names each address by its
+        # path in the source, for VICE's monitor and for test.ps1.
+        Run $Ld65 (@('-C', $settings.Config, '-o', $image, '-m', "$stem.map", '--dbgfile', "$stem.dbg") + $objects)
+        Run $Nt65 @('remap-dbg', "$stem.dbg", '--labels', "$stem.lbl")
         if ($settings.Checksum) { Set-Checksum $image $settings.Checksum }
         Write-Host ('{0,-8} {1,6:N0} bytes in build/{0}/{2}' -f $p, (Get-Item $image).Length, $settings.Image)
     }

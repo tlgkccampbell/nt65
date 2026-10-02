@@ -42,8 +42,8 @@ try {
         $object
     }
     Run $Ld65 (@('-C', 'hirom.cfg', '-o', 'build/hirom-hdma.sfc', '-m', 'build/hirom-hdma.map',
-                 '-Ln', 'build/hirom-hdma.lbl', '--dbgfile', 'build/hirom-hdma.dbg') + $objects)
-    Run $Nt65 @('remap-dbg', 'build/hirom-hdma.dbg')
+                 '--dbgfile', 'build/hirom-hdma.dbg') + $objects)
+    Run $Nt65 @('remap-dbg', 'build/hirom-hdma.dbg', '--labels', 'build/hirom-hdma.lbl')
     # The header is at $00FFC0, which is $FFC0 in the image, and its complement at $FFDC.
     Set-Checksum (Join-Path $PSScriptRoot 'build/hirom-hdma.sfc') 0xFFDC
     Write-Host ('hirom-hdma {0,7:N0} bytes in build/hirom-hdma.sfc' -f (Get-Item 'build/hirom-hdma.sfc').Length)

@@ -40,11 +40,16 @@ $emulator = if (-not $Atari800) { (Get-Command atari800).Source }
             elseif (Test-Path $Atari800 -PathType Container) { (Get-ChildItem $Atari800 -Filter 'atari800*.exe' -Recurse | Select-Object -First 1).FullName }
             else { (Resolve-Path $Atari800).Path }
 
+# The address of each name, from the label file `nt65 remap-dbg --labels` wrote, which names it
+# by its path in the source.
+. (Join-Path $PSScriptRoot '../labels.ps1')
+$labels = Read-Labels (Join-Path $build 'demo.lbl')
+
 # The program's names and segments, from ld65's debug file. The loader and the program's screen
-# share their addresses, so a name is told apart by its segment as well as its address. A name
-# is written as nt65 writes it, with its module: ld65 has `display__list` for an exported one,
-# or for a constant `display` uses from `atari`, and `rows__status` for one private to `display`.
-$modules = @{}
+# share their addresses, so a name is told apart by its segment as well as its address. ld65 has
+# a name as the .s spells it, such as `rows__status` for `display::rows::status`, and the map nt65
+# wrote beside each .s gives its path, in records such as `name rows__status, display::rows::status`.
+$paths = @{}
 $scopes = @{}
 $segments = @{}
 $symbols = @()
@@ -56,7 +61,15 @@ foreach ($line in Get-Content (Join-Path $build 'demo.dbg')) {
         $field[$key] = "$value".Trim('"')
     }
     switch ($kind) {
-        'mod'   { $modules[$field.id] = ($field.name -replace '\.o$', '') -replace '[/\\]', '::' }
+        'file'  {
+            if (-not (Test-Path "$($field.name).lines")) { break }
+            $names = [Collections.Generic.Dictionary[string, string]]::new([StringComparer]::Ordinal)
+            foreach ($record in Get-Content "$($field.name).lines" | Where-Object { $_ -like 'name *' }) {
+                $name, $path = $record.Substring(5) -split ', '
+                $names[$name] = $path
+            }
+            foreach ($module in $field.mod -split '\+') { $paths[$module] = $names }
+        }
         'scope' { $scopes[$field.id] = $field.mod }
         'seg'   { $segments[$field.id] = @{ Name = $field.name; Start = [Convert]::ToInt32($field.start, 16)
                                             Size = [Convert]::ToInt32($field.size, 16)
@@ -64,14 +77,13 @@ foreach ($line in Get-Content (Join-Path $build 'demo.dbg')) {
         'sym'   { if ($field.val -and $field.type -ne 'imp') { $symbols += $field } }
     }
 }
-$labels = @{}
-foreach ($symbol in $symbols) {
-    $module = $modules[$scopes[$symbol.scope]]
-    $name = $symbol.name -replace '__', '::'
-    if (($name -split '::')[0] -notin $modules.Values) { $name = "${module}::$name" }
-    $symbol.path = $name
-    $labels[$name] = [Convert]::ToInt32($symbol.val, 16)
-}
+$symbols = @(foreach ($symbol in $symbols) {
+    $names = $paths[$scopes[$symbol.scope]]
+    if ($names -and $names.ContainsKey($symbol.name)) {
+        $symbol.path = $names[$symbol.name]
+        $symbol
+    }
+})
 
 # The XEX's records in order: each load segment with its first address and its bytes, and each
 # INITAD and RUNAD with the address it gives, which are load segments of their own at $02E2 and
@@ -147,7 +159,7 @@ function Start-Atari800([string]$name, [string]$break, [string]$basic, [string[]
         $env:http_proxy = 'http://127.0.0.1:9'
         $arguments = @('-config', "$name.cfg", '-no-autosave-config', '-xl', '-xl-rev', 'altirra',
                        '-basic-rev', 'altirra', $basic, '-nosound', '-turbo',
-                       '-bpc', ('{0:X4}' -f $labels[$break]), '-run', $image)
+                       '-bpc', ('{0:X4}' -f (Address $labels $break)), '-run', $image)
         Start-Process $emulator -ArgumentList $arguments -WorkingDirectory $work -PassThru -WindowStyle Hidden `
             -RedirectStandardInput $script -RedirectStandardOutput (Join-Path $work "$name.log") `
             -RedirectStandardError (Join-Path $work "$name.err")
@@ -200,12 +212,12 @@ if ($differ) { $failed += 'loaded: at RUNAD, memory differs from the XEX at ' + 
 
 # Returns the bytes at a label, at a stop, as hex.
 function Hex([string]$stop, [string]$label, [int]$count = 1) {
-    (Bytes $stop $labels[$label] $count | ForEach-Object { '{0:X2}' -f $_ }) -join ' '
+    (Bytes $stop (Address $labels $label) $count | ForEach-Object { '{0:X2}' -f $_ }) -join ' '
 }
 
 # Returns the address a vector holds, at a stop, as a label.
 function Vector([string]$stop, [string]$label) {
-    $target = (Bytes $stop $labels[$label] 1)[0] + 256 * (Bytes $stop ($labels[$label] + 1) 1)[0]
+    $target = (Bytes $stop (Address $labels $label) 1)[0] + 256 * (Bytes $stop ((Address $labels $label) + 1) 1)[0]
     if ($name = Name $target) { $name } else { '${0:X4}' -f $target }
 }
 
@@ -224,7 +236,7 @@ $state = [ordered]@{
     'after bars::frames'     = Hex after 'bars::frames' 2
     'after bars::band'       = Hex after 'bars::band'
     'after bars::phase'      = Hex after 'bars::phase'
-    'after status row'       = (Text (Bytes after $labels['display::rows::status'] 40)).TrimEnd()
+    'after status row'       = (Text (Bytes after (Address $labels 'display::rows::status') 40)).TrimEnd()
 }
 # The screen the refused run left, from the address in SAVMSC at $58, two rows of 40.
 $screen = (Bytes refused 0x58 1)[0] + 256 * (Bytes refused 0x59 1)[0]

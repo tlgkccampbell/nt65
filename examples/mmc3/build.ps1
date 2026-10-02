@@ -29,9 +29,8 @@ try {
         Run $Ca65 @('-g', $source.FullName, '-o', $object)
         $object
     }
-    Run $Ld65 (@('-C', 'mmc3.cfg', '-o', 'build/mmc3.nes', '-m', 'build/mmc3.map', '-Ln', 'build/mmc3.lbl',
-                 '--dbgfile', 'build/mmc3.dbg') + $objects)
-    Run $Nt65 @('remap-dbg', 'build/mmc3.dbg')
+    Run $Ld65 (@('-C', 'mmc3.cfg', '-o', 'build/mmc3.nes', '-m', 'build/mmc3.map', '--dbgfile', 'build/mmc3.dbg') + $objects)
+    Run $Nt65 @('remap-dbg', 'build/mmc3.dbg', '--labels', 'build/mmc3.lbl')
     Write-Host ('mmc3 {0,7:N0} bytes in build/mmc3.nes' -f (Get-Item 'build/mmc3.nes').Length)
 }
 catch {

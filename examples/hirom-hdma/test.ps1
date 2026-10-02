@@ -27,23 +27,19 @@ $emulator = if (-not $Mame) { (Get-Command mame).Source }
             elseif (Test-Path $Mame -PathType Container) { (Get-ChildItem $Mame -Filter 'mame*.exe' | Select-Object -First 1).FullName }
             else { (Resolve-Path $Mame).Path }
 
-$labels = @{}
-foreach ($line in Get-Content (Join-Path $build 'hirom-hdma.lbl')) {
-    $_, $address, $name = $line -split ' '
-    $labels[$name.TrimStart('.')] = [Convert]::ToInt32($address, 16)
-}
+. (Join-Path $PSScriptRoot '../labels.ps1')
+$labels = Read-Labels (Join-Path $build 'hirom-hdma.lbl')
 
 # The memory the test reads, by name: each an address and a count of bytes. The sizes are the
-# ones wave.nt65 and gradient.nt65 lay out. A name a module keeps to itself, such as `shown`, is
-# in the label file under its own name, without its module's.
+# ones wave.nt65 and gradient.nt65 lay out.
 $regions = [ordered]@{
-    frames   = $labels['main__frames'], 4
+    frames   = (Address $labels 'main::frames'), 4
     channel1 = 0x4310, 8
     channel2 = 0x4320, 5
-    shown    = $labels['shown'], 1
-    ready    = $labels['wave__ready'], 1
-    scrolls  = $labels['wave__scrolls'], (2 * 2 * $labels['wave__LINES'])
-    ramp     = $labels['gradient__ramp'], (7 * (1 + 32 * 4) + 1)
+    shown    = (Address $labels 'wave::shown'), 1
+    ready    = (Address $labels 'wave::ready'), 1
+    scrolls  = (Address $labels 'wave::scrolls'), (2 * 2 * (Address $labels 'wave::LINES'))
+    ramp     = (Address $labels 'gradient::ramp'), (7 * (1 + 32 * 4) + 1)
 }
 
 $work = Join-Path $build 'test'
@@ -55,7 +51,7 @@ Remove-Item $state, $screen -ErrorAction SilentlyContinue
 $script = Join-Path $work 'session.lua'
 @(
     'session = {'
-    "    frames = 0x$('{0:X6}' -f $labels['main__frames']),"
+    "    frames = 0x$('{0:X6}' -f (Address $labels 'main::frames')),"
     "    wanted = $Frames,"
     "    state = [[$state]],"
     "    screen = [[$screen]],"
@@ -91,7 +87,7 @@ function Field([string]$name) { @((($lines | Where-Object { $_ -like "$name *" }
 $channel = Field 'channel1'
 $shown = [Convert]::ToInt32(@(Field 'shown')[0], 16)
 $address = [Convert]::ToInt32($channel[3] + $channel[2], 16)
-$table = ($labels['wave__tables'] + $shown * 7) -band 0xFFFF
+$table = ((Address $labels 'wave::tables') + $shown * 7) -band 0xFFFF
 if ($address -ne $table -or $channel[4] -ne 'C1' -or $channel[7] -ne '7E') {
     $failed += "wave: channel 1 reads `$$($channel[4]):$('{0:X4}' -f $address) and `$$($channel[7]), not buffer $shown's table at `$C1:$('{0:X4}' -f $table) and `$7E"
 }

@@ -29,9 +29,8 @@ try {
         Run $Ca65 @('-g', $source.FullName, '-o', $object)
         $object
     }
-    Run $Ld65 (@('-C', 'xex.cfg', '-o', 'build/demo.xex', '-m', 'build/demo.map', '-Ln', 'build/demo.lbl',
-                 '--dbgfile', 'build/demo.dbg') + $objects)
-    Run $Nt65 @('remap-dbg', 'build/demo.dbg')
+    Run $Ld65 (@('-C', 'xex.cfg', '-o', 'build/demo.xex', '-m', 'build/demo.map', '--dbgfile', 'build/demo.dbg') + $objects)
+    Run $Nt65 @('remap-dbg', 'build/demo.dbg', '--labels', 'build/demo.lbl')
     Write-Host ('demo {0,6:N0} bytes in build/demo.xex' -f (Get-Item 'build/demo.xex').Length)
 }
 catch {

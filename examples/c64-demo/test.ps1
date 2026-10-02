@@ -28,11 +28,8 @@ $emulator = if (-not $Vice) { (Get-Command x64sc).Source }
             elseif (Test-Path $Vice -PathType Container) { (Get-ChildItem $Vice -Filter 'x64sc*.exe' -Recurse | Select-Object -First 1).FullName }
             else { (Resolve-Path $Vice).Path }
 
-$labels = @{}
-foreach ($line in Get-Content (Join-Path $build 'demo.lbl')) {
-    $_, $address, $name = $line -split ' '
-    $labels[$name.TrimStart('.')] = [Convert]::ToInt32($address, 16)
-}
+. (Join-Path $PSScriptRoot '../labels.ps1')
+$labels = Read-Labels (Join-Path $build 'demo.lbl')
 
 # The cycle of its line on which `stable` reaches `steady`, in VICE's count of a line's cycles:
 # `stable` starts on cycle 38 or 39, and the read of the raster makes both reach `steady` 28
@@ -47,7 +44,7 @@ Remove-Item $memory, $shot -ErrorAction SilentlyContinue
 
 # Checkpoints 1 to 3 save memory and the screen at the top of the main loop after `$Frames`
 # frames, and leave once they have. Checkpoint 4 leaves with 2 if `steady` is ever off its cycle.
-$loop = '{0:x4}' -f $labels['loop']
+$loop = '{0:x4}' -f (Address $labels 'main::loop')
 $script = Join-Path $work 'demo.mon'
 @(
     "tr exec `$$loop"
@@ -59,7 +56,7 @@ $script = Join-Path $work 'demo.mon'
     "tr exec `$$loop"
     "ignore 3 $('{0:x}' -f ($Frames + 1))"
     'command 3 "> d7ff 00"'
-    "tr exec `$$('{0:x4}' -f $labels['stable__steady']) if CY != `$$('{0:x2}' -f $steady)"
+    "tr exec `$$('{0:x4}' -f (Address $labels 'raster::stable::steady')) if CY != `$$('{0:x2}' -f $steady)"
     'command 4 "> d7ff 02"'
 ) | Set-Content $script
 
@@ -90,21 +87,21 @@ if (Compare-Object $colours (Bytes 0xD800 1000 | ForEach-Object { $_ -band 0x0F 
 }
 
 # The order the multiplexer shows the objects in, each once and from the top down.
-$order = Bytes $labels['plex__order'] 16
-$ypos = Bytes $labels['plex__objects__ypos'] 16
+$order = Bytes (Address $labels 'plex::order') 16
+$ypos = Bytes (Address $labels 'plex::objects::ypos') 16
 $sorted = (($order | Sort-Object) -join ',') -eq ((0..15) -join ',')
 for ($i = 1; $sorted -and $i -lt 16; $i++) { $sorted = $ypos[$order[$i - 1]] -le $ypos[$order[$i]] }
 if (-not $sorted) { $failed += "sorted: plex::order is $($order -join ' ') for Y $($ypos -join ' ')" }
 
 # What the run leaves, a line to each part, as hex bytes.
 $state = [ordered]@{
-    'raster::frames'      = Bytes $labels['raster__frames'] 1
-    'music::step'         = Bytes $labels['music__step'] 1
-    'music::tick'         = Bytes $labels['music__tick'] 1
+    'raster::frames'      = Bytes (Address $labels 'raster::frames') 1
+    'music::step'         = Bytes (Address $labels 'music::step') 1
+    'music::tick'         = Bytes (Address $labels 'music::tick') 1
     'sid'                 = Bytes 0xD400 25
     'plex::order'         = $order
-    'plex::objects::xpos' = Bytes $labels['plex__objects__xpos'] 16
-    'plex::objects::xhigh' = Bytes $labels['plex__objects__xhigh'] 16
+    'plex::objects::xpos' = Bytes (Address $labels 'plex::objects::xpos') 16
+    'plex::objects::xhigh' = Bytes (Address $labels 'plex::objects::xhigh') 16
     'plex::objects::ypos' = $ypos
 }
 $lines = @("; What the demo holds after $Frames frames, at the top of its main loop. test.ps1 -Update writes it.")

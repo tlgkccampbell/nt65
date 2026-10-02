@@ -14,6 +14,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot '../labels.ps1')
 
 # Each platform's emulator, the file it runs, the function that starts a session in it, and what
 # that function needs. VICE saves the C64's screen memory, which is read here; MAME's scripts read
@@ -21,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 # which of their buttons types a space.
 $platforms = [ordered]@{
     c64      = @{ Emulator = 'x64sc'; Given = $Vice; Image = 'monitor.prg'; Run = 'Start-Vice'
-                  Start = 'monitor__main'; End = 'platform__exit'; Screen = '0400 07e7'; Columns = 40 }
+                  Start = 'monitor::main'; End = 'platform::exit'; Screen = '0400 07e7'; Columns = 40 }
     apple2gs = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.bin'; Run = 'Start-Apple2gs'
                   Load = 0x2000 }
     snes     = @{ Emulator = 'mame'; Given = $Mame; Image = 'monitor.sfc'; Run = 'Start-Joypad'
@@ -36,6 +37,10 @@ function Emulator([string]$name, [string]$given) {
     if (Test-Path $given -PathType Container) { return (Get-ChildItem $given -Filter "$name*.exe" -Recurse | Select-Object -First 1).FullName }
     return (Resolve-Path $given).Path
 }
+
+# The address of a name in the label file, as the four hex digits the sessions write it with, its
+# bank left out.
+function At($labels, [string]$name) { '{0:X4}' -f ((Address $labels $name) -band 0xFFFF) }
 
 # A C64 screen code as the character it shows: $00 to $1F are `@`, the capitals and a few
 # signs, $20 to $3F are ASCII, and bit 7 is the cursor's reverse video.
@@ -55,9 +60,9 @@ function Start-Vice($settings, $emulator, $image, $labels, $lines, $screen, $wor
     $typed += 'poke 55295,0\\x0d'
     $script = Join-Path $work "$name.mon"
     @(
-        "tr exec `$$($labels[$settings.Start])"
+        "tr exec `$$(At $labels $settings.Start)"
         "command 1 `"keybuf $typed`""
-        "tr exec `$$($labels[$settings.End])"
+        "tr exec `$$(At $labels $settings.End)"
         "command 2 `"bsave \`"$($screen.Replace('\', '/'))\`" 0 $($settings.Screen)`""
     ) | Set-Content $script
     $arguments = @('-default', '-console', '-warp', '+sound', '-debugcart', '-limitcycles', '20000000',
@@ -103,10 +108,10 @@ function Start-Joypad($settings, $emulator, $image, $labels, $lines, $screen, $w
         'session = {'
         "    typed = `"$typed`","
         "    space = `"$($settings.Space)`","
-        "    keys = 0x$($labels['platform__keyboard__keys']),"
-        "    pad = 0x$($labels['platform__keyboard__pad']),"
-        "    screen = 0x$($labels['platform__screen__screen']),"
-        "    halt = 0x$($labels['platform__halt']),"
+        "    keys = 0x$(At $labels 'platform::keyboard::keys'),"
+        "    pad = 0x$(At $labels 'platform::keyboard::pad'),"
+        "    screen = 0x$(At $labels 'platform::screen::screen'),"
+        "    halt = 0x$(At $labels 'platform::halt'),"
         "    output = [[$screen]],"
         '}'
         "assert(loadfile([[$(Join-Path $PSScriptRoot 'joypad-session.lua')]], 't', _ENV))()"
@@ -138,11 +143,7 @@ $runs = foreach ($p in $platforms.Keys) {
     $image = Join-Path $build $settings.Image
     if (-not (Test-Path $image)) { throw "$p is not built: run build.ps1 first" }
     if ($p -eq 'apple2gs' -and -not (Test-Path $Disk)) { throw "no ProDOS disk at ${Disk}: give one with -Disk" }
-    $labels = @{}
-    foreach ($line in Get-Content (Join-Path $build 'monitor.lbl')) {
-        $_, $address, $name = $line -split ' '
-        $labels[$name.TrimStart('.')] = $address.Substring(2)
-    }
+    $labels = Read-Labels (Join-Path $build 'monitor.lbl')
     $emulator = Emulator $settings.Emulator $settings.Given
     $work = Join-Path $build 'tests'
     New-Item -ItemType Directory -Force $work | Out-Null

@@ -30,9 +30,8 @@ try {
         Run $Ca65 @('-g', $source.FullName, '-o', $object)
         $object
     }
-    Run $Ld65 (@('-C', 'x16.cfg', '-o', 'build/card.prg', '-m', 'build/card.map', '-Ln', 'build/card.lbl',
-                 '--dbgfile', 'build/card.dbg') + $objects)
-    Run $Nt65 @('remap-dbg', 'build/card.dbg')
+    Run $Ld65 (@('-C', 'x16.cfg', '-o', 'build/card.prg', '-m', 'build/card.map', '--dbgfile', 'build/card.dbg') + $objects)
+    Run $Nt65 @('remap-dbg', 'build/card.dbg', '--labels', 'build/card.lbl')
     $sizes = foreach ($file in 'card.prg', 'card.prg.01', 'card.prg.02') { (Get-Item "build/$file").Length }
     Write-Host ('card {0:N0} bytes in build/card.prg, and {1:N0} and {2:N0} for banks 1 and 2' -f $sizes)
 }

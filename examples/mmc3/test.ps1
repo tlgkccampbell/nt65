@@ -33,11 +33,8 @@ $emulator = if (-not $Mame) { (Get-Command mame).Source }
             elseif (Test-Path $Mame -PathType Container) { (Get-ChildItem $Mame -Filter 'mame*.exe' -Recurse | Select-Object -First 1).FullName }
             else { (Resolve-Path $Mame).Path }
 
-$labels = @{}
-foreach ($line in Get-Content (Join-Path $build 'mmc3.lbl')) {
-    $_, $address, $name = $line -split ' '
-    $labels[$name.TrimStart('.')] = [Convert]::ToInt32($address, 16)
-}
+. (Join-Path $PSScriptRoot '../labels.ps1')
+$labels = Read-Labels (Join-Path $build 'mmc3.lbl')
 
 # The program's numbers that the checks need, which its sources define.
 $statusLine = 192                   # main::STATUS_LINE, the status bar's first line
@@ -55,11 +52,11 @@ Remove-Item $memory, $events, $shot -ErrorAction SilentlyContinue
 $script = Join-Path $work 'session.lua'
 @(
     'session = {'
-    "    frames = 0x$('{0:X4}' -f $labels['main__frames']),"
+    "    frames = 0x$('{0:X4}' -f (Address $labels 'main::frames')),"
     "    stop = $Frames,"
     "    right = { $($right[0]), $($right[1]) },"
     "    skip = { $($switchesLines[0]), $($switchesLines[1]) },"
-    "    drum = 0x$('{0:X4}' -f $labels['audio__drum']),"
+    "    drum = 0x$('{0:X4}' -f (Address $labels 'audio::drum')),"
     "    length = $drumLength,"
     "    memory = [[$memory]],"
     "    events = [[$events]],"
@@ -124,14 +121,14 @@ if ($splits.Count -ne 1) {
 
 # The main loop's checks of its banks: none failed, and there were many in each frame, which is
 # what makes it all but certain that the interrupts came in the middle of its switches.
-$frameCount = Word $labels['main__frames']
-$switches = Word $labels['main__switches']
-$errors = $ram[$labels['main__errors']]
+$frameCount = Word (Address $labels 'main::frames')
+$switches = Word (Address $labels 'main::switches')
+$errors = $ram[(Address $labels 'main::errors')]
 if ($errors -ne 0) { $failed += "banks: $errors of the main loop's switches found another bank there" }
 if ($switches -lt 50 * $frameCount) { $failed += "banks: the main loop made only $switches rounds of switches" }
 
 # The DMC's reads of the drum: the whole sample, once for each drum.
-$drums = $ram[$labels['audio__drums']]
+$drums = $ram[(Address $labels 'audio::drums')]
 $fetches = [int]$seen['fetches']
 if ($fetches -ne $drums * $drumLength) {
     $failed += "drums: the DMC read $fetches bytes of the drum for $drums drums of $drumLength bytes"
@@ -139,7 +136,7 @@ if ($fetches -ne $drums * $drumLength) {
 
 # The status bar's text, against the counts it shows. The switches it shows are the count when it
 # was written, earlier in the frame.
-$rows = Bytes $labels['status__rows'] 64
+$rows = Bytes (Address $labels 'status::rows') 64
 $text = @((Text $rows[0..31]), (Text $rows[32..63]))
 $shown = ($text -join ' ').Trim() -replace '\s+', ' '
 $wanted = '^FRAME {0:X4} DRUMS {1:X2} SWITCHES [0-9A-F]{{4}} ERRORS {2:X2}$' -f $frameCount, $drums, $errors
@@ -149,10 +146,10 @@ if ($shown -notmatch $wanted) { $failed += "status: the status bar says `"$shown
 $state = [ordered]@{
     'main::frames'    = '{0:X4}' -f $frameCount
     'main::errors'    = '{0:X2}' -f $errors
-    'main::scroll'    = '{0:X4}' -f (Word $labels['scroll'])
-    'main::oam[0]'    = (Bytes $labels['main__oam'] 4 | ForEach-Object { '{0:X2}' -f $_ }) -join ' '
+    'main::scroll'    = '{0:X4}' -f (Word (Address $labels 'main::scroll'))
+    'main::oam[0]'    = (Bytes (Address $labels 'main::oam') 4 | ForEach-Object { '{0:X2}' -f $_ }) -join ' '
     'audio::drums'    = '{0:X2}' -f $drums
-    'audio::offset'   = '{0:X2}' -f $ram[$labels['offset']]
+    'audio::offset'   = '{0:X2}' -f $ram[(Address $labels 'audio::offset')]
     'status::rows'    = "`"$($text[0])`""
     ' '               = "`"$($text[1] -replace '(?<=SWITCHES )[0-9A-F]{4}', '....')`""
     'split line'      = ($splits | ForEach-Object { $_.Line }) -join ' '
