@@ -42,7 +42,7 @@ function label(group, border, filled) {
     border: `1px ${border}`,
     borderColor: colour(group),
     fontWeight: 'bold',
-    margin: '0 0 0 1.5em',
+    margin: '0 0 0 0.6em',
     textDecoration: 'none; border-radius: 3px; padding: 0 3px; font-size: 90%',
   };
 }
@@ -101,10 +101,13 @@ function addLabel(labels, line, name) {
 
 // Turns a map of labels into decorations, one per line, each with its names after the code.
 function labelled(document, labels) {
-  return [...labels].map(([line, names]) => ({
-    range: document.lineAt(line).range,
-    renderOptions: { after: { contentText: names.join(' ') } },
-  }));
+  return [...labels].flatMap(([line, names]) => boxes(document.lineAt(line).range, names));
+}
+
+// One decoration per label, so that each input gets a box of its own rather than sharing one
+// with the others of its colour.
+function boxes(range, texts) {
+  return texts.map(text => ({ range, renderOptions: { after: { contentText: text } } }));
 }
 
 // The chip for one input on the caret line. It says whether the value came from the caller,
@@ -306,14 +309,11 @@ class Sources {
 
       // The chips go after the code on the caret line, and the routine's opening line gets a `↰`
       // for each input that comes from the caller, which sticky scroll often keeps in sight.
-      const chipped = [];
-      if (chips.length > 0) {
-        chipped.push({ range: new vscode.Range(caretEnd, caretEnd), renderOptions: { after: { contentText: chips.join(' ') } } });
-      }
+      const chipped = boxes(new vscode.Range(caretEnd, caretEnd), chips);
       const opener = result.routine.start.line;
-      if (entries.length > 0 && opener !== line) {
+      if (opener !== line) {
         const end = document.lineAt(opener).range.end;
-        chipped.push({ range: new vscode.Range(end, end), renderOptions: { after: { contentText: [...new Set(entries)].join(' ') } } });
+        chipped.push(...boxes(new vscode.Range(end, end), [...new Set(entries)]));
       }
       editor.setDecorations(types.chip, chipped);
     }
