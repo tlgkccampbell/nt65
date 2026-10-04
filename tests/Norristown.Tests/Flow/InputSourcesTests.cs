@@ -166,10 +166,10 @@ public sealed class InputSourcesTests
     {
         const string Wide = ".proc wide: a16, i8 {\n    rts\n}\n";
         Assert.Equal(
-            ["M: rep #$20", "X width: entry"],
+            ["a16: rep #$20", "i8: entry"],
             Wider(Wide + ".proc p: a8, i8 {\n    rep #$20\n    jsr wide\n    sep #$20\n    rts\n}\n", "jsr wide"));
         Assert.Equal(
-            ["M: call jsr narrow", "X width: call jsr narrow"],
+            ["a8: call jsr narrow", "i8: call jsr narrow"],
             Wider(".proc narrow: a16, i8 -> a8, i8 {\n    sep #$20\n    rts\n}\n.proc needs8: a8, i8 {\n    rts\n}\n"
                 + ".proc p: a16, i8 -> a8, i8 {\n    jsr narrow\n    jsr needs8\n    rts\n}\n", "jsr needs8"));
     }
@@ -179,7 +179,7 @@ public sealed class InputSourcesTests
     public void AMacroWithASignatureSetsWidthsAtItsCall()
     {
         Assert.Equal(
-            ["M: macro narrow!()", "X width: macro narrow!()"],
+            ["a8: macro narrow!()", "i8: macro narrow!()"],
             Wider(".macro narrow(): a16, i8 -> a8, i8 {\n    sep #$20\n}\n.proc needs8: a8, i8 {\n    rts\n}\n"
                 + ".proc p: a16, i8 -> a8, i8 {\n    narrow!()\n    jsr needs8\n    rts\n}\n", "jsr needs8"));
     }

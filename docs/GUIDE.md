@@ -1625,7 +1625,8 @@ everything below works across modules.
   that set a value it reads is highlighted. On a `jsr`, the values are the ones the routine
   called reads, so you see what is passed to it without reading back through the caller.
   Each value has a colour: A, X and Y one each, the flags one between them, and on the 65816
-  the two widths one. A line that set a value is tinted in its colour, with a solid bar at its
+  the two widths one. A width is named as a signature spells the one the routine called needs,
+  so `a8` or `a16` for the accumulator and `i8` or `i16` for the index registers. A line that set a value is tinted in its colour, with a solid bar at its
   left edge, a tag naming the value after the code, and a mark in the scrollbar. A line the
   value only passed through unchanged, such as a call that keeps the register or the `pla`
   that restored a value pushed earlier, gets a dotted bar and a hollow tag. A value a macro set

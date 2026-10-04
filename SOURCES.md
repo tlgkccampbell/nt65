@@ -216,7 +216,7 @@ SourcesResult
   inputs:  SourcesInput[]
 
 SourcesInput
-  name:     string                  "A", "X", "Y", "C", "Z", "N", "V", "M", "X width"; or a symbol name in pass 2
+  name:     string                  "A", "X", "Y", "C", "Z", "N", "V"; a width as the callee's signature spells it, "a8", "a16", "i8" or "i16"; or a symbol name in pass 2
   group:    string?                 pass 2: the root symbol for grouping, such as "banks" for banks::source
   category: "register" | "flag" | "width" | "memory"
   sources:  SourceSpan[]

@@ -157,13 +157,14 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                     yield return Register(register, SourceWalk.Given(callee, register, state));
 
                 // On the 65816 a routine reads the widths it declares on entry, which the caller
-                // has to have set.
+                // has to have set. Each is named as a signature spells it, such as `a8` or `i16`,
+                // so the name says what the routine needs as well as which width it is.
                 if (walk.HasWidths && callee?.Signature?.Entry is { } entry)
                 {
                     if (entry.A is Semantics.Width.Eight or Semantics.Width.Sixteen)
-                        yield return ((int)Tracked.M, "M", InputCategory.Width, state.Of(Tracked.M));
+                        yield return ((int)Tracked.M, $"a{Bits(entry.A)}", InputCategory.Width, state.Of(Tracked.M));
                     if (entry.Index is Semantics.Width.Eight or Semantics.Width.Sixteen)
-                        yield return ((int)Tracked.Index, "X width", InputCategory.Width, state.Of(Tracked.Index));
+                        yield return ((int)Tracked.Index, $"i{Bits(entry.Index)}", InputCategory.Width, state.Of(Tracked.Index));
                 }
             }
             yield break;
@@ -179,6 +180,9 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 yield return ((int)tracked, name, InputCategory.Flag, state.Of(tracked));
         }
     }
+
+    /// <summary>Returns how many bits wide a known width is, which is 8 or 16.</summary>
+    private static int Bits(Semantics.Width width) => width == Semantics.Width.Eight ? 8 : 16;
 
     /// <summary>Returns the registers the instruction at <paramref name="step"/> reads.</summary>
     private static Registers ReadBy(SourceWalk walk, Step step, InstructionStatementSyntax statement) =>
