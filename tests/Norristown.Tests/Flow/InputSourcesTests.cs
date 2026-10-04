@@ -174,6 +174,20 @@ public sealed class InputSourcesTests
                 + ".proc p: a16, i8 -> a8, i8 {\n    jsr narrow\n    jsr needs8\n    rts\n}\n", "jsr needs8"));
     }
 
+    /// <summary>
+    /// Where the routines a <c>.next</c> names need different widths, the width's name lists each
+    /// of them, because no one width suits them all.
+    /// </summary>
+    [Fact]
+    public void RoutinesThatNeedDifferentWidthsAreAllNamed()
+    {
+        Assert.Equal(
+            ["a8/a16: entry", "i8: entry"],
+            Wider(".proc one: a8, i8 {\n    rts\n}\n.proc two: a16, i8 {\n    rts\n}\n"
+                + ".segment RODATA\n.data table: .addr[2] { one, two }\n.segment CODE\n"
+                + ".proc p: a8, i8 {\n    ldx #0\n    jsr (table,x)\n    .next one, two\n    rts\n}\n", "jsr (table,x)"));
+    }
+
     /// <summary>A macro with a state signature sets the widths its exit declares, at its call.</summary>
     [Fact]
     public void AMacroWithASignatureSetsWidthsAtItsCall()

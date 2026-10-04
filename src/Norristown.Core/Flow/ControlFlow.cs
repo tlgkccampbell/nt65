@@ -729,14 +729,15 @@ public sealed class ControlFlow
 
             // A `.next` replaces the operand as the source of the targets, because the operand
             // does not identify them. On a call it lists the routines called, and the call
-            // still returns to the statement after it.
+            // still returns to the statement after it. That holds for a call through a pointer
+            // too, which is where a `.next` is most needed.
             if (tail.Next is { } next)
             {
                 foreach (var named in Named(next, tail.Step.On))
                 {
                     if (found.TryGetValue(named, out var to))
                         Edge(i, to, EdgeKind.Declared);
-                    if (makesCall)
+                    if (makesCall || IsCall(tail.Step.Statement))
                         blocks[i].Called(named.Symbol);
                 }
                 continue;

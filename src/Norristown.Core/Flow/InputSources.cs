@@ -75,7 +75,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 foreach (var (order, name, category, value) in InputsOf(walk, block, index, state, readsOf))
                 {
                     found[order] = found.TryGetValue(order, out var known)
-                        ? (name, category, SourceValue.Merge(known.Value, value))
+                        ? (Joined(known.Name, name), category, SourceValue.Merge(known.Value, value))
                         : (name, category, value);
                 }
             }
@@ -180,6 +180,16 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 yield return ((int)tracked, name, InputCategory.Flag, state.Of(tracked));
         }
     }
+
+    /// <summary>
+    /// Returns the name of an input that two calls, or two copies of one line, both read under
+    /// different names. That happens only for a width, where the routines a <c>.next</c> names need
+    /// different ones, and the name then lists each, narrowest first, as <c>a8/a16</c>.
+    /// </summary>
+    private static string Joined(string known, string name) =>
+        known == name ? known
+            : string.Join("/", known.Split('/').Append(name).Distinct()
+                .OrderBy(each => each.Length).ThenBy(each => each, StringComparer.Ordinal));
 
     /// <summary>Returns how many bits wide a known width is, which is 8 or 16.</summary>
     private static int Bits(Semantics.Width width) => width == Semantics.Width.Eight ? 8 : 16;
@@ -320,7 +330,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
             if (step == block.Steps[^1] && RegisterWalk.CallsAtEnd(block))
             {
                 if (block.CallsUnknown || block.Calls.Count == 0)
-                    return $"`{text}` has no `.next`";
+                    return block.Next is null ? $"`{text}` has no `.next`" : $"the `.next` under `{text}` names no routine";
                 if (block.Calls.FirstOrDefault(callee => !of(callee).Complete) is { } incomplete)
                 {
                     return of(incomplete) == RoutineRegisters.Nothing
