@@ -16,7 +16,7 @@ namespace Norristown.Tests.Editors;
 public sealed class ExtensionTests : IDisposable
 {
     /// <summary>The client's own code, which the manifest has to agree with.</summary>
-    private static readonly string[] ClientFiles = ["extension.js", "views.js"];
+    private static readonly string[] ClientFiles = ["extension.js", "views.js", "sources.js"];
 
     private static readonly JsonDocument Package = Read("package.json");
     private static readonly JsonDocument Schema = Read("nt65.schema.json");
@@ -195,6 +195,32 @@ public sealed class ExtensionTests : IDisposable
         Assert.Contains(
             "onLanguage:nt65",
             Package.RootElement.GetProperty("activationEvents").EnumerateArray().Select(e => e.GetString()));
+    }
+
+    /// <summary>
+    /// Every keybinding the extension contributes runs a command it contributes, and each one's
+    /// colours are contributed with a default for every kind of theme. A keybinding or a colour
+    /// that names nothing does nothing, and nothing else would notice.
+    /// </summary>
+    [Fact]
+    public void TheKeybindingsAndColoursAreComplete()
+    {
+        var contributes = Package.RootElement.GetProperty("contributes");
+        var commands = contributes.GetProperty("commands").EnumerateArray()
+            .Select(command => command.GetProperty("command").GetString()).ToHashSet();
+        Assert.All(
+            contributes.GetProperty("keybindings").EnumerateArray(),
+            binding => Assert.Contains(binding.GetProperty("command").GetString(), commands));
+
+        var colours = contributes.GetProperty("colors").EnumerateArray().ToList();
+        foreach (var group in (ReadOnlySpan<string>)["a", "x", "y", "flags", "widths", "memory"])
+        {
+            foreach (var suffix in (ReadOnlySpan<string>)["", "Background", "FaintBackground"])
+                Assert.Contains(colours, colour => colour.GetProperty("id").GetString() == $"nt65.sources.{group}{suffix}");
+        }
+        Assert.All(colours, colour => Assert.Equal(
+            ["dark", "highContrast", "highContrastLight", "light"],
+            colour.GetProperty("defaults").EnumerateObject().Select(theme => theme.Name).Order(StringComparer.Ordinal)));
     }
 
     /// <summary>

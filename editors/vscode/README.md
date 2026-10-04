@@ -20,6 +20,15 @@ build tasks and a schema for the project file.
   instruction shows what each register holds at that line. A hover's grid of facts is
   coloured from a grammar this extension contributes, so the keys, what the analysis could
   not work out and what is about the block rather than the line each read as themselves.
+- **Where an instruction's inputs come from.** Rest the caret on an instruction and each line
+  that set a value it reads is tinted in that value's colour, with a bar at its left edge, a
+  tag naming the value and a mark in the scrollbar. On a `jsr`, the values are the ones the
+  routine called reads, so you see what is passed to it. A line the value only passed through,
+  such as the `pla` that restored it or a call that keeps it, gets a dotted bar. The caret line
+  gets a short chip per value: `A↑12` for a source 12 lines up, `A ×2` for two of them, `A↰`
+  for a value the routine's caller set, `A?` where the analysis lost track. Hover the line for
+  each source and its code, and for why the analysis lost track. **Shift+Alt+PageDown** and
+  **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
 - **What this became, beside the source.** **nt65: Show Output Beside** opens the ca65 for the
   file you are in, as the program stands with whatever you have not saved, and the caret is the
   link: move in the source and the lines it became are highlighted and scrolled to; move in the
@@ -84,6 +93,7 @@ The extension carries the language server and runs it on the installed .NET 10 r
 | `nt65.server.path` | a language server to run in place of the one the extension carries |
 | `nt65.cli.path` | the `nt65` command the build tasks run, in place of the one on the path |
 | `nt65.inlayHints.stateChanges`, `.longBranches`, `.impliedValues`, `.parameterNames` | each kind of hint, on unless switched off |
+| `nt65.sources.enabled` | where the values an instruction reads were set, shown when the caret rests on it; on unless switched off, and **nt65: Toggle Input Sources** switches it |
 | `nt65.inlayHints.cycles` | cycle counts at the end of every instruction; off unless switched on |
 | `nt65.lineLength` | the longest a line may be before the editor suggests laying out a call's arguments, a set or a list of parameters one item to a line, or writing a list directive's items as a block, 100 unless set; 0 for no suggestion |
 | `nt65.diagnostics.onlyWhileOpen` | globs, in the form of `files` in nt65.json, naming files whose problems show only while they are open, such as test inputs that are wrong on purpose; none unless set |

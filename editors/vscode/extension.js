@@ -5,6 +5,7 @@ const path = require('path');
 const vscode = require('vscode');
 const { LanguageClient } = require('vscode-languageclient/node');
 const views = require('./views');
+const sources = require('./sources');
 
 let client;
 
@@ -241,6 +242,7 @@ async function activate(context) {
   statusItem(context);
   cycleCounts(context);
   views.register(context, client);
+  sources.register(context, client);
   await client.start();
 }
 

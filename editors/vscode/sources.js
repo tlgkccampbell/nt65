@@ -1,0 +1,376 @@
+// Shows where each value that the instruction at the caret reads was set. The server works out
+// the answer (`nt65/sources`), and this file only draws it: a tint, a bar and a tag on each line
+// that set a value, a dotted bar on each line the value passed through, and a chip per input on
+// the caret line. Meaning is carried by colour and short glyphs, and anything longer goes in the
+// hover, because lines crowded with inlays are hard to read.
+const vscode = require('vscode');
+
+// How long the caret has to rest on a line before the server is asked about it.
+const DELAY = 100;
+
+// The colour groups. Each register has its own colour, the flags share one and are told apart
+// by their letter, the two widths share one, and memory has one.
+const GROUPS = ['a', 'x', 'y', 'flags', 'widths', 'memory'];
+
+// The context key that the next and previous keybindings depend on.
+const ACTIVE = 'nt65.sources.active';
+
+function groupOf(input) {
+  switch (input.category) {
+    case 'register': return input.name.toLowerCase();
+    case 'flag': return 'flags';
+    case 'width': return 'widths';
+    default: return 'memory';
+  }
+}
+
+function colour(group) {
+  return new vscode.ThemeColor(`nt65.sources.${group}`);
+}
+
+function background(group) {
+  return new vscode.ThemeColor(`nt65.sources.${group}Background`);
+}
+
+// The style of a small label after the code. A tag on a source line is filled; one on a through
+// line is hollow and dotted; one on a best-effort source is dashed. Rounded corners are not an
+// attachment option, so they go in through `textDecoration`, which is written into the style.
+function label(group, border, filled) {
+  return {
+    color: colour(group),
+    backgroundColor: filled ? background(group) : undefined,
+    border: `1px ${border}`,
+    borderColor: colour(group),
+    fontWeight: 'bold',
+    margin: '0 0 0 1.5em',
+    textDecoration: 'none; border-radius: 3px; padding: 0 3px; font-size: 90%',
+  };
+}
+
+// One decoration type per group and per style, made once.
+function decorationTypes() {
+  const types = {};
+  for (const group of GROUPS) {
+    types[group] = {
+      source: vscode.window.createTextEditorDecorationType({
+        isWholeLine: true,
+        backgroundColor: background(group),
+        borderWidth: '0 0 0 3px',
+        borderStyle: 'solid',
+        borderColor: colour(group),
+        overviewRulerColor: colour(group),
+        overviewRulerLane: vscode.OverviewRulerLane.Left,
+        after: label(group, 'solid', true),
+      }),
+      through: vscode.window.createTextEditorDecorationType({
+        isWholeLine: true,
+        borderWidth: '0 0 0 3px',
+        borderStyle: 'dotted',
+        borderColor: colour(group),
+        after: label(group, 'dotted', false),
+      }),
+      // A best-effort source is fainter than a proven one, with a tint of its own and dashes
+      // where a proven source is solid. Its ruler mark goes in the centre lane instead of the
+      // left one, since a ruler mark has no dashed form. Only memory has best-effort sources.
+      guess: vscode.window.createTextEditorDecorationType({
+        isWholeLine: true,
+        backgroundColor: new vscode.ThemeColor(`nt65.sources.${group}FaintBackground`),
+        borderWidth: '0 0 0 3px',
+        borderStyle: 'dashed',
+        borderColor: colour(group),
+        overviewRulerColor: colour(group),
+        overviewRulerLane: vscode.OverviewRulerLane.Center,
+        after: label(group, 'dashed', false),
+      }),
+      chip: vscode.window.createTextEditorDecorationType({
+        after: label(group, 'solid', true),
+      }),
+    };
+  }
+  // The hover on the caret line, which lists every input and source. It draws nothing.
+  types.hover = vscode.window.createTextEditorDecorationType({});
+  return types;
+}
+
+// Adds `name` to the label for `line` in `labels`, a map from line to the names shown there.
+function addLabel(labels, line, name) {
+  const names = labels.get(line) || [];
+  if (!names.includes(name)) names.push(name);
+  labels.set(line, names);
+}
+
+// Turns a map of labels into decorations, one per line, each with its names after the code.
+function labelled(document, labels) {
+  return [...labels].map(([line, names]) => ({
+    range: document.lineAt(line).range,
+    renderOptions: { after: { contentText: names.join(' ') } },
+  }));
+}
+
+// The chip for one input on the caret line. It says whether the value came from the caller,
+// whether the analysis lost track of it, how far away its nearest source is when not every source
+// is on screen, and how many sources there are when there is more than one.
+function chipOf(input, caret, visible) {
+  const name = input.name;
+  if (input.sources.some(source => source.kind === 'unknown')) return `${name}?`;
+  const times = input.sources.length > 1 ? ` ×${input.sources.length}` : '';
+  const set = input.sources.filter(source => source.kind !== 'entry');
+  if (set.length < input.sources.length) return `${name}↰${set.length > 0 ? times : ''}`;
+  if (set.every(source => visible(source.range.start.line))) return `${name}${times}`;
+  let nearest = set[0].range.start.line;
+  for (const source of set) {
+    const line = source.range.start.line;
+    if (Math.abs(line - caret) < Math.abs(nearest - caret)) nearest = line;
+  }
+  const arrow = nearest < caret ? '↑' : '↓';
+  return `${name}${arrow}${Math.abs(nearest - caret)}${times}`;
+}
+
+// Writes a line of the document as inline code, for the hover.
+function code(document, line) {
+  const text = document.lineAt(line).text.trim();
+  const fence = text.includes('`') ? '``' : '`';
+  return `${fence}${text}${fence}`;
+}
+
+// The hover on the caret line: each input, each line that set it with the code on that line, and
+// for a value the analysis lost track of, the line that stopped it and why.
+function hoverOf(document, result) {
+  const hover = new vscode.MarkdownString();
+  for (const input of result.inputs) {
+    hover.appendMarkdown(`**${input.name}**\n\n`);
+    for (const source of input.sources) {
+      const line = source.range.start.line;
+      const where = `line ${line + 1} ${code(document, line)}`;
+      switch (source.kind) {
+        case 'entry':
+          hover.appendMarkdown(`- from the caller of ${code(document, line)}\n`);
+          break;
+        case 'unknown':
+          hover.appendMarkdown(`- unknown after ${where}: ${source.reason}\n`);
+          break;
+        case 'macro':
+          hover.appendMarkdown(`- ${where} (macro)\n`);
+          break;
+        case 'call':
+          hover.appendMarkdown(`- ${where} (call)\n`);
+          break;
+        default:
+          hover.appendMarkdown(`- ${where}${source.reason ? `: ${source.reason}` : ''}\n`);
+      }
+    }
+    for (const through of input.through) {
+      hover.appendMarkdown(`- through line ${through.start.line + 1} ${code(document, through.start.line)}\n`);
+    }
+    hover.appendMarkdown('\n');
+  }
+  return hover;
+}
+
+class Sources {
+  constructor(client) {
+    this.client = client;
+    this.types = decorationTypes();
+    this.timer = undefined;
+    this.cancel = undefined;
+
+    // What is shown: the editor, the document version and the line asked about, and the answer.
+    this.shown = undefined;
+
+    // The key of the last question asked, so that a caret that stays on its line asks nothing.
+    this.asked = undefined;
+
+    // Where the last navigation command put the caret. A selection change to there is the
+    // command's own and keeps what is shown, rather than asking about the new line.
+    this.moved = undefined;
+  }
+
+  get enabled() {
+    return vscode.workspace.getConfiguration('nt65').get('sources.enabled') !== false;
+  }
+
+  // Waits for the caret to rest, then asks about its line.
+  schedule(editor) {
+    clearTimeout(this.timer);
+    if (!this.enabled || !this.applies(editor)) {
+      this.clear();
+      return;
+    }
+    const position = editor.selection.active;
+    if (this.moved && this.shown && this.shown.editor === editor && position.isEqual(this.moved)) {
+      this.render();
+      return;
+    }
+    this.moved = undefined;
+    if (this.shown && this.shown.line !== position.line) this.clear();
+    this.timer = setTimeout(() => this.ask(editor, position), DELAY);
+  }
+
+  applies(editor) {
+    return editor && editor.document.languageId === 'nt65'
+      && (editor.document.uri.scheme === 'file' || editor.document.uri.scheme === 'untitled');
+  }
+
+  async ask(editor, position) {
+    const document = editor.document;
+    const version = document.version;
+    const key = `${document.uri}@${version}:${position.line}`;
+    if (key === this.asked && this.shown) return;
+    this.asked = key;
+
+    // A newer question makes any older one moot.
+    if (this.cancel) this.cancel.cancel();
+    const cancel = new vscode.CancellationTokenSource();
+    this.cancel = cancel;
+    let result;
+    try {
+      result = await this.client.sendRequest('nt65/sources', {
+        textDocument: { uri: document.uri.toString() },
+        position: { line: position.line, character: position.character },
+      }, cancel.token);
+    } catch {
+      result = null;
+    }
+
+    // An answer that arrives after the caret has moved on, or the text has changed, is dropped.
+    if (cancel.token.isCancellationRequested || document.version !== version
+      || vscode.window.activeTextEditor !== editor || editor.selection.active.line !== position.line) {
+      return;
+    }
+    if (!result || result.inputs.length === 0) {
+      this.clear();
+      return;
+    }
+    this.shown = { editor, version, line: position.line, result };
+    vscode.commands.executeCommand('setContext', ACTIVE, true);
+    this.render();
+  }
+
+  // Draws what is shown. The chips depend on which lines are on screen, so this runs again
+  // whenever the editor scrolls, without a new request.
+  render() {
+    if (!this.shown) return;
+    const { editor, line, result } = this.shown;
+    const document = editor.document;
+    const visible = at => editor.visibleRanges.some(range => range.start.line <= at && at <= range.end.line);
+    const caretEnd = document.lineAt(line).range.end;
+    for (const group of GROUPS) {
+      const sources = new Map();
+      const guesses = new Map();
+      const through = new Map();
+      const chips = [];
+      const entries = [];
+      for (const input of result.inputs.filter(item => groupOf(item) === group)) {
+        for (const source of input.sources) {
+          if (source.kind === 'entry') entries.push(`${input.name}↰`);
+          else if (source.kind !== 'unknown') {
+            addLabel(source.confidence === 'bestEffort' ? guesses : sources, source.range.start.line, input.name);
+          }
+        }
+        for (const range of input.through) addLabel(through, range.start.line, input.name);
+        chips.push(chipOf(input, line, visible));
+      }
+      const types = this.types[group];
+      editor.setDecorations(types.source, labelled(document, sources));
+      editor.setDecorations(types.guess, labelled(document, guesses));
+      editor.setDecorations(types.through, labelled(document, through));
+
+      // The chips go after the code on the caret line, and the routine's opening line gets a `↰`
+      // for each input that comes from the caller, which sticky scroll often keeps in sight.
+      const chipped = [];
+      if (chips.length > 0) {
+        chipped.push({ range: new vscode.Range(caretEnd, caretEnd), renderOptions: { after: { contentText: chips.join(' ') } } });
+      }
+      const opener = result.routine.start.line;
+      if (entries.length > 0 && opener !== line) {
+        const end = document.lineAt(opener).range.end;
+        chipped.push({ range: new vscode.Range(end, end), renderOptions: { after: { contentText: [...new Set(entries)].join(' ') } } });
+      }
+      editor.setDecorations(types.chip, chipped);
+    }
+    editor.setDecorations(this.types.hover, [{ range: document.lineAt(line).range, hoverMessage: hoverOf(document, result) }]);
+  }
+
+  clear() {
+    clearTimeout(this.timer);
+    if (this.cancel) this.cancel.cancel();
+    this.cancel = undefined;
+    this.asked = undefined;
+    this.moved = undefined;
+    if (!this.shown) return;
+    const { editor } = this.shown;
+    this.shown = undefined;
+    for (const group of GROUPS) {
+      for (const type of Object.values(this.types[group])) editor.setDecorations(type, []);
+    }
+    editor.setDecorations(this.types.hover, []);
+    vscode.commands.executeCommand('setContext', ACTIVE, false);
+  }
+
+  // The lines the navigation commands visit, in the order they come in the file: every line that
+  // set an input's value, and the routine's opening line where a value came from the caller.
+  targets() {
+    if (!this.shown) return [];
+    const lines = new Set();
+    for (const input of this.shown.result.inputs) {
+      for (const source of input.sources) {
+        if (source.kind !== 'unknown') lines.add(source.range.start.line);
+      }
+    }
+    return [...lines].sort((a, b) => a - b);
+  }
+
+  // Moves the caret to the next source after it, or the previous one before it, wrapping round
+  // at either end. What is shown stays the answer for the line the caret started on.
+  step(forward) {
+    const editor = vscode.window.activeTextEditor;
+    const lines = this.targets();
+    if (!this.shown || editor !== this.shown.editor || lines.length === 0) return;
+    const at = editor.selection.active.line;
+    const line = forward
+      ? lines.find(target => target > at) ?? lines[0]
+      : [...lines].reverse().find(target => target < at) ?? lines[lines.length - 1];
+    const position = new vscode.Position(line, editor.document.lineAt(line).firstNonWhitespaceCharacterIndex);
+    this.moved = position;
+    editor.selection = new vscode.Selection(position, position);
+    editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+  }
+
+  // Opens the peek view on every source of every input on the caret line.
+  peek() {
+    if (!this.shown) return;
+    const { editor, line } = this.shown;
+    const uri = editor.document.uri;
+    const locations = this.targets().map(target => new vscode.Location(uri, editor.document.lineAt(target).range));
+    vscode.commands.executeCommand('editor.action.peekLocations', uri, new vscode.Position(line, 0), locations, 'peek');
+  }
+}
+
+// Everything the source highlights need, registered once.
+function register(context, client) {
+  const sources = new Sources(client);
+  context.subscriptions.push(
+    ...GROUPS.flatMap(group => Object.values(sources.types[group])),
+    sources.types.hover,
+    vscode.window.onDidChangeTextEditorSelection(event => sources.schedule(event.textEditor)),
+    vscode.window.onDidChangeTextEditorVisibleRanges(event => {
+      if (sources.shown && event.textEditor === sources.shown.editor) sources.render();
+    }),
+    vscode.window.onDidChangeActiveTextEditor(() => sources.clear()),
+    vscode.workspace.onDidChangeTextDocument(event => {
+      if (sources.shown && event.document === sources.shown.editor.document && event.contentChanges.length > 0) {
+        sources.clear();
+      }
+    }),
+    vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('nt65.sources.enabled') && !sources.enabled) sources.clear();
+    }),
+    vscode.commands.registerCommand('nt65.nextSource', () => sources.step(true)),
+    vscode.commands.registerCommand('nt65.previousSource', () => sources.step(false)),
+    vscode.commands.registerCommand('nt65.peekSources', () => sources.peek()),
+    vscode.commands.registerCommand('nt65.toggleSources', () => vscode.workspace.getConfiguration('nt65')
+      .update('sources.enabled', !sources.enabled, vscode.ConfigurationTarget.Global)),
+    { dispose: () => sources.clear() });
+}
+
+module.exports = { register };

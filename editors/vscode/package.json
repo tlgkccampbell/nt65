@@ -40,6 +40,220 @@
         "command": "nt65.restartServer",
         "title": "Restart Server",
         "category": "nt65"
+      },
+      {
+        "command": "nt65.nextSource",
+        "title": "Go to Next Input Source",
+        "category": "nt65"
+      },
+      {
+        "command": "nt65.previousSource",
+        "title": "Go to Previous Input Source",
+        "category": "nt65"
+      },
+      {
+        "command": "nt65.peekSources",
+        "title": "Peek Input Sources",
+        "category": "nt65"
+      },
+      {
+        "command": "nt65.toggleSources",
+        "title": "Toggle Input Sources",
+        "category": "nt65"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "nt65.nextSource",
+        "key": "shift+alt+pagedown",
+        "when": "editorTextFocus && editorLangId == nt65 && nt65.sources.active"
+      },
+      {
+        "command": "nt65.previousSource",
+        "key": "shift+alt+pageup",
+        "when": "editorTextFocus && editorLangId == nt65 && nt65.sources.active"
+      }
+    ],
+    "colors": [
+      {
+        "id": "nt65.sources.a",
+        "description": "The bar, tag, chip and ruler mark that show where A was set, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#4FC1FF",
+          "light": "#0070C1",
+          "highContrast": "#79D7FF",
+          "highContrastLight": "#0050A0"
+        }
+      },
+      {
+        "id": "nt65.sources.aBackground",
+        "description": "The tint of a line that set A, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#4FC1FF26",
+          "light": "#0070C11F",
+          "highContrast": "#79D7FF40",
+          "highContrastLight": "#0050A033"
+        }
+      },
+      {
+        "id": "nt65.sources.aFaintBackground",
+        "description": "The tint of a line that may have set A, where nt65 can only make a best guess.",
+        "defaults": {
+          "dark": "#4FC1FF12",
+          "light": "#0070C10F",
+          "highContrast": "#79D7FF20",
+          "highContrastLight": "#0050A018"
+        }
+      },
+      {
+        "id": "nt65.sources.x",
+        "description": "The bar, tag, chip and ruler mark that show where X was set, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#89D185",
+          "light": "#388A34",
+          "highContrast": "#A8F0A0",
+          "highContrastLight": "#1E6B1A"
+        }
+      },
+      {
+        "id": "nt65.sources.xBackground",
+        "description": "The tint of a line that set X, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#89D18526",
+          "light": "#388A341F",
+          "highContrast": "#A8F0A040",
+          "highContrastLight": "#1E6B1A33"
+        }
+      },
+      {
+        "id": "nt65.sources.xFaintBackground",
+        "description": "The tint of a line that may have set X, where nt65 can only make a best guess.",
+        "defaults": {
+          "dark": "#89D18512",
+          "light": "#388A340F",
+          "highContrast": "#A8F0A020",
+          "highContrastLight": "#1E6B1A18"
+        }
+      },
+      {
+        "id": "nt65.sources.y",
+        "description": "The bar, tag, chip and ruler mark that show where Y was set, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#E5C07B",
+          "light": "#B5690C",
+          "highContrast": "#FFD98A",
+          "highContrastLight": "#8A4E00"
+        }
+      },
+      {
+        "id": "nt65.sources.yBackground",
+        "description": "The tint of a line that set Y, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#E5C07B26",
+          "light": "#B5690C1F",
+          "highContrast": "#FFD98A40",
+          "highContrastLight": "#8A4E0033"
+        }
+      },
+      {
+        "id": "nt65.sources.yFaintBackground",
+        "description": "The tint of a line that may have set Y, where nt65 can only make a best guess.",
+        "defaults": {
+          "dark": "#E5C07B12",
+          "light": "#B5690C0F",
+          "highContrast": "#FFD98A20",
+          "highContrastLight": "#8A4E0018"
+        }
+      },
+      {
+        "id": "nt65.sources.flags",
+        "description": "The bar, tag, chip and ruler mark that show where the flags C, N, Z and V was set, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#C586C0",
+          "light": "#AF00DB",
+          "highContrast": "#E8A8F0",
+          "highContrastLight": "#7A0099"
+        }
+      },
+      {
+        "id": "nt65.sources.flagsBackground",
+        "description": "The tint of a line that set the flags C, N, Z and V, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#C586C026",
+          "light": "#AF00DB1F",
+          "highContrast": "#E8A8F040",
+          "highContrastLight": "#7A009933"
+        }
+      },
+      {
+        "id": "nt65.sources.flagsFaintBackground",
+        "description": "The tint of a line that may have set the flags C, N, Z and V, where nt65 can only make a best guess.",
+        "defaults": {
+          "dark": "#C586C012",
+          "light": "#AF00DB0F",
+          "highContrast": "#E8A8F020",
+          "highContrastLight": "#7A009918"
+        }
+      },
+      {
+        "id": "nt65.sources.widths",
+        "description": "The bar, tag, chip and ruler mark that show where the 65816's register widths was set, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#4EC9B0",
+          "light": "#16825D",
+          "highContrast": "#7FF0D8",
+          "highContrastLight": "#0B5C40"
+        }
+      },
+      {
+        "id": "nt65.sources.widthsBackground",
+        "description": "The tint of a line that set the 65816's register widths, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#4EC9B026",
+          "light": "#16825D1F",
+          "highContrast": "#7FF0D840",
+          "highContrastLight": "#0B5C4033"
+        }
+      },
+      {
+        "id": "nt65.sources.widthsFaintBackground",
+        "description": "The tint of a line that may have set the 65816's register widths, where nt65 can only make a best guess.",
+        "defaults": {
+          "dark": "#4EC9B012",
+          "light": "#16825D0F",
+          "highContrast": "#7FF0D820",
+          "highContrastLight": "#0B5C4018"
+        }
+      },
+      {
+        "id": "nt65.sources.memory",
+        "description": "The bar, tag, chip and ruler mark that show where locations in memory was set, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#CE9178",
+          "light": "#A31515",
+          "highContrast": "#F0B49C",
+          "highContrastLight": "#7A0F0F"
+        }
+      },
+      {
+        "id": "nt65.sources.memoryBackground",
+        "description": "The tint of a line that set locations in memory, for the instruction at the caret.",
+        "defaults": {
+          "dark": "#CE917826",
+          "light": "#A315151F",
+          "highContrast": "#F0B49C40",
+          "highContrastLight": "#7A0F0F33"
+        }
+      },
+      {
+        "id": "nt65.sources.memoryFaintBackground",
+        "description": "The tint of a line that may have set locations in memory, where nt65 can only make a best guess.",
+        "defaults": {
+          "dark": "#CE917812",
+          "light": "#A315150F",
+          "highContrast": "#F0B49C20",
+          "highContrastLight": "#7A0F0F18"
+        }
       }
     ],
     "languages": [
@@ -181,6 +395,11 @@
           },
           "default": [],
           "markdownDescription": "Globs, relative to the workspace folder and in the form of `files` in nt65.json, naming files whose problems are shown only while they are open, such as `tests/fixtures/**/*`. Every other file of every project is reported whether or not it is open. The files are still analyzed with their projects."
+        },
+        "nt65.sources.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show, when the caret is on an instruction, where each value it reads was set: the lines are tinted in the value's colour, and the caret line gets a chip per value. On a call, the values are the ones the routine called reads. `nt65: Toggle Input Sources` turns this on and off."
         }
       }
     }

@@ -44,7 +44,7 @@ finally {
     Remove-Item "$held.out", "$held.err" -ErrorAction SilentlyContinue
 }
 Step 'vscode client' {
-    foreach ($file in @('extension.js', 'views.js')) {
+    foreach ($file in @('extension.js', 'views.js', 'sources.js')) {
         node --check (Join-Path $root "editors/vscode/$file")
         if ($LASTEXITCODE -ne 0) { return }
     }
