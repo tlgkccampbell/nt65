@@ -2117,7 +2117,9 @@ for it, so passing a value in a register and reading the result back out of the 
 nothing. It is left out because a warning is the wrong shape for the answer. Every call takes
 some register away, being told so is rarely news, and the reader's question is what the
 registers are doing here rather than a list of the places they changed. That is something to
-show, and §14 says where per-instruction facts are shown.
+show, and §14 says where per-instruction facts are shown. The editor shows it at the caret: on
+a call, each line that set a register the routine reads is highlighted, and after it, a
+register the routine did not keep has the call as its source.
 
 Tooling shows it in three places, and none of them is the only one: a lens is something an
 editor can be told not to show.
@@ -4039,6 +4041,16 @@ alone and without an assembler:
   datasheet gives it, the flags it writes, and on the 65816 the state reaching it, are on
   hover rather than in the line; what it costs and what state reaches it lead, and the flags,
   the registers and the stack stand under the rule;
+- show, while the caret rests on an instruction, where each value it reads was set, and on a
+  call, where each value the routine called reads was set (§7.7). This is the one fact about
+  an instruction that leaves the hover, and only as colour and a few characters. Each line
+  that set a value is tinted in that value's colour, with a bar at its left edge and a mark in
+  the scrollbar; a line the value only passed through, such as a call that keeps it or the
+  `pla` that restored it, gets a dotted bar. The caret line gets one short chip per value:
+  `A↑12` for a source twelve lines up, `A ×2` for two of them, `A↰` for a value the caller
+  set, `A?` where the analysis lost track. Which line, why the analysis lost track and the
+  code on each line are in the hover, as everything else about an instruction is. What is
+  shown is a picture of the analysis and feeds no diagnostic;
 - complete what may be written at the caret, and only that: the statements the place the
   caret is in accepts, so that a file's top level offers declarations and only code offers
   instructions, labels and what they say about the processor; the forms an instruction has

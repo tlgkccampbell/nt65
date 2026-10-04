@@ -1621,6 +1621,28 @@ everything below works across modules.
   processor state reaching it; what a routine costs and which registers it reads and preserves.
 - **Lenses** above each routine: what one pass costs, what it costs with its calls, and which
   registers it reads and preserves.
+- **Where an instruction's inputs come from.** Rest the caret on an instruction, and every line
+  that set a value it reads is highlighted. On a `jsr`, the values are the ones the routine
+  called reads, so you see what is passed to it without reading back through the caller.
+  Each value has a colour: A, X and Y one each, the flags one between them, and on the 65816
+  the two widths one. A line that set a value is tinted in its colour, with a solid bar at its
+  left edge, a tag naming the value after the code, and a mark in the scrollbar. A line the
+  value only passed through unchanged, such as a call that keeps the register or the `pla`
+  that restored a value pushed earlier, gets a dotted bar and a hollow tag. A value a macro set
+  is shown at the macro call.
+
+  The caret line gets one chip per value. `A` means every line that set it is on screen;
+  `A↑12` and `A↓3` give the distance to the nearest one, above or round a loop below; `A ×2`
+  counts them where there is more than one. `A↰` means the routine's caller set it, and the
+  line that opens the routine gets the same chip. `A↰ ×2` means some paths set it in the
+  routine and some do not. `A?` means the analysis lost track of it on some path, at a call it
+  cannot follow or to a routine that does not say what it keeps. Hover the caret line for each
+  source with its line and code, and for why the analysis lost track.
+
+  **Shift+Alt+PageDown** and **Shift+Alt+PageUp** move the caret through the sources and back,
+  leaving the highlights in place, and *Peek Input Sources* lists them all. The setting
+  `nt65.sources.enabled`, or *Toggle Input Sources*, turns the feature off. It only shows what
+  the analysis found and never reports a problem.
 - **Inlay hints** at the end of a line, off by default for cycle counts: where a width or
   other state changes, where a long branch was written long, values a declaration implies,
   and parameter names in calls.
@@ -1646,8 +1668,9 @@ everything below works across modules.
   own; and read pasted ca65 as nt65, as far as one line at a time can be converted.
 - **Commands:** *Show Output Beside* shows the ca65 the current file becomes, and moving in
   either text highlights the matching lines in the other. *Show Macro Expansion* writes a macro
-  call out. *Select Configuration* chooses which configuration the editor analyzes, and *Toggle
-  Cycle Counts* switches the cycle hints on.
+  call out. *Select Configuration* chooses which configuration the editor analyzes, *Toggle
+  Cycle Counts* switches the cycle hints on, and *Toggle Input Sources* switches the
+  highlights of where an instruction's inputs come from.
 - **Formatting:** the same layout `nt65 fmt` writes.
 
 ## The command line
