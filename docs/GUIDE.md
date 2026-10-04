@@ -1631,6 +1631,13 @@ everything below works across modules.
   that restored a value pushed earlier, gets a dotted bar and a hollow tag. A value a macro set
   is shown at the macro call.
 
+  Memory is followed as well, as a best guess. A location the instruction reads by name, or
+  that the routine called reads before writing it, is a value like a register: the last store
+  to it is its source, drawn with a dashed bar and a fainter tint. The bytes of a pointer such
+  as `ptr` and `ptr+1`, and the members of one struct, share a chip named after the symbol.
+  The hover names anything that might also have changed the value, such as a store through a
+  pointer or a call that may write it.
+
   The caret line gets one chip per value. `A` means every line that set it is on screen;
   `A↑12` and `A↓3` give the distance to the nearest one, above or round a loop below; `A ×2`
   counts them where there is more than one. `A↰` means the routine's caller set it, and the

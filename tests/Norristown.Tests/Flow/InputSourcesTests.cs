@@ -1,3 +1,6 @@
+using Norristown.Flow;
+using Norristown.Tests.Semantics;
+
 namespace Norristown.Tests.Flow;
 
 /// <summary>
@@ -179,6 +182,68 @@ public sealed class InputSourcesTests
             ["M: macro narrow!()", "X width: macro narrow!()"],
             Wider(".macro narrow(): a16, i8 -> a8, i8 {\n    sep #$20\n}\n.proc needs8: a8, i8 {\n    rts\n}\n"
                 + ".proc p: a16, i8 -> a8, i8 {\n    narrow!()\n    jsr needs8\n    rts\n}\n", "jsr needs8"));
+    }
+
+    /// <summary>
+    /// A routine reads a location in memory when it loads it before storing to it. On a call to it,
+    /// the location is an input, and its source is the last store to it, a best guess.
+    /// </summary>
+    [Fact]
+    public void ACallReadsTheMemoryItsRoutineLoadsFirst()
+    {
+        const string Data = ".segment ZEROPAGE\n.data count: .byte\n.data scratch: .byte\n.segment CODE\n";
+        const string Fill = ".proc fill {\n    lda count\n    sta scratch\n    lda scratch\n    rts\n}\n";
+        Assert.Equal(
+            ["count: sta count"],
+            Sources(Data + Fill + ".proc p {\n    lda #3\n    sta count\n    jsr fill\n    rts\n}\n", "jsr fill"));
+        Assert.Equal(
+            ["count: entry"],
+            Sources(Data + Fill + ".proc p {\n    jsr fill\n    rts\n}\n", "jsr fill"));
+    }
+
+    /// <summary>
+    /// An indirect operand reads both bytes of its pointer directly, and the sources of each are
+    /// grouped under the pointer's name.
+    /// </summary>
+    [Fact]
+    public void APointerIsReadByteByByte()
+    {
+        var found = FlowFragment.Analyze("6502", ".segment ZEROPAGE\n.data ptr: .word\n.segment CODE\n"
+            + ".proc p {\n    lda #0\n    sta ptr\n    stx ptr+1\n    ldy #0\n    lda (ptr),y\n    rts\n}\n");
+        Assert.Equal(["Y: ldy #0", "ptr: sta ptr", "ptr+1: stx ptr+1"], FlowFragment.SourcesAt(found, "lda (ptr),y"));
+        var model = found.File(Analysis.Path);
+        var inputs = InputSources.At(found, model, model.Offset("lda (ptr),y"))!.Inputs.Where(input => input.Category == InputCategory.Memory);
+        Assert.All(inputs, input => Assert.Equal("ptr", input.Group));
+        Assert.All(inputs.SelectMany(input => input.Sources), source => Assert.Equal(SourceConfidence.BestEffort, source.Confidence));
+    }
+
+    /// <summary>The members of one struct are grouped under the data that holds them.</summary>
+    [Fact]
+    public void TheMembersOfAStructAreGroupedUnderItsData()
+    {
+        var found = FlowFragment.Analyze("6502", ".struct Pair {\n    lo: .byte\n    hi: .byte\n}\n"
+            + ".segment ZEROPAGE\n.data args: .type Pair\n.segment CODE\n"
+            + ".proc use {\n    lda args::lo\n    ldx args::hi\n    rts\n}\n"
+            + ".proc p {\n    lda #1\n    sta args::lo\n    stx args::hi\n    jsr use\n    rts\n}\n");
+        Assert.Equal(["args::hi: stx args::hi", "args::lo: sta args::lo"], FlowFragment.SourcesAt(found, "jsr use"));
+        var model = found.File(Analysis.Path);
+        Assert.All(InputSources.At(found, model, model.Offset("jsr use"))!.Inputs, input => Assert.Equal("args", input.Group));
+    }
+
+    /// <summary>
+    /// What might also have changed a value in memory does not stop the search. It is named, as an
+    /// indirect store or a call that may write the location is.
+    /// </summary>
+    [Fact]
+    public void WhatMightAlsoChangeMemoryIsNamed()
+    {
+        const string Data = ".segment ZEROPAGE\n.data count: .byte\n.data ptr: .word\n.segment CODE\n";
+        Assert.Equal(
+            ["count: sta count [may also have been changed by `sta (ptr),y` on line 11]"],
+            Sources(Data + ".proc p {\n    sta count\n    ldy #0\n    sta (ptr),y\n    lda count\n    rts\n}\n", "lda count"));
+        Assert.Equal(
+            ["count: sta count [may also have been changed by `jsr bump` on line 14]"],
+            Sources(Data + ".proc bump {\n    inc count\n    rts\n}\n.proc p {\n    sta count\n    jsr bump\n    lda count\n    rts\n}\n", "lda count"));
     }
 
     private static IReadOnlyList<string>? Sources(string text, string line) =>

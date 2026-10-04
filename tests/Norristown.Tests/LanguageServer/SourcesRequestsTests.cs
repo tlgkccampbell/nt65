@@ -96,6 +96,44 @@ public sealed class SourcesRequestsTests
         Assert.Equal([10], x.Through.Select(line => line.Start.Line));
     }
 
+    /// <summary>
+    /// A location in memory that the routine called reads is an input too. Its sources are best
+    /// guesses, and the bytes of one pointer share the pointer's group.
+    /// </summary>
+    [Fact]
+    public async Task MemoryInputsAreBestGuessesGroupedBySymbol()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In("""
+            .module main
+            .segment ZEROPAGE
+            .data ptr: .word
+            .segment CODE
+            .proc first {
+                ldy #0
+                lda (ptr),y
+                rts
+            }
+            .export .proc main {
+                lda #0
+                sta ptr
+                sta ptr+1
+                jsr fir|st
+                nop
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        var memory = result.Inputs.Where(input => input.Category == "memory").ToList();
+        Assert.Equal(["ptr", "ptr+1"], memory.Select(input => input.Name));
+        Assert.All(memory, input => Assert.Equal("ptr", input.Group));
+        Assert.Equal([11, 12], memory.Select(input => Assert.Single(input.Sources).Range.Start.Line));
+        Assert.All(memory, input => Assert.Equal("bestEffort", input.Sources[0].Confidence));
+    }
+
     /// <summary>A line that holds no instruction has no answer.</summary>
     [Fact]
     public async Task ALineWithNoInstructionHasNoAnswer()

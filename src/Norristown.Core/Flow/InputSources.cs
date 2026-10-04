@@ -84,9 +84,57 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
             var mapping = new Mapping(tree, region, keepsOf);
             return new InputSources(
                 mapping.Routine,
-                [.. found.Values.Select(input => mapping.Input(input.Name, input.Category, input.Value))]);
+                [
+                    .. found.Values.Select(input => mapping.Input(input.Name, input.Category, input.Value)),
+                    .. Memory(analysis, file, region, occurrences)
+                        .Select(input => mapping.Memory(input.Key, input.Value)),
+                ]);
         }
         return null;
+    }
+
+    /// <summary>
+    /// Returns where each location in memory that the instruction at the caret reads was set, in the
+    /// order of the locations' names. On a call, the locations are the ones the routine called reads
+    /// before writing, which <see cref="MemoryInference"/> works out. On any other instruction, they
+    /// are the location its direct operand reads, or the bytes of the pointer its indirect operand
+    /// reads.
+    /// </summary>
+    private static SortedDictionary<Location, MemoryWalk.Value> Memory(
+        ProgramAnalysis analysis, FileAnalysis file, FlowRegion region, IReadOnlyList<(BasicBlock Block, int Index)> occurrences)
+    {
+        var found = new SortedDictionary<Location, MemoryWalk.Value>(
+            Comparer<Location>.Create((a, b) => string.CompareOrdinal(a.Name, b.Name) is var order and not 0
+                ? order
+                : a.GetHashCode().CompareTo(b.GetHashCode())));
+        var inference = new MemoryInference(analysis);
+        var wanted = new List<(BasicBlock Block, int Index, IReadOnlyList<Location> Locations)>();
+        foreach (var (block, index) in occurrences)
+        {
+            IReadOnlyList<Location> locations = index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block)
+                ? [.. block.Calls.SelectMany(inference.ReadsOf).Distinct()]
+                : MemoryAccess.Of(file.Model, file.Layout, block.Steps[index]) is { } access
+                    ? [.. access.Reads && access.Direct is { } read ? [read] : Array.Empty<Location>(), .. access.Pointer]
+                    : [];
+            wanted.Add((block, index, locations));
+        }
+        if (wanted.All(each => each.Locations.Count == 0))
+            return found;
+
+        var walk = new MemoryWalk(file, inference, wanted.SelectMany(each => each.Locations));
+        var reached = walk.Solve(region);
+        foreach (var (block, index, locations) in wanted)
+        {
+            if (locations.Count == 0 || reached[block.Index] is not { } entered)
+                continue;
+            var state = walk.Before(block, entered, index);
+            foreach (var location in locations)
+            {
+                var value = state.Values[location];
+                found[location] = found.TryGetValue(location, out var known) ? MemoryWalk.Value.Merge(known, value) : value;
+            }
+        }
+        return found;
     }
 
     /// <summary>
@@ -185,6 +233,31 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 .ToList();
             return new SourcedInput(
                 name, null, category, [.. sources.OrderBy(source => source.Line.Start).ThenBy(source => source.Kind)], through);
+        }
+
+        /// <summary>
+        /// Returns a location in memory as it is reported. Every source of it is a best guess, and
+        /// where something might also have changed the value since, each source says what.
+        /// </summary>
+        public SourcedInput Memory(Location location, MemoryWalk.Value value)
+        {
+            var doubts = value.Doubts
+                .Select(key => steps.TryGetValue(key, out var at) ? Span(at.Step)?.Span : null)
+                .OfType<TextSpan>()
+                .Distinct()
+                .OrderBy(span => span.Start)
+                .Select(span => $"`{tree.Text[span.Start..span.End].Trim()}` on line {tree.GetLineIndex(span.Start) + 1}")
+                .ToList();
+            var reason = doubts.Count == 0 ? null : "may also have been changed by " + string.Join(", ", doubts);
+            var sources = new List<InputSource>();
+            foreach (var origin in value.Origins)
+            {
+                if (Source(origin) is { } source && !sources.Any(known => known.Kind == source.Kind && known.Line == source.Line))
+                    sources.Add(source with { Confidence = SourceConfidence.BestEffort, Reason = reason });
+            }
+            return new SourcedInput(
+                location.Name, location.Group, InputCategory.Memory,
+                [.. sources.OrderBy(source => source.Line.Start).ThenBy(source => source.Kind)], []);
         }
 
         /// <summary>Returns the source an origin stands for, or null where its step is not in this file.</summary>

@@ -27,7 +27,9 @@ build tasks and a schema for the project file.
   such as the `pla` that restored it or a call that keeps it, gets a dotted bar. The caret line
   gets a short chip per value: `A↑12` for a source 12 lines up, `A ×2` for two of them, `A↰`
   for a value the routine's caller set, `A?` where the analysis lost track. Hover the line for
-  each source and its code, and for why the analysis lost track. **Shift+Alt+PageDown** and
+  each source and its code, and for why the analysis lost track. Values in memory are followed
+  too, as a best guess drawn with dashes: a location the routine reads before writing it has
+  the last store to it as its source. **Shift+Alt+PageDown** and
   **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
 - **What this became, beside the source.** **nt65: Show Output Beside** opens the ca65 for the
   file you are in, as the program stands with whatever you have not saved, and the caret is the

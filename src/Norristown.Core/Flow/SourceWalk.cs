@@ -55,6 +55,12 @@ internal sealed class SourceWalk
     }
 
     /// <summary>
+    /// Gets a value indicating whether the CPU has register widths, which only the 65816 does. On
+    /// every other CPU nothing sets them, and they are not reported.
+    /// </summary>
+    public bool HasWidths => states is not null;
+
+    /// <summary>
     /// Returns where the value of <paramref name="register"/> that a call hands to
     /// <paramref name="callee"/> was set. A routine that declares an 8-bit accumulator on entry
     /// reads only its low byte. Any other reads both halves, as far as the walk can tell.
@@ -63,12 +69,6 @@ internal sealed class SourceWalk
         register == Registers.A && callee?.Signature?.Entry.A == Semantics.Width.Eight
             ? state.Of(Tracked.A)
             : state.Whole(register);
-
-    /// <summary>
-    /// Gets a value indicating whether the CPU has register widths, which only the 65816 does. On
-    /// every other CPU nothing sets them, and they are not reported.
-    /// </summary>
-    public bool HasWidths => states is not null;
 
     /// <summary>
     /// Returns what reaches each block of <paramref name="region"/> from the routine's own entry, or

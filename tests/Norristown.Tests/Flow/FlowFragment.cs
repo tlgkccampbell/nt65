@@ -60,7 +60,8 @@ internal static class FlowFragment
     /// <paramref name="line"/> was set, or null where <see cref="InputSources.At"/> has no answer.
     /// Each input is one string: its name, then each source, then each through line after
     /// <c>via</c>. A source is the text of its line, prefixed with its kind unless it is an
-    /// instruction, and an entry source is the word <c>entry</c>.
+    /// instruction, and an entry source is the word <c>entry</c>. Where a best-effort source says
+    /// what else might have changed the value, that follows in brackets.
     /// </summary>
     public static IReadOnlyList<string>? SourcesAt(ProgramAnalysis analysis, string line)
     {
@@ -82,7 +83,8 @@ internal static class FlowFragment
                 _ => $"{source.Kind.ToString().ToLowerInvariant()} {Text(model.Tree, source.Line)}",
             });
             var through = input.Through.Count == 0 ? "" : " via " + string.Join(", ", input.Through.Select(span => Text(model.Tree, span)));
-            return $"{input.Name}: {string.Join(", ", sources)}{through}";
+            var doubted = input.Sources.FirstOrDefault(source => source is { Confidence: SourceConfidence.BestEffort, Reason: not null });
+            return $"{input.Name}: {string.Join(", ", sources)}{through}{(doubted is null ? "" : $" [{doubted.Reason}]")}";
         })];
 
         static string Text(SyntaxTree tree, TextSpan span) => tree.Text[span.Start..span.End].Trim();

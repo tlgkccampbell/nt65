@@ -4050,7 +4050,16 @@ alone and without an assembler:
   `A↑12` for a source twelve lines up, `A ×2` for two of them, `A↰` for a value the caller
   set, `A?` where the analysis lost track. Which line, why the analysis lost track and the
   code on each line are in the hover, as everything else about an instruction is. What is
-  shown is a picture of the analysis and feeds no diagnostic;
+  shown is a picture of the analysis and feeds no diagnostic.
+
+  Memory is shown too, because passing arguments in memory is as common as passing them in
+  registers, but only as a guess, drawn with dashes and a fainter tint. A routine reads a
+  location when some path through it loads the location by name before storing to it; the
+  source of the location's value is the last store to the same name on each path; and the
+  hover names what else might have changed it since: a store through a pointer or an index, a
+  call that may write it, or a store to another name for the same address. This does not go
+  back on memory being the programmer's word (§7.7). Nothing warns, errors or checks a promise
+  because of it, and it is wrong in exactly the cases a guess from names can be;
 - complete what may be written at the caret, and only that: the statements the place the
   caret is in accepts, so that a file's top level offers declarations and only code offers
   instructions, labels and what they say about the processor; the forms an instruction has

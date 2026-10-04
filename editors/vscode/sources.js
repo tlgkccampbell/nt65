@@ -126,11 +126,40 @@ function chipOf(input, caret, visible) {
   return `${name}${arrow}${Math.abs(nearest - caret)}${times}`;
 }
 
+// Merges the inputs that share a group, such as the bytes of one pointer or the members of one
+// struct in memory, into one input named by the group, so that they get one chip and one tag. A
+// register or a flag has no group and stays as it is.
+function grouped(inputs) {
+  const merged = new Map();
+  for (const input of inputs) {
+    const name = input.group || input.name;
+    const known = merged.get(name);
+    if (!known) {
+      merged.set(name, { ...input, name, sources: [...input.sources], through: [...input.through] });
+      continue;
+    }
+    for (const source of input.sources) {
+      if (!known.sources.some(other => other.kind === source.kind && other.range.start.line === source.range.start.line)) {
+        known.sources.push(source);
+      }
+    }
+    known.through.push(...input.through);
+  }
+  return [...merged.values()];
+}
+
 // Writes a line of the document as inline code, for the hover.
 function code(document, line) {
   const text = document.lineAt(line).text.trim();
   const fence = text.includes('`') ? '``' : '`';
   return `${fence}${text}${fence}`;
+}
+
+// What the hover adds after a best-effort source: that it is a guess, and what else might have
+// changed the value since, where something might.
+function guessed(source) {
+  if (source.confidence !== 'bestEffort') return '';
+  return source.reason ? `, a guess: it ${source.reason}` : ', a guess';
 }
 
 // The hover on the caret line: each input, each line that set it with the code on that line, and
@@ -144,19 +173,19 @@ function hoverOf(document, result) {
       const where = `line ${line + 1} ${code(document, line)}`;
       switch (source.kind) {
         case 'entry':
-          hover.appendMarkdown(`- from the caller of ${code(document, line)}\n`);
+          hover.appendMarkdown(`- from the caller of ${code(document, line)}${guessed(source)}\n`);
           break;
         case 'unknown':
           hover.appendMarkdown(`- unknown after ${where}: ${source.reason}\n`);
           break;
         case 'macro':
-          hover.appendMarkdown(`- ${where} (macro)\n`);
+          hover.appendMarkdown(`- ${where} (macro)${guessed(source)}\n`);
           break;
         case 'call':
-          hover.appendMarkdown(`- ${where} (call)\n`);
+          hover.appendMarkdown(`- ${where} (call)${guessed(source)}\n`);
           break;
         default:
-          hover.appendMarkdown(`- ${where}${source.reason ? `: ${source.reason}` : ''}\n`);
+          hover.appendMarkdown(`- ${where}${guessed(source)}\n`);
       }
     }
     for (const through of input.through) {
@@ -260,7 +289,7 @@ class Sources {
       const through = new Map();
       const chips = [];
       const entries = [];
-      for (const input of result.inputs.filter(item => groupOf(item) === group)) {
+      for (const input of grouped(result.inputs.filter(item => groupOf(item) === group))) {
         for (const source of input.sources) {
           if (source.kind === 'entry') entries.push(`${input.name}↰`);
           else if (source.kind !== 'unknown') {
