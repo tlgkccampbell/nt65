@@ -33,6 +33,7 @@ internal sealed class SourceWalk
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly RegisterWalk registers;
+    private readonly StateAnalysis? states;
     private readonly OutsideEntries outside;
     private readonly Func<Symbol, RoutineRegisters> of;
 
@@ -48,6 +49,7 @@ internal sealed class SourceWalk
         this.model = model;
         this.layout = layout;
         this.of = of;
+        this.states = states;
         registers = new RegisterWalk(model, layout, flow, states);
         outside = new OutsideEntries(model, layout);
     }
@@ -61,6 +63,12 @@ internal sealed class SourceWalk
         register == Registers.A && callee?.Signature?.Entry.A == Semantics.Width.Eight
             ? state.Of(Tracked.A)
             : state.Whole(register);
+
+    /// <summary>
+    /// Gets a value indicating whether the CPU has register widths, which only the 65816 does. On
+    /// every other CPU nothing sets them, and they are not reported.
+    /// </summary>
+    public bool HasWidths => states is not null;
 
     /// <summary>
     /// Returns what reaches each block of <paramref name="region"/> from the routine's own entry, or
@@ -188,7 +196,16 @@ internal sealed class SourceWalk
     /// </summary>
     private SourceState Step(Step step, SourceState state, Step? next)
     {
-        var after = Registered(step, state, next);
+        var after = Flagged(step, Registered(step, state, next));
+        return states is null ? after : Widened(step, after);
+    }
+
+    /// <summary>
+    /// Returns where N, Z and V were set after one statement, given where every value was set after
+    /// its effect on the registers.
+    /// </summary>
+    private SourceState Flagged(Step step, SourceState after)
+    {
         if (step.Statement is not InstructionStatementSyntax { MnemonicKind: var mnemonic } statement
             || mnemonic is MnemonicKind.Plp or MnemonicKind.Rti or MnemonicKind.Brk or MnemonicKind.Cop
             || Instructions.IsCall(mnemonic))
@@ -207,6 +224,65 @@ internal sealed class SourceWalk
                 after = after.With(tracked, wrote);
         }
         return after;
+    }
+
+    /// <summary>
+    /// Returns where the 65816's widths were set after one statement, following the rules of
+    /// <see cref="StateAnalysis"/>. A <c>rep</c>, a <c>sep</c>, an <c>xce</c>, a <c>plp</c>, an
+    /// <c>.ensure</c> and a <c>.state</c> set the widths they name at their own line. A macro with a
+    /// state signature sets the widths its signature does not leave unchanged, at its call.
+    /// </summary>
+    private SourceState Widened(Step step, SourceState state)
+    {
+        var (a, index, kind) = WidthsSet(step);
+        var set = SourceValue.Of(new Origin(kind, step.Key), RegisterValue.Written);
+        if (a)
+            state = state.With(Tracked.M, set);
+        if (index)
+            state = state.With(Tracked.Index, set);
+        return state;
+    }
+
+    /// <summary>
+    /// Returns which widths a statement sets, and the kind of source it is for them. In emulation
+    /// mode a <c>rep</c> or a <c>sep</c> changes nothing, because both widths are pinned at 8 bits.
+    /// </summary>
+    private (bool A, bool Index, SourceKind Kind) WidthsSet(Step step)
+    {
+        switch (step.Statement)
+        {
+            case StateDirectiveSyntax or EnsureDirectiveSyntax:
+                var (a, index) = (false, false);
+                foreach (var item in StateItem.Read(step.Statement))
+                {
+                    var all = item.Part == StatePart.AllUnknown || (item.Part == StatePart.E && item.Mode == ProcessorMode.Emulation);
+                    a |= all || item.Part == StatePart.A;
+                    index |= all || item.Part == StatePart.Index;
+                }
+                return (a, index, SourceKind.Instruction);
+
+            case MacroCallSyntax call when model.MacroAt(call) is { MacroSignature: { } signature }:
+                var widths = step.Closes ? signature.Exit : signature.Entry;
+                return (widths.A != Semantics.Width.Unchanged, widths.Index != Semantics.Width.Unchanged, SourceKind.Macro);
+
+            case InstructionStatementSyntax statement:
+                switch (statement.MnemonicKind)
+                {
+                    case MnemonicKind.Rep or MnemonicKind.Sep:
+                        if (states?.Before(step.Statement, step.On)?.Processor.E == ProcessorMode.Emulation)
+                            return (false, false, SourceKind.Instruction);
+                        if (StepOperands.Constant(model, step) is not { } flags)
+                            return (true, true, SourceKind.Instruction);
+                        return ((flags & (long)StatusFlags.M) != 0, (flags & (long)StatusFlags.X) != 0, SourceKind.Instruction);
+                    case MnemonicKind.Xce or MnemonicKind.Plp:
+                        return (true, true, SourceKind.Instruction);
+                    default:
+                        return (false, false, SourceKind.Instruction);
+                }
+
+            default:
+                return (false, false, SourceKind.Instruction);
+        }
     }
 
     /// <summary>
@@ -321,6 +397,17 @@ internal sealed class SourceWalk
                 left = register == Registers.A
                     ? left.With(Tracked.A, state.Of(Tracked.A).Via(step.Key)).With(Tracked.AHigh, state.Of(Tracked.AHigh).Via(step.Key))
                     : left.With(register, state.Of(SourceState.Track(register)).Via(step.Key));
+            }
+
+            // A call returns with the widths its routine's signature gives on exit, and with the
+            // ones it leaves unchanged as they were. A routine with no signature, or an interrupt
+            // handler, leaves the widths alone, as the processor-state analysis takes it to.
+            if (states is not null && callee.Signature is { IsInterrupt: false } signature)
+            {
+                var emulation = signature.Exit.E == ProcessorMode.Emulation;
+                left = left
+                    .With(Tracked.M, emulation || signature.Exit.A != Semantics.Width.Unchanged ? called : state.Of(Tracked.M).Via(step.Key))
+                    .With(Tracked.Index, emulation || signature.Exit.Index != Semantics.Width.Unchanged ? called : state.Of(Tracked.Index).Via(step.Key));
             }
             reached = SourceState.Merge(reached, left);
         }

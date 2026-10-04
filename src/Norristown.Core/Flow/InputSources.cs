@@ -107,6 +107,16 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 var read = callee is null ? Registers.All : readsOf(callee).Assumed;
                 foreach (var register in RegisterEffects.Each(read))
                     yield return Register(register, SourceWalk.Given(callee, register, state));
+
+                // On the 65816 a routine reads the widths it declares on entry, which the caller
+                // has to have set.
+                if (walk.HasWidths && callee?.Signature?.Entry is { } entry)
+                {
+                    if (entry.A is Semantics.Width.Eight or Semantics.Width.Sixteen)
+                        yield return ((int)Tracked.M, "M", InputCategory.Width, state.Of(Tracked.M));
+                    if (entry.Index is Semantics.Width.Eight or Semantics.Width.Sixteen)
+                        yield return ((int)Tracked.Index, "X width", InputCategory.Width, state.Of(Tracked.Index));
+                }
             }
             yield break;
         }

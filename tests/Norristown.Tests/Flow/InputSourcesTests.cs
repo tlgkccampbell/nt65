@@ -153,6 +153,37 @@ public sealed class InputSourcesTests
         Assert.Null(Sources(".proc p {\n    lda #1\n    rts\n}\n.data b: .byte\n", ".data b: .byte"));
     }
 
+    /// <summary>
+    /// On the 65816 a call reads the widths its routine declares on entry. A <c>rep</c> or a
+    /// <c>sep</c> sets the widths its mask names, and a call sets the widths its routine's exit
+    /// declares, here both of them.
+    /// </summary>
+    [Fact]
+    public void ACallOnThe65816ReadsTheWidthsItsRoutineDeclares()
+    {
+        const string Wide = ".proc wide: a16, i8 {\n    rts\n}\n";
+        Assert.Equal(
+            ["M: rep #$20", "X width: entry"],
+            Wider(Wide + ".proc p: a8, i8 {\n    rep #$20\n    jsr wide\n    sep #$20\n    rts\n}\n", "jsr wide"));
+        Assert.Equal(
+            ["M: call jsr narrow", "X width: call jsr narrow"],
+            Wider(".proc narrow: a16, i8 -> a8, i8 {\n    sep #$20\n    rts\n}\n.proc needs8: a8, i8 {\n    rts\n}\n"
+                + ".proc p: a16, i8 -> a8, i8 {\n    jsr narrow\n    jsr needs8\n    rts\n}\n", "jsr needs8"));
+    }
+
+    /// <summary>A macro with a state signature sets the widths its exit declares, at its call.</summary>
+    [Fact]
+    public void AMacroWithASignatureSetsWidthsAtItsCall()
+    {
+        Assert.Equal(
+            ["M: macro narrow!()", "X width: macro narrow!()"],
+            Wider(".macro narrow(): a16, i8 -> a8, i8 {\n    sep #$20\n}\n.proc needs8: a8, i8 {\n    rts\n}\n"
+                + ".proc p: a16, i8 -> a8, i8 {\n    narrow!()\n    jsr needs8\n    rts\n}\n", "jsr needs8"));
+    }
+
     private static IReadOnlyList<string>? Sources(string text, string line) =>
         FlowFragment.SourcesAt(FlowFragment.Analyze("6502", text), line);
+
+    private static IReadOnlyList<string>? Wider(string text, string line) =>
+        FlowFragment.SourcesAt(FlowFragment.Analyze("65816", text), line);
 }
