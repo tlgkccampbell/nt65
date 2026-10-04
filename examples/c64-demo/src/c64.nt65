@@ -44,7 +44,7 @@
 }
 
 .export .scope sid {
-    .data voices: .type Voice[3] = $D400
+    .mmio voices: .type Voice[3] = $D400
     .const VOLUME = $D418           ; the volume in the low nibble
 }
 

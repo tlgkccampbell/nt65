@@ -46,6 +46,7 @@ internal static class Directives
         [DirectiveKind.Const] = "a constant, or with ?= a setting the build may set",
         [DirectiveKind.Cpu] = "the processor the program is built for",
         [DirectiveKind.Data] = "a data declaration",
+        [DirectiveKind.Mmio] = "a hardware register at a fixed address",
         [DirectiveKind.Dword] = "four-byte values",
         [DirectiveKind.Each] = "assemble the block once for each item",
         [DirectiveKind.Else] = "what to assemble instead",

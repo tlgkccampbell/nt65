@@ -138,6 +138,8 @@ public static class SyntaxFacts
         [DirectiveKind.Segment] = new(SyntaxKind.SegmentDeclaration, new(Declarations, Expanded), BlockKind.Segment),
         [DirectiveKind.Data] = new(
             SyntaxKind.DataDeclaration, new(Declarations | DirectiveContexts.Data), BlockKind.Data, Exportable: true),
+        [DirectiveKind.Mmio] = new(
+            SyntaxKind.DataDeclaration, new(Declarations | DirectiveContexts.Data), BlockKind.Data, Exportable: true),
         [DirectiveKind.Proc] = new(SyntaxKind.ProcDeclaration, new(Declarations, RoutineOrExpanded), BlockKind.Proc, Exportable: true),
         [DirectiveKind.MultiProc] = new(
             SyntaxKind.MultiProcDeclaration, new(Declarations, RoutineOrExpanded), BlockKind.MultiProc, Exportable: true),

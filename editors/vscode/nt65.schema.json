@@ -332,6 +332,7 @@
         "member-text-too-long",
         "member-unknown",
         "mirror-bank-mismatch",
+        "mmio-needs-an-address",
         "mnemonic-name",
         "module-declared-twice",
         "module-missing",

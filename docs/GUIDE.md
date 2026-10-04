@@ -479,6 +479,18 @@ constants, usable anywhere a constant is, including a `.res` count. The size of 
 different, because it depends on how the code was laid out: `.endof(f)` is the address just
 past `f` and `.spanof(f)` its length, and ca65 and ld65 work those out.
 
+**Data found elsewhere.** `.data name: element = address` names data that something else put at
+an address: another declaration, another program or the hardware. It has no bytes of its own,
+but has the type, size and fields its element gives it. A hardware register is declared with
+`.mmio` in place of `.data`, which says that the hardware owns what it holds, so the editor does
+not ask a routine's callers where a register's value came from. A register that reads back what
+was last written to it, such as a bank latch, behaves as memory and stays `.data`.
+
+```nt65
+.mmio VIC_BORDER: .byte = $D020
+.mmio CIA1:       .byte[16] = $DC00
+```
+
 **Mixed data.** `.data name { ... }` holds data directives of any kind, nested `.data`
 declarations, which become members such as `name::sub`, and `@` positions private to the
 block. It is how you write a file header or any record whose layout is not a struct.
@@ -1636,6 +1648,7 @@ everything below works across modules.
   that the routine called reads before writing it, is a value like a register: the last store
   to it is its source, drawn with a dashed bar and a fainter tint. The bytes of a pointer such
   as `ptr` and `ptr+1`, and the members of one struct, share a chip named after the symbol.
+  A hardware register declared with `.mmio` is not followed, since the hardware sets it.
   A line that might also have changed the value since, such as a store through a pointer or a
   call that may write the location, is drawn as a doubt rather than a source: a thin dashed bar
   with no tint and no scrollbar mark, and a faded tag such as `ptr?`. The hover names those

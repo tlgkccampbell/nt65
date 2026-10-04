@@ -1366,6 +1366,14 @@ internal sealed partial class Binder
     {
         var element = statement.Directive;
 
+        // A hardware register is never laid out by the program. It is where the hardware puts it,
+        // so `.mmio` has only the form of data found elsewhere.
+        if (statement.Keyword.DirectiveKind == DirectiveKind.Mmio && statement.Address is null)
+        {
+            Report(NameToken(statement)?.Span ?? statement.Span, Catalogue.MmioNeedsAnAddress.Message(
+                statement.Name.IsMissing ? "name" : statement.Name.Text));
+        }
+
         // Data found elsewhere is a name for an address, sized and typed by its element, or by
         // the data the address names. Whether it names data is known once the name resolves.
         if (statement.Address is { } address)

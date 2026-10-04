@@ -1,0 +1,28 @@
+; A hardware register is declared with `.mmio`, at the address the hardware gives it. The output
+; sees it as data found elsewhere, so a typed register's fields are reached by name and written
+; as offsets from it.
+.module main
+.cpu 6502
+
+.struct Voice {
+    freq:    .word
+    pulse:   .word
+    control: .byte
+    ad:      .byte
+    sr:      .byte
+}
+
+.mmio BORDER:         .byte = $D020
+.export .mmio voices: .type Voice[3] = $D400
+
+; The design's and the guide's example.
+.mmio VIC_BORDER: .byte = $D020
+.mmio CIA1:       .byte[16] = $DC00
+
+.segment CODE
+.export .proc start {
+    lda #0
+    sta BORDER
+    sta voices[1]::control
+    rts
+}

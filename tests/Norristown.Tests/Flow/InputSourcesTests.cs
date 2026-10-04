@@ -231,6 +231,22 @@ public sealed class InputSourcesTests
         Assert.All(inputs.SelectMany(input => input.Sources), source => Assert.Equal(SourceConfidence.BestEffort, source.Confidence));
     }
 
+    /// <summary>
+    /// A hardware register that <c>.mmio</c> declares holds what the hardware puts there. It is
+    /// never an input, and neither is a member of one, so a caller is not asked to set it.
+    /// </summary>
+    [Fact]
+    public void AHardwareRegisterIsNoInput()
+    {
+        const string Text = ".struct Ch {\n    dest: .byte\n}\n.mmio PORT: .byte = $9F23\n.mmio chans: .type Ch[2] = $4300\n"
+            + ".segment ZEROPAGE\n.data count: .byte\n.segment CODE\n"
+            + ".proc wait {\n    lda PORT\n    lda chans[1]::dest\n    lda count\n    rts\n}\n"
+            + ".proc p {\n    sta PORT\n    jsr wait\n    rts\n}\n";
+        Assert.Equal(["count: entry"], Sources(Text, "jsr wait"));
+        Assert.Equal([], Sources(Text, "lda PORT"));
+        Assert.Equal([], Sources(Text, "lda chans[1]::dest"));
+    }
+
     /// <summary>The members of one struct are grouped under the data that holds them.</summary>
     [Fact]
     public void TheMembersOfAStructAreGroupedUnderItsData()

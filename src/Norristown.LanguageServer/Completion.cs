@@ -64,7 +64,7 @@ internal static class Completion
     /// </summary>
     private static readonly HashSet<DirectiveKind> Declaring =
     [
-        DirectiveKind.Module, DirectiveKind.Proc, DirectiveKind.Scope, DirectiveKind.Data, DirectiveKind.Enum,
+        DirectiveKind.Module, DirectiveKind.Proc, DirectiveKind.Scope, DirectiveKind.Data, DirectiveKind.Mmio, DirectiveKind.Enum,
         DirectiveKind.Struct, DirectiveKind.Union, DirectiveKind.Macro, DirectiveKind.Func, DirectiveKind.List,
         DirectiveKind.Charmap, DirectiveKind.Signature, DirectiveKind.Segment, DirectiveKind.Frame,
         DirectiveKind.Const, DirectiveKind.Import,
@@ -765,7 +765,7 @@ internal static class Completion
         {
             DirectiveKind.Import => ([.. Directives.Sizes, "proc("], "how the name is reached"),
             DirectiveKind.Export or DirectiveKind.Segment => (Directives.Sizes, "address size"),
-            DirectiveKind.Data => (Directives.Data, "what it holds"),
+            DirectiveKind.Data or DirectiveKind.Mmio => (Directives.Data, "what it holds"),
             null when line.Context == ContextKind.TypeMembers => ([.. Directives.Elements, ".res"], "what it holds"),
             _ => null,
         };

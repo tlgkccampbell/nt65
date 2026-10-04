@@ -25,6 +25,12 @@ public enum DirectiveKind
     /// <summary><c>.data</c>: declares data.</summary>
     Data,
 
+    /// <summary>
+    /// <c>.mmio</c>: declares a memory-mapped hardware register, which is data found elsewhere whose
+    /// value the hardware sets rather than the program.
+    /// </summary>
+    Mmio,
+
     /// <summary><c>.proc</c>: declares a routine.</summary>
     Proc,
 

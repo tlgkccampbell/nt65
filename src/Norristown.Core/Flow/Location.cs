@@ -64,6 +64,14 @@ internal readonly record struct Location(Symbol? Root, string Path, long Offset)
                         ? Of(model, given, caller)
                         : null;
                 }
+                // A hardware register holds what the hardware puts there, so it is not a location
+                // whose value the program sets, and neither is a member reached through one.
+                if (IsHardware(symbol)
+                    || (symbol.Kind == SymbolKind.Member && name.Tree == model.Tree
+                        && IsHardware(model.ReferenceAt(name.Parts[0].Span.Start)?.Symbol)))
+                {
+                    return null;
+                }
                 return symbol.Kind switch
                 {
                     SymbolKind.Label or SymbolKind.AddressAlias or SymbolKind.Data or SymbolKind.ImportedAddress
@@ -76,4 +84,8 @@ internal readonly record struct Location(Symbol? Root, string Path, long Offset)
                 return null;
         }
     }
+
+    /// <summary>Returns whether <paramref name="symbol"/> is a hardware register, which <c>.mmio</c> declares.</summary>
+    private static bool IsHardware(Symbol? symbol) =>
+        symbol?.ValueExpression?.Parent is DataDeclarationSyntax { Keyword.DirectiveKind: DirectiveKind.Mmio };
 }

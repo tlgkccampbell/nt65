@@ -1340,6 +1340,16 @@ public static class Catalogue
             + "size, its count, its elements and its fields are unknown until its declaration states an element "
             + "type.");
 
+    internal static DiagnosticDescriptor MmioNeedsAnAddress { get; } = Entry(
+        Area.Values,
+        "mmio-needs-an-address",
+        Severity.Error,
+        "`.mmio` declares a hardware register at the address the hardware gives it: write `.mmio {0}: .byte = $address`",
+        "A memory-mapped register is not laid out by the program. It is found at the address the hardware gives it, "
+            + "so `.mmio` takes only the form of data found elsewhere, `.mmio name: element = address`. Everything "
+            + "else about it is as `.data` at that address would be. The difference is that what it holds is set by "
+            + "the hardware, so the editor does not trace its value back to the program's stores.");
+
     internal static DiagnosticDescriptor DataElsewhereOverruns { get; } = Entry(
         Area.Values,
         "data-elsewhere-overruns",

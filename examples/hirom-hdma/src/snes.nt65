@@ -49,7 +49,7 @@
 .assert .sizeof(Channel) == $10, "each channel's registers take sixteen bytes"
 
 ; The eight DMA channels, from $4300.
-.export .data channels: .type Channel[8] = $4300
+.export .mmio channels: .type Channel[8] = $4300
 
 .export .const DMA_ONE_PORT  = $00  ; each byte to the port
 .export .const DMA_TWO_PORTS = $01  ; the bytes to the port and the one after it, in turn

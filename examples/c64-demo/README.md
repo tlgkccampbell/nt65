@@ -132,6 +132,7 @@ is done before `stable` shows the first objects of the next frame.
   G-4`, and `.func`s of `.strat` turn each cell into a note. The SID's frequency table is worked
   out from one octave's frequencies. The sine table is `.sin`, and the sprites' shapes are
   worked out a pixel at a time.
-- **Records for the hardware.** The SID's three voices are `.data voices: .type Voice[3] =
+- **Records for the hardware.** The SID's three voices are `.mmio voices: .type Voice[3] =
   $D400`, so `sid::voices[p]::control` is the control register of voice p, and the music driver
-  sets each part's voice with an `.each` over its parts.
+  sets each part's voice with an `.each` over its parts. `.mmio` is data found elsewhere that
+  the hardware owns, so the editor does not ask a routine's callers where its value came from.

@@ -1,0 +1,7 @@
+; A hardware register is where the hardware puts it, so `.mmio` needs the address. Without one it
+; would be data the program lays out, which a register never is.
+.module main
+.cpu 6502
+
+.segment BSS
+.mmio LATCH: .byte                  ;! error[mmio-needs-an-address]: `.mmio` declares a hardware register at the address the hardware gives it: write `.mmio LATCH: .byte = $address`

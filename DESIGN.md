@@ -869,6 +869,7 @@ marker file.
 | `.struct name { ... }`, `.union name { ... }` | member offsets and a size (§6.3). |
 | `.data name: element`, `.data name { ... }` | data: an address with a size in bytes, a count of elements for an element type, and a scope of its members or of its type's fields (§8). |
 | `.data name [: element] = expr` | **data found elsewhere**: data at the address `expr` gives, with no bytes of its own. Without an element type it takes the one at the address, where there is one (§8). |
+| `.mmio name: element = expr` | a **hardware register**: data found elsewhere that the hardware owns rather than the program (§8). |
 | `.charmap name { ... }` | a text encoding (§8). |
 | `.list name { ... }` | a named sequence of expressions (§6.4). |
 | `.func name(...) = expr` | a pure expression function (§9). |
@@ -2209,6 +2210,20 @@ here does, so `.sizeof(TXTPTR)` below is 2.
 .data PPUCTRL: .byte = $2000        ; a port
 .data TXTPTR:  .addr = CHRGOT + 1   ; the operand of an instruction in CHRGOT
 .data TEMP3 = FNCNAM                ; FNCNAM, under another name
+```
+
+**Hardware registers.** `.mmio name: element = expr` declares a memory-mapped register. It is
+data found elsewhere in every way this section describes, with the same type, fields and
+output, but the hardware owns what it holds rather than the program. The editor's picture of
+where a value in memory came from (§14) therefore does not follow a register: a routine that
+reads one does not ask its callers for it, and a store to one is not where a later read's value
+came from. The address is required, since a register is never laid out by the program. A
+register that reads back what was last written to it, such as a bank latch, behaves as memory,
+and is declared with `.data`.
+
+```nt65
+.mmio VIC_BORDER: .byte = $D020
+.mmio CIA1:       .byte[16] = $DC00
 ```
 
 The element type may be left out, and the declaration then takes the one at the address. Offsets
@@ -4057,8 +4072,9 @@ alone and without an assembler:
   location when some path through it loads the location by name before storing to it; the
   source of the location's value is the last store to the same name on each path; and the
   hover names what else might have changed it since: a store through a pointer or an index, a
-  call that may write it, or a store to another name for the same address. This does not go
-  back on memory being the programmer's word (§7.7). Nothing warns, errors or checks a promise
+  call that may write it, or a store to another name for the same address. A hardware register
+  that `.mmio` declares (§8) is not followed at all, because the hardware sets what it holds.
+  This does not go back on memory being the programmer's word (§7.7). Nothing warns, errors or checks a promise
   because of it, and it is wrong in exactly the cases a guess from names can be;
 - complete what may be written at the caret, and only that: the statements the place the
   caret is in accepts, so that a file's top level offers declarations and only code offers
@@ -5105,6 +5121,7 @@ const       := '.const' (ident | local) ('=' | '?=') expr   ; `?=` at file level
 data-decl   := '.data' ident ':' data
              | '.data' ident '{' NL mixed* '}'
              | '.data' ident (':' element count?)? '=' expr   ; found elsewhere
+             | '.mmio' ident ':' element count? '=' expr      ; a hardware register
 mixed       := data | data-decl | local ':' data? | macro-call
              | if-block | repeat-block | each-block  ; their contents mixed too
 data        := element count? values?

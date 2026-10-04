@@ -105,6 +105,6 @@ with long addresses.
   `hdma::start` writes are its `.lobytes`, `.hibytes` and `.bankbytes`, one byte to an effect,
   which an 8-bit index reads. The wave's channel is indirect, and the bank of its scrolls is
   `.bankbyte(wave::scrolls)`.
-- **Hardware as data.** The DMA channels are `.data channels: .type Channel[8] = $4300`, so
+- **Hardware as data.** The DMA channels are `.mmio channels: .type Channel[8] = $4300`, so
   `channels[1]::address` is $4312, and `channels::mode,x` is the mode of the channel whose
   registers are at X.

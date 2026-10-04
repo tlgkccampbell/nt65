@@ -17,12 +17,12 @@
 ; writes video memory at the port's own address, and then moves the address on by the port's
 ; increment. CTRL's ADDRSEL bit chooses whose address ADDR_L, ADDR_M and ADDR_H show.
 .export .scope vera {
-    .data ADDR_L: .byte = $9F20
-    .data ADDR_M: .byte = $9F21
-    .data ADDR_H: .byte = $9F22     ; bit 16 of the address, and the increment in bits 4 to 7
-    .data DATA0:  .byte = $9F23
-    .data DATA1:  .byte = $9F24
-    .data CTRL:   .byte = $9F25     ; ADDRSEL in bit 0
+    .mmio ADDR_L: .byte = $9F20
+    .mmio ADDR_M: .byte = $9F21
+    .mmio ADDR_H: .byte = $9F22     ; bit 16 of the address, and the increment in bits 4 to 7
+    .mmio DATA0:  .byte = $9F23
+    .mmio DATA1:  .byte = $9F24
+    .mmio CTRL:   .byte = $9F25     ; ADDRSEL in bit 0
 
     .const ADDRSEL = %0000_0001
 
