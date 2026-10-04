@@ -429,6 +429,17 @@ internal sealed class Server : IDisposable
                 expansion.Refusal);
     }
 
+    /// <summary>
+    /// Returns where each value that the instruction at a position reads was set. On a call, the
+    /// values are the ones the routine called reads. The answer is for highlighting and feeds no
+    /// diagnostic.
+    /// </summary>
+    [JsonRpcMethod("nt65/sources")]
+    public async Task<SourcesResult?> SourcesAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
+        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
+            ? CaretSources.At(asked.Analysis, asked.Model, asked.Position)
+            : null;
+
     [JsonRpcMethod("textDocument/didOpen")]
     public async Task DidOpenAsync(DidOpenTextDocumentParams request, CancellationToken cancellation)
     {
