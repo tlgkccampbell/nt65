@@ -95,6 +95,7 @@ The extension carries the language server and runs it on the installed .NET 10 r
 | `nt65.server.path` | a language server to run in place of the one the extension carries |
 | `nt65.cli.path` | the `nt65` command the build tasks run, in place of the one on the path |
 | `nt65.inlayHints.stateChanges`, `.longBranches`, `.impliedValues`, `.parameterNames` | each kind of hint, on unless switched off |
+| `nt65.sources.chipLength` | the most characters the chips after the caret line may take, 40 unless set; a `+N` box counts the rest, and 0 means no limit |
 | `nt65.sources.enabled` | where the values an instruction reads were set, shown when the caret rests on it; on unless switched off, and **nt65: Toggle Input Sources** switches it |
 | `nt65.inlayHints.cycles` | cycle counts at the end of every instruction; off unless switched on |
 | `nt65.lineLength` | the longest a line may be before the editor suggests laying out a call's arguments, a set or a list of parameters one item to a line, or writing a list directive's items as a block, 100 unless set; 0 for no suggestion |

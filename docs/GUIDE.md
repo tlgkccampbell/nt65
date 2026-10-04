@@ -1644,7 +1644,9 @@ everything below works across modules.
   counts them where there is more than one. `A↰` means the routine's caller set it, and the
   line that opens the routine gets the same chip. `A↰ ×2` means some paths set it in the
   routine and some do not. `A?` means the analysis lost track of it on some path, at a call it
-  cannot follow or to a routine that does not say what it keeps. Hover the caret line for each
+  cannot follow or to a routine that does not say what it keeps. A call that reads many values
+  would fill the line, so the chips are held to 40 characters, registers first, and a `+N` box
+  counts the rest; `nt65.sources.chipLength` changes the limit. Hover the caret line for each
   source with its line and code, and for why the analysis lost track.
 
   **Shift+Alt+PageDown** and **Shift+Alt+PageUp** move the caret through the sources and back,

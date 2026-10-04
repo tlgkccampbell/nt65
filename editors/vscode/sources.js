@@ -89,6 +89,19 @@ function decorationTypes() {
   }
   // The hover on the caret line, which lists every input and source. It draws nothing.
   types.hover = vscode.window.createTextEditorDecorationType({});
+
+  // The `+N` box that says how many chips did not fit. It is made last, so it comes after the
+  // chips, and drawn in a neutral colour, because it stands for inputs of any colour.
+  const muted = new vscode.ThemeColor('descriptionForeground');
+  types.more = vscode.window.createTextEditorDecorationType({
+    after: {
+      color: muted,
+      border: '1px dotted',
+      borderColor: muted,
+      margin: '0 0 0 0.6em',
+      textDecoration: 'none; border-radius: 3px; padding: 0 3px; font-size: 90%',
+    },
+  });
   return types;
 }
 
@@ -149,6 +162,26 @@ function grouped(inputs) {
     known.through.push(...input.through);
   }
   return [...merged.values()];
+}
+
+// Splits a line's chips, given as [group, text] pairs in the order they are drawn, into the ones
+// that fit in `budget` characters and a count of the rest. A chip costs its text and a space.
+// Where some do not fit, room is kept for the `+N` box that counts them. A budget of 0 means no
+// limit.
+function fit(chips, budget) {
+  if (budget <= 0) return { shown: chips, hidden: 0 };
+  const cost = chips.reduce((sum, [, text]) => sum + text.length + 1, 0);
+  if (cost <= budget) return { shown: chips, hidden: 0 };
+  const shown = [];
+  let used = 0;
+  for (const chip of chips) {
+    const rest = chips.length - shown.length - 1;
+    const more = rest > 0 ? `+${rest}`.length + 1 : 0;
+    if (used + chip[1].length + 1 + more > budget) break;
+    shown.push(chip);
+    used += chip[1].length + 1;
+  }
+  return { shown, hidden: chips.length - shown.length };
 }
 
 // Writes a line of the document as inline code, for the hover.
@@ -286,37 +319,50 @@ class Sources {
     const document = editor.document;
     const visible = at => editor.visibleRanges.some(range => range.start.line <= at && at <= range.end.line);
     const caretEnd = document.lineAt(line).range.end;
+    const opener = result.routine.start.line;
+    const openerEnd = document.lineAt(opener).range.end;
+    const chips = [];
+    const entries = [];
     for (const group of GROUPS) {
       const sources = new Map();
       const guesses = new Map();
       const through = new Map();
-      const chips = [];
-      const entries = [];
       for (const input of grouped(result.inputs.filter(item => groupOf(item) === group))) {
         for (const source of input.sources) {
-          if (source.kind === 'entry') entries.push(`${input.name}↰`);
-          else if (source.kind !== 'unknown') {
+          if (source.kind === 'entry' && !entries.some(([, text]) => text === `${input.name}↰`)) {
+            entries.push([group, `${input.name}↰`]);
+          } else if (source.kind !== 'unknown' && source.kind !== 'entry') {
             addLabel(source.confidence === 'bestEffort' ? guesses : sources, source.range.start.line, input.name);
           }
         }
         for (const range of input.through) addLabel(through, range.start.line, input.name);
-        chips.push(chipOf(input, line, visible));
+        chips.push([group, chipOf(input, line, visible)]);
       }
       const types = this.types[group];
       editor.setDecorations(types.source, labelled(document, sources));
       editor.setDecorations(types.guess, labelled(document, guesses));
       editor.setDecorations(types.through, labelled(document, through));
-
-      // The chips go after the code on the caret line, and the routine's opening line gets a `↰`
-      // for each input that comes from the caller, which sticky scroll often keeps in sight.
-      const chipped = boxes(new vscode.Range(caretEnd, caretEnd), chips);
-      const opener = result.routine.start.line;
-      if (opener !== line) {
-        const end = document.lineAt(opener).range.end;
-        chipped.push(...boxes(new vscode.Range(end, end), [...new Set(entries)]));
-      }
-      editor.setDecorations(types.chip, chipped);
     }
+
+    // The chips go after the code on the caret line, and the routine's opening line gets a `↰`
+    // for each input that comes from the caller, which sticky scroll often keeps in sight. A call
+    // that reads many locations in memory would fill the line, so each line's chips are held to a
+    // length, registers first, and a `+N` box counts the rest, which the hover still lists.
+    const budget = vscode.workspace.getConfiguration('nt65').get('sources.chipLength') ?? 40;
+    const onCaret = fit(chips, budget);
+    const onOpener = opener === line ? { shown: [], hidden: 0 } : fit(entries, budget);
+    const at = end => new vscode.Range(end, end);
+    for (const group of GROUPS) {
+      const texts = shown => shown.filter(([owner]) => owner === group).map(([, text]) => text);
+      editor.setDecorations(this.types[group].chip, [
+        ...boxes(at(caretEnd), texts(onCaret.shown)),
+        ...boxes(at(openerEnd), texts(onOpener.shown)),
+      ]);
+    }
+    editor.setDecorations(this.types.more, [
+      ...(onCaret.hidden > 0 ? boxes(at(caretEnd), [`+${onCaret.hidden}`]) : []),
+      ...(onOpener.hidden > 0 ? boxes(at(openerEnd), [`+${onOpener.hidden}`]) : []),
+    ]);
     editor.setDecorations(this.types.hover, [{ range: document.lineAt(line).range, hoverMessage: hoverOf(document, result) }]);
   }
 
@@ -333,6 +379,7 @@ class Sources {
       for (const type of Object.values(this.types[group])) editor.setDecorations(type, []);
     }
     editor.setDecorations(this.types.hover, []);
+    editor.setDecorations(this.types.more, []);
     vscode.commands.executeCommand('setContext', ACTIVE, false);
   }
 
@@ -381,6 +428,7 @@ function register(context, client) {
   context.subscriptions.push(
     ...GROUPS.flatMap(group => Object.values(sources.types[group])),
     sources.types.hover,
+    sources.types.more,
     vscode.window.onDidChangeTextEditorSelection(event => sources.schedule(event.textEditor)),
     vscode.window.onDidChangeTextEditorVisibleRanges(event => {
       if (sources.shown && event.textEditor === sources.shown.editor) sources.render();
@@ -393,6 +441,7 @@ function register(context, client) {
     }),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('nt65.sources.enabled') && !sources.enabled) sources.clear();
+      if (event.affectsConfiguration('nt65.sources.chipLength')) sources.render();
     }),
     vscode.commands.registerCommand('nt65.nextSource', () => sources.step(true)),
     vscode.commands.registerCommand('nt65.previousSource', () => sources.step(false)),

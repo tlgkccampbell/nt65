@@ -396,6 +396,12 @@
           "default": [],
           "markdownDescription": "Globs, relative to the workspace folder and in the form of `files` in nt65.json, naming files whose problems are shown only while they are open, such as `tests/fixtures/**/*`. Every other file of every project is reported whether or not it is open. The files are still analyzed with their projects."
         },
+        "nt65.sources.chipLength": {
+          "type": "integer",
+          "default": 40,
+          "minimum": 0,
+          "description": "The most characters the chips after the caret line may take, and those on the line that opens the routine. Registers come first, then flags, widths and memory, and a `+N` box counts the chips that did not fit, which the hover still lists. 0 means no limit."
+        },
         "nt65.sources.enabled": {
           "type": "boolean",
           "default": true,
