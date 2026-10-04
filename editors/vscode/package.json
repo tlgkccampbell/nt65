@@ -398,7 +398,7 @@
         },
         "nt65.sources.chipLength": {
           "type": "integer",
-          "default": 40,
+          "default": 60,
           "minimum": 0,
           "description": "The most characters the chips after the caret line may take, and those on the line that opens the routine. Registers come first, then flags, widths and memory, and a `+N` box counts the chips that did not fit, which the hover still lists. 0 means no limit."
         },

@@ -262,7 +262,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 .OrderBy(span => span.Start)
                 .Select(span => $"`{tree.Text[span.Start..span.End].Trim()}` on line {tree.GetLineIndex(span.Start) + 1}")
                 .ToList();
-            var reason = doubts.Count == 0 ? null : "may also have been changed by " + string.Join(", ", doubts);
+            var reason = doubts.Count == 0 ? null : "or possibly " + string.Join(", ", doubts);
             var sources = new List<InputSource>();
             foreach (var origin in value.Origins)
             {

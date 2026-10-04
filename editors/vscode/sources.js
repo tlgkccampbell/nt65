@@ -191,11 +191,11 @@ function code(document, line) {
   return `${fence}${text}${fence}`;
 }
 
-// What the hover adds after a best-effort source: that it is a guess, and what else might have
-// changed the value since, where something might.
+// What the hover adds after a best-effort source: that it was inferred, and what else might have
+// changed the value since, where something might, as the server words it ("or possibly ...").
 function guessed(source) {
   if (source.confidence !== 'bestEffort') return '';
-  return source.reason ? `, a guess: it ${source.reason}` : ', a guess';
+  return source.reason ? ` (inferred), ${source.reason}` : ' (inferred)';
 }
 
 // The hover on the caret line: each input, each line that set it with the code on that line, and
@@ -348,7 +348,7 @@ class Sources {
     // for each input that comes from the caller, which sticky scroll often keeps in sight. A call
     // that reads many locations in memory would fill the line, so each line's chips are held to a
     // length, registers first, and a `+N` box counts the rest, which the hover still lists.
-    const budget = vscode.workspace.getConfiguration('nt65').get('sources.chipLength') ?? 40;
+    const budget = vscode.workspace.getConfiguration('nt65').get('sources.chipLength') ?? 60;
     const onCaret = fit(chips, budget);
     const onOpener = opener === line ? { shown: [], hidden: 0 } : fit(entries, budget);
     const at = end => new vscode.Range(end, end);
