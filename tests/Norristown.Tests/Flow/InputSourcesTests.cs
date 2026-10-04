@@ -99,6 +99,30 @@ public sealed class InputSourcesTests
         Assert.Equal(["C: cmp #1"], Sources(".proc p {\n    cmp #1\n    bcs @x\n@x:\n    rts\n}\n", "bcs @x"));
     }
 
+    /// <summary>
+    /// A branch on N, Z or V reads that flag. The flag's source is the last instruction that wrote
+    /// it, or the call that left it. A <c>plp</c> restores the flags a <c>php</c> saved.
+    /// </summary>
+    [Fact]
+    public void ABranchReadsTheFlagItTests()
+    {
+        Assert.Equal(["Z: lda #1"], Sources(".proc p {\n    lda #1\n    sta $10\n    beq @x\n@x:\n    rts\n}\n", "beq @x"));
+        Assert.Equal(["V: bit $10"], Sources(".proc p {\n    bit $10\n    bvs @x\n@x:\n    rts\n}\n", "bvs @x"));
+        Assert.Equal(
+            ["N: call jsr q"],
+            Sources(".proc q {\n    rts\n}\n.proc p {\n    lda #1\n    jsr q\n    bmi @x\n@x:\n    rts\n}\n", "bmi @x"));
+        Assert.Equal(
+            ["Z: cmp #1 via plp"],
+            Sources(".proc p {\n    cmp #1\n    php\n    lda #2\n    plp\n    beq @x\n@x:\n    rts\n}\n", "beq @x"));
+    }
+
+    /// <summary>An add reads the carry as well as the accumulator.</summary>
+    [Fact]
+    public void AnAddReadsTheCarry()
+    {
+        Assert.Equal(["A: lda #1", "C: clc"], Sources(".proc p {\n    clc\n    lda #1\n    adc #2\n    rts\n}\n", "adc #2"));
+    }
+
     /// <summary>A <c>.state keeps</c> says the register holds its entry value again, and is a through line.</summary>
     [Fact]
     public void AStateKeepsRestoresTheEntryValue()

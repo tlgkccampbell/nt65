@@ -23,6 +23,13 @@ namespace Norristown.Flow;
 /// </summary>
 internal sealed class SourceWalk
 {
+    /// <summary>
+    /// The flags this walk follows apart from the carry, which is followed with the registers, and
+    /// the value each is followed as.
+    /// </summary>
+    private static readonly (StatusFlags Flag, Tracked Tracked)[] Followed =
+        [(StatusFlags.Negative, Tracked.N), (StatusFlags.Zero, Tracked.Z), (StatusFlags.Overflow, Tracked.V)];
+
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly RegisterWalk registers;
@@ -137,7 +144,7 @@ internal sealed class SourceWalk
     /// Returns the state with each register that <paramref name="value"/> gives a value for set to
     /// it. A null value leaves the register as it was.
     /// </summary>
-    private static SourceState Registered(SourceState state, Func<Registers, SourceValue?> value)
+    private static SourceState EachRegister(SourceState state, Func<Registers, SourceValue?> value)
     {
         foreach (var register in RegisterEffects.Each(Registers.All))
         {
@@ -181,6 +188,34 @@ internal sealed class SourceWalk
     /// </summary>
     private SourceState Step(Step step, SourceState state, Step? next)
     {
+        var after = Registered(step, state, next);
+        if (step.Statement is not InstructionStatementSyntax { MnemonicKind: var mnemonic } statement
+            || mnemonic is MnemonicKind.Plp or MnemonicKind.Rti or MnemonicKind.Brk or MnemonicKind.Cop
+            || Instructions.IsCall(mnemonic))
+        {
+            return after;
+        }
+
+        // N, Z and V are set by whatever instruction last wrote them. `plp` and `rti` restore
+        // them, a software interrupt loses them, and a call sets them, all of which are handled
+        // with the registers.
+        var flags = FlagEffects.Written(mnemonic, layout.Of(statement, step.On)?.Mode, StepOperands.Immediate(model, layout, step));
+        var wrote = Wrote(step, RegisterValue.Written);
+        foreach (var (flag, tracked) in Followed)
+        {
+            if (flags.HasFlag(flag))
+                after = after.With(tracked, wrote);
+        }
+        return after;
+    }
+
+    /// <summary>
+    /// Returns where each register's value was set after one statement, and where the flags were
+    /// set after a statement that restores or loses them. <paramref name="next"/> is the step after
+    /// it in its block, where there is one.
+    /// </summary>
+    private SourceState Registered(Step step, SourceState state, Step? next)
+    {
         if (step.Statement is StateDirectiveSyntax)
             return Asserted(step, state);
         if (step.Statement is not InstructionStatementSyntax statement)
@@ -210,9 +245,13 @@ internal sealed class SourceWalk
         // because `rti` pulls the flags the interrupt pushed.
         if (mnemonic == MnemonicKind.Rti)
         {
-            return state.With(Registers.C, state.Stack is { IsEmpty: true }
-                ? SourceValue.Of(Origin.Entry, RegisterValue.Of(Registers.C)).Via(step.Key)
-                : SourceValue.Unknown(step.Key));
+            foreach (var flag in SourceState.Flags)
+            {
+                state = state.With(flag, state.Stack is { IsEmpty: true }
+                    ? SourceValue.Of(Origin.Entry, SourceState.EntryValue(flag)).Via(step.Key)
+                    : SourceValue.Unknown(step.Key));
+            }
+            return state;
         }
 
         if (facts.Pushes is { } push)
@@ -261,8 +300,11 @@ internal sealed class SourceWalk
     /// </summary>
     private SourceState Calls(BasicBlock block, Step step, SourceState state)
     {
+        var called = SourceValue.Of(new Origin(SourceKind.Call, step.Key), RegisterValue.Unknown);
+        foreach (var (_, tracked) in Followed)
+            state = state.With(tracked, called);
         if (block.CallsUnknown || block.Calls.Count == 0)
-            return Registered(state, _ => SourceValue.Unknown(step.Key));
+            return EachRegister(state, _ => SourceValue.Unknown(step.Key));
 
         // A call through a pointer whose `.next` names several routines brings back what any one
         // of them may have left.
@@ -270,9 +312,9 @@ internal sealed class SourceWalk
         foreach (var callee in block.Calls)
         {
             var contract = of(callee);
-            var left = Registered(state, register =>
+            var left = EachRegister(state, register =>
                 contract.Kept.HasFlag(register) ? null
-                : contract.Complete ? SourceValue.Of(new Origin(SourceKind.Call, step.Key), RegisterValue.Unknown)
+                : contract.Complete ? called
                 : SourceValue.Unknown(step.Key));
             foreach (var register in RegisterEffects.Each(contract.Kept))
             {

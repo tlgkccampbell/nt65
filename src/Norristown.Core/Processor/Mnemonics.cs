@@ -164,40 +164,15 @@ public static class Mnemonics
     {
         if (mnemonic is Rep or Sep)
             return constant is { } mask ? Format(mask) : "all";
-        if (mnemonic is Plp or Rti)
-            return "all";
-
-        // The 65C02 and the 65816 read an immediate `bit` as a mask test and leave N and V
-        // alone; every other form copies the two high bits of what it read.
-        if (mnemonic == Bit)
-            return mode == AddressingMode.Immediate ? "Z" : "N V Z";
+        var written = FlagEffects.Written(mnemonic, mode, constant);
 
         // The NMOS 6502 leaves the decimal flag unchanged when it takes an interrupt, a trap
         // every CMOS part closed by clearing the flag.
-        if (mnemonic is Brk or Cop)
-            return cpu == Cpu.Mos6502 ? "I" : "D I";
-        return Bare(mnemonic) switch
-        {
-            Adc or Sbc => "N V Z C",
-            Cmp or Cpx or Cpy => "N Z C",
-            Asl or Lsr or Rol or Ror => "N Z C",
-            And or Eor or Ora or Lda or Ldx or Ldy => "N Z",
-
-            // Each undocumented opcode writes the flags its pair of documented instructions writes.
-            Rra or Isc or Arr => "N V Z C",
-            Slo or Rla or Sre or Dcp or Alr or Anc or Axs => "N Z C",
-            Lax or Las or Ane => "N Z",
-            Inc or Dec or Inx or Dex or Iny or Dey => "N Z",
-            Pla or Plx or Ply or Plb or Pld => "N Z",
-            Tax or Tay or Txa or Tya or Tsx or Txy or Tyx => "N Z",
-            Tcd or Tdc or Tsc or Xba => "N Z",
-            Trb or Tsb => "Z",
-            Clc or Sec or Xce => "C",
-            Cld or Sed => "D",
-            Cli or Sei => "I",
-            Clv => "V",
-            _ => null,
-        };
+        if (mnemonic is Brk or Cop && cpu == Cpu.Mos6502)
+            written &= ~StatusFlags.Decimal;
+        return written == StatusFlags.None ? null
+            : written == FlagEffects.All ? "all"
+            : Format((long)written);
     }
 
     /// <summary>

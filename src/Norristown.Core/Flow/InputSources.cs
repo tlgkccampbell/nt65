@@ -25,6 +25,13 @@ namespace Norristown.Flow;
 public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> Inputs)
 {
     /// <summary>
+    /// The flags apart from the carry that an instruction may read, each with the value the walk
+    /// follows it as and the name it is reported under. The carry is reported with the registers.
+    /// </summary>
+    private static readonly (StatusFlags Flag, Tracked Tracked, string Name)[] Flags =
+        [(StatusFlags.Negative, Tracked.N, "N"), (StatusFlags.Zero, Tracked.Z, "Z"), (StatusFlags.Overflow, Tracked.V, "V")];
+
+    /// <summary>
     /// Returns where each input of the instruction on the line at <paramref name="position"/> in
     /// <paramref name="model"/>'s file was set. It returns null where the line holds no instruction,
     /// where the line is inside a macro's definition, whose expansions would each give a different
@@ -107,6 +114,12 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
         var statement = (InstructionStatementSyntax)step.Statement;
         foreach (var register in RegisterEffects.Each(ReadBy(walk, step, statement)))
             yield return Register(register, walk.Read(step, register, state));
+        var flags = FlagEffects.Read(statement.MnemonicKind);
+        foreach (var (flag, tracked, name) in Flags)
+        {
+            if (flags.HasFlag(flag))
+                yield return ((int)tracked, name, InputCategory.Flag, state.Of(tracked));
+        }
     }
 
     /// <summary>Returns the registers the instruction at <paramref name="step"/> reads.</summary>
