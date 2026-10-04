@@ -3,7 +3,7 @@
 
 .export install_blob as "_install_blob", call_blob as "_call_blob"
 
-.const BLOB_ADDR = $0300
+.data BLOB_ADDR: .byte = $0300
 
 .proc run_blob = BLOB_ADDR
 

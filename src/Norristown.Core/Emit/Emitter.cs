@@ -433,7 +433,7 @@ public sealed class Emitter
     /// of a library.
     /// <para>
     /// A constant is not imported, because ca65 cannot use an imported symbol where it needs a
-    /// value, so the constant is written out here instead. A checked import yields both the value
+    /// value, so the constant is written out here instead, and so is data at a fixed address. A checked import yields both the value
     /// nt65 uses and an assertion that the definition it will be linked against agrees.
     /// </para>
     /// </summary>
@@ -507,6 +507,13 @@ public sealed class Emitter
     private string? Import(Symbol symbol)
     {
         var name = NameOf(symbol);
+
+        // Data at a fixed address, such as a hardware register, is written out by value as a
+        // constant is. nt65 often writes it as a number where it is used, as `z:$04` for a
+        // register reached through the direct page, and an import nothing then used would draw
+        // a warning from ca65.
+        if (symbol.Kind == SymbolKind.AddressAlias && symbol.Value.AsNumber() is { } fixedAt)
+            return $"{name} = {Constant(fixedAt)}";
         if (symbol.IsAddress || symbol.Kind == SymbolKind.ImportedConstant)
             return LinkageDirective(".import", symbol.AddressSizeIn(model.Tree), name);
 

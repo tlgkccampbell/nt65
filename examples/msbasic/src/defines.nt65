@@ -93,8 +93,8 @@
 .export .const FOR_STACK2         = BYTES_FP + 4
 .export .const MAX_EXPON          = .select(CBM1, 12, 10)
 
-.export .const STACK  = $0100
-.export .const STACK2 = .select(AIM65, $0200, STACK)
+.export .data STACK:  .byte = $0100
+.export .data STACK2: .byte = .select(AIM65, $0200, STACK)
 
 .export .const CR = 13
 .export .const LF = 10
@@ -115,10 +115,10 @@
     .export .const CRLF_1 = CR
     .export .const CRLF_2 = LF
 
-    .export .const CURDVC  = .select(CBM1, $0003, $000E)
-    .export .const TISTR   = .select(CBM1, $0200, $008D)
-    .export .const Z96     = .select(CBM1, $020C, $0096)
-    .export .const ENTROPY = .select(CBM1, $9044, $E844)
+    .export .data CURDVC:  .byte = .select(CBM1, $0003, $000E)
+    .export .data TISTR:   .byte = .select(CBM1, $0200, $008D)
+    .export .data Z96:     .byte = .select(CBM1, $020C, $0096)
+    .export .mmio ENTROPY: .byte = .select(CBM1, $9044, $E844)
 
     ; the KERNAL
     .export .proc OPEN = $FFC0
@@ -201,8 +201,8 @@
     .export .const RAMSTART2       = $0300
     .export .const CONST_MEMSIZ    = $3FFF
 
-    .export .const Z96   = $0096
-    .export .const L06FE = $06FE
+    .export .data Z96:   .byte = $0096
+    .export .data L06FE: .byte = $06FE
 
     .export .proc L6874 = $6874
     .export .proc MONCOUT = $FDFA
@@ -254,11 +254,11 @@
     .export .const WIDTH2          = 10
     .export .const RAMSTART2       = $0211
 
-    .export .const PRIFLG = $A411
-    .export .const INFLG  = $A412
-    .export .const OUTFLG = $A413
-    .export .const DRA2   = $A480
-    .export .const DRB2   = $A482
+    .export .data PRIFLG: .byte = $A411
+    .export .data INFLG:  .byte = $A412
+    .export .data OUTFLG: .byte = $A413
+    .export .mmio DRA2:   .byte = $A480
+    .export .mmio DRB2:   .byte = $A482
 
     .export .proc DU13 = $E520
     .export .proc PSLS = $E7DC
@@ -283,8 +283,8 @@
     .export .const WIDTH2          = 56
     .export .const RAMSTART2       = $0200
 
-    .export .const ZD3 = $D3
-    .export .const ZD4 = $D4
+    .export .data ZD3: .byte = $D3
+    .export .data ZD4: .byte = $D4
 
     .export .proc ASCNIB = $8275
     .export .proc INSTAT = $8386
@@ -294,11 +294,11 @@
     .export .const L8C78 = $8C78
     .export .const DUMPT = $8E87
 
-    .export .const P3L = $A64A
-    .export .const P3H = P3L + 1
-    .export .const P2L = $A64C
-    .export .const P2H = P2L + 1
-    .export .const P1L = $A64E
+    .export .data P3L: .byte = $A64A
+    .export .data P3H: .byte = P3L + 1
+    .export .data P2L: .byte = $A64C
+    .export .data P2H: .byte = P2L + 1
+    .export .data P1L: .byte = $A64E
 }
 
 .if W65C816SXB {

@@ -5,27 +5,27 @@
 .cpu 6502
 
 ; The PPU's ports.
-.export .const PPUCTRL   = $2000    ; the NMI, the sprites' pattern table and the nametable shown
-.export .const PPUMASK   = $2001    ; what the PPU draws
-.export .const PPUSTATUS = $2002    ; whether vblank has started; reading it resets the latch
-.export .const OAMADDR   = $2003    ; where in OAM a DMA starts
-.export .const PPUSCROLL = $2005    ; written twice, across and then down
-.export .const PPUADDR   = $2006    ; the VRAM address, written twice, high byte first
-.export .const PPUDATA   = $2007    ; a byte of VRAM, after which the address steps
+.export .mmio PPUCTRL:   .byte = $2000  ; the NMI, the sprites' pattern table and the nametable shown
+.export .mmio PPUMASK:   .byte = $2001  ; what the PPU draws
+.export .mmio PPUSTATUS: .byte = $2002  ; whether vblank has started; reading it resets the latch
+.export .mmio OAMADDR:   .byte = $2003  ; where in OAM a DMA starts
+.export .mmio PPUSCROLL: .byte = $2005  ; written twice, across and then down
+.export .mmio PPUADDR:   .byte = $2006  ; the VRAM address, written twice, high byte first
+.export .mmio PPUDATA:   .byte = $2007  ; a byte of VRAM, after which the address steps
 
 ; The APU's ports, and the joypads'.
-.export .const PULSE1_VOLUME = $4000  ; pulse 1's duty and volume
-.export .const PULSE1_SWEEP  = $4001  ; pulse 1's sweep
-.export .const PULSE1_LOW    = $4002  ; the low byte of pulse 1's period
-.export .const PULSE1_HIGH   = $4003  ; the period's high bits and the length counter
-.export .const DMC_FREQ      = $4010  ; the sample channel's rate, its loop and its IRQ
-.export .const DMC_RAW       = $4011  ; the sample channel's output level
-.export .const DMC_START     = $4012  ; where the sample starts, as (address - $C000) / 64
-.export .const DMC_LENGTH    = $4013  ; how long the sample is, as (bytes - 1) / 16
-.export .const OAMDMA        = $4014  ; written with a page, whose 256 bytes it copies to OAM
-.export .const SND_CHN       = $4015  ; which channels play
-.export .const JOY1          = $4016  ; written to latch the joypads, and read for joypad 1's buttons
-.export .const FRAME_COUNTER = $4017  ; the APU's frame counter, and its IRQ
+.export .mmio PULSE1_VOLUME: .byte = $4000  ; pulse 1's duty and volume
+.export .mmio PULSE1_SWEEP:  .byte = $4001  ; pulse 1's sweep
+.export .mmio PULSE1_LOW:    .byte = $4002  ; the low byte of pulse 1's period
+.export .mmio PULSE1_HIGH:   .byte = $4003  ; the period's high bits and the length counter
+.export .mmio DMC_FREQ:      .byte = $4010  ; the sample channel's rate, its loop and its IRQ
+.export .mmio DMC_RAW:       .byte = $4011  ; the sample channel's output level
+.export .mmio DMC_START:     .byte = $4012  ; where the sample starts, as (address - $C000) / 64
+.export .mmio DMC_LENGTH:    .byte = $4013  ; how long the sample is, as (bytes - 1) / 16
+.export .mmio OAMDMA:        .byte = $4014  ; written with a page, whose 256 bytes it copies to OAM
+.export .mmio SND_CHN:       .byte = $4015  ; which channels play
+.export .mmio JOY1:          .byte = $4016  ; written to latch the joypads, and read for joypad 1's buttons
+.export .mmio FRAME_COUNTER: .byte = $4017  ; the APU's frame counter, and its IRQ
 
 .export .const NMI_ON     = $80     ; PPUCTRL: an NMI at the start of each vblank
 .export .const SPRITES_HI = $08     ; PPUCTRL: the sprites' tiles are at $1000

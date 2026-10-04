@@ -12,8 +12,8 @@
 ; ANTIC's registers, and the instructions of a display list, which ANTIC reads one at a time to
 ; draw the screen.
 .export .scope antic {
-    .const WSYNC = $D40A            ; a write holds the CPU until the end of the line
-    .const NMIEN = $D40E            ; bit 7 enables the display list interrupt, bit 6 the vertical blank's
+    .mmio WSYNC: .byte = $D40A      ; a write holds the CPU until the end of the line
+    .mmio NMIEN: .byte = $D40E      ; bit 7 enables the display list interrupt, bit 6 the vertical blank's
 
     .const BLANK8 = $70             ; eight blank lines
     .const TEXT   = $02             ; a line of 40 characters, each 8 lines high
@@ -28,25 +28,25 @@
 
 ; GTIA's colour registers. A colour is a hue in the high nibble and a luminance in the low.
 .export .scope gtia {
-    .const COLBK = $D01A            ; the border, and blank lines
+    .mmio COLBK: .byte = $D01A      ; the border, and blank lines
 }
 
 ; The operating system's variables, shadows and vectors, and its routines.
 .export .scope os {
-    .const DOSVEC = $000A           ; where DOS is entered, or the loader when there is no DOS
-    .const RTCLOK = $0014           ; the low byte of the frame counter, which the vertical blank counts up
-    .const RAMTOP = $006A           ; the page after the last of RAM, below any cartridge
+    .data DOSVEC: .byte = $000A     ; where DOS is entered, or the loader when there is no DOS
+    .data RTCLOK: .byte = $0014     ; the low byte of the frame counter, which the vertical blank counts up
+    .data RAMTOP: .byte = $006A     ; the page after the last of RAM, below any cartridge
 
     .data VDSLST: .addr = $0200     ; where the display list interrupt goes
     .data VVBLKD: .addr = $0224     ; the deferred vertical blank, which ends by jumping to XITVBV at $E462
 
-    .const SDMCTL = $022F           ; what ANTIC fetches; 0 turns the screen off
+    .data SDMCTL: .byte = $022F     ; what ANTIC fetches; 0 turns the screen off
     .data SDLSTL: .addr = $0230     ; the display list's address
-    .const COLOR0 = $02C4           ; the characters of a LARGE line
-    .const COLOR1 = $02C5           ; the characters' luminance in a TEXT line
-    .const COLOR2 = $02C6           ; the background of a TEXT line
-    .const COLOR4 = $02C8           ; gtia::COLBK's shadow
-    .data MEMLO: .addr = $02E7      ; the first address DOS leaves free
+    .data COLOR0: .byte = $02C4     ; the characters of a LARGE line
+    .data COLOR1: .byte = $02C5     ; the characters' luminance in a TEXT line
+    .data COLOR2: .byte = $02C6     ; the background of a TEXT line
+    .data COLOR4: .byte = $02C8     ; gtia::COLBK's shadow
+    .data MEMLO:  .addr = $02E7     ; the first address DOS leaves free
 
     ; Points the vector that A names at the routine whose address is in Y (low) and X (high): 6
     ; names the immediate vertical blank, 7 the deferred, and 1 to 5 the countdown timers.

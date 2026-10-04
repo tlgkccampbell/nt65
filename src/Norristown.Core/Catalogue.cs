@@ -3784,6 +3784,18 @@ public static class Catalogue
             + "reaches the return, it can go too, which saves a byte. The suggestion is not made for a routine that "
             + "reads what follows its call, takes arguments on the stack, or never returns.");
 
+    internal static DiagnosticDescriptor ConstantUsedAsAddress { get; } = Entry(
+        Area.Suggestions,
+        "constant-used-as-address",
+        Severity.Info,
+        "`{0}` is used as an address; declaring it as data says what is there, or with `.mmio` that it is a hardware register",
+        "A constant is a number to nt65, even where an instruction reaches memory through it, so what is at that "
+            + "address has no element type, size or fields, and the editor cannot follow values stored there. Declared "
+            + "as data found elsewhere, `.data name: .byte = address`, the same name has all of those, and with "
+            + "`.mmio` in place of `.data` it is a hardware register, whose value the hardware sets. The output is the "
+            + "same. A constant that a branch, a jump or a call names directly is the address of code, and is not "
+            + "suggested.");
+
     internal static DiagnosticDescriptor WidthAlreadySet { get; } = Entry(
         Area.Suggestions,
         "width-already-set",
@@ -3867,6 +3879,6 @@ public static class Catalogue
             new("Signatures", "What a routine or macro signature may declare, and what a signature set may hold.");
 
         public static DiagnosticArea Suggestions { get; } =
-            new("Suggestions", "Changes that make code smaller or faster, which only the editor shows.");
+            new("Suggestions", "Changes that make code smaller, faster or clearer about what it means, which only the editor shows.");
     }
 }

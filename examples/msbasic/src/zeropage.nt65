@@ -145,7 +145,7 @@
 } .elseif SYM1 {
     .export .data INPUTBUFFER: .byte = $001E
 }
-.export .const INPUTBUFFERX = .select(CONFIG_NO_INPUTBUFFER_ZP, INPUTBUFFER & $FF00, 0)
+.export .data INPUTBUFFERX: .byte = .select(CONFIG_NO_INPUTBUFFER_ZP, INPUTBUFFER & $FF00, 0)
 
 .if CBM1 || CBM2 {
     .export .data USR: .byte[3] = GORESTART

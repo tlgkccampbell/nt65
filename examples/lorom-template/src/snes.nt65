@@ -24,7 +24,7 @@
 
 ; S-PPU configuration ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const PPUBRIGHT  = $2100
+.export .mmio PPUBRIGHT: .byte = $2100
 ; 76543210
 ; |   ++++- brightness (F: max)
 ; +-------- 1: disable rendering
@@ -36,7 +36,7 @@
 ; "Negative."
 .export .const FORCEBLANK = $80
 
-.export .const PPURES       = $2133
+.export .mmio PPURES: .byte = $2133
 ; 76543210
 ; ||  |||+- Screen interlace
 ; ||  ||+-- Shrink sprites vertically during interlace
@@ -51,14 +51,14 @@
 .export .const SUB_HIRES    = $08
 .export .const M7_EXTBG     = $40
 
-.export .const PPUSTATUS1 = $213E
+.export .mmio PPUSTATUS1: .byte = $213E
 ; 76543210  PPU address generator status
 ; ||  ++++- PPU1 version (always 1)
 ; |+------- 1: sprite overflow (>32 on a line) since the last vblank end
 ; +-------- 1: sliver overflow (>34 on a line) since the last vblank end
 ; this parallels bit 5 of $2002 on NES
 
-.export .const PPUSTATUS2 = $213F
+.export .mmio PPUSTATUS2: .byte = $213F
 ; 76543210  PPU compositor status
 ; || |++++- PPU2 version (1-3, not counting minor versions of 3)
 ; || +----- 1: PPU is configured for 50 Hz (PAL)
@@ -67,7 +67,7 @@
 
 ; S-PPU sprites ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const OBSEL        = $2101
+.export .mmio OBSEL: .byte = $2101
 ; 76543210
 ; ||||| ++- Sprite main pattern table (0=$0000, 1=$2000, 2=$4000, 3=$6000)
 ; |||++---- Alt pattern table offset (0=$1000, 1=$2000, 2=$3000, 3=$4000)
@@ -80,9 +80,9 @@
 .export .const OBSIZE_16_64 = $80
 .export .const OBSIZE_32_64 = $A0
 
-.export .const OAMADDR   = $2102    ; 16-bit, 128 sprites followed by high-X/size table
-.export .const OAMDATA   = $2104
-.export .const OAMDATARD = $2138
+.export .mmio OAMADDR:   .word = $2102  ; 16-bit, 128 sprites followed by high-X/size table
+.export .mmio OAMDATA:   .byte = $2104
+.export .mmio OAMDATARD: .byte = $2138
 ; Parallels NES $2003, except apparently word-addressed.
 ; OAM random access is working here, unlike on NES.
 ; If bit 15 is set, value at start of frame apparently also
@@ -90,7 +90,7 @@
 
 ; S-PPU background configuration ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const BGMODE = $2105
+.export .mmio BGMODE: .byte = $2105
 ; 76543210
 ; |||||+++- 0: 4 planes 2 bpp
 ; |||||     1: 2 planes 4 bpp, 1 plane 2 bpp
@@ -108,7 +108,7 @@
 ;           Modes 5 and 6 use 16x8 instead of 8x8
 ;           Mode 7 always uses 8x8
 
-.export .const MOSAIC = $2106
+.export .mmio MOSAIC: .byte = $2106
 ; 76543210
 ; |||||||+- Apply mosaic to plane 0 (or mode 7 high-prio horizontal)
 ; ||||||+-- Apply mosaic to plane 1 (or mode 7 high-prio vertical)
@@ -116,7 +116,7 @@
 ; ||||+---- Apply mosaic to plane 3
 ; ++++----- Pixel size minus 1 (0=1x1, 15=16x16)
 
-.export .const NTADDR = $2107       ; through $210A
+.export .mmio NTADDR: .byte[4] = $2107  ; through $210A
 ; 76543210
 ;  ||||||+- Nametable width (0: 1 screen, 1: 2 screens)
 ;  |||||+-- Nametable height (0: 1 screen, 1: 2 screens)
@@ -124,14 +124,14 @@
 ; Each nametable in modes 0-6 is 32 rows, each 32 spaces long.
 .export .func NTXY(xc, yc) = xc | (yc << 5)
 
-.export .const BGCHRADDR = $210B
+.export .mmio BGCHRADDR: .byte[2] = $210B
 ; FEDCBA98 76543210
 ;  ||| |||  ||| +++- Pattern table base address for plane 0
 ;  ||| |||  +++----- Same for plane 1
 ;  ||| +++---------- Same for plane 2
 ;  +++-------------- Same for plane 3
 
-.export .const M7SEL       = $211A
+.export .mmio M7SEL: .byte = $211A
 ; 76543210
 ; ||    ||
 ; ||    |+- Flip screen horizontally
@@ -146,8 +146,8 @@
 
 ; S-PPU scrolling ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const BGSCROLLX = $210D    ; double write low then high (000-3FF m0-6, 000-7FF m7)
-.export .const BGSCROLLY = $210E    ; similar. reg 210F-2114 are same for other planes
+.export .mmio BGSCROLLX: .byte[7] = $210D  ; double write low then high (000-3FF m0-6, 000-7FF m7)
+.export .mmio BGSCROLLY: .byte[7] = $210E  ; similar. reg 210F-2114 are same for other planes
 ; Hi-res scrolling in modes 5-6 moves by whole (sub+main) pixels in X
 ; but half scanlines in Y.
 ; The top visible line is the line below the value written here.
@@ -161,7 +161,7 @@
 
 ; S-PPU VRAM data port ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const PPUCTRL     = $2115
+.export .mmio PPUCTRL: .byte = $2115
 ; 76543210
 ; |   ||++- VRAM address increment (1, 32, 128, 128)
 ; |   ++--- Rotate low bits of address left by 3 (off, 8, 9, or 10)
@@ -171,37 +171,37 @@
 .export .const VRAM_M7DOWN = $02
 .export .const INC_DATAHI  = $80
 
-.export .const PPUADDR     = $2116  ; Word address, not double-write anymore
-.export .const PPUDATA     = $2118
-.export .const PPUDATAHI   = $2119
-.export .const PPUDATARD   = $2139  ; Same dummy read as on NES is needed
-.export .const PPUDATARDHI = $213A
+.export .mmio PPUADDR:     .word = $2116  ; Word address, not double-write anymore
+.export .mmio PPUDATA:     .word = $2118
+.export .mmio PPUDATAHI:   .byte = $2119
+.export .mmio PPUDATARD:   .byte = $2139  ; Same dummy read as on NES is needed
+.export .mmio PPUDATARDHI: .byte = $213A
 
 ; S-PPU palette ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const CGADDR   = $2121
-.export .const CGDATA   = $2122     ; 5-bit BGR, write twice, low byte first
-.export .const CGDATARD = $213B     ; 5-bit BGR, read twice, low byte first
+.export .mmio CGADDR:   .byte = $2121
+.export .mmio CGDATA:   .byte = $2122  ; 5-bit BGR, write twice, low byte first
+.export .mmio CGDATARD: .byte = $213B  ; 5-bit BGR, read twice, low byte first
 .export .func RGB(r, g, b) = r | (g << 5) | (b << 10)
 
 ; S-PPU window ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const BG12WINDOW = $2123
-.export .const BG34WINDOW = $2124
-.export .const OBJWINDOW  = $2125
+.export .mmio BG12WINDOW: .byte = $2123
+.export .mmio BG34WINDOW: .byte = $2124
+.export .mmio OBJWINDOW:  .byte = $2125
 ; 76543210
 ; ||||||++- 0: disable window 1 on BG1/BG3/OBJ; 2: enable; 3: enable outside
 ; ||||++--- 0: disable window 2 on BG1/BG3/OBJ; 2: enable; 3: enable outside
 ; ||++----- 0: disable window 1 on BG2/BG4; 2: enable; 3: enable outside
 ; ++------- 0: disable window 2 on BG2/BG4; 2: enable; 3: enable outside
 
-.export .const WINDOW1L = $2126
-.export .const WINDOW1R = $2127
-.export .const WINDOW2L = $2128
-.export .const WINDOW2R = $2129
+.export .mmio WINDOW1L: .byte = $2126
+.export .mmio WINDOW1R: .byte = $2127
+.export .mmio WINDOW2L: .byte = $2128
+.export .mmio WINDOW2R: .byte = $2129
 
-.export .const BGWINDOP  = $212A    ; Window op is how windows are combined when both
-.export .const OBJWINDOP = $212B    ; windows 1 and 2 are enabled.
+.export .mmio BGWINDOP:  .byte = $212A  ; Window op is how windows are combined when both
+.export .mmio OBJWINDOP: .byte = $212B  ; windows 1 and 2 are enabled.
 ; 76543210
 ; ||||||++- Window op for plane 0 or sprites (0: or, 1: and, 2: xor, 3: xnor)
 ; ||||++--- Window op for plane 1 or color window
@@ -212,10 +212,10 @@
 
 ; The main layer enable reg, corresponding to PPUMASK on the NES,
 ; is BLENDMAIN.
-.export .const BLENDMAIN  = $212C   ; Layers enabled for main input of blending
-.export .const BLENDSUB   = $212D   ; Layers enabled for sub input of blending
-.export .const WINDOWMAIN = $212E   ; Windows enabled for main input of blending
-.export .const WINDOWSUB  = $212F   ; Windows enabled for sub input of blending
+.export .mmio BLENDMAIN:  .byte = $212C  ; Layers enabled for main input of blending
+.export .mmio BLENDSUB:   .byte = $212D  ; Layers enabled for sub input of blending
+.export .mmio WINDOWMAIN: .byte = $212E  ; Windows enabled for main input of blending
+.export .mmio WINDOWSUB:  .byte = $212F  ; Windows enabled for sub input of blending
 ; 76543210
 ;    ||||+- plane 0
 ;    |||+-- plane 1
@@ -233,26 +233,26 @@
 
 ; When BGMODE is 0-6 (or during vblank in mode 7), a fast 16x8
 ; signed multiply is available, finishing by the next CPU cycle.
-.export .const M7MCAND    = $211B   ; write low then high
-.export .const M7MUL      = $211C   ; 8-bit factor
-.export .const M7PRODLO   = $2134
-.export .const M7PRODHI   = $2135
-.export .const M7PRODBANK = $2136
+.export .mmio M7MCAND:    .byte = $211B  ; write low then high
+.export .mmio M7MUL:      .byte = $211C  ; 8-bit factor
+.export .mmio M7PRODLO:   .byte = $2134
+.export .mmio M7PRODHI:   .byte = $2135
+.export .mmio M7PRODBANK: .byte = $2136
 
-.export .const GETXY  = $2137       ; read while $4201 D7 is set: populate x and y coords
-.export .const XCOORD = $213C       ; used with light guns, read twice
-.export .const YCOORD = $213D       ; also read twice
+.export .mmio GETXY:  .byte = $2137  ; read while $4201 D7 is set: populate x and y coords
+.export .mmio XCOORD: .byte = $213C  ; used with light guns, read twice
+.export .mmio YCOORD: .byte = $213D  ; also read twice
 
 ; SPC700 communication ports ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const APU0 = $2140
-.export .const APU1 = $2141
-.export .const APU2 = $2142
-.export .const APU3 = $2143
+.export .mmio APU0: .byte = $2140
+.export .mmio APU1: .byte = $2141
+.export .mmio APU2: .byte = $2142
+.export .mmio APU3: .byte = $2143
 
 ; S-CPU interrupt control ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const PPUNMI     = $4200
+.export .mmio PPUNMI: .byte = $4200
 ; 76543210
 ; | ||   +- Automatically read controllers in first 4 lines of vblank
 ; | ++----- 0: no IRQ (and acknowledge any pending); 1: IRQs at HTIME;
@@ -264,28 +264,28 @@
 .export .const HVTIME_IRQ = $30
 .export .const AUTOREAD   = $01
 
-.export .const HTIME   = $4207
-.export .const HTIMEHI = $4208
-.export .const VTIME   = $4209
-.export .const VTIMEHI = $420A
+.export .mmio HTIME:   .byte = $4207
+.export .mmio HTIMEHI: .byte = $4208
+.export .mmio VTIME:   .byte = $4209
+.export .mmio VTIMEHI: .byte = $420A
 
-.export .const NMISTATUS = $4210    ; read to acknowledge NMI
+.export .mmio NMISTATUS: .byte = $4210  ; read to acknowledge NMI
 ; 76543210
 ; |   ||||
 ; |   ++++- DMA controller version (1, 2) where v1 has an HDMA glitch
 ; +-------- 1: Vblank has started since last read (like $2002.d7 on NES)
 
 ; bit 7: htime/vtime IRQ occurred since last read; read to acknowledge
-.export .const TIMESTATUS = $4211
+.export .mmio TIMESTATUS: .byte = $4211
 
-.export .const VBLSTATUS = $4212
+.export .mmio VBLSTATUS: .byte = $4212
 ; 76543210
 ; ||     +- 0: Controller reading finished; 1: busy
 ; |+------- 1: In hblank (including hblank of vblank)
 ; +-------- 1: In vblank
 
 ; 0: slow ROM everywhere; 1: fast ROM in banks 80-FF (requires 120ns or faster PRG ROM)
-.export .const ROMSPEED = $420D
+.export .mmio ROMSPEED: .byte = $420D
 
 ; S-CPU controller I/O ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -294,22 +294,22 @@
 ; as you can enable controller autoreading along with vblank NMIs.
 ; But for games using (multitap, mouse, etc.), you will need to
 ; read the extra bits separately after the autoreader finishes.
-.export .const JOY0 = $4016
-.export .const JOY1 = $4017
+.export .mmio JOY0: .byte = $4016
+.export .mmio JOY1: .byte = $4017
 
 ; In addition to the common strobe, each controller port has an
 ; additional output bit that can be used as, say, a chip select
 ; for SPI peripherals.
-.export .const JOYOUT = $4201
+.export .mmio JOYOUT: .byte = $4201
 ; 76543210
 ; |+------- Controller 1 pin 6 output
 ; +-------- Controller 2 pin 6 output
 
 ; Results of the autoreader
-.export .const JOY1CUR   = $4218    ; Bit 0: used by standard controllers
-.export .const JOY2CUR   = $421A
-.export .const JOY1B1CUR = $421C    ; Bit 1: used by multitap and a few oddball
-.export .const JOY2B1CUR = $421E    ; input devices
+.export .mmio JOY1CUR:   .word = $4218  ; Bit 0: used by standard controllers
+.export .mmio JOY2CUR:   .word = $421A
+.export .mmio JOY1B1CUR: .word = $421C  ; Bit 1: used by multitap and a few oddball
+.export .mmio JOY2B1CUR: .word = $421E  ; input devices
 ; FEDCBA98 76543210
 ; BYSRUDLR AXLRTTTT
 ; |||||||| ||||++++- controller type (0: controller, 1: mouse)
@@ -338,37 +338,37 @@
 ; not to mix _HI addresses with whole `Key` values or vice versa:
 ; the high byte of a key is `>Key::right`.
 ; A, X, L, and R cannot be read this way.
-.export .const JOY1CUR_HI = JOY1CUR + 1
-.export .const JOY2CUR_HI = JOY2CUR + 1
+.export .mmio JOY1CUR_HI: .byte = JOY1CUR + 1
+.export .mmio JOY2CUR_HI: .byte = JOY2CUR + 1
 
 ; S-CPU multiply and divide ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; Multiply unit.  Also good for shifting pixels when drawing
 ; text in a proportional font.
-.export .const CPUMCAND  = $4202    ; unchanged by multiplications
-.export .const CPUMUL    = $4203    ; write here to fill CPUPROD 8 cycles later
-.export .const CPUPROD   = $4216
-.export .const CPUPRODHI = $4217
+.export .mmio CPUMCAND:  .byte = $4202  ; unchanged by multiplications
+.export .mmio CPUMUL:    .byte = $4203  ; write here to fill CPUPROD 8 cycles later
+.export .mmio CPUPROD:   .word = $4216
+.export .mmio CPUPRODHI: .byte = $4217
 
 ; Divide unit
-.export .const CPUNUM    = $4204
-.export .const CPUNUMHI  = $4205
-.export .const CPUDEN    = $4206    ; write divisor to fill CPUQUOT/CPUREM 16 cycles later
-.export .const CPUQUOT   = $4214
-.export .const CPUQUOTHI = $4215
-.export .const CPUREM    = CPUPROD
-.export .const CPUREMHI  = CPUPRODHI
+.export .mmio CPUNUM:    .byte = $4204
+.export .mmio CPUNUMHI:  .byte = $4205
+.export .mmio CPUDEN:    .byte = $4206  ; write divisor to fill CPUQUOT/CPUREM 16 cycles later
+.export .mmio CPUQUOT:   .word = $4214
+.export .mmio CPUQUOTHI: .byte = $4215
+.export .mmio CPUREM:    .byte = CPUPROD
+.export .mmio CPUREMHI:  .byte = CPUPRODHI
 
 ; S-CPU DMA ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-.export .const COPYSTART = $420B    ; writes of 1 << n start a DMA copy on channel n
-.export .const HDMASTART = $420C    ; writes of 1 << n start HDMA on channel n
+.export .mmio COPYSTART: .byte = $420B  ; writes of 1 << n start a DMA copy on channel n
+.export .mmio HDMASTART: .byte = $420C  ; writes of 1 << n start HDMA on channel n
 ; Don't run a DMA copy while HDMA is enabled, or you might run into
 ; a defect in revision 1 of the S-CPU that causes crashing.
 
 ; There are 8 DMA channels.
 ; Registers for channels 1-7 start at $4310, $4320, ...
-.export .const DMAMODE      = $4300
+.export .mmio DMAMODE: .byte = $4300
 ; 76543210
 ; || ||+++- PPU address offset pattern
 ; || ||     0: 0     1: 01    2: 00    3: 0011  4: 0123  5: 0101
@@ -387,12 +387,12 @@
 .export .const DMA_INDIRECT = $40
 .export .const DMA_READPPU  = $80
 
-.export .const DMAPPUREG   = $4301
-.export .const DMAADDR     = $4302
-.export .const DMAADDRHI   = $4303
-.export .const DMAADDRBANK = $4304
-.export .const DMALEN      = $4305  ; number of bytes, not number of transfers; 0 means 65536
-.export .const DMALENHI    = $4306
+.export .mmio DMAPPUREG:   .byte = $4301
+.export .mmio DMAADDR:     .byte = $4302
+.export .mmio DMAADDRHI:   .byte = $4303
+.export .mmio DMAADDRBANK: .byte = $4304
+.export .mmio DMALEN:      .byte = $4305  ; number of bytes, not number of transfers; 0 means 65536
+.export .mmio DMALENHI:    .byte = $4306
 
 ; A future demo that includes HDMA effects would include port definitions.
 ;HDMAINDBANK = $4307
@@ -415,107 +415,107 @@
 ; These aliases match the names presented in Fullsnes.
 
 ; S-PPU write
-.export .const INIDISP = PPUBRIGHT
-.export .const OAMADDL = OAMADDR + 0
-.export .const OAMADDH = OAMADDR + 1
-.export .const BG1SC   = NTADDR + 0
-.export .const BG2SC   = NTADDR + 1
-.export .const BG3SC   = NTADDR + 2
-.export .const BG4SC   = NTADDR + 3
-.export .const BG12NBA = BGCHRADDR + 0  ; Welcome to...
-.export .const BG34NBA = BGCHRADDR + 1  ; BG34NBA JAM!!!
-.export .const BG1HOFS = BGSCROLLX + 0
-.export .const BG1VOFS = BGSCROLLY + 0
-.export .const BG2HOFS = BGSCROLLX + 2
-.export .const BG2VOFS = BGSCROLLY + 2
-.export .const BG3HOFS = BGSCROLLX + 4
-.export .const BG3VOFS = BGSCROLLY + 4
-.export .const BG4HOFS = BGSCROLLX + 6
-.export .const BG4VOFS = BGSCROLLY + 6
-.export .const VMAIN   = PPUCTRL
-.export .const VMADDL  = PPUADDR + 0
-.export .const VMADDH  = PPUADDR + 1
-.export .const VMDATAL = PPUDATA + 0
-.export .const VMDATAH = PPUDATA + 1
-.export .const M7A     = $211B
-.export .const M7B     = $211C
-.export .const M7C     = $211D
-.export .const M7D     = $211E
-.export .const M7X     = $211F
-.export .const M7Y     = $2120
-.export .const CGADD   = CGADDR
-.export .const W12SEL  = BG12WINDOW
-.export .const W34SEL  = BG34WINDOW
-.export .const WOBJSEL = OBJWINDOW
-.export .const WH0     = WINDOW1L
-.export .const WH1     = WINDOW1R
-.export .const WH2     = WINDOW2L
-.export .const WH3     = WINDOW2R
-.export .const WBGLOG  = BGWINDOP
-.export .const WOBJLOG = OBJWINDOP
-.export .const TM      = BLENDMAIN
-.export .const TS      = BLENDSUB
-.export .const TMW     = WINDOWMAIN
-.export .const TSW     = WINDOWSUB
-.export .const CGWSEL  = $2130
-.export .const CGADSUB = $2131
-.export .const COLDATA = $2132
-.export .const SETINI  = PPURES
+.export .mmio INIDISP: .byte = PPUBRIGHT
+.export .mmio OAMADDL: .byte = OAMADDR + 0
+.export .mmio OAMADDH: .byte = OAMADDR + 1
+.export .mmio BG1SC:   .byte = NTADDR + 0
+.export .mmio BG2SC:   .byte = NTADDR + 1
+.export .mmio BG3SC:   .byte = NTADDR + 2
+.export .mmio BG4SC:   .byte = NTADDR + 3
+.export .mmio BG12NBA: .byte = BGCHRADDR + 0  ; Welcome to...
+.export .mmio BG34NBA: .byte = BGCHRADDR + 1  ; BG34NBA JAM!!!
+.export .mmio BG1HOFS: .byte = BGSCROLLX + 0
+.export .mmio BG1VOFS: .byte = BGSCROLLY + 0
+.export .mmio BG2HOFS: .byte = BGSCROLLX + 2
+.export .mmio BG2VOFS: .byte = BGSCROLLY + 2
+.export .mmio BG3HOFS: .byte = BGSCROLLX + 4
+.export .mmio BG3VOFS: .byte = BGSCROLLY + 4
+.export .mmio BG4HOFS: .byte = BGSCROLLX + 6
+.export .mmio BG4VOFS: .byte = BGSCROLLY + 6
+.export .mmio VMAIN:   .byte = PPUCTRL
+.export .mmio VMADDL:  .byte = PPUADDR + 0
+.export .mmio VMADDH:  .byte = PPUADDR + 1
+.export .mmio VMDATAL: .byte = PPUDATA + 0
+.export .mmio VMDATAH: .byte = PPUDATA + 1
+.export .mmio M7A:     .byte = $211B
+.export .mmio M7B:     .byte = $211C
+.export .mmio M7C:     .byte = $211D
+.export .mmio M7D:     .byte = $211E
+.export .mmio M7X:     .byte = $211F
+.export .mmio M7Y:     .byte = $2120
+.export .mmio CGADD:   .byte = CGADDR
+.export .mmio W12SEL:  .byte = BG12WINDOW
+.export .mmio W34SEL:  .byte = BG34WINDOW
+.export .mmio WOBJSEL: .byte = OBJWINDOW
+.export .mmio WH0:     .byte = WINDOW1L
+.export .mmio WH1:     .byte = WINDOW1R
+.export .mmio WH2:     .byte = WINDOW2L
+.export .mmio WH3:     .byte = WINDOW2R
+.export .mmio WBGLOG:  .byte = BGWINDOP
+.export .mmio WOBJLOG: .byte = OBJWINDOP
+.export .mmio TM:      .byte = BLENDMAIN
+.export .mmio TS:      .byte = BLENDSUB
+.export .mmio TMW:     .byte = WINDOWMAIN
+.export .mmio TSW:     .byte = WINDOWSUB
+.export .mmio CGWSEL:  .byte = $2130
+.export .mmio CGADSUB: .byte = $2131
+.export .mmio COLDATA: .byte = $2132
+.export .mmio SETINI:  .byte = PPURES
 
 ; S-PPU read
-.export .const MPYL    = M7PRODLO
-.export .const MPYM    = M7PRODHI
-.export .const MPYH    = M7PRODBANK
-.export .const SLHV    = GETXY
-.export .const RDOAM   = OAMDATARD
-.export .const RDVRAML = PPUDATARD
-.export .const RDVRAMH = PPUDATARDHI
-.export .const RDCGRAM = CGDATARD
-.export .const OPHCT   = XCOORD
-.export .const OPVCT   = YCOORD
-.export .const STAT77  = PPUSTATUS1
-.export .const STAT78  = PPUSTATUS2
+.export .mmio MPYL:    .byte = M7PRODLO
+.export .mmio MPYM:    .byte = M7PRODHI
+.export .mmio MPYH:    .byte = M7PRODBANK
+.export .mmio SLHV:    .byte = GETXY
+.export .mmio RDOAM:   .byte = OAMDATARD
+.export .mmio RDVRAML: .byte = PPUDATARD
+.export .mmio RDVRAMH: .byte = PPUDATARDHI
+.export .mmio RDCGRAM: .byte = CGDATARD
+.export .mmio OPHCT:   .byte = XCOORD
+.export .mmio OPVCT:   .byte = YCOORD
+.export .mmio STAT77:  .byte = PPUSTATUS1
+.export .mmio STAT78:  .byte = PPUSTATUS2
 
 ; other B bus devices
-.export .const APUIO0 = APU0        ; didn't want to use capital O with digit 0
-.export .const APUIO1 = APU1
-.export .const APUIO2 = APU2
-.export .const APUIO3 = APU3
-.export .const WMDATA = $2180
-.export .const WMADDL = $2181
-.export .const WMADDM = $2182
-.export .const WMADDH = $2183
+.export .mmio APUIO0: .byte = APU0  ; didn't want to use capital O with digit 0
+.export .mmio APUIO1: .byte = APU1
+.export .mmio APUIO2: .byte = APU2
+.export .mmio APUIO3: .byte = APU3
+.export .mmio WMDATA: .byte = $2180
+.export .mmio WMADDL: .byte = $2181
+.export .mmio WMADDM: .byte = $2182
+.export .mmio WMADDH: .byte = $2183
 
 ; S-CPU I/O write
-.export .const NMITIMEN = $4200
-.export .const WRIO     = $4201
-.export .const WRMPYA   = CPUMCAND
-.export .const WRMPYB   = CPUMUL
-.export .const WRDIVL   = CPUNUM
-.export .const WRDIVH   = CPUNUMHI
-.export .const WRDIVB   = CPUDEN
-.export .const HTIMEL   = HTIME
-.export .const HTIMEH   = HTIMEHI
-.export .const VTIMEL   = VTIME
-.export .const VTIMEH   = VTIMEHI
-.export .const MDMAEN   = COPYSTART  ; where I come from MDMA is a drug
-.export .const HDMAEN   = HDMASTART
-.export .const MEMSEL   = ROMSPEED
+.export .mmio NMITIMEN: .byte = $4200
+.export .mmio WRIO:     .byte = $4201
+.export .mmio WRMPYA:   .byte = CPUMCAND
+.export .mmio WRMPYB:   .byte = CPUMUL
+.export .mmio WRDIVL:   .byte = CPUNUM
+.export .mmio WRDIVH:   .byte = CPUNUMHI
+.export .mmio WRDIVB:   .byte = CPUDEN
+.export .mmio HTIMEL:   .byte = HTIME
+.export .mmio HTIMEH:   .byte = HTIMEHI
+.export .mmio VTIMEL:   .byte = VTIME
+.export .mmio VTIMEH:   .byte = VTIMEHI
+.export .mmio MDMAEN:   .byte = COPYSTART  ; where I come from MDMA is a drug
+.export .mmio HDMAEN:   .byte = HDMASTART
+.export .mmio MEMSEL:   .byte = ROMSPEED
 
 ; S-CPU I/O read
-.export .const RDNMI  = NMISTATUS
-.export .const TIMEUP = TIMESTATUS
-.export .const HVBJOY = VBLSTATUS
-.export .const RDIO   = $4213
-.export .const RDDIVL = CPUQUOT
-.export .const RDDIVH = CPUQUOT + 1
-.export .const RDMPYL = CPUPROD
-.export .const RDMPYH = CPUPROD + 1
-.export .const JOY1L  = JOY1CUR + 0
-.export .const JOY1H  = JOY1CUR + 1
-.export .const JOY2L  = JOY2CUR + 0
-.export .const JOY2H  = JOY2CUR + 1
-.export .const JOY3L  = JOY1B1CUR + 0
-.export .const JOY3H  = JOY1B1CUR + 1
-.export .const JOY4L  = JOY2B1CUR + 0
-.export .const JOY4H  = JOY2B1CUR + 1
+.export .mmio RDNMI:  .byte = NMISTATUS
+.export .mmio TIMEUP: .byte = TIMESTATUS
+.export .mmio HVBJOY: .byte = VBLSTATUS
+.export .mmio RDIO:   .byte = $4213
+.export .mmio RDDIVL: .byte = CPUQUOT
+.export .mmio RDDIVH: .byte = CPUQUOT + 1
+.export .mmio RDMPYL: .byte = CPUPROD
+.export .mmio RDMPYH: .byte = CPUPROD + 1
+.export .mmio JOY1L:  .byte = JOY1CUR + 0
+.export .mmio JOY1H:  .byte = JOY1CUR + 1
+.export .mmio JOY2L:  .byte = JOY2CUR + 0
+.export .mmio JOY2H:  .byte = JOY2CUR + 1
+.export .mmio JOY3L:  .byte = JOY1B1CUR + 0
+.export .mmio JOY3H:  .byte = JOY1B1CUR + 1
+.export .mmio JOY4L:  .byte = JOY2B1CUR + 0
+.export .mmio JOY4H:  .byte = JOY2B1CUR + 1

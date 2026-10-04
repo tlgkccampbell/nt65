@@ -76,6 +76,13 @@ internal static class Fixes
                 yield return Fix(diagnostic, "Remove it", [Removed(tree, diagnostic.Span)]);
                 break;
 
+            case FixKind.AddressData when AsData(tree, diagnostic) is var (constant, asData):
+                yield return Fix(diagnostic, "Declare it as data with `.data`",
+                    [new Edit(tree, constant, $".data {asData}")]);
+                yield return Fix(diagnostic, "Declare it as a hardware register with `.mmio`",
+                    [new Edit(tree, constant, $".mmio {asData}")], preferred: false);
+                break;
+
             case FixKind.Flags when fix.Text is { } flags:
                 yield return Fix(diagnostic, $"Change it to `#{flags}`",
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), flags)]);
@@ -219,6 +226,24 @@ internal static class Fixes
     /// Creates a fix for <paramref name="diagnostic"/>, preferred unless it is one of several
     /// readings.
     /// </summary>
+    /// <summary>
+    /// Returns the span of the <c>.const</c> declaration a diagnostic names, from its keyword to the
+    /// end of its value, and the rest of it as data found elsewhere, such as <c>BORDER: .byte = $D020</c>.
+    /// What stands before the keyword, such as <c>.export</c>, and the comment after it are kept.
+    /// </summary>
+    private static (TextSpan Declaration, string Written)? AsData(SyntaxTree tree, Diagnostic diagnostic)
+    {
+        var name = Edits.SpanOf(tree, diagnostic.Span);
+        if (tree.Root.DescendantNodes().OfType<ConstantDeclarationSyntax>()
+            .FirstOrDefault(declaration => declaration.Name.Span == name) is not { } constant)
+        {
+            return null;
+        }
+        var start = constant.Keyword.Span.Start;
+        var value = tree.Text[constant.Value.Span.Start..constant.Value.Span.End];
+        return (new TextSpan(start, constant.Value.Span.End - start), $"{constant.Name.Text}: .byte = {value}");
+    }
+
     private static Change Fix(Diagnostic diagnostic, string title, IReadOnlyList<Edit> edits, bool preferred = true) =>
         new(title, CodeActionKinds.QuickFix, edits, diagnostic, preferred);
 

@@ -8,35 +8,35 @@
 .export .const DEBUG ?= 0
 
 .export .scope vic {
-    .const BASE         = $D000
-    .const SPR0_X       = BASE + $00
-    .const SPR0_Y       = BASE + $01
-    .const SPR_MSB      = BASE + $10
-    .const CTRL1        = BASE + $11
-    .const RASTER       = BASE + $12
-    .const SPR_ENA      = BASE + $15
-    .const MEMSETUP     = BASE + $18
-    .const IRQ_FLAG     = BASE + $19
-    .const IRQ_MASK     = BASE + $1A
-    .const SPR_SPR_COLL = BASE + $1E
-    .const BORDER       = BASE + $20
-    .const BG0          = BASE + $21
-    .const SPR0_COL     = BASE + $27
+    .mmio BASE:         .byte[47] = $D000
+    .mmio SPR0_X:       .byte = BASE + $00
+    .mmio SPR0_Y:       .byte = BASE + $01
+    .mmio SPR_MSB:      .byte = BASE + $10
+    .mmio CTRL1:        .byte = BASE + $11
+    .mmio RASTER:       .byte = BASE + $12
+    .mmio SPR_ENA:      .byte = BASE + $15
+    .mmio MEMSETUP:     .byte = BASE + $18
+    .mmio IRQ_FLAG:     .byte = BASE + $19
+    .mmio IRQ_MASK:     .byte = BASE + $1A
+    .mmio SPR_SPR_COLL: .byte = BASE + $1E
+    .mmio BORDER:       .byte = BASE + $20
+    .mmio BG0:          .byte = BASE + $21
+    .mmio SPR0_COL:     .byte = BASE + $27
 }
 
 .export .scope cia1 {
-    .const PRA = $DC00              ; joystick port 2
-    .const ICR = $DC0D
+    .mmio PRA: .byte = $DC00        ; joystick port 2
+    .mmio ICR: .byte = $DC0D
 }
 
 .export .scope cia2 {
-    .const ICR = $DD0D
+    .mmio ICR: .byte = $DD0D
 }
 
 .export .scope kernal {
-    .const IRQ_VECTOR = $0314       ; CINV
-    .const IRQ        = $EA31       ; full KERNAL IRQ (keyboard scan, cursor blink)
-    .const IRQ_EXIT   = $EA81       ; restore registers and RTI
+    .data IRQ_VECTOR: .byte = $0314  ; CINV
+    .const IRQ      = $EA31         ; full KERNAL IRQ (keyboard scan, cursor blink)
+    .const IRQ_EXIT = $EA81         ; restore registers and RTI
 
     ; CHROUT is documented as using A alone, so X and Y come back; the rest use all three
     ; and promise nothing.
@@ -46,9 +46,9 @@
     .proc CLRSCR = $E544
 }
 
-.export .const SCREEN_RAM  = $0400
-.export .const COLOR_RAM   = $D800
-.export .const SPRITE_PTRS = SCREEN_RAM + $03F8
+.export .data SCREEN_RAM:  .byte[1024] = $0400
+.export .data COLOR_RAM:   .byte = $D800
+.export .data SPRITE_PTRS: .byte = SCREEN_RAM + $03F8
 
 .export .enum Color {
     black

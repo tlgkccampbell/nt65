@@ -167,7 +167,7 @@ public sealed class CatalogueAreaTests
             "signature-set-not-first", "signature-set-self-reference", "signature-value-not-constant",
             "signature-value-out-of-range", "state-banks-invalid", "state-banks-not-dbr", "unchanged-needs-entry",
         ]),
-        ("Suggestions", ["tail-call", "width-already-set"]),
+        ("Suggestions", ["constant-used-as-address", "tail-call", "width-already-set"]),
     ];
 
     [Fact]

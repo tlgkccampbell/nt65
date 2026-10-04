@@ -130,4 +130,10 @@ public enum FixKind
 
     /// <summary>The register added to the <c>reads</c> item of the routine's signature.</summary>
     Reads,
+
+    /// <summary>
+    /// The constant reported, declared instead as data found elsewhere at its value, with
+    /// <c>.data</c> or, for a hardware register, <c>.mmio</c>.
+    /// </summary>
+    AddressData,
 }

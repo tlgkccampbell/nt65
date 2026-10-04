@@ -35,8 +35,8 @@
 
 .export read_pads
 
-.const JOY1 = $4016
-.const JOY2 = $4017
+.mmio JOY1: .byte = $4016
+.mmio JOY2: .byte = $4017
 
 ; turn USE_DAS on to enable autorepeat support
 .const USE_DAS ?= 0

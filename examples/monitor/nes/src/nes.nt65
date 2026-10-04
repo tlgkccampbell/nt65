@@ -5,17 +5,17 @@
 .cpu 6502
 
 ; The PPU's ports.
-.export .const PPUCTRL   = $2000    ; the NMI, and which nametable and pattern tables show
-.export .const PPUMASK   = $2001    ; what the PPU draws
-.export .const PPUSTATUS = $2002    ; whether vblank has started; reading it resets PPUADDR's latch
-.export .const PPUSCROLL = $2005    ; written twice, across and then down
-.export .const PPUADDR   = $2006    ; the VRAM address, written twice, high byte first
-.export .const PPUDATA   = $2007    ; a byte of VRAM, after which the address steps
+.export .mmio PPUCTRL:   .byte = $2000  ; the NMI, and which nametable and pattern tables show
+.export .mmio PPUMASK:   .byte = $2001  ; what the PPU draws
+.export .mmio PPUSTATUS: .byte = $2002  ; whether vblank has started; reading it resets PPUADDR's latch
+.export .mmio PPUSCROLL: .byte = $2005  ; written twice, across and then down
+.export .mmio PPUADDR:   .byte = $2006  ; the VRAM address, written twice, high byte first
+.export .mmio PPUDATA:   .byte = $2007  ; a byte of VRAM, after which the address steps
 
 ; The APU's and the joypads' ports.
-.export .const DMC_FREQ      = $4010  ; the sample channel's rate, and its IRQ
-.export .const JOY1          = $4016  ; written to latch the joypads, and read for joypad 1's buttons
-.export .const FRAME_COUNTER = $4017  ; the APU's frame counter, and its IRQ
+.export .mmio DMC_FREQ:      .byte = $4010  ; the sample channel's rate, and its IRQ
+.export .mmio JOY1:          .byte = $4016  ; written to latch the joypads, and read for joypad 1's buttons
+.export .mmio FRAME_COUNTER: .byte = $4017  ; the APU's frame counter, and its IRQ
 
 .export .const NMI_ON  = $80        ; PPUCTRL: an NMI at the start of each vblank
 .export .const SHOW_BG = $08        ; PPUMASK: the background shows

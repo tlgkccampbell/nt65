@@ -1681,9 +1681,11 @@ everything below works across modules.
   offered and neither is applied for you. A decimal number used as an address, as in `lda 10`,
   is `immediate-missing`, fixed with the `#` it most likely lost or by writing the address in
   hex.
-- **Suggestions** where code could be smaller or faster, shown as hints and never reported by
-  a build: a `jsr` followed by `rts` that can be a `jmp` (and `jsl` with `rtl` a `jml`), and a
-  `rep` or `sep` that sets a width the register already has. A tail call is not suggested to a
+- **Suggestions** where code could be smaller, faster or say more, shown as hints and never
+  reported by a build: a `jsr` followed by `rts` that can be a `jmp` (and `jsl` with `rtl` a
+  `jml`), a `rep` or `sep` that sets a width the register already has, and a `.const` that an
+  instruction uses as an address, with fixes that declare it as data with `.data`, or as a
+  hardware register with `.mmio`. A tail call is not suggested to a
   routine that depends on how deep the stack is, such as one that pops its caller's return
   address, and a routine with a branch this configuration leaves out gets no suggestions.
 - **Refactorings** on a selection: bring a path in with `.use` or write it out in full; export

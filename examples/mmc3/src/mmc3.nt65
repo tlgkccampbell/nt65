@@ -25,13 +25,13 @@
 .export set, map_8000, map_a000, push_banks, pull_banks
 
 ; The MMC3's ports, each of which takes its even or its odd address in a range of 8K.
-.const BANK_SELECT = $8000          ; which register BANK_DATA sets, and the banking modes
-.const BANK_DATA   = $8001          ; the bank of the register BANK_SELECT chose
-.const MIRRORING   = $A000          ; 0 for vertical mirroring, 1 for horizontal
-.const IRQ_LATCH   = $C000          ; the line counter's value after it is reloaded
-.const IRQ_RELOAD  = $C001          ; reloads the counter at the next line
-.const IRQ_DISABLE = $E000          ; turns the IRQ off, and acknowledges it
-.const IRQ_ENABLE  = $E001          ; turns the IRQ on
+.mmio BANK_SELECT: .byte = $8000    ; which register BANK_DATA sets, and the banking modes
+.mmio BANK_DATA:   .byte = $8001    ; the bank of the register BANK_SELECT chose
+.mmio MIRRORING:   .byte = $A000    ; 0 for vertical mirroring, 1 for horizontal
+.mmio IRQ_LATCH:   .byte = $C000    ; the line counter's value after it is reloaded
+.mmio IRQ_RELOAD:  .byte = $C001    ; reloads the counter at the next line
+.mmio IRQ_DISABLE: .byte = $E000    ; turns the IRQ off, and acknowledges it
+.mmio IRQ_ENABLE:  .byte = $E001    ; turns the IRQ on
 
 ; The bank registers. With BANK_SELECT's mode bits 0, as this program leaves them, R0 and R1
 ; map 2K character banks at $0000 and $0800, R2 to R5 map 1K banks at $1000 to $1C00, and R6

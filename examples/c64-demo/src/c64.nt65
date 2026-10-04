@@ -4,34 +4,34 @@
 
 .cpu 6502
 
-.export .const SCREEN   = $0400           ; screen memory, 40 by 25 screen codes
-.export .const COLOURS  = $D800           ; colour memory, a colour for each place on the screen
-.export .const POINTERS = SCREEN + $03F8  ; the eight sprites' shape pointers, after the screen
+.export .const SCREEN = $0400       ; screen memory, 40 by 25 screen codes
+.export .data COLOURS:  .byte = $D800           ; colour memory, a colour for each place on the screen
+.export .data POINTERS: .byte = SCREEN + $03F8  ; the eight sprites' shape pointers, after the screen
 
 ; The cycles in a raster line of the PAL machine, which the demo is timed for, and which VICE's
 ; x64sc emulates unless told otherwise.
 .export .const CYCLES = 63
 
 .export .scope vic {
-    .const SPRITE_X      = $D000    ; sprite 0's X, then its Y, then sprite 1's, two bytes apart
-    .const SPRITE_Y      = $D001
-    .const X_HIGH        = $D010    ; bit n is the ninth bit of sprite n's X
-    .const CONTROL       = $D011    ; bit 7 is the ninth bit of RASTER
-    .const RASTER        = $D012    ; the line being drawn, and the line that raises the interrupt
-    .const ENABLE        = $D015
-    .const IRQ_FLAG      = $D019    ; a 1 written to a bit acknowledges that interrupt
-    .const IRQ_MASK      = $D01A
-    .const BORDER        = $D020
-    .const PAPER         = $D021
-    .const SPRITE_COLOUR = $D027    ; sprite 0's colour, then sprite 1's
+    .mmio SPRITE_X:      .byte = $D000  ; sprite 0's X, then its Y, then sprite 1's, two bytes apart
+    .mmio SPRITE_Y:      .byte = $D001
+    .mmio X_HIGH:        .byte = $D010  ; bit n is the ninth bit of sprite n's X
+    .mmio CONTROL:       .byte = $D011  ; bit 7 is the ninth bit of RASTER
+    .mmio RASTER:        .byte = $D012  ; the line being drawn, and the line that raises the interrupt
+    .mmio ENABLE:        .byte = $D015
+    .mmio IRQ_FLAG:      .byte = $D019  ; a 1 written to a bit acknowledges that interrupt
+    .mmio IRQ_MASK:      .byte = $D01A
+    .mmio BORDER:        .byte = $D020
+    .mmio PAPER:         .byte = $D021
+    .mmio SPRITE_COLOUR: .byte = $D027  ; sprite 0's colour, then sprite 1's
 }
 
 .export .scope cia1 {
-    .const ICR = $DC0D              ; a write sets the bits it gives if bit 7 is set, or clears them
+    .mmio ICR: .byte = $DC0D        ; a write sets the bits it gives if bit 7 is set, or clears them
 }
 
 .export .scope cia2 {
-    .const ICR = $DD0D
+    .mmio ICR: .byte = $DD0D
 }
 
 ; One voice of the SID, as its seven registers lie.
@@ -45,7 +45,7 @@
 
 .export .scope sid {
     .mmio voices: .type Voice[3] = $D400
-    .const VOLUME = $D418           ; the volume in the low nibble
+    .mmio VOLUME: .byte = $D418     ; the volume in the low nibble
 }
 
 ; The KERNAL's interrupt entry saves A, X and Y and jumps through CINV, which a program points

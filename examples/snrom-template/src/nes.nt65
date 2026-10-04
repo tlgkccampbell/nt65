@@ -11,7 +11,7 @@
 
 .cpu 6502
 
-.export .const PPUCTRL    = $2000
+.export .mmio PPUCTRL: .byte = $2000
 .export .const NT_2000    = $00
 .export .const NT_2400    = $01
 .export .const NT_2800    = $02
@@ -24,7 +24,7 @@
 .export .const BG_1000    = $10
 .export .const VBLANK_NMI = $80
 
-.export .const PPUMASK   = $2001
+.export .mmio PPUMASK: .byte = $2001
 .export .const LIGHTGRAY = $01
 .export .const BG_OFF    = $00
 .export .const BG_CLIP   = $08
@@ -36,17 +36,17 @@
 .export .const TINT_G    = $40
 .export .const TINT_B    = $80
 
-.export .const PPUSTATUS = $2002
-.export .const OAMADDR   = $2003
+.export .mmio PPUSTATUS: .byte = $2002
+.export .mmio OAMADDR:   .byte = $2003
 ; Don't worry about $2004; let OAM_DMA do the work for you.
-.export .const PPUSCROLL = $2005
-.export .const PPUADDR   = $2006
-.export .const PPUDATA   = $2007
+.export .mmio PPUSCROLL: .byte = $2005
+.export .mmio PPUADDR:   .byte = $2006
+.export .mmio PPUDATA:   .byte = $2007
 
-.export .const OAM_DMA = $4014
-.export .const SNDCHN  = $4015
-.export .const P1      = $4016
-.export .const P2      = $4017
+.export .mmio OAM_DMA: .byte = $4014
+.export .mmio SNDCHN:  .byte = $4015
+.export .mmio P1:      .byte = $4016
+.export .mmio P2:      .byte = $4017
 
 .export .const KEY_A      = %10000000
 .export .const KEY_B      = %01000000

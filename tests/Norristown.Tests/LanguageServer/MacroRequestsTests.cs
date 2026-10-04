@@ -43,7 +43,7 @@ public sealed class MacroRequestsTests
             rts
         }
 
-        .const ptr = $10
+        .data ptr: .word = $10
         """;
 
     /// <summary>

@@ -4,10 +4,10 @@
 
 .segment EXTRA
 .if W65C816SXB {
-    .const VIA_USB_REG_DDRB  = $7FE2
-    .const VIA_USB_REG_DDRA  = $7FE3
-    .const VIA_USB_REG_PORTB = $7FE0
-    .const VIA_USB_REG_PORTA = $7FE1
+    .mmio VIA_USB_REG_DDRB:  .byte = $7FE2
+    .mmio VIA_USB_REG_DDRA:  .byte = $7FE3
+    .mmio VIA_USB_REG_PORTB: .byte = $7FE0
+    .mmio VIA_USB_REG_PORTA: .byte = $7FE1
     .const VIA_USB_NRD       = %00001000  ; make RD# high to not output data from FTDI
     .const VIA_USB_WR        = %00000100  ; make WR  high to output data from FTDI
     .const VIA_USB_nRXF      = %00000010

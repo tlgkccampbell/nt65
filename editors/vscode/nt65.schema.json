@@ -165,6 +165,7 @@
         "const-argument-out-of-range",
         "const-missing",
         "constant-names-an-address",
+        "constant-used-as-address",
         "continuation-outside-expression",
         "countof-has-no-elements",
         "cpu-disagrees",

@@ -21,7 +21,7 @@
 .proc CHRIN = $FFCF: running, reads none           ; reads the line the cursor is on, a character at a time
 .proc READY = $E37B: running, noreturn, reads none ; BASIC's warm start
 
-.const CBINV     = $0316            ; where the KERNAL's interrupt entry goes on a BRK
+.data CBINV: .byte = $0316          ; where the KERNAL's interrupt entry goes on a BRK
 .const CLEAR     = $93              ; PETSCII's clear screen
 .const UPPERCASE = $8E              ; PETSCII's switch to the uppercase and graphics characters
 

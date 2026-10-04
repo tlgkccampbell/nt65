@@ -30,14 +30,14 @@
 .proc EIGHTY = $C300: running, reads a               ; turns the 80-column screen on, and writes A there
 .proc HOME = $FC58: running, reads none              ; clears the screen
 
-.const INPUT  = $0200               ; where GETLN1 reads a line to, ended by RETURN
-.const PROMPT = $33                 ; what GETLN writes when it starts a line again
-.const BRKV   = $03F0               ; where the firmware goes on a BRK
-.const ROMIN  = $C082               ; reading it shows the ROM in place of the language card's RAM
+.data INPUT:  .byte = $0200         ; where GETLN1 reads a line to, ended by RETURN
+.data PROMPT: .byte = $33           ; what GETLN writes when it starts a line again
+.data BRKV:   .byte = $03F0         ; where the firmware goes on a BRK
+.mmio ROMIN:  .byte = $C082         ; reading it shows the ROM in place of the language card's RAM
 
 ; The firmware saves the registers of a BRK at this address in bank $E1, as `Saved` lays them
 ; out. This is where ROM 3 keeps them.
-.const SAVED = $E10108
+.data SAVED: .byte = $E10108
 .struct Saved {
     ac:   .word
     xr:   .word

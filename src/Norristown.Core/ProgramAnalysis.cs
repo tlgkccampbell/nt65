@@ -29,6 +29,11 @@ public sealed record ProgramAnalysis(
     // The files by their logical paths. Where two files share a path, the first is found.
     private readonly Dictionary<string, FileAnalysis> byPath = ByPath(Files);
 
+    // The constants some instruction of the program uses as an address, found the first time a
+    // file's suggestions are asked for, because a constant is used across the program and declared
+    // in one file.
+    private readonly Lazy<IReadOnlySet<Symbol>> usedAsAddresses = new(() => Flow.AddressConstants.UsedAsAddresses(Files));
+
     /// <summary>
     /// Gets what analyzing each file of <see cref="Program"/> on its own found, in the same order.
     /// It cannot be replaced, so that the lookups by path always agree with it.
@@ -78,12 +83,14 @@ public sealed record ProgramAnalysis(
         [.. Diagnostics.Where(diagnostic => diagnostic.Span.File == path)];
 
     /// <summary>
-    /// Returns the places in one file where the code could be smaller or faster, for an editor to
-    /// suggest. No build reports them.
+    /// Returns the places in one file where the code could be smaller or faster, or where a constant
+    /// used as an address could be declared as data, for an editor to suggest. No build reports them.
     /// </summary>
     public IReadOnlyList<Diagnostic> SuggestionsFor(string path) =>
         FileFor(path) is { } file
-            ? Flow.Suggestions.For(file, Configuration.Omitted(file.Model.Tree), ReadsCallerStack)
+            ? Norristown.Diagnostics.Ordered([
+                .. Flow.Suggestions.For(file, Configuration.Omitted(file.Model.Tree), ReadsCallerStack),
+                .. Flow.AddressConstants.For(file, usedAsAddresses.Value)])
             : [];
 
     /// <summary>

@@ -18,7 +18,7 @@ public sealed class SemanticTokensTests
         .module main
         .cpu 6502
 
-        .const SCREEN = $0400
+        .data SCREEN: .byte = $0400
         .func twice(n) = n * 2
 
         .enum Joy {
@@ -82,7 +82,7 @@ public sealed class SemanticTokensTests
 
         Assert.Equal(
             [
-                "SCREEN variable declaration readonly",
+                "SCREEN variable declaration",
                 "twice function declaration",
                 "n parameter declaration",
                 "n parameter",
@@ -95,7 +95,7 @@ public sealed class SemanticTokensTests
                 "poke macro declaration",
                 "value parameter declaration",
                 "value parameter",
-                "SCREEN variable readonly",
+                "SCREEN variable",
                 "origin variable declaration",
                 "Point struct",
                 "x property",

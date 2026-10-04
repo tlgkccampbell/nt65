@@ -7,8 +7,9 @@ using Range = Norristown.LanguageServer.Protocol.Range;
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
-/// Tests the suggestions an editor shows where code could be smaller or faster: a tail call in
-/// place of a call and a return, and a <c>rep</c> or <c>sep</c> that sets a width already set.
+/// Tests the suggestions an editor shows where code could be smaller, faster or clearer: a tail
+/// call in place of a call and a return, a <c>rep</c> or <c>sep</c> that sets a width already set,
+/// and a constant used as an address that could be declared as data.
 /// The tests cover where each is made, where it is held back because the change would not be
 /// safe, and that no build reports one.
 /// </summary>
@@ -114,6 +115,36 @@ public sealed class SuggestionsTests
             ".macro narrow {\n    sep #$20\n}\n.export .proc main: a8, i8 {\n    narrow!\n    rts\n}\n");
 
         Assert.Empty(analysis.SuggestionsFor(path));
+    }
+
+    /// <summary>
+    /// A constant that an instruction reaches memory through is suggested as data, with a fix for
+    /// each of <c>.data</c> and <c>.mmio</c>. A constant used only as a number, or as the address of
+    /// code a call names, is not.
+    /// </summary>
+    [Fact]
+    public void AConstantUsedAsAnAddressIsSuggestedAsData()
+    {
+        const string Body = ".export .const BORDER = $D020  ; the frame\n.const LIMIT = 4\n.const CHROUT = $FFD2\n"
+            + ".export .proc main {\n    lda #LIMIT\n    sta BORDER\n    jsr CHROUT\n    rts\n}\n";
+        var (analysis, path) = Analyzed(Body);
+
+        var suggestion = Assert.Single(analysis.SuggestionsFor(path), found => found.Id == "constant-used-as-address");
+        Assert.Equal(
+            "`BORDER` is used as an address; declaring it as data says what is there, or with `.mmio` that it is a hardware register",
+            suggestion.Message);
+        Assert.Equal(4, suggestion.Span.Line);
+
+        var model = analysis.ModelFor(path)!;
+        var actions = CodeActions.In(analysis, model, Whole);
+        var data = Assert.Single(actions, action => action.Title == "Declare it as data with `.data`");
+        var mmio = Assert.Single(actions, action => action.Title == "Declare it as a hardware register with `.mmio`");
+        Assert.StartsWith(
+            Header + ".export .data BORDER: .byte = $D020  ; the frame\n",
+            Editing.Apply(Header + Body, data.Edit!.Changes[Uri]), StringComparison.Ordinal);
+        Assert.StartsWith(
+            Header + ".export .mmio BORDER: .byte = $D020  ; the frame\n",
+            Editing.Apply(Header + Body, mmio.Edit!.Changes[Uri]), StringComparison.Ordinal);
     }
 
     private static (ProgramAnalysis Analysis, string Path) Analyzed(string body)

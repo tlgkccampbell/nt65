@@ -25,7 +25,7 @@
 ; MMIO is mirrored into $21xx, $42xx, and $43xx of all banks $00-$3F and $80-$BF.  To make it
 ; work no matter the current data bank, we can use a long address in a nonzero bank.
 ; Bit 0 of MEMSEL enables fast ROM access above $808000.
-.const MEMSEL_LONG = $80420D
+.mmio MEMSEL_LONG: .byte = $80420D
 
 ; A tiny stub in bank $00 needs to set interrupt priority to 1, leave 6502 emulation mode, and
 ; long jump to the rest of init code in another bank.  This should set 16-bit mode, turn off

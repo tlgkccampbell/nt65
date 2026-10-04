@@ -4,30 +4,30 @@
 .cpu 65816
 
 ; PPU registers ($21xx), mirrored in banks $00-$3f and $80-$bf
-.export .const INIDISP = $2100
-.export .const OBSEL   = $2101
-.export .const BGMODE  = $2105
-.export .const BG1SC   = $2107
-.export .const BG12NBA = $210b
-.export .const VMAIN   = $2115
-.export .const VMADDL  = $2116
-.export .const CGADD   = $2121
-.export .const TM      = $212c
-.export .const SETINI  = $2133
+.export .mmio INIDISP: .byte = $2100
+.export .mmio OBSEL:   .byte = $2101
+.export .mmio BGMODE:  .byte = $2105
+.export .mmio BG1SC:   .byte = $2107
+.export .mmio BG12NBA: .byte = $210b
+.export .mmio VMAIN:   .byte = $2115
+.export .mmio VMADDL:  .byte = $2116
+.export .mmio CGADD:   .byte = $2121
+.export .mmio TM:      .byte = $212c
+.export .mmio SETINI:  .byte = $2133
 
 ; CPU registers ($42xx)
-.export .const NMITIMEN = $4200
-.export .const WRMPYA   = $4202
-.export .const MEMSEL   = $420d
-.export .const MDMAEN   = $420b
-.export .const HDMAEN   = $420c
-.export .const RDNMI    = $4210
-.export .const HVBJOY   = $4212
-.export .const JOY1L    = $4218
+.export .mmio NMITIMEN: .byte = $4200
+.export .mmio WRMPYA:   .byte = $4202
+.export .mmio MEMSEL:   .byte = $420d
+.export .mmio MDMAEN:   .byte = $420b
+.export .mmio HDMAEN:   .byte = $420c
+.export .mmio RDNMI:    .byte = $4210
+.export .mmio HVBJOY:   .byte = $4212
+.export .mmio JOY1L:    .byte = $4218
 
 ; DMA channel 0 ($43x0)
-.export .const DMAP0 = $4300
-.export .const BBAD0 = $4301
-.export .const A1T0L = $4302
-.export .const A1B0  = $4304
-.export .const DAS0L = $4305
+.export .mmio DMAP0: .byte = $4300
+.export .mmio BBAD0: .byte = $4301
+.export .mmio A1T0L: .byte = $4302
+.export .mmio A1B0:  .byte = $4304
+.export .mmio DAS0L: .byte = $4305
