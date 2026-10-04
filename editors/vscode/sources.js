@@ -209,7 +209,7 @@ function hoverOf(document, result) {
       const where = `line ${line + 1} ${code(document, line)}`;
       switch (source.kind) {
         case 'entry':
-          hover.appendMarkdown(`- from the caller of ${code(document, line)}${guessed(source)}\n`);
+          hover.appendMarkdown(`- from the routine's caller${guessed(source)}\n`);
           break;
         case 'unknown':
           hover.appendMarkdown(`- unknown after ${where}: ${source.reason}\n`);
