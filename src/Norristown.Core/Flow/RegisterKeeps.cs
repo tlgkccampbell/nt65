@@ -123,6 +123,14 @@ public static class RegisterKeeps
             if ((reads[name].Read & ~declared) != Registers.None)
                 Undeclared(region, declared, walks[name], diagnostics);
         }
+
+        // An editor asks about one routine at a time, long after the rounds have finished, and
+        // goes by the same answers they settled on.
+        foreach (var (flow, _) in byFile)
+        {
+            flow.KeepsOf = Of;
+            flow.ReadsOf = ReadsOf;
+        }
         return (Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message))), readers);
 
         // Reports each register a routine reads that its `reads` does not list, at the first place

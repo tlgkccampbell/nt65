@@ -55,6 +55,39 @@ internal static class FlowFragment
         return state;
     }
 
+    /// <summary>
+    /// Returns where each input of the first statement of <c>main.nt65</c> whose text is
+    /// <paramref name="line"/> was set, or null where <see cref="InputSources.At"/> has no answer.
+    /// Each input is one string: its name, then each source, then each through line after
+    /// <c>via</c>. A source is the text of its line, prefixed with its kind unless it is an
+    /// instruction, and an entry source is the word <c>entry</c>.
+    /// </summary>
+    public static IReadOnlyList<string>? SourcesAt(ProgramAnalysis analysis, string line)
+    {
+        var model = analysis.File(Analysis.Path);
+        var statement = model.Tree.Root.DescendantNodes()
+            .OfType<LineSyntax>()
+            .Select(node => node.Statement)
+            .FirstOrDefault(statement => statement.GetText().Trim() == line);
+        Assert.True(statement is not null, $"{Analysis.Path} has no statement \"{line}\"");
+        if (InputSources.At(analysis, model, statement.Span.Start) is not { } found)
+            return null;
+        return [.. found.Inputs.Select(input =>
+        {
+            var sources = input.Sources.Select(source => source.Kind switch
+            {
+                SourceKind.Entry => "entry",
+                SourceKind.Instruction => Text(model.Tree, source.Line),
+                SourceKind.Unknown => $"? {Text(model.Tree, source.Line)} ({source.Reason})",
+                _ => $"{source.Kind.ToString().ToLowerInvariant()} {Text(model.Tree, source.Line)}",
+            });
+            var through = input.Through.Count == 0 ? "" : " via " + string.Join(", ", input.Through.Select(span => Text(model.Tree, span)));
+            return $"{input.Name}: {string.Join(", ", sources)}{through}";
+        })];
+
+        static string Text(SyntaxTree tree, TextSpan span) => tree.Text[span.Start..span.End].Trim();
+    }
+
     /// <summary>Returns the header's text for <paramref name="cpu"/>, which is <see cref="HeaderLines"/> lines long.</summary>
     private static string Header(string cpu) => $".module main\n.cpu {cpu}\n.segment CODE\n";
 }

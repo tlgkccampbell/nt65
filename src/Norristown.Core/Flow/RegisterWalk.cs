@@ -304,6 +304,62 @@ internal sealed class RegisterWalk
     }
 
     /// <summary>
+    /// Returns whether the accumulator, or the index registers where <paramref name="index"/>
+    /// is true, are 16 bits wide before a step, or null where that is not known. Every CPU but
+    /// the 65816 has no high byte to speak of, and there the answer is true, so that a write
+    /// covers the whole register.
+    /// </summary>
+    public bool? Wide(Step step, bool index)
+    {
+        if (states is null)
+            return true;
+        var width = states.Before(step.Statement, step.On)?.Processor is { } processor
+            ? index ? processor.Index : processor.A
+            : Semantics.Width.Unknown;
+        return width switch
+        {
+            Semantics.Width.Sixteen => true,
+            Semantics.Width.Eight => false,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Determines whether a statement may make the index registers 8 bits wide when they may
+    /// have been 16, which zeroes the high bytes of X and Y. A routine entered with 8-bit
+    /// index registers found those bytes zero, so zeroing them again changes nothing it was
+    /// given. Only an instruction that can set the index flag narrows it.
+    /// </summary>
+    public bool NarrowsIndex(Step step, Step? next, MnemonicKind mnemonic)
+    {
+        var sets = mnemonic switch
+        {
+            MnemonicKind.Sep => StepOperands.Immediate(model, layout, step) is not { } flags
+                || (flags & (long)StatusFlags.X) != 0,
+            MnemonicKind.Plp or MnemonicKind.Xce => true,
+            _ => false,
+        };
+        return sets && states is not null
+            && step.Routine?.Signature?.Entry.Index != Semantics.Width.Eight
+            && Wide(step, index: true) != false
+            && (next is not { } after || Wide(after, index: true) != true);
+    }
+
+    /// <summary>
+    /// Returns how wide the register a push of this size moves is. Only the 65816 has widths. A
+    /// routine that changes neither width reads <see cref="Semantics.Width.Unchanged"/> at both
+    /// the save and the restore, so the two cancel.
+    /// </summary>
+    public Semantics.Width Width(Step step, PushSize size)
+    {
+        if (states is null || size is PushSize.OneByte or PushSize.TwoBytes)
+            return Semantics.Width.Eight;
+        if (states.Before(step.Statement, step.On)?.Processor is not { } processor)
+            return Semantics.Width.Unknown;
+        return size == PushSize.Accumulator ? processor.A : processor.Index;
+    }
+
+    /// <summary>
     /// Returns the state at a declared label that can also be entered from outside the routine.
     /// The registers are as the path from above leaves them, and its stack is merged with the
     /// empty stack a call to the routine leaves. Where the path above has pushed something, the
@@ -495,48 +551,6 @@ internal sealed class RegisterWalk
     }
 
     /// <summary>
-    /// Returns whether the accumulator, or the index registers where <paramref name="index"/>
-    /// is true, are 16 bits wide before a step, or null where that is not known. Every CPU but
-    /// the 65816 has no high byte to speak of, and there the answer is true, so that a write
-    /// covers the whole register.
-    /// </summary>
-    private bool? Wide(Step step, bool index)
-    {
-        if (states is null)
-            return true;
-        var width = states.Before(step.Statement, step.On)?.Processor is { } processor
-            ? index ? processor.Index : processor.A
-            : Semantics.Width.Unknown;
-        return width switch
-        {
-            Semantics.Width.Sixteen => true,
-            Semantics.Width.Eight => false,
-            _ => null,
-        };
-    }
-
-    /// <summary>
-    /// Determines whether a statement may make the index registers 8 bits wide when they may
-    /// have been 16, which zeroes the high bytes of X and Y. A routine entered with 8-bit
-    /// index registers found those bytes zero, so zeroing them again changes nothing it was
-    /// given. Only an instruction that can set the index flag narrows it.
-    /// </summary>
-    private bool NarrowsIndex(Step step, Step? next, MnemonicKind mnemonic)
-    {
-        var sets = mnemonic switch
-        {
-            MnemonicKind.Sep => StepOperands.Immediate(model, layout, step) is not { } flags
-                || (flags & (long)StatusFlags.X) != 0,
-            MnemonicKind.Plp or MnemonicKind.Xce => true,
-            _ => false,
-        };
-        return sets && states is not null
-            && step.Routine?.Signature?.Entry.Index != Semantics.Width.Eight
-            && Wide(step, index: true) != false
-            && (next is not { } after || Wide(after, index: true) != true);
-    }
-
-    /// <summary>
     /// Returns the state after a push, which puts what the register held on the stack, or a
     /// value nothing is known about for a push of no register.
     /// </summary>
@@ -572,19 +586,5 @@ internal sealed class RegisterWalk
             Registers.A => Accumulator(step, pulled, value),
             _ => pulled.With(facts.Held, value),
         };
-    }
-
-    /// <summary>
-    /// Returns how wide the register a push of this size moves is. Only the 65816 has widths. A
-    /// routine that changes neither width reads <see cref="Semantics.Width.Unchanged"/> at both
-    /// the save and the restore, so the two cancel.
-    /// </summary>
-    private Semantics.Width Width(Step step, PushSize size)
-    {
-        if (states is null || size is PushSize.OneByte or PushSize.TwoBytes)
-            return Semantics.Width.Eight;
-        if (states.Before(step.Statement, step.On)?.Processor is not { } processor)
-            return Semantics.Width.Unknown;
-        return size == PushSize.Accumulator ? processor.A : processor.Index;
     }
 }

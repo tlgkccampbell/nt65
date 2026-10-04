@@ -64,6 +64,19 @@ public sealed class ControlFlow
     /// </summary>
     public RegisterStates? Registers { get; internal set; }
 
+    /// <summary>
+    /// Gets what each routine keeps, as <see cref="RegisterKeeps"/> settled it across the program,
+    /// or null before it has been worked out. A label that another routine enters keeps what the
+    /// path from that label keeps.
+    /// </summary>
+    internal Func<Symbol, RoutineRegisters>? KeepsOf { get; set; }
+
+    /// <summary>
+    /// Gets what each routine reads, as <see cref="RegisterKeeps"/> settled it across the program,
+    /// or null before it has been worked out.
+    /// </summary>
+    internal Func<Symbol, RoutineReads>? ReadsOf { get; set; }
+
     /// <summary>Works out where control goes in <paramref name="layout"/>'s file.</summary>
     public static ControlFlow Of(SemanticModel model, CodeLayout layout)
     {
@@ -205,6 +218,8 @@ public sealed class ControlFlow
             Diagnostics = Diagnostics,
             RunningOn = RunningOn,
             Registers = Registers,
+            KeepsOf = KeepsOf,
+            ReadsOf = ReadsOf,
         };
         copy.regions.AddRange(regions.Select(region => region.ForComposing()));
         return copy;

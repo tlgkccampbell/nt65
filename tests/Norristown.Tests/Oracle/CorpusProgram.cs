@@ -94,6 +94,9 @@ internal sealed record CorpusProgram(
     public Compilation Compile(params SettingValue[] values) =>
         Compiler.Compile(Sources, Project.With(values), BinaryLength);
 
+    /// <summary>Analyzes the program under its own settings, without emitting it.</summary>
+    public ProgramAnalysis Analyze() => Compiler.Analyze(Sources, Project, BinaryLength);
+
     private long? BinaryLength(string path)
     {
         var file = Path.Combine(Directory, path.Replace('/', Path.DirectorySeparatorChar));
