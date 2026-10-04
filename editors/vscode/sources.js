@@ -82,6 +82,21 @@ function decorationTypes() {
         overviewRulerLane: vscode.OverviewRulerLane.Center,
         after: label(group, 'dashed', false),
       }),
+      // A line that might have changed a value in memory after its source set it. It is drawn
+      // as a doubt and not as a source: a thinner dashed bar, no tint and no ruler mark, and a
+      // faded, italic, hollow tag whose name ends in `?`.
+      possible: vscode.window.createTextEditorDecorationType({
+        isWholeLine: true,
+        borderWidth: '0 0 0 2px',
+        borderStyle: 'dashed',
+        borderColor: colour(group),
+        after: {
+          ...label(group, 'dashed', false),
+          fontStyle: 'italic',
+          fontWeight: 'normal',
+          textDecoration: 'none; border-radius: 3px; padding: 0 3px; font-size: 90%; opacity: 0.7',
+        },
+      }),
       chip: vscode.window.createTextEditorDecorationType({
         after: label(group, 'solid', true),
       }),
@@ -151,7 +166,9 @@ function grouped(inputs) {
     const name = input.group || input.name;
     const known = merged.get(name);
     if (!known) {
-      merged.set(name, { ...input, name, sources: [...input.sources], through: [...input.through] });
+      merged.set(name, {
+        ...input, name, sources: [...input.sources], through: [...input.through], possibly: [...(input.possibly || [])],
+      });
       continue;
     }
     for (const source of input.sources) {
@@ -160,6 +177,7 @@ function grouped(inputs) {
       }
     }
     known.through.push(...input.through);
+    known.possibly.push(...(input.possibly || []));
   }
   return [...merged.values()];
 }
@@ -327,6 +345,7 @@ class Sources {
       const sources = new Map();
       const guesses = new Map();
       const through = new Map();
+      const possible = new Map();
       for (const input of grouped(result.inputs.filter(item => groupOf(item) === group))) {
         for (const source of input.sources) {
           if (source.kind === 'entry' && !entries.some(([, text]) => text === `${input.name}↰`)) {
@@ -336,12 +355,14 @@ class Sources {
           }
         }
         for (const range of input.through) addLabel(through, range.start.line, input.name);
+        for (const range of input.possibly || []) addLabel(possible, range.start.line, `${input.name}?`);
         chips.push([group, chipOf(input, line, visible)]);
       }
       const types = this.types[group];
       editor.setDecorations(types.source, labelled(document, sources));
       editor.setDecorations(types.guess, labelled(document, guesses));
       editor.setDecorations(types.through, labelled(document, through));
+      editor.setDecorations(types.possible, labelled(document, possible));
     }
 
     // The chips go after the code on the caret line, and the routine's opening line gets a `↰`

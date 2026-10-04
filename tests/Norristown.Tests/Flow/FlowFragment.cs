@@ -60,8 +60,9 @@ internal static class FlowFragment
     /// <paramref name="line"/> was set, or null where <see cref="InputSources.At"/> has no answer.
     /// Each input is one string: its name, then each source, then each through line after
     /// <c>via</c>. A source is the text of its line, prefixed with its kind unless it is an
-    /// instruction, and an entry source is the word <c>entry</c>. Where a best-effort source says
-    /// what else might have changed the value, that follows in brackets.
+    /// instruction, and an entry source is the word <c>entry</c>. Each line that might also have
+    /// changed a value in memory follows <c>or possibly</c>, and the reason a best-effort source
+    /// gives follows in brackets.
     /// </summary>
     public static IReadOnlyList<string>? SourcesAt(ProgramAnalysis analysis, string line)
     {
@@ -83,6 +84,7 @@ internal static class FlowFragment
                 _ => $"{source.Kind.ToString().ToLowerInvariant()} {Text(model.Tree, source.Line)}",
             });
             var through = input.Through.Count == 0 ? "" : " via " + string.Join(", ", input.Through.Select(span => Text(model.Tree, span)));
+            through += input.Possibly.Count == 0 ? "" : " or possibly " + string.Join(", ", input.Possibly.Select(span => Text(model.Tree, span)));
             var doubted = input.Sources.FirstOrDefault(source => source is { Confidence: SourceConfidence.BestEffort, Reason: not null });
             return $"{input.Name}: {string.Join(", ", sources)}{through}{(doubted is null ? "" : $" [{doubted.Reason}]")}";
         })];

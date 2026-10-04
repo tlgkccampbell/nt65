@@ -134,6 +134,37 @@ public sealed class SourcesRequestsTests
         Assert.All(memory, input => Assert.Equal("bestEffort", input.Sources[0].Confidence));
     }
 
+    /// <summary>
+    /// A line that might have changed a value in memory after its source set it is sent as a line
+    /// of its own, apart from the sources, so a client can draw it as the doubt it is.
+    /// </summary>
+    [Fact]
+    public async Task WhatMightAlsoChangeMemoryIsSentAsLines()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In("""
+            .module main
+            .segment ZEROPAGE
+            .data count: .byte
+            .data ptr: .word
+            .segment CODE
+            .export .proc main {
+                sta count
+                ldy #0
+                sta (ptr),y
+                lda co|unt
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        var count = Assert.Single(result.Inputs);
+        Assert.Equal([6], count.Sources.Select(source => source.Range.Start.Line));
+        Assert.Equal(new Range(new Position(8, 0), new Position(8, 15)), Assert.Single(count.Possibly));
+    }
+
     /// <summary>A line that holds no instruction has no answer.</summary>
     [Fact]
     public async Task ALineWithNoInstructionHasNoAnswer()

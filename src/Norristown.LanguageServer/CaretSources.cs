@@ -31,7 +31,8 @@ internal static class CaretSources
                     source.Confidence == SourceConfidence.Proven ? "proven" : "bestEffort",
                     source.Blocker is { } blocker ? Line(tree, blocker.Start) : null,
                     source.Reason))],
-                [.. input.Through.Select(span => Line(tree, span.Start))]))]);
+                [.. input.Through.Select(span => Line(tree, span.Start))],
+                [.. input.Possibly.Select(span => Line(tree, span.Start))]))]);
     }
 
     /// <summary>

@@ -253,10 +253,10 @@ public sealed class InputSourcesTests
     {
         const string Data = ".segment ZEROPAGE\n.data count: .byte\n.data ptr: .word\n.segment CODE\n";
         Assert.Equal(
-            ["count: sta count [or possibly `sta (ptr),y` on line 11]"],
+            ["count: sta count or possibly sta (ptr),y [or possibly `sta (ptr),y` on line 11]"],
             Sources(Data + ".proc p {\n    sta count\n    ldy #0\n    sta (ptr),y\n    lda count\n    rts\n}\n", "lda count"));
         Assert.Equal(
-            ["count: sta count [or possibly `jsr bump` on line 14]"],
+            ["count: sta count or possibly jsr bump [or possibly `jsr bump` on line 14]"],
             Sources(Data + ".proc bump {\n    inc count\n    rts\n}\n.proc p {\n    sta count\n    jsr bump\n    lda count\n    rts\n}\n", "lda count"));
     }
 

@@ -246,7 +246,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 .OrderBy(span => span.Start)
                 .ToList();
             return new SourcedInput(
-                name, null, category, [.. sources.OrderBy(source => source.Line.Start).ThenBy(source => source.Kind)], through);
+                name, null, category, [.. sources.OrderBy(source => source.Line.Start).ThenBy(source => source.Kind)], through, []);
         }
 
         /// <summary>
@@ -255,14 +255,14 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
         /// </summary>
         public SourcedInput Memory(Location location, MemoryWalk.Value value)
         {
-            var doubts = value.Doubts
+            var possibly = value.Doubts
                 .Select(key => steps.TryGetValue(key, out var at) ? Span(at.Step)?.Span : null)
                 .OfType<TextSpan>()
                 .Distinct()
                 .OrderBy(span => span.Start)
-                .Select(span => $"`{tree.Text[span.Start..span.End].Trim()}` on line {tree.GetLineIndex(span.Start) + 1}")
                 .ToList();
-            var reason = doubts.Count == 0 ? null : "or possibly " + string.Join(", ", doubts);
+            var reason = possibly.Count == 0 ? null : "or possibly " + string.Join(", ", possibly.Select(span =>
+                $"`{tree.Text[span.Start..span.End].Trim()}` on line {tree.GetLineIndex(span.Start) + 1}"));
             var sources = new List<InputSource>();
             foreach (var origin in value.Origins)
             {
@@ -271,7 +271,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
             }
             return new SourcedInput(
                 location.Name, location.Group, InputCategory.Memory,
-                [.. sources.OrderBy(source => source.Line.Start).ThenBy(source => source.Kind)], []);
+                [.. sources.OrderBy(source => source.Line.Start).ThenBy(source => source.Kind)], [], possibly);
         }
 
         /// <summary>Returns the source an origin stands for, or null where its step is not in this file.</summary>

@@ -18,5 +18,12 @@ namespace Norristown.Flow;
 /// the lines come in the file. Such a line is a call that keeps the register, or a pull that
 /// restores a value pushed earlier.
 /// </param>
+/// <param name="Possibly">
+/// The span of each line that might have changed a value in memory after its sources set it, in the
+/// order the lines come in the file. Such a line is a store through a pointer or an index, a call
+/// that may write the location, or a store to another name for the same address. Only memory has
+/// such lines.
+/// </param>
 public sealed record SourcedInput(
-    string Name, string? Group, InputCategory Category, IReadOnlyList<InputSource> Sources, IReadOnlyList<TextSpan> Through);
+    string Name, string? Group, InputCategory Category, IReadOnlyList<InputSource> Sources, IReadOnlyList<TextSpan> Through,
+    IReadOnlyList<TextSpan> Possibly);

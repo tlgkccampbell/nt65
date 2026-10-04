@@ -10,5 +10,10 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Category">The input's kind: <c>register</c>, <c>flag</c>, <c>width</c> or <c>memory</c>.</param>
 /// <param name="Sources">Each place the value was set, in the order the lines come in the document.</param>
 /// <param name="Through">Each line the value passed through unchanged, in the order the lines come in the document.</param>
+/// <param name="Possibly">
+/// Each line that might have changed a value in memory after its sources set it, in the order the
+/// lines come in the document. Only memory has such lines.
+/// </param>
 internal sealed record SourcesInput(
-    string Name, string? Group, string Category, IReadOnlyList<SourceSpan> Sources, IReadOnlyList<Range> Through);
+    string Name, string? Group, string Category, IReadOnlyList<SourceSpan> Sources, IReadOnlyList<Range> Through,
+    IReadOnlyList<Range> Possibly);

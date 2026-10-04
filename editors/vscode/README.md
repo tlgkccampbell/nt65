@@ -29,7 +29,8 @@ build tasks and a schema for the project file.
   for a value the routine's caller set, `A?` where the analysis lost track. Hover the line for
   each source and its code, and for why the analysis lost track. Values in memory are followed
   too, as a best guess drawn with dashes: a location the routine reads before writing it has
-  the last store to it as its source. **Shift+Alt+PageDown** and
+  the last store to it as its source, and a line that might also have changed it, such as a
+  store through a pointer, gets a thin dashed bar and a faded tag ending in `?`. **Shift+Alt+PageDown** and
   **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
 - **What this became, beside the source.** **nt65: Show Output Beside** opens the ca65 for the
   file you are in, as the program stands with whatever you have not saved, and the caret is the

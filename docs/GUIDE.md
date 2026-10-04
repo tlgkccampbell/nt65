@@ -1636,8 +1636,10 @@ everything below works across modules.
   that the routine called reads before writing it, is a value like a register: the last store
   to it is its source, drawn with a dashed bar and a fainter tint. The bytes of a pointer such
   as `ptr` and `ptr+1`, and the members of one struct, share a chip named after the symbol.
-  The hover names anything that might also have changed the value, such as a store through a
-  pointer or a call that may write it.
+  A line that might also have changed the value since, such as a store through a pointer or a
+  call that may write the location, is drawn as a doubt rather than a source: a thin dashed bar
+  with no tint and no scrollbar mark, and a faded tag such as `ptr?`. The hover names those
+  lines too.
 
   The caret line gets one chip per value. `A` means every line that set it is on screen;
   `A↑12` and `A↓3` give the distance to the nearest one, above or round a loop below; `A ×2`
