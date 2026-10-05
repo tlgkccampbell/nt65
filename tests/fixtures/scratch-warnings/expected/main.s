@@ -16,6 +16,7 @@
 .export main__reads_pointer
 .export main__reads_in_loop
 .export main__reads_after_indexed_store
+.export main__stores_one_byte_again
 .export main__reads_in_macro
 .export main__odd
 .export main__draw_row
@@ -32,7 +33,7 @@ buf:    .res 4
 result: .res 1
 
 .segment "CODE": absolute
-; .proc reads_after_call  main.nt65:22
+; .proc reads_after_call  main.nt65:23
 main__reads_after_call:
     lda #1
     sta z:tmp
@@ -41,7 +42,7 @@ main__reads_after_call:
     rts
 ; end of reads_after_call
 
-; .proc reads_through_nested_call  main.nt65:31
+; .proc reads_through_nested_call  main.nt65:32
 main__reads_through_nested_call:
     lda #1
     sta z:tmp
@@ -50,7 +51,7 @@ main__reads_through_nested_call:
     rts
 ; end of reads_through_nested_call
 
-; .proc stores_again  main.nt65:40
+; .proc stores_again  main.nt65:41
 main__stores_again:
     lda #1
     sta z:tmp
@@ -61,7 +62,7 @@ main__stores_again:
     rts
 ; end of stores_again
 
-; .proc callee_leaves_it  main.nt65:51
+; .proc callee_leaves_it  main.nt65:52
 main__callee_leaves_it:
     lda #1
     sta z:other
@@ -70,14 +71,14 @@ main__callee_leaves_it:
     rts
 ; end of callee_leaves_it
 
-; .proc shared_on_purpose  main.nt65:60
+; .proc shared_on_purpose  main.nt65:61
 main__shared_on_purpose:
     jsr returns_result
     lda z:result
     rts
 ; end of shared_on_purpose
 
-; .proc reads_pointer  main.nt65:67
+; .proc reads_pointer  main.nt65:68
 main__reads_pointer:
     lda #0
     sta z:ptr
@@ -88,7 +89,7 @@ main__reads_pointer:
     rts
 ; end of reads_pointer
 
-; .proc reads_in_loop  main.nt65:78
+; .proc reads_in_loop  main.nt65:79
 main__reads_in_loop:
     lda #1
     sta z:tmp
@@ -101,7 +102,7 @@ reads_in_loop__next:
     rts
 ; end of reads_in_loop
 
-; .proc reads_after_indexed_store  main.nt65:91
+; .proc reads_after_indexed_store  main.nt65:92
 main__reads_after_indexed_store:
     lda #1
     sta z:buf + 2
@@ -110,18 +111,27 @@ main__reads_after_indexed_store:
     rts
 ; end of reads_after_indexed_store
 
-; .proc reads_in_macro  main.nt65:104
+; .proc stores_one_byte_again  main.nt65:102
+main__stores_one_byte_again:
+    jsr fills_buf
+    lda #1
+    sta z:buf + 2
+    lda z:buf + 2
+    rts
+; end of stores_one_byte_again
+
+; .proc reads_in_macro  main.nt65:115
 main__reads_in_macro:
     lda #1
     sta z:tmp
     jsr uses_tmp
-    ; reload!()  main.nt65:108
+    ; reload!()  main.nt65:119
     lda z:tmp
     ; end of reload!
     rts
 ; end of reads_in_macro
 
-; .proc odd  main.nt65:113
+; .proc odd  main.nt65:124
 main__odd:
     lda #1
     sta z:other
@@ -130,32 +140,32 @@ main__odd:
     rts
 ; end of odd
 
-; .proc even  main.nt65:121
+; .proc even  main.nt65:132
 even:
     jsr main__odd
     rts
 ; end of even
 
-; .proc uses_tmp  main.nt65:126
+; .proc uses_tmp  main.nt65:137
 uses_tmp:
     sta z:tmp
     rts
 ; end of uses_tmp
 
-; .proc calls_uses_tmp  main.nt65:131
+; .proc calls_uses_tmp  main.nt65:142
 calls_uses_tmp:
     jsr uses_tmp
     rts
 ; end of calls_uses_tmp
 
-; .proc returns_result  main.nt65:136
+; .proc returns_result  main.nt65:147
 returns_result:
     lda #3
     sta z:result
     rts
 ; end of returns_result
 
-; .proc uses_ptr  main.nt65:142
+; .proc uses_ptr  main.nt65:153
 uses_ptr:
     lda #<buf
     sta z:ptr
@@ -164,7 +174,7 @@ uses_ptr:
     rts
 ; end of uses_ptr
 
-; .proc fills_buf  main.nt65:150
+; .proc fills_buf  main.nt65:161
 fills_buf:
     ldx #3
 fills_buf__next:
@@ -174,7 +184,7 @@ fills_buf__next:
     rts
 ; end of fills_buf
 
-; .proc draw_row  main.nt65:160
+; .proc draw_row  main.nt65:171
 main__draw_row:
     sta z:tmp
     jsr plot
@@ -182,19 +192,19 @@ main__draw_row:
     rts
 ; end of draw_row
 
-; .proc plot  main.nt65:167
+; .proc plot  main.nt65:178
 plot:
     jsr mul8
     rts
 ; end of plot
 
-; .proc mul8  main.nt65:172
+; .proc mul8  main.nt65:183
 mul8:
     sta z:tmp
     rts
 ; end of mul8
 
-; .proc argument_overwritten  main.nt65:178
+; .proc argument_overwritten  main.nt65:189
 main__argument_overwritten:
     lda #0
     sta z:ptr
@@ -204,7 +214,7 @@ main__argument_overwritten:
     rts
 ; end of argument_overwritten
 
-; .proc argument_kept  main.nt65:188
+; .proc argument_kept  main.nt65:199
 main__argument_kept:
     lda #0
     sta z:ptr
@@ -214,7 +224,7 @@ main__argument_kept:
     rts
 ; end of argument_kept
 
-; .proc argument_to_tail_call  main.nt65:198
+; .proc argument_to_tail_call  main.nt65:209
 main__argument_to_tail_call:
     lda #0
     sta z:ptr
@@ -223,14 +233,14 @@ main__argument_to_tail_call:
     jmp reads_ptr
 ; end of argument_to_tail_call
 
-; .proc reads_ptr  main.nt65:206
+; .proc reads_ptr  main.nt65:217
 reads_ptr:
     ldy #0
     lda (ptr),y
     rts
 ; end of reads_ptr
 
-; .proc argument_through_fallthrough  main.nt65:213
+; .proc argument_through_fallthrough  main.nt65:224
 main__argument_through_fallthrough:
     lda #1
     sta z:tmp
@@ -239,12 +249,12 @@ main__argument_through_fallthrough:
     rts
 ; end of argument_through_fallthrough
 
-; .proc reads_through_fallthrough  main.nt65:221
+; .proc reads_through_fallthrough  main.nt65:232
 reads_through_fallthrough:
     ldx #0
 ; end of reads_through_fallthrough
 
-; .proc reads_tmp  main.nt65:226
+; .proc reads_tmp  main.nt65:237
 reads_tmp:
     lda z:tmp
     rts

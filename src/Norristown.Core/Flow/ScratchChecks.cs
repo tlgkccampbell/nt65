@@ -138,7 +138,7 @@ internal static class ScratchChecks
                 {
                     if (program.Of(callee) is not { } theirs)
                         continue;
-                    foreach (var slot in theirs.Stores.Keys)
+                    foreach (var slot in theirs.Stores.Keys.SelectMany(program.Bytes))
                         slots = slots.SetItem(slot, new Call(call, callee));
                 }
             }
@@ -448,6 +448,10 @@ internal static class ScratchChecks
     /// </summary>
     private sealed class ProgramScratch
     {
+        // The size of each scratch whose size is known, by the file and the flattened name of its
+        // declaration. Zero page holds at most 256 bytes, so a larger size is not expanded.
+        private readonly Dictionary<(string Path, string Name), long> sizes = [];
+
         /// <summary>
         /// Initializes the routines of <paramref name="files"/>, finds what each stores to and uses,
         /// and works out which run under which handler.
@@ -467,6 +471,11 @@ internal static class ScratchChecks
             }
             Scratch = [.. files.SelectMany(file => file.Model.Symbols.Where(Location.IsScratch))
                 .DistinctBy(symbol => (symbol.Tree.Path, symbol.FlatName))];
+            foreach (var scratch in Scratch)
+            {
+                if (scratch.Size is { } size and > 0 and <= 256)
+                    sizes[(scratch.Tree.Path, scratch.FlatName)] = size;
+            }
             Spread();
             foreach (var handler in Routines.Values.Where(routine => routine.Symbol.Signature?.IsInterrupt == true))
             {
@@ -483,6 +492,19 @@ internal static class ScratchChecks
 
         /// <summary>Gets every scratch the program declares, in the order of its files.</summary>
         public IReadOnlyList<Symbol> Scratch { get; }
+
+        /// <summary>
+        /// Returns the bytes <paramref name="slot"/> stands for. A slot for every byte of a scratch,
+        /// which an indexed store makes, is each of its bytes, so that a later store to one of them
+        /// makes that byte alone the routine's own again. Where the scratch's size is not known, the
+        /// slot stays as it is.
+        /// </summary>
+        public IEnumerable<Slot> Bytes(Slot slot)
+        {
+            if (slot.Offset is not null || !sizes.TryGetValue((slot.Path, slot.Name), out var size))
+                return [slot];
+            return Enumerable.Range(0, (int)size).Select(offset => slot with { Offset = offset });
+        }
 
         /// <summary>Gets each routine an interrupt handler runs, with that handler.</summary>
         public Dictionary<RoutineKey, Symbol> Handlers { get; } = [];
