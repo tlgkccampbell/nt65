@@ -4,12 +4,10 @@
 .module main
 .cpu 65816
 
-.use nt65::wide::{add, inc, mov}
-.use nt65::math::mul16_body
+.use nt65::wide::{add, inc, ldax, mov}
 
 .segment ZEROPAGE
-.data ptr:     .word
-.data product: .byte[4]
+.data ptr: .word
 
 .segment CODE
 .proc run: a8, i8 {
@@ -20,7 +18,7 @@
     add!(ptr, {#1})                     ;! error[call-state-mismatch]: `add!` needs `a8`, but A is 16-bit here
     sep #$20
     rep #$10
-    mul16_body!(ptr, ptr, product)      ;! error[call-state-mismatch]: `mul16_body!` needs `i8`, but X and Y are 16-bit here
+    ldax!(ptr)                          ;! error[call-state-mismatch]: `ldax!` needs `i8`, but X and Y are 16-bit here
     sep #$10
     rts
 }

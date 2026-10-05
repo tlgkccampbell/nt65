@@ -9,21 +9,17 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .export wide__advance
-.export wide__multiply
 
 SCREEN_END = $07e8
 
 .segment "ZEROPAGE": zeropage
-score:   .res 3
-ptr:     .res 2
-factor1: .res 2
-factor2: .res 2
-product: .res 4
+score: .res 3
+ptr:   .res 2
 
 .segment "CODE": absolute
-; .proc advance  wide.nt65:19
+; .proc advance  wide.nt65:15
 wide__advance:
-    ; add!(score, {#100}, bytes = 3)  wide.nt65:20
+    ; add!(score, {#100}, bytes = 3)  wide.nt65:16
     clc
     lda z:score
     adc #$64
@@ -35,13 +31,13 @@ wide__advance:
     adc #$00
     sta z:score+2
     ; end of add!
-    ; inc!(ptr)  wide.nt65:21
+    ; inc!(ptr)  wide.nt65:17
     inc z:ptr
     bne inc__done
     inc z:ptr+1
 inc__done:
     ; end of inc!
-    ; cmp!(ptr, {#SCREEN_END})  wide.nt65:22
+    ; cmp!(ptr, {#SCREEN_END})  wide.nt65:18
 
     lda z:ptr+1
     cmp #$07
@@ -52,37 +48,3 @@ cmp__done:
     ; end of cmp!
     rts
 ; end of advance
-
-; .proc multiply  wide.nt65:26
-wide__multiply:
-    ; mul16_body!(factor1, factor2, product)  wide.nt65:27
-
-    lda #0
-    sta z:product+2
-    sta z:product+3
-    lda z:factor2
-    sta z:product
-    lda z:factor2+1
-    lsr a
-    sta z:product+1
-    ror z:product
-    ldx #16
-mul16_body__bit:
-    bcc mul16_body__shift
-    lda z:product+2
-    clc
-    adc z:factor1
-    sta z:product+2
-    lda z:product+3
-    adc z:factor1+1
-    sta z:product+3
-mul16_body__shift:
-    ror z:product+3
-    ror z:product+2
-    ror z:product+1
-    ror z:product
-    dex
-    bne mul16_body__bit
-    ; end of mul16_body!
-    rts
-; end of multiply

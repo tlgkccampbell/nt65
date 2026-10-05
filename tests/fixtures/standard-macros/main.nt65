@@ -7,21 +7,18 @@
 .use nt65::wide::*
 .use nt65::cmos::*
 .use nt65::regs::*
-.use nt65::math::*
 
-.export run, multiply, divide, to_decimal
+.export run, work
 
 .segment ZEROPAGE
-.data ptr:     .word
-.data other:   .word
-.data score:   .byte[3]
-.data total:   .byte[4]
-.data product: .byte[4]
-.data sign:    .byte
+.data ptr:   .word
+.data other: .word
+.data score: .byte[3]
+.data total: .byte[4]
+.data sign:  .byte
 
 .segment BSS
-.data table:  .word[8]
-.data digits: .byte[5]
+.data table: .word[8]
 
 .segment CODE
 .proc run: a8, i8 {
@@ -60,7 +57,7 @@
         ldx #0
     }
     save!(a, x, y) {
-        jsr multiply
+        jsr work
     }
     asr_a!()
     neg_a!()
@@ -71,17 +68,6 @@
     rts
 }
 
-.proc multiply: a8, i8 {
-    mul16_body!(ptr, other, product)
-    rts
-}
-
-.proc divide: a8, i8 {
-    div16_body!(ptr, other, score)
-    rts
-}
-
-.proc to_decimal: a8, i8 {
-    decimal16_body!(ptr, digits, zero = $b0)
+.proc work: a8, i8 {
     rts
 }

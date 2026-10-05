@@ -3362,11 +3362,9 @@ with nt65, under the root `nt65`, as the charmaps are (§8):
 | `nt65::wide` | arithmetic on values of 2 to 4 bytes, given as `bytes`: `mov`, `add`, `sub`, `inc`, `dec`, `cmp`, `neg`, `asl`, `lsr`, `add8` and `adds8`; and `ldax` and `stax`, which move a 2-byte value through A and X |
 | `nt65::cmos` | `stz`, `phx`, `plx`, `phy`, `ply`, `bra`, `inc_a` and `dec_a`, each the 65C02 instruction where the CPU has it and a stand-in on the 6502 |
 | `nt65::regs` | `save`, which pushes registers around a block and pulls them after it; and `asr_a`, `neg_a`, `abs_a` and `sext_a` |
-| `nt65::math` | `mul16_body`, `div16_body` and `decimal16_body`, each the instructions of a routine that the program declares around it |
 
 They follow the rule of §1: nt65 writes no library code, and a macro writes nothing unless a
-program calls it. A routine too large to expand at each call is a macro of its body, so the
-program owns the proc, its name, its segment and its `rts`. Each macro that depends on the
+program calls it. Each macro that depends on the
 accumulator's or the index registers' width declares `a8` or `i8` (§11.5), so a 65816 call in
 the wrong width is an error at the call. The modules change with the language, since they ship
 inside it, and `tests/corpus/macros` runs every macro under sim65 for the 6502 and the 65C02.

@@ -981,7 +981,7 @@ library spells another processor's instructions.
 The editor can show any call written out as the nt65 it expands to, and can replace the call
 with that text when you want to stop using a macro.
 
-**Macros that come with nt65.** Four modules hold the macros most programs would otherwise
+**Macros that come with nt65.** Three modules hold the macros most programs would otherwise
 write for themselves:
 
 - `nt65::wide` works on values of 2 to 4 bytes: `mov!`, `add!`, `sub!`, `inc!`, `dec!`, `cmp!`,
@@ -991,21 +991,14 @@ write for themselves:
   so that one source serves the 6502 as well.
 - `nt65::regs` holds `save!`, which pushes registers around a block, and `asr_a!`, `neg_a!`,
   `abs_a!` and `sext_a!` for signed values in A.
-- `nt65::math` holds the bodies of 16-bit multiplication, division and decimal conversion.
 
 ```nt65
 .use nt65::wide::{add, inc, cmp}
-.use nt65::math::mul16_body
 
 .proc advance {
     add!(score, {#100}, bytes = 3)      ; a 3-byte score
     inc!(ptr)
     cmp!(ptr, {#SCREEN_END})            ; C and Z as cmp leaves them
-    rts
-}
-
-.proc multiply {                        ; the program names the routine and places it
-    mul16_body!(factor1, factor2, product)
     rts
 }
 ```

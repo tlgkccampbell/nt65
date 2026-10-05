@@ -9,32 +9,28 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .export main__run
-.export main__multiply
-.export main__divide
-.export main__to_decimal
+.export main__work
 
 .segment "ZEROPAGE": zeropage
-ptr:     .res 2
-other:   .res 2
-score:   .res 3
-total:   .res 4
-product: .res 4
-sign:    .res 1
+ptr:   .res 2
+other: .res 2
+score: .res 3
+total: .res 4
+sign:  .res 1
 
 .segment "BSS": absolute
-table:  .res 16
-digits: .res 5
+table: .res 16
 
 .segment "CODE": absolute
-; .proc run: a8, i8  main.nt65:27
+; .proc run: a8, i8  main.nt65:24
 main__run:
-    ; mov!(ptr, {#$1234})  main.nt65:28
+    ; mov!(ptr, {#$1234})  main.nt65:25
     lda #$34
     sta z:ptr
     lda #$12
     sta z:ptr+1
     ; end of mov!
-    ; mov!(total, {table,x}, bytes = 4)  main.nt65:29
+    ; mov!(total, {table,x}, bytes = 4)  main.nt65:26
     lda a:table,x
     sta z:total
     lda a:table+1,x
@@ -44,7 +40,7 @@ main__run:
     lda a:table+3,x
     sta z:total+3
     ; end of mov!
-    ; add!(ptr, other)  main.nt65:30
+    ; add!(ptr, other)  main.nt65:27
     clc
     lda z:ptr
     adc z:other
@@ -53,7 +49,7 @@ main__run:
     adc z:other+1
     sta z:ptr+1
     ; end of add!
-    ; add!(score, {#100}, bytes = 3)  main.nt65:31
+    ; add!(score, {#100}, bytes = 3)  main.nt65:28
     clc
     lda z:score
     adc #$64
@@ -65,7 +61,7 @@ main__run:
     adc #$00
     sta z:score+2
     ; end of add!
-    ; sub!({table,y}, {#1})  main.nt65:32
+    ; sub!({table,y}, {#1})  main.nt65:29
     sec
     lda table,y
     sbc #$01
@@ -74,13 +70,13 @@ main__run:
     sbc #$00
     sta table+1,y
     ; end of sub!
-    ; inc!(ptr)  main.nt65:33
+    ; inc!(ptr)  main.nt65:30
     inc z:ptr
     bne inc__done
     inc z:ptr+1
 inc__done:
     ; end of inc!
-    ; inc!(total, bytes = 4)  main.nt65:34
+    ; inc!(total, bytes = 4)  main.nt65:31
     inc z:total
     bne inc__done_2
     inc z:total+1
@@ -90,7 +86,7 @@ inc__done:
     inc z:total+3
 inc__done_2:
     ; end of inc!
-    ; dec!(ptr)  main.nt65:35
+    ; dec!(ptr)  main.nt65:32
     lda z:ptr
     bne dec__byte0
 dec__byte1:
@@ -98,7 +94,7 @@ dec__byte1:
 dec__byte0:
     dec z:ptr
     ; end of dec!
-    ; dec!(score, bytes = 3)  main.nt65:36
+    ; dec!(score, bytes = 3)  main.nt65:33
     lda z:score
     bne dec__byte0_2
     lda z:score+1
@@ -109,7 +105,7 @@ dec__byte1_2:
 dec__byte0_2:
     dec z:score
     ; end of dec!
-    ; dec!(total, bytes = 4)  main.nt65:37
+    ; dec!(total, bytes = 4)  main.nt65:34
     lda z:total
     bne dec__byte0_3
     lda z:total+1
@@ -124,7 +120,7 @@ dec__byte1_3:
 dec__byte0_3:
     dec z:total
     ; end of dec!
-    ; cmp!(ptr, {#$0400})  main.nt65:38
+    ; cmp!(ptr, {#$0400})  main.nt65:35
 
     lda z:ptr+1
     cmp #$04
@@ -133,7 +129,7 @@ dec__byte0_3:
     cmp #$00
 cmp__done:
     ; end of cmp!
-    ; cmp!(total, {table,x}, bytes = 4)  main.nt65:39
+    ; cmp!(total, {table,x}, bytes = 4)  main.nt65:36
 
     lda z:total+3
     cmp a:table+3,x
@@ -148,7 +144,7 @@ cmp__done:
     cmp a:table,x
 cmp__done_2:
     ; end of cmp!
-    ; neg!(ptr)  main.nt65:40
+    ; neg!(ptr)  main.nt65:37
     sec
     lda #0
     sbc z:ptr
@@ -157,16 +153,16 @@ cmp__done_2:
     sbc z:ptr+1
     sta z:ptr+1
     ; end of neg!
-    ; asl!(score, bytes = 3)  main.nt65:41
+    ; asl!(score, bytes = 3)  main.nt65:38
     asl z:score
     rol z:score+1
     rol z:score+2
     ; end of asl!
-    ; lsr!(ptr)  main.nt65:42
+    ; lsr!(ptr)  main.nt65:39
     lsr z:ptr+1
     ror z:ptr
     ; end of lsr!
-    ; add8!(ptr, {#40})  main.nt65:43
+    ; add8!(ptr, {#40})  main.nt65:40
     clc
     lda z:ptr
     adc #40
@@ -175,7 +171,7 @@ cmp__done_2:
     inc z:ptr+1
 add8__done:
     ; end of add8!
-    ; add8!(score, sign, bytes = 3)  main.nt65:44
+    ; add8!(score, sign, bytes = 3)  main.nt65:41
     clc
     lda z:score
     adc z:sign
@@ -186,7 +182,7 @@ add8__done:
     inc z:score+2
 add8__done_2:
     ; end of add8!
-    ; adds8!(ptr, {table,x})  main.nt65:45
+    ; adds8!(ptr, {table,x})  main.nt65:42
     lda a:table,x
     bpl adds8__positive
     dec z:ptr+1
@@ -198,82 +194,82 @@ adds8__positive:
     inc z:ptr+1
 adds8__done:
     ; end of adds8!
-    ; ldax!({#1000})  main.nt65:46
+    ; ldax!({#1000})  main.nt65:43
     lda #$e8
     ldx #$03
     ; end of ldax!
-    ; ldax!({table,y})  main.nt65:47
+    ; ldax!({table,y})  main.nt65:44
     lda table,y
     ldx a:table+1,y
     ; end of ldax!
-    ; stax!(other)  main.nt65:48
+    ; stax!(other)  main.nt65:45
     sta z:other
     stx z:other+1
     ; end of stax!
 
-    ; stz!(ptr)  main.nt65:50
+    ; stz!(ptr)  main.nt65:47
     lda #0
     sta z:ptr
     ; end of stz!
-    ; stz!({table,x})  main.nt65:51
+    ; stz!({table,x})  main.nt65:48
     lda #0
     sta a:table,x
     ; end of stz!
-    ; phx!()  main.nt65:52
+    ; phx!()  main.nt65:49
     txa
     pha
     ; end of phx!
-    ; plx!()  main.nt65:53
+    ; plx!()  main.nt65:50
     pla
     tax
     ; end of plx!
-    ; phy!()  main.nt65:54
+    ; phy!()  main.nt65:51
     tya
     pha
     ; end of phy!
-    ; ply!()  main.nt65:55
+    ; ply!()  main.nt65:52
     pla
     tay
     ; end of ply!
-    ; inc_a!()  main.nt65:56
+    ; inc_a!()  main.nt65:53
     clc
     adc #1
     ; end of inc_a!
-    ; dec_a!()  main.nt65:57
+    ; dec_a!()  main.nt65:54
     sec
     sbc #1
     ; end of dec_a!
 
-    ; save!(x)  main.nt65:59
+    ; save!(x)  main.nt65:56
     txa
     pha
     ldx #0
     pla
     tax
     ; end of save!
-    ; save!(a, x, y)  main.nt65:62
+    ; save!(a, x, y)  main.nt65:59
     pha
     txa
     pha
     tya
     pha
-    jsr main__multiply
+    jsr main__work
     pla
     tay
     pla
     tax
     pla
     ; end of save!
-    ; asr_a!()  main.nt65:65
+    ; asr_a!()  main.nt65:62
     cmp #$80
     ror a
     ; end of asr_a!
-    ; neg_a!()  main.nt65:66
+    ; neg_a!()  main.nt65:63
     eor #$ff
     clc
     adc #1
     ; end of neg_a!
-    ; abs_a!()  main.nt65:67
+    ; abs_a!()  main.nt65:64
     cmp #$80
     bcc abs_a__done
     ; neg_a!()  (nt65)/regs.nt65:85
@@ -283,108 +279,21 @@ adds8__done:
     ; end of neg_a!
 abs_a__done:
     ; end of abs_a!
-    ; sext_a!(sign)  main.nt65:68
+    ; sext_a!(sign)  main.nt65:65
     ora #$7f
     bmi sext_a__negative
     lda #0
 sext_a__negative:
     sta z:sign
     ; end of sext_a!
-    ; bra!(@end)  main.nt65:69
+    ; bra!(@end)  main.nt65:66
     jmp run__end
     ; end of bra!
 run__end:
     rts
 ; end of run
 
-; .proc multiply: a8, i8  main.nt65:74
-main__multiply:
-    ; mul16_body!(ptr, other, product)  main.nt65:75
-
-    lda #0
-    sta z:product+2
-    sta z:product+3
-    lda z:other
-    sta z:product
-    lda z:other+1
-    lsr a
-    sta z:product+1
-    ror z:product
-    ldx #16
-mul16_body__bit:
-    bcc mul16_body__shift
-    lda z:product+2
-    clc
-    adc z:ptr
-    sta z:product+2
-    lda z:product+3
-    adc z:ptr+1
-    sta z:product+3
-mul16_body__shift:
-    ror z:product+3
-    ror z:product+2
-    ror z:product+1
-    ror z:product
-    dex
-    bne mul16_body__bit
-    ; end of mul16_body!
+; .proc work: a8, i8  main.nt65:71
+main__work:
     rts
-; end of multiply
-
-; .proc divide: a8, i8  main.nt65:79
-main__divide:
-    ; div16_body!(ptr, other, score)  main.nt65:80
-
-    lda #0
-    sta z:score
-    sta z:score+1
-    ldx #16
-div16_body__bit:
-    asl z:ptr
-    rol z:ptr+1
-    rol z:score
-    rol z:score+1
-    lda z:score
-    sec
-    sbc z:other
-    tay
-    lda z:score+1
-    sbc z:other+1
-    bcc div16_body__next
-    sta z:score+1
-    sty z:score
-    inc z:ptr
-div16_body__next:
-    dex
-    bne div16_body__bit
-    ; end of div16_body!
-    rts
-; end of divide
-
-; .proc to_decimal: a8, i8  main.nt65:84
-main__to_decimal:
-    ; decimal16_body!(ptr, digits, zero = $b0)  main.nt65:85
-
-    ldy #4
-decimal16_body__digit:
-    lda #0
-    ldx #16
-decimal16_body__bit:
-    asl z:ptr
-    rol z:ptr+1
-    rol a
-    cmp #10
-    bcc decimal16_body__next
-    sbc #10
-    inc z:ptr
-decimal16_body__next:
-    dex
-    bne decimal16_body__bit
-    clc
-    adc #$b0
-    sta digits,y
-    dey
-    bpl decimal16_body__digit
-    ; end of decimal16_body!
-    rts
-; end of to_decimal
+; end of work

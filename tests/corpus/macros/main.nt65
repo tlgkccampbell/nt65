@@ -9,7 +9,6 @@
 .use nt65::wide::*
 .use nt65::cmos::*
 .use nt65::regs::*
-.use nt65::math::*
 
 ; The address sim65 treats as a call to exit, with the exit code in A.
 .const SIM65_EXIT = $fff9
@@ -28,24 +27,16 @@
 }
 
 .segment ZEROPAGE
-.data c_sp:      .word
-.data check:     .byte
-.data w:         .word
-.data w2:        .word
-.data l:         .byte[4]
-.data l2:        .byte[4]
-.data t:         .byte[4]
-.data factor1:   .word
-.data factor2:   .word
-.data product:   .byte[4]
-.data dividend:  .word
-.data divisor:   .word
-.data remainder: .word
-.data number:    .word
+.data c_sp:  .word
+.data check: .byte
+.data w:     .word
+.data w2:    .word
+.data l:     .byte[4]
+.data l2:    .byte[4]
+.data t:     .byte[4]
 
 .segment BSS
-.data table:  .word[4]
-.data digits: .byte[5]
+.data table: .word[4]
 
 ; Stores the constant value in the bytes at dest, low byte first.
 .macro set(dest: operand(zp, abs), value: const, bytes: const(1..4) = 2) {
@@ -84,38 +75,6 @@
     lda t+3
 }
 
-; Counts a check of mul16_body!, which multiplies m by n.
-.macro expect_product(m: const, n: const) {
-    set!(factor1, m)
-    set!(factor2, n)
-    jsr multiply
-    expect!(product, m * n, bytes = 4)
-    expect!(factor1, m)
-    expect!(factor2, n)
-}
-
-; Counts a check of div16_body!, which divides n by d.
-.macro expect_quotient(n: const, d: const) {
-    set!(dividend, n)
-    set!(divisor, d)
-    jsr divide
-    expect!(dividend, n / d)
-    expect!(remainder, n .mod d)
-    expect!(divisor, d)
-}
-
-; Counts a check of decimal16_body!, which writes n in decimal.
-.macro expect_decimal(n: const) {
-    set!(number, n)
-    jsr to_decimal
-    expect!(digits, n / 10000 + '0', bytes = 1)
-    expect!(digits+1, n / 1000 .mod 10 + '0', bytes = 1)
-    expect!(digits+2, n / 100 .mod 10 + '0', bytes = 1)
-    expect!(digits+3, n / 10 .mod 10 + '0', bytes = 1)
-    expect!(digits+4, n .mod 10 + '0', bytes = 1)
-    expect!(number, 0)
-}
-
 .segment CODE
 .proc start {
     ldx #$ff
@@ -125,7 +84,6 @@
     jsr test_wide
     jsr test_cmos
     jsr test_regs
-    jsr test_math
     lda #0
     jmp SIM65_EXIT
 }
@@ -412,54 +370,5 @@
     lda #0
     sext_a!(t)
     expect!(t, 0, bytes = 1)
-    rts
-}
-
-.proc test_math {
-    expect_product!(0, $ffff)
-    expect_product!(1, 1)
-    expect_product!(300, 200)
-    expect_product!(1234, 5678)
-    expect_product!($ffff, $ffff)
-    expect_product!($8000, 2)
-    expect_product!($00ff, $0101)
-
-    expect_quotient!(60000, 7)
-    expect_quotient!(12345, 1)
-    expect_quotient!(5, 10)
-    expect_quotient!(65535, 3)
-    expect_quotient!(1000, 300)
-    expect_quotient!(65535, 65535)
-    expect_quotient!(40000, $9000)
-    expect_quotient!(65535, $8001)
-    expect_quotient!($fffe, $ffff)
-
-    ; Division by 0 gives a quotient of $ffff and leaves the dividend as the remainder.
-    set!(dividend, 1234)
-    set!(divisor, 0)
-    jsr divide
-    expect!(dividend, $ffff)
-    expect!(remainder, 1234)
-
-    expect_decimal!(0)
-    expect_decimal!(7)
-    expect_decimal!(1234)
-    expect_decimal!(40960)
-    expect_decimal!(65535)
-    rts
-}
-
-.proc multiply {
-    mul16_body!(factor1, factor2, product)
-    rts
-}
-
-.proc divide {
-    div16_body!(dividend, divisor, remainder)
-    rts
-}
-
-.proc to_decimal {
-    decimal16_body!(number, digits)
     rts
 }
