@@ -265,13 +265,13 @@ adds8__done:
     ; end of neg_a!
 abs_a__done:
     ; end of abs_a!
-    ; sext_a!(sign)  main.nt65:65
+    ; sxt_a!(sign)  main.nt65:65
     ora #$7f
-    bmi sext_a__negative
+    bmi sxt_a__negative
     lda #0
-sext_a__negative:
+sxt_a__negative:
     sta z:sign
-    ; end of sext_a!
+    ; end of sxt_a!
     ; bra!(@end)  main.nt65:66
     bra run__end
     ; end of bra!

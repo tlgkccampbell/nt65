@@ -362,13 +362,13 @@
     expect_a!($80)
 
     lda #$80
-    sext_a!(t)
+    sxt_a!(t)
     expect!(t, $ff, bytes = 1)
     lda #$7f
-    sext_a!(t)
+    sxt_a!(t)
     expect!(t, 0, bytes = 1)
     lda #0
-    sext_a!(t)
+    sxt_a!(t)
     expect!(t, 0, bytes = 1)
     rts
 }

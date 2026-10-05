@@ -3361,7 +3361,7 @@ with nt65, under the root `nt65`, as the charmaps are (§8):
 |---|---|
 | `nt65::wide` | arithmetic on values of 2 to 4 bytes, given as `bytes`: `mov`, `add`, `sub`, `inc`, `dec`, `cmp`, `neg`, `asl`, `lsr`, `add8` and `adds8`; and `ldax` and `stax`, which move a 2-byte value through A and X |
 | `nt65::cmos` | `stz`, `phx`, `plx`, `phy`, `ply`, `bra`, `inc_a` and `dec_a`, each the 65C02 instruction where the CPU has it and a stand-in on the 6502 |
-| `nt65::regs` | `save`, which pushes registers around a block and pulls them after it; and `asr_a`, `neg_a`, `abs_a` and `sext_a` |
+| `nt65::regs` | `save`, which pushes registers around a block and pulls them after it; and `asr_a`, `neg_a`, `abs_a` and `sxt_a` |
 
 They follow the rule of §1: nt65 writes no library code, and a macro writes nothing unless a
 program calls it. Each macro that depends on the

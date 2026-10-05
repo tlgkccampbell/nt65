@@ -1,7 +1,7 @@
 ; Idioms on the registers that every 6502 program writes.
 .module nt65::regs
 
-.export save, asr_a, neg_a, abs_a, sext_a
+.export save, asr_a, neg_a, abs_a, sxt_a
 
 ; Pushes the registers in regs, runs body, then pulls them again. The pushes and pulls stay
 ; together, so they cannot fall out of order.
@@ -88,7 +88,7 @@
 
 ; Stores in dest the byte that extends the sign of A, which is $ff when A is negative and $00
 ; when it is not. It destroys A.
-.macro sext_a(dest: operand(zp, zpx, abs, absx, absy)): a8 {
+.macro sxt_a(dest: operand(zp, zpx, abs, absx, absy)): a8 {
     ora #$7f
     bmi @negative
     lda #0

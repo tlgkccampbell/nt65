@@ -990,7 +990,7 @@ write for themselves:
 - `nt65::cmos` spells the 65C02's `stz`, `phx`, `plx`, `phy`, `ply`, `bra`, `inc a` and `dec a`
   so that one source serves the 6502 as well.
 - `nt65::regs` holds `save!`, which pushes registers around a block, and `asr_a!`, `neg_a!`,
-  `abs_a!` and `sext_a!` for signed values in A.
+  `abs_a!` and `sxt_a!` for signed values in A.
 
 ```nt65
 .use nt65::wide::{add, inc, cmp}

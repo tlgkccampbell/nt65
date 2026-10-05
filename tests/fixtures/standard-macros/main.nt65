@@ -62,7 +62,7 @@
     asr_a!()
     neg_a!()
     abs_a!()
-    sext_a!(sign)
+    sxt_a!(sign)
     bra!(@end)
 @end:
     rts
