@@ -24,13 +24,16 @@ internal static class Fixes
         var path = model.Tree.Path;
         foreach (var diagnostic in analysis.DiagnosticsFor(path).Concat(analysis.SuggestionsFor(path)))
         {
-            if (diagnostic.Fix is not { } fix
-                || diagnostic.Span.LineIndex < range.Start.Line || diagnostic.Span.LineIndex > range.End.Line)
-            {
+            if (diagnostic.Span.LineIndex < range.Start.Line || diagnostic.Span.LineIndex > range.End.Line)
                 continue;
+
+            // A diagnostic with a second fix has two readings, and neither is preferred.
+            var readings = diagnostic.Also is null;
+            foreach (var fix in new[] { diagnostic.Fix, diagnostic.Also }.OfType<DiagnosticFix>())
+            {
+                foreach (var change in For(analysis, model, diagnostic, fix))
+                    yield return readings ? change : change with { Preferred = false };
             }
-            foreach (var change in For(analysis, model, diagnostic, fix))
-                yield return change;
         }
     }
 
@@ -242,6 +245,21 @@ internal static class Fixes
             case FixKind.FarBranch:
                 foreach (var change in FarBranch(model, diagnostic, fix.Text))
                     yield return change;
+                break;
+
+            case FixKind.Ensure when fix.Text is { } ensured:
+                yield return Fix(diagnostic, $"Add `.ensure {ensured}`", [Edits.InsertBefore(tree, line, $".ensure {ensured}")]);
+                break;
+
+            case FixKind.Exit when fix is { Text: { } leaves, At: { } routine }
+                && model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == routine) is { } returning
+                && Edits.ExitItem(tree, routine.LineIndex, leaves, (returning.Signature ?? Signature.Default).Entry) is { } exit:
+                yield return Fix(diagnostic, $"Declare that `{returning.Name}` returns with `{leaves}`", [exit]);
+                break;
+
+            case FixKind.StateItem when fix.Text is { } found:
+                yield return Fix(diagnostic, $"Change it to `{found}`",
+                    [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), found)]);
                 break;
 
             default:

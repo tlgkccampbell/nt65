@@ -236,6 +236,36 @@ internal static class Edits
     }
 
     /// <summary>
+    /// Returns an edit that declares <paramref name="item"/> in the exit of the routine
+    /// <paramref name="line"/> opens. It replaces the exit item for the same part of the state,
+    /// or is added where the exit has none. A routine with no signature is given one, with
+    /// <paramref name="entry"/> as its entry. Returns null for a line that opens no routine.
+    /// </summary>
+    public static Edit? ExitItem(SyntaxTree tree, int line, string item, ProcessorState entry)
+    {
+        if (RoutineHead(tree, line) is not var (signature, beforeBrace))
+            return null;
+        if (signature is null)
+            return new Edit(tree, new TextSpan(beforeBrace, 0), $": {FormatState(entry)} -> {item}");
+        if (signature.Exit is not { } exit)
+            return new Edit(tree, new TextSpan(signature.Entry.Span.End, 0), $" -> {item}");
+        var part = PartOf(item);
+        return StateItem.Read(exit).Where(given => given.Part == part).Cast<StateItem?>().FirstOrDefault() is { } replaced
+            ? new Edit(tree, replaced.Node.Span, item)
+            : new Edit(tree, new TextSpan(exit.Span.End, 0), $", {item}");
+    }
+
+    /// <summary>
+    /// Returns the part of the processor state that <paramref name="item"/> declares, read by
+    /// parsing it as the one item of a <c>.state</c>.
+    /// </summary>
+    private static StatePart? PartOf(string item) =>
+        SyntaxTree.Parse("item", $".state {item}\n").Root.DescendantNodes().OfType<StateListSyntax>().FirstOrDefault()
+            is { } list && StateItem.Read(list).Cast<StateItem?>().FirstOrDefault() is { } read
+            ? read.Part
+            : null;
+
+    /// <summary>
     /// Returns an edit that adds <paramref name="register"/> to the <c>reads</c> item in the
     /// signature of the routine <paramref name="line"/> opens. It replaces <c>none</c>, or follows
     /// the registers the item already names. Returns null where the signature writes no

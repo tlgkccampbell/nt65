@@ -204,6 +204,51 @@ public sealed class FixesTests
             ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    bra helper\n}\n",
             ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
         },
+        {
+            "Add `.ensure a16`",
+            ".proc helper: a16, i8 -> a8 {\n    sep #$20\n    rts\n}\n.export .proc main: a8, i8 {\n    jsr helper\n    rts\n}\n",
+            ".proc helper: a16, i8 -> a8 {\n    sep #$20\n    rts\n}\n.export .proc main: a8, i8 {\n    .ensure a16\n    jsr helper\n    rts\n}\n"
+        },
+        {
+            "Add `.ensure a16`",
+            ".macro wide(): a16 -> a8 {\n    lda #$1234\n    sep #$20\n}\n.export .proc main: a8, i8 {\n    wide!()\n    rts\n}\n",
+            ".macro wide(): a16 -> a8 {\n    lda #$1234\n    sep #$20\n}\n.export .proc main: a8, i8 {\n    .ensure a16\n    wide!()\n    rts\n}\n"
+        },
+        {
+            "Add `.ensure a8`",
+            ".export .proc main: a8, i8 {\n    rep #$20\n    rts\n}\n",
+            ".export .proc main: a8, i8 {\n    rep #$20\n    .ensure a8\n    rts\n}\n"
+        },
+        {
+            "Declare that `main` returns with `a16`",
+            ".export .proc main: a8, i8 {\n    rep #$20\n    rts\n}\n",
+            ".export .proc main: a8, i8 -> a16 {\n    rep #$20\n    rts\n}\n"
+        },
+        {
+            "Declare that `main` returns with `a16`",
+            ".export .proc main: a8, i8 -> i8 {\n    rep #$20\n    rts\n}\n",
+            ".export .proc main: a8, i8 -> i8, a16 {\n    rep #$20\n    rts\n}\n"
+        },
+        {
+            "Declare that `main` returns with `emu`",
+            ".export .proc main: a8, i8, native -> native {\n    sec\n    xce\n    rts\n}\n",
+            ".export .proc main: a8, i8, native -> emu {\n    sec\n    xce\n    rts\n}\n"
+        },
+        {
+            "Change it to `a8`",
+            ".export .proc main: a8, i8 {\n    .state a16, i8, native\n    rts\n}\n",
+            ".export .proc main: a8, i8 {\n    .state a8, i8, native\n    rts\n}\n"
+        },
+        {
+            "Change it to `native`",
+            ".export .proc main: a8, i8, native {\n    .state a8, i8, emu\n    rts\n}\n",
+            ".export .proc main: a8, i8, native {\n    .state a8, i8, native\n    rts\n}\n"
+        },
+        {
+            "Change it to `dp = $0000`",
+            ".export .proc main: a8, i8, dp = $0000 {\n    .state a8, i8, native, dp = $2100\n    rts\n}\n",
+            ".export .proc main: a8, i8, dp = $0000 {\n    .state a8, i8, native, dp = $0000\n    rts\n}\n"
+        },
     };
 
     [Theory]
@@ -263,6 +308,39 @@ public sealed class FixesTests
         Assert.Equal(
             Header + ".proc other: a8, i8 -> ? {\n    rts\n}\n.export .proc main: a8, i8 {\n    jsr other\n    .ensure a8\n    lda #1\n    rts\n}\n",
             Editing.Apply(Header + Body, actions[0].Edit!.Changes[Uri]));
+    }
+
+    /// <summary>
+    /// A return that leaves a width other than the one its routine declares has two readings. The
+    /// routine may need to set the width it declares, or it may declare the wrong one. Both fixes
+    /// are offered, and neither is preferred.
+    /// </summary>
+    [Fact]
+    public void AReturnInTheWrongStateOffersBothReadings()
+    {
+        var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8 {\n    rep #$20\n    rts\n}\n");
+
+        var actions = CodeActions.In(analysis, model, Whole).Where(action => action.Kind == "quickfix").ToList();
+
+        Assert.Equal(
+            ["Add `.ensure a8`", "Declare that `main` returns with `a16`"],
+            actions.Select(action => action.Title));
+        Assert.All(actions, action => Assert.False(action.IsPreferred));
+    }
+
+    /// <summary>
+    /// An <c>.ensure</c> before a conditional branch would set the width on the path that falls
+    /// through as well, so a branch to a routine that needs another width is offered no
+    /// <c>.ensure</c>.
+    /// </summary>
+    [Fact]
+    public void ABranchIsOfferedNoEnsure()
+    {
+        var (analysis, model) = Analyzed(Header
+            + ".proc helper: a16, i8 -> a8 {\n    sep #$20\n    rts\n}\n.export .proc main: a8, i8 {\n    beq helper\n    rts\n}\n");
+
+        Assert.Contains(analysis.Diagnostics, diagnostic => diagnostic.Id == "call-state-mismatch");
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.StartsWith("Add `.ensure", StringComparison.Ordinal));
     }
 
     /// <summary>

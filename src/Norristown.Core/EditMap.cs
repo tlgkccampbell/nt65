@@ -67,7 +67,7 @@ internal sealed class EditMap
     public Diagnostic? Moved(Diagnostic diagnostic)
     {
         if (diagnostic.Span.File != before.Path && diagnostic.Related.All(related => related.Span.File != before.Path)
-            && diagnostic.Fix?.At?.File != before.Path)
+            && diagnostic.Fix?.At?.File != before.Path && diagnostic.Also?.At?.File != before.Path)
         {
             return diagnostic;
         }
@@ -80,14 +80,24 @@ internal sealed class EditMap
                 return null;
             related.Add(other with { Span = moved });
         }
-        var fix = diagnostic.Fix;
-        if (fix?.At is { } at)
-        {
-            if (Moved(at) is not { } movedAt)
-                return null;
-            fix = fix with { At = movedAt };
-        }
-        return diagnostic with { Span = span, Related = related, Fix = fix };
+        if (!Moved(diagnostic.Fix, out var fix) || !Moved(diagnostic.Also, out var also))
+            return null;
+        return diagnostic with { Span = span, Related = related, Fix = fix, Also = also };
+    }
+
+    /// <summary>
+    /// Moves the declaration a fix names to its position after the edit. Returns false when the
+    /// edit changed the text of that declaration.
+    /// </summary>
+    private bool Moved(DiagnosticFix? fix, out DiagnosticFix? moved)
+    {
+        moved = fix;
+        if (fix?.At is not { } at)
+            return true;
+        if (Moved(at) is not { } movedAt)
+            return false;
+        moved = fix with { At = movedAt };
+        return true;
     }
 
     private Span? Moved(Span span)

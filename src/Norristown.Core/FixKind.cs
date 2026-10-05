@@ -167,4 +167,23 @@ public enum FixKind
     /// <c>jml</c>. An unconditional branch becomes the <c>jml</c> alone.
     /// </summary>
     FarBranch,
+
+    /// <summary>
+    /// An <c>.ensure</c> of the width the fix's <see cref="DiagnosticFix.Text"/> names, inserted
+    /// before the statement reported.
+    /// </summary>
+    Ensure,
+
+    /// <summary>
+    /// The item the fix's <see cref="DiagnosticFix.Text"/> gives, declared in the exit of the
+    /// routine at <see cref="DiagnosticFix.At"/>. It replaces the exit item for the same part, or
+    /// is added where the exit has none.
+    /// </summary>
+    Exit,
+
+    /// <summary>
+    /// The <c>.state</c> item reported, replaced with the fix's <see cref="DiagnosticFix.Text"/>,
+    /// which states what the analysis finds there.
+    /// </summary>
+    StateItem,
 }

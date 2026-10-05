@@ -49,6 +49,13 @@ public sealed record Diagnostic(
     public DiagnosticFix? Fix { get; init; }
 
     /// <summary>
+    /// Gets a second change an editor may offer beside <see cref="Fix"/>, or null. A diagnostic
+    /// has one where its message allows two readings. An editor then prefers neither, since only
+    /// the programmer knows which was meant.
+    /// </summary>
+    public DiagnosticFix? Also { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether the code the diagnostic is about is not needed, such as a
     /// declaration nothing names or a name imported and never used. An editor shows such code
     /// faded, the usual look for unnecessary code, rather than only listing it.

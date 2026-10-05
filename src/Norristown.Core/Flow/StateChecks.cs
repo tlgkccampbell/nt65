@@ -216,12 +216,14 @@ internal sealed class StateChecks
         {
             if (!IsKnown(needed) || needed == here)
                 return;
+            var item = ProcessorState.Format(register, needed);
             Report(step, Catalogue.CallStateMismatch.Message(
                 what,
-                ProcessorState.Format(register, needed),
+                item,
                 IsKnown(here)
                     ? $"{register.Name} {register.Is} {Format(here)} here"
-                    : $"the width of {register.Name} is not known here"));
+                    : $"the width of {register.Name} is not known here"),
+                EnsuresBefore(step) ? Ensured(step, item, state) : null);
         }
     }
 
@@ -229,9 +231,14 @@ internal sealed class StateChecks
     /// Reports a diagnostic for each part of <paramref name="state"/> that is not what the routine
     /// or macro <paramref name="name"/> declares it returns with.
     /// </summary>
-    /// <remarks><paramref name="where"/> says where <paramref name="state"/> holds, as the message puts it.</remarks>
+    /// <remarks>
+    /// <paramref name="where"/> says where <paramref name="state"/> holds, as the message puts it.
+    /// Where <paramref name="returning"/> is given, the step is that routine's return, and each
+    /// mismatch offers two fixes. One sets the width the routine declares with an <c>.ensure</c>,
+    /// and the other declares what the analysis finds here.
+    /// </remarks>
     public void CheckExit(
-        Step step, string what, string where, ProcessorState exit, ProcessorState state, string name)
+        Step step, string what, string where, ProcessorState exit, ProcessorState state, string name, Symbol? returning = null)
     {
         var lead = what.Length == 0 ? "" : what + " ";
         Part(StateRegister.A, exit.A, state.A);
@@ -249,7 +256,9 @@ internal sealed class StateChecks
                 $"in {Mode(exit.E)} mode",
                 IsKnown(state.E)
                     ? $"the processor is in {Mode(state.E)} mode {where}"
-                    : $"the mode is not known {where}"));
+                    : $"the mode is not known {where}"),
+                Declared(IsKnown(state.E) ? ProcessorState.Format(state.E) : null),
+                null);
         }
 
         Value(StateRegister.DirectPage, exit.D, state.D);
@@ -275,7 +284,9 @@ internal sealed class StateChecks
                     $"with `{declared.Format(register)}`",
                     here.IsBounded
                         ? $"{register.Name} is {here.Describe(register.Digits)} {where}"
-                        : $"{register.Name} is not known {where}"));
+                        : $"{register.Name} is not known {where}"),
+                    Declared(here.IsBounded ? here.Format(register) : null),
+                    null);
             }
         }
 
@@ -293,15 +304,25 @@ internal sealed class StateChecks
             }
             else if (IsKnown(declared) && declared != here)
             {
+                var item = ProcessorState.Format(register, declared);
                 Report(step, Catalogue.ReturnStateMismatch.Message(
                     lead,
                     name,
-                    $"with `{ProcessorState.Format(register, declared)}`",
+                    $"with `{item}`",
                     IsKnown(here)
                         ? $"{register.Name} {register.Is} {Format(here)} {where}"
-                        : $"the width of {register.Name} is not known {where}"));
+                        : $"the width of {register.Name} is not known {where}"),
+                    returning is null ? null : Ensured(step, item, state),
+                    Declared(IsKnown(here) ? ProcessorState.Format(register, here) : null));
             }
         }
+
+        // The routine may instead declare what the analysis finds, where it finds one thing.
+        DiagnosticFix? Declared(string? found) =>
+            returning is not null && found is not null && Own(step, FixKind.Exit, found) is not null
+                && returning.Tree == model.Tree
+                ? new DiagnosticFix(FixKind.Exit, found, returning.DeclarationSpan)
+                : null;
     }
 
     /// <summary>
@@ -315,7 +336,7 @@ internal sealed class StateChecks
             Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"), Own(step, FixKind.Return, "rtl"));
         else if (mnemonic == MnemonicKind.Rtl && !signature.IsFar)
             Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"), Own(step, FixKind.Return, "rts"));
-        CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName);
+        CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName, routine);
     }
 
     /// <summary>
@@ -551,14 +572,39 @@ internal sealed class StateChecks
     }
 
     /// <summary>
+    /// Reports a problem with <paramref name="step"/>'s statement, in the expansion the step
+    /// belongs to, and attaches the two fixes its message allows. Either fix may be null.
+    /// </summary>
+    public void Report(Step step, DiagnosticMessage message, DiagnosticFix? fix, DiagnosticFix? also)
+    {
+        Report(step, message);
+        diagnostics[^1] = (fix, also) switch
+        {
+            (null, null) => diagnostics[^1],
+            (null, { } only) => diagnostics[^1] with { Fix = only },
+            _ => diagnostics[^1] with { Fix = fix, Also = also },
+        };
+    }
+
+    /// <summary>
     /// Reports a problem with <paramref name="node"/>, in the expansion that
     /// <paramref name="step"/> belongs to. A line of a macro body is wrong only for the call that
     /// expanded it. It is reported at that call, which is the side that can change, with the body
     /// line named beside it. A line a call gave as a block argument is the caller's own, and is
     /// reported where it appears.
     /// </summary>
-    public void ReportAt(SyntaxNode node, Step step, DiagnosticMessage message)
+    /// <remarks>
+    /// <paramref name="fix"/> is attached only where the node is a line of this file outside
+    /// every expansion, since a fix elsewhere would change a line that serves more than this one.
+    /// </remarks>
+    public void ReportAt(SyntaxNode node, Step step, DiagnosticMessage message, DiagnosticFix? fix = null)
     {
+        if (fix is not null && step.On is null && node.Tree == model.Tree)
+        {
+            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
+            return;
+        }
+
         var inBody = node.Tree != model.Tree;
         MacroCallSyntax? call = null;
         for (var level = step.On; level is not null; level = level.Outer)
@@ -663,6 +709,28 @@ internal sealed class StateChecks
     /// where the statement is in this file and outside any expansion.
     /// </summary>
     private DiagnosticFix? Mnemonic(Step step, string mnemonic) => Own(step, FixKind.Mnemonic, mnemonic);
+
+    /// <summary>
+    /// Returns a value indicating whether an <c>.ensure</c> before <paramref name="step"/>'s
+    /// statement sets the state for it alone. That holds for a call, a jump and a macro call. A
+    /// conditional branch also falls through to the next line, which the <c>.ensure</c> would
+    /// change too. A relative call's branch must follow its <c>per</c> directly.
+    /// </summary>
+    private static bool EnsuresBefore(Step step) => step.Statement switch
+    {
+        MacroCallSyntax => true,
+        InstructionStatementSyntax instruction =>
+            Instructions.Facts(instruction.MnemonicKind).Control is Control.Calls or Control.Jumps,
+        _ => false,
+    };
+
+    /// <summary>
+    /// Returns a fix that adds <c>.ensure</c> <paramref name="item"/> before the statement, where
+    /// the statement is in this file and outside any expansion. An <c>.ensure</c> needs native
+    /// mode, so none is offered where the processor is not known to be in it.
+    /// </summary>
+    private DiagnosticFix? Ensured(Step step, string item, ProcessorState state) =>
+        state.E == ProcessorMode.Native ? Own(step, FixKind.Ensure, item) : null;
 
     /// <summary>
     /// Returns a fix of <paramref name="kind"/> with <paramref name="text"/>, where the statement

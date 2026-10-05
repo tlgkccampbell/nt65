@@ -860,7 +860,8 @@ public sealed class StateAnalysis : IProcessorStates
                     if (StateChecks.IsKnown(item.Mode) && StateChecks.IsKnown(processor.E) && item.Mode != processor.E)
                     {
                         report?.ReportAt(item.Node, step, Catalogue.StateModeMismatch.Message(
-                            item.Text, StateChecks.Mode(processor.E)));
+                            item.Text, StateChecks.Mode(processor.E)),
+                            new DiagnosticFix(FixKind.StateItem, ProcessorState.Format(processor.E)));
                     }
                     processor = processor with { E = item.Mode };
                     break;
@@ -910,7 +911,8 @@ public sealed class StateAnalysis : IProcessorStates
             if (here.IsBounded && !here.Values.Contains(value))
             {
                 report?.ReportAt(item.Node, step,
-                    Catalogue.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)));
+                    Catalogue.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)),
+                    new DiagnosticFix(FixKind.StateItem, here.Format(register)));
             }
             return StateValue.Of(value);
         }
@@ -930,7 +932,8 @@ public sealed class StateAnalysis : IProcessorStates
             }
             if (here.Narrowed(banks) is { } narrowed)
                 return narrowed;
-            report?.ReportAt(item.Node, step, Catalogue.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)));
+            report?.ReportAt(item.Node, step, Catalogue.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)),
+                new DiagnosticFix(FixKind.StateItem, here.Format(register)));
             return StateValue.Among(banks);
         }
 
@@ -939,7 +942,8 @@ public sealed class StateAnalysis : IProcessorStates
             if (StateChecks.IsKnown(item.Width) && StateChecks.IsKnown(here) && item.Width != here)
             {
                 report?.ReportAt(item.Node, step, Catalogue.StateWidthMismatch.Message(
-                    item.Text, register.Name, register.Is, StateChecks.Format(here)));
+                    item.Text, register.Name, register.Is, StateChecks.Format(here)),
+                    new DiagnosticFix(FixKind.StateItem, ProcessorState.Format(register, here)));
             }
             return item.Width;
         }
