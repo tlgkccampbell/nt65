@@ -100,7 +100,7 @@ internal sealed class MemoryInference
             var locations = stored.Locations;
             foreach (var step in block.Steps)
             {
-                if (MemoryAccess.Of(file.Model, file.Layout, step) is not { } access)
+                if (MemoryAccess.Of(file, step) is not { } access)
                     continue;
                 if (access.Reads && access.Direct is { } loaded && !locations.Contains(loaded))
                     read?.Add(loaded);

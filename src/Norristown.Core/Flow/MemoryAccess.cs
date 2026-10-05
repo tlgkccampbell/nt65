@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using Norristown.Layout;
 using Norristown.Processor;
-using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.Flow;
@@ -11,7 +10,9 @@ namespace Norristown.Flow;
 /// <see cref="InputSources"/> follows it. Only direct addressing names a <see cref="Location"/>.
 /// An indexed operand names the location it starts from, and an indirect one names nothing,
 /// because either may reach a location other than the one it names. An indirect operand does read
-/// its pointer directly, though, so the bytes of the pointer are reads of their own.
+/// its pointer directly, though, so the bytes of the pointer are reads of their own. An operand
+/// that a <c>.patch</c> says the program rewrites is taken as indexed, because the location written
+/// in the source is only where the program starts from.
 /// </summary>
 /// <param name="Direct">The location a direct operand names, or null.</param>
 /// <param name="Reads">Whether the instruction reads the memory it reaches.</param>
@@ -23,11 +24,12 @@ internal readonly record struct MemoryAccess(
     Location? Direct, bool Reads, bool Stores, Location? Indexed, bool Indirect, ImmutableArray<Location> Pointer)
 {
     /// <summary>
-    /// Returns how the instruction at <paramref name="step"/> reaches memory, or null where it
-    /// neither reads nor writes memory through its operand.
+    /// Returns how the instruction at <paramref name="step"/> in <paramref name="file"/> reaches
+    /// memory, or null where it neither reads nor writes memory through its operand.
     /// </summary>
-    public static MemoryAccess? Of(SemanticModel model, CodeLayout layout, Step step)
+    public static MemoryAccess? Of(FileAnalysis file, Step step)
     {
+        var (model, layout) = (file.Model, file.Layout);
         if (step.Statement is not InstructionStatementSyntax statement)
             return null;
         var mnemonic = statement.MnemonicKind;
@@ -44,6 +46,8 @@ internal readonly record struct MemoryAccess(
 
         var operand = StepOperands.Of(model, step);
         var location = operand is null ? null : Location.Of(model, CodeLayout.Expression(operand), step.On);
+        if (file.Flow.Patched.Contains(step.Key))
+            return new MemoryAccess(null, reads, stores, location, false, []);
         return mode switch
         {
             AddressingMode.Direct or AddressingMode.Absolute or AddressingMode.Long

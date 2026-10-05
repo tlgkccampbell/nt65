@@ -825,36 +825,11 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns the block moves in the file that stand on a label a <c>.patch</c> names, which are
     /// the ones whose banks the program writes.
     /// </summary>
-    private HashSet<StepKey> PatchedMoves()
-    {
-        var targets = new HashSet<Symbol>();
-        foreach (var step in layout.Steps)
-        {
-            foreach (var patch in flow.AnnotationsOf(step).OfType<PatchDirectiveSyntax>())
-            {
-                foreach (var target in Annotations.TargetsOf(patch))
-                {
-                    if (Targets.Of(model, target, step.On)?.Symbol is { } symbol)
-                        targets.Add(symbol);
-                }
-            }
-        }
-
-        var moves = new HashSet<StepKey>();
-        var labelled = false;
-        foreach (var step in layout.Steps)
-        {
-            if (step.Label is { } label)
-            {
-                labelled |= targets.Contains(label);
-                continue;
-            }
-            if (labelled && step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Mvn or MnemonicKind.Mvp })
-                moves.Add(step.Key);
-            labelled = false;
-        }
-        return moves;
-    }
+    private HashSet<StepKey> PatchedMoves() =>
+        [.. layout.Steps
+            .Where(step => step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Mvn or MnemonicKind.Mvp }
+                && flow.Patched.Contains(step.Key))
+            .Select(step => step.Key)];
 
     /// <summary>
     /// Returns the state after a <c>.state</c>, reporting where it disagrees with the state here.

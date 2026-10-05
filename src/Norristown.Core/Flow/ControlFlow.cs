@@ -25,6 +25,10 @@ public sealed class ControlFlow
     private readonly Dictionary<StepKey, RelativeCall> relativeCalls;
     private readonly HashSet<StepKey> returnAddresses;
 
+    // The instructions whose operands the program rewrites, found the first time any is asked
+    // about. Two threads that ask at once find the same set.
+    private HashSet<StepKey>? patched;
+
     private ControlFlow(SemanticModel model, CodeLayout layout)
         : this(model, layout, [], [], [])
     {
@@ -76,6 +80,13 @@ public sealed class ControlFlow
     /// or null before it has been worked out.
     /// </summary>
     internal Func<Symbol, RoutineReads>? ReadsOf { get; set; }
+
+    /// <summary>
+    /// Gets each instruction that stands on a label a <c>.patch</c> names, in every expansion it
+    /// is laid out in. The program rewrites such an instruction's operand as it runs, so the
+    /// operand as written says only where the program starts from.
+    /// </summary>
+    internal IReadOnlySet<StepKey> Patched => patched ??= FindPatched();
 
     /// <summary>Works out where control goes in <paramref name="layout"/>'s file.</summary>
     public static ControlFlow Of(SemanticModel model, CodeLayout layout)
@@ -823,6 +834,38 @@ public sealed class ControlFlow
     /// Returns the labels a table or a list expands to. The result is empty when the target does
     /// not expand to labels and so names only itself.
     /// </summary>
+    /// <summary>Returns each instruction that stands on a label a <c>.patch</c> names.</summary>
+    private HashSet<StepKey> FindPatched()
+    {
+        var targets = new HashSet<Symbol>();
+        foreach (var step in layout.Steps)
+        {
+            foreach (var patch in AnnotationsOf(step).OfType<PatchDirectiveSyntax>())
+            {
+                foreach (var target in Annotations.TargetsOf(patch))
+                {
+                    if (Targets.Of(model, target, step.On)?.Symbol is { } symbol)
+                        targets.Add(symbol);
+                }
+            }
+        }
+
+        var found = new HashSet<StepKey>();
+        var labelled = false;
+        foreach (var step in layout.Steps)
+        {
+            if (step.Label is { } label)
+            {
+                labelled |= targets.Contains(label);
+                continue;
+            }
+            if (labelled && step.Statement is InstructionStatementSyntax)
+                found.Add(step.Key);
+            labelled = false;
+        }
+        return found;
+    }
+
     private IEnumerable<(Symbol Symbol, Expansion? At)> Spread(Symbol target, Expansion? on)
     {
         var items = target.Kind == SymbolKind.List

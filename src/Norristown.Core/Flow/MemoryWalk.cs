@@ -99,7 +99,7 @@ internal sealed class MemoryWalk
         var step = block.Steps[index];
         if (step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Brk or MnemonicKind.Cop })
             state = state.Each((_, value) => value.Doubted(step.Key));
-        else if (MemoryAccess.Of(file.Model, file.Layout, step) is { Stores: true } access)
+        else if (MemoryAccess.Of(file, step) is { Stores: true } access)
             state = state.Each((location, value) => Stored(location, value, access, step.Key));
 
         if (index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block))

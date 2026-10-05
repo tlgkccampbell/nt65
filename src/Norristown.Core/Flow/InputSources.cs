@@ -113,7 +113,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
         {
             IReadOnlyList<Location> locations = index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block)
                 ? [.. block.Calls.SelectMany(inference.ReadsOf).Distinct()]
-                : MemoryAccess.Of(file.Model, file.Layout, block.Steps[index]) is { } access
+                : MemoryAccess.Of(file, block.Steps[index]) is { } access
                     ? [.. access.Reads && access.Direct is { } read ? [read] : Array.Empty<Location>(), .. access.Pointer]
                     : [];
             wanted.Add((block, index, locations));

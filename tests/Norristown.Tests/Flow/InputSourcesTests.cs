@@ -278,6 +278,24 @@ public sealed class InputSourcesTests
     }
 
     /// <summary>
+    /// An instruction a <c>.patch</c> names has its operand rewritten as the program runs, so the
+    /// location written in the source is only where it starts. A store there might change the
+    /// location, and a read there is not an input.
+    /// </summary>
+    [Fact]
+    public void APatchedOperandIsOnlyWhereTheProgramStarts()
+    {
+        const string Data = ".segment ZEROPAGE\n.data count: .byte\n.segment CODE\n";
+        Assert.Equal(
+            ["count: stx count or possibly sta count [or possibly `sta count` on line 13]"],
+            Sources(Data + ".proc p {\n    stx count\n    lda #1\n    sta store + 1\n    .patch store\n"
+                + "store:\n    sta count\n    lda count\n    rts\n}\n", "lda count"));
+        Assert.Equal(
+            [],
+            Sources(Data + ".proc p {\n    lda #1\n    sta load + 1\n    .patch load\nload:\n    ldy count\n    rts\n}\n", "ldy count"));
+    }
+
+    /// <summary>
     /// A call whose routine writes a location on every path is where the location's value came
     /// from. Round a loop, a call can be the source of its own next call's input.
     /// </summary>
