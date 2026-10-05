@@ -82,10 +82,10 @@
 .data order: .byte[OBJECTS]         ; the objects, from the top of the screen down
 
 .segment ZEROPAGE
-.data next:     .byte               ; the place in `order` of the next object to show
-.data position: .byte               ; the place in `order` that `sort` is filling
-.data moving:   .byte               ; the object `sort` is placing
-.data key:      .byte               ; its Y
+.data next:        .byte            ; the place in `order` of the next object to show
+.scratch position: .byte            ; the place in `order` that `sort` is filling
+.scratch moving:   .byte            ; the object `sort` is placing
+.scratch key:      .byte            ; its Y
 
 .segment RODATA
 .data starts: .type Object[] {
