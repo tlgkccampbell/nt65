@@ -128,8 +128,24 @@ public static class SegmentLinks
                 ? [new RunArea(config.Path, area.Name, first, first + length - 1, area.Declaration)]
                 : [],
             IsDefined = placed.Defines,
+            Unwritten = Unwritten(placed, config),
         };
         return new Placed(segment, config.Path, note);
+    }
+
+    /// <summary>
+    /// Returns why ld65 writes none of a segment's bytes, or null when it writes them. ld65 writes
+    /// the bytes of a <c>ro</c> or <c>rw</c> segment into the file of the memory area it loads
+    /// into. It writes no bytes for a <c>bss</c> or <c>zp</c> segment, and only warns where one
+    /// holds values. A load area with <c>file = ""</c> is written nowhere, without a warning.
+    /// </summary>
+    private static string? Unwritten(LinkerConfig.PlacedSegment placed, LinkerConfig config)
+    {
+        if (placed.Type is "bss" or "zp")
+            return $"has `type = {placed.Type}`";
+        return placed.Load is { } load && config.Area(load) is { IsWritten: false }
+            ? $"loads into memory area \"{load}\", whose `file` is empty"
+            : null;
     }
 
     /// <summary>
@@ -194,6 +210,7 @@ public static class SegmentLinks
             Placements = [.. first.Placements, .. segment.Placements],
             Runs = [.. first.Runs, .. segment.Runs],
             IsDefined = first.IsDefined || segment.IsDefined,
+            Unwritten = segment.Unwritten is null ? null : first.Unwritten,
         };
     }
 

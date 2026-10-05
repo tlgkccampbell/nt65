@@ -1,0 +1,19 @@
+; A segment that two links place is reported only when neither of them writes its bytes.
+.module main
+
+.cpu 6502
+
+; The cartridge drops WORK's bytes, but the disk build writes them, so values here are fine.
+.segment WORK
+.data limit: .word $1234
+
+; Neither link writes a `bss` segment.
+.segment BSS
+.data table: .byte[2] { 1, 2 }      ;! error[never-written]: `table` has values in segment "BSS", which has `type = bss`, so ld65 never writes them
+
+.segment CODE
+.proc main {
+    lda limit
+    sta table
+    rts
+}

@@ -508,7 +508,11 @@ line, such as `%S`, is unknown, never guessed, and a bank nt65 cannot tell is le
 project file to give. A standard segment a config places is declared there, at its standard
 size. In such a project a region, a block, an import's `in`, or a `.loadof` or `.runof` that
 names a segment no config places is an error, which ld65 would otherwise report as a missing memory area; a `.loadof`
-or `.runof` of a segment without `define = yes` is an error too.
+or `.runof` of a segment without `define = yes` is an error too. ld65 writes no bytes for a
+`bss` or `zp` segment, and none for one that loads into a memory area with `file = ""`, so
+values or code in such a segment never reach memory, and giving them is an error. ld65 only
+warns about the first and says nothing about the second. A segment that several links place
+is reported only when none of them writes it, and room that is only reserved is never reported.
 
 A program linked more than once, such as a cartridge and a sound file that share objects,
 names a link for each. nt65 analyzes each module once, whichever links it goes into, so a
@@ -1836,8 +1840,8 @@ values, the merged stack keeps its depth and forgets the values.
 - a direct operand naming a symbol in a segment with a declared `dp` is an error if D
   differs, and an error if D is not known, because the operand reaches the symbol only when D
   holds that value. An interrupt handler is entered with whatever D the interrupted code
-  held, so it sets D, or declares it with `dp =` in its signature or a `.state`, before it
-  names such a symbol;
+  held, and its signature cannot say otherwise, so it sets D itself before it names such a
+  symbol;
 - an absolute operand of an instruction that reads or writes data, naming a symbol in a
   segment with a declared `bank`, is an error if B is neither that home bank nor one of its
   `mirrors`, and where B is one of a set, if any bank of the set is neither;

@@ -121,6 +121,8 @@ public sealed partial class CodeLayout
         /// </summary>
         private void Place(StatementSyntax statement, int length)
         {
+            if (length > 0)
+                CheckWritten(statement);
             var offset = filled.GetValueOrDefault(Measured);
             layout.positions[StepKey.Of(statement, expansion)] = new BytePosition(Measured, offset, length);
             if (length == DataLengths.Unpredictable && segment is { } named)
@@ -130,6 +132,43 @@ public sealed partial class CodeLayout
             else
                 filled[Measured] = offset + length;
         }
+
+        /// <summary>
+        /// Reports bytes that hold values in a segment whose bytes ld65 never writes, because the
+        /// values never reach memory. A data declaration is reported once, at its first line of
+        /// values, and a routine's code once, at its first instruction. Room that is only reserved
+        /// holds no values and is left alone.
+        /// </summary>
+        private void CheckWritten(StatementSyntax statement)
+        {
+            if (segment is null || model.Segments.Find(segment) is not { Unwritten: { } why })
+                return;
+            if (statement is DataDirectiveSyntax directive && !HasValues(directive))
+                return;
+
+            var data = statement is DataDirectiveSyntax or DataValuesSyntax;
+            DataDeclarationSyntax? declaration = null;
+            for (var node = statement.Parent; data && declaration is null && node is not null; node = node.Parent)
+                declaration = node as DataDeclarationSyntax;
+            object owner = data ? (object?)declaration ?? statement : (object?)routine ?? statement;
+            if (!unwritten.Add((owner, expansion)))
+                return;
+
+            var what = declaration is not null ? $"`{declaration.Name.Text}` has values"
+                : data ? "this line has values"
+                : routine is not null ? $"`{routine.DisplayName}` has instructions"
+                : "this line has an instruction";
+            Report(statement, Catalogue.NeverWritten.Message(what, segment, why));
+        }
+
+        /// <summary>
+        /// Returns a value indicating whether a data directive gives values rather than only
+        /// reserving room. A directive with nothing after its element type reserves room, and so
+        /// does a <c>.res</c> or an <c>.align</c>.
+        /// </summary>
+        private static bool HasValues(DataDirectiveSyntax directive) =>
+            directive.Tail is not null
+            && directive.Directive.DirectiveKind is not (DirectiveKind.Res or DirectiveKind.Align);
 
         /// <summary>
         /// Records a <c>.fallthrough</c>, which generates nothing and is recorded where the routine's

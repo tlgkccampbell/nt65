@@ -1,0 +1,8 @@
+{
+  "cpu": "6502",
+  "files": ["*.nt65"],
+  "links": {
+    "cart": { "config": "cart.cfg" },
+    "disk": { "config": "disk.cfg" }
+  }
+}

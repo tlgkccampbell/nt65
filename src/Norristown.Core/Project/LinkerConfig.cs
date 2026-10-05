@@ -47,7 +47,12 @@ public sealed class LinkerConfig
                 name,
                 attributes.TryGetValue("start", out var start) ? Value(start) : null,
                 attributes.TryGetValue("size", out var size) ? Value(size) : null,
-                at));
+                at)
+            {
+                // ld65 writes an area to the output file unless its `file` is empty. A `file` given
+                // as anything nt65 cannot read is taken as written, so nothing is reported for it.
+                IsWritten = Word(attributes, "file") != "",
+            });
         }
 
         var segments = new List<PlacedSegment>();
@@ -156,7 +161,14 @@ public sealed class LinkerConfig
     /// <param name="Start">The address where the area starts.</param>
     /// <param name="Size">The area's size in bytes.</param>
     /// <param name="Declaration">Where the configuration names the area.</param>
-    public sealed record MemoryArea(string Name, long? Start, long? Size, Span Declaration);
+    public sealed record MemoryArea(string Name, long? Start, long? Size, Span Declaration)
+    {
+        /// <summary>
+        /// Gets a value indicating whether ld65 writes the area to an output file. It does unless
+        /// the area gives <c>file = ""</c>.
+        /// </summary>
+        public bool IsWritten { get; init; } = true;
+    }
 
     /// <summary>Represents one entry of the <c>SEGMENTS</c> block.</summary>
     /// <param name="Name">The segment's name.</param>

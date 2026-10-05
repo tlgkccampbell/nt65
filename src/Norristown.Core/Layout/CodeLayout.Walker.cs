@@ -54,6 +54,10 @@ public sealed partial class CodeLayout
         private readonly IReadOnlySet<Symbol> measured;
         private readonly Dictionary<Symbol, long> extents = [];
 
+        // The data declarations and routines already reported for values in a segment ld65 never
+        // writes, each with the expansion it was laid out in, so each is reported once.
+        private readonly HashSet<(object Owner, Expansion? On)> unwritten = [];
+
         // The streams the walk is inside, innermost last. Each region and each segment block is a
         // stream of its own, so that the flow analysis can tell a detour from the code around it. A
         // nested segment block is a detour, so the stream around it resumes where it left off.

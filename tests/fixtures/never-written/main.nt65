@@ -1,0 +1,37 @@
+; Values in a segment whose bytes ld65 never writes never reach memory. Room that is only
+; reserved is what such a segment is for.
+.module main
+
+.cpu 6502
+
+.segment ZEROPAGE
+.data ptr:   .addr
+.data count: .byte 3                ;! error[never-written]: `count` has values in segment "ZEROPAGE", which has `type = zp`, so ld65 never writes them
+
+.segment BSS
+.data spare: .byte[4]
+.data table: .byte[4] { 1, 2, 3, 4 }  ;! error[never-written]: `table` has values in segment "BSS", which has `type = bss`, so ld65 never writes them
+
+; A segment that is `rw` is written only when the area it loads into has a file.
+.segment WORK
+.data limit: .word $1234            ;! error[never-written]: `limit` has values in segment "WORK", which loads into memory area "RAM", whose `file` is empty, so ld65 never writes them
+
+; Code is bytes too, and a routine is reported once, at its first instruction.
+.segment BSS
+.proc stray {
+    lda #1                              ;! error[never-written]: `stray` has instructions in segment "BSS", which has `type = bss`, so ld65 never writes them
+    sta ptr
+    rts
+}
+
+; DATA loads with the ROM, which ld65 writes, and runs in RAM once the program copies it there.
+.segment DATA
+.data lives: .byte 3
+
+.segment CODE
+.proc main {
+    lda lives
+    sta count
+    jsr stray
+    rts
+}

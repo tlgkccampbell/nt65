@@ -343,6 +343,12 @@ link, and so is `.loadof` of a segment the config does not give `define = yes`. 
 linked twice, such as a cartridge and a music file, names both configs, and a segment they
 both place must be the same in each.
 
+**Values ld65 never writes are an error.** ld65 writes no bytes for a `bss` or `zp` segment,
+and none for a segment that loads into a memory area with `file = ""`. Values given there,
+such as `.data count: .byte 3` in `ZEROPAGE`, never reach memory, and neither does code. Leave
+the values out and set them in code, or load them with the program and copy them where they
+run, as a `DATA` segment with `load = ROM, run = RAM` does.
+
 **Banks and overlays cannot see each other.** When a linked config runs two segments in
 different memory areas that cover the same addresses, such as the switchable banks of a
 cartridge mapper or two disk overlays with one load address, only one of them is ever mapped.

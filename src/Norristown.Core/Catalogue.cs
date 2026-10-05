@@ -2325,6 +2325,17 @@ public static class Catalogue
             + "in `CODE`, nt65 has no default segment, and nothing is placed just by coming first. Put a "
             + "`.segment` line, such as `.segment CODE`, above it.");
 
+    internal static DiagnosticDescriptor NeverWritten { get; } = Entry(
+        Area.Placement,
+        "never-written",
+        Severity.Error,
+        "{0} in segment \"{1}\", which {2}, so ld65 never writes them",
+        "ld65 writes a segment's bytes only when the segment is `ro` or `rw` and the memory area it loads into "
+            + "has a file. A `bss` or `zp` segment, or one that loads into an area with `file = \"\"`, only reserves "
+            + "room, so values given there never reach memory and the program starts with whatever the memory "
+            + "held. Leave the values out and set them in code, or move them to a segment that loads into an area "
+            + "ld65 writes, and copy them where they run.");
+
     internal static DiagnosticDescriptor InstructionInData { get; } = Entry(
         Area.Placement,
         "instruction-in-data",
@@ -3175,7 +3186,8 @@ public static class Catalogue
         "A `d:` operand, and a direct operand on a symbol whose segment declares `dp`, is an offset from the "
             + "direct page register D, so nt65 needs D's value to know which address it reaches. Set D first, or "
             + "declare it with `.state dp = ...` at this point or with `dp = ...` in the routine's signature. An "
-            + "interrupt handler starts with D unknown, because it runs with whatever D the interrupted code held.");
+            + "interrupt handler starts with D unknown, because it runs with whatever D the interrupted code held, "
+            + "so it sets D itself.");
 
     internal static DiagnosticDescriptor DirectPageOutOfReach { get; } = Entry(
         Area.ProcessorState,

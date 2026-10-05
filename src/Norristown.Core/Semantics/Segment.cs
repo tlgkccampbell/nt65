@@ -57,6 +57,12 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     public bool IsDefined { get; init; }
 
     /// <summary>
+    /// Gets why ld65 writes none of the segment's bytes, such as <c>has `type = bss`</c>, or null
+    /// when some linked configuration writes them. It is null for a program without <c>links</c>.
+    /// </summary>
+    public string? Unwritten { get; init; }
+
+    /// <summary>
     /// Gets where the project file's <c>segments</c> adds to a segment that a linked configuration
     /// declares, or null when it adds nothing.
     /// </summary>
