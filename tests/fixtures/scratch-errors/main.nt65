@@ -1,0 +1,12 @@
+; Scratch holds nothing until a routine stores to it, so `.scratch` takes no values.
+.module main
+.cpu 6502
+
+.segment ZEROPAGE
+.scratch tmp:   .byte
+.scratch ptr:   .addr = $FB
+.scratch count: .byte 5             ;! error[scratch-has-values]: `.scratch` declares working storage, which holds nothing until a routine stores to it: write `.scratch count: .byte` with no values
+.scratch pair:  .byte[2] { 1, 2 }   ;! error[scratch-has-values]: `.scratch` declares working storage, which holds nothing until a routine stores to it: write `.scratch pair: .byte` with no values
+.scratch mixed {                    ;! error[scratch-has-values]: `.scratch` declares working storage, which holds nothing until a routine stores to it: write `.scratch mixed: .byte` with no values
+    .byte 1
+}

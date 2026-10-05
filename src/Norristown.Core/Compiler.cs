@@ -480,6 +480,7 @@ public static class Compiler
             Diagnostics = Collected(project, analysis.Cpu, cpu, program, reuse, [
                 .. registers, .. placements.Diagnostics,
                 .. Flow.RunningOnChecks.Check(program, analysis.Files, placements),
+                .. Flow.ScratchChecks.Check(analysis.Files),
                 .. OutputNames.Collisions(analysis, placements)]),
             Reused = reuse,
             Placements = placements,

@@ -491,6 +491,21 @@ was last written to it, such as a bank latch, behaves as memory and stays `.data
 .mmio CIA1:       .byte[16] = $DC00
 ```
 
+**Scratch.** Zero page is scarce, so routines often share a few working bytes. Declare those
+bytes with `.scratch` in place of `.data`, which says that they never carry a value into or out
+of a call. nt65 then warns where a routine stores to scratch, calls a routine that may store to
+the same bytes, and reads them back afterwards, because the read may see the other routine's
+value. The warning names the call and the store that may have overwritten the byte. Scratch takes
+no values, and `= address` places it at a fixed address.
+
+```nt65
+.scratch tmp: .byte
+.scratch ptr: .addr = $FB
+```
+
+Memory that a routine uses to return a result, or to receive an argument, is not scratch, and
+stays `.data`.
+
 **Mixed data.** `.data name { ... }` holds data directives of any kind, nested `.data`
 declarations, which become members such as `name::sub`, and `@` positions private to the
 block. It is how you write a file header or any record whose layout is not a struct.

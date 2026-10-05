@@ -198,7 +198,7 @@ internal static class TextMateGrammar
             TextMateRule.Scoped($@"(?i)(\.macro)\s+({Word})", Directive, Macro),
             TextMateRule.Scoped($@"(?i)(\.scope)\s+({Word})", Directive, Namespace),
             TextMateRule.Scoped($@"(?i)(\.(?:charmap|signature))\s+({Word})", Directive, Type),
-            TextMateRule.Scoped($@"(?i)(\.(?:data|mmio|list|frame))\s+({Word})", Directive, Variable),
+            TextMateRule.Scoped($@"(?i)(\.(?:data|mmio|scratch|list|frame))\s+({Word})", Directive, Variable),
             TextMateRule.Scoped($@"(?i)(\.const)\s+({Word})", Directive, Constant),
             TextMateRule.Scoped($@"(?i)(\.export)\s+({Word})(?=\s*\??=(?!=))", Directive, Constant),
             new TextMateRule(Match: @"\.[A-Za-z_][A-Za-z0-9_]*", Name: Directive),

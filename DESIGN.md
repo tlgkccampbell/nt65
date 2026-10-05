@@ -870,6 +870,7 @@ marker file.
 | `.data name: element`, `.data name { ... }` | data: an address with a size in bytes, a count of elements for an element type, and a scope of its members or of its type's fields (§8). |
 | `.data name [: element] = expr` | **data found elsewhere**: data at the address `expr` gives, with no bytes of its own. Without an element type it takes the one at the address, where there is one (§8). |
 | `.mmio name: element = expr` | a **hardware register**: data found elsewhere that the hardware owns rather than the program (§8). |
+| `.scratch name: element [= expr]` | **scratch**: working storage that never carries a value into or out of a call (§8). |
 | `.charmap name { ... }` | a text encoding (§8). |
 | `.list name { ... }` | a named sequence of expressions (§6.4). |
 | `.func name(...) = expr` | a pure expression function (§9). |
@@ -2225,6 +2226,38 @@ and is declared with `.data`.
 .mmio VIC_BORDER: .byte = $D020
 .mmio CIA1:       .byte[16] = $DC00
 ```
+
+**Scratch.** `.scratch name: element` declares working storage that routines share and that
+never carries a value into or out of a call. It is laid out and written exactly as `.data` is,
+and `= expr` places it at a fixed address, as for data found elsewhere. It takes no values,
+because a value would suggest that it holds something when a routine starts.
+
+Sharing zero-page bytes between routines by hand is a classic source of bugs, so nt65 checks
+scratch. A read of scratch is a warning when some path to it, since the routine last stored to
+the same byte, passes a call to a routine that may store to it, directly or through a routine it
+calls in turn. The warning names the call and the store. A loop brings a call in its body round
+to a read at its top, and a cycle of calls makes every routine of the cycle store what any of
+them stores.
+
+```nt65
+.scratch tmp: .byte
+
+.proc draw_row {
+    sta tmp
+    jsr plot            ; plot calls mul8, which stores to tmp
+    lda tmp             ; warning: tmp may have been overwritten by the call to plot
+    rts
+}
+```
+
+The check follows only instructions that name scratch directly, never what memory holds. The
+programmer's word that the bytes are working storage is what makes it sound to check, as
+`.state saves` is for a save (§7.7). A direct store makes a byte the routine's own again. An
+indexed store counts as a store to every byte of the scratch it names. A store through a
+pointer is not seen, and a call nt65 cannot follow, such as one through `.next ?` or to an
+import, is taken to store nothing. Those gaps can only miss a warning, never cause one. Memory
+that passes a value through a call on purpose, such as a result a routine returns in zero page,
+is declared with `.data`, and the check does not look at it.
 
 The element type may be left out, and the declaration then takes the one at the address. Offsets
 count bytes, as they always have in assembly, so where an offset lands decides what is there:
@@ -4092,7 +4125,7 @@ alone and without an assembler:
   call that may write it, or a store to another name for the same address. A hardware register
   that `.mmio` declares (§8) is not followed at all, because the hardware sets what it holds.
   This does not go back on memory being the programmer's word (§7.7). Nothing warns, errors or checks a promise
-  because of it, and it is wrong in exactly the cases a guess from names can be;
+  because of it, apart from the check on scratch (§8), which the programmer declares, and it is wrong in exactly the cases a guess from names can be;
 - complete what may be written at the caret, and only that: the statements the place the
   caret is in accepts, so that a file's top level offers declarations and only code offers
   instructions, labels and what they say about the processor; the forms an instruction has
@@ -5139,6 +5172,7 @@ data-decl   := '.data' ident ':' data
              | '.data' ident '{' NL mixed* '}'
              | '.data' ident (':' element count?)? '=' expr   ; found elsewhere
              | '.mmio' ident ':' element count? '=' expr      ; a hardware register
+             | '.scratch' ident ':' element count? ('=' expr)? ; scratch
 mixed       := data | data-decl | local ':' data? | macro-call
              | if-block | repeat-block | each-block  ; their contents mixed too
 data        := element count? values?

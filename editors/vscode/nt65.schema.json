@@ -430,6 +430,8 @@
         "saves-in-signature",
         "saves-not-a-store",
         "scope-has-no-address",
+        "scratch-has-values",
+        "scratch-overwritten",
         "segment-attribute-not-constant",
         "segment-attribute-out-of-range",
         "segment-attribute-twice",

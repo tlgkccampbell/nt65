@@ -31,6 +31,12 @@ public enum DirectiveKind
     /// </summary>
     Mmio,
 
+    /// <summary>
+    /// <c>.scratch</c>: declares data that holds a routine's working values and never carries a
+    /// value into or out of a call.
+    /// </summary>
+    Scratch,
+
     /// <summary><c>.proc</c>: declares a routine.</summary>
     Proc,
 

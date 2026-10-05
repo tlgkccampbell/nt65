@@ -39,6 +39,7 @@ public sealed class DirectivePlacesTests
         [".cpu"] = ".cpu 65816",
         [".data"] = ".data room#: .byte 0",
         [".mmio"] = ".mmio port#: .byte = $D000",
+        [".scratch"] = ".scratch tmp#: .byte",
         [".dword"] = ".dword 0",
         [".each"] = ".each Kind, kind# {\n}",
         [".ensure"] = ".ensure a8",
