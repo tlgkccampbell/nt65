@@ -178,8 +178,8 @@ public sealed class ExtensionTests : IDisposable
 
     /// <summary>
     /// Every command the client registers is one the palette offers, and every command the
-    /// palette offers is one the client registers. The one exception is <c>nt65.rename</c>, which
-    /// only the server invokes and nobody types.
+    /// palette offers is one the client registers. The exceptions are <c>nt65.rename</c> and
+    /// <c>nt65.applyEdit</c>, which only the server invokes and nobody types.
     /// </summary>
     [Fact]
     public void TheCommandsOfferedAreTheCommandsRegistered()
@@ -187,7 +187,7 @@ public sealed class ExtensionTests : IDisposable
         var offered = Package.RootElement.GetProperty("contributes").GetProperty("commands")
             .EnumerateArray().Select(command => command.GetProperty("command").GetString() ?? "")
             .Order(StringComparer.Ordinal);
-        var registered = Registered().Where(name => name != "nt65.rename").Order(StringComparer.Ordinal);
+        var registered = Registered().Where(name => name is not ("nt65.rename" or "nt65.applyEdit")).Order(StringComparer.Ordinal);
         Assert.Equal(offered, registered);
 
         // A lone file gets a server, because the extension starts on the language and not only

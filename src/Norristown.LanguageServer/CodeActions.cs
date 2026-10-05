@@ -98,22 +98,28 @@ internal static class CodeActions
     private static Protocol.CodeAction ToCodeAction(Change change)
     {
         change = WithLineBreaksOfFiles(change);
-        var edits = change.Edits
+        return new Protocol.CodeAction(
+            change.Title,
+            change.Kind,
+            change.For is { } diagnostic ? [Lsp.ToDiagnostic(diagnostic)] : [],
+            ToWorkspaceEdit(change),
+            change.Preferred,
+            Renaming(change),
+            change.Refused is { } why ? new Protocol.CodeActionDisabled(why) : null);
+    }
+
+    /// <summary>
+    /// Converts the edits of <paramref name="change"/> to the protocol's workspace edit, grouped
+    /// by the file each belongs to and written with that file's line breaks.
+    /// </summary>
+    public static Protocol.WorkspaceEdit ToWorkspaceEdit(Change change) =>
+        new(WithLineBreaksOfFiles(change).Edits
             .GroupBy(edit => edit.Tree)
             .ToDictionary(
                 group => Uris.ToUri(group.Key.Path),
                 group => (IReadOnlyList<Protocol.TextEdit>)[.. group
                     .OrderBy(edit => edit.Span.Start)
-                    .Select(edit => new Protocol.TextEdit(Lsp.ToRange(edit.Tree, edit.Span), edit.Text))]);
-        return new Protocol.CodeAction(
-            change.Title,
-            change.Kind,
-            change.For is { } diagnostic ? [Lsp.ToDiagnostic(diagnostic)] : [],
-            new Protocol.WorkspaceEdit(edits),
-            change.Preferred,
-            Renaming(change),
-            change.Refused is { } why ? new Protocol.CodeActionDisabled(why) : null);
-    }
+                    .Select(edit => new Protocol.TextEdit(Lsp.ToRange(edit.Tree, edit.Span), edit.Text))]));
 
     /// <summary>
     /// Returns <paramref name="change"/> with the line breaks in its edits written the way each

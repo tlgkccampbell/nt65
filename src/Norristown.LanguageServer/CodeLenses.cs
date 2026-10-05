@@ -18,6 +18,11 @@ namespace Norristown.LanguageServer;
 /// others.
 /// </para>
 /// <para>
+/// Clicking a routine's read or preserved registers declares them in its signature, through the
+/// client's <c>nt65.applyEdit</c> command. A lens offers this only where the analysis followed
+/// every path and the signature does not already say the same.
+/// </para>
+/// <para>
 /// The routines a <see cref="Family"/> declares get no lenses. Every instance is declared on the
 /// family's single line, so their lenses would all land on it, one per instance, and make a line
 /// too long to read. The hover on that line gives each instance's cost and registers instead.
@@ -41,9 +46,10 @@ internal static class CodeLenses
                 continue;
             if (Format(region.Cost, region.Total, "never returns", true) is { } cost)
                 Add(region.Routine.NameSpan, 0, cost);
-            Add(region.Routine.NameSpan, 1, $"reads {Hovers.Format(region.Reads.Read, region.Reads.Complete)}");
+            Add(region.Routine.NameSpan, 1, $"reads {Hovers.Format(region.Reads.Read, region.Reads.Complete)}",
+                RegisterDeclarations.Reads(tree, region));
             if (Kept(region) is { } kept)
-                Add(region.Routine.NameSpan, 2, kept);
+                Add(region.Routine.NameSpan, 2, kept, RegisterDeclarations.Keeps(tree, region));
             foreach (var scope in region.Scopes)
             {
                 if (Format(scope.Cost, null, null, true) is { } inline)
@@ -53,8 +59,10 @@ internal static class CodeLenses
                 Add(scope.Opener, 2, Format(scope.Kept, scope.Complete));
         }
 
-        void Add(TextSpan at, int kind, string text) =>
-            lenses.Add((at.Start, kind, new Protocol.CodeLens(Lsp.ToRange(tree, at), new Protocol.Command(text, ""))));
+        void Add(TextSpan at, int kind, string text, Change? declares = null) =>
+            lenses.Add((at.Start, kind, new Protocol.CodeLens(Lsp.ToRange(tree, at), declares is null
+                ? new Protocol.Command(text, "")
+                : new Protocol.Command(text, "nt65.applyEdit", [CodeActions.ToWorkspaceEdit(declares)]))));
         return [.. lenses.OrderBy(lens => lens.At).ThenBy(lens => lens.Kind).Select(lens => lens.Lens)];
     }
 

@@ -11,6 +11,7 @@ namespace Norristown.LanguageServer;
 /// <item>Organize the <c>.use</c> items.</item>
 /// <item>Export a declaration, or stop exporting it.</item>
 /// <item>Declare a routine's exit state.</item>
+/// <item>Declare the registers a routine reads and the ones it keeps.</item>
 /// <item>Rewrite a width change as an <c>.ensure</c>, or write an <c>.ensure</c> out as
 /// instructions.</item>
 /// <item>Give a number a name.</item>
@@ -50,6 +51,7 @@ internal static class Refactors
             .. UseItems.Organized(model, line),
             .. Exported(model, line),
             .. Leaves(analysis, model, line),
+            .. Registers(analysis, model, line),
             .. Widths(analysis, model, line),
             .. Named(model, caret, line),
             .. Labels(analysis.Program, model, caret),
@@ -247,6 +249,26 @@ internal static class Refactors
         var clause = declared is null ? $": {Edits.FormatState(signature.Entry)} -> {items}" : $" -> {items}";
         yield return new Change($"Declare what `{routine.Name}` leaves: `-> {items}`", CodeActionKinds.Rewrite,
             [new Edit(tree, new TextSpan(beforeBrace, 0), clause)]);
+    }
+
+    /// <summary>
+    /// Offers to declare the registers a routine reads and the ones it keeps, as the analysis
+    /// finds them, on the line that declares the routine. A routine a family declares is left
+    /// out, because its signature is the family's and serves every instance.
+    /// </summary>
+    private static IEnumerable<Change> Registers(ProgramAnalysis analysis, SemanticModel model, int line)
+    {
+        var tree = model.Tree;
+        if (Edits.DeclaredOn(model, line) is not { Kind: SymbolKind.Proc } routine
+            || model.Families.Any(family => family.Instances.Any(instance => instance.NameSpan == routine.NameSpan))
+            || analysis.FlowFor(tree.Path)?.Regions.FirstOrDefault(region => region.Routine == routine) is not { } region)
+        {
+            yield break;
+        }
+        if (RegisterDeclarations.Reads(tree, region) is { } reads)
+            yield return reads;
+        if (RegisterDeclarations.Keeps(tree, region) is { } keeps)
+            yield return keeps;
     }
 
     /// <summary>

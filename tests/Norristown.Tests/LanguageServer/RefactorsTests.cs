@@ -210,6 +210,36 @@ public sealed class RefactorsTests
     }
 
     /// <summary>
+    /// The registers a routine reads and the ones it keeps are declared from what the analysis
+    /// finds. A <c>keeps</c> the signature already has is replaced rather than given a second.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc add: a8, i8 {", "Declare `reads a, c` for `add`", ".proc add: a8, i8, reads a, c {")]
+    [InlineData(".proc add: a8, i8 {", "Declare `keeps x, y` for `add`", ".proc add: a8, i8, keeps x, y {")]
+    [InlineData(".proc add: a8, i8, keeps x {", "Declare `keeps x, y` for `add`", ".proc add: a8, i8, keeps x, y {")]
+    [InlineData(".proc add {", "Declare `reads a, c` for `add`", ".proc add: reads a, c {")]
+    public void WhatARoutineReadsAndKeepsIsDeclared(string head, string title, string declared)
+    {
+        const string Body = "\n    adc $10\n    sta $10\n    rts\n}\n";
+        const string Start = ".module main\n.cpu 65816\n.segment CODE\n";
+
+        var action = Single(Start + head + Body, ".proc add", title);
+
+        Assert.Equal(Start + declared + Body, Editing.Apply(Start + head + Body, action.Edit!.Changes[Uri]));
+    }
+
+    /// <summary>
+    /// Registers a signature already declares as the analysis finds them are not offered again.
+    /// </summary>
+    [Fact]
+    public void DeclaredRegistersAreNotOfferedAgain()
+    {
+        const string Main = ".module main\n.cpu 65816\n.segment CODE\n.proc add: a8, i8, reads a, c, keeps x, y {\n    adc $10\n    sta $10\n    rts\n}\n";
+
+        Assert.DoesNotContain(Actions(Main, At(Main, ".proc add")), action => action.Title.StartsWith("Declare `", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// A <c>rep</c> that only changes a width is converted to the <c>.ensure</c> that says so, and
     /// back.
     /// </summary>

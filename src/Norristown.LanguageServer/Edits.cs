@@ -236,6 +236,19 @@ internal static class Edits
     }
 
     /// <summary>
+    /// Returns an edit that puts <paramref name="item"/> in the signature of the routine
+    /// <paramref name="line"/> opens. It replaces the item there that starts with
+    /// <paramref name="name"/>, such as <c>reads</c>, or is added where there is none. Returns
+    /// null for a line that opens no routine.
+    /// </summary>
+    public static Edit? RegistersItem(SyntaxTree tree, int line, string name, string item) =>
+        RoutineHead(tree, line) is ({ } signature, _)
+            && signature.Entry.DescendantNodes().OfType<StateRegistersItemSyntax>()
+                .FirstOrDefault(given => given.Name.Text.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } replaced
+            ? new Edit(tree, replaced.Span, item)
+            : SignatureItem(tree, line, item);
+
+    /// <summary>
     /// Returns an edit that declares <paramref name="item"/> in the exit of the routine
     /// <paramref name="line"/> opens. It replaces the exit item for the same part of the state,
     /// or is added where the exit has none. A routine with no signature is given one, with

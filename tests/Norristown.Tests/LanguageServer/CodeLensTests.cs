@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Norristown.LanguageServer.Protocol;
 using static Norristown.Tests.LanguageServer.EditingWorkspace;
 
@@ -417,6 +418,57 @@ public sealed class CodeLensTests
             [(2, "reads none"), (5, "reads A, C"), (11, "reads X, ?")],
             lenses.Where(lens => lens.Command.Title.StartsWith("reads ", StringComparison.Ordinal))
                 .Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+    }
+
+    /// <summary>
+    /// Clicking a routine's read or preserved registers declares them in its signature. A lens
+    /// whose list nt65 could not complete, or whose registers the signature already declares,
+    /// does nothing when clicked.
+    /// </summary>
+    [Fact]
+    public async Task ClickingARegistersLensDeclaresThem()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc add {
+                adc $10
+                sta $10
+                rts
+            }
+            .proc declared: reads a, c, keeps x, y {
+                adc $10
+                sta $10
+                rts
+            }
+            .proc rom = $FFD2
+            .proc asks {
+                stx $10
+                jsr rom
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        // Each clickable lens carries the edit, which inserts the item into the signature.
+        string Clicked(int line, string title)
+        {
+            var lens = Assert.Single(lenses, lens => lens.Range.Start.Line == line && lens.Command.Title == title);
+            if (lens.Command.Name.Length == 0)
+                return "";
+            Assert.Equal("nt65.applyEdit", lens.Command.Name);
+            return Assert.IsType<JsonElement>(Assert.Single(lens.Command.Arguments!))
+                .GetProperty("changes").GetProperty(MainUri)[0].GetProperty("newText").GetString()!;
+        }
+        Assert.Equal(": reads a, c", Clicked(2, "reads A, C"));
+        Assert.Equal(": keeps x, y", Clicked(2, "preserves X, Y"));
+        Assert.Equal("", Clicked(7, "reads A, C"));
+        Assert.Equal("", Clicked(7, "preserves X, Y"));
+        Assert.Equal("", Clicked(13, "reads X, ?"));
     }
 
     /// <summary>

@@ -217,11 +217,14 @@ async function activate(context) {
         ],
       },
     });
-  // `nt65.rename` is invoked by the server, never typed by the user, so it is registered here
-  // but not contributed in package.json, and the command palette does not list it.
+  // `nt65.rename` and `nt65.applyEdit` are invoked by the server, never typed by the user, so
+  // they are registered here but not contributed in package.json, and the command palette does
+  // not list them. A code lens runs `nt65.applyEdit` to make the edit it carries.
   context.subscriptions.push(
     vscode.commands.registerCommand('nt65.selectConfiguration', selectConfiguration),
     vscode.commands.registerCommand('nt65.rename', renameAt),
+    vscode.commands.registerCommand('nt65.applyEdit', async edit =>
+      vscode.workspace.applyEdit(await client.protocol2CodeConverter.asWorkspaceEdit(edit))),
     vscode.commands.registerCommand('nt65.restartServer', () => client.restart()),
     // A definition or reference that leads into a module that comes with nt65 opens its source,
     // which no file holds, so the server supplies the text.
