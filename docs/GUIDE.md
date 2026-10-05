@@ -981,6 +981,38 @@ library spells another processor's instructions.
 The editor can show any call written out as the nt65 it expands to, and can replace the call
 with that text when you want to stop using a macro.
 
+**Macros that come with nt65.** Four modules hold the macros most programs would otherwise
+write for themselves:
+
+- `nt65::wide` works on values of 2 to 4 bytes: `mov!`, `add!`, `sub!`, `inc!`, `dec!`, `cmp!`,
+  `neg!`, `asl!`, `lsr!`, `add8!` and `adds8!`, which adds a signed byte. `ldax!` and `stax!`
+  move a 2-byte value through A and X, as cc65 passes one.
+- `nt65::cmos` spells the 65C02's `stz`, `phx`, `plx`, `phy`, `ply`, `bra`, `inc a` and `dec a`
+  so that one source serves the 6502 as well.
+- `nt65::regs` holds `save!`, which pushes registers around a block, and `asr_a!`, `neg_a!`,
+  `abs_a!` and `sext_a!` for signed values in A.
+- `nt65::math` holds the bodies of 16-bit multiplication, division and decimal conversion.
+
+```nt65
+.use nt65::wide::{add, inc, cmp}
+.use nt65::math::mul16_body
+
+.proc advance {
+    add!(score, {#100}, bytes = 3)      ; a 3-byte score
+    inc!(ptr)
+    cmp!(ptr, {#SCREEN_END})            ; C and Z as cmp leaves them
+    rts
+}
+
+.proc multiply {                        ; the program names the routine and places it
+    mul16_body!(factor1, factor2, product)
+    rts
+}
+```
+
+Each macro's comment, which hover shows, says what it destroys. On the 65816 they need 8-bit
+registers, and a call with a 16-bit one is an error at the call.
+
 ## What nt65 follows through your code
 
 nt65 follows control flow through every routine: where each instruction can go next, and on

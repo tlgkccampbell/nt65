@@ -61,7 +61,7 @@ public sealed class StandardModulesTests
 
         var files = ("main.nt65", ".module main\n.use nt65::cbm::screen\n.segment RODATA\n.data text: .byte screen(\"HI\")\n");
         var with = Analysis.Program(files);
-        Assert.Equal(3, with.Program.Files.Count(file => StandardModules.IsStandard(file.Tree.Path)));
+        Assert.Equal(StandardModules.Trees.Count, with.Program.Files.Count(file => StandardModules.IsStandard(file.Tree.Path)));
         Assert.Empty(with.Problems());
         Assert.Equal(["main.s", "main.s.lines"], Analysis.Outputs(files).Keys.Order(StringComparer.Ordinal));
     }

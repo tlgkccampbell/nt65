@@ -3352,6 +3352,25 @@ nt65 expands macros itself and emits flat code, with a comment naming the invoca
 ca65's `.macro` is not used in the output, so nt65's macro semantics never depend on
 ca65's.
 
+### 11.8 Macros that come with nt65
+
+The instruction idioms most programs write for themselves are macros in modules that come
+with nt65, under the root `nt65`, as the charmaps are (§8):
+
+| module | macros |
+|---|---|
+| `nt65::wide` | arithmetic on values of 2 to 4 bytes, given as `bytes`: `mov`, `add`, `sub`, `inc`, `dec`, `cmp`, `neg`, `asl`, `lsr`, `add8` and `adds8`; and `ldax` and `stax`, which move a 2-byte value through A and X |
+| `nt65::cmos` | `stz`, `phx`, `plx`, `phy`, `ply`, `bra`, `inc_a` and `dec_a`, each the 65C02 instruction where the CPU has it and a stand-in on the 6502 |
+| `nt65::regs` | `save`, which pushes registers around a block and pulls them after it; and `asr_a`, `neg_a`, `abs_a` and `sext_a` |
+| `nt65::math` | `mul16_body`, `div16_body` and `decimal16_body`, each the instructions of a routine that the program declares around it |
+
+They follow the rule of §1: nt65 writes no library code, and a macro writes nothing unless a
+program calls it. A routine too large to expand at each call is a macro of its body, so the
+program owns the proc, its name, its segment and its `rts`. Each macro that depends on the
+accumulator's or the index registers' width declares `a8` or `i8` (§11.5), so a 65816 call in
+the wrong width is an error at the call. The modules change with the language, since they ship
+inside it, and `tests/corpus/macros` runs every macro under sim65 for the 6502 and the 65C02.
+
 ## 12. Modules
 
 Every file is a module, and says which first:
@@ -3361,7 +3380,7 @@ Every file is a module, and says which first:
 ```
 
 A file without one is an error, a single-file build included, and no module of a program's
-may be `nt65` or under it, which is reserved for the modules that come with nt65 (§8). Two files may not be the
+may be `nt65` or under it, which is reserved for the modules that come with nt65 (§8, §11.8). Two files may not be the
 same module. A module's name may be a path, and a path is only a name: `gfx::sprite` needs no
 module `gfx`, and has no special view into it or into `gfx::tile`. **A module is one file**,
 and unless something places it (below) it is one ca65 translation unit. That buys what no

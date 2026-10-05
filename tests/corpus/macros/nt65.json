@@ -1,0 +1,8 @@
+{
+  "cpu": "6502",
+  "files": ["*.nt65"],
+  "out": "build",
+  "links": {
+    "sim65": { "config": "sim65.cfg" }
+  }
+}

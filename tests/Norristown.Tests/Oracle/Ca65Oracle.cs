@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -7,8 +8,8 @@ namespace Norristown.Tests.Oracle;
 
 /// <summary>
 /// Runs ca65 built from the pinned cc65 commit (<c>scripts/cc65.commit</c>). It never runs a
-/// ca65 found on PATH, or a build that reports a different commit. The ld65 and cc65 beside it
-/// come from the same build.
+/// ca65 found on PATH, or a build that reports a different commit. The ld65, cc65 and sim65
+/// beside it come from the same build.
 /// </summary>
 internal sealed partial class Ca65Oracle
 {
@@ -20,6 +21,7 @@ internal sealed partial class Ca65Oracle
     private readonly string ca65;
     private readonly string ld65;
     private readonly string cc65;
+    private readonly string sim65;
     private readonly string commit;
 
     // A hash of the assembler binary itself. The commit identifies the source ca65 was built
@@ -41,6 +43,7 @@ internal sealed partial class Ca65Oracle
         ca65 = ca65Path;
         ld65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "ld65.exe" : "ld65");
         cc65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "cc65.exe" : "cc65");
+        sim65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "sim65.exe" : "sim65");
         commit = pinnedCommit;
         binary = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(ca65Path)));
         linker = File.Exists(ld65) ? Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(ld65))) : "";
@@ -211,6 +214,26 @@ internal sealed partial class Ca65Oracle
             return code == 0 && printed.Trim().Length == 0
                 ? ""
                 : printed.Trim() + (code == 0 ? "" : $"\n(exit code {code})");
+        }
+        finally
+        {
+            work.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="image"/>, a program linked for sim65, in cc65's simulator. The
+    /// simulator stops the program after <paramref name="cycles"/> cycles, so a program that
+    /// never exits fails rather than hanging the test.
+    /// </summary>
+    /// <returns>The program's exit code, and what sim65 printed.</returns>
+    public (int ExitCode, string Output) Simulate(byte[] image, long cycles)
+    {
+        var work = Directory.CreateTempSubdirectory("nt65-sim65-");
+        try
+        {
+            File.WriteAllBytes(Path.Combine(work.FullName, "program.bin"), image);
+            return Execute(sim65, ["-x", cycles.ToString(CultureInfo.InvariantCulture), "program.bin"], work.FullName);
         }
         finally
         {

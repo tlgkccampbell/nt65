@@ -212,13 +212,16 @@ internal static class TextMateGrammar
 
             // After `::` a word is a member, even one spelled like a mnemonic or a register.
             TextMateRule.Scoped($@"::({Word})", Identifier),
-            new TextMateRule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Mnemonics.Select(SyntaxFacts.TextOf))})\b", Name: Mnemonic),
+            // A mnemonic followed by `!(` names a macro being called, such as `inc!(ptr)`, as the
+            // parser reads it. Before a `!` alone it stays an instruction, since `lda !flag` takes
+            // the logical not of `flag`.
+            new TextMateRule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Mnemonics.Select(SyntaxFacts.TextOf))})\b(?!\s*!\s*\()", Name: Mnemonic),
             new TextMateRule(Match: $@"(?i)\b(?:{string.Join("|", SyntaxFacts.Registers)})\b", Name: Register),
 
-            // A macro call, after mnemonics and registers, which keep their scope even before a
-            // `!`. Its named arguments are its parameters. The arguments may continue across
-            // lines, so a named argument's match starts with the space before it, where a
-            // constant declaration's would on a line of its own, and wins the tie.
+            // A macro call, after mnemonics and registers. Its named arguments are its parameters.
+            // The arguments may continue across lines, so a named argument's match starts with the
+            // space before it, where a constant declaration's would on a line of its own, and wins
+            // the tie.
             TextMateRule.Block($@"\b({Word})\s*(!)\s*(\()", @"\)", [Macro, Operator],
                 [parentheses, TextMateRule.Scoped($@"\s*({Word})(?=\s*=(?!=))", Parameter), include]),
             TextMateRule.Scoped($@"\b({Word})(?=\s*!(?!=))", Macro),

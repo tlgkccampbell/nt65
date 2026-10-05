@@ -1,0 +1,8 @@
+{
+  "cpu": "65c02",
+  "files": ["../macros/*.nt65"],
+  "out": "build",
+  "links": {
+    "sim65": { "config": "sim65.cfg" }
+  }
+}

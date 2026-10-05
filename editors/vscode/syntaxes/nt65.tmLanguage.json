@@ -427,7 +427,7 @@
           }
         },
         {
-          "match": "(?i)\\b(?:adc|and|asl|bcc|bcs|beq|bit|bmi|bne|bpl|brk|bvc|bvs|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|jmp|jsr|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|rti|rts|sbc|sec|sed|sei|sta|stx|sty|tax|tay|tsx|txa|txs|tya|alr|anc|ane|arr|axs|dcp|isc|jam|las|lax|rla|rra|sax|sha|shx|shy|slo|sre|tas|bra|phx|phy|plx|ply|stz|trb|tsb|stp|wai|bbr0|bbr1|bbr2|bbr3|bbr4|bbr5|bbr6|bbr7|bbs0|bbs1|bbs2|bbs3|bbs4|bbs5|bbs6|bbs7|rmb0|rmb1|rmb2|rmb3|rmb4|rmb5|rmb6|rmb7|smb0|smb1|smb2|smb3|smb4|smb5|smb6|smb7|brl|cop|jml|jsl|mvn|mvp|pea|pei|per|phb|phd|phk|plb|pld|rep|rtl|sep|tcd|tcs|tdc|tsc|txy|tyx|wdm|xba|xce|jeq|jne|jcs|jcc|jmi|jpl|jvs|jvc)\\b",
+          "match": "(?i)\\b(?:adc|and|asl|bcc|bcs|beq|bit|bmi|bne|bpl|brk|bvc|bvs|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|jmp|jsr|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|rti|rts|sbc|sec|sed|sei|sta|stx|sty|tax|tay|tsx|txa|txs|tya|alr|anc|ane|arr|axs|dcp|isc|jam|las|lax|rla|rra|sax|sha|shx|shy|slo|sre|tas|bra|phx|phy|plx|ply|stz|trb|tsb|stp|wai|bbr0|bbr1|bbr2|bbr3|bbr4|bbr5|bbr6|bbr7|bbs0|bbs1|bbs2|bbs3|bbs4|bbs5|bbs6|bbs7|rmb0|rmb1|rmb2|rmb3|rmb4|rmb5|rmb6|rmb7|smb0|smb1|smb2|smb3|smb4|smb5|smb6|smb7|brl|cop|jml|jsl|mvn|mvp|pea|pei|per|phb|phd|phk|plb|pld|rep|rtl|sep|tcd|tcs|tdc|tsc|txy|tyx|wdm|xba|xce|jeq|jne|jcs|jcc|jmi|jpl|jvs|jvc)\\b(?!\\s*!\\s*\\()",
           "name": "keyword.other.mnemonic.nt65"
         },
         {

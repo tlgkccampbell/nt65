@@ -88,6 +88,35 @@ public sealed class CorpusTests
         Assert.True(reported.Length == 0, $"cc65 reported:\n{reported}\nagainst:\n{compilation.Header}");
     }
 
+    /// <summary>
+    /// The macro programs run each macro in the modules that come with nt65 under sim65, cc65's
+    /// simulator, once built for the 6502 and once for the 65C02. A program exits with 0 when
+    /// every check passes, and otherwise with the number of the check that failed.
+    /// </summary>
+    [Fact]
+    public void TheMacroModulesComputeTheRightResultsUnderSim65()
+    {
+        var programs = CorpusProgram.All().Where(p => p.Name.StartsWith("macros", StringComparison.Ordinal)).ToList();
+        if (programs.Count == 0)
+            return;
+        var failures = Repo.CollectFailures(programs, Run);
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
+
+        static IEnumerable<string> Run(CorpusProgram program)
+        {
+            var compilation = program.Compile();
+            var linked = Ca65Oracle.Pinned.Link(program.LinkerConfig, [.. compilation.Ca65.Select(o => (o.Path, o.Text))]);
+            if (!linked.Succeeded)
+            {
+                yield return $"[{program.Name}] the link failed:\n{linked.Messages}";
+                yield break;
+            }
+            var (exitCode, output) = Ca65Oracle.Pinned.Simulate(linked.Binary, cycles: 1_000_000);
+            if (exitCode != 0)
+                yield return $"[{program.Name}] check {exitCode} failed; sim65 printed:\n{output.Trim()}";
+        }
+    }
+
     private static IEnumerable<string> Check(CorpusProgram program, Compilation compilation)
     {
         if (compilation.Diagnostics.Count > 0)

@@ -1,0 +1,97 @@
+; Idioms on the registers that every 6502 program writes.
+.module nt65::regs
+
+.export save, asr_a, neg_a, abs_a, sext_a
+
+; Pushes the registers in regs, runs body, then pulls them again. The pushes and pulls stay
+; together, so they cannot fall out of order.
+;
+; The registers are pushed in the order A, X, Y and pulled in reverse, whatever order regs
+; lists them in. On the 6502 a push or pull of X or Y goes through A, so A is pushed first and
+; pulled last. Saving X or Y without A destroys A there.
+.macro save(regs: list(one(a, x, y)), body: block) {
+    .each regs, r {
+        .if r == a {
+            pha
+        }
+    }
+    .each regs, r {
+        .if r == x {
+            .if .has(phx) {
+                phx
+            } .else {
+                txa
+                pha
+            }
+        }
+    }
+    .each regs, r {
+        .if r == y {
+            .if .has(phy) {
+                phy
+            } .else {
+                tya
+                pha
+            }
+        }
+    }
+    body
+    .each regs, r {
+        .if r == y {
+            .if .has(ply) {
+                ply
+            } .else {
+                pla
+                tay
+            }
+        }
+    }
+    .each regs, r {
+        .if r == x {
+            .if .has(plx) {
+                plx
+            } .else {
+                pla
+                tax
+            }
+        }
+    }
+    .each regs, r {
+        .if r == a {
+            pla
+        }
+    }
+}
+
+; Shifts A right by one bit as a signed number, which keeps its sign. C holds the bit shifted
+; out of the bottom.
+.macro asr_a(): a8 {
+    cmp #$80
+    ror a
+}
+
+; Negates A as a two's complement number.
+.macro neg_a(): a8 {
+    eor #$ff
+    clc
+    adc #1
+}
+
+; Replaces A with its absolute value as a signed number. The result for -128 is -128, as it is
+; for any two's complement negation of a byte.
+.macro abs_a(): a8 {
+    cmp #$80
+    bcc @done
+    neg_a!()
+@done:
+}
+
+; Stores in dest the byte that extends the sign of A, which is $ff when A is negative and $00
+; when it is not. It destroys A.
+.macro sext_a(dest: operand(zp, zpx, abs, absx, absy)): a8 {
+    ora #$7f
+    bmi @negative
+    lda #0
+@negative:
+    sta dest
+}

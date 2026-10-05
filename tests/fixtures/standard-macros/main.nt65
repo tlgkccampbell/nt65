@@ -1,0 +1,87 @@
+; The macro modules that come with nt65, each macro called once in each form of operand it
+; takes. The program is built for the 6502, the 65C02 and the 65816, so the snapshots show the
+; 6502 stand-ins beside the instructions that replace them. The corpus programs under
+; tests/corpus/macros run the same macros under sim65 and check what they compute.
+.module main
+
+.use nt65::wide::*
+.use nt65::cmos::*
+.use nt65::regs::*
+.use nt65::math::*
+
+.export run, multiply, divide, to_decimal
+
+.segment ZEROPAGE
+.data ptr:     .word
+.data other:   .word
+.data score:   .byte[3]
+.data total:   .byte[4]
+.data product: .byte[4]
+.data sign:    .byte
+
+.segment BSS
+.data table:  .word[8]
+.data digits: .byte[5]
+
+.segment CODE
+.proc run: a8, i8 {
+    mov!(ptr, {#$1234})
+    mov!(total, {table,x}, bytes = 4)
+    add!(ptr, other)
+    add!(score, {#100}, bytes = 3)
+    sub!({table,y}, {#1})
+    inc!(ptr)
+    inc!(total, bytes = 4)
+    dec!(ptr)
+    dec!(score, bytes = 3)
+    dec!(total, bytes = 4)
+    cmp!(ptr, {#$0400})
+    cmp!(total, {table,x}, bytes = 4)
+    neg!(ptr)
+    asl!(score, bytes = 3)
+    lsr!(ptr)
+    add8!(ptr, {#40})
+    add8!(score, sign, bytes = 3)
+    adds8!(ptr, {table,x})
+    ldax!({#1000})
+    ldax!({table,y})
+    stax!(other)
+
+    stz!(ptr)
+    stz!({table,x})
+    phx!()
+    plx!()
+    phy!()
+    ply!()
+    inc_a!()
+    dec_a!()
+
+    save!(x) {
+        ldx #0
+    }
+    save!(a, x, y) {
+        jsr multiply
+    }
+    asr_a!()
+    neg_a!()
+    abs_a!()
+    sext_a!(sign)
+    bra!(@end)
+@end:
+    rts
+}
+
+.proc multiply: a8, i8 {
+    mul16_body!(ptr, other, product)
+    rts
+}
+
+.proc divide: a8, i8 {
+    div16_body!(ptr, other, score)
+    rts
+}
+
+.proc to_decimal: a8, i8 {
+    decimal16_body!(ptr, digits, zero = $b0)
+    rts
+}

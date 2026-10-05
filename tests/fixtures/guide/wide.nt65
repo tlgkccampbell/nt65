@@ -1,0 +1,29 @@
+; Macros from the modules that come with nt65.
+.module wide
+
+.use nt65::wide::{add, inc, cmp}
+.use nt65::math::mul16_body
+
+.export advance, multiply
+
+.const SCREEN_END = $07e8
+
+.segment ZEROPAGE
+.data score:   .byte[3]
+.data ptr:     .word
+.data factor1: .word
+.data factor2: .word
+.data product: .byte[4]
+
+.segment CODE
+.proc advance {
+    add!(score, {#100}, bytes = 3)      ; a 3-byte score
+    inc!(ptr)
+    cmp!(ptr, {#SCREEN_END})            ; C and Z as cmp leaves them
+    rts
+}
+
+.proc multiply {                        ; the program names the routine and places it
+    mul16_body!(factor1, factor2, product)
+    rts
+}

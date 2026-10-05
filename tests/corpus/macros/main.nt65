@@ -1,0 +1,465 @@
+; Runs the macro modules that come with nt65 under sim65, cc65's simulator, and checks what each
+; macro computes. The program exits with 0 when every check passes. Otherwise it exits with the
+; number of the first check that failed, counting from 1 in the order the checks run.
+;
+; The checks set up their values and test the results with the plain instructions of `set!`
+; and `expect!`, so no macro under test checks itself.
+.module main
+
+.use nt65::wide::*
+.use nt65::cmos::*
+.use nt65::regs::*
+.use nt65::math::*
+
+; The address sim65 treats as a call to exit, with the exit code in A.
+.const SIM65_EXIT = $fff9
+
+.const C_FLAG = $01
+.const Z_FLAG = $02
+
+.segment EXEHDR
+.data header {
+    .byte "sim65"
+    .byte 2                             ; the version of the header
+    .byte .select(.has(phx), 1, 0)      ; the CPU, 0 for the 6502 and 1 for the 65C02
+    .byte c_sp                          ; cc65's stack pointer, which this program does not use
+    .word $0200                         ; where the rest of the file loads
+    .word start
+}
+
+.segment ZEROPAGE
+.data c_sp:      .word
+.data check:     .byte
+.data w:         .word
+.data w2:        .word
+.data l:         .byte[4]
+.data l2:        .byte[4]
+.data t:         .byte[4]
+.data factor1:   .word
+.data factor2:   .word
+.data product:   .byte[4]
+.data dividend:  .word
+.data divisor:   .word
+.data remainder: .word
+.data number:    .word
+
+.segment BSS
+.data table:  .word[4]
+.data digits: .byte[5]
+
+; Stores the constant value in the bytes at dest, low byte first.
+.macro set(dest: operand(zp, abs), value: const, bytes: const(1..4) = 2) {
+    .repeat bytes, i {
+        lda #((value >> (8 * i)) & $ff)
+        sta dest+i
+    }
+}
+
+; Counts a check, and fails it unless the bytes at actual hold the constant value.
+.macro expect(actual: operand(zp, abs), value: const, bytes: const(1..4) = 2) {
+    inc check
+    .repeat bytes, i {
+        lda actual+i
+        cmp #((value >> (8 * i)) & $ff)
+        jne fail
+    }
+}
+
+; Counts a check, and fails it unless A holds the constant value.
+.macro expect_a(value: const) {
+    sta t
+    expect!(t, value, bytes = 1)
+}
+
+; Counts a check, and fails it unless the flags in mask are as value gives them. It keeps A, so
+; a check of A may follow.
+.macro expect_flags(mask: const, value: const) {
+    php
+    sta t+3
+    inc check
+    pla
+    and #mask
+    cmp #value
+    jne fail
+    lda t+3
+}
+
+; Counts a check of mul16_body!, which multiplies m by n.
+.macro expect_product(m: const, n: const) {
+    set!(factor1, m)
+    set!(factor2, n)
+    jsr multiply
+    expect!(product, m * n, bytes = 4)
+    expect!(factor1, m)
+    expect!(factor2, n)
+}
+
+; Counts a check of div16_body!, which divides n by d.
+.macro expect_quotient(n: const, d: const) {
+    set!(dividend, n)
+    set!(divisor, d)
+    jsr divide
+    expect!(dividend, n / d)
+    expect!(remainder, n .mod d)
+    expect!(divisor, d)
+}
+
+; Counts a check of decimal16_body!, which writes n in decimal.
+.macro expect_decimal(n: const) {
+    set!(number, n)
+    jsr to_decimal
+    expect!(digits, n / 10000 + '0', bytes = 1)
+    expect!(digits+1, n / 1000 .mod 10 + '0', bytes = 1)
+    expect!(digits+2, n / 100 .mod 10 + '0', bytes = 1)
+    expect!(digits+3, n / 10 .mod 10 + '0', bytes = 1)
+    expect!(digits+4, n .mod 10 + '0', bytes = 1)
+    expect!(number, 0)
+}
+
+.segment CODE
+.proc start {
+    ldx #$ff
+    txs
+    lda #0
+    sta check
+    jsr test_wide
+    jsr test_cmos
+    jsr test_regs
+    jsr test_math
+    lda #0
+    jmp SIM65_EXIT
+}
+
+.proc fail {
+    lda check
+    jmp SIM65_EXIT
+}
+
+.proc test_wide {
+    mov!(w, {#$1234})
+    expect!(w, $1234)
+    set!(l2, $89abcdef, bytes = 4)
+    mov!(l, l2, bytes = 4)
+    expect!(l, $89abcdef, bytes = 4)
+    ldx #2
+    mov!({table,x}, {#$beef})
+    expect!(table+2, $beef)
+
+    set!(w, $12ff)
+    add!(w, {#$0101})
+    expect_flags!(C_FLAG, 0)
+    expect!(w, $1400)
+    set!(w, $ffff)
+    add!(w, {#1})
+    expect_flags!(C_FLAG, C_FLAG)
+    expect!(w, 0)
+    set!(l, $00ffff, bytes = 3)
+    add!(l, {#1}, bytes = 3)
+    expect!(l, $010000, bytes = 3)
+    set!(w, $1000)
+    ldx #2
+    add!(w, {table,x})
+    expect!(w, $1000 + $beef)
+
+    set!(w, $1000)
+    sub!(w, {#1})
+    expect_flags!(C_FLAG, C_FLAG)
+    expect!(w, $0fff)
+    set!(w, 0)
+    sub!(w, {#1})
+    expect_flags!(C_FLAG, 0)
+    expect!(w, $ffff)
+    set!(l, $01000000, bytes = 4)
+    sub!(l, {#1}, bytes = 4)
+    expect!(l, $00ffffff, bytes = 4)
+
+    set!(w, $00ff)
+    inc!(w)
+    expect_flags!(Z_FLAG, 0)
+    expect!(w, $0100)
+    set!(w, $ffff)
+    inc!(w)
+    expect_flags!(Z_FLAG, Z_FLAG)
+    expect!(w, 0)
+    set!(l, $00ffff, bytes = 3)
+    inc!(l, bytes = 3)
+    expect!(l, $010000, bytes = 3)
+    set!(l, $00ffffff, bytes = 4)
+    inc!(l, bytes = 4)
+    expect!(l, $01000000, bytes = 4)
+
+    set!(w, $0100)
+    dec!(w)
+    expect!(w, $00ff)
+    set!(w, 0)
+    dec!(w)
+    expect!(w, $ffff)
+    set!(w, $1235)
+    dec!(w)
+    expect!(w, $1234)
+    set!(l, $010000, bytes = 3)
+    dec!(l, bytes = 3)
+    expect!(l, $00ffff, bytes = 3)
+    set!(l, $020100, bytes = 3)
+    dec!(l, bytes = 3)
+    expect!(l, $0200ff, bytes = 3)
+    set!(l, $01000000, bytes = 4)
+    dec!(l, bytes = 4)
+    expect!(l, $00ffffff, bytes = 4)
+    set!(l, $00010000, bytes = 4)
+    dec!(l, bytes = 4)
+    expect!(l, $0000ffff, bytes = 4)
+    set!(l, $12340000, bytes = 4)
+    dec!(l, bytes = 4)
+    expect!(l, $1233ffff, bytes = 4)
+
+    set!(w, $1234)
+    cmp!(w, {#$1235})
+    expect_flags!(C_FLAG | Z_FLAG, 0)
+    set!(w, $1235)
+    cmp!(w, {#$1234})
+    expect_flags!(C_FLAG | Z_FLAG, C_FLAG)
+    cmp!(w, {#$1235})
+    expect_flags!(C_FLAG | Z_FLAG, C_FLAG | Z_FLAG)
+    set!(w, $0200)
+    cmp!(w, {#$01ff})
+    expect_flags!(C_FLAG | Z_FLAG, C_FLAG)
+    set!(w2, $0200)
+    cmp!(w, w2)
+    expect_flags!(C_FLAG | Z_FLAG, C_FLAG | Z_FLAG)
+    set!(l, $020001, bytes = 3)
+    cmp!(l, {#$0100ff}, bytes = 3)
+    expect_flags!(C_FLAG | Z_FLAG, C_FLAG)
+    set!(l, $0100ff, bytes = 3)
+    cmp!(l, {#$020001}, bytes = 3)
+    expect_flags!(C_FLAG | Z_FLAG, 0)
+
+    set!(w, 1)
+    neg!(w)
+    expect!(w, $ffff)
+    set!(w, 0)
+    neg!(w)
+    expect!(w, 0)
+    set!(w, $8000)
+    neg!(w)
+    expect!(w, $8000)
+    set!(l, $000100, bytes = 3)
+    neg!(l, bytes = 3)
+    expect!(l, $ffff00, bytes = 3)
+
+    set!(w, $8081)
+    asl!(w)
+    expect_flags!(C_FLAG, C_FLAG)
+    expect!(w, $0102)
+    set!(l, $408000, bytes = 3)
+    asl!(l, bytes = 3)
+    expect_flags!(C_FLAG, 0)
+    expect!(l, $810000, bytes = 3)
+    set!(w, $0181)
+    lsr!(w)
+    expect_flags!(C_FLAG, C_FLAG)
+    expect!(w, $00c0)
+    set!(l, $010001, bytes = 3)
+    lsr!(l, bytes = 3)
+    expect_flags!(C_FLAG, C_FLAG)
+    expect!(l, $008000, bytes = 3)
+
+    set!(w, $12f0)
+    add8!(w, {#$20})
+    expect!(w, $1310)
+    set!(t, $05, bytes = 1)
+    set!(w, $12f0)
+    add8!(w, t)
+    expect!(w, $12f5)
+    set!(w, $ffff)
+    add8!(w, {#1})
+    expect!(w, 0)
+    set!(l, $00ffff, bytes = 3)
+    add8!(l, {#1}, bytes = 3)
+    expect!(l, $010000, bytes = 3)
+
+    set!(w, $1000)
+    adds8!(w, {#$ff})
+    expect!(w, $0fff)
+    set!(w, $10ff)
+    adds8!(w, {#$01})
+    expect!(w, $1100)
+    set!(w, $1000)
+    adds8!(w, {#$80})
+    expect!(w, $0f80)
+    set!(w, $10f0)
+    adds8!(w, {#$7f})
+    expect!(w, $116f)
+    set!(w, 0)
+    adds8!(w, {#$ff})
+    expect!(w, $ffff)
+    set!(t, $fe, bytes = 1)
+    set!(w, 5)
+    ldx #0
+    adds8!(w, {t,x})
+    expect!(w, 3)
+
+    ldax!({#$1234})
+    stax!(w)
+    expect!(w, $1234)
+    set!(w2, $abcd)
+    ldax!(w2)
+    stax!(t)
+    expect!(t, $abcd)
+    rts
+}
+
+.proc test_cmos {
+    set!(w, $ffff)
+    stz!(w)
+    expect!(w, $ff00)
+    set!(table+2, $ffff)
+    ldx #3
+    stz!({table,x})
+    expect!(table+2, $00ff)
+
+    ldx #$5a
+    phx!()
+    ldx #0
+    plx!()
+    txa
+    expect_a!($5a)
+    ldy #$a5
+    phy!()
+    ldy #0
+    ply!()
+    tya
+    expect_a!($a5)
+
+    inc check
+    bra!(@over)
+    jmp fail
+@over:
+
+    lda #$41
+    inc_a!()
+    expect_a!($42)
+    lda #$ff
+    inc_a!()
+    expect_a!(0)
+    lda #0
+    dec_a!()
+    expect_a!($ff)
+    rts
+}
+
+.proc test_regs {
+    lda #1
+    ldx #2
+    ldy #3
+    save!(a, x, y) {
+        lda #$ff
+        ldx #$ff
+        ldy #$ff
+    }
+    sta t
+    stx t+1
+    sty t+2
+    expect!(t, $030201, bytes = 3)
+    lda #4
+    ldx #5
+    ldy #6
+    save!(y, a, x) {
+        lda #$ff
+        ldx #$ff
+        ldy #$ff
+    }
+    sta t
+    stx t+1
+    sty t+2
+    expect!(t, $060504, bytes = 3)
+
+    lda #$f0
+    asr_a!()
+    expect_flags!(C_FLAG, 0)
+    expect_a!($f8)
+    lda #$11
+    asr_a!()
+    expect_flags!(C_FLAG, C_FLAG)
+    expect_a!($08)
+
+    lda #1
+    neg_a!()
+    expect_a!($ff)
+    lda #$80
+    neg_a!()
+    expect_a!($80)
+    lda #0
+    neg_a!()
+    expect_a!(0)
+
+    lda #$fb
+    abs_a!()
+    expect_a!(5)
+    lda #5
+    abs_a!()
+    expect_a!(5)
+    lda #$80
+    abs_a!()
+    expect_a!($80)
+
+    lda #$80
+    sext_a!(t)
+    expect!(t, $ff, bytes = 1)
+    lda #$7f
+    sext_a!(t)
+    expect!(t, 0, bytes = 1)
+    lda #0
+    sext_a!(t)
+    expect!(t, 0, bytes = 1)
+    rts
+}
+
+.proc test_math {
+    expect_product!(0, $ffff)
+    expect_product!(1, 1)
+    expect_product!(300, 200)
+    expect_product!(1234, 5678)
+    expect_product!($ffff, $ffff)
+    expect_product!($8000, 2)
+    expect_product!($00ff, $0101)
+
+    expect_quotient!(60000, 7)
+    expect_quotient!(12345, 1)
+    expect_quotient!(5, 10)
+    expect_quotient!(65535, 3)
+    expect_quotient!(1000, 300)
+    expect_quotient!(65535, 65535)
+    expect_quotient!(40000, $9000)
+    expect_quotient!(65535, $8001)
+    expect_quotient!($fffe, $ffff)
+
+    ; Division by 0 gives a quotient of $ffff and leaves the dividend as the remainder.
+    set!(dividend, 1234)
+    set!(divisor, 0)
+    jsr divide
+    expect!(dividend, $ffff)
+    expect!(remainder, 1234)
+
+    expect_decimal!(0)
+    expect_decimal!(7)
+    expect_decimal!(1234)
+    expect_decimal!(40960)
+    expect_decimal!(65535)
+    rts
+}
+
+.proc multiply {
+    mul16_body!(factor1, factor2, product)
+    rts
+}
+
+.proc divide {
+    div16_body!(dividend, divisor, remainder)
+    rts
+}
+
+.proc to_decimal {
+    decimal16_body!(number, digits)
+    rts
+}

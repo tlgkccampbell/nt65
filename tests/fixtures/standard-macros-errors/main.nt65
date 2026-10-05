@@ -1,0 +1,26 @@
+; What a call of the macro modules that come with nt65 can get wrong. Each refusal lands on the
+; call, where it can be fixed: a width out of range, an operand in a mode the macro cannot use,
+; and on the 65816 a register in the wrong width.
+.module main
+.cpu 65816
+
+.use nt65::wide::{add, inc, mov}
+.use nt65::math::mul16_body
+
+.segment ZEROPAGE
+.data ptr:     .word
+.data product: .byte[4]
+
+.segment CODE
+.proc run: a8, i8 {
+    add!(ptr, {#1}, bytes = 5)          ;! error[const-argument-out-of-range]: `bytes` takes a constant from 2 to 4, and this is 5
+    inc!({(ptr),y})                     ;! error[operand-argument-mode]: `dest` takes one of `zp`, `zpx`, `abs`, `absx`, and this is `indy`
+    mov!({#1}, ptr)                     ;! error[operand-argument-mode]: `dest` takes one of `zp`, `zpx`, `abs`, `absx`, `absy`, and this is `imm`
+    rep #$20
+    add!(ptr, {#1})                     ;! error[call-state-mismatch]: `add!` needs `a8`, but A is 16-bit here
+    sep #$20
+    rep #$10
+    mul16_body!(ptr, ptr, product)      ;! error[call-state-mismatch]: `mul16_body!` needs `i8`, but X and Y are 16-bit here
+    sep #$10
+    rts
+}

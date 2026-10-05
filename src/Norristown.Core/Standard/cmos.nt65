@@ -1,0 +1,88 @@
+; Instructions of the 65C02 that the 6502 lacks, spelled so that one source serves both.
+;
+; On a CPU with the instruction, each macro writes it. On the 6502 it writes a stand-in that
+; does the same work but destroys A or a flag the instruction keeps, as each macro's comment
+; says. The analysis reports that in the 6502 build of code shared between the two.
+.module nt65::cmos
+
+.export stz, phx, plx, phy, ply, bra, inc_a, dec_a
+
+; Stores 0 in dest. The 6502 stand-in destroys A, N and Z.
+.macro stz(dest: operand(zp, zpx, abs, absx)) {
+    .if .has(stz) {
+        stz dest
+    } .else {
+        lda #0
+        sta dest
+    }
+}
+
+; Pushes X. The 6502 stand-in destroys A, N and Z.
+.macro phx() {
+    .if .has(phx) {
+        phx
+    } .else {
+        txa
+        pha
+    }
+}
+
+; Pulls X. The 6502 stand-in destroys A.
+.macro plx() {
+    .if .has(plx) {
+        plx
+    } .else {
+        pla
+        tax
+    }
+}
+
+; Pushes Y. The 6502 stand-in destroys A, N and Z.
+.macro phy() {
+    .if .has(phy) {
+        phy
+    } .else {
+        tya
+        pha
+    }
+}
+
+; Pulls Y. The 6502 stand-in destroys A.
+.macro ply() {
+    .if .has(ply) {
+        ply
+    } .else {
+        pla
+        tay
+    }
+}
+
+; Branches to target always. The 6502 stand-in is a `jmp`, which takes one more byte and
+; reaches any address.
+.macro bra(target: ident) {
+    .if .has(bra) {
+        bra target
+    } .else {
+        jmp target
+    }
+}
+
+; Adds 1 to A. The 6502 stand-in destroys C and V.
+.macro inc_a() {
+    .if .target(6502) || .target(6502x) {
+        clc
+        adc #1
+    } .else {
+        inc a
+    }
+}
+
+; Subtracts 1 from A. The 6502 stand-in destroys C and V.
+.macro dec_a() {
+    .if .target(6502) || .target(6502x) {
+        sec
+        sbc #1
+    } .else {
+        dec a
+    }
+}

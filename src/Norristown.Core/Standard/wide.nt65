@@ -1,0 +1,161 @@
+; Arithmetic on values of several bytes, stored low byte first.
+;
+; Each macro takes the width of its values as `bytes`, from 2 to 4, so one macro serves 16, 24
+; and 32 bits. An operand may be an address, an indexed address or, where a macro reads it, an
+; immediate such as `{#1000}`. Each macro destroys A and the flags unless its comment says
+; otherwise, and the analysis shows that from the expansion.
+;
+; On the 65816 each macro needs an 8-bit accumulator. With a 16-bit one, a plain `adc` or `inc`
+; is the right code.
+.module nt65::wide
+
+.export mov, add, sub, inc, dec, cmp, neg, asl, lsr, add8, adds8, ldax, stax
+
+; Copies src to dest.
+.macro mov(dest: operand(zp, zpx, abs, absx, absy), src: operand(imm, zp, zpx, abs, absx, absy),
+           bytes: const(2..4) = 2): a8 {
+    .repeat bytes, i {
+        lda .byteof(src, i)
+        sta dest+i
+    }
+}
+
+; Adds src to dest. C holds the carry out of the top byte afterwards.
+.macro add(dest: operand(zp, zpx, abs, absx, absy), src: operand(imm, zp, zpx, abs, absx, absy),
+           bytes: const(2..4) = 2): a8 {
+    clc
+    .repeat bytes, i {
+        lda .byteof(dest, i)
+        adc .byteof(src, i)
+        sta dest+i
+    }
+}
+
+; Subtracts src from dest. C is clear afterwards when the subtraction borrowed.
+.macro sub(dest: operand(zp, zpx, abs, absx, absy), src: operand(imm, zp, zpx, abs, absx, absy),
+           bytes: const(2..4) = 2): a8 {
+    sec
+    .repeat bytes, i {
+        lda .byteof(dest, i)
+        sbc .byteof(src, i)
+        sta dest+i
+    }
+}
+
+; Adds 1 to dest. It keeps A, and Z is set afterwards when dest wrapped round to 0.
+.macro inc(dest: operand(zp, zpx, abs, absx), bytes: const(2..4) = 2) {
+    inc dest
+    .repeat bytes - 1, i {
+        bne @done
+        inc dest+(i + 1)
+    }
+@done:
+}
+
+; Subtracts 1 from dest. A byte borrows from the one above it only when it was 0, so the macro
+; tests each byte before it decrements the one above.
+.macro dec(dest: operand(zp, zpx, abs, absx), bytes: const(2..4) = 2): a8 {
+    lda dest
+    bne @byte0
+    .if bytes >= 3 {
+        lda dest+1
+        bne @byte1
+        .if bytes == 4 {
+            lda dest+2
+            bne @byte2
+            dec dest+3
+@byte2:
+        }
+        dec dest+2
+    }
+@byte1:
+    dec dest+1
+@byte0:
+    dec dest
+}
+
+; Compares left with right as unsigned numbers. It leaves C and Z as `cmp` does, so C is set
+; when left is greater than or equal to right, and Z is set when they are equal.
+.macro cmp(left: operand(zp, zpx, abs, absx, absy), right: operand(imm, zp, zpx, abs, absx, absy),
+           bytes: const(2..4) = 2): a8 {
+    ; A difference in a higher byte decides the comparison, so the lower bytes are compared only
+    ; when every byte above them is equal.
+    .repeat bytes - 1, i {
+        lda .byteof(left, bytes - 1 - i)
+        cmp .byteof(right, bytes - 1 - i)
+        bne @done
+    }
+    lda .byteof(left, 0)
+    cmp .byteof(right, 0)
+@done:
+}
+
+; Negates dest as a two's complement number.
+.macro neg(dest: operand(zp, zpx, abs, absx, absy), bytes: const(2..4) = 2): a8 {
+    sec
+    .repeat bytes, i {
+        lda #0
+        sbc dest+i
+        sta dest+i
+    }
+}
+
+; Shifts dest left by one bit. It keeps A, and C holds the bit shifted out of the top.
+.macro asl(dest: operand(zp, zpx, abs, absx), bytes: const(2..4) = 2) {
+    asl dest
+    .repeat bytes - 1, i {
+        rol dest+(i + 1)
+    }
+}
+
+; Shifts dest right by one bit as an unsigned number. It keeps A, and C holds the bit shifted
+; out of the bottom.
+.macro lsr(dest: operand(zp, zpx, abs, absx), bytes: const(2..4) = 2) {
+    lsr dest+(bytes - 1)
+    .repeat bytes - 1, i {
+        ror dest+(bytes - 2 - i)
+    }
+}
+
+; Adds the unsigned byte src to dest, which moves a pointer on by up to 255 bytes.
+.macro add8(dest: operand(zp, zpx, abs, absx), src: operand(imm, zp, zpx, abs, absx, absy),
+            bytes: const(2..4) = 2): a8 {
+    clc
+    lda dest
+    adc src
+    sta dest
+    bcc @done
+    inc dest+1
+    .repeat bytes - 2, i {
+        bne @done
+        inc dest+(i + 2)
+    }
+@done:
+}
+
+; Adds the signed byte src to the 2-byte dest. A negative src takes 256 from dest's high byte,
+; and its low byte is then added as an unsigned one.
+.macro adds8(dest: operand(zp, zpx, abs, absx), src: operand(imm, zp, zpx, abs, absx, absy)): a8 {
+    lda src
+    bpl @positive
+    dec dest+1
+@positive:
+    clc
+    adc dest
+    sta dest
+    bcc @done
+    inc dest+1
+@done:
+}
+
+; Loads a 2-byte value with its low byte in A and its high byte in X, as cc65 passes one.
+.macro ldax(src: operand(imm, zp, zpy, abs, absy)): a8, i8 {
+    lda .byteof(src, 0)
+    ldx .byteof(src, 1)
+}
+
+; Stores A as the low byte of dest and X as its high byte. It keeps A, X and the flags.
+.macro stax(dest: operand(zp, abs)): a8, i8 {
+    sta dest
+    stx dest+1
+}

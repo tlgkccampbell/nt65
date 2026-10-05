@@ -3,10 +3,11 @@ using Norristown.Syntax;
 namespace Norristown.Standard;
 
 /// <summary>
-/// Provides the modules that come with nt65, under the root <c>nt65</c>. They are charmaps for
-/// the machines whose text has no standard of its own. They are ordinary nt65 source, kept
-/// beside this class and compiled into it, and they join a program as its own files do, so a
-/// path, a hover and a definition reach them as they reach any module.
+/// Provides the modules that come with nt65, under the root <c>nt65</c>. They hold charmaps for
+/// the machines whose text has no standard of its own, and macros for the instruction idioms
+/// most programs write. They are ordinary nt65 source, kept beside this class and compiled into
+/// it, and they join a program as its own files do, so a path, a hover and a definition reach
+/// them as they reach any module.
 /// <para>
 /// They join only a program that could name them, which is one with a file whose text mentions
 /// <c>nt65</c>. What they declare crosses modules by value, so they write no output in either
