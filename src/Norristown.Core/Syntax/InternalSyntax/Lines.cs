@@ -183,7 +183,7 @@ internal static class Lines
         var token = tokens[start];
         if (token.Kind == SyntaxKind.Directive)
         {
-            var data = token.DirectiveKind is DirectiveKind.Data or DirectiveKind.Mmio or DirectiveKind.Scratch
+            var data = token.DirectiveKind is DirectiveKind.Data or DirectiveKind.Mmio
                 || SyntaxFacts.IsElementType(token.DirectiveKind);
             return (data ? DataBlockKind(line.Parse(BlockKind.None)) : null) ?? SyntaxFacts.BlockKindOf(token.DirectiveKind);
         }

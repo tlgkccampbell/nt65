@@ -31,12 +31,6 @@ public enum DirectiveKind
     /// </summary>
     Mmio,
 
-    /// <summary>
-    /// <c>.scratch</c>: declares working storage that routines share, which a call that may store
-    /// to it leaves holding nothing the caller can rely on.
-    /// </summary>
-    Scratch,
-
     /// <summary><c>.proc</c>: declares a routine.</summary>
     Proc,
 

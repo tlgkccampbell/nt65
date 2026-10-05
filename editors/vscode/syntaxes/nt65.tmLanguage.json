@@ -354,7 +354,7 @@
           }
         },
         {
-          "match": "(?i)(\\.(?:data|mmio|scratch|list|frame))\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "match": "(?i)(\\.(?:data|mmio|list|frame))\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": {
               "name": "keyword.control.directive.nt65"

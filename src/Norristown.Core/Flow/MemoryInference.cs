@@ -10,10 +10,8 @@ namespace Norristown.Flow;
 /// on a resolved symbol counts, so an indexed or indirect read is not an input.
 /// <para>
 /// The answer is worked out on demand, for the routines a question reaches, and kept for the rest
-/// of the question. It is a best guess for showing. The one check that warns from it,
-/// <see cref="ScratchChecks"/>, asks only which scratch a routine reads, which the programmer
-/// vouches is working storage. A routine that calls itself, directly or not, is taken to read
-/// nothing more through that call, so the check can miss a warning there but never adds one.
+/// of the question. It is a best guess for showing, and no check warns from it. A routine that
+/// calls itself, directly or not, is taken to read nothing more through that call.
 /// </para>
 /// </summary>
 internal sealed class MemoryInference

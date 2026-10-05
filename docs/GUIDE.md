@@ -491,28 +491,6 @@ was last written to it, such as a bank latch, behaves as memory and stays `.data
 .mmio CIA1:       .byte[16] = $DC00
 ```
 
-**Scratch.** Zero page is scarce, so routines often share a few working bytes. Declare those
-bytes with `.scratch` in place of `.data`. A caller may store an argument in scratch for the
-routine it calls, but a call that may store to scratch leaves nothing there the caller can rely
-on. nt65 warns where a routine stores to scratch, calls a routine that may store to the same
-bytes, and then reads them back, or calls another routine that reads them as an argument. The
-warning names the call and the store that may have overwritten the bytes, and the editor offers
-to move the routine to scratch that nothing it calls stores to. Scratch belongs to the code
-outside interrupt handlers, so a handler, and every routine it reaches, keeps its working
-storage in `.data`. Using scratch there is an error, because an interrupt can come between a
-store and a read. Hover on a routine shows the scratch
-it reads and stores, counting the routines it calls. Scratch takes no values, and `= address`
-places it at a fixed address.
-
-```nt65
-.scratch tmp: .byte
-.scratch ptr: .addr = $FB
-```
-
-A routine that only reads scratch leaves it as it was, so the same argument can go to several
-calls. Memory that returns a result from a routine is not scratch, because the caller reads it
-after the call, and stays `.data`.
-
 **Mixed data.** `.data name { ... }` holds data directives of any kind, nested `.data`
 declarations, which become members such as `name::sub`, and `@` positions private to the
 block. It is how you write a file header or any record whose layout is not a struct.

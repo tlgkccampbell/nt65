@@ -462,8 +462,7 @@ internal static class Hovers
                 Cost: CodeLenses.Format(region.Cost, region.Total, "never returns", false),
                 Excluded: region.Cost.IsKnown ? region.Total.Excluded ?? [] : [],
                 Read: Format(region.Reads.Read, region.Reads.Complete),
-                Kept: region.Total.Ends ? Format(region.Registers.Kept, region.Registers.Complete) : null,
-                Scratch: Format(analysis.ScratchUseOf(region.Routine))))
+                Kept: region.Total.Ends ? Format(region.Registers.Kept, region.Registers.Complete) : null))
             .ToList();
         Rows(card, "cost", found.Select(region => (region.Name, region.Cost)));
 
@@ -474,23 +473,6 @@ internal static class Hovers
             card.Row(i == 0 ? "excluding" : "", $"{excluded[i].What}: {excluded[i].Why}");
         Rows(card, "reads", found.Select(region => (region.Name, (string?)region.Read)));
         Rows(card, "preserves", found.Select(region => (region.Name, region.Kept)));
-        Rows(card, "scratch", found.Select(region => (region.Name, region.Scratch)));
-    }
-
-    /// <summary>
-    /// Formats the scratch a routine reads and stores to, such as <c>reads ptr; stores tmp</c>, or
-    /// returns null where it uses none.
-    /// </summary>
-    private static string? Format(ScratchUse? use)
-    {
-        if (use is null)
-            return null;
-        var parts = new List<string>();
-        if (use.Reads.Count > 0)
-            parts.Add("reads " + string.Join(", ", use.Reads));
-        if (use.Stores.Count > 0)
-            parts.Add("stores " + string.Join(", ", use.Stores));
-        return parts.Count == 0 ? null : string.Join("; ", parts);
     }
 
     /// <summary>

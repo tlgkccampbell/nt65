@@ -70,10 +70,6 @@ public sealed record ProgramAnalysis(
     /// </summary>
     internal IReadOnlySet<RoutineKey> CallerStackReaders { get; init; } = new HashSet<RoutineKey>();
 
-    /// <summary>Gets the scratch each routine reads and stores to, for a program that declares scratch.</summary>
-    internal IReadOnlyDictionary<RoutineKey, ScratchUse> ScratchUses { get; init; } =
-        new Dictionary<RoutineKey, ScratchUse>();
-
     /// <summary>
     /// Gets what a later analysis of the same program, after one edit, needs in order to reuse the
     /// parts of this one that the edit did not affect.
@@ -96,12 +92,6 @@ public sealed record ProgramAnalysis(
                 .. Flow.Suggestions.For(file, Configuration.Omitted(file.Model.Tree), ReadsCallerStack),
                 .. Flow.AddressConstants.For(file, usedAsAddresses.Value)])
             : [];
-
-    /// <summary>
-    /// Returns the scratch <paramref name="routine"/> reads and stores to, directly or through the
-    /// routines it calls, or null where the program declares no scratch or has no such routine.
-    /// </summary>
-    public ScratchUse? ScratchUseOf(Symbol routine) => ScratchUses.GetValueOrDefault(RoutineKey.Of(routine));
 
     /// <summary>
     /// Returns whether a routine depends on the depth of the stack it was entered with, which a

@@ -1350,17 +1350,6 @@ public static class Catalogue
             + "else about it is as `.data` at that address would be. The difference is that what it holds is set by "
             + "the hardware, so the editor does not trace its value back to the program's stores.");
 
-    internal static DiagnosticDescriptor ScratchHasValues { get; } = Entry(
-        Area.Values,
-        "scratch-has-values",
-        Severity.Error,
-        "`.scratch` declares working storage, which holds nothing until a routine stores to it: write `.scratch "
-            + "{0}: .byte` with no values",
-        "Scratch is working storage that routines share, and that holds nothing until a routine stores to it. "
-            + "A value would suggest that it holds something before any routine has stored there. "
-            + "So `.scratch` takes only an element type and a count, as in `.scratch ptr: .addr` or `.scratch buf: "
-            + ".byte[4]`, and may give an address with `=`. Data that starts with a value is declared with `.data`.");
-
     internal static DiagnosticDescriptor DataElsewhereOverruns { get; } = Entry(
         Area.Values,
         "data-elsewhere-overruns",
@@ -2918,36 +2907,6 @@ public static class Catalogue
         "`.state saves x` says that the store on the line above it only saves X, to be restored later, so that the "
             + "store does not count as a use of X's value. It must stand directly under `stx`, or under `sta` or "
             + "`sty` of a register that holds the same value as X, such as `sta` after `txa`.");
-
-    internal static DiagnosticDescriptor ScratchOverwritten { get; } = Entry(
-        Area.ControlFlow,
-        "scratch-overwritten",
-        Severity.Warning,
-        "`{0}` may have been overwritten by the call to `{1}`{2}{3}; store it again after the call, or use "
-            + "scratch that `{1}` does not write",
-        "`.scratch` declares working storage that routines share. A caller may store an argument there for the "
-            + "routine it calls, but a call that may store to scratch leaves nothing there the caller can rely on. A "
-            + "routine that stores to scratch, calls a routine that may store to the same bytes, directly or through "
-            + "a routine it calls in turn, and then reads the scratch back, may read the other routine's value "
-            + "rather than its own. So may a routine it calls next that reads the scratch as an argument. This is "
-            + "the classic bug of sharing zero-page bytes by hand. A routine that only reads scratch leaves it as it "
-            + "was. The check follows only stores and loads that name the scratch directly, and a call nt65 cannot "
-            + "follow is taken to write nothing. Memory that returns a result from a routine is not scratch: "
-            + "declare it with `.data`.");
-
-    internal static DiagnosticDescriptor ScratchInHandler { get; } = Entry(
-        Area.ControlFlow,
-        "scratch-in-handler",
-        Severity.Error,
-        "`{0}` is scratch, which interrupt handlers may not use{1}; declare what the handler uses with `.data`",
-        "Scratch belongs to the code outside interrupt handlers. A handler can run between any two instructions, "
-            + "so scratch it shared with that code could change under it between a store and a read, a fault that "
-            + "depends on when the interrupt arrives. Every routine a handler reaches, by a call, a jump, a branch "
-            + "or a `.fallthrough`, is held to the rule, including a routine the rest of the program also calls. "
-            + "The rule does not depend on what kind of interrupt enters the handler, because nothing holds a "
-            + "handler to one kind. Keep a handler's working storage in `.data`. A routine both sides need can "
-            + "become a macro, so that the handler's copy uses `.data` and the rest of the program's copy uses "
-            + "scratch.");
 
     // Processor state
 

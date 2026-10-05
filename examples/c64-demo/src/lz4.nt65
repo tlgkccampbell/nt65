@@ -13,10 +13,10 @@
 .export install, unpack, source, finish, target, run
 
 .segment ZEROPAGE
-.scratch finish: .addr              ; the address just past the packed data
-.scratch token:  .byte              ; the sequence's token
-.data count:     .word              ; how many bytes a run of literals or a match copies
-.scratch offset: .byte              ; the low byte of a match's offset, while the high is read
+.data finish: .addr                 ; the address just past the packed data
+.data token:  .byte                 ; the sequence's token
+.data count:  .word                 ; how many bytes a run of literals or a match copies
+.data offset: .byte                 ; the low byte of a match's offset, while the high is read
 
 ; Unpacks the data declared as `packed` to the address `to`. The data ends where its declaration
 ; does.

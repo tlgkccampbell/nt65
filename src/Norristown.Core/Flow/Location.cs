@@ -10,8 +10,7 @@ namespace Norristown.Flow;
 /// symbol, or a path to a member of a struct, and a constant offset from it, as in <c>ptr+1</c>.
 /// <para>
 /// Two spellings of one location that resolve differently are two locations here. This is a best
-/// guess for showing. The one check that warns from it, <see cref="ScratchChecks"/>, looks only
-/// at data that <c>.scratch</c> declares, which the programmer vouches is working storage.
+/// guess for showing, and no check warns from it.
 /// </para>
 /// </summary>
 /// <param name="Root">
@@ -85,13 +84,6 @@ internal readonly record struct Location(Symbol? Root, string Path, long Offset)
                 return null;
         }
     }
-
-    /// <summary>
-    /// Returns whether <paramref name="symbol"/> is scratch data, which <c>.scratch</c> declares.
-    /// </summary>
-    public static bool IsScratch(Symbol? symbol) =>
-        (symbol?.Data?.Parent ?? symbol?.ValueExpression?.Parent)
-            is DataDeclarationSyntax { Keyword.DirectiveKind: DirectiveKind.Scratch };
 
     /// <summary>Returns whether <paramref name="symbol"/> is a hardware register, which <c>.mmio</c> declares.</summary>
     private static bool IsHardware(Symbol? symbol) =>

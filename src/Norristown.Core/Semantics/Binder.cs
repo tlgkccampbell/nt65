@@ -855,8 +855,6 @@ internal sealed partial class Binder
     {
         if (opener is not DataDeclarationSyntax { Name: { IsMissing: false } name })
             return new Scope(ScopeKind.Data, null, scope, null);
-        if (opener is DataDeclarationSyntax { Keyword.DirectiveKind: DirectiveKind.Scratch })
-            Report(name.Span, Catalogue.ScratchHasValues.Message(name.Text));
         var symbol = Declare(name, SymbolKind.Data);
         var body = new Scope(ScopeKind.Data, symbol?.Name ?? name.Text, scope, symbol);
         if (symbol is not null)
@@ -1373,15 +1371,6 @@ internal sealed partial class Binder
         if (statement.Keyword.DirectiveKind == DirectiveKind.Mmio && statement.Address is null)
         {
             Report(NameToken(statement)?.Span ?? statement.Span, Catalogue.MmioNeedsAnAddress.Message(
-                statement.Name.IsMissing ? "name" : statement.Name.Text));
-        }
-
-        // Scratch holds nothing until a routine stores to it, so a value would suggest it holds
-        // something on entry, which is what scratch rules out.
-        if (statement.Keyword.DirectiveKind == DirectiveKind.Scratch
-            && (statement.OpenBraceToken is not null || element is null || element.Tail is not null))
-        {
-            Report(NameToken(statement)?.Span ?? statement.Span, Catalogue.ScratchHasValues.Message(
                 statement.Name.IsMissing ? "name" : statement.Name.Text));
         }
 

@@ -83,11 +83,6 @@ internal static class Fixes
                     [new Edit(tree, constant, $".mmio {asData}")], preferred: false);
                 break;
 
-            case FixKind.UseScratch when fix is { Text: { } scratch, Spans: { } spans }:
-                yield return Fix(diagnostic, $"Use `{scratch}` in this routine, which nothing it calls stores to",
-                    [.. spans.Select(span => new Edit(tree, Edits.SpanOf(tree, span), scratch))]);
-                break;
-
             case FixKind.Flags when fix.Text is { } flags:
                 yield return Fix(diagnostic, $"Change it to `#{flags}`",
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), flags)]);

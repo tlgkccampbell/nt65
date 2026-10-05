@@ -475,18 +475,15 @@ public static class Compiler
         // translation unit, so an edit to any module of a translation unit can change it for the
         // others, and the placements are worked out again after any change.
         var placements = Placements.Of(reuse.Trees);
-        var (scratch, uses) = Flow.ScratchChecks.Check(analysis);
         return analysis with
         {
             Diagnostics = Collected(project, analysis.Cpu, cpu, program, reuse, [
                 .. registers, .. placements.Diagnostics,
                 .. Flow.RunningOnChecks.Check(program, analysis.Files, placements),
-                .. scratch,
                 .. OutputNames.Collisions(analysis, placements)]),
             Reused = reuse,
             Placements = placements,
             CallerStackReaders = readers,
-            ScratchUses = uses,
         };
     }
 
