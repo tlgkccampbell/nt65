@@ -622,7 +622,7 @@ public sealed class ControlFlow
             }
             var far = i >= 2 && units[i - 2].Step.Stream == branch.Stream
                 && IsInstruction(units[i - 2].Step.Statement, MnemonicKind.Phk);
-            calls[branch.Key] = new RelativeCall(routine.Symbol, far);
+            calls[branch.Key] = new RelativeCall(routine.Symbol, push.Step, far ? units[i - 2].Step : null);
             returnAddresses.Add(push.Step.Key);
         }
         return (calls, returnAddresses);

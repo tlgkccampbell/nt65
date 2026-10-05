@@ -312,9 +312,9 @@ internal sealed class StateChecks
     {
         var signature = routine.Signature ?? Signature.Default;
         if (mnemonic == MnemonicKind.Rts && signature.IsFar)
-            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"));
+            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"), Own(step, FixKind.Return, "rtl"));
         else if (mnemonic == MnemonicKind.Rtl && !signature.IsFar)
-            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"));
+            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"), Own(step, FixKind.Return, "rts"));
         CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName);
     }
 
@@ -351,9 +351,9 @@ internal sealed class StateChecks
         var target = call.Routine;
         var callee = target.Signature!;
         if (callee.IsFar && !call.IsFar)
-            Report(step, Catalogue.RelativeCallNeedsPhk.Message(target.DisplayName));
-        else if (!callee.IsFar && call.IsFar)
-            Report(step, Catalogue.RelativeCallExtraPhk.Message(target.DisplayName));
+            Report(step, Catalogue.RelativeCallNeedsPhk.Message(target.DisplayName), BankPush(step, call.Push, "phk"));
+        else if (!callee.IsFar && call.IsFar && call.Bank is { } bank)
+            Report(step, Catalogue.RelativeCallExtraPhk.Message(target.DisplayName), BankPush(step, bank, null));
         CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state);
     }
 
@@ -380,7 +380,7 @@ internal sealed class StateChecks
         {
             if (!EntersAnotherBank(step, target))
                 Report(step, Catalogue.JumpDistanceMismatch.Message(
-                    target.DisplayName, "near", "jmp", target.DisplayName));
+                    target.DisplayName, "near", "jmp", target.DisplayName), Mnemonic(step, "jmp"));
             else if (returns)
             {
                 Report(step, Catalogue.JumpAcrossBanks.Message(target.DisplayName, routine.DisplayName));
@@ -388,11 +388,12 @@ internal sealed class StateChecks
         }
         else if (Instructions.Facts(mnemonic).Control == Control.Branches && callee.IsFar)
         {
-            Report(step, Catalogue.BranchToFarRoutine.Message(target.DisplayName));
+            Report(step, Catalogue.BranchToFarRoutine.Message(target.DisplayName), Own(step, FixKind.FarBranch, OppositeOf(mnemonic)));
         }
         else if (mnemonic is not (MnemonicKind.Jml or MnemonicKind.None) && callee.IsFar)
         {
-            Report(step, Catalogue.JumpDistanceMismatch.Message(target.DisplayName, "far", "jml", target.DisplayName));
+            Report(step, Catalogue.JumpDistanceMismatch.Message(target.DisplayName, "far", "jml", target.DisplayName),
+                Mnemonic(step, "jml"));
         }
         CheckEntry(step, what, callee, state);
         if (!returns)
@@ -661,6 +662,34 @@ internal sealed class StateChecks
     /// Returns a fix that replaces the statement's mnemonic with <paramref name="mnemonic"/>,
     /// where the statement is in this file and outside any expansion.
     /// </summary>
-    private DiagnosticFix? Mnemonic(Step step, string mnemonic) =>
-        step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.Mnemonic, mnemonic) : null;
+    private DiagnosticFix? Mnemonic(Step step, string mnemonic) => Own(step, FixKind.Mnemonic, mnemonic);
+
+    /// <summary>
+    /// Returns a fix of <paramref name="kind"/> with <paramref name="text"/>, where the statement
+    /// is in this file and outside any expansion. A fix elsewhere would change a line that serves
+    /// more than this statement.
+    /// </summary>
+    private DiagnosticFix? Own(Step step, FixKind kind, string? text) =>
+        step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(kind, text) : null;
+
+    /// <summary>
+    /// Returns a fix that inserts <paramref name="text"/> before <paramref name="at"/>, or removes
+    /// <paramref name="at"/> where <paramref name="text"/> is null. The relative call
+    /// <paramref name="step"/> makes and <paramref name="at"/> must both be in this file and
+    /// outside any expansion.
+    /// </summary>
+    private DiagnosticFix? BankPush(Step step, Step at, string? text) =>
+        Own(step, FixKind.BankPush, text) is not null && at.On is null && at.Statement.Tree == model.Tree
+            ? new DiagnosticFix(FixKind.BankPush, text, at.Statement.Tree.GetSpan(at.Statement.Span))
+            : null;
+
+    /// <summary>
+    /// Returns the conditional branch that is taken exactly when <paramref name="mnemonic"/> is
+    /// not, or null for a branch that is always taken.
+    /// </summary>
+    private static string? OppositeOf(MnemonicKind mnemonic) =>
+        (Instructions.LongFormOf(mnemonic) ?? mnemonic) is var conditional
+            && conditional is not (MnemonicKind.Bra or MnemonicKind.Brl)
+            ? SyntaxFacts.TextOf(Instructions.FormsOf(conditional).Skipped)
+            : null;
 }

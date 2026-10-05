@@ -538,12 +538,13 @@ public sealed class ProgramModel
                 : null;
             long? ValueOf(ExpressionSyntax expression) =>
                 Evaluator.ValueOf(expression, segments, resolved, bound, configuration: configuration).AsNumber();
-            void Report(TextSpan span, DiagnosticMessage message) =>
-                byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message));
+            void Report(TextSpan span, DiagnosticMessage message) => Fixable(span, message, null);
+            void Fixable(TextSpan span, DiagnosticMessage message, DiagnosticFix? fix) =>
+                byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), Severity.Error, message) { Fix = fix });
             if (symbol.Kind == SymbolKind.SignatureSet)
-                Signature.CheckSet(symbol, ValueOf, SetOf, Report);
-            symbol.Signature = symbol.Signature?.Resolved(ValueOf, SetOf, Report);
-            symbol.MacroSignature = symbol.MacroSignature?.Resolved(ValueOf, SetOf, Report);
+                Signature.CheckSet(symbol, ValueOf, SetOf, Fixable);
+            symbol.Signature = symbol.Signature?.Resolved(ValueOf, SetOf, Fixable);
+            symbol.MacroSignature = symbol.MacroSignature?.Resolved(ValueOf, SetOf, Fixable);
             if (symbol.Kind == SymbolKind.Macro)
             {
                 ArgumentChecks.CheckHeader(symbol, ValueOf, SetOf, Report);

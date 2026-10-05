@@ -1081,7 +1081,10 @@ internal sealed partial class Binder
             _ => null,
         };
         if (keyword is { } present && Annotations.Misplaced(line, statement) is { } why)
+        {
             Report(present.Span, why);
+            Fixed(new DiagnosticFix(FixKind.Redundant));
+        }
     }
 
     /// <summary>

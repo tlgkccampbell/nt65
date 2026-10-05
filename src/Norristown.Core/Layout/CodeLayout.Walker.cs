@@ -268,6 +268,8 @@ public sealed partial class CodeLayout
                     && (routine is not null || streams.Count > 1) && opener is SegmentStatementSyntax detour)
                 {
                     Report(detour.Keyword, Catalogue.SegmentBlockRedundant.Message(segment));
+                    if (expansion is null && detour.Tree == model.Tree)
+                        diagnostics[^1] = diagnostics[^1] with { Fix = new DiagnosticFix(FixKind.SegmentBlock) };
                 }
                 segment = Constructs.SegmentOf(opener) ?? segment;
                 streams.Add(nextStream++);

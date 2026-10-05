@@ -399,7 +399,10 @@ internal sealed class RegisterWalk
                 {
                     report.Add(new Diagnostic(
                         step.Statement.Tree.GetSpan(item.Node.Span),
-                        Catalogue.KeepsRedundant.Message(item.Text, RegisterEffects.Format(register))));
+                        Catalogue.KeepsRedundant.Message(item.Text, RegisterEffects.Format(register)))
+                    {
+                        Fix = step.On is null ? new DiagnosticFix(FixKind.Item, RegisterEffects.Format(register).ToLowerInvariant()) : null,
+                    });
                 }
                 state = state.With(register, RegisterValue.Of(register));
             }

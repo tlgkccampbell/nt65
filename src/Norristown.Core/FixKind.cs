@@ -7,8 +7,8 @@ public enum FixKind
     EndPath,
 
     /// <summary>
-    /// The statement's mnemonic replaced with another, either <c>jsl</c> for <c>jsr</c> or the
-    /// reverse.
+    /// The statement's mnemonic replaced with another of the other distance, such as <c>jsl</c>
+    /// for <c>jsr</c> or <c>jmp</c> for <c>jml</c>.
     /// </summary>
     Mnemonic,
 
@@ -136,4 +136,35 @@ public enum FixKind
     /// <c>.data</c> or, for a hardware register, <c>.mmio</c>.
     /// </summary>
     AddressData,
+
+    /// <summary>
+    /// The <c>phk</c> of the relative call reported, inserted or removed. Where the fix's
+    /// <see cref="DiagnosticFix.Text"/> is <c>phk</c>, it is inserted before the call's <c>per</c>
+    /// at <see cref="DiagnosticFix.At"/>. Otherwise the <c>phk</c> at <see cref="DiagnosticFix.At"/>
+    /// is removed.
+    /// </summary>
+    BankPush,
+
+    /// <summary>
+    /// The item reported, removed from its list. Where the fix's <see cref="DiagnosticFix.Text"/>
+    /// names a register, only that register is removed from the item. An item, list or directive
+    /// left with nothing in it goes too.
+    /// </summary>
+    Item,
+
+    /// <summary>The item reported, moved from the exit of a signature to the end of its entry.</summary>
+    ToEntry,
+
+    /// <summary>
+    /// The segment block reported, removed along with its closing brace. Its contents stay where
+    /// they are, one level less indented.
+    /// </summary>
+    SegmentBlock,
+
+    /// <summary>
+    /// The branch reported, replaced with a <c>jml</c> to its target. Where the fix's
+    /// <see cref="DiagnosticFix.Text"/> names the opposite branch, that branch skips over the
+    /// <c>jml</c>. An unconditional branch becomes the <c>jml</c> alone.
+    /// </summary>
+    FarBranch,
 }

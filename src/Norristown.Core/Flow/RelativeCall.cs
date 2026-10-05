@@ -1,3 +1,4 @@
+using Norristown.Layout;
 using Norristown.Semantics;
 
 namespace Norristown.Flow;
@@ -9,9 +10,13 @@ namespace Norristown.Flow;
 /// does. With <c>phk</c> before the <c>per</c> it pushes the bank too, as <c>jsl</c> does.
 /// </summary>
 /// <param name="Routine">The routine the branch goes to.</param>
-/// <param name="IsFar">Whether a <c>phk</c> pushed the bank as well, so it returns with <c>rtl</c>.</param>
-public readonly record struct RelativeCall(Symbol Routine, bool IsFar)
+/// <param name="Push">The <c>per</c> that pushes the return address.</param>
+/// <param name="Bank">The <c>phk</c> before the <c>per</c> that pushes the bank, or null for a near call.</param>
+public readonly record struct RelativeCall(Symbol Routine, Step Push, Step? Bank)
 {
+    /// <summary>Gets a value indicating whether a <c>phk</c> pushed the bank as well, so it returns with <c>rtl</c>.</summary>
+    public bool IsFar => Bank is not null;
+
     /// <summary>Gets how many bytes the call pushed, which the routine's return pulls.</summary>
     public int Pushed => IsFar ? 3 : 2;
 }

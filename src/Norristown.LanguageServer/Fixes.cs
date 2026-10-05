@@ -1,3 +1,4 @@
+using System.Text;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -89,7 +90,7 @@ internal static class Fixes
                 break;
 
             case FixKind.Mnemonic when fix.Text is { } mnemonic && ReplaceMnemonic(tree, line, mnemonic) is { } call:
-                yield return Fix(diagnostic, $"Call with `{mnemonic}`", [call]);
+                yield return Fix(diagnostic, mnemonic is "jsr" or "jsl" ? $"Call with `{mnemonic}`" : $"Jump with `{mnemonic}`", [call]);
                 break;
 
             case FixKind.Branch when fix.Text is { } longer && ReplaceMnemonic(tree, line, longer) is { } branch:
@@ -217,10 +218,196 @@ internal static class Fixes
                     yield return Fix(diagnostic, $"Insert the missing `{piece}`", [inserted]);
                 break;
 
+            case FixKind.BankPush when fix.At is { } at:
+                yield return fix.Text is { } pushed
+                    ? Fix(diagnostic, $"Push the bank with `{pushed}`", [Edits.InsertBefore(tree, at.LineIndex, pushed)])
+                    : Fix(diagnostic, "Remove the `phk`", [Removed(tree, at)]);
+                break;
+
+            case FixKind.Item:
+                if (WithoutItem(tree, diagnostic, fix.Text) is { } removal)
+                    yield return Fix(diagnostic, removal.Title, [removal.Edit]);
+                break;
+
+            case FixKind.ToEntry:
+                if (MovedToEntry(tree, diagnostic) is { } moved)
+                    yield return Fix(diagnostic, moved.Title, [moved.Edit]);
+                break;
+
+            case FixKind.SegmentBlock:
+                if (Unwrapped(tree, line) is { } unwrapped)
+                    yield return Fix(diagnostic, "Remove the block and keep its contents", [unwrapped]);
+                break;
+
+            case FixKind.FarBranch:
+                foreach (var change in FarBranch(model, diagnostic, fix.Text))
+                    yield return change;
+                break;
+
             default:
                 break;
         }
     }
+
+    /// <summary>
+    /// Returns an edit that removes the item a diagnostic reports from its list, and a title that
+    /// says what goes. Where <paramref name="register"/> is given and the item names other
+    /// registers too, only that register goes. A <c>.state</c> or <c>.ensure</c> left with no
+    /// items goes whole. Returns null where removing the item would leave a signature with an
+    /// empty list.
+    /// </summary>
+    private static (string Title, Edit Edit)? WithoutItem(SyntaxTree tree, Diagnostic diagnostic, string? register)
+    {
+        if (ItemAt(tree, diagnostic) is not { } item)
+            return null;
+        if (register is not null && item is StateRegistersItemSyntax { Registers: { Count: > 1 } registers })
+        {
+            var index = IndexOf(registers, node => node.Name.Text.Equals(register, StringComparison.OrdinalIgnoreCase));
+            return index < 0
+                ? null
+                : ($"Remove `{register}` from `{Text(tree, item.Span)}`", new Edit(tree, ElementSpan(registers, index), ""));
+        }
+        if (item.Parent is not StateListSyntax list)
+            return null;
+        var title = $"Remove `{Text(tree, item.Span)}`";
+        if (list.Items.Count > 1)
+            return (title, new Edit(tree, ElementSpan(list.Items, IndexOf(list.Items, node => node.Span == item.Span)), ""));
+        return list.Parent is StateListDirectiveSyntax directive
+            ? (title, Removed(tree, tree.GetSpan(directive.Span)))
+            : null;
+    }
+
+    /// <summary>
+    /// Returns an edit that moves the item a diagnostic reports from after a signature's
+    /// <c>-&gt;</c> to the end of its entry, and the title for it. The <c>-&gt;</c> goes too when
+    /// the item was the only one after it.
+    /// </summary>
+    private static (string Title, Edit Edit)? MovedToEntry(SyntaxTree tree, Diagnostic diagnostic)
+    {
+        if (ItemAt(tree, diagnostic) is not { Parent: StateListSyntax exit } item)
+            return null;
+        var entry = exit.Parent switch
+        {
+            ProcSignatureSyntax proc when proc.Exit?.Span == exit.Span => proc.Entry,
+            ImportSignatureSyntax import when import.Exit?.Span == exit.Span => import.Entry,
+            _ => null,
+        };
+        if (entry is null)
+            return null;
+
+        // One edit runs from the end of the entry to the end of the exit, so that the item can
+        // join the one and leave the other without two edits meeting at the same place.
+        var start = entry.Span.End;
+        var rest = "";
+        if (exit.Items.Count > 1)
+        {
+            var removed = ElementSpan(exit.Items, IndexOf(exit.Items, node => node.Span == item.Span));
+            rest = tree.Text[start..removed.Start] + tree.Text[removed.End..exit.Span.End];
+        }
+        var written = Text(tree, item.Span);
+        var separator = entry.Items.Count > 0 ? ", " : "";
+        return ($"Move `{written}` before `->`",
+            new Edit(tree, new TextSpan(start, exit.Span.End - start), separator + written + rest));
+    }
+
+    /// <summary>Returns the signature or <c>.state</c> item at the span a diagnostic reports.</summary>
+    private static StateItemSyntax? ItemAt(SyntaxTree tree, Diagnostic diagnostic)
+    {
+        var span = Edits.SpanOf(tree, diagnostic.Span);
+        return tree.Root.DescendantNodes().OfType<StateItemSyntax>().FirstOrDefault(item => item.Span == span);
+    }
+
+    /// <summary>
+    /// Returns the span to remove to take the element at <paramref name="index"/> out of
+    /// <paramref name="list"/>, together with the separator that goes with it. That is the one
+    /// after it, or the one before it for the last element.
+    /// </summary>
+    private static TextSpan ElementSpan<T>(SeparatedSyntaxList<T> list, int index) where T : SyntaxNode
+    {
+        var (start, end) = index + 1 < list.Count
+            ? (list[index].Span.Start, list[index + 1].Span.Start)
+            : (list[index - 1].Span.End, list[index].Span.End);
+        return new TextSpan(start, end - start);
+    }
+
+    /// <summary>Returns the index of the first element of <paramref name="list"/> that matches, or -1.</summary>
+    private static int IndexOf<T>(SeparatedSyntaxList<T> list, Func<T, bool> match) where T : SyntaxNode
+    {
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (match(list[i]))
+                return i;
+        }
+        return -1;
+    }
+
+    /// <summary>
+    /// Returns an edit that removes the segment block <paramref name="line"/> opens, both its
+    /// opening line and the line that closes it. The lines between move out by one level. Returns
+    /// null when the closing brace shares its line with anything else.
+    /// </summary>
+    private static Edit? Unwrapped(SyntaxTree tree, int line)
+    {
+        var end = Edits.BlockEnd(tree, line);
+        if (end == line || LineContext.TokensOf(tree, end) is not [{ Kind: SyntaxKind.CloseBrace }])
+            return null;
+        var own = Edits.IndentOf(tree, line);
+        var body = Edits.BodyIndent(tree, line);
+        var kept = new StringBuilder();
+        foreach (var inner in Enumerable.Range(line + 1, end - line - 1))
+        {
+            var text = tree.Text[tree.LineStarts[inner]..tree.LineStarts[inner + 1]];
+            kept.Append(text.StartsWith(body, StringComparison.Ordinal) ? own + text[body.Length..] : text);
+        }
+        var start = tree.LineStarts[line];
+        return new Edit(tree, new TextSpan(start, tree.GetLineEnd(end) - start), kept.ToString());
+    }
+
+    /// <summary>
+    /// Returns the fix for a branch to a far routine, which only a <c>jml</c> can reach. An
+    /// unconditional branch becomes the <c>jml</c>. A conditional one becomes
+    /// <paramref name="opposite"/>, which skips over a <c>jml</c> to the routine on the next line
+    /// and lands on a new cheap local label after it.
+    /// </summary>
+    private static IEnumerable<Change> FarBranch(SemanticModel model, Diagnostic diagnostic, string? opposite)
+    {
+        var tree = model.Tree;
+        var line = diagnostic.Span.LineIndex;
+        if (Edits.StatementOn(tree, line) is not InstructionStatementSyntax { Operand: { } operand })
+            yield break;
+        var target = Text(tree, operand.Span);
+        if (opposite is null)
+        {
+            if (ReplaceMnemonic(tree, line, "jml") is { } jumped)
+                yield return Fix(diagnostic, "Jump with `jml`", [jumped]);
+            yield break;
+        }
+        if (ReplaceMnemonic(tree, line, opposite) is not { } branched)
+            yield break;
+        var skip = SkipLabel(model);
+        yield return Fix(diagnostic, $"Branch with `{opposite}` around a `jml {target}`",
+        [
+            branched,
+            new Edit(tree, operand.Span, "@" + skip),
+            Edits.InsertAfter(tree, line, $"{Edits.IndentOf(tree, line)}jml {target}\n@{skip}:"),
+        ]);
+    }
+
+    /// <summary>
+    /// Returns a name for a cheap local label that skips over a jump, one that no cheap local in
+    /// the file already has.
+    /// </summary>
+    private static string SkipLabel(SemanticModel model)
+    {
+        var taken = model.Symbols.Where(symbol => symbol.IsCheapLocal).Select(symbol => symbol.Name).ToHashSet();
+        var name = "skip";
+        for (var number = 2; taken.Contains(name); number++)
+            name = $"skip{number}";
+        return name;
+    }
+
+    /// <summary>Returns the text of <paramref name="span"/> in <paramref name="tree"/>.</summary>
+    private static string Text(SyntaxTree tree, TextSpan span) => tree.Text[span.Start..span.End];
 
     /// <summary>
     /// Creates a fix for <paramref name="diagnostic"/>, preferred unless it is one of several

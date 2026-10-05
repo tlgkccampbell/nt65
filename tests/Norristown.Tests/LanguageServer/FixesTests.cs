@@ -134,6 +134,76 @@ public sealed class FixesTests
             ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jsl helper\n    rtl\n}\n",
             ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
         },
+        {
+            "Leave with `rtl`",
+            ".export .proc main: far {\n    rts\n}\n",
+            ".export .proc main: far {\n    rtl\n}\n"
+        },
+        {
+            "Jump with `jml`",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jmp helper\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
+        },
+        {
+            "Jump with `jmp`",
+            ".proc helper {\n    rts\n}\n.export .proc main {\n    jml helper\n}\n",
+            ".proc helper {\n    rts\n}\n.export .proc main {\n    jmp helper\n}\n"
+        },
+        {
+            "Push the bank with `phk`",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main {\n    per back-1\n    brl helper\nback:\n    rts\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main {\n    phk\n    per back-1\n    brl helper\nback:\n    rts\n}\n"
+        },
+        {
+            "Remove the `phk`",
+            ".proc helper {\n    rts\n}\n.export .proc main {\n    phk\n    per back-1\n    brl helper\nback:\n    rts\n}\n",
+            ".proc helper {\n    rts\n}\n.export .proc main {\n    per back-1\n    brl helper\nback:\n    rts\n}\n"
+        },
+        {
+            "Remove `keeps x`",
+            ".export .proc main: keeps x {\n    .state keeps x\n    rts\n}\n",
+            ".export .proc main: keeps x {\n    rts\n}\n"
+        },
+        {
+            "Remove `x` from `keeps x, y`",
+            ".export .proc main: i8, keeps x, y {\n    ldy #0\n    .state keeps x, y\n    rts\n}\n",
+            ".export .proc main: i8, keeps x, y {\n    ldy #0\n    .state keeps y\n    rts\n}\n"
+        },
+        {
+            "Remove it",
+            ".next ?\n.export .proc main {\n    rts\n}\n",
+            ".export .proc main {\n    rts\n}\n"
+        },
+        {
+            "Remove `far`",
+            ".export .proc main: near, far {\n    rts\n}\n",
+            ".export .proc main: near {\n    rts\n}\n"
+        },
+        {
+            "Move `keeps x` before `->`",
+            ".export .proc main: a8 -> a16, keeps x {\n    rep #$20\n    rts\n}\n",
+            ".export .proc main: a8, keeps x -> a16 {\n    rep #$20\n    rts\n}\n"
+        },
+        {
+            "Move `keeps x` before `->`",
+            ".export .proc main: a8 -> keeps x {\n    rts\n}\n",
+            ".export .proc main: a8, keeps x {\n    rts\n}\n"
+        },
+        {
+            "Remove the block and keep its contents",
+            ".export .proc main {\n    nop\n    .segment CODE {\n        nop\n    }\n    rts\n}\n",
+            ".export .proc main {\n    nop\n    nop\n    rts\n}\n"
+        },
+        {
+            "Branch with `beq` around a `jml helper`",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    bne helper\n    rtl\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    beq @skip\n    jml helper\n@skip:\n    rtl\n}\n"
+        },
+        {
+            "Jump with `jml`",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    bra helper\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
+        },
     };
 
     [Theory]
