@@ -95,7 +95,7 @@
 }
 
 ; Clamp signed A into [X, Y].
-.proc clamp16: a16, i16 {
+.proc clamp16: a16, i16, dp = 0 {
     stx scratch
     cmp scratch
     bpl @above_min

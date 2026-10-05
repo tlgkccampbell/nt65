@@ -121,6 +121,31 @@
     rts
 }
 
+; A direct operand on a symbol whose segment declares `dp` reaches the symbol only when D holds
+; that value, so D must be known there too.
+.proc assumes: a8, i8 -> a8, i8, dp? {
+    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment "ZP2", which expects the direct page at $2100, and `assumes` declares `dp*`, which assumes nothing about D
+    tax
+    tcd
+    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment "ZP2", which expects the direct page at $2100, and D is not known here: a `.state dp = ...` declares what it is
+    .state dp = $2100
+    lda ptr
+    rts
+}
+
+; An interrupt handler is entered with whatever D the interrupted code held. Pulling the D it
+; saved on entry gives that value back, which is no more known than it was then.
+.proc handler: interrupt, native {
+    rep #$30
+    phd
+    pea $2100
+    pld
+    lda ptr
+    pld
+    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment "ZP2", which expects the direct page at $2100, and D is not known here: a `.state dp = ...` declares what it is
+    rti
+}
+
 ; Calls and returns check D and B like the widths.
 .proc needs: a8, i8, dp = $2100 {
     rts

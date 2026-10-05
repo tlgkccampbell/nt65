@@ -1834,7 +1834,10 @@ values, the merged stack keeps its depth and forgets the values.
 **Checks.** When the state is known and the other side is declared:
 
 - a direct operand naming a symbol in a segment with a declared `dp` is an error if D
-  differs;
+  differs, and an error if D is not known, because the operand reaches the symbol only when D
+  holds that value. An interrupt handler is entered with whatever D the interrupted code
+  held, so it sets D, or declares it with `dp =` in its signature or a `.state`, before it
+  names such a symbol;
 - an absolute operand of an instruction that reads or writes data, naming a symbol in a
   segment with a declared `bank`, is an error if B is neither that home bank nor one of its
   `mirrors`, and where B is one of a set, if any bank of the set is neither;
@@ -1859,8 +1862,8 @@ values, the merged stack keeps its depth and forgets the values.
   home bank or one of its mirrors;
 - immediates such as `#<sym` are never checked.
 
-When either side is undeclared or unknown, nothing is reported. Signatures are the
-exception, as they are for widths: a call, a tail call or a jump to a declared label is
+When either side is undeclared, nothing is reported. When B is unknown, nothing is
+reported either. Signatures are the exception, as they are for widths: a call, a tail call or a jump to a declared label is
 checked against the D and B its target declares, and a return against the ones its
 routine declares, and there an unknown value, `*` included, is an error. A set is met by
 a B known to be one of its banks, or one of a set within it.

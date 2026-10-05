@@ -36,7 +36,7 @@ main__table: .byte 1, 2, 4, 8
 main__far_table: .byte 16, 32
 
 .segment "CODE": absolute
-; .proc boot: a8, i16, dbr = $80  main.nt65:28
+; .proc boot: a8, i16, dp = 0, dbr = $80  main.nt65:28
 main__boot:
     lda a:main__table
     sta a:main__frames

@@ -1420,11 +1420,12 @@ declares nothing and is checked for nothing.
 .segment LORAM: abs, bank = $7e, mirrors = [$00..$3f, $80..$bf]
 ```
 
-With those declared, a direct operand naming a `HUD_DP` symbol is an error where D is known
-to be something other than `$2100`, and an absolute operand naming a `WRAM` symbol is an error
-where B is known to be a bank that cannot see it. Where D or B is unknown, nothing is
-reported; a routine that declares them in its signature, `dp = 0, dbr = $7e`, makes them
-known. nt65 recognizes the usual idioms that set D and B: `pea $2100` then `pld`,
+With those declared, a direct operand naming a `HUD_DP` symbol is an error unless D is known
+to be `$2100`, and an absolute operand naming a `WRAM` symbol is an error where B is known to
+be a bank that cannot see it. Where B is unknown, nothing is reported. A routine that declares
+them in its signature, `dp = 0, dbr = $7e`, makes them known. An interrupt handler starts with
+D unknown, because it runs with whatever D the code it interrupted held, so it sets D before
+it names a `HUD_DP` symbol. nt65 recognizes the usual idioms that set D and B: `pea $2100` then `pld`,
 `lda #$7e` / `pha` / `plb`, and `phk` / `plb`.
 
 A `jsr`, `jmp` or branch to a segment whose home bank is not the caller's is an error too: it

@@ -122,9 +122,11 @@ internal sealed class StateChecks
     /// <summary>
     /// Reports a diagnostic where the memory an operand reaches through the direct page or the
     /// data bank disagrees with what the segments and the project's <c>ranges</c> declare. Where
-    /// either side is not declared or not known, nothing is reported, because the checks are
-    /// opt-in by declaration. A near transfer to a segment in another bank is a matter of reach,
-    /// which layout checks.
+    /// the segment or range declares nothing, nothing is reported, because the checks are opt-in
+    /// by declaration. A direct operand on a symbol whose segment declares <c>dp</c> also needs D
+    /// to be known, because the operand reaches the symbol only when D holds that value. Where B is
+    /// not known, nothing is reported. A near transfer to a segment in another bank is a matter of
+    /// reach, which layout checks.
     /// </summary>
     public void CheckMemory(Step step, MnemonicKind mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
     {
@@ -141,11 +143,22 @@ internal sealed class StateChecks
                 CheckThroughDirectPage(step, expression, state, routine);
                 return;
             }
-            if (!state.D.IsKnown)
-                return;
             foreach (var symbol in AddressSymbols.In(model, expression, step.On))
             {
-                if (SegmentOf(symbol) is { DirectPage: { } page } segment && page != state.D.Value)
+                if (SegmentOf(symbol) is not { DirectPage: { } page } segment)
+                    continue;
+                var what = $"`{symbol.DisplayName}` is in segment \"{segment.Name}\", which expects the direct page at {StateValue.Hex(page, 4)}";
+                if (state.D.Kind == StateValueKind.Unchanged)
+                {
+                    Report(step, Catalogue.DirectPageUnknown.Message(
+                        what, $"`{Owner(step, routine)}` declares `dp*`, which assumes nothing about D"));
+                }
+                else if (!state.D.IsKnown)
+                {
+                    Report(step, Catalogue.DirectPageUnknown.Message(
+                        what, "D is not known here: a `.state dp = ...` declares what it is"));
+                }
+                else if (page != state.D.Value)
                 {
                     Report(step, Catalogue.DirectPageMismatch.Message(
                         symbol.DisplayName, segment.Name, StateValue.Hex(page, 4), StateValue.Hex(state.D.Value, 4)));

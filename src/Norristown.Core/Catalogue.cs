@@ -3172,9 +3172,10 @@ public static class Catalogue
         "direct-page-unknown",
         Severity.Error,
         "{0}, and {1}",
-        "A `d:` operand is an offset from the direct page register D, so nt65 needs D's value to know which "
-            + "address it reaches. Declare it with `.state dp = ...` at this point, or with `dp = ...` in the "
-            + "routine's signature.");
+        "A `d:` operand, and a direct operand on a symbol whose segment declares `dp`, is an offset from the "
+            + "direct page register D, so nt65 needs D's value to know which address it reaches. Set D first, or "
+            + "declare it with `.state dp = ...` at this point or with `dp = ...` in the routine's signature. An "
+            + "interrupt handler starts with D unknown, because it runs with whatever D the interrupted code held.");
 
     internal static DiagnosticDescriptor DirectPageOutOfReach { get; } = Entry(
         Area.ProcessorState,

@@ -25,7 +25,7 @@
 .data far_table: .byte 16, 32
 
 .segment CODE
-.proc boot: a8, i16, dbr = $80 {
+.proc boot: a8, i16, dp = 0, dbr = $80 {
     lda table               ; RODATA runs in bank $80, where B points
     sta frames              ; BSS is in bank $00 and mirrored in bank $80
     lda f:far_table
