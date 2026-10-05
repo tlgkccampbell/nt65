@@ -10,3 +10,31 @@
 .scratch mixed {                    ;! error[scratch-has-values]: `.scratch` declares working storage, which holds nothing until a routine stores to it: write `.scratch mixed: .byte` with no values
     .byte 1
 }
+
+; Scratch belongs to the code outside interrupt handlers, so a handler, and every routine it
+; reaches, keeps its working storage in `.data`. That holds whatever kind of interrupt enters it.
+.data own: .byte
+
+.segment CODE
+.export irq, counts
+
+.proc irq: interrupt {
+    pha
+    lda #1
+    sta tmp             ;! error[scratch-in-handler]: `tmp` is scratch, which interrupt handlers may not use; declare what the handler uses with `.data`
+    sta own
+    jsr bump
+    pla
+    rti
+}
+
+; A routine the rest of the program also calls is held to the rule.
+.proc counts {
+    jsr bump
+    rts
+}
+
+.proc bump {
+    inc ptr             ;! error[scratch-in-handler]: `ptr` is scratch, which interrupt handlers may not use: `bump` runs under the interrupt handler `irq`; declare what the handler uses with `.data`
+    rts
+}

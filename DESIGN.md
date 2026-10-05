@@ -2287,13 +2287,14 @@ that the routine does not already use and that nothing it calls stores to or rea
 renames the routine's own references, so it is offered only where the scratch is not the
 routine's argument, is not passed on to a routine it calls, and is not used from a macro body.
 
-An interrupt handler can run between any two instructions, so scratch that code a handler runs
-stores to, and that code outside every handler also uses, is a warning too. It is reported at
-the handler's store and points at the use outside. A routine that both sides call uses the same
-scratch on both, so it is reported as well, and the fix is a macro, which gives each side's copy
-its own scratch. Code outside the handlers is what nothing in the program calls, what no handler
-reaches, and what those routines reach in turn. Two handlers may share scratch, since handlers
-that cannot nest, such as a chain of raster interrupts, often do.
+Scratch belongs to the code outside interrupt handlers. A handler can run between any two
+instructions, so scratch it shared with that code could change between a store and a read, a
+fault that depends on when the interrupt arrives. Any use of scratch by a routine a handler
+reaches, by a call, a jump, a branch or a `.fallthrough`, is therefore an error, and a handler
+keeps its working storage in `.data`. A routine both sides call is held to the rule too, and a
+macro can give each side a copy of its own. The rule does not ask what kind of interrupt enters
+a handler, such as a `brk` that only runs where the program executes one. Nothing could hold a
+handler to a kind, and one handler may serve several.
 
 A routine that only reads scratch leaves it as it was, so a caller can pass the same argument to
 several calls in turn. Nothing declares that: what each routine stores is worked out from its

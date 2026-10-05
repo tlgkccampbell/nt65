@@ -2935,18 +2935,19 @@ public static class Catalogue
             + "follow is taken to write nothing. Memory that returns a result from a routine is not scratch: "
             + "declare it with `.data`.");
 
-    internal static DiagnosticDescriptor ScratchSharedWithHandler { get; } = Entry(
+    internal static DiagnosticDescriptor ScratchInHandler { get; } = Entry(
         Area.ControlFlow,
-        "scratch-shared-with-handler",
-        Severity.Warning,
-        "`{0}` is stored to by the interrupt handler `{1}`{2}, and also used by `{3}`, which runs outside it; "
-            + "give the handler scratch of its own",
-        "An interrupt handler can run between any two instructions. When code the handler runs stores to "
-            + "scratch that code outside the handler also uses, an interrupt between that code's store and its read "
-            + "changes the scratch under it. The fault depends on when the interrupt arrives, so it is rare and hard "
-            + "to reproduce. A routine that both the handler and the rest of the program call uses the same "
-            + "scratch on both sides, so it is reported too. Give the handler scratch that nothing outside it uses, "
-            + "or make the shared routine a macro, so that each side's copy can use its own scratch.");
+        "scratch-in-handler",
+        Severity.Error,
+        "`{0}` is scratch, which interrupt handlers may not use{1}; declare what the handler uses with `.data`",
+        "Scratch belongs to the code outside interrupt handlers. A handler can run between any two instructions, "
+            + "so scratch it shared with that code could change under it between a store and a read, a fault that "
+            + "depends on when the interrupt arrives. Every routine a handler reaches, by a call, a jump, a branch "
+            + "or a `.fallthrough`, is held to the rule, including a routine the rest of the program also calls. "
+            + "The rule does not depend on what kind of interrupt enters the handler, because nothing holds a "
+            + "handler to one kind. Keep a handler's working storage in `.data`. A routine both sides need can "
+            + "become a macro, so that the handler's copy uses `.data` and the rest of the program's copy uses "
+            + "scratch.");
 
     // Processor state
 

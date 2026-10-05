@@ -8,16 +8,12 @@
 .export reads_after_call, reads_through_nested_call, stores_again, callee_leaves_it, shared_on_purpose
 .export reads_pointer, reads_in_loop, reads_after_indexed_store, reads_in_macro, odd, draw_row
 .export argument_overwritten, argument_kept, argument_to_tail_call, argument_through_fallthrough
-.export irq, polls_flag, counts
 
 .segment ZEROPAGE
 .scratch tmp:   .byte
 .scratch other: .byte
 .scratch ptr:   .addr
 .scratch buf:   .byte[4]
-.scratch flag:  .byte
-.scratch count: .byte
-.scratch own:   .byte
 .data result:   .byte
 
 .segment CODE
@@ -229,38 +225,5 @@
 
 .proc reads_tmp {
     lda tmp
-    rts
-}
-
-; An interrupt handler can run between any two instructions, so scratch its code stores to must
-; not be used by code outside it. Scratch only the handler's code uses is its own.
-.proc irq: interrupt {
-    pha
-    lda #1
-    sta flag            ;! warning[scratch-shared-with-handler]: `flag` is stored to by the interrupt handler `irq`, and also used by `polls_flag`, which runs outside it; give the handler scratch of its own
-    sta own
-    lda own
-    jsr bump
-    pla
-    rti
-}
-
-.proc polls_flag {
-    lda #0
-    sta flag
-    lda flag
-    rts
-}
-
-; A routine both sides call uses the same scratch on both.
-.proc counts {
-    jsr bump
-    rts
-}
-
-.proc bump {
-    lda #0
-    sta count           ;! warning[scratch-shared-with-handler]: `count` is stored to by the interrupt handler `irq`, in `bump`, and also used by `bump`, which runs outside it; give the handler scratch of its own
-    inc count
     rts
 }

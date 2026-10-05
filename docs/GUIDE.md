@@ -497,9 +497,10 @@ routine it calls, but a call that may store to scratch leaves nothing there the 
 on. nt65 warns where a routine stores to scratch, calls a routine that may store to the same
 bytes, and then reads them back, or calls another routine that reads them as an argument. The
 warning names the call and the store that may have overwritten the bytes, and the editor offers
-to move the routine to scratch that nothing it calls stores to. nt65 also warns where code an
-interrupt handler runs stores to scratch that code outside the handler uses, because an
-interrupt can come between that code's store and its read. Hover on a routine shows the scratch
+to move the routine to scratch that nothing it calls stores to. Scratch belongs to the code
+outside interrupt handlers, so a handler, and every routine it reaches, keeps its working
+storage in `.data`. Using scratch there is an error, because an interrupt can come between a
+store and a read. Hover on a routine shows the scratch
 it reads and stores, counting the routines it calls. Scratch takes no values, and `= address`
 places it at a fixed address.
 

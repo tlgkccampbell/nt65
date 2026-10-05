@@ -6,11 +6,10 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// Reports reads of scratch that a call may have overwritten since it was stored, and scratch that
-/// an interrupt handler shares with the rest of the program. Scratch is data that <c>.scratch</c>
-/// declares. Routines share its bytes for working values, and a caller may store an argument there
-/// for the routine it calls. A call that may store to scratch leaves nothing there that the caller
-/// can rely on.
+/// Reports reads of scratch that a call may have overwritten since it was stored, and scratch used
+/// by code an interrupt handler runs. Scratch is data that <c>.scratch</c> declares. Routines share
+/// its bytes for working values, and a caller may store an argument there for the routine it calls.
+/// A call that may store to scratch leaves nothing there that the caller can rely on.
 /// <para>
 /// The checks follow only instructions that name scratch directly, never what memory holds. A
 /// direct store to a byte of scratch makes it the routine's own again. A call to a routine that
@@ -21,9 +20,11 @@ namespace Norristown.Flow;
 /// nothing.
 /// </para>
 /// <para>
-/// An interrupt handler can run between any two instructions. Scratch that code a handler runs
-/// stores to, and that code outside every handler also uses, can change under that code between
-/// its store and its read, so it is reported too.
+/// Scratch belongs to the code outside interrupt handlers. A handler can run between any two
+/// instructions, so scratch it shared could change under the code it interrupted. A handler
+/// therefore keeps its working storage in <c>.data</c>, and any use of scratch by a routine a
+/// handler reaches is an error. The rule does not ask what kind of interrupt enters a handler,
+/// because nothing can hold a handler to one kind.
 /// </para>
 /// </summary>
 internal static class ScratchChecks
@@ -55,7 +56,7 @@ internal static class ScratchChecks
                 Shown(program.Inference.ReadsOf(routine.Symbol).Select(Slot.Of)),
                 Shown(routine.Stores.Keys.Select(slot => (Slot?)slot)));
         }
-        found.AddRange(SharedWithHandlers(program));
+        found.AddRange(InHandlers(program));
         return (found, uses);
     }
 
@@ -210,14 +211,18 @@ internal static class ScratchChecks
     /// routine's own references, so it is offered only where the scratch is the routine's own
     /// working storage. That means it is not the routine's argument, it is not an argument the
     /// routine passes on, and it is not used from a macro body. The other scratch must be as large,
-    /// unused by the routine, neither stored to nor read by any routine it calls, on the routine's
-    /// side of every interrupt handler, and reachable by name wherever the routine names the first.
+    /// unused by the routine, neither stored to nor read by any routine it calls, and reachable by
+    /// name wherever the routine names the first. A routine an interrupt handler runs may use no
+    /// scratch at all, so it is offered none.
     /// </summary>
     private static DiagnosticFix? OtherScratch(Routine routine, Step step, Location location, ProgramScratch program)
     {
         var (file, model) = (routine.File, routine.File.Model);
-        if (location.Root is not { } scratch || Slot.Of(location) is not { } read || Reported(file, step).Related.Count > 0)
+        if (location.Root is not { } scratch || Slot.Of(location) is not { } read || Reported(file, step).Related.Count > 0
+            || program.Handlers.ContainsKey(routine.Key))
+        {
             return null;
+        }
         var group = read.Whole();
         if (Groups(program.Inference.ReadsOf(routine.Symbol)).Contains(group)
             || routine.Callees.Any(callee => Groups(program.Inference.ReadsOf(callee)).Contains(group)))
@@ -242,15 +247,12 @@ internal static class ScratchChecks
             return null;
 
         var calleeReads = routine.Callees.SelectMany(callee => Groups(program.Inference.ReadsOf(callee))).ToHashSet();
-        var handled = program.Handlers.ContainsKey(routine.Key);
-        var main = program.Main.Contains(routine.Key);
         foreach (var candidate in program.Scratch)
         {
             var other = Slot.WholeOf(candidate);
             if (other == group || (candidate.Size ?? 0) < (scratch.Size ?? long.MaxValue)
                 || routine.Stores.Keys.Any(slot => slot.Whole() == other) || routine.Uses.ContainsKey(other)
-                || calleeReads.Contains(other)
-                || (main && program.HandlerStores.Contains(other)) || (handled && program.MainUses.Contains(other)))
+                || calleeReads.Contains(other))
             {
                 continue;
             }
@@ -305,29 +307,24 @@ internal static class ScratchChecks
         [.. locations.Select(Slot.Of).OfType<Slot>().Select(slot => slot.Whole())];
 
     /// <summary>
-    /// Returns a warning for each scratch that code an interrupt handler runs stores to and that
-    /// code outside every handler also uses. Each is reported once for each handler, at a store the
-    /// handler's code makes, and points at a use outside the handler.
+    /// Returns an error for each scratch that a routine an interrupt handler runs uses, once for
+    /// each routine and scratch, at the routine's first use of it. The error points at the handler.
     /// </summary>
-    private static IEnumerable<Diagnostic> SharedWithHandlers(ProgramScratch program)
+    private static IEnumerable<Diagnostic> InHandlers(ProgramScratch program)
     {
-        var reported = new HashSet<(RoutineKey, Slot)>();
         foreach (var routine in program.Routines.Values)
         {
             if (!program.Handlers.TryGetValue(routine.Key, out var handler))
                 continue;
-            foreach (var (slot, store) in routine.OwnStores)
+            var runs = Same(routine.Symbol, handler)
+                ? ""
+                : $": `{routine.Symbol.DisplayName}` runs under the interrupt handler `{handler.DisplayName}`";
+            foreach (var (group, use) in routine.Uses)
             {
-                var group = slot.Whole();
-                var user = program.Routines.Values.FirstOrDefault(
-                    other => program.Main.Contains(other.Key) && other.Uses.ContainsKey(group));
-                if (user is null || !reported.Add((RoutineKey.Of(handler), group)))
-                    continue;
-                var through = routine.Symbol.DisplayName == handler.DisplayName ? "" : $", in `{routine.Symbol.DisplayName}`";
                 yield return new Diagnostic(
-                    store.Span,
-                    Catalogue.ScratchSharedWithHandler.Message(group.Shown, handler.DisplayName, through, user.Symbol.DisplayName),
-                    [new RelatedSpan(user.Uses[group].Span, $"`{user.Symbol.DisplayName}` uses `{group.Shown}` here")]);
+                    use.Span,
+                    Catalogue.ScratchInHandler.Message(group.Shown, runs),
+                    [new RelatedSpan(handler.DeclarationSpan, $"the interrupt handler `{handler.DisplayName}`")]);
             }
         }
     }
@@ -447,8 +444,7 @@ internal static class ScratchChecks
 
     /// <summary>
     /// Represents what the scratch checks know about the whole program: its routines, which of
-    /// them run under an interrupt handler and which outside every handler, and every scratch
-    /// declared.
+    /// them run under an interrupt handler, and every scratch declared.
     /// </summary>
     private sealed class ProgramScratch
     {
@@ -472,7 +468,11 @@ internal static class ScratchChecks
             Scratch = [.. files.SelectMany(file => file.Model.Symbols.Where(Location.IsScratch))
                 .DistinctBy(symbol => (symbol.Tree.Path, symbol.FlatName))];
             Spread();
-            Contexts();
+            foreach (var handler in Routines.Values.Where(routine => routine.Symbol.Signature?.IsInterrupt == true))
+            {
+                foreach (var reached in Reach(handler))
+                    Handlers.TryAdd(reached.Key, handler.Symbol);
+            }
         }
 
         /// <summary>Gets the routines of the program, by key, in the order of their files.</summary>
@@ -486,15 +486,6 @@ internal static class ScratchChecks
 
         /// <summary>Gets each routine an interrupt handler runs, with that handler.</summary>
         public Dictionary<RoutineKey, Symbol> Handlers { get; } = [];
-
-        /// <summary>Gets the routines that run outside every interrupt handler.</summary>
-        public HashSet<RoutineKey> Main { get; } = [];
-
-        /// <summary>Gets the scratch that the code of some interrupt handler stores to, as whole slots.</summary>
-        public HashSet<Slot> HandlerStores { get; } = [];
-
-        /// <summary>Gets the scratch that code outside every handler uses, as whole slots.</summary>
-        public HashSet<Slot> MainUses { get; } = [];
 
         /// <summary>Returns the routine a call to <paramref name="target"/> runs, or null where it is not in the program.</summary>
         public Routine? Of(Symbol target) => Routines.GetValueOrDefault(KeyOf(target));
@@ -553,40 +544,13 @@ internal static class ScratchChecks
         }
 
         /// <summary>
-        /// Works out which routines each interrupt handler runs and which run outside every
-        /// handler. A handler runs what it reaches. Outside the handlers, a routine runs when
-        /// nothing in the program calls it, when no handler reaches it, or when a routine outside
-        /// the handlers passes control to it. A routine can therefore run on both sides.
+        /// Returns every routine that <paramref name="start"/> reaches by a call, a jump, a branch or
+        /// a <c>.fallthrough</c>, itself included.
         /// </summary>
-        private void Contexts()
-        {
-            foreach (var handler in Routines.Values.Where(routine => routine.Symbol.Signature?.IsInterrupt == true))
-            {
-                foreach (var reached in Reach([handler]))
-                    Handlers.TryAdd(reached.Key, handler.Symbol);
-            }
-            var called = Routines.Values.SelectMany(routine => routine.Callees.Select(KeyOf)).ToHashSet();
-            var roots = Routines.Values.Where(routine => routine.Symbol.Signature?.IsInterrupt != true
-                && (!called.Contains(routine.Key) || !Handlers.ContainsKey(routine.Key)));
-            foreach (var reached in Reach(roots))
-            {
-                if (reached.Symbol.Signature?.IsInterrupt != true)
-                    Main.Add(reached.Key);
-            }
-            foreach (var routine in Routines.Values)
-            {
-                if (Handlers.ContainsKey(routine.Key))
-                    HandlerStores.UnionWith(routine.OwnStores.Keys.Select(slot => slot.Whole()));
-                if (Main.Contains(routine.Key))
-                    MainUses.UnionWith(routine.Uses.Keys);
-            }
-        }
-
-        /// <summary>Returns every routine that <paramref name="starts"/> reach, themselves included.</summary>
-        private List<Routine> Reach(IEnumerable<Routine> starts)
+        private List<Routine> Reach(Routine start)
         {
             var seen = new HashSet<RoutineKey>();
-            var pending = new Stack<Routine>(starts);
+            var pending = new Stack<Routine>([start]);
             var found = new List<Routine>();
             while (pending.TryPop(out var routine))
             {
