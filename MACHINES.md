@@ -7,15 +7,14 @@ checks they enable, a sound analysis of memory built on them, what stays out, an
 work.
 
 Two decisions were made with the owner on 2026-10-05, and the rest of the document follows from
-them:
+them. The owner settled the remaining questions the same day, and the document records each answer
+where it applies.
 
 - A program opts in to machine knowledge by declaring it. A program that declares nothing is
   analyzed exactly as it is today.
 - Users write their own models, including for homebrew machines. nt65 has no built-in machines.
   The models that come with nt65 are ordinary modules, written only with declarations any program
   may use.
-
-Everything else here is a proposal. The open questions at the end are the decisions still needed.
 
 ## The problem
 
@@ -70,6 +69,9 @@ the devices below say what the addresses are.
   whole range. Each repeat is a **mirror**.
 - An address's **canonical address** is the first address in its device that answers the same.
   `$2008` on the NES is canonically `$2000`.
+- A **chip type** is a struct whose fields are a chip's registers, and a **typed device** is a
+  device declared with a chip type in place of its kind. Both are described under "Chips as
+  types".
 
 ## Declaring devices
 
@@ -81,8 +83,9 @@ the devices below say what the addresses are.
 .device PRG:  rom = $8000..$ffff
 ```
 
-The form is `.device name: kind = range`, which reads like `.mmio name: element = address`. The
-name appears in messages and hovers. Two devices may not overlap.
+The form is `.device name: kind = range`, which reads like `.mmio name: element = address`. A
+chip type may stand in place of the kind, as described under "Chips as types". Two devices may
+not overlap.
 
 | Kind | Reads | Writes | Meaning |
 |---|---|---|---|
@@ -104,17 +107,64 @@ repeat. An address no device covers is unknown, as every address is today, and i
 A model may therefore describe only part of a machine. An unconnected gap is declared with
 `none`.
 
-Devices describe the program's whole address space. Like a segment declaration, a device
-declared in any module of the program applies to all of it, and it needs no `.export` or `.use`.
-A shared library declares none, and each platform's project brings its own, which is the layout
-the monitor example already has.
+A device has two parts, and they have different scopes:
+
+- **Its behaviour** is its kind, its repeats and, for a typed device, its registers. These go
+  into a program-wide device table, beside the segment table. Like a segment
+  declaration, a device declared in any module of the program applies to all of it. Every
+  module's accesses are checked against it, with no `.export` or `.use`.
+- **Its name** is declared in its module like any other name. It is private unless exported, and
+  another module reaches it by path or with `.use`. An untyped device's name is not an operand,
+  as a `.scope` name is not. It lets messages and hovers name the device, and it keeps two
+  devices in one module from sharing a name.
+
+The checks need only the table, so they protect every module, while names keep the rule that
+nothing another module declares is visible without its path or a `.use`. A shared library
+declares no devices, and each platform's project brings its own, which is the layout the monitor
+example already has. A shipped model joins the program when a file names it, as any module under
+`nt65` does.
 
 A device may stand under `.if`, so one model can follow a setting. A C64 program that banks out
 BASIC can declare `BASIC` as `ram` when a setting says so. A program that switches the map while
 it runs is described under later work.
 
-On the 65816 a range is 24 bits wide, such as `$7e0000..$7fffff`. Whether devices should also
-replace the project file's `ranges` is an open question.
+### Banks and pages
+
+On the 65816 a range is 24 bits wide, such as `$7e0000..$7fffff`. Some hardware answers at one
+offset in many banks, and some answers in scattered slices of a 16-bit space. A range followed by
+`in banks` or `in pages` repeats it at the start of each bank or 256-byte page in a set:
+
+```nt65
+.device REGS:  io = $2100..$21ff in banks [$00..$3f, $80..$bf]
+.device LORAM: ram = $0000..$1fff in banks [$00..$3f, $7e, $80..$bf]
+.device RAM:   ram = $80..$ff in pages [$00, $01, $04, $05, $08, $09, $0c, $0d]
+```
+
+The range gives the offsets, and the set gives the banks or pages they appear in. Every copy is
+the same device, so its canonical address is in the first bank or page of the set. The SNES's
+first 8K of work RAM is therefore one device, and `$7e0000` is a mirror of `$000000`. The third
+line is the Atari 2600's RAM, which answers wherever A7 is 1 and A9 is 0, and where the stack at
+`$1ff` is the byte at `$ff`. `every n` still applies within each copy.
+
+`every` and this form cover every machine the corpus models, and the NES, C64, Atari 8-bit,
+Apple II and BBC Micro need nothing more. nt65 has no decode mask. A board whose chip selects use
+single address lines, such as the PET's `$e8xx` I/O or the VIC-20's VIAs, mirrors a chip at
+addresses that neither form lists. Its model declares the addresses that programs use and leaves
+the other mirrors unknown, and an unknown address is never checked. Overlapping devices stay an error, so a
+model never describes an address where two chips answer at once.
+
+### Data bank checks
+
+Devices replace the project file's `ranges`. A typed device or `io` device that answers in some
+banks only says what `ranges` said, which is the banks its addresses can be reached from. The
+`range-bank-mismatch` error is now judged from the devices. It is reported where a constant
+absolute operand lands on an `io` device's offsets, and B may hold a bank that device does not
+answer in. `sta $2100` with B at `$7e` is still the error, because `REGS` above does not answer
+in bank `$7e`. A project without devices no longer has this check, so the SNES examples use an
+`nt65::devices::snes` model.
+
+A segment's `mirrors` could come from the device its memory area lies in, in the same way. That
+is later work, and `mirrors` stays in the project file until then.
 
 ## Register access
 
@@ -140,23 +190,46 @@ an index, such as `voices::freq,x`, is still that field.
 
 A device's mirrors resolve to its registers. `sta $2008` is a store to `PPUCTRL`, and the hover
 and the checks treat it so. The `constant-used-as-address` suggestion offers `PPUCTRL` for
-`$2008` too.
+`$2008` too, but only by a name the file can write. That is a name in scope, or an exported name
+by its path. A register private to another module gets no offer, though the checks still apply.
 
 ## Chips as types
 
 Homebrew machines are built from a few standard chips, such as the 6522 VIA, the 6551 ACIA and
-the SID. A chip is a struct whose fields are its registers, with their access. A machine places
-the chips it has:
+the SID, and a machine often has two of one. A chip type is a struct whose fields are the chip's
+registers, with their access. Its size is the chip's whole decoded span, with unused registers
+declared as padding. The SID's type is therefore `$20` bytes for its 29 registers, and the
+VIC-II's is `$40`.
+
+A machine places each chip it has as a typed device:
 
 ```nt65
-.use nt65::chip::w65c22 as via
+.use nt65::devices::w65c22 as via
 
-.device VIA1: io every $10 = $6000..$7fff
-.mmio   VIA1_REGS: .type via::W65c22 = $6000
+.device VIA1: via::W65c22 = $6000..$7fff
 ```
 
-nt65 ships a small library of chip types under `nt65::chip`, beside the charmaps and the macro
-modules. A user can write a chip type for anything else in the same way.
+A typed device is `io`. It repeats every `.sizeof` its type, and has the type's registers at its
+base and at every mirror. The chip owns its register layout and its span, and the board owns
+where the chip select puts the chip and how far it reaches. `every n` after the type overrides
+the repeat, for a board that wires the register selects to other address lines.
+
+A typed device's name declares exactly what `.mmio VIA1: .type via::W65c22 = $6000` would. Code
+reaches a register as `VIA1::orb`, the output is that of `.mmio`, and other modules reach the
+name through `.export` and `.use` as they reach any other. The device's entry in the table stays
+program-wide, so a module that cannot name `VIA1` still gets every check on it.
+
+Two kinds of hardware are not chip types:
+
+- **A chip whose reads and writes differ, or that answers in more than one range**, such as the
+  MMC3. Its devices sit at fixed addresses, so a module of plain devices describes it, as
+  `nt65::devices::mmc3` below does.
+- **A machine.** Devices from every module apply program-wide, so a program combines a console's
+  module with a cartridge's with no new syntax. Devices therefore do not nest.
+
+nt65 ships its chip types and machine models together under `nt65::devices`, beside the charmaps
+and the macro modules. No chip and no machine share a name, so one root serves both. A user can
+write a chip type or a model for anything else in the same way.
 
 ## Example models
 
@@ -167,9 +240,11 @@ A breadboard 65C02 in the style of Ben Eater's kit has 16K of RAM, a VIA decoded
 to `$7fff` and a 32K ROM:
 
 ```nt65
+.use nt65::devices::w65c22 as via
+
 .device RAM:  ram = $0000..$3fff
 .device GAP:  none = $4000..$5fff
-.device VIA1: io every $10 = $6000..$7fff
+.device VIA1: via::W65c22 = $6000..$7fff
 .device ROM:  rom = $8000..$ffff
 ```
 
@@ -188,25 +263,33 @@ The NES with an MMC3 cartridge combines the console's fixed map with the cartrid
 .device ACK:    rom, writes io every 2 = $e000..$ffff   ; the IRQ disable and enable
 ```
 
-The base console and the mapper are two modules, `nt65::machine::nes` and
-`nt65::machine::mmc3`, so a program on another mapper uses the first with a mapper module of its
+The base console and the mapper are two modules, `nt65::devices::nes` and
+`nt65::devices::mmc3`, so a program on another mapper uses the first with a mapper module of its
 own.
 
-The C64's default map has ROM over RAM, and I/O chips that repeat:
+The C64's default map has ROM over RAM, and I/O chips that repeat. Its two CIAs are one chip
+type at two ranges:
 
 ```nt65
+.use nt65::devices::vic2 as vic
+.use nt65::devices::sid
+.use nt65::devices::cia
+
 .device PORT:   io = $0000..$0001
 .device RAM:    ram = $0002..$9fff
 .device BASIC:  rom, writes ram = $a000..$bfff
 .device HIRAM:  ram = $c000..$cfff
-.device VIC:    io every $40 = $d000..$d3ff
-.device SID:    io every $20 = $d400..$d7ff
+.device VIC:    vic::Vic2 = $d000..$d3ff
+.device SID:    sid::Sid = $d400..$d7ff
 .device COLOR:  io = $d800..$dbff                 ; only the low four bits read back
-.device CIA1:   io every $10 = $dc00..$dcff
-.device CIA2:   io every $10 = $dd00..$ddff
+.device CIA1:   cia::Cia = $dc00..$dcff
+.device CIA2:   cia::Cia = $dd00..$ddff
 .device EXPAN:  io = $de00..$dfff
 .device KERNAL: rom, writes ram = $e000..$ffff
 ```
+
+The shipped module exports its typed devices, so after `.use nt65::devices::c64` a program writes
+the border colour as `c64::VIC::border`.
 
 ## Checks
 
@@ -215,20 +298,26 @@ canonical address. None of them follows values through memory.
 
 | Name | Severity | Reported when |
 |---|---|---|
-| `store-to-rom` | warning | An instruction writes where writes are ignored, meaning a `rom` device with no other kind for writes. |
-| `access-to-nothing` | warning | An instruction reads or writes a `none` device. |
-| `read-of-write-only` | warning | An instruction reads a `write` register. |
-| `write-to-read-only` | warning | An instruction writes a `read` register. |
+| `store-to-rom` | error | An instruction writes where writes are ignored, meaning a `rom` device with no other kind for writes. |
+| `access-to-nothing` | error | An instruction reads or writes a `none` device. |
+| `read-of-write-only` | error | An instruction reads a `write` register. |
+| `write-to-read-only` | error | An instruction writes a `read` register. |
 | `scratch-outside-ram` | error | `.scratch` is at an address, or in a segment, whose writes are not `ram`. |
-| `segment-not-writable` | warning | A linked config runs a `bss`, `zp` or `rw` segment where writes are not `ram`. |
+| `segment-not-writable` | error | A linked config runs a `bss`, `zp` or `rw` segment where writes are not `ram`. |
+
+Every check is an error, because each is a fault on real hardware. A project cannot turn an
+error off, so a model that is wrong has to be fixed rather than silenced, and no check may report
+an access that might be right.
 
 A read-modify-write instruction, such as `inc`, `asl` or `trb`, is both a read and a write, so
 `inc` on a SID register is `read-of-write-only`. `bit` is a read.
 
 An instruction's address is known when its operand is a constant, or a symbol with a fixed
 address such as data found elsewhere, `.mmio` and placed scratch. A symbol in a segment is known
-when every memory area the segment runs in lies in one device. An indexed operand is judged by
-its base address. A store through a pointer is not seen. These gaps only miss reports, as the
+when every memory area the segment runs in lies in one device. An indexed operand that names a
+field, such as `voices::freq,x`, is judged by that field. Any other indexed operand is judged only
+where every address its index can reach would give the same report. `lda $2000,x` reaches more
+than `PPUCTRL`, so it reports nothing unless X is known. A store through a pointer is not seen. These gaps only miss reports, as the
 scratch check's gaps do, and no gap can cause one.
 
 ## What it feeds that is not a check
@@ -237,7 +326,9 @@ scratch check's gaps do, and no gap can cause one.
   `.mmio` register. With devices, a load from anywhere in an `io` device stops it too, and a store
   and a load at two mirrors of one RAM address are grouped as one location.
 - **Hover.** A constant address names its device, and its register when it has one, including at
-  a mirror. `$2008` shows as `PPUCTRL`, mirrored from `$2000`.
+  a mirror. `$2008` shows as `PPUCTRL`, mirrored from `$2000`. A hover is not a lookup, so it
+  shows a register the file cannot name too. It uses the shortest name that resolves in the
+  file, and otherwise the full path, such as `nt65::devices::c64::VIC::border`.
 - **The scratch check.** Scratch compares canonical addresses, so a `.data` declared at a mirror
   of scratch is the same bytes.
 
@@ -282,7 +373,14 @@ cannot see.
    ```nt65
    .proc print_char = $ff00: reads a, keeps x, y, writes $00..$0f
    .proc delay = $ff10: reads a, writes none
+   .import fill: proc(reads a, writes fill_ptr, fill_count)
    ```
+
+   `writes` lists address ranges and names. A name with a size, such as data or scratch, writes
+   all of its bytes, and a name without one is written as a range from it, as in
+   `tmp..tmp + 3`. An imported name whose value nt65 does not know is never the program's own
+   segment data, since the linker lays the two out apart. It may still be any RAM address that
+   an instruction names as a constant, and the analysis treats it so.
 
    A machine model declares its ROM's routines once, so user code declares nothing. `writes` on a
    routine with a body is an error, because nt65 works the answer out from the body.
@@ -320,7 +418,13 @@ pattern is not enough.
   path between them. A save it cannot prove is still trusted, and the hover says why.
 - **Saves are inferred.** A routine that stores X to RAM and loads it back keeps X, without
   `.state saves` or `.state keeps`, when nt65 can prove it. That is the inference DESIGN.md does
-  not make today, and the proof is what makes it safe.
+  not make today, and the proof is what makes it safe. The `preserves` lens shows a register
+  kept through memory as it shows any other kept register, with no mark. The proof is sound, so
+  callers can rely on it as fully as on a stack save, and the lens stays readable at a glance.
+  The hover on the routine's line names the byte that carries the register, as in "X kept
+  through `save_x`", and when a proof fails it names the store that broke it.
+- **A proved save is not a read.** The `reads` lens counts a register stored to memory as read
+  today, even when it is stored only to be restored. A save that nt65 proves no longer counts.
 - **Input sources in RAM become exact.** A memory source that is proved is drawn like a register
   source, and only an unproved one keeps the dashed look.
 
@@ -360,13 +464,21 @@ only miss warnings.
 
 ## Documentation
 
-- DESIGN.md, section "Data": add `.device` beside `.mmio` and `.scratch`, the access words on
-  `.mmio` and struct fields, and the grammar lines.
+- DESIGN.md, section "Data": add `.device` beside `.mmio` and `.scratch`, typed devices and
+  chip types, the access words on `.mmio` and struct fields, and the grammar lines.
+- DESIGN.md, section "Declarations": a row for `.device`.
+- DESIGN.md, section "What tooling gets": add the device table to the program-wide tables, and
+  note that editing a device re-analyzes the program, as editing a segment declaration does.
 - DESIGN.md, section "What a routine keeps": the sentence "nothing about a location's behaviour
   is nt65's to know" must say that a program may now declare it for each address. When the memory
   analysis lands, the section must also say that `.state saves` is checked and that a save nt65
   can prove needs no `.state` at all.
 - DESIGN.md, section "Signatures": `writes` in the table of signature items.
+- DESIGN.md, section "Project file": remove `ranges`.
+- DESIGN.md, section "Direct page and data bank": the check on constant addresses is judged
+  from devices.
+- DESIGN.md, section "What a routine keeps": the `preserves` and `reads` lenses with saves
+  through memory, when the memory analysis lands.
 - DESIGN.md, section "What tooling gets": devices in hover and in the input sources.
 - docs/GUIDE.md: a section on describing a machine, with the homebrew model as its example.
 - The diagnostics catalogue: the six new names.
@@ -375,61 +487,46 @@ only miss warnings.
 
 Each step ends with the full test gate green and a commit to `main`.
 
-1. **`.device`** in the syntax, the binder and a program-wide device table. Report overlaps and
-   bad ranges, and show devices in hover.
+1. **`.device`** in the syntax, the binder and a program-wide device table, with `in banks` and
+   `in pages`. Report overlaps and bad ranges, and show devices in hover.
 2. **Canonical addresses.** Resolve mirrors when looking up a register at a constant address, in
    hover and in `constant-used-as-address`.
 3. **Register access** on `.mmio` and struct fields, with `read-of-write-only` and
-   `write-to-read-only`.
+   `write-to-read-only`. **Typed devices**, with their names declared as `.mmio` is, their
+   repeat taken from the type, and their registers resolved at every mirror.
 4. **`store-to-rom` and `access-to-nothing`.**
 5. **`scratch-outside-ram` and `segment-not-writable`**, and canonical addresses in the scratch
    check.
-6. **The models.** Write `nt65::chip` types for the chips the examples use, and
-   `nt65::machine::nes`, `mmc3` and `c64`. Add the homebrew corpus program. Move the mmc3,
-   c64-demo and monitor examples' register modules onto them. The ported examples (msbasic,
-   lorom-template and snrom-template) are left as they are.
-7. **Input sources:** stop at `io` devices and group mirrors.
-8. **Documentation.**
+6. **The models.** Write `nt65::devices` chip types for the chips the examples use,
+   and the models `nes`, `mmc3`, `c64` and `snes` beside them. Add the homebrew corpus program.
+   Move the mmc3, c64-demo and monitor examples' register modules onto them, with `.export .use`
+   where a module's register names are used today. The ported examples (msbasic, lorom-template
+   and snrom-template) keep their source as it is.
+7. **Devices replace `ranges`.** Judge `range-bank-mismatch` from the devices, and remove
+   `ranges` from the project file, its schema and its diagnostics. Move the projects that use it
+   onto the `snes` model. These are the hirom-hdma and lorom-template examples, the snes corpus
+   project and four fixtures. A fixture that tests the bank check declares its own device. A
+   project names the model from a file of its own, which in lorom-template is a new file, so the
+   ported sources stay as they are.
+8. **Input sources:** stop at `io` devices and group mirrors.
+9. **Documentation.**
 
 Steps 1 to 5 are tested with small fixtures. Each check has one fixture that reports and one that
 does not.
 
 The memory analysis follows as a second phase, with the same rule for each step:
 
-9. **`writes` on routines with no body**, in the syntax and the signature model, with the error on
-   a routine with a body.
-10. **May-write sets** for each routine, with the handlers' union, and a hover row that shows
+10. **`writes` on routines with no body**, in the syntax and the signature model, with the error
+    on a routine with a body.
+11. **May-write sets** for each routine, with the handlers' union, and a hover row that shows
     them. Test them with flow fragments, as the scratch check is tested.
-11. **The `.state saves` check**, proved or reported, with the reason in the hover.
-12. **Measure** how many saves in the examples go unproved because of pointer stores. Decide from
+12. **The `.state saves` check**, proved or reported, with the reason in the hover.
+13. **Measure** how many saves in the examples go unproved because of pointer stores. Decide from
     that whether to track pointers.
-13. **Inferred saves**, then **exact memory sources** in the input-sources highlight.
-14. **`writes` on the shipped models' ROM routines**, checked against each machine's
+14. **Inferred saves**, with the hover and the `reads` lens change, then **exact memory
+    sources** in the input-sources highlight.
+15. **`writes` on the shipped models' ROM routines**, checked against each machine's
     documentation before it is written.
-
-## Open questions
-
-1. **The keyword.** `.region` would read well, but "region" already names a segment region line
-   and `FlowRegion`. `.device` matches how a homebrew builder thinks of chip selects. Other
-   candidates are `.map` and `.bus`.
-2. **Repeats.** `every n` covers every board above. A decode mask, such as `decode $e00f`, would
-   also cover decoding that skips address lines, at the cost of being harder to read. Start with
-   `every` unless a real board needs the mask.
-3. **A device's registers.** A device could carry its register type in one line, as
-   `.device VIA1: io every $10 = $6000..$7fff, regs: .type W65c22`, in place of a separate
-   `.mmio`. That is shorter, but it puts two declarations into one.
-4. **The access words.** `read` and `write` before the element type are short. A field such as
-   `freq: write .word` might read as an instruction to a newcomer. `in` and `out` are an
-   alternative.
-5. **Severity.** All the new warnings could be errors, since each is a fault on real hardware.
-   Warnings let a project turn one off in `diagnostics` while a model is being written.
-6. **The project file's `ranges`.** On the 65816, 24-bit devices can say which banks see the
-   hardware registers. If they do, `ranges` could go, or stay as a shorthand.
-7. **Module names.** `nt65::machine::nes` and `nt65::chip::w65c22` are proposals.
-8. **What `writes` lists.** Address ranges are enough for ROM routines. Imported ca65 routines
-   might want to name the symbols they write instead, which needs those symbols to resolve.
-9. **An inferred save in the editor.** An inferred save changes what a routine keeps, which its
-   callers see. Whether the `keeps` lens should mark a register kept through memory is open.
 
 ## Conventions
 
