@@ -2935,6 +2935,19 @@ public static class Catalogue
             + "follow is taken to write nothing. Memory that returns a result from a routine is not scratch: "
             + "declare it with `.data`.");
 
+    internal static DiagnosticDescriptor ScratchSharedWithHandler { get; } = Entry(
+        Area.ControlFlow,
+        "scratch-shared-with-handler",
+        Severity.Warning,
+        "`{0}` is stored to by the interrupt handler `{1}`{2}, and also used by `{3}`, which runs outside it; "
+            + "give the handler scratch of its own",
+        "An interrupt handler can run between any two instructions. When code the handler runs stores to "
+            + "scratch that code outside the handler also uses, an interrupt between that code's store and its read "
+            + "changes the scratch under it. The fault depends on when the interrupt arrives, so it is rare and hard "
+            + "to reproduce. A routine that both the handler and the rest of the program call uses the same "
+            + "scratch on both sides, so it is reported too. Give the handler scratch that nothing outside it uses, "
+            + "or make the shared routine a macro, so that each side's copy can use its own scratch.");
+
     // Processor state
 
     internal static DiagnosticDescriptor WidthUnknown { get; } = Entry(

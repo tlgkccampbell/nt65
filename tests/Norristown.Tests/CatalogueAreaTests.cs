@@ -125,7 +125,7 @@ public sealed class CatalogueAreaTests
             "next-not-the-branch-target", "next-successors-known", "next-table-has-no-labels",
             "next-target-not-a-table", "next-target-not-code", "noreturn-returns", "pushed-return-unchecked",
             "reads-undeclared", "routine-runs-off-the-end", "runs-into-data", "saves-not-a-store",
-            "scratch-overwritten", "self-modifying-unchecked",
+            "scratch-overwritten", "scratch-shared-with-handler", "self-modifying-unchecked",
             "tail-call-distance-mismatch", "tail-call-to-handler",
         ]),
         ("Processor state",

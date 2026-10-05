@@ -136,4 +136,10 @@ public enum FixKind
     /// <c>.data</c> or, for a hardware register, <c>.mmio</c>.
     /// </summary>
     AddressData,
+
+    /// <summary>
+    /// The scratch a routine reads after a call overwrote it, replaced throughout the routine by
+    /// other scratch that nothing the routine calls stores to.
+    /// </summary>
+    UseScratch,
 }

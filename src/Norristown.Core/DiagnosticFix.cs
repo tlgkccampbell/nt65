@@ -13,4 +13,8 @@ namespace Norristown;
 /// The declaration the change applies to, when that is not where the diagnostic is reported. For
 /// example, it is the label a <c>.state</c> goes after, or the declaration whose module exports it.
 /// </param>
-public sealed record DiagnosticFix(FixKind Kind, string? Text = null, Span? At = null);
+/// <param name="Spans">
+/// The places the change writes <paramref name="Text"/> over, when it replaces several, as a
+/// rename does. Null for every other change.
+/// </param>
+public sealed record DiagnosticFix(FixKind Kind, string? Text = null, Span? At = null, IReadOnlyList<Span>? Spans = null);

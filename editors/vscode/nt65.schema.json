@@ -432,6 +432,7 @@
         "scope-has-no-address",
         "scratch-has-values",
         "scratch-overwritten",
+        "scratch-shared-with-handler",
         "segment-attribute-not-constant",
         "segment-attribute-out-of-range",
         "segment-attribute-twice",

@@ -130,6 +130,15 @@ public sealed class FixesTests
             ".export .proc main: a8, i8, reads x {\n    stx $10\n    rts\n}\n"
         },
         {
+            "Use `spare` in this routine, which nothing it calls stores to",
+            ".segment ZEROPAGE\n.scratch tmp: .byte\n.scratch spare: .byte\n.segment CODE\n"
+                + ".proc helper: a8, i8 {\n    sta tmp\n    rts\n}\n"
+                + ".export .proc main: a8, i8 {\n    sta tmp\n    jsr helper\n    lda tmp\n    rts\n}\n",
+            ".segment ZEROPAGE\n.scratch tmp: .byte\n.scratch spare: .byte\n.segment CODE\n"
+                + ".proc helper: a8, i8 {\n    sta tmp\n    rts\n}\n"
+                + ".export .proc main: a8, i8 {\n    sta spare\n    jsr helper\n    lda spare\n    rts\n}\n"
+        },
+        {
             "Jump with `jml` as a tail call",
             ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jsl helper\n    rtl\n}\n",
             ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
@@ -151,6 +160,25 @@ public sealed class FixesTests
         // What the fix leaves is a file with nothing wrong.
         var (after, _) = Analyzed(Header + fixedBody);
         Assert.Empty(after.Diagnostics.Select(diagnostic => diagnostic.Message));
+    }
+
+    /// <summary>
+    /// Moving a routine to other scratch renames only the routine's own references. Where the
+    /// routine also passes the scratch to a routine it calls, the rename would leave that routine
+    /// reading the old scratch, so no move is offered.
+    /// </summary>
+    [Fact]
+    public void ScratchARoutinePassesOnIsNotMoved()
+    {
+        const string Body = ".segment ZEROPAGE\n.scratch tmp: .byte\n.scratch spare: .byte\n.segment CODE\n"
+            + ".proc helper: a8, i8 {\n    sta tmp\n    rts\n}\n"
+            + ".proc reader: a8, i8 {\n    lda tmp\n    rts\n}\n"
+            + ".export .proc main: a8, i8 {\n    sta tmp\n    jsr reader\n    jsr helper\n    lda tmp\n    rts\n}\n";
+        var (analysis, model) = Analyzed(Header + Body);
+
+        Assert.Contains(analysis.Diagnostics, diagnostic => diagnostic.Id == "scratch-overwritten");
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole),
+            action => action.Title.StartsWith("Use `spare`", StringComparison.Ordinal));
     }
 
     /// <summary>

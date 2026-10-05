@@ -2281,6 +2281,20 @@ the cycle store what any of them stores.
 }
 ```
 
+Where a read warns because a call overwrote the routine's own working storage, the editor offers
+to move the routine to other scratch of at least the same size. The other scratch must be scratch
+that the routine does not already use and that nothing it calls stores to or reads. The move
+renames the routine's own references, so it is offered only where the scratch is not the
+routine's argument, is not passed on to a routine it calls, and is not used from a macro body.
+
+An interrupt handler can run between any two instructions, so scratch that code a handler runs
+stores to, and that code outside every handler also uses, is a warning too. It is reported at
+the handler's store and points at the use outside. A routine that both sides call uses the same
+scratch on both, so it is reported as well, and the fix is a macro, which gives each side's copy
+its own scratch. Code outside the handlers is what nothing in the program calls, what no handler
+reaches, and what those routines reach in turn. Two handlers may share scratch, since handlers
+that cannot nest, such as a chain of raster interrupts, often do.
+
 A routine that only reads scratch leaves it as it was, so a caller can pass the same argument to
 several calls in turn. Nothing declares that: what each routine stores is worked out from its
 body and the routines it calls, and hover on a routine shows the scratch it reads and stores. If
