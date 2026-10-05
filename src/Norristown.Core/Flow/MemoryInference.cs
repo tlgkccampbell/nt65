@@ -10,8 +10,10 @@ namespace Norristown.Flow;
 /// on a resolved symbol counts, so an indexed or indirect read is not an input.
 /// <para>
 /// The answer is worked out on demand, for the routines a question reaches, and kept for the rest
-/// of the question. It is a best guess for showing. Nothing that warns or errors depends on it, and
-/// a routine that calls itself, directly or not, is taken to read nothing more through that call.
+/// of the question. It is a best guess for showing. The one check that warns from it,
+/// <see cref="ScratchChecks"/>, asks only which scratch a routine reads, which the programmer
+/// vouches is working storage. A routine that calls itself, directly or not, is taken to read
+/// nothing more through that call, so the check can miss a warning there but never adds one.
 /// </para>
 /// </summary>
 internal sealed class MemoryInference
@@ -19,6 +21,7 @@ internal sealed class MemoryInference
     private readonly Dictionary<RoutineKey, (FlowRegion Region, FileAnalysis File)> routines = [];
     private readonly Dictionary<RoutineKey, Inferred> found = [];
     private readonly HashSet<RoutineKey> active = [];
+    private readonly Dictionary<FileAnalysis, RegisterWalk> walks = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Initializes an inference over every routine of <paramref name="analysis"/>'s program.</summary>
     public MemoryInference(ProgramAnalysis analysis)
@@ -72,7 +75,9 @@ internal sealed class MemoryInference
     /// The blocks are run to a fixed point over the locations every path has stored to, and then
     /// walked once more to collect the reads, because a read counts only against what is stored on
     /// every path to it. What every path has stored where it returns is what the routine always
-    /// writes.
+    /// writes. A path that leaves for another routine without a call, through a branch, a jump
+    /// into its body or a <c>.fallthrough</c>, returns from that routine, so it takes on what
+    /// that routine reads and writes, as a tail call does.
     /// </summary>
     private Inferred Infer(FlowRegion region, FileAnalysis file)
     {
@@ -92,6 +97,14 @@ internal sealed class MemoryInference
             var after = Through(block, stored, reads, writes);
             if (block.End is BlockEnd.Return or BlockEnd.TailCall)
                 always = always is null ? after.Locations : always.Intersect(after.Locations);
+            foreach (var target in WalkOf(file).Leaves(block, region.Routine))
+            {
+                var into = Of(target);
+                reads.UnionWith(into.Reads.Where(location => !after.Locations.Contains(location)));
+                writes.UnionWith(into.Writes);
+                var left = after.Locations.Union(into.Always);
+                always = always is null ? left : always.Intersect(left);
+            }
         }
         return new Inferred(reads.ToImmutable(), writes.ToImmutable(), always ?? []);
 
@@ -142,6 +155,17 @@ internal sealed class MemoryInference
             }
             return new Stored(locations);
         }
+    }
+
+    /// <summary>Returns the register walk over <paramref name="file"/>, which finds where a path leaves a routine.</summary>
+    private RegisterWalk WalkOf(FileAnalysis file)
+    {
+        if (!walks.TryGetValue(file, out var walk))
+        {
+            walk = new RegisterWalk(file.Model, file.Layout, file.Flow, file.State);
+            walks[file] = walk;
+        }
+        return walk;
     }
 
     /// <summary>Represents what one routine reads, may write and always writes.</summary>

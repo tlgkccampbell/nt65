@@ -1356,8 +1356,8 @@ public static class Catalogue
         Severity.Error,
         "`.scratch` declares working storage, which holds nothing until a routine stores to it: write `.scratch "
             + "{0}: .byte` with no values",
-        "Scratch is working storage that routines share, and that never carries a value into or out of a call. "
-            + "A value would suggest that it holds something when a routine starts, which is what scratch rules out. "
+        "Scratch is working storage that routines share, and that holds nothing until a routine stores to it. "
+            + "A value would suggest that it holds something before any routine has stored there. "
             + "So `.scratch` takes only an element type and a count, as in `.scratch ptr: .addr` or `.scratch buf: "
             + ".byte[4]`, and may give an address with `=`. Data that starts with a value is declared with `.data`.");
 
@@ -2923,15 +2923,17 @@ public static class Catalogue
         Area.ControlFlow,
         "scratch-overwritten",
         Severity.Warning,
-        "`{0}` may have been overwritten by the call to `{1}`{2}; store it again after the call, or use scratch "
-            + "that `{1}` does not write",
-        "`.scratch` declares working storage that routines share, and that never carries a value into or out of a "
-            + "call. A routine that stores to scratch, calls a routine that may store to the same bytes, directly or "
-            + "through a routine it calls in turn, and then reads the scratch back, may read the other routine's "
-            + "value rather than its own. This is the classic bug of sharing zero-page bytes by hand. The check "
-            + "follows only stores and loads that name the scratch directly, and a call nt65 cannot follow is taken "
-            + "to write nothing. Where a routine passes a value through memory on purpose, declare that memory with "
-            + "`.data` instead.");
+        "`{0}` may have been overwritten by the call to `{1}`{2}{3}; store it again after the call, or use "
+            + "scratch that `{1}` does not write",
+        "`.scratch` declares working storage that routines share. A caller may store an argument there for the "
+            + "routine it calls, but a call that may store to scratch leaves nothing there the caller can rely on. A "
+            + "routine that stores to scratch, calls a routine that may store to the same bytes, directly or through "
+            + "a routine it calls in turn, and then reads the scratch back, may read the other routine's value "
+            + "rather than its own. So may a routine it calls next that reads the scratch as an argument. This is "
+            + "the classic bug of sharing zero-page bytes by hand. A routine that only reads scratch leaves it as it "
+            + "was. The check follows only stores and loads that name the scratch directly, and a call nt65 cannot "
+            + "follow is taken to write nothing. Memory that returns a result from a routine is not scratch: "
+            + "declare it with `.data`.");
 
     // Processor state
 

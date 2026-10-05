@@ -32,8 +32,8 @@ public enum DirectiveKind
     Mmio,
 
     /// <summary>
-    /// <c>.scratch</c>: declares data that holds a routine's working values and never carries a
-    /// value into or out of a call.
+    /// <c>.scratch</c>: declares working storage that routines share, which a call that may store
+    /// to it leaves holding nothing the caller can rely on.
     /// </summary>
     Scratch,
 

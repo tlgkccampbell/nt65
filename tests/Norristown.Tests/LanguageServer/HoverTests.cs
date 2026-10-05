@@ -43,6 +43,38 @@ public sealed class HoverTests
     }
 
     /// <summary>
+    /// Hover on a routine shows the scratch it reads as arguments and the scratch it may store to,
+    /// counting the routines it calls, so a reader can see which scratch a call leaves intact.
+    /// </summary>
+    [Fact]
+    public async Task HoverOnARoutineShowsTheScratchItReadsAndStores()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .segment ZEROPAGE
+            .scratch ptr: .addr
+            .scratch tmp: .byte
+            .segment CODE
+            .proc measure {
+                ldy #0
+                lda (ptr),y
+                jsr helper
+                rts
+            }
+            .proc helper {
+                sta tmp
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, ".proc me|asure"), timeout);
+
+        Assert.Contains("reads ptr; stores tmp", hover?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Hover on a line shows what each register holds there, beside what the line costs. A
     /// register may hold the value another register had on entry, which is how a 6502 saves X
     /// (by copying it to A), and naming that register makes the save readable.

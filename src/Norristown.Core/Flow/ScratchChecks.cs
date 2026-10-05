@@ -6,28 +6,33 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// Reports reads of scratch that a call may have overwritten since the routine stored it.
-/// Scratch is data that <c>.scratch</c> declares. It holds a routine's working values and never
-/// carries a value into or out of a call, so routines can share its bytes as long as no routine
-/// relies on them across a call to another routine that writes them.
+/// Reports reads of scratch that a call may have overwritten since it was stored. Scratch is data
+/// that <c>.scratch</c> declares. Routines share its bytes for working values, and a caller may
+/// store an argument there for the routine it calls. A call that may store to scratch leaves
+/// nothing there that the caller can rely on.
 /// <para>
 /// The check follows only instructions that name scratch directly, never what memory holds. A
 /// direct store to a byte of scratch makes it the routine's own again. A call to a routine that
 /// may store to the byte, directly or through a routine it calls in turn, makes it doubtful. A
-/// read of a doubtful byte is reported. An indexed store counts as a store to every byte of the
-/// scratch it names, and a call nt65 cannot follow is taken to store nothing.
+/// read of a doubtful byte is reported, and so is a call to a routine that reads a doubtful byte
+/// before storing to it, which is an argument an earlier call overwrote. An indexed store counts as
+/// a store to every byte of the scratch it names, and a call nt65 cannot follow is taken to store
+/// nothing.
 /// </para>
 /// </summary>
 internal static class ScratchChecks
 {
     /// <summary>
     /// Returns a warning for each read of scratch that a call may have overwritten, over every
-    /// routine of <paramref name="files"/>. A program that declares no scratch is not walked.
+    /// routine of <paramref name="analysis"/>, together with the scratch each routine reads and
+    /// stores to. A program that declares no scratch is not walked.
     /// </summary>
-    public static IReadOnlyList<Diagnostic> Check(IReadOnlyList<FileAnalysis> files)
+    public static (IReadOnlyList<Diagnostic> Found, IReadOnlyDictionary<RoutineKey, ScratchUse> Uses) Check(
+        ProgramAnalysis analysis)
     {
+        var files = analysis.Files;
         if (!files.Any(file => file.Model.Symbols.Any(Location.IsScratch)))
-            return [];
+            return ([], new Dictionary<RoutineKey, ScratchUse>());
 
         var routines = new Dictionary<RoutineKey, (FlowRegion Region, FileAnalysis File)>();
         foreach (var file in files)
@@ -36,19 +41,31 @@ internal static class ScratchChecks
                 routines.TryAdd(RoutineKey.Of(region.Routine), (region, file));
         }
         var writes = Writes(routines);
+        var inference = new MemoryInference(analysis);
 
         var found = new List<Diagnostic>();
         var reported = new HashSet<(Span, string)>();
-        foreach (var (region, file) in routines.Values)
+        var uses = new Dictionary<RoutineKey, ScratchUse>();
+        foreach (var (key, (region, file)) in routines)
         {
-            foreach (var diagnostic in Walk(region, file, writes))
+            foreach (var diagnostic in Walk(region, file, writes, inference))
             {
                 if (reported.Add((diagnostic.Span, diagnostic.Message)))
                     found.Add(diagnostic);
             }
+            uses[key] = new ScratchUse(
+                Shown(inference.ReadsOf(region.Routine).Select(Slot.Of)),
+                Shown(writes[key].Keys.Select(slot => (Slot?)slot)));
         }
-        return found;
+        return (found, uses);
     }
+
+    /// <summary>
+    /// Returns the names of the scratch that <paramref name="slots"/> are bytes of, each once and
+    /// in order.
+    /// </summary>
+    private static IReadOnlyList<string> Shown(IEnumerable<Slot?> slots) =>
+        [.. slots.OfType<Slot>().Select(slot => slot.Shown).Distinct().Order(StringComparer.Ordinal)];
 
     /// <summary>
     /// Returns the scratch each routine may store to, directly or through the routines it calls,
@@ -109,7 +126,8 @@ internal static class ScratchChecks
     /// at each label a <c>.state</c> declares an entry point, with nothing doubtful.
     /// </summary>
     private static List<Diagnostic> Walk(
-        FlowRegion region, FileAnalysis file, Dictionary<RoutineKey, Dictionary<Slot, Store>> writes)
+        FlowRegion region, FileAnalysis file, Dictionary<RoutineKey, Dictionary<Slot, Store>> writes,
+        MemoryInference inference)
     {
         var found = new List<Diagnostic>();
         var blocks = region.Blocks;
@@ -146,9 +164,9 @@ internal static class ScratchChecks
                     var read = access.Reads && access.Direct is { } direct ? [direct] : ImmutableArray<Location>.Empty;
                     foreach (var location in read.AddRange(access.Pointer))
                     {
-                        if (Slot.Of(location) is not { } slot || Overwriting(slots, slot) is not { } call)
+                        if (Slot.Of(location) is not { } slot || Overwriting(slots, slot) is not { } earlier)
                             continue;
-                        report.Add(Overwritten(file, step, location, call, writes));
+                        report.Add(Overwritten(file, step, location, earlier, writes));
                         break;
                     }
                 }
@@ -156,10 +174,18 @@ internal static class ScratchChecks
                     slots = slots.Remove(own);
             }
 
+            if (block.Steps.Count == 0 || !(RegisterWalk.CallsAtEnd(block) || block.RunsInto is not null))
+                return new Doubtful(slots);
+            var call = block.Steps[^1];
+            if (report is not null)
+            {
+                foreach (var callee in Callees(block))
+                    Arguments(call, callee, slots, report);
+            }
+
             // A tail call ends the path, so nothing in this routine reads what it stores.
             if (block.EndsInCall)
             {
-                var call = block.Steps[^1];
                 foreach (var callee in block.Calls)
                 {
                     if (!writes.TryGetValue(KeyOf(callee), out var theirs))
@@ -169,6 +195,23 @@ internal static class ScratchChecks
                 }
             }
             return new Doubtful(slots);
+        }
+
+        // Reports each doubtful byte that `callee` reads before storing to it, which is an argument
+        // an earlier call may have overwritten. Each scratch is reported once at a call, however
+        // many of its bytes the callee reads.
+        void Arguments(Step call, Symbol callee, ImmutableDictionary<Slot, Call> slots, List<Diagnostic> report)
+        {
+            var named = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var location in inference.ReadsOf(callee).OrderBy(location => location.Name, StringComparer.Ordinal))
+            {
+                if (Slot.Of(location) is not { } slot || Overwriting(slots, slot) is not { } earlier
+                    || !named.Add(slot.Shown))
+                {
+                    continue;
+                }
+                report.Add(Overwritten(file, call, location, earlier, writes, callee));
+            }
         }
     }
 
@@ -187,16 +230,26 @@ internal static class ScratchChecks
     /// which <paramref name="call"/> may have overwritten. The warning names the routine that
     /// stores to it where that is not the routine called, and points at the call and the store.
     /// </summary>
+    /// <param name="file">The file the read is in.</param>
+    /// <param name="step">The read, or the call to the routine that reads the scratch.</param>
+    /// <param name="location">The byte of scratch read.</param>
+    /// <param name="call">The earlier call that may have overwritten it.</param>
+    /// <param name="writes">The scratch each routine may store to.</param>
+    /// <param name="reader">
+    /// The routine called at <paramref name="step"/> that reads the scratch, or null for a read in
+    /// the routine itself.
+    /// </param>
     private static Diagnostic Overwritten(
         FileAnalysis file, Step step, Location location, Call call,
-        Dictionary<RoutineKey, Dictionary<Slot, Store>> writes)
+        Dictionary<RoutineKey, Dictionary<Slot, Store>> writes, Symbol? reader = null)
     {
         var theirs = writes[KeyOf(call.Callee)];
         var slot = Slot.Of(location)!.Value;
         var store = theirs.TryGetValue(slot, out var exact) ? exact : theirs[slot.Whole()];
         var through = store.Routine == call.Callee.DisplayName ? "" : $", through `{store.Routine}`";
         var (span, related) = Reported(file, step);
-        var message = Catalogue.ScratchOverwritten.Message(location.Name, call.Callee.DisplayName, through);
+        var before = reader is null ? "" : $" before `{reader.DisplayName}` reads it";
+        var message = Catalogue.ScratchOverwritten.Message(location.Name, call.Callee.DisplayName, through, before);
         return new Diagnostic(span, message, [
             .. related,
             new RelatedSpan(Reported(file, call.Step).Span, $"the call to `{call.Callee.DisplayName}`"),
@@ -248,12 +301,13 @@ internal static class ScratchChecks
     /// <param name="Path">The path of the file that declares the scratch.</param>
     /// <param name="Name">The flattened name of the scratch.</param>
     /// <param name="Offset">The byte's offset from the start of the scratch, or null for every byte.</param>
-    private readonly record struct Slot(string Path, string Name, long? Offset)
+    /// <param name="Shown">The name of the scratch as a reader sees it.</param>
+    private readonly record struct Slot(string Path, string Name, long? Offset, string Shown)
     {
         /// <summary>Returns the byte of scratch <paramref name="location"/> names, or null where it names none.</summary>
         public static Slot? Of(Location location) =>
             Location.IsScratch(location.Root)
-                ? new Slot(location.Root!.Tree.Path, location.Root.FlatName, location.Offset)
+                ? new Slot(location.Root!.Tree.Path, location.Root.FlatName, location.Offset, location.Root.DisplayName)
                 : null;
 
         /// <summary>Returns the slot that stands for every byte of this one's scratch.</summary>

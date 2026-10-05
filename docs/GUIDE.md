@@ -492,19 +492,22 @@ was last written to it, such as a bank latch, behaves as memory and stays `.data
 ```
 
 **Scratch.** Zero page is scarce, so routines often share a few working bytes. Declare those
-bytes with `.scratch` in place of `.data`, which says that they never carry a value into or out
-of a call. nt65 then warns where a routine stores to scratch, calls a routine that may store to
-the same bytes, and reads them back afterwards, because the read may see the other routine's
-value. The warning names the call and the store that may have overwritten the byte. Scratch takes
-no values, and `= address` places it at a fixed address.
+bytes with `.scratch` in place of `.data`. A caller may store an argument in scratch for the
+routine it calls, but a call that may store to scratch leaves nothing there the caller can rely
+on. nt65 warns where a routine stores to scratch, calls a routine that may store to the same
+bytes, and then reads them back, or calls another routine that reads them as an argument. The
+warning names the call and the store that may have overwritten the bytes. Hover on a routine
+shows the scratch it reads and stores, counting the routines it calls. Scratch takes no values,
+and `= address` places it at a fixed address.
 
 ```nt65
 .scratch tmp: .byte
 .scratch ptr: .addr = $FB
 ```
 
-Memory that a routine uses to return a result, or to receive an argument, is not scratch, and
-stays `.data`.
+A routine that only reads scratch leaves it as it was, so the same argument can go to several
+calls. Memory that returns a result from a routine is not scratch, because the caller reads it
+after the call, and stays `.data`.
 
 **Mixed data.** `.data name { ... }` holds data directives of any kind, nested `.data`
 declarations, which become members such as `name::sub`, and `@` positions private to the
