@@ -17,7 +17,7 @@ namespace Norristown.Flow;
 internal sealed class MemoryInference
 {
     private readonly Dictionary<RoutineKey, (FlowRegion Region, FileAnalysis File)> routines = [];
-    private readonly Dictionary<RoutineKey, (ImmutableHashSet<Location> Reads, ImmutableHashSet<Location> Writes)> found = [];
+    private readonly Dictionary<RoutineKey, Inferred> found = [];
     private readonly HashSet<RoutineKey> active = [];
 
     /// <summary>Initializes an inference over every routine of <paramref name="analysis"/>'s program.</summary>
@@ -43,17 +43,24 @@ internal sealed class MemoryInference
     public ImmutableHashSet<Location> WritesOf(Symbol target) => Of(target).Writes;
 
     /// <summary>
-    /// Returns what a call to <paramref name="target"/> reads and may write, worked out the first
-    /// time it is asked. A routine whose body is not in the program, and one that is already being
-    /// worked out further up the calls, reads and writes nothing that can be seen.
+    /// Returns the locations a call to <paramref name="target"/> writes on every path that returns,
+    /// directly or through a routine it calls. After such a call, the call is where a location's
+    /// value came from, not just something that may have changed it.
     /// </summary>
-    private (ImmutableHashSet<Location> Reads, ImmutableHashSet<Location> Writes) Of(Symbol target)
+    public ImmutableHashSet<Location> AlwaysWrittenBy(Symbol target) => Of(target).Always;
+
+    /// <summary>
+    /// Returns what a call to <paramref name="target"/> reads, may write and always writes, worked
+    /// out the first time it is asked. A routine whose body is not in the program, and one that is
+    /// already being worked out further up the calls, reads and writes nothing that can be seen.
+    /// </summary>
+    private Inferred Of(Symbol target)
     {
         var key = RoutineKey.Of(RegisterWalk.Owner(target) ?? target);
         if (found.TryGetValue(key, out var known))
             return known;
         if (!routines.TryGetValue(key, out var routine) || !active.Add(key))
-            return ([], []);
+            return Inferred.Nothing;
         var inferred = Infer(routine.Region, routine.File);
         active.Remove(key);
         found[key] = inferred;
@@ -61,11 +68,13 @@ internal sealed class MemoryInference
     }
 
     /// <summary>
-    /// Returns what one routine reads before writing, and what it may write. The blocks are run to a
-    /// fixed point over the locations every path has stored to, and then walked once more to collect
-    /// the reads, because a read counts only against what is stored on every path to it.
+    /// Returns what one routine reads before writing, what it may write and what it always writes.
+    /// The blocks are run to a fixed point over the locations every path has stored to, and then
+    /// walked once more to collect the reads, because a read counts only against what is stored on
+    /// every path to it. What every path has stored where it returns is what the routine always
+    /// writes.
     /// </summary>
-    private (ImmutableHashSet<Location> Reads, ImmutableHashSet<Location> Writes) Infer(FlowRegion region, FileAnalysis file)
+    private Inferred Infer(FlowRegion region, FileAnalysis file)
     {
         var blocks = region.Blocks;
         var reads = ImmutableHashSet.CreateBuilder<Location>();
@@ -73,14 +82,18 @@ internal sealed class MemoryInference
         var solver = new Dataflow<Stored>(
             blocks, (block, stored) => Through(block, stored, null, null), Stored.Merge, block => ControlFlow.Onward(blocks, block));
         if (blocks.Count == 0)
-            return ([], []);
+            return Inferred.Nothing;
         solver.Enter(0, Stored.Nothing);
+        ImmutableHashSet<Location>? always = null;
         foreach (var block in blocks)
         {
-            if (solver.Reached[block.Index] is { } stored)
-                Through(block, stored, reads, writes);
+            if (solver.Reached[block.Index] is not { } stored)
+                continue;
+            var after = Through(block, stored, reads, writes);
+            if (block.End is BlockEnd.Return or BlockEnd.TailCall)
+                always = always is null ? after.Locations : always.Intersect(after.Locations);
         }
-        return (reads.ToImmutable(), writes.ToImmutable());
+        return new Inferred(reads.ToImmutable(), writes.ToImmutable(), always ?? []);
 
         Stored Through(BasicBlock block, Stored stored, ImmutableHashSet<Location>.Builder? read, ImmutableHashSet<Location>.Builder? written)
         {
@@ -110,19 +123,36 @@ internal sealed class MemoryInference
             }
             if (RegisterWalk.CallsAtEnd(block))
             {
+                // A call through a pointer whose `.next` names several routines has stored only
+                // what every one of them always stores.
+                ImmutableHashSet<Location>? stores = null;
                 foreach (var callee in block.Calls)
                 {
-                    var (calleeReads, calleeWrites) = Of(callee);
-                    foreach (var location in calleeReads)
+                    var called = Of(callee);
+                    foreach (var location in called.Reads)
                     {
                         if (!locations.Contains(location))
                             read?.Add(location);
                     }
-                    written?.UnionWith(calleeWrites);
+                    written?.UnionWith(called.Writes);
+                    stores = stores is null ? called.Always : stores.Intersect(called.Always);
                 }
+                if (!block.CallsUnknown && stores is not null)
+                    locations = locations.Union(stores);
             }
             return new Stored(locations);
         }
+    }
+
+    /// <summary>Represents what one routine reads, may write and always writes.</summary>
+    /// <param name="Reads">The locations it reads before it writes them.</param>
+    /// <param name="Writes">The locations it may write, counting an indexed store as a write of where it starts.</param>
+    /// <param name="Always">The locations it writes on every path that returns.</param>
+    private sealed record Inferred(
+        ImmutableHashSet<Location> Reads, ImmutableHashSet<Location> Writes, ImmutableHashSet<Location> Always)
+    {
+        /// <summary>Gets what a routine nothing can be seen of reads and writes, which is nothing.</summary>
+        public static Inferred Nothing { get; } = new([], [], []);
     }
 
     /// <summary>Represents the locations every path to a point has stored to.</summary>

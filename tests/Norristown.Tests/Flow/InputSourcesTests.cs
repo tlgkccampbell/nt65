@@ -272,8 +272,26 @@ public sealed class InputSourcesTests
             ["count: sta count or possibly sta (ptr),y [or possibly `sta (ptr),y` on line 11]"],
             Sources(Data + ".proc p {\n    sta count\n    ldy #0\n    sta (ptr),y\n    lda count\n    rts\n}\n", "lda count"));
         Assert.Equal(
-            ["count: sta count or possibly jsr bump [or possibly `jsr bump` on line 14]"],
+            ["count: sta count or possibly jsr bump [or possibly `jsr bump` on line 16]"],
+            Sources(Data + ".proc bump {\n    beq @skip\n    inc count\n@skip:\n    rts\n}\n"
+                + ".proc p {\n    sta count\n    jsr bump\n    lda count\n    rts\n}\n", "lda count"));
+    }
+
+    /// <summary>
+    /// A call whose routine writes a location on every path is where the location's value came
+    /// from. Round a loop, a call can be the source of its own next call's input.
+    /// </summary>
+    [Fact]
+    public void ACallThatAlwaysWritesIsTheSource()
+    {
+        const string Data = ".segment ZEROPAGE\n.data count: .byte\n.segment CODE\n";
+        Assert.Equal(
+            ["count: call jsr bump"],
             Sources(Data + ".proc bump {\n    inc count\n    rts\n}\n.proc p {\n    sta count\n    jsr bump\n    lda count\n    rts\n}\n", "lda count"));
+        Assert.Equal(
+            ["count: entry, call jsr show"],
+            Sources(Data + ".proc show {\n    lda count\n    inc count\n    rts\n}\n"
+                + ".proc p {\n@again:\n    jsr show\n    lda count\n    cmp #4\n    bne @again\n    rts\n}\n", "jsr show"));
     }
 
     private static IReadOnlyList<string>? Sources(string text, string line) =>

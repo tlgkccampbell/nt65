@@ -104,9 +104,14 @@ internal sealed class MemoryWalk
 
         if (index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block))
         {
+            // A call that writes a location on every path is where its value came from. One that
+            // only may write it, or that nt65 cannot follow, is a doubt.
             var written = block.CallsUnknown ? null : block.Calls.SelectMany(inference.WritesOf).ToHashSet();
+            var always = block.CallsUnknown || block.Calls.Count == 0 ? null
+                : block.Calls.Select(inference.AlwaysWrittenBy).Aggregate((a, b) => a.Intersect(b));
             state = state.Each((location, value) =>
-                written is null || written.Contains(location) || written.Any(write => Overlaps(write, location))
+                always is not null && always.Contains(location) ? Value.Called(step.Key)
+                : written is null || written.Contains(location) || written.Any(write => Overlaps(write, location))
                     ? value.Doubted(step.Key)
                     : value);
         }
@@ -172,6 +177,9 @@ internal sealed class MemoryWalk
 
         /// <summary>Returns the value a direct store at <paramref name="step"/> left.</summary>
         public static Value Set(StepKey step) => new([new Origin(SourceKind.Instruction, step)], []);
+
+        /// <summary>Returns the value a call at <paramref name="step"/> left, whose routine always writes the location.</summary>
+        public static Value Called(StepKey step) => new([new Origin(SourceKind.Call, step)], []);
 
         /// <summary>Returns what either of two values may be.</summary>
         public static Value Merge(Value a, Value b) =>
