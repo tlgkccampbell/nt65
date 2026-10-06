@@ -485,6 +485,7 @@ public sealed partial class CodeLayout
             if (cpu == Cpu.Wdc65816 && operand is not null && mode != AddressingMode.Immediate)
                 CheckDirectPageSymbols(mnemonic, operand, mode);
             CheckReach(mnemonic, operand, mode);
+            CheckIndirectJumpWrap(statement, operand, mode);
             var timing = Cycles.Of(cpu, statement.MnemonicKind, mode, state);
             IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
             Laid(statement, new LineLayout(

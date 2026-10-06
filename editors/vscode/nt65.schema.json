@@ -287,6 +287,7 @@
         "incbin-unreadable",
         "indirect-call-unchecked",
         "indirect-jump-unchecked",
+        "indirect-jump-wraps",
         "inline-count-not-constant",
         "inline-data-missing",
         "instruction-in-data",

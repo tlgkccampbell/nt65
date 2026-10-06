@@ -2316,6 +2316,17 @@ public static class Catalogue
             + "fall through into them. A block that names the segment it is already in moves nothing, and its "
             + "contents stay where the code above runs into them. Name a different segment, or remove the block.");
 
+    internal static DiagnosticDescriptor IndirectJumpWraps { get; } = Entry(
+        Area.Instructions,
+        "indirect-jump-wraps",
+        Severity.Error,
+        "the vector is at {0}, the last byte of a page, so the NMOS 6502 reads its high byte from {1} rather than {2}",
+        "On the NMOS 6502, `jmp (vector)` reads the vector's high byte from the address after its low byte, but "
+            + "without carrying into the next page, so a vector at $xxff has its high byte read from $xx00. The "
+            + "CMOS 6502s and the 65816 do not do this. Move the vector off the last byte of its page, for example "
+            + "with `.align 2` before it. Where only the linker decides the vector's address, ca65 has ld65 check "
+            + "it, and ld65 reports it at the jump in the `.s` file.");
+
     internal static DiagnosticDescriptor OutsideEverySegment { get; } = Entry(
         Area.Placement,
         "outside-every-segment",

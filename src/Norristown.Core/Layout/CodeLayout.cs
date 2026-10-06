@@ -134,6 +134,15 @@ public sealed partial class CodeLayout
         operand is AbsoluteOperandSyntax { Prefix: { } prefix } && char.ToLowerInvariant(prefix.Name.Text[0]) == 'd';
 
     /// <summary>
+    /// Returns a value indicating whether an instruction is a <c>jmp (vector)</c> on the NMOS
+    /// 6502. That processor reads the vector's high byte from the next address without carrying
+    /// into the next page, so a vector at the last byte of a page has its high byte read from the
+    /// first byte of that page.
+    /// </summary>
+    public static bool WrapsIndirectJump(Cpu cpu, MnemonicKind mnemonic, AddressingMode? mode) =>
+        cpu is Cpu.Mos6502 or Cpu.Mos6502X && mnemonic == MnemonicKind.Jmp && mode == AddressingMode.AbsoluteIndirect;
+
+    /// <summary>
     /// Returns the expression an operand addresses, from which an address size is worked out. An
     /// <c>operand</c> argument passed without braces is itself an expression, and the whole of it
     /// is the address.

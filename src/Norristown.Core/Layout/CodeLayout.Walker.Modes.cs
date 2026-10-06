@@ -304,6 +304,23 @@ public sealed partial class CodeLayout
         }
 
         /// <summary>
+        /// Reports a <c>jmp (vector)</c> on the NMOS 6502 whose vector nt65 knows to be at the
+        /// last byte of a page, where the processor reads the vector's high byte from the wrong
+        /// address. Where only the linker decides the address, ca65 has ld65 check it.
+        /// </summary>
+        private void CheckIndirectJumpWrap(InstructionStatementSyntax statement, SyntaxNode? operand, AddressingMode mode)
+        {
+            if (!CodeLayout.WrapsIndirectJump(cpu, statement.MnemonicKind, mode) || operand is null
+                || Expression(operand) is not { } vector
+                || model.ValueOf(vector, expansion).AsNumber() is not { } address || (address & 0xff) != 0xff)
+            {
+                return;
+            }
+            Report(operand, Catalogue.IndirectJumpWraps.Message(
+                StateValue.Hex(address, 4), StateValue.Hex(address & ~0xffL, 4), StateValue.Hex(address + 1, 4)));
+        }
+
+        /// <summary>
         /// Reports each symbol in a segment addressed through a nonzero direct page that is used as
         /// an absolute or long operand on the 65816. Such a symbol is only meaningful as a direct
         /// operand, where it means D plus its offset. As an absolute or long operand it would instead

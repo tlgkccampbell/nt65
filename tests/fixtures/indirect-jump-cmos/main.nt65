@@ -1,0 +1,12 @@
+; The CMOS 6502s read a vector at the last byte of a page correctly.
+.module main
+
+.cpu 65c02
+
+.export fixed
+
+.segment CODE
+.proc fixed {
+    jmp ($02ff)
+    .next ?
+}

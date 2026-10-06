@@ -1,0 +1,39 @@
+; On the NMOS 6502, `jmp (vector)` reads the vector's high byte without carrying into the next
+; page, so a vector at the last byte of a page is read wrongly.
+.module main
+
+.cpu 6502
+
+.data vector:  .addr = $03ff
+.data handler: .addr = $0400
+
+.segment BSS
+.data hook: .addr
+
+.segment CODE
+.proc constant {
+    jmp ($02ff)                         ;! error[indirect-jump-wraps]: the vector is at $02ff, the last byte of a page, so the NMOS 6502 reads its high byte from $0200 rather than $0300
+    .next ?
+}
+
+.proc declared {
+    jmp (vector)                        ;! error[indirect-jump-wraps]: the vector is at $03ff, the last byte of a page, so the NMOS 6502 reads its high byte from $0300 rather than $0400
+    .next ?
+}
+
+; A vector anywhere else in its page is read as written.
+.proc inside {
+    jmp ($02fe)
+    .next ?
+}
+
+.proc aligned {
+    jmp (handler)
+    .next ?
+}
+
+; Where only the linker places the vector, ca65 has ld65 check it.
+.proc linked {
+    jmp (hook)
+    .next ?
+}

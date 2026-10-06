@@ -442,6 +442,12 @@ Writing one of them on a CPU that has not got it says so, and says what it is: `
 6502 is "not available on the 6502, and is an undocumented opcode of the NMOS 6502, which the
 6502x has", rather than a word nobody declared.
 
+**The indirect jump.** On the `6502` and `6502x`, `jmp (vector)` reads the vector's high byte
+from the next address without carrying into the next page, so a vector at `$xxff` has its high
+byte read from `$xx00`. Where nt65 knows the vector's address, as for a constant or data declared
+at an address, a vector at the last byte of a page is an error. Where only the linker places it,
+ca65 already writes an assertion of its own that ld65 checks, so nt65 adds none.
+
 ### 5.2 Segments
 
 ```nt65
