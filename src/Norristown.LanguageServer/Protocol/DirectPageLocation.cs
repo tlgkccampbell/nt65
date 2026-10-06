@@ -12,8 +12,15 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Hazard">Whether a routine's use of it is a hazard.</param>
 /// <param name="Shared">The bytes it shares with locations on other pages.</param>
 /// <param name="Accesses">The number of instructions that reach it.</param>
-/// <param name="Loops">The number of those instructions that are inside a loop.</param>
+/// <param name="PerPass">
+/// How many times those instructions run in one pass through each outermost caller, added up. It
+/// counts only the loops whose counts are known, through the calls as well as in each routine.
+/// </param>
+/// <param name="Uncounted">
+/// The number of those instructions that are in a loop whose count is not known, or that are
+/// reached through a call in one, so that they may run more often than <paramref name="PerPass"/> says.
+/// </param>
 /// <param name="Routines">The call trees from the outermost callers down to each routine that reaches it.</param>
 internal sealed record DirectPageLocation(
     string Name, Location Declaration, long? Offset, long? Size, long? Address, bool Fixed, string Type, string Relation, bool Hazard,
-    IReadOnlyList<DirectPageShared> Shared, int Accesses, int Loops, IReadOnlyList<DirectPageRoutine> Routines);
+    IReadOnlyList<DirectPageShared> Shared, int Accesses, long PerPass, int Uncounted, IReadOnlyList<DirectPageRoutine> Routines);

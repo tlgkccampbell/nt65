@@ -47,7 +47,12 @@ public sealed class DirectPageMap
     /// <param name="Caller">The routine that makes the call.</param>
     /// <param name="Callee">The routine called.</param>
     /// <param name="At">The statement that makes the call, as it appears in the caller's file.</param>
-    public sealed record PageCall(Symbol Caller, Symbol Callee, SyntaxNode At);
+    /// <param name="Times">
+    /// How many times one pass through the caller makes the call, counting only the loops whose
+    /// iteration counts nt65 knows. It is 1 outside every counted loop.
+    /// </param>
+    /// <param name="InUncountedLoop">Whether the call is inside a loop whose iteration count nt65 does not know.</param>
+    public sealed record PageCall(Symbol Caller, Symbol Callee, SyntaxNode At, long Times, bool InUncountedLoop);
 
     /// <summary>Builds a map from one analysis.</summary>
     private sealed class Builder(ProgramAnalysis analysis, CancellationToken cancellation)
@@ -95,6 +100,7 @@ public sealed class DirectPageMap
                 {
                     var caller = Current(region.Routine);
                     routines.TryAdd(caller, (region, file));
+                    var uncounted = Uncounted(region.Blocks);
                     foreach (var block in region.Blocks)
                     {
                         if (block.Calls.Count == 0 || block.Steps.Count == 0)
@@ -103,7 +109,7 @@ public sealed class DirectPageMap
                         foreach (var target in block.Calls)
                         {
                             var callee = Current(RegisterWalk.Owner(target) ?? target);
-                            calls.Add(new PageCall(caller, callee, at));
+                            calls.Add(new PageCall(caller, callee, at, block.Iterations ?? 1, uncounted[block.Index]));
                             if (!callees.TryGetValue(caller, out var list))
                                 callees[caller] = list = [];
                             if (!list.Contains(callee))
@@ -287,22 +293,42 @@ public sealed class DirectPageMap
                 foreach (var region in file.Flow.Regions)
                 {
                     var routine = Current(region.Routine);
-                    var inside = new bool[region.Blocks.Count];
-                    foreach (var loop in Loops.In(region.Blocks))
-                    {
-                        for (var i = 0; i < inside.Length; i++)
-                            inside[i] |= loop.Inside[i];
-                    }
+                    var uncounted = Uncounted(region.Blocks);
                     foreach (var block in region.Blocks)
                     {
                         foreach (var step in block.Steps)
                         {
                             if (!step.Closes && Access(file, step) is { } access)
-                                found.Add(access with { Routine = routine, Block = block, Region = region, InLoop = inside[block.Index] });
+                                found.Add(access with
+                                {
+                                    Routine = routine,
+                                    Block = block,
+                                    Region = region,
+                                    Times = block.Iterations ?? 1,
+                                    InUncountedLoop = uncounted[block.Index],
+                                });
                         }
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns, for each of a routine's blocks, whether it is inside a loop whose iteration
+        /// count nt65 does not know. A counted loop's latch repeats its header, which is how a
+        /// counted loop is told from the others.
+        /// </summary>
+        private static bool[] Uncounted(IReadOnlyList<BasicBlock> blocks)
+        {
+            var uncounted = new bool[blocks.Count];
+            foreach (var loop in Loops.In(blocks))
+            {
+                if (blocks[loop.Latch].Repeats == loop.Header)
+                    continue;
+                for (var i = 0; i < uncounted.Length; i++)
+                    uncounted[i] |= loop.Inside[i];
+            }
+            return uncounted;
         }
 
         /// <summary>
@@ -450,7 +476,7 @@ public sealed class DirectPageMap
                     notes = [.. notes, .. Strays(accesses)];
                     var use = new PageUse(
                         routine, role,
-                        [.. accesses.Select(access => new PageAccess(access.Line, access.Reads, access.Writes, access.InLoop))],
+                        [.. accesses.Select(access => new PageAccess(access.Line, access.Reads, access.Writes, access.Times, access.InUncountedLoop))],
                         notes, IsHandler(routine), inInterrupt, location.Key.Unknown);
                     uses[(routine, location.Key.Location, location.Key.Unknown)] = use;
                 }
@@ -729,7 +755,9 @@ public sealed class DirectPageMap
 
             public FlowRegion? Region { get; init; }
 
-            public bool InLoop { get; init; }
+            public long Times { get; init; } = 1;
+
+            public bool InUncountedLoop { get; init; }
         }
 
         /// <summary>

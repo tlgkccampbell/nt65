@@ -9,6 +9,7 @@ body {
   --unused: var(--vscode-nt65-directPages-unused, #6e6e6e);
   --hw: var(--vscode-nt65-directPages-hw, #8a8a8a);
   --unknown: var(--vscode-nt65-directPages-unknown, #9d9d9d);
+  --caret: var(--vscode-nt65-directPages-caret, #ff8ac8);
   --cut: var(--vscode-editor-background);
   --fg: var(--vscode-foreground);
   --dim: var(--vscode-descriptionForeground);
@@ -143,8 +144,20 @@ body.vscode-high-contrast-light {
 .syms .nm { font-family: var(--mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .syms .s.foreign .nm { color: var(--dim); }
 .syms .rg { font-family: var(--mono); font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+.syms .s.head { cursor: default; padding-top: 0; padding-bottom: 0; }
+.syms .s.head:hover { background: none; }
+.syms .hd { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); cursor: help; }
+/* The caret's marks recolour each block's own edge, so a location still reads as one shape. */
+.cell.caret { --edge: var(--caret) !important; }
+.caret-on .cell.sym:not(.caret):not(.caret-direct) { opacity: 0.35; }
+.cell.caret-direct { --edge: var(--caret) !important; }
+.syms .s.caret .nm { color: var(--caret); }
+.syms .s.caret-direct { box-shadow: inset 2px 0 0 var(--caret); }
+.syms .s.caret-direct .nm { color: var(--caret); font-weight: 700; }
 .syms .ht { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
 .syms .ht span { display: block; height: 100%; background: var(--dim); }
+.syms .ht.open { display: flex; overflow: visible; }
+.syms .ht.open::after { content: ""; width: 8px; margin-left: 1px; border-top: 2px dashed var(--dim); align-self: center; }
 
 .kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 16px; font-variant-numeric: tabular-nums; max-width: 300px; }
 .kv .k { color: var(--dim); }

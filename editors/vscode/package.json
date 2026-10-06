@@ -12,7 +12,8 @@
   "activationEvents": [
     "onLanguage:nt65",
     "workspaceContains:**/nt65.json",
-    "onTaskType:nt65"
+    "onTaskType:nt65",
+    "onWebviewPanel:nt65.directPageGrid"
   ],
   "contributes": {
     "commands": [
@@ -429,6 +430,16 @@
           "light": "#717171",
           "highContrast": "#C0C0C0",
           "highContrastLight": "#5A5A5A"
+        }
+      },
+      {
+        "id": "nt65.directPages.caret",
+        "description": "The direct page map's mark on the locations the routine at the caret reaches, and on the one under the caret.",
+        "defaults": {
+          "dark": "#FF8AC8",
+          "light": "#C2185B",
+          "highContrast": "#FFA8D8",
+          "highContrastLight": "#9C0F47"
         }
       },
       {

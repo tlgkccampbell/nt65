@@ -128,6 +128,53 @@ public sealed class DirectPagesRequestsTests
         Assert.Equal(("frames", "$0000", "inout", true), (use.Name, use.Home, use.Role, use.Hazard));
     }
 
+    /// <summary>
+    /// How often a location is used counts each instruction as many times as the loops whose
+    /// counts are known run it, and as many times as calls in such loops run its routine. An
+    /// instruction in a loop whose count is not known is counted once and also counted apart.
+    /// </summary>
+    [Fact]
+    public async Task CountedLoopsAndCallsMultiplyUses()
+    {
+        var timeout = TestTimeout.Token();
+        const string Text = """
+            .module main
+            .segment ZEROPAGE
+            .data n: .byte
+            .segment CODE
+            .export .proc main {
+                ldx #4
+            @loop:
+                jsr bump
+                dex
+                bne @loop
+            @wait:
+                lda n
+                beq @wait
+                rts
+            }
+            .proc bump {
+                ldy #3
+            @inner:
+                inc n
+                dey
+                bne @inner
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
+
+        var result = await DirectPagesAsync(client, timeout);
+        Assert.NotNull(result);
+        var n = Assert.Single(Assert.Single(result.Pages).Locations);
+        Assert.Equal((2, 13L, 1), (n.Accesses, n.PerPass, n.Uncounted));
+        var main = Assert.Single(n.Routines);
+        Assert.Equal((1L, true), (main.Accesses[0].Times, main.Accesses[0].Uncounted));
+        var bump = Assert.Single(main.Children);
+        Assert.Equal((4L, false), (bump.Runs, bump.RunsUncounted));
+        Assert.Equal((3L, false), (bump.Accesses[0].Times, bump.Accesses[0].Uncounted));
+    }
+
     private static Task<DirectPagesResult?> DirectPagesAsync(TestClient client, CancellationToken timeout) =>
         client.RequestAsync<DirectPagesResult?>("nt65/directPages", new DirectPagesParams(new TextDocumentIdentifier(Uri)), timeout);
 }

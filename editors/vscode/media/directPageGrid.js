@@ -10,6 +10,10 @@
   let pageId = saved.page || null;
   let hot = null;
 
+  // What the caret marks: the keys of the locations its routine reaches, and the key of the
+  // location under it.
+  let marked = { keys: [], direct: null };
+
   const tabs = document.getElementById('tabs');
   const body = document.getElementById('body');
   const tip = document.getElementById('tip');
@@ -37,8 +41,10 @@
   // Returns the bytes a location takes, at least one.
   const sizeOf = location => Math.max(1, location.size || 1);
 
-  // Returns how hot a location is: its accesses, with those in loops counted three times.
-  const heatOf = location => location.accesses + 2 * location.loops;
+  // Returns how hot a location is: how many times its instructions run in a pass, counting the
+  // loops whose counts are known. It is on a logarithmic scale, so that a location used once
+  // still shows beside one used thousands of times.
+  const heatOf = location => Math.log2(1 + location.perPass);
 
   // Returns a new element with a class and text.
   function h(tag, className, text) {
@@ -168,6 +174,7 @@
       tabs.append(tab);
     }
     drawPage(page);
+    mark();
   }
 
   function drawPage(page) {
@@ -230,9 +237,9 @@
     };
 
     // Returns the shadows that cut a cell's outer sides away from its neighbours and draw its
-    // block's edge there. The cuts go first and the edges after, so each cut covers all but the
-    // inner pixel of its edge.
-    const sides = (at, column) => {
+    // block's edge there, `width` pixels wide. The cuts go first and the edges after, so each cut
+    // covers all but the inner pixels of its edge.
+    const sides = (at, column, width) => {
       const me = blockOf(at).key;
       const differs = (there, wraps) => wraps || blockOf(there).key !== me;
       const cuts = [];
@@ -241,10 +248,11 @@
         cuts.push(`inset ${x}px ${y}px 0 var(--cut)`);
         edges.push(`inset ${x2}px ${y2}px 0 var(--edge)`);
       };
-      if (differs(at - 1, column === 0)) cut(2, 0, 3, 0);
-      if (differs(at + 1, column === 15)) cut(-2, 0, -3, 0);
-      if (differs(at - 16, false)) cut(0, 2, 0, 3);
-      if (differs(at + 16, false)) cut(0, -2, 0, -3);
+      const edge = 2 + width;
+      if (differs(at - 1, column === 0)) cut(2, 0, edge, 0);
+      if (differs(at + 1, column === 15)) cut(-2, 0, -edge, 0);
+      if (differs(at - 16, false)) cut(0, 2, 0, edge);
+      if (differs(at + 16, false)) cut(0, -2, 0, -edge);
       return cuts.concat(edges).join(', ');
     };
 
@@ -258,7 +266,9 @@
         const theirs = other[at];
         const cell = h('span', 'cell');
         cell.style.setProperty('--edge', blockOf(at).edge);
-        cell.style.boxShadow = sides(at, c);
+        cell.style.boxShadow = sides(at, c, 1);
+        // The locations the caret marks get wider edges, the one under it the widest.
+        cell.edges = { plain: cell.style.boxShadow, used: sides(at, c, 2), direct: sides(at, c, 3) };
         if (mine && mine.relation !== 'unused') {
           const share = Math.round(30 + 70 * heatOf(mine) / maxHeat);
           cell.style.background = `color-mix(in srgb, var(--${mine.relation in RELATIONS ? mine.relation : 'own'}) ${share}%, transparent)`;
@@ -309,10 +319,11 @@
     body.append(side);
   }
 
-  // Returns how often a location is accessed, in words.
+  // Returns how often a location is used, in words.
   function heatText(location) {
-    const loops = location.loops > 0 ? ` · ${location.loops} in loops` : '';
-    return `${location.accesses} access${location.accesses === 1 ? '' : 'es'}${loops}`;
+    const instructions = `${location.accesses} instruction${location.accesses === 1 ? '' : 's'}`;
+    const open = location.uncounted > 0 ? ` · ${location.uncounted} in a loop of unknown count` : '';
+    return `${instructions} · ${location.perPass.toLocaleString('en-US')}× a pass${open}`;
   }
 
   // Returns the list of the page's locations, and the other pages' locations that lie in it.
@@ -336,6 +347,15 @@
     const section = h('div');
     section.append(h('h3', '', 'Locations'));
     const list = h('div', 'syms');
+
+    // The bars have a header of their own, right above them, since nothing else says what they
+    // measure. Its hover gives the measure in full.
+    const head = h('div', 's head');
+    const use = h('span', 'hd', 'use');
+    use.title = 'How many times its instructions run in one pass, counting loops whose counts are known. '
+      + 'The scale is logarithmic. A dashed end means some run in a loop of unknown count, so it may run more.';
+    head.append(h('span'), h('span'), h('span'), use);
+    list.append(head);
     for (const entry of listed) {
       const { location } = entry;
       const row = h('div', `s${entry.foreign ? ' foreign' : ''}${!entry.foreign && hot === location.name ? ' sel' : ''}`);
@@ -353,6 +373,7 @@
         const bar = h('span');
         bar.style.width = `${Math.round(heatOf(location) / maxHeat * 100)}%`;
         heat.append(bar);
+        if (location.uncounted > 0) heat.classList.add('open');
       }
       row.append(swatch, name, h('span', 'rg', range), heat);
       const meta = entry.foreign
@@ -473,8 +494,36 @@
     return strip;
   }
 
+  // Marks the cells and list entries of the locations the caret marks.
+  function mark() {
+    const keys = new Set(marked.keys);
+    // While the caret marks anything, the cells it does not mark fade.
+    document.body.classList.toggle('caret-on', keys.size > 0 || !!marked.direct);
+    for (const element of document.querySelectorAll('[data-key]')) {
+      const key = element.dataset.key;
+      const direct = key === marked.direct;
+      const used = keys.has(key) && !direct;
+      element.classList.toggle('caret', used);
+      element.classList.toggle('caret-direct', direct);
+      if (element.edges) element.style.boxShadow = direct ? element.edges.direct : used ? element.edges.used : element.edges.plain;
+    }
+  }
+
   window.addEventListener('message', event => {
     const message = event.data;
+    if (message && message.type === 'caret') {
+      const moved = message.direct && message.direct !== marked.direct;
+      marked = { keys: message.keys || [], direct: message.direct || null };
+      // The location under the caret is shown even when it is on another page.
+      const page = moved ? message.direct.slice(0, message.direct.lastIndexOf('/')) : null;
+      if (map && page && page !== pageId && map.pages.some(item => item.id === page)) {
+        pageId = page;
+        render();
+      } else {
+        mark();
+      }
+      return;
+    }
     if (!message || message.type !== 'map') return;
     map = message.result;
     hazards = message.hazards !== false;

@@ -40,6 +40,7 @@ class Grid {
     this.panel = undefined;
     this.ready = false;
     this.state = { result: null, hazards: true, page: null, location: null };
+    this.marked = { keys: [], direct: null };
   }
 
   // Gets a value indicating whether the panel is open and in view.
@@ -55,11 +56,22 @@ class Grid {
       this.post();
       return;
     }
-    const media = vscode.Uri.joinPath(this.context.extensionUri, 'media');
-    this.panel = vscode.window.createWebviewPanel(PANEL, 'Direct Page',
-      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
-      { enableScripts: true, localResourceRoots: [media] });
+    this.adopt(vscode.window.createWebviewPanel(PANEL, 'Direct Page',
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, this.options()));
+  }
+
+  // Gets the options the panel's webview is created with, which a restored panel is given again.
+  options() {
+    return { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')] };
+  }
+
+  // Takes a panel as the grid: one just created, or one VS Code restored after a restart, whose
+  // webview it gives the page and the script again. `page` is the page a restored panel showed.
+  adopt(panel, page) {
+    this.panel = panel;
+    if (page) this.state = { ...this.state, page };
     this.ready = false;
+    this.panel.webview.options = this.options();
     this.panel.webview.html = html(this.panel.webview, this.context.extensionUri);
     this.panel.webview.onDidReceiveMessage(message => this.receive(message));
     this.panel.onDidChangeViewState(() => {
@@ -69,6 +81,13 @@ class Grid {
       this.panel = undefined;
       this.ready = false;
     });
+  }
+
+  // Restores the panel VS Code reopens after a restart. The webview kept the page it showed in its
+  // state, and the map is asked for again, since nothing of it survives the restart.
+  async deserializeWebviewPanel(panel, state) {
+    this.adopt(panel, state && state.page);
+    this.handlers.visible();
   }
 
   // Passes a new map to the panel, which stays on the page it shows.
@@ -82,6 +101,12 @@ class Grid {
     if (!this.panel) return;
     this.state = { ...this.state, page, location };
     this.post();
+  }
+
+  // Marks the locations the caret's routine reaches, and the one under the caret.
+  caret(keys, direct) {
+    this.marked = { keys, direct };
+    if (this.panel && this.ready) this.panel.webview.postMessage({ type: 'caret', ...this.marked });
   }
 
   // Handles a message from the webview.
@@ -106,6 +131,7 @@ class Grid {
   post() {
     if (!this.panel || !this.ready) return;
     this.panel.webview.postMessage({ type: 'map', ...this.state });
+    this.panel.webview.postMessage({ type: 'caret', ...this.marked });
   }
 
   dispose() {

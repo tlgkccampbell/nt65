@@ -58,20 +58,44 @@ internal static class DirectPages
                         [.. use.Use.Accesses.Select(access => Access(access, uriOf))],
                         use.Use.Hazards.Count > 0))]))]))]);
 
-    private static Protocol.DirectPageLocation Location(DirectPage page, PageLocation location, Graph graph, Func<string, string> uriOf) => new(
-        location.Symbol.Name,
-        Declaration(location.Symbol, uriOf),
-        location.Offset,
-        location.Size,
-        page.Base is { } at && location.Offset is { } offset ? at + offset : null,
-        location.IsFixed,
-        location.Type,
-        Name(location.Relation),
-        location.IsHazard,
-        [.. location.Shared.Select(Shared)],
-        location.Uses.Sum(use => use.Accesses.Count),
-        location.Uses.Sum(use => use.Accesses.Count(access => access.InLoop)),
-        graph.Trees(location.Uses));
+    private static Protocol.DirectPageLocation Location(DirectPage page, PageLocation location, Graph graph, Func<string, string> uriOf)
+    {
+        var trees = graph.Trees(location.Uses);
+        var (perPass, uncounted) = (0L, 0);
+        var pending = new Stack<Protocol.DirectPageRoutine>(trees);
+        while (pending.TryPop(out var node))
+        {
+            foreach (var access in node.Accesses)
+            {
+                perPass = Saturated(perPass + Saturated(access.Times * node.Runs));
+                if (access.Uncounted || node.RunsUncounted)
+                    uncounted++;
+            }
+            foreach (var child in node.Children)
+                pending.Push(child);
+        }
+        return new(
+            location.Symbol.Name,
+            Declaration(location.Symbol, uriOf),
+            location.Offset,
+            location.Size,
+            page.Base is { } at && location.Offset is { } offset ? at + offset : null,
+            location.IsFixed,
+            location.Type,
+            Name(location.Relation),
+            location.IsHazard,
+            [.. location.Shared.Select(Shared)],
+            location.Uses.Sum(use => use.Accesses.Count),
+            perPass,
+            uncounted,
+            trees);
+    }
+
+    /// <summary>
+    /// Returns a count held below a trillion, which is far past anything a person reads as
+    /// different, so that loops nested through many calls cannot overflow.
+    /// </summary>
+    private static long Saturated(long count) => Math.Clamp(count, 0, 999_999_999_999);
 
     private static Protocol.DirectPageShared Shared(SharedBytes shared) =>
         new(shared.Here.Name, shared.There.Name, Id(shared.Page), shared.First, shared.Last);
@@ -103,7 +127,7 @@ internal static class DirectPages
         new(uriOf(symbol.Tree.Path), Lsp.ToRange(symbol.Tree, symbol.NameSpan));
 
     private static Protocol.DirectPageAccess Access(PageAccess access, Func<string, string> uriOf) =>
-        new(Line(access.Line, uriOf), access.Reads, access.Writes);
+        new(Line(access.Line, uriOf), access.Reads, access.Writes, access.Times, access.InUncountedLoop);
 
     private static Protocol.DirectPageNote Note(PageNote note, Func<string, string> uriOf) =>
         new(note.Glyph, note.Text, note.At is { } at ? Line(at, uriOf) : null);
@@ -126,7 +150,7 @@ internal static class DirectPages
     /// <summary>Represents the program's calls, from which the call trees under each location are built.</summary>
     private sealed class Graph
     {
-        private readonly Dictionary<Symbol, List<(Symbol Callee, List<SyntaxNode> At)>> callees = [];
+        private readonly Dictionary<Symbol, List<Callee>> callees = [];
         private readonly Dictionary<Symbol, HashSet<Symbol>> callers = [];
         private readonly Func<string, string> uriOf;
 
@@ -137,11 +161,16 @@ internal static class DirectPages
             {
                 if (!callees.TryGetValue(call.Caller, out var list))
                     callees[call.Caller] = list = [];
-                var index = list.FindIndex(item => item.Callee == call.Callee);
-                if (index < 0)
-                    list.Add((call.Callee, [call.At]));
-                else if (!list[index].At.Contains(call.At))
-                    list[index].At.Add(call.At);
+                // A routine called from several places runs once for each of them.
+                var callee = list.Find(item => item.Routine == call.Callee);
+                if (callee is null)
+                    list.Add(callee = new Callee(call.Callee));
+                if (!callee.At.Contains(call.At))
+                {
+                    callee.At.Add(call.At);
+                    callee.Times = Saturated(callee.Times + call.Times);
+                    callee.Uncounted |= call.InUncountedLoop;
+                }
                 if (call.Caller == call.Callee)
                     continue;
                 if (!callers.TryGetValue(call.Callee, out var set))
@@ -175,9 +204,9 @@ internal static class DirectPages
             return [.. roots
                 .OrderBy(root => root.Tree.Path, StringComparer.Ordinal)
                 .ThenBy(root => root.NameSpan.Start)
-                .Select(root => Node(root, [], []))];
+                .Select(root => Node(root, [], 1, false, []))];
 
-            Protocol.DirectPageRoutine Node(Symbol routine, List<SyntaxNode> via, HashSet<Symbol> path)
+            Protocol.DirectPageRoutine Node(Symbol routine, List<SyntaxNode> via, long runs, bool uncounted, HashSet<Symbol> path)
             {
                 count++;
                 var own = byRoutine.GetValueOrDefault(routine) ?? [];
@@ -186,12 +215,12 @@ internal static class DirectPages
                 if (path.Count < Deepest)
                 {
                     path.Add(routine);
-                    foreach (var (callee, at) in callees.GetValueOrDefault(routine) ?? [])
+                    foreach (var callee in callees.GetValueOrDefault(routine) ?? [])
                     {
                         if (count >= MostNodes)
                             break;
-                        if (leading.Contains(callee) && !path.Contains(callee))
-                            children.Add(Node(callee, at, path));
+                        if (leading.Contains(callee.Routine) && !path.Contains(callee.Routine))
+                            children.Add(Node(callee.Routine, callee.At, Saturated(runs * callee.Times), uncounted || callee.Uncounted, path));
                     }
                     path.Remove(routine);
                 }
@@ -204,10 +233,24 @@ internal static class DirectPages
                     use?.IsUnknownPage ?? false,
                     use is null ? null : Name(use.Role),
                     [.. via.Select(at => Line(at, uriOf))],
+                    runs,
+                    uncounted,
                     [.. own.SelectMany(item => item.Accesses).Select(access => Access(access, uriOf))],
                     [.. own.SelectMany(item => item.Hazards).Select(note => Note(note, uriOf))],
                     children);
             }
+        }
+
+        /// <summary>Represents the calls one routine makes to another, wherever it makes them.</summary>
+        private sealed class Callee(Symbol routine)
+        {
+            public Symbol Routine { get; } = routine;
+
+            public List<SyntaxNode> At { get; } = [];
+
+            public long Times { get; set; }
+
+            public bool Uncounted { get; set; }
         }
     }
 }

@@ -1711,7 +1711,12 @@ everything below works across modules.
   SNES's at $2100, are a page of their own, and code that reaches memory while D is not known,
   such as a handler after it gives D back, is listed under `D = ?`. Selecting a row marks the
   lines it stands for. *Show Grid* draws a page as 16 rows of 16 bytes, with each location's
-  bytes outlined, what is free, and what the page shares with other pages.
+  bytes outlined, what is free, and what the page shares with other pages. A location is
+  brighter, and its bar longer, the more often its instructions run in one pass: a loop that
+  counts a register down from a constant multiplies them, and so does a call inside one. A loop
+  whose count nt65 cannot know counts once, and the bar's dashed end says that it may be more.
+  With the caret in a routine, the locations it uses are marked in both views, and the one under
+  the caret more strongly.
 
   The linker decides where data lands, so offsets are predicted. A segment starts where its
   linked configuration's memory area does, or at the start of its page without one, and the

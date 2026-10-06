@@ -4,6 +4,7 @@
 // stands for in the source, and the grid panel in directPagesGrid.js shows one page byte by byte.
 const vscode = require('vscode');
 const { Grid } = require('./directPagesGrid');
+const { Caret, keyOf, uriOf } = require('./directPagesCaret');
 
 const VIEW = 'nt65.directPages';
 const LEGEND = 'nt65.directPagesLegend';
@@ -318,8 +319,8 @@ function locationTip(result, page, location, hazards) {
   const relation = RELATIONS[location.relation] || location.relation;
   tip.row(glyph, colour, users.size > 1 ? `${relation} · ${users.size} routines` : relation, '');
   if (location.accesses > 0) {
-    const loops = location.loops > 0 ? ` · ${location.loops} in loops` : '';
-    tip.row('#', COLOUR.dim, `${location.accesses} access${location.accesses === 1 ? '' : 'es'}${loops}`, '');
+    tip.row('#', COLOUR.dim, `${count(location.accesses, 'instruction')} · ${times(location.perPass)} a pass`, '');
+    if (location.uncounted > 0) tip.row('∞', COLOUR.dim, `${location.uncounted} in a loop of unknown count`, '');
   }
   const roles = nodes.filter(node => node.role);
   for (const node of roles.slice(0, ROUTINE_ROWS)) {
@@ -360,7 +361,12 @@ function routineTip(location, node, hazards) {
     if (writes.length > 0) tip.row(role.glyph, role.colour, 'writes', lineLinks(writes));
     if (reads.length > 0) tip.row(role.glyph, role.colour, 'reads', lineLinks(reads));
   }
-  if (node.via.length > 0) tip.row('↳', COLOUR.dim, 'called', lineLinks(node.via));
+  if (node.via.length > 0) tip.row('↳', COLOUR.dim, node.runs > 1 ? `called · runs ${times(node.runs)} a pass` : 'called', lineLinks(node.via));
+  if (node.runsUncounted) tip.row('∞', COLOUR.dim, 'called in a loop of unknown count', '');
+  const looped = node.accesses.filter(access => access.times > 1);
+  if (looped.length > 0) tip.row('↻', COLOUR.dim, `${count(looped.length, 'instruction')} in counted loops`, lineLinks(looped.map(access => access.place)));
+  const open = node.accesses.filter(access => access.uncounted);
+  if (open.length > 0) tip.row('∞', COLOUR.dim, `${count(open.length, 'instruction')} in a loop of unknown count`, lineLinks(open.map(access => access.place)));
   for (const child of node.children || []) {
     if (child.via.length > 0) tip.row('↳', COLOUR.dim, `\`${child.name}\``, lineLinks(child.via));
   }
@@ -436,6 +442,8 @@ function itemOf(result, element, hazards) {
         : icon('symbol-variable', COLOUR[location.relation]);
       item.tooltip = locationTip(result, page, location, hazards);
       item.contextValue = 'location';
+      // The URI is only there so that the caret's decorations can colour the row.
+      item.resourceUri = uriOf(keyOf(page, location));
       break;
     }
     case 'routine': {
@@ -643,6 +651,11 @@ function earliest(places) {
     .reduce((best, place) => (place.range.start.line < best.range.start.line ? place : best));
 }
 
+// Returns how many times something runs, such as `13×` or `4,096×`.
+function times(n) {
+  return `${n.toLocaleString('en-US')}×`;
+}
+
 // Returns a count with its noun, such as `1 routine` or `4 accesses`.
 function count(n, one, many) {
   return `${n} ${n === 1 ? one : many || `${one}s`}`;
@@ -818,6 +831,7 @@ class DirectPages {
       select: (page, location) => this.selectLocation(page, location),
       visible: () => this.schedule(),
     });
+    this.caret = new Caret(caret => this.grid.caret([...caret.keys], caret.direct));
     vscode.commands.executeCommand('setContext', HAZARDS, this.hazards);
   }
 
@@ -853,6 +867,8 @@ class DirectPages {
   async ask() {
     this.stale = false;
     const asked = ++this.asked;
+    if (!this.source) this.source = await anySource();
+    if (asked !== this.asked) return;
     if (!this.source) {
       this.take(null);
       return;
@@ -891,6 +907,7 @@ class DirectPages {
       this.view.message = undefined;
     }
     this.grid.update(result, this.hazards);
+    this.caret.schedule(result);
   }
 
   // Marks the lines a row stands for, names it above the tree, and shows its line: a variable's
@@ -996,10 +1013,20 @@ class DirectPages {
   dispose() {
     clearTimeout(this.timer);
     this.highlights.dispose();
+    this.caret.dispose();
     this.view.dispose();
     this.grid.dispose();
     this.changed.dispose();
   }
+}
+
+// Returns an nt65 source to ask about when no editor has made one current, as after a restart
+// that reopens the grid on its own: one that is open, or else any in the workspace.
+async function anySource() {
+  const open = vscode.workspace.textDocuments.find(applies);
+  if (open) return open.uri.toString();
+  const [found] = await vscode.workspace.findFiles('**/*.nt65', '**/node_modules/**', 1);
+  return found ? found.toString() : null;
 }
 
 // Checks whether a document is an nt65 source the server analyzes.
@@ -1020,9 +1047,24 @@ function register(context, client, outputChanged) {
       if (pages.view.visible && pages.stale) pages.schedule();
     }),
     vscode.commands.registerCommand(SELECT, element => pages.select(element)),
-    vscode.window.onDidChangeActiveTextEditor(editor => pages.follow(editor)),
+    vscode.window.onDidChangeActiveTextEditor(editor => {
+      pages.follow(editor);
+      pages.caret.schedule(pages.result);
+    }),
+    vscode.window.onDidChangeTextEditorSelection(event => {
+      if (event.textEditor === vscode.window.activeTextEditor && applies(event.textEditor.document)) {
+        pages.caret.schedule(pages.result);
+      }
+    }),
+    vscode.window.registerFileDecorationProvider(pages.caret),
+    vscode.window.registerWebviewPanelSerializer('nt65.directPageGrid', pages.grid),
     vscode.window.onDidChangeVisibleTextEditors(() => pages.highlights.paint()),
     outputChanged(() => pages.schedule()),
+    // A grid VS Code restores after a restart can ask for the map before the server has started,
+    // so the map is asked for again once it runs.
+    client.onDidChangeState(() => {
+      if (client.isRunning()) pages.schedule();
+    }),
     vscode.commands.registerCommand('nt65.directPages.refresh', () => {
       pages.text = '';
       pages.schedule();
