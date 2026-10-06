@@ -6,6 +6,7 @@ const vscode = require('vscode');
 const { LanguageClient } = require('vscode-languageclient/node');
 const views = require('./views');
 const sources = require('./sources');
+const directPages = require('./directPages');
 
 let client;
 
@@ -242,10 +243,16 @@ async function activate(context) {
         return folder ? buildTask(context, folder, task.definition, task.name) : undefined;
       },
     }));
+  // The client keeps one handler per notification, so `nt65/outputChanged` is handled once here
+  // and passed on as an event to every view that follows the program.
+  const outputChanged = new vscode.EventEmitter();
+  context.subscriptions.push(outputChanged,
+    client.onNotification('nt65/outputChanged', () => outputChanged.fire()));
   statusItem(context);
   cycleCounts(context);
-  views.register(context, client);
+  views.register(context, client, outputChanged.event);
   sources.register(context, client);
+  directPages.register(context, client, outputChanged.event);
   await client.start();
 }
 

@@ -440,6 +440,29 @@ internal sealed class Server : IDisposable
             ? CaretSources.At(asked.Analysis, asked.Model, asked.Position)
             : null;
 
+    /// <summary>
+    /// Returns how the routines of the program that holds a document share the zero page, or on
+    /// the 65816 each direct page. The answer is for showing and feeds no diagnostic. For a
+    /// document that no program holds, the result is null.
+    /// <para>
+    /// Like <c>nt65/output</c>, once this has been requested the server sends
+    /// <c>nt65/outputChanged</c> whenever the whole program's diagnostics are published, which is
+    /// when the map may have changed.
+    /// </para>
+    /// </summary>
+    [JsonRpcMethod("nt65/directPages")]
+    public async Task<DirectPagesResult?> DirectPagesAsync(DirectPagesParams request, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        diagnostics.WatchOutput();
+        var uri = request.TextDocument.Uri;
+        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
+        var analysis = await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false);
+        return analysis.FileFor(path) is null
+            ? null
+            : LanguageServer.DirectPages.Of(analysis, file => outgoing.ToClient(Uris.ToUri(file)), cancellation);
+    }
+
     [JsonRpcMethod("textDocument/didOpen")]
     public async Task DidOpenAsync(DidOpenTextDocumentParams request, CancellationToken cancellation)
     {

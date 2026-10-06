@@ -189,8 +189,9 @@ function lenses(document) {
 }
 
 // Everything the two views need, registered once. `client` is the language client; the views
-// only request text from it and send it no notifications.
-function register(context, client) {
+// only request text from it and send it no notifications. `outputChanged` fires whenever the
+// server has published the whole program's analysis after an edit.
+function register(context, client, outputChanged) {
   context.subscriptions.push(
     marked,
     vscode.workspace.registerTextDocumentContentProvider(OUTPUT, held),
@@ -206,7 +207,7 @@ function register(context, client) {
 
     // An output view follows the program, not the caret, so it requests its text again when the
     // server says analysis has caught up after an edit, the same point diagnostics are published.
-    client.onNotification('nt65/outputChanged', async () => {
+    outputChanged(async () => {
       for (const view of [...shown.values()]) {
         if (view.kind === OUTPUT) await askForOutput(client, view.source);
       }

@@ -16,7 +16,8 @@ namespace Norristown.Tests.Editors;
 public sealed class ExtensionTests : IDisposable
 {
     /// <summary>The client's own code, which the manifest has to agree with.</summary>
-    private static readonly string[] ClientFiles = ["extension.js", "views.js", "sources.js"];
+    private static readonly string[] ClientFiles =
+        ["extension.js", "views.js", "sources.js", "directPages.js", "directPagesGrid.js", "media/directPageGrid.js"];
 
     private static readonly JsonDocument Package = Read("package.json");
     private static readonly JsonDocument Schema = Read("nt65.schema.json");
@@ -187,7 +188,7 @@ public sealed class ExtensionTests : IDisposable
         var offered = Package.RootElement.GetProperty("contributes").GetProperty("commands")
             .EnumerateArray().Select(command => command.GetProperty("command").GetString() ?? "")
             .Order(StringComparer.Ordinal);
-        var registered = Registered().Where(name => name is not ("nt65.rename" or "nt65.applyEdit")).Order(StringComparer.Ordinal);
+        var registered = Registered().Where(name => name is not ("nt65.rename" or "nt65.applyEdit" or "nt65.directPages.select")).Order(StringComparer.Ordinal);
         Assert.Equal(offered, registered);
 
         // A lone file gets a server, because the extension starts on the language and not only

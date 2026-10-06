@@ -60,6 +60,35 @@
         "command": "nt65.toggleSources",
         "title": "Toggle Input Sources",
         "category": "nt65"
+      },
+      {
+        "command": "nt65.directPages.refresh",
+        "title": "Refresh Direct Pages",
+        "category": "nt65",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "nt65.directPages.toggleHazards",
+        "title": "Toggle Direct Page Hazards",
+        "category": "nt65"
+      },
+      {
+        "command": "nt65.directPages.hideHazards",
+        "title": "Hide Hazards",
+        "category": "nt65",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "nt65.directPages.showHazards",
+        "title": "Show Hazards",
+        "category": "nt65",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "nt65.showDirectPageGrid",
+        "title": "Show Direct Page Grid",
+        "category": "nt65",
+        "icon": "$(table)"
       }
     ],
     "keybindings": [
@@ -74,6 +103,83 @@
         "when": "editorTextFocus && editorLangId == nt65 && nt65.sources.active"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nt65",
+          "title": "nt65",
+          "icon": "icons/direct-pages.svg"
+        }
+      ]
+    },
+    "views": {
+      "nt65": [
+        {
+          "id": "nt65.directPages",
+          "name": "Direct Pages",
+          "contextualTitle": "nt65"
+        },
+        {
+          "id": "nt65.directPagesLegend",
+          "name": "Legend",
+          "contextualTitle": "nt65",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "nt65.directPages",
+        "contents": "Open a file of an nt65 program to see the direct pages it uses.",
+        "when": "nt65.directPages.empty == noProgram"
+      },
+      {
+        "view": "nt65.directPages",
+        "contents": "This program reaches no memory through the direct page.",
+        "when": "nt65.directPages.empty == noPages"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "nt65.directPages.hideHazards",
+          "when": "view == nt65.directPages && nt65.directPages.hazards",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nt65.directPages.showHazards",
+          "when": "view == nt65.directPages && !nt65.directPages.hazards",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nt65.showDirectPageGrid",
+          "when": "view == nt65.directPages",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nt65.directPages.refresh",
+          "when": "view == nt65.directPages",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "nt65.showDirectPageGrid",
+          "when": "view == nt65.directPages && viewItem == page",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "nt65.directPages.hideHazards",
+          "when": "false"
+        },
+        {
+          "command": "nt65.directPages.showHazards",
+          "when": "false"
+        }
+      ]
+    },
     "colors": [
       {
         "id": "nt65.sources.a",
@@ -253,6 +359,126 @@
           "light": "#A315150F",
           "highContrast": "#F0B49C20",
           "highContrastLight": "#7A0F0F18"
+        }
+      },
+      {
+        "id": "nt65.directPages.shared",
+        "description": "A direct page location that several routines use at different times, in the direct page map.",
+        "defaults": {
+          "dark": "#89D185",
+          "light": "#388A34",
+          "highContrast": "#A8F0A0",
+          "highContrastLight": "#1E6B1A"
+        }
+      },
+      {
+        "id": "nt65.directPages.nested",
+        "description": "A direct page location that routines use while another use of it is live, and the mark of a hazard or of bytes two pages share, in the direct page map.",
+        "defaults": {
+          "dark": "#CCA700",
+          "light": "#BF8803",
+          "highContrast": "#FFD700",
+          "highContrastLight": "#7A5C00"
+        }
+      },
+      {
+        "id": "nt65.directPages.irq",
+        "description": "A direct page location an interrupt uses, and an interrupt handler, in the direct page map.",
+        "defaults": {
+          "dark": "#F48771",
+          "light": "#C72E0F",
+          "highContrast": "#FFA090",
+          "highContrastLight": "#A1260D"
+        }
+      },
+      {
+        "id": "nt65.directPages.own",
+        "description": "A direct page location that one routine owns, in the direct page map.",
+        "defaults": {
+          "dark": "#75BEFF",
+          "light": "#0070C1",
+          "highContrast": "#9ACFFF",
+          "highContrastLight": "#0050A0"
+        }
+      },
+      {
+        "id": "nt65.directPages.unused",
+        "description": "A direct page location that no instruction accesses, in the direct page map.",
+        "defaults": {
+          "dark": "#6E6E6E",
+          "light": "#A0A0A0",
+          "highContrast": "#9D9D9D",
+          "highContrastLight": "#767676"
+        }
+      },
+      {
+        "id": "nt65.directPages.hw",
+        "description": "A hardware register reached through the direct page, in the direct page map.",
+        "defaults": {
+          "dark": "#8A8A8A",
+          "light": "#6E6E6E",
+          "highContrast": "#BDBDBD",
+          "highContrastLight": "#5A5A5A"
+        }
+      },
+      {
+        "id": "nt65.directPages.unknown",
+        "description": "The direct page whose D is not known, in the direct page map.",
+        "defaults": {
+          "dark": "#9D9D9D",
+          "light": "#717171",
+          "highContrast": "#C0C0C0",
+          "highContrastLight": "#5A5A5A"
+        }
+      },
+      {
+        "id": "nt65.directPages.inout",
+        "description": "The glyph of a routine that reads a direct page location it is passed and writes it back, in the direct page map.",
+        "defaults": {
+          "dark": "#4EC9B0",
+          "light": "#16825D",
+          "highContrast": "#7FF0D8",
+          "highContrastLight": "#0B5C40"
+        }
+      },
+      {
+        "id": "nt65.directPages.access",
+        "description": "The bar and ruler mark of a line that accesses the selected direct page location, and the glyph of a routine that reads it as an input.",
+        "defaults": {
+          "dark": "#4FC1FF",
+          "light": "#0070C1",
+          "highContrast": "#79D7FF",
+          "highContrastLight": "#0050A0"
+        }
+      },
+      {
+        "id": "nt65.directPages.accessBackground",
+        "description": "The tint of a line that accesses the selected direct page location, or calls a routine that does.",
+        "defaults": {
+          "dark": "#4FC1FF21",
+          "light": "#0070C11A",
+          "highContrast": "#79D7FF40",
+          "highContrastLight": "#0050A033"
+        }
+      },
+      {
+        "id": "nt65.directPages.warningBackground",
+        "description": "The tint of a line that makes a hazard for the selected direct page location.",
+        "defaults": {
+          "dark": "#CCA7002B",
+          "light": "#BF88031F",
+          "highContrast": "#FFD70040",
+          "highContrastLight": "#7A5C0033"
+        }
+      },
+      {
+        "id": "nt65.directPages.interruptBackground",
+        "description": "The tint of a line in an interrupt handler that accesses the selected direct page location.",
+        "defaults": {
+          "dark": "#F4877126",
+          "light": "#C72E0F1A",
+          "highContrast": "#FFA09040",
+          "highContrastLight": "#A1260D33"
         }
       }
     ],

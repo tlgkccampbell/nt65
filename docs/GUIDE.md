@@ -1700,6 +1700,23 @@ everything below works across modules.
   leaving the highlights in place, and *Peek Input Sources* lists them all. The setting
   `nt65.sources.enabled`, or *Toggle Input Sources*, turns the feature off. It only shows what
   the analysis found and never reports a problem.
+- **The direct page map**, in the nt65 view of the activity bar, shows how routines share the
+  zero page, or on the 65816 each direct page. Each page is a value of D, with the segments
+  reached through it, the locations on it and, under each location, the calls that lead to the
+  routines that use it. Colour says how a location is shared: by one routine, by several, by an
+  interrupt handler and the code it interrupts, or by a routine that relies on it across a call
+  to another that uses it as a temporary of its own, which is marked `⚠`. A glyph says what each
+  routine does with it: `↓` reads it first, `↑` only writes it, `↕` both, `◦` uses it as a
+  temporary. `⧉` marks pages that overlap. Hardware registers reached through D, such as the
+  SNES's at $2100, are a page of their own, and code that reaches memory while D is not known,
+  such as a handler after it gives D back, is listed under `D = ?`. Selecting a row marks the
+  lines it stands for. *Show Grid* draws a page as 16 rows of 16 bytes, with each location's
+  bytes outlined, what is free, and what the page shares with other pages.
+
+  The linker decides where data lands, so offsets are predicted. A segment starts where its
+  linked configuration's memory area does, or at the start of its page without one, and the
+  files' bytes follow in the order the project lists them. Like the input sources, the map
+  only shows what the analysis found and never reports a problem.
 - **Inlay hints** at the end of a line, off by default for cycle counts: where a width or
   other state changes, where a long branch was written long, values a declaration implies,
   and parameter names in calls.

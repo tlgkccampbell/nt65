@@ -1,0 +1,173 @@
+/* The grid panel of the direct page map. Colours come from the theme: the relations from the
+   colours the extension contributes, with fallbacks for each kind of theme, and the rest from
+   VS Code's own variables. */
+body {
+  --shared: var(--vscode-nt65-directPages-shared, #89d185);
+  --nested: var(--vscode-nt65-directPages-nested, #cca700);
+  --irq: var(--vscode-nt65-directPages-irq, #f48771);
+  --own: var(--vscode-nt65-directPages-own, #75beff);
+  --unused: var(--vscode-nt65-directPages-unused, #6e6e6e);
+  --hw: var(--vscode-nt65-directPages-hw, #8a8a8a);
+  --unknown: var(--vscode-nt65-directPages-unknown, #9d9d9d);
+  --cut: var(--vscode-editor-background);
+  --fg: var(--vscode-foreground);
+  --dim: var(--vscode-descriptionForeground);
+  --faint: var(--vscode-disabledForeground, #6e6e6e);
+  --line: var(--vscode-panel-border, #2b2b2b);
+  --hover: var(--vscode-list-hoverBackground);
+  --active: var(--vscode-list-inactiveSelectionBackground);
+  --link: var(--vscode-textLink-foreground);
+  --mono: var(--vscode-editor-font-family, monospace);
+  --free: rgba(128, 128, 128, 0.16);
+  --track: rgba(128, 128, 128, 0.2);
+  --hatch: rgba(128, 128, 128, 0.45);
+  --hatch-used: rgba(160, 160, 160, 0.85);
+  --edge-sym: rgba(255, 255, 255, 0.55);
+  --edge-strong: rgba(255, 255, 255, 0.75);
+  --edge-unused: #6a6a6a;
+  --edge-foreign: #9a9a9a;
+  --edge-page: #4a4a4a;
+  --edge-hot: #ffffff;
+  --on-amber: #111111;
+  margin: 0;
+  padding: 0;
+  background: var(--vscode-editor-background);
+  color: var(--fg);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+}
+
+body.vscode-light {
+  --shared: var(--vscode-nt65-directPages-shared, #388a34);
+  --nested: var(--vscode-nt65-directPages-nested, #bf8803);
+  --irq: var(--vscode-nt65-directPages-irq, #c72e0f);
+  --own: var(--vscode-nt65-directPages-own, #0070c1);
+  --unused: var(--vscode-nt65-directPages-unused, #a0a0a0);
+  --hw: var(--vscode-nt65-directPages-hw, #6e6e6e);
+  --unknown: var(--vscode-nt65-directPages-unknown, #717171);
+  --free: rgba(0, 0, 0, 0.06);
+  --track: rgba(0, 0, 0, 0.08);
+  --hatch: rgba(0, 0, 0, 0.22);
+  --hatch-used: rgba(0, 0, 0, 0.45);
+  --edge-sym: rgba(0, 0, 0, 0.45);
+  --edge-strong: rgba(0, 0, 0, 0.7);
+  --edge-unused: #a0a0a0;
+  --edge-foreign: #808080;
+  --edge-page: #c8c8c8;
+  --edge-hot: #000000;
+}
+
+body.vscode-high-contrast {
+  --shared: var(--vscode-nt65-directPages-shared, #a8f0a0);
+  --nested: var(--vscode-nt65-directPages-nested, #ffd700);
+  --irq: var(--vscode-nt65-directPages-irq, #ffa090);
+  --own: var(--vscode-nt65-directPages-own, #9acfff);
+  --edge-sym: #ffffff;
+  --edge-strong: #ffffff;
+  --edge-page: #808080;
+  --line: var(--vscode-contrastBorder, #6fc3df);
+}
+
+body.vscode-high-contrast-light {
+  --shared: var(--vscode-nt65-directPages-shared, #1e6b1a);
+  --nested: var(--vscode-nt65-directPages-nested, #7a5c00);
+  --irq: var(--vscode-nt65-directPages-irq, #a1260d);
+  --own: var(--vscode-nt65-directPages-own, #0050a0);
+  --free: rgba(0, 0, 0, 0.06);
+  --track: rgba(0, 0, 0, 0.1);
+  --hatch: rgba(0, 0, 0, 0.3);
+  --hatch-used: rgba(0, 0, 0, 0.55);
+  --edge-sym: #000000;
+  --edge-strong: #000000;
+  --edge-unused: #767676;
+  --edge-foreign: #5a5a5a;
+  --edge-page: #a0a0a0;
+  --edge-hot: #000000;
+  --line: var(--vscode-contrastBorder, #0f4a85);
+}
+
+.tabs { display: flex; overflow-x: auto; border-bottom: 1px solid var(--line); }
+.tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; height: 32px; border: 0; border-right: 1px solid var(--line);
+  background: none; color: var(--dim); cursor: pointer; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--vscode-focusBorder); }
+.tab:hover { background: var(--hover); }
+.tab:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.tab .ic { width: 12px; height: 12px; border-radius: 2px; border: 1px solid var(--own);
+  background-image: linear-gradient(var(--own), var(--own)), linear-gradient(var(--own), var(--own));
+  background-size: 100% 1px, 1px 100%; background-position: 0 50%, 50% 0; background-repeat: no-repeat; opacity: 0.8; }
+.tab .ic.hw { border-color: var(--hw); background-image: none; }
+
+.body { display: grid; grid-template-columns: auto 1fr; gap: 28px; padding: 16px 20px 22px; align-items: start; }
+.empty { color: var(--dim); }
+.head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; font-family: var(--mono); font-size: 12.5px; }
+.head .t { font-weight: 600; }
+.head .m { color: var(--dim); }
+.head .p { color: var(--dim); font-style: italic; font-family: var(--vscode-font-family); }
+
+.gridwrap { overflow-x: auto; }
+.grid { display: grid; grid-template-columns: 48px repeat(16, 24px); grid-auto-rows: 22px; font-family: var(--mono); }
+.grid .colh, .grid .rowh { font-size: 10px; color: var(--faint); display: grid; place-items: center; }
+.grid .rowh { justify-items: end; padding-right: 6px; }
+
+/* Cells touch, and each block of cells (one location, one free byte, one other page's stretch)
+   is cut out by a gap and drawn with an edge on its outer sides only, so a location reads as
+   one shape. */
+.cell { position: relative; background: var(--free); --edge: transparent; }
+.cell.sym { cursor: pointer; }
+.cell.unused { background: transparent; }
+.cell.other { background: repeating-linear-gradient(135deg, var(--hatch) 0 2px, var(--free) 2px 5px); }
+.cell.otherused { background: repeating-linear-gradient(135deg, var(--hatch-used) 0 2px, var(--free) 2px 5px); }
+.cell.clash { background: var(--nested) !important; }
+.cell.clash::after { content: "⧉"; position: absolute; right: 2px; bottom: 1px; font-size: 9px; line-height: 1; color: var(--on-amber); }
+.cell.hot, .cell.peek { --edge: var(--edge-hot) !important; }
+.cell.peek:not(.hot) { filter: brightness(1.2); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px; color: var(--dim); margin-top: 12px; max-width: 432px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 12px; border-radius: 2px; display: inline-block; font-style: normal; }
+.legend .heat { width: 30px; background: linear-gradient(90deg, color-mix(in srgb, var(--shared) 30%, transparent), var(--shared)); }
+.legend .shape { width: 30px; background: color-mix(in srgb, var(--shared) 60%, transparent); box-shadow: inset 0 0 0 1px var(--edge-sym); }
+.legend .clashkey { background: var(--nested); color: var(--on-amber); font-size: 9px; text-align: right; line-height: 12px; }
+.legend .neverkey { box-shadow: inset 0 0 0 1px var(--edge-unused); }
+
+.side { display: grid; gap: 18px; min-width: 0; font-size: 12.5px; }
+.side h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+.syms { display: grid; gap: 1px; max-width: 380px; }
+.syms .s { display: grid; grid-template-columns: 14px 1fr auto 52px; gap: 10px; align-items: center; padding: 2px 6px; border-radius: 3px; cursor: pointer; }
+.syms .s:hover, .syms .s.peek { background: var(--hover); }
+.syms .s.sel { background: var(--active); }
+.syms .s:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
+.syms .sw { width: 12px; height: 10px; border-radius: 2px; }
+.syms .sw.never { box-shadow: inset 0 0 0 1px var(--edge-unused); }
+.syms .sw.foreign { background: repeating-linear-gradient(135deg, var(--hatch-used) 0 2px, var(--free) 2px 5px); }
+.syms .nm { font-family: var(--mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.syms .s.foreign .nm { color: var(--dim); }
+.syms .rg { font-family: var(--mono); font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+.syms .ht { height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.syms .ht span { display: block; height: 100%; background: var(--dim); }
+
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 16px; font-variant-numeric: tabular-nums; max-width: 300px; }
+.kv .k { color: var(--dim); }
+.kv .v { font-family: var(--mono); text-align: right; }
+.meter { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; display: flex; margin: 2px 0 8px; max-width: 300px; }
+.meter span { display: block; height: 100%; }
+.meter .own { background: var(--own); }
+.meter .never { background: var(--unused); }
+.meter .shared { background: var(--nested); }
+.meter .foreign { background: var(--hatch-used); }
+
+.lst { display: grid; gap: 4px; max-width: 380px; }
+.lst .it { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: baseline; }
+.lst .k { font-family: var(--mono); text-align: center; }
+.lst .ref { font-family: var(--mono); font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+code { font-family: var(--mono); font-size: 12px; color: var(--vscode-textPreformat-foreground, inherit); background: none; padding: 0; }
+
+.tip { position: fixed; z-index: 10; background: var(--vscode-editorHoverWidget-background); color: var(--vscode-editorHoverWidget-foreground, var(--fg));
+  border: 1px solid var(--vscode-editorHoverWidget-border); border-radius: 4px; box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.4));
+  padding: 6px 10px 7px; font-size: 12.5px; pointer-events: none; width: max-content; max-width: min(340px, calc(100vw - 24px)); }
+.tip .hd { font-family: var(--mono); font-size: 12px; display: flex; gap: 8px; padding-bottom: 5px; margin-bottom: 5px; border-bottom: 1px solid var(--line); }
+.tip .hd .m { color: var(--dim); }
+.tip .r { display: grid; grid-template-columns: 16px 1fr; gap: 8px; align-items: baseline; line-height: 1.6; }
+.tip .r .k { text-align: center; font-family: var(--mono); }
+
+@media (max-width: 760px) { .body { grid-template-columns: 1fr; } }

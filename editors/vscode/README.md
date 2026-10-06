@@ -32,6 +32,16 @@ build tasks and a schema for the project file.
   the last store to it as its source, and a line that might also have changed it, such as a
   store through a pointer, gets a thin dashed bar and a faded tag ending in `?`. **Shift+Alt+PageDown** and
   **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
+- **Where the direct page goes.** The nt65 view in the activity bar lists every direct page the
+  program reaches memory through: each `D` with its segments, the locations in it and the
+  routines that use each one, down the calls that reach them. Colour says how a location is
+  shared, a glyph says what each routine does with it (`↓` in, `↑` out, `↕` both, `◦` temp),
+  `⧉` marks pages that overlap and `⚠` a hazard, which the toolbar hides and shows. Selecting
+  a row marks the lines it stands for, with a solid bar where they write and a dashed one where
+  they only read. Code that runs with `D` not known is grouped under `D = ?`. **Show Grid**
+  opens a page as 16 rows of 16 bytes beside the source, with each location's bytes outlined
+  and brighter the more they are used, what is free, and what the page shares with others; the
+  Legend view says what each mark means.
 - **What this became, beside the source.** **nt65: Show Output Beside** opens the ca65 for the
   file you are in, as the program stands with whatever you have not saved, and the caret is the
   link: move in the source and the lines it became are highlighted and scrolled to; move in the

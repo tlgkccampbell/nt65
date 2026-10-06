@@ -75,7 +75,7 @@ internal readonly record struct MemoryAccess(
     /// Returns whether <paramref name="mnemonic"/> reads the memory its operand reaches. A
     /// read-modify-write reads it before it writes it.
     /// </summary>
-    private static bool ReadsMemory(MnemonicKind mnemonic) => mnemonic is
+    internal static bool ReadsMemory(MnemonicKind mnemonic) => mnemonic is
         MnemonicKind.Lda or MnemonicKind.Ldx or MnemonicKind.Ldy or MnemonicKind.Adc or MnemonicKind.Sbc
         or MnemonicKind.And or MnemonicKind.Ora or MnemonicKind.Eor or MnemonicKind.Cmp or MnemonicKind.Cpx
         or MnemonicKind.Cpy or MnemonicKind.Bit or MnemonicKind.Lax or MnemonicKind.Las or MnemonicKind.Inc
