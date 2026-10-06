@@ -348,14 +348,11 @@
     section.append(h('h3', '', 'Locations'));
     const list = h('div', 'syms');
 
-    // The bars have a header of their own, right above them, since nothing else says what they
-    // measure. Its hover gives the measure in full.
-    const head = h('div', 's head');
-    const use = h('span', 'hd', 'use');
-    use.title = 'How many times its instructions run in one pass, counting loops whose counts are known. '
-      + 'The scale is logarithmic. A dashed end means some run in a loop of unknown count, so it may run more.';
-    head.append(h('span'), h('span'), h('span'), use);
-    list.append(head);
+    // The bars are explained right under the heading, where they are read, rather than in a
+    // legend or a hover.
+    section.append(
+      h('p', 'caption', 'Bar represents relative usage (log scale).'),
+      h('p', 'caption', 'Dashes indicate an uncountable loop.'));
     for (const entry of listed) {
       const { location } = entry;
       const row = h('div', `s${entry.foreign ? ' foreign' : ''}${!entry.foreign && hot === location.name ? ' sel' : ''}`);
