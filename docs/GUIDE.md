@@ -1265,8 +1265,13 @@ main.nt65:12:5: warning: this call relies on `print_digit` keeping Y, which it d
 ```
 
 A caller relies on a register when it uses, after the call, the value the register held before
-it, or when its own `keeps` hands that value back. The fix adds the register to the routine's
-`keeps`. Where the reliance is deliberate, `.allow "unpromised-keep"` before the call says so.
+it, or when its own `keeps` hands that value back. One fix adds the register to the routine's
+`keeps`. The other saves the register around the call, with `pha` and `pla`, or with `phx` and
+`plx` or `phy` and `ply` where the CPU has them. It is offered only where that is safe: not for
+the carry, since `plp` would restore every flag; not where a label on the call's line would let
+a branch skip the save; and not where the code after the call reads N or Z before setting them,
+since the pull sets both. Where the reliance is deliberate, `.allow "unpromised-keep"` before
+the call says so.
 
 When a routine saves a register to memory and reloads it, nt65 cannot see that the value came
 back unchanged. `.state keeps x` at the point where it has says so.

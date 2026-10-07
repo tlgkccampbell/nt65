@@ -77,6 +77,37 @@ public sealed class UnpromisedKeepsTests
             diagnostic.Message);
     }
 
+    /// <summary>
+    /// The second fix saves the register around the call where that is safe: for A on any CPU,
+    /// and for Y where the CPU has <c>phy</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("6502", ".proc bump: keeps x {\n    inc $10\n    rts\n}\n.export .proc main {\n    lda #1\n    jsr bump\n    ora #2\n    sta $11\n    rts\n}\n", "pha")]
+    [InlineData("65C02", PrintDigit + ".export .proc main {\n    ldy #1\n    jsr print_digit\n    tya\n    sta $11\n    rts\n}\n", "phy")]
+    public void TheRegisterCanBeSavedAroundTheCall(string cpu, string text, string push)
+    {
+        var diagnostic = Assert.Single(Analysis.Program(("main.nt65", Header.Replace("6502", cpu, StringComparison.Ordinal) + text)).Diagnostics);
+
+        Assert.Equal(new DiagnosticFix(FixKind.SaveAround, push), diagnostic.Also);
+    }
+
+    /// <summary>
+    /// The register is not saved where that is not safe. X and Y need <c>phx</c> and <c>phy</c>,
+    /// which the 6502 lacks; the carry cannot be saved without every other flag; a label on the
+    /// call lets a branch reach it past the save; and the pull sets N and Z, so code that reads
+    /// either before setting both rules it out.
+    /// </summary>
+    [Theory]
+    [InlineData(PrintDigit + ".export .proc main {\n    ldy #1\n    jsr print_digit\n    tya\n    sta $11\n    rts\n}\n")]
+    [InlineData(".proc setc: keeps x {\n    lda #1\n    rts\n}\n.export .proc main {\n    sec\n    jsr setc\n    adc #1\n    sta $11\n    rts\n}\n")]
+    [InlineData(".proc bump: keeps x {\n    inc $10\n    rts\n}\n.export .proc main {\n    lda #1\n@again: jsr bump\n    ora #2\n    sta $11\n    bne @again\n    rts\n}\n")]
+    [InlineData(".proc bump: keeps x {\n    inc $10\n    rts\n}\n.export .proc main {\n    lda #1\n    jsr bump\n    beq @zero\n    sta $11\n@zero:\n    rts\n}\n")]
+    public void TheRegisterIsNotSavedWhereThatIsNotSafe(string text)
+    {
+        Assert.All(Diagnostics(text), diagnostic => Assert.Null(diagnostic.Also));
+        Assert.NotEmpty(Diagnostics(text));
+    }
+
     /// <summary>A deliberate reliance can be allowed where it is made.</summary>
     [Fact]
     public void ADeliberateRelianceCanBeAllowed()

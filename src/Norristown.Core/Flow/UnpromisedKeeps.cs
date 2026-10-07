@@ -1,5 +1,6 @@
 using Norristown.Processor;
 using Norristown.Semantics;
+using Norristown.Syntax;
 
 namespace Norristown.Flow;
 
@@ -33,12 +34,16 @@ internal static class UnpromisedKeeps
         IReadOnlySet<RoutineKey> readers, List<Diagnostic> report)
     {
         var blocks = region.Blocks;
-        if (!region.IsEntered || blocks.Count == 0)
+        if (!region.IsEntered || blocks.Count == 0
+            || !blocks.Any(block => block.Calls is [{ Signature.Keeps: not Registers.None }]))
+        {
             return;
+        }
         var reached = walk.Solved(region, of, 0);
         var routine = region.Routine;
         var promised = routine.Signature?.Keeps ?? Registers.None;
         Registers[]? live = null;
+        Registers? restored = null;
         foreach (var block in blocks)
         {
             if (reached[block.Index] is not { } state || block.CallsUnknown
@@ -53,13 +58,20 @@ internal static class UnpromisedKeeps
 
             if (block.EndsInCall)
             {
+                // Walked from the call, a `.state keeps` would seem to bring back the value from
+                // before the call, when it says the routine's own entry value is back. A register
+                // one restores is not followed, which can only miss a reliance.
+                restored ??= Restored(blocks);
+                unpromised &= ~restored.Value;
+                if (unpromised == Registers.None)
+                    continue;
                 if (block.Index + 1 >= blocks.Count || !blocks[block.Index + 1].IsFallenInto)
                     continue;
                 var start = block.Index + 1;
 
                 // Most calls are followed by code that gives the registers new values, which a
                 // cheap pass over the routine shows without following every path from the call.
-                live ??= Live(blocks, promised, of, reads);
+                live ??= Live(walk, blocks, promised, of, reads);
                 if ((live[start] & unpromised) == Registers.None)
                     continue;
 
@@ -74,7 +86,10 @@ internal static class UnpromisedKeeps
                 foreach (var (register, (step, _)) in sites)
                 {
                     if ((unpromised & register) != Registers.None)
-                        Report("call", register, step, $"{RegisterEffects.Format(register)} is used here");
+                    {
+                        Report("call", register, step, $"{RegisterEffects.Format(register)} is used here",
+                            SaveAround(walk, register, call, callee, blocks[start], readers));
+                    }
                 }
 
                 // A return that hands the register back unchanged relies on it as well, where this
@@ -87,7 +102,10 @@ internal static class UnpromisedKeeps
                     foreach (var register in RegisterEffects.Each(unpromised & promised & ~Used(sites)))
                     {
                         if ((left.Whole(register).Entry & register) != Registers.None)
-                            Report("call", register, end.Steps[^1], $"`{routine.DisplayName}` returns it here, promising `keeps`");
+                        {
+                            Report("call", register, end.Steps[^1], $"`{routine.DisplayName}` returns it here, promising `keeps`",
+                                SaveAround(walk, register, call, callee, blocks[start], readers));
+                        }
                     }
                 }
                 continue;
@@ -105,9 +123,9 @@ internal static class UnpromisedKeeps
                 }
             });
             foreach (var register in RegisterEffects.Each(unpromised & promised & held))
-                Report("tail call", register, null, null);
+                Report("tail call", register, null, null, null);
 
-            void Report(string how, Registers register, Layout.Step? used, string? where)
+            void Report(string how, Registers register, Layout.Step? used, string? where, DiagnosticFix? also)
             {
                 var name = RegisterEffects.Format(register);
                 var related = used is { } step && where is not null
@@ -120,6 +138,7 @@ internal static class UnpromisedKeeps
                     related)
                 {
                     Fix = new DiagnosticFix(FixKind.Keeps, name.ToLowerInvariant(), callee.DeclarationSpan),
+                    Also = also,
                 });
             }
         }
@@ -132,7 +151,7 @@ internal static class UnpromisedKeeps
     /// to keep, and leaving for another routine, or for somewhere nt65 cannot follow, may use any.
     /// </summary>
     private static Registers[] Live(
-        IReadOnlyList<BasicBlock> blocks, Registers promised, Func<Symbol, RoutineRegisters> of,
+        RegisterWalk walk, IReadOnlyList<BasicBlock> blocks, Registers promised, Func<Symbol, RoutineRegisters> of,
         Func<Symbol, RoutineReads> reads)
     {
         var live = new Registers[blocks.Count];
@@ -157,7 +176,7 @@ internal static class UnpromisedKeeps
                         after |= reads(callee).Complete ? reads(callee).Read : Registers.All;
                 }
                 for (var j = block.Steps.Count - 1; j >= 0; j--)
-                    after = Before(block.Steps[j], after);
+                    after = Before(walk, block.Steps[j], after);
                 if (after == live[i])
                     continue;
                 live[i] = after;
@@ -172,44 +191,104 @@ internal static class UnpromisedKeeps
     /// Returns the registers used before <paramref name="step"/>, from those used after it. A
     /// statement that is not an instruction may be run as data and do anything.
     /// </summary>
-    private static Registers Before(Layout.Step step, Registers after)
+    private static Registers Before(RegisterWalk walk, Layout.Step step, Registers after)
     {
-        if (step.Statement is not Syntax.InstructionStatementSyntax instruction)
-            return step.Statement is Syntax.StateDirectiveSyntax or Syntax.MacroCallSyntax or Syntax.BlockSpliceSyntax
+        if (step.Statement is not InstructionStatementSyntax instruction)
+        {
+            return step.Statement is StateDirectiveSyntax or MacroCallSyntax or BlockSpliceSyntax
                 || step.Label is not null ? after : Registers.All;
+        }
         var mnemonic = instruction.MnemonicKind;
         if (Instructions.IsCall(mnemonic))
             return after;
         var facts = Instructions.Facts(mnemonic);
-        var read = facts.Reads | facts.Held | Indexes(step, instruction);
-        var written = facts.Pushes is not null ? Registers.None : facts.Writes & ~read;
-
-        // A shift or an increment through memory leaves the accumulator alone.
-        if (mnemonic is Syntax.MnemonicKind.Asl or Syntax.MnemonicKind.Lsr or Syntax.MnemonicKind.Rol
-                or Syntax.MnemonicKind.Ror or Syntax.MnemonicKind.Inc or Syntax.MnemonicKind.Dec
-            && instruction.Operand is { } operand
-            && !operand.GetText().Trim().Equals("a", StringComparison.OrdinalIgnoreCase))
-        {
-            written &= ~Registers.A;
-        }
+        var (reads, writes) = walk.EffectsOf(step, instruction);
+        var read = reads | facts.Held | (facts.Copies?.From ?? Registers.None);
+        var written = facts.Pushes is not null ? Registers.None : writes & ~read;
         return (after & ~written) | read;
     }
 
-    /// <summary>
-    /// Returns the index registers an instruction's operand adds to what it reads. In a macro
-    /// body the operand may be an argument, so both are counted.
-    /// </summary>
-    private static Registers Indexes(Layout.Step step, Syntax.InstructionStatementSyntax instruction)
+    /// <summary>Returns the registers a <c>.state keeps</c> among the blocks names.</summary>
+    private static Registers Restored(IReadOnlyList<BasicBlock> blocks)
     {
-        if (step.On is not null)
-            return Registers.X | Registers.Y;
-        var operand = instruction.Operand?.GetText().Replace(" ", "", StringComparison.Ordinal) ?? "";
-        var used = Registers.None;
-        if (operand.Contains(",x", StringComparison.OrdinalIgnoreCase))
-            used |= Registers.X;
-        if (operand.Contains(",y", StringComparison.OrdinalIgnoreCase))
-            used |= Registers.Y;
-        return used;
+        var restored = Registers.None;
+        foreach (var step in blocks.SelectMany(block => block.Steps))
+        {
+            if (step.Statement is not StateDirectiveSyntax)
+                continue;
+            foreach (var item in StateItem.Read(step.Statement))
+            {
+                if (item.Part == StatePart.Keeps)
+                    restored |= item.Registers;
+            }
+        }
+        return restored;
+    }
+
+    /// <summary>
+    /// Returns the fix that saves <paramref name="register"/> on the stack before the call and
+    /// restores it after, where that is safe, or null where it is not. It is safe for A, and for
+    /// X and Y on a CPU with <c>phx</c> and <c>phy</c>; the carry cannot be saved alone, since
+    /// <c>plp</c> restores every flag. The call must be a plain <c>jsr</c> or <c>jsl</c> on a line
+    /// with no label, which a branch could reach past the save, to a routine that does not read
+    /// below its own entry on the stack. The register must have the same width on both sides of
+    /// the call. The pull sets N and Z, so the code after the call must set both before it reads
+    /// either.
+    /// </summary>
+    private static DiagnosticFix? SaveAround(
+        RegisterWalk walk, Registers register, Layout.Step call, Symbol callee, BasicBlock following,
+        IReadOnlySet<RoutineKey> readers)
+    {
+        MnemonicKind? push = register switch
+        {
+            Registers.A => MnemonicKind.Pha,
+            Registers.X => MnemonicKind.Phx,
+            Registers.Y => MnemonicKind.Phy,
+            _ => null,
+        };
+        if (push is not { } saving || !Instructions.Has(walk.Cpu, saving)
+            || call.On is not null || call.Statement.Parent is LabeledLineSyntax
+            || call.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jsr or MnemonicKind.Jsl }
+            || callee.Signature is { Arguments: > 0 } or { Inline: not null } || readers.Contains(RoutineKey.Of(callee))
+            || following.Steps.Count == 0)
+        {
+            return null;
+        }
+        var index = register != Registers.A;
+        if (walk.Wide(call, index) is not { } before || walk.Wide(following.Steps[0], index) != before)
+            return null;
+        return SetsNAndZFirst(following) ? new DiagnosticFix(FixKind.SaveAround, SyntaxFacts.TextOf(saving)) : null;
+    }
+
+    /// <summary>
+    /// Returns whether the code at the start of <paramref name="block"/> sets both N and Z before
+    /// anything reads either. A call, a <c>php</c>, and the end of the block count as reading them.
+    /// </summary>
+    private static bool SetsNAndZFirst(BasicBlock block)
+    {
+        const StatusFlags NZ = StatusFlags.Negative | StatusFlags.Zero;
+        var set = StatusFlags.None;
+        foreach (var step in block.Steps)
+        {
+            if (step.Statement is not InstructionStatementSyntax instruction)
+            {
+                if (step.Statement is StateDirectiveSyntax)
+                    continue;
+                return false;
+            }
+            var mnemonic = instruction.MnemonicKind;
+            if (Instructions.IsCall(mnemonic) || mnemonic == MnemonicKind.Php
+                || (FlagEffects.Read(mnemonic) & NZ & ~set) != StatusFlags.None)
+            {
+                return false;
+            }
+
+            // An immediate `bit` sets Z alone, and nothing here says which form this one is.
+            set |= mnemonic == MnemonicKind.Bit ? StatusFlags.Zero : FlagEffects.Written(mnemonic, null, null) & NZ;
+            if (set == NZ)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Returns the registers a use was already found for.</summary>

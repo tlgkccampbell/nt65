@@ -219,6 +219,16 @@ internal static class Fixes
                 yield return Fix(diagnostic, $"Add `{register}` to `reads`", [added]);
                 break;
 
+            case FixKind.SaveAround when fix.Text is { } push:
+                var pull = "pl" + push[2..];
+                var upper = LineContext.TokensOf(tree, line).FirstOrDefault(token => token.Kind == SyntaxKind.Mnemonic)
+                    is { Text: { } called } && called.All(char.IsUpper);
+                if (upper)
+                    (push, pull) = (push.ToUpperInvariant(), pull.ToUpperInvariant());
+                yield return Fix(diagnostic, $"Save it around the call with `{push}` and `{pull}`",
+                    [Edits.InsertBefore(tree, line, push), Edits.InsertAfter(tree, line, $"{Edits.IndentOf(tree, line)}{pull}")]);
+                break;
+
             case FixKind.Keeps when fix is { Text: { } kept, At: { } callee }
                 && analysis.ModelFor(callee.File) is { } declaring
                 && Edits.AddedRegister(declaring.Tree, callee.LineIndex, "keeps", kept) is { } promise:

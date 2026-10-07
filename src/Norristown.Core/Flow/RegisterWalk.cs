@@ -46,8 +46,27 @@ internal sealed class RegisterWalk
     /// </summary>
     public StackEffects Effects { get; internal set; }
 
+    /// <summary>Gets the CPU the file the walk goes through is built for.</summary>
+    internal Cpu Cpu => layout.Cpu;
+
     /// <summary>Gets the control flow of the file the walk goes through.</summary>
     internal ControlFlow Flow => flow;
+
+    /// <summary>
+    /// Returns the registers an instruction uses the value of, including the index register its
+    /// mode adds, and the registers it certainly writes. A <c>rep</c> or <c>sep</c> whose mask
+    /// nt65 cannot work out certainly writes nothing.
+    /// </summary>
+    internal (Registers Read, Registers Written) EffectsOf(Step step, InstructionStatementSyntax instruction)
+    {
+        var mnemonic = instruction.MnemonicKind;
+        var mode = layout.Of(instruction, step.On)?.Mode;
+        var constant = StepOperands.Immediate(model, layout, step);
+        var written = mnemonic is MnemonicKind.Rep or MnemonicKind.Sep && constant is null
+            ? Registers.None
+            : RegisterEffects.Written(mnemonic, mode, constant);
+        return (RegisterEffects.Read(mnemonic, mode), written);
+    }
 
     /// <summary>Gets the semantic model of the file the walk goes through.</summary>
     internal SemanticModel Model => model;

@@ -152,6 +152,12 @@ public enum FixKind
     Keeps,
 
     /// <summary>
+    /// The register reported, saved on the stack before the call with the push the fix's
+    /// <see cref="DiagnosticFix.Text"/> names, and restored after it with the matching pull.
+    /// </summary>
+    SaveAround,
+
+    /// <summary>
     /// The constant reported, declared instead as data found elsewhere at its value, with
     /// <c>.data</c> or, for a hardware register, <c>.mmio</c>.
     /// </summary>
