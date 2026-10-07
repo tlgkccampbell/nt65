@@ -11,7 +11,7 @@
 .use nt65::regs::*
 
 ; The address sim65 treats as a call to exit, with the exit code in A.
-.const SIM65_EXIT = $fff9
+.proc SIM65_EXIT = $fff9: noreturn, reads a
 
 .const C_FLAG = $01
 .const Z_FLAG = $02
@@ -86,13 +86,11 @@
     jsr test_regs
     lda #0
     jmp SIM65_EXIT
-    .next ?
 }
 
 .proc fail {
     lda check
     jmp SIM65_EXIT
-    .next ?
 }
 
 .proc test_wide {

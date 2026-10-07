@@ -19,6 +19,9 @@
 ; the carry set and the error's number in A.
 .proc MLI = $BF00: running, inline 3, reads none
 
+; The same entry, for the QUIT call, which does not come back.
+.proc MLI_QUIT = $BF00: running, inline 3, reads none, noreturn
+
 .data DEVNUM: .byte = $BF30         ; the unit ProDOS last read from, as ON_LINE takes it
 .const MAX_PATH = 64                ; the longest pathname ProDOS takes
 .const BINARY   = $06               ; the file type of a binary file, whose aux type is its address
@@ -281,10 +284,9 @@
 
 ; Leaves the monitor for ProDOS's program selector, which runs the next program.
 .proc quit: running, noreturn {
-    jsr MLI
+    jsr MLI_QUIT
     .byte Call::quit
     .addr quitting
-    .next ?
 }
 
 ; Reads a pathname after any spaces into `path`, as ProDOS takes it: its length, then its

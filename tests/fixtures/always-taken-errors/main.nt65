@@ -5,7 +5,7 @@
 
 .cpu 6502
 
-.export wrong_target, two_targets, unreached, end_path, elsewhere
+.export wrong_target, two_targets, unreached, end_path, computed, computed_unknown, elsewhere
 
 .segment CODE
 .proc wrong_target {
@@ -34,12 +34,30 @@
     rts
 }
 
-; `.next ?` still ends the path after any statement.
+; `.next ?` would give up the path where the branch is not taken as well, and a branch goes
+; only to its operand or on, so neither way is unknown.
 .proc end_path {
     lda #1
     bne @done
-    .next ?
+    .next ?                 ;! error[next-unknown-after-branch]: `.next ?` cannot follow `bne @done`, because it would also give up the path where the branch is not taken: if the branch is always taken, write `.next @done`, and otherwise remove the `.next`
 @done:
+    rts
+}
+
+; A branch to an address written as an expression needs the label there named instead, and
+; `.next ?` cannot stand in for it.
+.proc computed {
+    lda #1
+    bne computed_end-1      ;! error[computed-branch-unchecked]: `bne computed_end-1` branches to a computed address, which nt65 cannot follow: write the label it goes to as its operand
+    rts
+}
+.proc computed_unknown {
+    lda #1
+    bne computed_end-1
+    .next ?                 ;! error[next-unknown-after-branch]: `.next ?` cannot follow `bne computed_end-1`, because it would also give up the path where the branch is not taken: write the label the branch goes to as its operand
+    rts
+}
+.proc computed_end {
     rts
 }
 

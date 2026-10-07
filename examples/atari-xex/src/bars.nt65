@@ -104,7 +104,7 @@
     inc frames + 1
 @counted:
     jmp (old)
-    .next ?                         ; the operating system's exit, which returns from the interrupt
+    .next os::XITVBV                ; the operating system's exit, which returns from the interrupt
 }
 
 ; Returns the luminance of a band's line i, which rises and falls over PERIOD lines.

@@ -254,6 +254,21 @@ public sealed class ModuleTests
     }
 
     /// <summary>
+    /// A <c>.next</c> is not written out, so a routine only a <c>.next</c> names is not imported.
+    /// ca65 would warn about an import nothing uses.
+    /// </summary>
+    [Fact]
+    public void ARoutineOnlyANextNamesIsNotImported()
+    {
+        var outputs = Analysis.Outputs(
+            ("os.nt65", ".module os\n.export .proc exit = $e462: interrupt\n"),
+            ("main.nt65", ".module main\n.segment BSS\n.data old: .addr\n.segment CODE\n"
+                + ".export .proc vbi: interrupt {\n    jmp (old)\n    .next os::exit\n}\n"));
+
+        Assert.DoesNotContain("os__exit", outputs["main.s"]);
+    }
+
+    /// <summary>
     /// Two modules may each export the same name. The linker sees each prefixed with its own
     /// module's name.
     /// </summary>

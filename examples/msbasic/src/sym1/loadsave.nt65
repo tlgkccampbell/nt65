@@ -15,8 +15,7 @@
         beq L2739
         sta P1L
         jsr CHRGET
-        bne NULL-1
-        .next ?
+        bne RET1
 
         lda TXTTAB
         ldy TXTTAB+1

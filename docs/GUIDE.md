@@ -1061,6 +1061,11 @@ assumes the code it reaches may do anything: no register survives it, nothing is
 the state after it, and its cost is unknown. A routine that promises `keeps` cannot keep that
 promise across a `.next ?`, so where a promise matters, name the places control goes.
 
+Most targets can be named. A jump to a ROM entry point names an extern proc declared at its
+address, and a jump through a vector that the program itself, or the system at startup, fills
+with one routine names that routine. `.next ?` is for code the program cannot know, such as a
+user's machine code that a monitor runs.
+
 The same annotation covers the `bit` skip trick, where one instruction's operand hides the
 next instruction:
 
@@ -1094,7 +1099,9 @@ taken, which is common in 6502 code that knows its flags:
 ```
 
 `.next` is only for what nt65 cannot see. After an ordinary instruction or a direct `jsr`,
-where nt65 already knows where flow goes, it is an error.
+where nt65 already knows where flow goes, it is an error. So is `.next ?` after a conditional
+branch, because the branch goes either to its operand or on, and neither is unknown. Where the
+operand is an expression, such as `NULL-1`, write the label at that address instead.
 
 **`.fallthrough` says a routine runs into the next one.** A routine that ends without a
 transfer of control runs into whatever is written after it. nt65 reports that, because it is

@@ -72,8 +72,15 @@ public sealed class SemanticModel
         // linker and is left out of the external symbols below.
         // A macro this file calls is expanded into it, so what its body uses is named in this
         // file's output and must be brought in here, exactly as if the file had named it itself.
+        // A `.next` is not written out, so a name only it uses is not used by the output, and
+        // importing it would draw a warning from ca65.
+        var unwritten = tree.Root.DescendantNodes()
+            .Where(node => node is NextDirectiveSyntax or NextTargetsSyntax)
+            .Select(node => node.Span)
+            .ToList();
         Used = [.. References
-            .Where(reference => reference is { IsDeclaration: false, InUse: false, IsStep: false, InMacro: false })
+            .Where(reference => reference is { IsDeclaration: false, InUse: false, IsStep: false, InMacro: false }
+                && !unwritten.Any(span => span.Contains(reference.Span)))
             .Select(reference => reference.Symbol)
             .Concat(expanded)
             .Concat(Namesakes(References))

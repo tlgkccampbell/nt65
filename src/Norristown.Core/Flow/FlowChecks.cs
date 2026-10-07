@@ -315,8 +315,9 @@ internal sealed class FlowChecks
     /// last statement runs into whatever the segment holds next. Under a conditional branch a
     /// <c>.next</c> names the branch's own target and nothing else, which says the branch is always
     /// taken. After any other statement nt65 already knows where flow goes, and the <c>.next</c>
-    /// could only contradict it. <c>.next ?</c> may stand anywhere, and says control goes somewhere
-    /// nt65 is not told about.
+    /// could only contradict it. <c>.next ?</c> says control goes somewhere nt65 is not told about,
+    /// and may stand anywhere but under a conditional branch. A branch goes only to its operand or
+    /// to the next statement, so neither of its ways on is unknown.
     /// </summary>
     private void CheckNextIsNeeded(IReadOnlyList<ControlFlow.Unit> units)
     {
@@ -330,6 +331,16 @@ internal sealed class FlowChecks
             .ToHashSet();
         foreach (var unit in units)
         {
+            if (unit.Next is { QuestionToken: not null } unknown && IsBranch(unit))
+            {
+                diagnostics.Add(new Diagnostic(unknown.Tree.GetSpan(unknown.Span), Severity.Error,
+                    Catalogue.NextUnknownAfterBranch.Message(
+                        $"`{unit.Step.Statement.GetText().Trim()}`",
+                        BranchTarget(unit) is { } taken
+                            ? $"if the branch is always taken, write `.next {taken.DisplayName}`, and otherwise remove the `.next`"
+                            : "write the label the branch goes to as its operand")));
+                continue;
+            }
             if (unit.Next is not { QuestionToken: null } next || endsASegmentBlock.Contains(unit))
                 continue;
 
@@ -362,6 +373,14 @@ internal sealed class FlowChecks
             });
         }
     }
+
+    /// <summary>
+    /// Returns whether a statement is a short or long conditional branch, whether or not nt65 can
+    /// read its target. A relative call made with <c>per</c> and a branch is a call, not a branch.
+    /// </summary>
+    private bool IsBranch(ControlFlow.Unit unit) =>
+        unit.Step.Statement is InstructionStatementSyntax statement && flow.RelativeCallAt(unit.Step) is null
+            && Transfers.Of(statement, layout.Of(statement, unit.Step.On)?.Mode) == Transfer.Branch;
 
     /// <summary>
     /// Returns the label or routine a short or long conditional branch goes to when it is taken.

@@ -35,8 +35,8 @@
 
 .export .scope kernal {
     .data IRQ_VECTOR: .byte = $0314  ; CINV
-    .const IRQ      = $EA31         ; full KERNAL IRQ (keyboard scan, cursor blink)
-    .const IRQ_EXIT = $EA81         ; restore registers and RTI
+    .proc IRQ      = $EA31: interrupt   ; full KERNAL IRQ (keyboard scan, cursor blink)
+    .proc IRQ_EXIT = $EA81: interrupt   ; restore registers and RTI
 
     ; CHROUT is documented as using A alone, so X and Y come back; the rest use all three
     ; and promise nothing.

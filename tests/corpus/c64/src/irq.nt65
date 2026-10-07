@@ -68,7 +68,7 @@
     and #1
     bne @ours
     jmp (old_irq)               ; not a raster IRQ: let the KERNAL have it
-    .next ?
+    .next kernal::IRQ           ; where the vector pointed before `install`
 
 @ours:
     sta vic::IRQ_FLAG            ; A = 1: acknowledge
@@ -94,8 +94,6 @@
     sta frame_flag
     inc16!(frame_count)
     jmp kernal::IRQ
-    .next ?
 @exit:
     jmp kernal::IRQ_EXIT
-    .next ?
 }

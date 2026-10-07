@@ -52,6 +52,10 @@
     ; names the immediate vertical blank, 7 the deferred, and 1 to 5 the countdown timers.
     .proc SETVBV = $E45C: reads a, x, y
     .proc CIOV   = $E456: reads x   ; the central I/O routine, for the channel whose control block is at X
+
+    ; Ends the vertical blank: puts back the registers the operating system saved on entering it,
+    ; and returns from the interrupt.
+    .proc XITVBV = $E462: interrupt
 }
 
 ; The control block of an I/O channel, which a program fills in and hands to os::CIOV.

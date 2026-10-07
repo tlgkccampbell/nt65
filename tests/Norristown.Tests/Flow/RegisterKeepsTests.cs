@@ -384,19 +384,17 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
-    /// A promise cannot hold across a <c>.next ?</c>, whether it follows a jump or a branch, so
-    /// the message asks for the places control goes. After a branch, the path where the branch
-    /// is not taken is given up too.
+    /// A promise cannot hold across a <c>.next ?</c>, so the message asks for the places control
+    /// goes.
     /// </summary>
-    [Theory]
-    [InlineData(".proc p: keeps x {\n    ldx #0\n    jmp (slot)\n    .next ?\n}\n", 3)]
-    [InlineData(".proc p: keeps x {\n    beq @done\n    .next ?\n    ldx #0\n@done:\n    rts\n}\n", 2)]
-    public void APromiseDoesNotHoldAcrossANextQuestion(string text, int line)
+    [Fact]
+    public void APromiseDoesNotHoldAcrossANextQuestion()
     {
         Assert.Equal(
-            [$"main.nt65:{line}: `p` promises `keeps x`, but X is not the same as on entry here: control goes "
+            ["main.nt65:3: `p` promises `keeps x`, but X is not the same as on entry here: control goes "
                 + "somewhere nt65 cannot follow, which may change anything: name the places it goes with `.next`"],
-            Problems(text + ".export p\n.segment BSS\n.data slot: .addr\n"));
+            Problems(".proc p: keeps x {\n    ldx #0\n    jmp (slot)\n    .next ?\n}\n"
+                + ".export p\n.segment BSS\n.data slot: .addr\n"));
     }
 
     private static Registers Kept(string text, string routine) => Found(text, routine).Kept;

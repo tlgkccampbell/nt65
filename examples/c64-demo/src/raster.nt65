@@ -84,7 +84,7 @@
     lda #>top
     sta kernal::CINV + 1
     jmp (old)
-    .next ?                         ; the KERNAL's handler, which returns from the interrupt
+    .next kernal::IRQ               ; the KERNAL's handler, which returns from the interrupt
 }
 
 ; Makes the next interrupt start on a known cycle. This one comes in late by however long the

@@ -227,13 +227,20 @@ internal sealed class Requirements
             return;
         var target = Targets.Of(model, targetExpression, step.On);
 
+        // A branch always goes to its operand or on to the next statement, so its target can
+        // always be written as a label, and a `.next ?` under it is an error.
+        var branch = Transfers.Of(statement, mode) == Transfer.Branch;
+
         // A name that resolves to nothing has already been reported where it appears. A call to
         // anything but a routine is reported by the state analysis, with the call's other checks.
         if (target is null)
         {
             if (!calls && targetExpression is not NameExpressionSyntax)
             {
-                Report(statement, Catalogue.ComputedJumpUnchecked.Message(Quoted(statement)), EndPath(step));
+                if (branch)
+                    Report(statement, Catalogue.ComputedBranchUnchecked.Message(Quoted(statement)));
+                else
+                    Report(statement, Catalogue.ComputedJumpUnchecked.Message(Quoted(statement)), EndPath(step));
             }
             return;
         }
@@ -243,7 +250,10 @@ internal sealed class Requirements
             if (!calls)
             {
                 Report(statement, Catalogue.JumpTargetNotALabel.Message(
-                    Quoted(statement), symbol.DisplayName, symbol.KindPhrase), EndPath(step));
+                    Quoted(statement), symbol.DisplayName, symbol.KindPhrase,
+                    branch ? "write the label it goes to as its operand"
+                        : "add a `.next` naming the labels it reaches, or `.next ?` where they cannot be named"),
+                    branch ? null : EndPath(step));
             }
             return;
         }

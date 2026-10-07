@@ -2675,8 +2675,18 @@ public static class Catalogue
         "`.next` after {0} can name only the branch's own target, `{1}`, to state that the branch is always taken",
         "Under a conditional branch, a `.next` states that the branch is always taken, because the flags are known there, "
             + "so flow never continues past it. It must then name exactly the branch's own target; naming anything "
-            + "else would claim the branch goes somewhere its operand does not. Where control goes somewhere that "
-            + "cannot be named, use `.next ?`.");
+            + "else would claim the branch goes somewhere its operand does not.");
+
+    internal static DiagnosticDescriptor NextUnknownAfterBranch { get; } = Entry(
+        Area.ControlFlow,
+        "next-unknown-after-branch",
+        Severity.Error,
+        "`.next ?` cannot follow {0}, because it would also give up the path where the branch is not taken: {1}",
+        "A `.next` under a conditional branch replaces both of the branch's ways on, so `.next ?` there would "
+            + "say that neither is known, and the code after the branch would go unchecked. A branch always goes "
+            + "to its operand or to the next statement, so neither is unknown. Where the branch is always taken, "
+            + "say so with a `.next` naming its target. Where the operand is not a label, such as `NULL-1`, write "
+            + "the label at that address instead.");
 
     internal static DiagnosticDescriptor FallthroughMisplaced { get; } = Entry(
         Area.ControlFlow,
@@ -2761,6 +2771,15 @@ public static class Catalogue
             + "instruction, such as a jump into the middle of one, use `.next ?`. The analysis then assumes "
             + "the code it reaches may change anything.");
 
+    internal static DiagnosticDescriptor ComputedBranchUnchecked { get; } = Entry(
+        Area.ControlFlow,
+        "computed-branch-unchecked",
+        Severity.Error,
+        "{0} branches to a computed address, which nt65 cannot follow: write the label it goes to as its operand",
+        "The target is an expression rather than a label, so the analysis has no label at which to continue. A "
+            + "branch can only reach a place within its range, which is code the program holds, so the label at "
+            + "that address can be named. Where nothing there has a label, add one.");
+
     internal static DiagnosticDescriptor PushedReturnUnchecked { get; } = Entry(
         Area.ControlFlow,
         "pushed-return-unchecked",
@@ -2774,11 +2793,13 @@ public static class Catalogue
         Area.ControlFlow,
         "jump-target-not-a-label",
         Severity.Error,
-        "{0} goes to `{1}`, which is {2}, not a label, so nt65 cannot follow it: add a `.next` naming the labels "
-            + "it reaches, or `.next ?` where they cannot be named",
+        "{0} goes to `{1}`, which is {2}, not a label, so nt65 cannot follow it: {3}",
         "A jump or branch normally names a label in code. This one names something else, such as a constant, so "
-            + "the analysis cannot tell where flow goes. A `.next` after it names the labels it reaches, or `.next "
-            + "?` says it goes somewhere nt65 is not told about.");
+            + "the analysis cannot tell where flow goes. Where it names a fixed address outside the program, such "
+            + "as a ROM entry point, declare that address as an extern proc, `.proc NAME = $address`, with the "
+            + "signature it has, and jump to that. Otherwise a `.next` after a jump names the labels it reaches, "
+            + "or `.next ?` says it goes somewhere nt65 is not told about. A branch can only reach code within its "
+            + "range, so write the label it goes to as its operand.");
 
     internal static DiagnosticDescriptor JumpIntoData { get; } = Entry(
         Area.ControlFlow,

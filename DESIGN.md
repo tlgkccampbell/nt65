@@ -1595,7 +1595,8 @@ label:
   others, so a table of three-byte entries, an address less one and the bank it is in, is
   named as it is. Mixed data stands for what each of its members holds. A target
   naming data that holds no addresses is an error that asks for the address type. `.next ?` says
-  control goes somewhere it does not name, and may stand after any statement. It is a tail call
+  control goes somewhere it does not name, and may stand after any statement but a conditional
+  branch. It is a tail call
   to a routine nothing is known about, or on a call a call to one: the path ends there, no
   register is kept across it, nothing is known of the state after it, and its cost is unknown. A `.next` that names
   targets after a statement whose successors nt65 already knows — an ordinary instruction, a
@@ -1608,7 +1609,9 @@ label:
   always returns with carry set. The edge that runs on past the branch is removed and the one
   to its target stays, carrying the state after the branch, as a taken branch's edge does. What
   follows the branch is then reached only by what else names it, so text or a table there is
-  not run into, and a label there that nothing else reaches is unreachable as usual. The short
+  not run into, and a label there that nothing else reaches is unreachable as usual. `.next ?`
+  is an error there: a branch goes only to its operand or on, so neither way is unknown, and
+  `.next ?` would give up the code after the branch as well. The short
   branches (`bcc`, `bcs`, `beq`, `bne`, `bmi`, `bpl`, `bvc`, `bvs`), the Rockwell `bbr` and
   `bbs`, and the long branches `jeq` and the rest all take it. Naming anything but the branch's
   own target, or more than it, is an error (next-not-the-branch-target); where code runs into
@@ -1638,7 +1641,7 @@ The third directive is about the end of a routine rather than a statement:
 | indirect call: `jsr (t,x)` | addressing mode | `.next` listing the routines; the call returns with the merge of their exits |
 | `rts` used as a jump | a block pushes a code label and then returns | `.next` on the `rts` |
 | a routine that returns past inline data: `jsr print` then `.strz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.strz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
-| jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary |
+| jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary; for a branch, `bne NULL-1`, the label at that address written as the operand, since a branch reaches only code within its range |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the memory operand of an instruction that reads it, the argument of `.sizeof`, `.countof`, `.endof`, `.spanof`, `.addrsize`, `.mincycles`, `.maxcycles` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next |
@@ -4695,7 +4698,12 @@ Recorded so the reasoning survives. None is open.
   `keeps`, and a routine whose only way out was one was inferred to keep every register. Once the
   unchecked constructs needed an annotation everywhere, the annotation they were given most was
   the one that turned the check off. `.next ?` withholds where control goes, so the analysis
-  assumes the worst of it; the way to a better answer is to name the targets.
+  assumes the worst of it; the way to a better answer is to name the targets. For the same
+  reason `.next ?` cannot follow a conditional branch, where it would also give up the path
+  past the branch. Writing out what was meant showed that most of the `.next ?` lines in the
+  examples could name their targets after all: a ROM entry declared as a constant became an
+  extern proc, an interrupt chained through a saved vector names the handler the vector held
+  to start with, and msbasic's `bne NULL-1` names the `rts` at that address.
 - **Text is built by functions, and is text wherever a literal is.** A text constant crosses
   modules by value, and nothing in ca65 can hold one, so none reaches it. At first there was no
   arithmetic or concatenation on text, so a constant could not build text a literal could not

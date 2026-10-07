@@ -54,6 +54,7 @@
 ; back and returns from the interrupt.
 .export .scope kernal {
     .data CINV: .addr = $0314
+    .proc IRQ = $EA31: interrupt
     .proc EXIT = $EA81: interrupt
 }
 
