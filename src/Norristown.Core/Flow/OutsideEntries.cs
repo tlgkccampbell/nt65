@@ -45,10 +45,14 @@ public sealed class OutsideEntries
         $"move the pushes above `{label.DisplayName}` to the same side of it as the code that reads them; `args n` "
             + $"on `{routine.DisplayName}` declares what the caller of a second entry point pushed");
 
-    /// <summary>Returns whether control may reach <paramref name="block"/>'s label from outside its routine.</summary>
+    /// <summary>
+    /// Returns whether control may reach <paramref name="block"/>'s label from outside its routine.
+    /// Only a label inside a routine counts, because the routine's own name is where its callers
+    /// are meant to enter it.
+    /// </summary>
     public bool Reaches(BasicBlock block)
     {
-        if (block.Label is not { } label)
+        if (block.Label is not { Kind: SymbolKind.Label } label)
             return false;
         if (label.IsExported)
             return true;

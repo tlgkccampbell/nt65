@@ -1566,10 +1566,12 @@ data in the instruction stream, self-modifying code) are all allowed. Each has a
 syntactic fingerprint, so nt65 finds it in one pass and requires an annotation that
 tells the analysis what it cannot see. The annotations are claims: nt65 checks that the
 claims and the code are consistent with each other, which is the same contract as the
-proc's own entry declaration. On the 6502 and its CMOS variants nothing consumes processor
-state, so the annotations are accepted and their names checked, but none is required; the
-unreachable-label warning applies on every CPU, and so does falling off the end of a proc,
-which is a warning there and an error on the 65816.
+proc's own entry declaration. The annotations are required on every CPU, because what each
+routine reads and keeps (§7.5) depends on its paths on every CPU, and falling off the end of a
+proc is an error everywhere. The one exception is a jump into another proc's interior and an
+exported inner label. Only the 65816 has processor state that the code after the label depends
+on and that no jump can supply, so only there does the label need a declaration. On the other
+CPUs the label is an entry where nothing about the registers is known.
 
 Two annotations carry most of it. Each applies to the statement immediately above it (for
 a macro call, the last statement of its expansion, §11.3) and comes before any following
@@ -1635,13 +1637,13 @@ The third directive is about the end of a routine rather than a statement:
 | `rts` used as a jump | a block pushes a code label and then returns | `.next` on the `rts` |
 | a routine that returns past inline data: `jsr print` then `.strz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.strz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary |
-| label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the argument of `.sizeof`, `.endof`, `.spanof` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
+| label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the memory operand of an instruction that reads it, the argument of `.sizeof`, `.countof`, `.endof`, `.spanof`, `.addrsize`, `.mincycles`, `.maxcycles` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next |
 | a conditional branch that is always taken: `bne L ; always`, `bcs` over inline text | the flags are known where the branch stands, which nt65 does not work out | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
-| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7) |
-| falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; a warning off the 65816, whose fix writes the `.fallthrough` where the routine written next is known. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
+| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7). On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
+| falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; the fix writes the `.fallthrough` where the routine written next is known. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`. A segment block is not a routine, so this is a claim about where flow goes and nothing about what is written next, and `.fallthrough` does not stand there; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
@@ -4572,8 +4574,9 @@ Recorded so the reasoning survives. None is open.
   in text order, and everything that reads layout reads that. The flow analysis still treats a
   nested segment block as a detour (§5.2), since what fall-through reaches is a question about
   the routine's text and not about where the block's bytes land.
-- **Processor-state analysis on the 65816 only.** On the other CPUs nothing consumes the
-  state, so its annotations would be ceremony.
+- **Processor-state analysis on the 65816 only.** On the other CPUs there are no widths,
+  mode, direct page or data bank to track. The annotations for unchecked constructs are still
+  required there (§7.4), because what each routine reads and keeps depends on its paths.
 - **Procs do not nest.** A nested proc's bytes would sit inline in its parent's; a
   separate proc in a `.scope` gives the same privacy and namespace without that.
 - **Cycle counts are two built-ins over a span, not one over a routine.** They were refused
@@ -4677,9 +4680,15 @@ Recorded so the reasoning survives. None is open.
   are described, rather than the whole instruction being left uncounted: how long `sha` takes
   is not in doubt, and what it stores is, so the count stands and the hover says which. Only
   `jam` has no count, because it stops the processor.
-- **Running off the end of a proc warns off the 65816.** Nothing consumes the state there,
-  but a proc that runs into the next one is still usually a missing `rts`, and one that means
-  to says so with `.fallthrough`.
+- **Running off the end of a proc is an error on every CPU.** It was a warning off the 65816
+  at first, when nothing there consumed the state. What a routine reads and keeps now depends
+  on its paths on every CPU, so a proc that means to run into the next says so with
+  `.fallthrough`.
+- **The unchecked constructs need their annotations on every CPU.** At first they were
+  required only on the 65816. Once reads and keeps ran everywhere, an unannotated indirect jump
+  let a routine claim to keep a register on a path nobody checked. A jump into another proc's
+  interior is the exception: off the 65816 the label is treated as an entry with unknown
+  registers, because there is no processor state there to declare.
 - **Text is built by functions, and is text wherever a literal is.** A text constant crosses
   modules by value, and nothing in ca65 can hold one, so none reaches it. At first there was no
   arithmetic or concatenation on text, so a constant could not build text a literal could not

@@ -75,7 +75,7 @@ public sealed class StateAnalysis : IProcessorStates
             analysis.Analyze(region);
         analysis.checks.CheckOutsideRoutines();
         analysis.Diagnostics = Norristown.Diagnostics.Ordered(
-            analysis.checks.Found.DistinctBy(d => (d.Span, d.Id, d.Message)));
+            analysis.checks.Found.Concat(analysis.UndeclaredExports()).DistinctBy(d => (d.Span, d.Id, d.Message)));
         return analysis;
     }
 
@@ -331,6 +331,27 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
+    /// Reports each exported label inside a routine that no <c>.state</c> declares. Another module
+    /// may jump to such a label in a state this module cannot see, so the label has to declare it.
+    /// </summary>
+    private IEnumerable<Diagnostic> UndeclaredExports()
+    {
+        foreach (var block in flow.Regions.SelectMany(region => region.Blocks))
+        {
+            if (block is not { Label: { Kind: SymbolKind.Label, IsExported: true, ExportSpan: { } at, Routine: { } owner } label }
+                || block.IsDeclared)
+            {
+                continue;
+            }
+            yield return new Diagnostic(model.Tree.GetSpan(at),
+                Catalogue.ExportedEntryNotDeclared.Message(label.DisplayName, owner.DisplayName))
+            {
+                Fix = new DiagnosticFix(FixKind.State, At: label.DeclarationSpan),
+            };
+        }
+    }
+
+    /// <summary>
     /// Runs one region to a fixed point, then once more to report.
     /// </summary>
     private void Analyze(FlowRegion region)
@@ -356,9 +377,12 @@ public sealed class StateAnalysis : IProcessorStates
         // stack a call to the routine leaves, since a jump in arrives as a call would. If some
         // path already reaches it, the directive is checked against that path. Where the label
         // can also be entered from outside the routine, only the parts the declaration gives
-        // are kept, because what the paths inside leave is no promise to code that jumps in.
-        solver.EnterDeclared(
+        // are kept, because what the paths inside leave is no promise to code that jumps in. A
+        // label entered from outside with no `.state` is reported where it is entered instead,
+        // because the widths there cannot be inferred from the jump.
+        solver.EnterEntries(
             outside,
+            declaredOnly: true,
             new FlowState(Outside(signature), EntryStack(signature)),
             (block, state) => Entered(block, state, signature, region.Routine));
 
@@ -637,6 +661,11 @@ public sealed class StateAnalysis : IProcessorStates
         }
         else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && Interior(target, routine) is { } owner)
         {
+            if (target.StateDeclaration is null)
+            {
+                report?.Report(step, Catalogue.EntryNotDeclared.Message(target.DisplayName, owner.DisplayName),
+                    new DiagnosticFix(FixKind.State, At: target.DeclarationSpan));
+            }
             if (DeclaredElsewhere(target) is { } declared)
                 report?.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
             report?.CheckJumpInto(step, SyntaxFacts.TextOf(mnemonic), target, owner, state.Processor, routine);

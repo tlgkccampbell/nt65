@@ -28,9 +28,7 @@ public sealed record Diagnostic(
 
     /// <summary>
     /// Initializes a diagnostic that reports <paramref name="message"/> at a
-    /// <paramref name="severity"/> chosen by the reporting site rather than the catalogue. A
-    /// construct that is an error on the 65816 and only a warning on earlier processors is one
-    /// diagnostic, reported at a different severity on each.
+    /// <paramref name="severity"/> chosen by the reporting site rather than the catalogue.
     /// </summary>
     public Diagnostic(Span span, Severity severity, DiagnosticMessage message)
         : this(span, message.Descriptor.Id, severity, message.Text, []) { }

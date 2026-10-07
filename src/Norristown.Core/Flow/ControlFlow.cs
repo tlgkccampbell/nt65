@@ -12,8 +12,8 @@ namespace Norristown.Flow;
 /// <para>
 /// Every assembly-language trick is allowed, and each can be recognised from its syntax. Where
 /// the operand does not say where flow goes, as with an indirect jump or a computed target, the
-/// edge comes from a <c>.next</c> instead. Where there is no <c>.next</c>, the path simply ends. On the
-/// 6502 and its CMOS variants nothing consumes processor state, so no annotation is required.
+/// edge comes from a <c>.next</c> instead. Where there is no <c>.next</c>, the path simply ends,
+/// and <see cref="Requirements"/> reports the missing annotation on every CPU.
 /// </para>
 /// </summary>
 public sealed class ControlFlow
@@ -139,13 +139,10 @@ public sealed class ControlFlow
         }
         flow.RunningOn = checks.RunningOn;
 
-        // On the 65816 the processor-state analysis depends on flow it cannot see for itself,
-        // so each construct that hides some flow has to declare what it hides.
+        // The analysis of what each routine reads and keeps depends on flow it cannot see for
+        // itself, so each construct that hides some flow has to declare what it hides.
         var diagnostics = new List<Diagnostic>(checks.Found);
-        if (layout.Cpu == Cpu.Wdc65816)
-            Requirements.Check(model, layout, flow, diagnostics);
-        else
-            Requirements.CheckEnds(model, layout, flow, diagnostics);
+        Requirements.Check(model, layout, flow, diagnostics);
 
         flow.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
         return flow;
@@ -889,10 +886,17 @@ public sealed class ControlFlow
     /// an <c>.addr</c> or <c>.faraddr</c> declaration, the values of the address members of
     /// records, and those of each member of mixed data in turn. Values in a body are read from the
     /// expansions layout made of them, since each iteration of a repetition there may emit a value
-    /// differently. Any other symbol yields no values.
+    /// differently. A label on an <c>.addr</c> or <c>.faraddr</c> line is a table too, of the
+    /// values on that line. Any other symbol yields no values.
     /// </summary>
     private IEnumerable<(SyntaxNode Item, Expansion? On)> ItemsOfTable(Symbol target)
     {
+        if (target.Kind == SymbolKind.Label)
+        {
+            foreach (var item in ItemsAfterLabel(target))
+                yield return item;
+            yield break;
+        }
         if (!IsAddressData(target))
             yield break;
         if (target.Data is not DataDirectiveSyntax element)
@@ -936,6 +940,28 @@ public sealed class ControlFlow
                         yield return (item, step.On);
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Returns the addresses on the <c>.addr</c> or <c>.faraddr</c> line that directly follows a
+    /// label, each paired with the <see cref="Expansion"/> it is in. A label on any other line
+    /// yields no values.
+    /// </summary>
+    private IEnumerable<(SyntaxNode Item, Expansion? On)> ItemsAfterLabel(Symbol label)
+    {
+        var steps = layout.Steps;
+        for (var i = 0; i < steps.Count - 1; i++)
+        {
+            if (steps[i].Label != label)
+                continue;
+            var next = steps[i + 1];
+            if (next.Statement is DataDirectiveSyntax { IsRecord: false } element && IsAddressElement(element))
+            {
+                foreach (var value in DataLengths.ElementsOf(element))
+                    yield return (value, next.On);
+            }
+            yield break;
         }
     }
 

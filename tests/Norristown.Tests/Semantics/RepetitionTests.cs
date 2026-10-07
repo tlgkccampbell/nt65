@@ -79,6 +79,7 @@ public sealed class RepetitionTests
             .each pointers, p {
                 lda p
             }
+                rts
             }
             """);
 

@@ -1019,9 +1019,12 @@ the 65816 what state the processor is in when it gets there. Most code needs not
 for this. The exceptions are the tricks assembly programmers use that no tool can read from
 the text alone, and each of them has a short annotation that says what the code does.
 
-On the 6502 and its CMOS variants the annotations are optional, and a trick left unannotated
-is at most a warning. On the 65816 they are required, because the processor state after a
-trick depends on them.
+The annotations are required on every CPU, and a trick left unannotated is an error. What
+each routine reads and keeps depends on where its paths go, so a path nt65 cannot see would
+make those answers wrong. The one difference is a label that another routine jumps into. On
+the 65816 it needs a `.state` saying what the processor state is there. On the 6502 and its
+CMOS variants nt65 treats such a label as an entry where nothing about the registers is
+known, and it needs nothing.
 
 **`.next` says where an instruction goes** when nt65 cannot see it: an indirect jump, an `rts`
 used as a jump, a jump to a computed address, or data that code runs into. It applies to the

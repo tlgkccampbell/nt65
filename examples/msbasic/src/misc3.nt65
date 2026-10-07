@@ -89,5 +89,6 @@
     }
     .export .proc LF47D {
         jmp (JMPADRS+1)
+        .next ?
     }
 }

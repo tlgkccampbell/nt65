@@ -72,8 +72,8 @@ internal sealed class SourceWalk
 
     /// <summary>
     /// Returns what reaches each block of <paramref name="region"/> from the routine's own entry, or
-    /// null for a block nothing reaches. A label that a <c>.state</c> declares is treated as the
-    /// <see cref="RegisterWalk"/> treats it. Where no path from the entry reaches it, everything is
+    /// null for a block nothing reaches. A label that a <c>.state</c> declares, or that can be
+    /// entered from outside the routine, is treated as the <see cref="RegisterWalk"/> treats it. Where no path from the entry reaches it, everything is
     /// unknown there, with the label as the blocker.
     /// </summary>
     public SourceState?[] Solve(FlowRegion region)
@@ -86,7 +86,7 @@ internal sealed class SourceWalk
         solver.Enter(0, SourceState.Entered);
         foreach (var block in blocks)
         {
-            if (!block.IsDeclared)
+            if (!block.IsDeclared && !outside.Reaches(block))
                 continue;
             var here = solver.Reached[block.Index];
             SourceState state;

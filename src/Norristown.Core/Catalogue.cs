@@ -2621,7 +2621,7 @@ public static class Catalogue
     internal static DiagnosticDescriptor RoutineRunsOffTheEnd { get; } = Entry(
         Area.ControlFlow,
         "routine-runs-off-the-end",
-        Severity.Warning,
+        Severity.Error,
         "`{0}` runs off {1} into whatever {2}: {3}, or use `.next ?` to end the path",
         "The routine's last instruction does not return, jump or branch away, so execution continues into "
             + "whatever the linker puts after it. Usually an `rts`, `rtl` or `jmp` is missing. Where running on "
@@ -2794,9 +2794,11 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is inside routine `{1}`: to jump into another routine, declare the label an entry point with a "
             + "`.state` after it",
-        "A jump into the middle of another routine arrives where that routine's own analysis never sees it. A "
-            + "`.state` directly after the label declares it an entry point and what the processor state is there, "
-            + "and both the jump and the routine are then checked against it.");
+        "A jump into the middle of another routine arrives with a processor state that routine's own paths do not "
+            + "give, and the widths, mode and registers there cannot be inferred from the jump. A `.state` directly "
+            + "after the label declares it an entry point and what the processor state is there, and both the jump "
+            + "and the routine are then checked against it. Only 65816 code needs this, because only there does the "
+            + "code after the label depend on the processor state.");
 
     internal static DiagnosticDescriptor ExportedEntryNotDeclared { get; } = Entry(
         Area.ControlFlow,
@@ -2804,9 +2806,10 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is inside routine `{1}`, and exporting it lets other modules jump into it: declare it an entry "
             + "point with a `.state` after the label",
-        "An exported label inside a routine lets other modules jump into the middle of it, and this module's "
-            + "analysis never sees those jumps arrive. A `.state` after the label declares it an entry point and "
-            + "what the processor state is there, so the routine is checked from it.");
+        "An exported label inside a routine lets other modules jump into the middle of it, with a processor state "
+            + "this module cannot see. A `.state` after the label declares it an entry point and what the processor "
+            + "state is there, so the routine is checked from it. Only 65816 code needs this, because only there does "
+            + "the code after the label depend on the processor state.");
 
     internal static DiagnosticDescriptor CodeLabelAsData { get; } = Entry(
         Area.ControlFlow,

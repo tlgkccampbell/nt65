@@ -16,6 +16,7 @@
     lda (ptr)               ; 65C02: through a direct-page pointer
     sta (ptr)
     jmp (table,x)           ; 65C02: through a table of pointers
+    .next ?
     bit #$80                ; 65C02: an immediate for bit
     bit z:flags,x
     inc a                   ; 65C02: the accumulator forms

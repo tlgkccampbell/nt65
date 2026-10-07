@@ -52,6 +52,7 @@
         sty GORESTART+2
         jmp L1873
         L27A6:
+        .state ?
         ldx #$FF
         txs
         lda #<RESTART

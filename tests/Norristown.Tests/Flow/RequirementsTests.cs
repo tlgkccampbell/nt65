@@ -12,24 +12,24 @@ namespace Norristown.Tests.Flow;
 public sealed class RequirementsTests
 {
     /// <summary>
-    /// On the 65C02 no instruction depends on the processor state, so none of the annotations
-    /// is required.
+    /// What a routine reads and keeps depends on the paths through it on every CPU, so the 65C02
+    /// requires the same annotations as the 65816.
     /// </summary>
     [Fact]
-    public void NothingIsRequiredOnThe65C02()
+    public void TheSameAnnotationsAreRequiredOnThe65C02()
     {
         const string Text = """
             .module main
             .cpu 65c02
             .segment BSS
             .data vec: .byte[2]
-            .proc p: a8, i8 {
+            .proc p {
                 jmp (vec)
             }
-            .proc q: a8, i8 {
+            .proc q {
                 jmp q+3
             }
-            .proc r: a8, i8 {
+            .proc r {
             @op:
                 lda $0400
                 sta @op+1
@@ -38,30 +38,34 @@ public sealed class RequirementsTests
             }
             """;
 
-        Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Problems());
+        var problems = Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics;
+
+        Assert.Equal(
+            ["indirect-jump-unchecked", "computed-jump-unchecked", "self-modifying-unchecked"],
+            problems.Select(problem => problem.Id));
+        Assert.All(problems, problem => Assert.Equal(Severity.Error, problem.Severity));
     }
 
     /// <summary>
-    /// On CPUs other than the 65816 a routine that runs off its end is likely a mistake rather
-    /// than something the analysis cannot follow, so it is a warning, and <c>.fallthrough</c>
-    /// says it was meant. The suggested fix is a <c>.fallthrough</c> naming the next routine in
-    /// the source.
+    /// A routine that runs off its end is an error on every CPU, and <c>.fallthrough</c> says it
+    /// was meant. The suggested fix is a <c>.fallthrough</c> naming the next routine in the
+    /// source.
     /// </summary>
     [Fact]
-    public void RunningOffTheEndWarnsOnThe6502()
+    public void RunningOffTheEndIsAnErrorOnThe6502()
     {
         const string Text = """
             .module main
             .cpu 6502
             .segment CODE
-            .proc first: a8, i8 {
+            .proc first {
                 lda #1
             }
-            .proc second: a8, i8 {
+            .proc second {
                 lda #2
                 .fallthrough third
             }
-            .proc third: a8, i8 {
+            .proc third {
                 tax
                 .next ?
             }
@@ -70,7 +74,7 @@ public sealed class RequirementsTests
         var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", Text));
 
         var only = Assert.Single(analysis.Diagnostics);
-        Assert.Equal(Severity.Warning, only.Severity);
+        Assert.Equal(Severity.Error, only.Severity);
         Assert.Equal("`first` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine "
             + "it runs into, or use `.next ?` to end the path", only.Message);
         Assert.Equal(new DiagnosticFix(FixKind.Fallthrough, "second", only.Fix?.At), only.Fix);
@@ -340,6 +344,90 @@ public sealed class RequirementsTests
             ["main.nt65:12: `jmp inner` leaves `p`: `p` declares it returns with `i8`, but X and Y are 16-bit "
                 + "when `owner` returns"],
             Program(Text).Problems());
+    }
+
+    /// <summary>
+    /// Off the 65816 there is no processor state for a label to declare, so a jump into another
+    /// routine's interior, and an exported inner label, need no <c>.state</c>.
+    /// </summary>
+    [Fact]
+    public void AJumpIntoAnotherRoutineNeedsNoDeclarationOnThe6502()
+    {
+        const string Text = """
+            .module main
+            .cpu 6502
+            .export owner::inside
+            .segment CODE
+            .proc owner {
+                rts
+            inner:
+                rts
+            inside:
+                rts
+            }
+            .proc p {
+                jmp owner::inner
+            }
+            """;
+
+        Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Problems());
+    }
+
+    /// <summary>
+    /// A label another routine jumps into is an entry where nothing about the registers is known,
+    /// even with no <c>.state</c>. Code that jumps in has pushed nothing, so a save above the label
+    /// cannot be the one a pull below it takes back.
+    /// </summary>
+    [Fact]
+    public void ASaveAcrossALabelAnotherRoutineEntersIsNotKept()
+    {
+        const string Text = """
+            .module main
+            .cpu 6502
+            .segment CODE
+            .proc owner: keeps a {
+                pha
+            halfway:
+                pla
+                rts
+            }
+            .proc p {
+                jmp owner::halfway
+            }
+            """;
+
+        var problems = Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics;
+
+        Assert.Equal(["keeps-broken"], problems.Select(problem => problem.Id));
+    }
+
+    /// <summary>
+    /// Reading the bytes at a code label, or measuring the span it starts, gives nothing a way to
+    /// jump there, so neither needs an annotation. Handing out its address does.
+    /// </summary>
+    [Fact]
+    public void OnlyHandingOutACodeLabelsAddressNeedsAnAnnotation()
+    {
+        const string Text = """
+            .module main
+            .cpu 6502
+            .segment CODE
+            .proc p {
+            top:
+                lda top
+                cmp top+1,x
+                lda #<top
+            bottom:
+                rts
+            }
+            .segment RODATA
+            .data cost: .byte .maxcycles(p::top, p::bottom)
+            """;
+
+        var problems = Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics;
+
+        Assert.Equal(["code-label-as-data"], problems.Select(problem => problem.Id));
+        Assert.Equal(8, problems[0].Span.Line);
     }
 
     private static ProgramAnalysis Program(string text) => FlowFragment.Analyze("65816", text);

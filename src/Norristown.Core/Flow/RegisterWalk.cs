@@ -101,15 +101,15 @@ internal sealed class RegisterWalk
         var solver = Solver(blocks, of, block => ControlFlow.Onward(blocks, block));
         solver.Enter(start, RegisterState.Entered);
 
-        // A label a `.state` declares may be jumped into from another routine, so the
-        // registers there hold nothing this routine put in them. The stack there is what a
+        // A label a `.state` declares, or one that another routine names, may be jumped into
+        // from another routine, so the registers there hold nothing this routine put in them. The stack there is what a
         // call to the routine leaves, which is empty. Code that jumps in has made none of
         // this routine's saves, so a save that the path above the label leaves on the stack
         // cannot be shown to be the one a pull below the label takes back. Entered at a label,
         // the routine's other entry points are not part of the answer unless the path from
         // that label reaches them.
-        solver.EnterDeclared(
-            outside, start == 0 && fromOutside ? RegisterState.Outside : null,
+        solver.EnterEntries(
+            outside, declaredOnly: false, start == 0 && fromOutside ? RegisterState.Outside : null,
             (block, state) => Entered(state, block, region.Routine));
         return solver.Reached;
     }

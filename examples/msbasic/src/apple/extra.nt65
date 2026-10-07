@@ -105,9 +105,11 @@
         lda FAC+3
         sta FAC+5
         jmp (FAC+4)
+        .next ?
     }
     .proc L29DA {
         jmp (GOAYINT)
+        .next ?
         .byte $00, $00, $00
         L29E0:
         pla
@@ -126,6 +128,7 @@
         lda $12
         beq L2A0E
         jmp (GOGIVEAYF)
+        .next ?
         L2A0E:
         jsr LF689
         .byte $15, $BC, $08, $10, $52, $45, $75, $10
@@ -134,6 +137,7 @@
         .byte $08, $10, $89, $10, $75, $15, $1C, $08
         .byte $10, $1F, $10, $75, $00
         jmp (GOGIVEAYF)
+        .next ?
     }
     ; ----------------------------------------------------------------------------
     .res 6

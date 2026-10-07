@@ -1,8 +1,8 @@
 ; Assembly's tricks — computed jumps, data in the instruction stream, self-modifying code
 ; — are all allowed. Each has a syntactic fingerprint, so nt65 finds it in one pass and
-; takes an annotation that tells the analysis what it cannot see for itself. On the 6502
-; and the 65C02 nothing consumes processor state, so the annotations are accepted and
-; their names checked, and none is required.
+; takes an annotation that tells the analysis what it cannot see for itself. The
+; annotations are required on every CPU, because what each routine reads and keeps
+; depends on where its paths go.
 .module main
 
 .cpu 65c02

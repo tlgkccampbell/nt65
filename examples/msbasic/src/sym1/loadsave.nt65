@@ -16,6 +16,7 @@
         sta P1L
         jsr CHRGET
         bne NULL-1
+        .next ?
 
         lda TXTTAB
         ldy TXTTAB+1

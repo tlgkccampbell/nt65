@@ -86,11 +86,13 @@
     jsr test_regs
     lda #0
     jmp SIM65_EXIT
+    .next ?
 }
 
 .proc fail {
     lda check
     jmp SIM65_EXIT
+    .next ?
 }
 
 .proc test_wide {

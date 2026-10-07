@@ -137,7 +137,7 @@ public sealed class ModuleTests
     {
         var outputs = Analysis.Outputs(
             ("gfx.nt65", Gfx),
-            ("main.nt65", ".module main\n.use gfx::*\n.segment CODE\n.export .proc main {\n    lda ptr\n    lda #<SCREEN\n    jsr clear\n}\n"));
+            ("main.nt65", ".module main\n.use gfx::*\n.segment CODE\n.export .proc main {\n    lda ptr\n    lda #<SCREEN\n    jsr clear\n    rts\n}\n"));
 
         var main = outputs["main.s"];
         Assert.Contains(".importzp gfx__ptr\n", main);
@@ -173,7 +173,7 @@ public sealed class ModuleTests
         };
         var outputs = Analysis.Outputs(project,
             ("cfg.nt65", ".module cfg\n.export .const DEBUG ?= 0\n"),
-            ("one.nt65", ".module one\n.use cfg::DEBUG\n.segment CODE\n.proc first {\n    lda #DEBUG\n}\n"),
+            ("one.nt65", ".module one\n.use cfg::DEBUG\n.segment CODE\n.proc first {\n    lda #DEBUG\n    rts\n}\n"),
             ("two.nt65", ".module two\n.const SIZE = cfg::DEBUG * 8\n"));
 
         Assert.Contains("lda #$02", outputs["one.s"]);
@@ -188,7 +188,7 @@ public sealed class ModuleTests
     public void ACheckedImportIsUsedByValueAndAsserted()
     {
         var main = Analysis.Outputs(
-            ("main.nt65", ".module main\n.import VIC_BORDER = $d020\n.segment CODE\n.export .proc main {\n    sta VIC_BORDER\n}\n"))["main.s"];
+            ("main.nt65", ".module main\n.import VIC_BORDER = $d020\n.segment CODE\n.export .proc main {\n    sta VIC_BORDER\n    rts\n}\n"))["main.s"];
 
         Assert.Contains(".import VIC_BORDER: abs\n", main);
         Assert.Contains(".assert VIC_BORDER = $d020, lderror,", main);

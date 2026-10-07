@@ -498,6 +498,7 @@
         php
         jsr LINGET
         LE444:
+        .state ?
         jsr LF457
         ldx #$FF
         plp

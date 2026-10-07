@@ -464,6 +464,7 @@
             sta GORESTART+1
             sty GORESTART+2
             jmp (GORESTART+1)
+            .next RESTART
         }
     }
 }

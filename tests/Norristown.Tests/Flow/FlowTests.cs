@@ -218,7 +218,7 @@ public sealed class FlowTests
     [InlineData(".proc p {\n    rts\nhere:\n    rts\n}\n\n.data table: .addr p::here\n.export table\n")]
     public void ALabelSomethingNamesIsNotReported(string text)
     {
-        Assert.Empty(Problems(text));
+        Assert.DoesNotContain(Problems(text), problem => problem.Contains("is never reached", StringComparison.Ordinal));
     }
 
     /// <summary>
