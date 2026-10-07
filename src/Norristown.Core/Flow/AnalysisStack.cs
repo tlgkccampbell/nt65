@@ -12,6 +12,12 @@ namespace Norristown.Flow;
 /// saved, so a <c>php</c> … <c>plp</c> pair restores them across calls and labels without
 /// either needing an annotation.
 /// <para>
+/// Apart from what is on it, the stack keeps its <see cref="Height"/> above the caller's stack
+/// as it was before the call, which is how much a return there leaves the caller. A pull of more
+/// than is known still lowers the height, so a routine that pulls its own return address is
+/// still measured.
+/// </para>
+/// <para>
 /// Two stacks are equal when they hold the same bytes over the same kind of base. A merge
 /// compares stacks this way.
 /// </para>
@@ -20,20 +26,28 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
 {
     private readonly ImmutableArray<StackEntry> entries;
 
-    private AnalysisStack(ImmutableArray<StackEntry> entries, bool isAnchored)
+    // How far the lowest entry sits above the caller's stack as it was before the call, or null
+    // where that is not known.
+    private readonly int? offset;
+
+    private AnalysisStack(ImmutableArray<StackEntry> entries, bool isAnchored, int? offset)
     {
         this.entries = entries;
         IsAnchored = isAnchored;
+        this.offset = offset;
     }
 
-    /// <summary>Gets the stack of a routine when it is entered, which holds nothing.</summary>
-    public static AnalysisStack Empty { get; } = new([], true);
+    /// <summary>
+    /// Gets the stack of a routine when it is entered, which holds nothing, measured from its own
+    /// entry rather than from a caller's stack.
+    /// </summary>
+    public static AnalysisStack Empty { get; } = new([], true, 0);
 
     /// <summary>
     /// Gets a stack about which nothing is known, but on which pushes can be tracked. A
     /// <c>txs</c> leaves the stack in this state.
     /// </summary>
-    public static AnalysisStack Unanchored { get; } = new([], false);
+    public static AnalysisStack Unanchored { get; } = new([], false, null);
 
     /// <summary>
     /// Gets a value indicating whether the base is the stack pointer at routine entry. The stack
@@ -43,6 +57,13 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
 
     /// <summary>Gets how many bytes are on the stack.</summary>
     public int Depth => entries.Length;
+
+    /// <summary>
+    /// Gets how many bytes the stack holds above the caller's stack as it was before the call,
+    /// which may be negative, or null where that is not known. A routine entered by a call starts
+    /// at the size of its return address, and a return that leaves nothing behind ends at it.
+    /// </summary>
+    public int? Height => offset + entries.Length;
 
     /// <summary>Gets the byte on top, or null when there is none.</summary>
     public StackEntry? Top => entries.IsEmpty ? null : entries[^1];
@@ -55,9 +76,20 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     public IReadOnlyList<StackEntry> Entries => entries;
 
     /// <summary>
+    /// Returns the stack of a routine entered by a call, which holds the caller's
+    /// <paramref name="arguments"/> bytes and the <paramref name="returnSize"/> bytes of the return
+    /// address. The arguments are the caller's, so they sit below the caller's stack as the
+    /// <see cref="Height"/> counts it.
+    /// </summary>
+    public static AnalysisStack Entered(int returnSize, int arguments) => arguments > 0
+        ? new AnalysisStack([.. Enumerable.Repeat(StackEntry.Opaque, arguments + returnSize)], true, -arguments)
+        : new AnalysisStack([], true, returnSize);
+
+    /// <summary>
     /// Returns what two paths arriving at one place agree the stack holds, or null when they do
     /// not agree on its shape. A byte whose value differs between them becomes a byte nothing is
-    /// known about, which leaves the depth, the saved status registers and the frames known.
+    /// known about, which leaves the depth, the saved status registers and the frames known. Two
+    /// paths that agree on the shape but not on the height leave the height unknown.
     /// </summary>
     public static AnalysisStack? Merge(AnalysisStack? a, AnalysisStack? b)
     {
@@ -65,6 +97,7 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
             return null;
         if (a.Equals(b))
             return a;
+        var offset = a.offset == b.offset ? a.offset : null;
         var builder = a.entries.ToBuilder();
         for (var i = 0; i < builder.Count; i++)
         {
@@ -75,7 +108,7 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
                 return null;
             builder[i] = StackEntry.Opaque with { Frame = x.Frame };
         }
-        return new AnalysisStack(builder.ToImmutable(), a.IsAnchored);
+        return new AnalysisStack(builder.ToImmutable(), a.IsAnchored, offset);
     }
 
     /// <summary>
@@ -91,7 +124,7 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
         var builder = entries.ToBuilder();
         for (var i = 0; i < count; i++)
             builder.Add(entry);
-        return new AnalysisStack(builder.ToImmutable(), IsAnchored);
+        return new AnalysisStack(builder.ToImmutable(), IsAnchored, offset);
     }
 
     /// <summary>
@@ -106,7 +139,7 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
         var builder = entries.ToBuilder();
         for (var i = size - 1; i >= 0; i--)
             builder.Add(new StackEntry(false, Width.Unknown, Width.Unknown, Held: held, Size: size, Byte: i));
-        return new AnalysisStack(builder.ToImmutable(), IsAnchored);
+        return new AnalysisStack(builder.ToImmutable(), IsAnchored, offset);
     }
 
     /// <summary>
@@ -133,7 +166,8 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     /// Returns this stack with its top <paramref name="size"/> bytes named as
     /// <paramref name="frame"/>, or null when fewer than that have been pushed since the routine
     /// was entered. Over an unknown base the frame reaches into bytes nothing is known about. A
-    /// frame named again moves to where it is named now.
+    /// frame named again moves to where it is named now. Naming bytes moves nothing, so the
+    /// <see cref="Height"/> stays as it was.
     /// </summary>
     public AnalysisStack? Framed(Symbol frame, int size)
     {
@@ -148,7 +182,7 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
         }
         var bottom = builder.Count - size;
         builder[bottom] = builder[bottom] with { Frame = frame };
-        return new AnalysisStack(builder.ToImmutable(), IsAnchored);
+        return new AnalysisStack(builder.ToImmutable(), IsAnchored, offset - Math.Max(0, size - entries.Length));
     }
 
     /// <summary>
@@ -168,14 +202,16 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     /// <summary>
     /// Returns this stack with <paramref name="count"/> bytes pulled. A pull of more than is known
     /// takes what is beneath, which belongs to the caller or is unknown, and leaves a stack about
-    /// which nothing is known.
+    /// which nothing is known but its <see cref="Height"/>.
     /// </summary>
-    public AnalysisStack Pull(int count) =>
-        count > entries.Length ? Unanchored : new AnalysisStack(entries[..^count], IsAnchored);
+    public AnalysisStack Pull(int count) => count > entries.Length
+        ? new AnalysisStack([], false, Height - count)
+        : new AnalysisStack(entries[..^count], IsAnchored, offset);
 
     /// <inheritdoc/>
     public bool Equals(AnalysisStack? other) =>
-        other is not null && IsAnchored == other.IsAnchored && entries.AsSpan().SequenceEqual(other.entries.AsSpan());
+        other is not null && IsAnchored == other.IsAnchored && offset == other.offset
+        && entries.AsSpan().SequenceEqual(other.entries.AsSpan());
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as AnalysisStack);
@@ -185,6 +221,7 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     {
         var hash = new HashCode();
         hash.Add(IsAnchored);
+        hash.Add(offset);
         foreach (var entry in entries)
             hash.Add(entry);
         return hash.ToHashCode();

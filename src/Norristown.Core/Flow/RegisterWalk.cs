@@ -99,7 +99,8 @@ internal sealed class RegisterWalk
     {
         var blocks = region.Blocks;
         var solver = Solver(blocks, of, block => ControlFlow.Onward(blocks, block));
-        solver.Enter(start, RegisterState.Entered);
+        var called = SavedStack.Entered((region.Routine.Signature ?? Signature.Default).ReturnSize);
+        solver.Enter(start, RegisterState.Entered with { Stack = called });
 
         // A label a `.state` declares, or one that another routine names, may be jumped into
         // from another routine, so the registers there hold nothing this routine put in them. The stack there is what a
@@ -109,8 +110,8 @@ internal sealed class RegisterWalk
         // the routine's other entry points are not part of the answer unless the path from
         // that label reaches them.
         solver.EnterEntries(
-            outside, declaredOnly: false, start == 0 && fromOutside ? RegisterState.Outside : null,
-            (block, state) => Entered(state, block, region.Routine));
+            outside, declaredOnly: false, start == 0 && fromOutside ? RegisterState.Outside with { Stack = called } : null,
+            (block, state) => Entered(state, called, block, region.Routine));
         return solver.Reached;
     }
 
@@ -361,14 +362,14 @@ internal sealed class RegisterWalk
 
     /// <summary>
     /// Returns the state at a declared label that can also be entered from outside the routine.
-    /// The registers are as the path from above leaves them, and its stack is merged with the
-    /// empty stack a call to the routine leaves. Where the path above has pushed something, the
-    /// two stacks disagree and the stack becomes unknown. A pull below the label then restores
-    /// nothing known.
+    /// The registers are as the path from above leaves them, and its stack is merged with
+    /// <paramref name="called"/>, the empty stack a call to the routine leaves. Where the path
+    /// above has pushed something, the two stacks disagree and the stack becomes unknown. A pull
+    /// below the label then restores nothing known.
     /// </summary>
-    private static RegisterState Entered(RegisterState reached, BasicBlock block, Symbol routine)
+    private static RegisterState Entered(RegisterState reached, SavedStack called, BasicBlock block, Symbol routine)
     {
-        var stack = SavedStack.Merge(reached.Stack, SavedStack.Empty);
+        var stack = SavedStack.Merge(reached.Stack, called);
         return reached with
         {
             Stack = stack,

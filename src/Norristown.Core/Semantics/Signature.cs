@@ -81,6 +81,12 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     public string Distance => IsInterrupt ? "interrupt" : IsFar ? "far" : "near";
 
     /// <summary>
+    /// Gets how many bytes of return address a call to the routine pushes, which is 3 for a far
+    /// routine and 2 for any other.
+    /// </summary>
+    public int ReturnSize => IsFar ? 3 : 2;
+
+    /// <summary>
     /// Gets a value indicating whether the routine declares a signature with at least one item,
     /// rather than taking the default or declaring an empty <c>proc()</c>. On the 65816, a routine
     /// with no body must do so, because nothing else states what a caller must hold to. A

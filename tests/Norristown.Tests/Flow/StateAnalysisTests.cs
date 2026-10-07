@@ -193,14 +193,18 @@ public sealed class StateAnalysisTests
     /// <summary>
     /// Once a routine pulls more than it pushed, reaching into what its caller pushed, the
     /// analysis no longer knows where the stack's base is. It goes on tracking later pushes
-    /// relative to that unknown base.
+    /// relative to that unknown base. It still knows the height: the return address's two
+    /// bytes, plus one pushed, less two pulled, leaves one byte of the return address.
     /// </summary>
     [Fact]
     public void PullingMoreThanWasPushedForgetsTheBase()
     {
         var state = StateAt(".proc p: a8, i8 {\n    php\n    pla\n    pla\n    nop\n    rts\n}\n", "nop");
 
-        Assert.Equal(AnalysisStack.Unanchored, state.Stack);
+        Assert.NotNull(state.Stack);
+        Assert.False(state.Stack.IsAnchored);
+        Assert.Equal(0, state.Stack.Depth);
+        Assert.Equal(1, state.Stack.Height);
     }
 
     /// <summary>

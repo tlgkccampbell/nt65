@@ -138,11 +138,11 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns the analysis stack where a routine is entered. It is empty except, for a routine
-    /// that takes <c>args n</c>, the arguments and the return address above them.
+    /// that takes <c>args n</c>, the arguments and the return address above them. Either way its
+    /// height starts at the return address, because the arguments belong to the caller.
     /// </summary>
-    private static AnalysisStack EntryStack(Signature signature) => signature.Arguments > 0
-        ? AnalysisStack.Empty.Push(StackEntry.Opaque, signature.Arguments + (signature.IsFar ? 3 : 2))
-        : AnalysisStack.Empty;
+    private static AnalysisStack EntryStack(Signature signature) =>
+        AnalysisStack.Entered(signature.ReturnSize, signature.Arguments);
 
     private static Cause EntryCause(Signature signature, Symbol routine, string item) => signature.IsInterrupt
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")

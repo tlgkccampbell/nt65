@@ -83,7 +83,8 @@ internal sealed class SourceWalk
             blocks, Through, SourceState.Merge, block => ControlFlow.Onward(blocks, block));
         if (blocks.Count == 0)
             return solver.Reached;
-        solver.Enter(0, SourceState.Entered);
+        var called = SourceStack.Entered((region.Routine.Signature ?? Signature.Default).ReturnSize);
+        solver.Enter(0, SourceState.Entered.WithStack(called));
         foreach (var block in blocks)
         {
             if (!block.IsDeclared && !outside.Reaches(block))
@@ -91,9 +92,9 @@ internal sealed class SourceWalk
             var here = solver.Reached[block.Index];
             SourceState state;
             if (here is null)
-                state = SourceState.Unknown(block.Steps[0].Key, SourceStack.Empty);
+                state = SourceState.Unknown(block.Steps[0].Key, called);
             else if (outside.Reaches(block))
-                state = here.WithStack(SourceStack.Merge(here.Stack, SourceStack.Empty));
+                state = here.WithStack(SourceStack.Merge(here.Stack, called));
             else
                 continue;
             if (!state.Equals(here))

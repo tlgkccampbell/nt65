@@ -15,15 +15,30 @@ namespace Norristown.Flow;
 /// returns unchanged. A null <see cref="SavedStack"/> means nothing is known about the stack,
 /// which is the case after <c>txs</c> and where two paths that pushed different amounts meet.
 /// </para>
+/// <para>
+/// Apart from its pushes, the stack keeps its <see cref="Height"/> in bytes above the caller's
+/// stack as it was before the call, as <see cref="AnalysisStack.Height"/> does.
+/// </para>
 /// </summary>
 public sealed class SavedStack : IEquatable<SavedStack>
 {
     private readonly ImmutableArray<SavedPush> pushes;
 
-    private SavedStack(ImmutableArray<SavedPush> pushes) => this.pushes = pushes;
+    // How far the lowest push sits above the caller's stack as it was before the call, or null
+    // where that is not known.
+    private readonly int? offset;
 
-    /// <summary>Gets the stack of a routine when it is entered, which holds no pushes.</summary>
-    public static SavedStack Empty { get; } = new([]);
+    private SavedStack(ImmutableArray<SavedPush> pushes, int? offset)
+    {
+        this.pushes = pushes;
+        this.offset = offset;
+    }
+
+    /// <summary>
+    /// Gets the stack of a routine when it is entered, which holds no pushes, measured from its
+    /// own entry rather than from a caller's stack.
+    /// </summary>
+    public static SavedStack Empty { get; } = new([], 0);
 
     /// <summary>Gets how many pushes are on the stack.</summary>
     public int Depth => pushes.Length;
@@ -33,6 +48,22 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// holding.
     /// </summary>
     public IReadOnlyList<SavedPush> Pushes => pushes;
+
+    /// <summary>
+    /// Gets how many bytes the stack holds above the caller's stack as it was before the call,
+    /// which may be negative, or null where that is not known. A push of a register whose width is
+    /// not known leaves it unknown.
+    /// </summary>
+    public int? Height
+    {
+        get
+        {
+            var height = offset;
+            foreach (var push in pushes)
+                height += PushBytes.Of(push.Size, push.Width);
+            return height;
+        }
+    }
 
     /// <summary>Gets the registers whose entry values any push on the stack may hold.</summary>
     public Registers Entries
@@ -47,8 +78,15 @@ public sealed class SavedStack : IEquatable<SavedStack>
     }
 
     /// <summary>
+    /// Returns the stack of a routine entered by a call, which holds no pushes and starts at the
+    /// <paramref name="returnSize"/> bytes of the return address.
+    /// </summary>
+    public static SavedStack Entered(int returnSize) => new([], returnSize);
+
+    /// <summary>
     /// Returns what two paths arriving at one place agree the stack holds, or null when they do
-    /// not agree on what is on it. A push they disagree about holds what either of them left.
+    /// not agree on what is on it. A push they disagree about holds what either of them left. Two
+    /// paths that agree on the pushes but not on the height leave the height unknown.
     /// </summary>
     public static SavedStack? Merge(SavedStack? a, SavedStack? b)
     {
@@ -56,6 +94,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
             return null;
         if (a.Equals(b))
             return a;
+        var offset = a.offset == b.offset ? a.offset : null;
         var builder = a.pushes.ToBuilder();
         for (var i = 0; i < builder.Count; i++)
         {
@@ -64,11 +103,11 @@ public sealed class SavedStack : IEquatable<SavedStack>
                 return null;
             builder[i] = x with { Value = RegisterValue.Merge(x.Value, y.Value) };
         }
-        return new SavedStack(builder.ToImmutable());
+        return new SavedStack(builder.ToImmutable(), offset);
     }
 
     /// <summary>Returns this stack with <paramref name="push"/> on top of it.</summary>
-    public SavedStack Push(SavedPush push) => new(pushes.Add(push));
+    public SavedStack Push(SavedPush push) => new(pushes.Add(push), offset);
 
     /// <summary>
     /// Returns what a pull of this size and width gets back. That is what the push on top holds
@@ -94,17 +133,19 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// A pull from an empty stack takes bytes the caller put there, such as the return address
     /// a routine pulls to read what follows its call. What it gets is unknown, but the stack
     /// stays empty rather than unknown, so what the routine pushes and pulls after it is still
-    /// followed. Two paths that meet having pulled different amounts both hold nothing known,
-    /// and every pull past what they push again gets back nothing known either.
+    /// followed. Such a pull lowers the <see cref="Height"/> below the return address. Two paths
+    /// that meet having pulled different amounts both hold nothing known, and every pull past
+    /// what they push again gets back nothing known either.
     /// </para>
     /// </summary>
     public SavedStack? Pull(PushSize size, Semantics.Width width) =>
-        pushes.Length == 0 ? this
-            : pushes[^1].Size == size && pushes[^1].Width == width ? new SavedStack(pushes[..^1])
+        pushes.Length == 0 ? new SavedStack(pushes, offset - PushBytes.Of(size, width))
+            : pushes[^1].Size == size && pushes[^1].Width == width ? new SavedStack(pushes[..^1], offset)
             : null;
 
     /// <inheritdoc/>
-    public bool Equals(SavedStack? other) => other is not null && pushes.AsSpan().SequenceEqual(other.pushes.AsSpan());
+    public bool Equals(SavedStack? other) =>
+        other is not null && offset == other.offset && pushes.AsSpan().SequenceEqual(other.pushes.AsSpan());
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as SavedStack);
@@ -113,6 +154,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
     public override int GetHashCode()
     {
         var hash = new HashCode();
+        hash.Add(offset);
         foreach (var push in pushes)
             hash.Add(push);
         return hash.ToHashCode();
