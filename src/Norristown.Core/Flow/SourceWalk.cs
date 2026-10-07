@@ -36,6 +36,7 @@ internal sealed class SourceWalk
     private readonly StateAnalysis? states;
     private readonly OutsideEntries outside;
     private readonly Func<Symbol, RoutineRegisters> of;
+    private readonly StackEffects effects;
 
     /// <summary>
     /// Initializes a walk over the routines of the file that <paramref name="flow"/> describes.
@@ -50,6 +51,7 @@ internal sealed class SourceWalk
         this.layout = layout;
         this.of = of;
         this.states = states;
+        effects = flow.Effects;
         registers = new RegisterWalk(model, layout, flow, states);
         outside = new OutsideEntries(model, layout);
     }
@@ -146,6 +148,8 @@ internal sealed class SourceWalk
         state = Step(step, state, RegisterWalk.NextOf(block, index));
         if (index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block))
             state = Calls(block, step, state);
+        if (index == block.Steps.Count - 1 && block.EndsInCall)
+            state = state.WithStack(state.Stack?.AfterCall(effects.OfCallIn(block)));
         return state;
     }
 

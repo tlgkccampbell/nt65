@@ -26,6 +26,8 @@ public sealed class StateAnalysis : IProcessorStates
     private readonly ControlFlow flow;
     private readonly StateChecks checks;
     private readonly OutsideEntries outside;
+    private readonly StackEffects effects;
+    private readonly Dictionary<Symbol, StackEffect> consumed = [];
     private readonly Dictionary<StepKey, FlowState> reaching = [];
     private readonly Dictionary<StepKey, int> slots = [];
 
@@ -43,17 +45,26 @@ public sealed class StateAnalysis : IProcessorStates
     // first meets a block move.
     private HashSet<StepKey>? patchedMoves;
 
-    private StateAnalysis(SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges)
+    private StateAnalysis(
+        SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange> ranges, StackEffects effects)
     {
         this.model = model;
         this.layout = layout;
         this.flow = flow;
+        this.effects = effects;
         checks = new StateChecks(model, layout, ranges);
         outside = new OutsideEntries(model, layout);
     }
 
     /// <summary>Gets what is wrong with the widths, the mode and the calls in this file.</summary>
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
+
+    /// <summary>
+    /// Gets the stack effect the analysis took for each routine a call in the file reaches. The
+    /// effects are worked out across the program after each file is analyzed, so a file whose
+    /// effects turn out different is analyzed again with them.
+    /// </summary>
+    internal IReadOnlyDictionary<Symbol, StackEffect> Consumed => consumed;
 
     /// <summary>
     /// Gets the most times any one block was walked before its region reached a fixed point,
@@ -68,9 +79,10 @@ public sealed class StateAnalysis : IProcessorStates
     /// addresses may be reached from.
     /// </summary>
     public static StateAnalysis Of(
-        SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange>? ranges = null)
+        SemanticModel model, CodeLayout layout, ControlFlow flow, IReadOnlyList<Project.AccessRange>? ranges = null,
+        StackEffects? effects = null)
     {
-        var analysis = new StateAnalysis(model, layout, flow, ranges ?? []);
+        var analysis = new StateAnalysis(model, layout, flow, ranges ?? [], effects ?? StackEffects.None);
         foreach (var region in flow.Regions)
             analysis.Analyze(region);
         analysis.checks.CheckOutsideRoutines();
@@ -694,7 +706,10 @@ public sealed class StateAnalysis : IProcessorStates
         {
             report?.CheckMirror(step, mode);
             report?.CheckArguments(step, target, state.Stack, 0);
-            return state with { Processor = Called(step, mnemonic, target, state.Processor, report) };
+            // A call to a name that is no routine has already been reported, and leaves the stack
+            // alone so that the one mistake is not reported again.
+            var after = state with { Processor = Called(step, mnemonic, target, state.Processor, report) };
+            return Returned(step, after, target is null ? StackEffect.Balanced : EffectOf(target));
         }
 
         // A relative call comes back to the label after it, having pulled what the `per` and
@@ -702,8 +717,10 @@ public sealed class StateAnalysis : IProcessorStates
         if (flow.RelativeCallAt(step) is { } relative)
         {
             report?.CheckArguments(step, relative.Routine, state.Stack, relative.Pushed);
-            return new FlowState(
-                RelativelyCalled(step, mnemonic, relative, state.Processor, report), Pull(state.Stack, relative.Pushed));
+            return Returned(
+                step,
+                new FlowState(RelativelyCalled(step, mnemonic, relative, state.Processor, report), Pull(state.Stack, relative.Pushed)),
+                EffectOf(relative.Routine));
         }
 
         // An indirect call goes where its `.next` says, and it returns with what any of the
@@ -714,11 +731,29 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         var named = Routines(next, step.On).ToList();
         if (named.Count == 0)
-            return state with { Processor = ProcessorState.Unknown };
+            return Returned(step, state with { Processor = ProcessorState.Unknown }, StackEffect.Unknown);
         FlowState? merged = null;
         foreach (var each in named)
-            merged = FlowState.Merge(merged, state with { Processor = Called(step, mnemonic, each, state.Processor, report) });
+            merged = FlowState.Merge(merged, Returned(step, state with { Processor = Called(step, mnemonic, each, state.Processor, report) }, EffectOf(each)));
         return merged!;
+    }
+
+    /// <summary>
+    /// Returns what a call to <paramref name="callee"/> leaves on the stack, and records that the
+    /// analysis took it.
+    /// </summary>
+    private StackEffect EffectOf(Symbol callee) => consumed[callee] = effects.Of(callee);
+
+    /// <summary>
+    /// Returns <paramref name="state"/> with the stack as the call at <paramref name="step"/> leaves
+    /// it once a routine with <paramref name="effect"/> returns.
+    /// </summary>
+    private static FlowState Returned(Step step, FlowState state, StackEffect effect)
+    {
+        var stack = state.Stack?.AfterCall(effect);
+        return stack is null && state.Stack is not null
+            ? state with { Stack = null, WhyStack = Cause.CallLeavesUnknown($"`{step.Statement.GetText().Trim()}`") }
+            : state with { Stack = stack };
     }
 
     /// <summary>

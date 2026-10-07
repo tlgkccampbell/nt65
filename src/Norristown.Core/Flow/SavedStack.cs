@@ -127,6 +127,26 @@ public sealed class SavedStack : IEquatable<SavedStack>
             : RegisterValue.Unknown;
 
     /// <summary>
+    /// Returns this stack as a call to a routine with <paramref name="effect"/> leaves it once the
+    /// routine returns, or null where what it leaves is not known. Bytes the routine leaves hold
+    /// nothing known. Bytes it takes are taken from beneath what this routine pushed, so where
+    /// this routine has pushed anything, the routine may have taken it and nothing is known.
+    /// </summary>
+    public SavedStack? AfterCall(StackEffect effect)
+    {
+        if (effect.KeepsTheStack)
+            return this;
+        if (effect.Kind == StackEffectKind.Unknown || (effect.Bytes < 0 && pushes.Length > 0))
+            return null;
+        if (effect.Bytes < 0)
+            return new SavedStack(pushes, offset + effect.Bytes);
+        var left = pushes.ToBuilder();
+        for (var i = 0; i < effect.Bytes; i++)
+            left.Add(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Semantics.Width.Eight));
+        return new SavedStack(left.ToImmutable(), offset);
+    }
+
+    /// <summary>
     /// Returns this stack with its top push taken off, or null when the pull does not match that
     /// push, which leaves nothing known about the stack.
     /// <para>

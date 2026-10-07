@@ -200,6 +200,17 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
+    /// Returns this stack as a call to a routine with <paramref name="effect"/> leaves it once the
+    /// routine returns, or null where what it leaves is not known. Bytes the routine leaves are
+    /// bytes nothing is known about, and bytes it takes come off the top.
+    /// </summary>
+    public AnalysisStack? AfterCall(StackEffect effect) =>
+        effect.KeepsTheStack ? this
+            : effect.Kind == StackEffectKind.Unknown ? null
+            : effect.Bytes > 0 ? Push(StackEntry.Opaque, effect.Bytes)
+            : Pull(-effect.Bytes);
+
+    /// <summary>
     /// Returns this stack with <paramref name="count"/> bytes pulled. A pull of more than is known
     /// takes what is beneath, which belongs to the caller or is unknown, and leaves a stack about
     /// which nothing is known but its <see cref="Height"/>.

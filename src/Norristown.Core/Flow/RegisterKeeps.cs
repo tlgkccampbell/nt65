@@ -35,10 +35,11 @@ public static class RegisterKeeps
     /// each region, and reports the routines that break what they promise.
     /// </summary>
     /// <returns>
-    /// The diagnostics, and the routines that depend on the depth of the stack they were entered
-    /// with, which what a routine reads is worked out from.
+    /// The diagnostics, the routines that depend on the depth of the stack they were entered
+    /// with, which what a routine reads is worked out from, and what each routine leaves on its
+    /// caller's stack.
     /// </returns>
-    internal static (IReadOnlyList<Diagnostic> Diagnostics, IReadOnlySet<RoutineKey> CallerStackReaders) Compose(
+    internal static (IReadOnlyList<Diagnostic> Diagnostics, IReadOnlySet<RoutineKey> CallerStackReaders, StackEffects Effects) Compose(
         IReadOnlyList<FileAnalysis> files)
     {
         var regions = new Dictionary<RoutineKey, FlowRegion>();
@@ -57,6 +58,11 @@ public static class RegisterKeeps
         }
 
         var labels = Labels(regions, walks);
+
+        // What a routine leaves on its caller's stack depends only on pushes and pulls, not on
+        // what the registers hold, so it is worked out first, and every walk below applies it
+        // after each call.
+        var effects = StackEffects.Solve(regions, walks, labels);
 
         // Every routine starts out keeping everything, and each round takes away what the round
         // before it found. Nothing is ever added back, so the rounds stop. A label that another
@@ -130,8 +136,9 @@ public static class RegisterKeeps
         {
             flow.KeepsOf = Of;
             flow.ReadsOf = ReadsOf;
+            flow.Effects = effects;
         }
-        return (Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message))), readers);
+        return (Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message))), readers, effects);
 
         // Reports each register a routine reads that its `reads` does not list, at the first place
         // on each path where its entry value is used.

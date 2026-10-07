@@ -4704,6 +4704,18 @@ Recorded so the reasoning survives. None is open.
   examples could name their targets after all: a ROM entry declared as a constant became an
   extern proc, an interrupt chained through a saved vector names the handler the vector held
   to start with, and msbasic's `bne NULL-1` names the `rts` at that address.
+- **What a call leaves on the stack is worked out from the callee's body.** Every stack
+  tracker assumed a call left the stack as it found it, so a routine that returns without its
+  return address, or with bytes it pushed, made its caller pair a later pull with the wrong
+  push. Each routine, and each label another routine enters, now has an effect: it never
+  returns, it leaves a known number of bytes (negative where it takes the caller's), or what it
+  leaves is unknown. Effects are read off each exit by counting bytes, solved over the whole
+  program, and applied after every call by all three trackers, on every CPU. The 65816's
+  processor-state analysis still runs on one file at a time, because layout depends on its
+  widths; it takes each callee's effect as the program last worked it out, and a file that
+  took one the program turns out to differ on is analyzed again. Moving the whole state
+  analysis into the program stage was weighed and rejected: each round would lay every affected
+  file out again, which would make a keystroke several times slower.
 - **Text is built by functions, and is text wherever a literal is.** A text constant crosses
   modules by value, and nothing in ca65 can hold one, so none reaches it. At first there was no
   arithmetic or concatenation on text, so a constant could not build text a literal could not

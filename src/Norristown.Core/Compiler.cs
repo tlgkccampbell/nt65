@@ -15,6 +15,10 @@ namespace Norristown;
 /// </summary>
 public static class Compiler
 {
+    // How many times a program is composed again for files analyzed with stack effects it turned
+    // out to differ on, before what was found is kept as it stands.
+    private const int StaleRounds = 4;
+
     /// <summary>
     /// Compiles <paramref name="files"/> as one program, and returns its ca65 output and
     /// diagnostics.
@@ -438,7 +442,10 @@ public static class Compiler
                 files.Add(kept with { Model = model, Flow = kept.Flow.ForComposing() });
                 continue;
             }
-            var (layout, flow, state, found) = AnalyzeFile(model, target, project);
+            // A file analyzed again starts from the stack effects the earlier analysis found, which
+            // are what an edit to one file usually leaves them.
+            var (layout, flow, state, found) = AnalyzeFile(
+                model, target, project, previous is { Files: [var any, ..] } ? any.Flow.Effects : Flow.StackEffects.None);
             files.Add(new FileAnalysis(model, layout, flow, state));
             analyzed[model.Tree.Path] = found;
         }
@@ -461,14 +468,49 @@ public static class Compiler
     {
         var program = analysis.Program;
 
-        // What a routine costs including its calls, and which registers it preserves for its
-        // caller and reads from it, are questions about the program rather than about one file, so they are
-        // worked out once every file has been analyzed on its own. A file kept from before an
-        // edit keeps its own costs, but its routines' costs including their calls, and the
-        // registers they preserve, may still have changed, because a routine they call may be in
-        // a file that changed.
-        Flow.CallCosts.Compose(analysis.Files.Select(file => file.Flow));
-        var (registers, readers) = Flow.RegisterKeeps.Compose(analysis.Files);
+        // What a routine costs including its calls, which registers it preserves for its caller
+        // and reads from it, and what it leaves on its caller's stack, are questions about the
+        // program rather than about one file, so they are worked out once every file has been
+        // analyzed on its own. A file kept from before an edit keeps its own costs, but its
+        // routines' costs including their calls, and the registers they preserve, may still have
+        // changed, because a routine they call may be in a file that changed.
+        //
+        // The 65816's processor-state analysis runs on each file alone, and takes for each
+        // routine a call reaches the stack effect it was given. A file that took an effect the
+        // program turns out to differ on is analyzed again with the program's, and the program
+        // composed again, until no file took a stale one. Each round only moves effects towards
+        // unknown, but the rounds are capped as well, so a cycle the analysis does not foresee
+        // cannot run on.
+        IReadOnlyList<Diagnostic> registers;
+        IReadOnlySet<Flow.RoutineKey> readers;
+        for (var round = 0; ; round++)
+        {
+            Flow.CallCosts.Compose(analysis.Files.Select(file => file.Flow));
+            (registers, readers, var effects) = Flow.RegisterKeeps.Compose(analysis.Files);
+            var stale = analysis.Files
+                .Where(file => file.State?.Consumed.Any(taken => effects.Of(taken.Key) != taken.Value) == true)
+                .ToHashSet();
+            if (stale.Count == 0 || round == StaleRounds)
+                break;
+            var analyzed = reuse.Analyzed.ToDictionary(StringComparer.Ordinal);
+            var files = new List<FileAnalysis>();
+            foreach (var file in analysis.Files)
+            {
+                if (!stale.Contains(file))
+                {
+                    files.Add(file);
+                    continue;
+                }
+                var (layout, flow, state, found) = AnalyzeFile(file.Model, analysis.Cpu, project, effects);
+                files.Add(new FileAnalysis(file.Model, layout, flow, state));
+                analyzed[file.Path] = found;
+            }
+            analysis = new ProgramAnalysis(program, analysis.Cpu, files, analysis.Configuration, [])
+            {
+                Reanalyzed = analysis.Reanalyzed + stale.Count,
+            };
+            reuse = reuse with { Analyzed = analyzed };
+        }
 
         // Which modules place which others follows from the files alone. Which routine a routine
         // falls through into across a `.place` follows from the layouts of every file in its
@@ -492,7 +534,7 @@ public static class Compiler
     /// and, on the 65816, its processor state, together with the diagnostics they found.
     /// </summary>
     private static (CodeLayout Layout, Flow.ControlFlow Flow, Flow.StateAnalysis? State, IReadOnlyList<Diagnostic> Found)
-        AnalyzeFile(SemanticModel model, Cpu target, ProjectSettings project)
+        AnalyzeFile(SemanticModel model, Cpu target, ProjectSettings project, Flow.StackEffects effects)
     {
         // Control flow is read from the order in which layout lays out the bytes, so the macros
         // are expanded and the repetitions unrolled before anything is asked about the path.
@@ -506,7 +548,7 @@ public static class Compiler
         Flow.StateAnalysis? state = null;
         if (target == Cpu.Wdc65816)
         {
-            state = Flow.StateAnalysis.Of(model, layout, flow, project.Ranges);
+            state = Flow.StateAnalysis.Of(model, layout, flow, project.Ranges, effects);
             found.AddRange(state.Diagnostics);
             layout = CodeLayout.Create(model, target, state);
             flow = Flow.ControlFlow.Of(model, layout);

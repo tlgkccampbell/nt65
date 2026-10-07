@@ -34,10 +34,20 @@ internal sealed class RegisterWalk
         this.states = states;
         outside = new OutsideEntries(model, layout);
         Held = new RegisterStates(model.Tree);
+        Effects = flow.Effects;
     }
 
     /// <summary>Gets what the registers hold at each statement of the file, for an editor to show.</summary>
     public RegisterStates Held { get; }
+
+    /// <summary>
+    /// Gets what each routine a call reaches leaves on the caller's stack, which the walk applies
+    /// after the call. It starts as the effects the flow was composed with.
+    /// </summary>
+    public StackEffects Effects { get; internal set; }
+
+    /// <summary>Gets the control flow of the file the walk goes through.</summary>
+    internal ControlFlow Flow => flow;
 
     /// <summary>Returns whether every call a block makes is one nt65 could follow into a body.</summary>
     public static bool Followed(BasicBlock block, Func<Symbol, RoutineRegisters> of) =>
@@ -175,6 +185,8 @@ internal sealed class RegisterWalk
             {
                 calling?.Invoke(state);
                 state = Calls(block, state, of);
+                if (block.EndsInCall)
+                    state = state with { Stack = state.Stack?.AfterCall(Effects.OfCallIn(block)) };
             }
         }
         return state;

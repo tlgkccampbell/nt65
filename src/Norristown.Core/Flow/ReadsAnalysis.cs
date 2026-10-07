@@ -58,7 +58,7 @@ internal static class ReadsAnalysis
         // after it, and a later pull may take any of those pushes back.
         foreach (var block in blocks)
         {
-            if (left[block.Index] is not { Stack: { } stack })
+            if (left[block.Index] is not { Stack: { } stack } || block.Steps.Count == 0)
                 continue;
             if (ControlFlow.Onward(blocks, block).Any(to => reached[to] is { Stack: null }))
                 Use(stack.Entries, block.Steps[^1], null);

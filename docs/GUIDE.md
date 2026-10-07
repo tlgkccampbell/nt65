@@ -1400,7 +1400,16 @@ The editor's fixes write `.state` lines from what the analysis finds reaching a 
 ### The stack
 
 nt65 tracks what each routine pushes, so a save and its restore need no annotation, and it
-names stack slots for you. `.frame name: T` lays the struct `T` over the top of the stack,
+names stack slots for you.
+
+It also works out how many bytes each routine leaves on its caller's stack when it returns.
+Almost every routine leaves none. One that pulls its own return address, as msbasic's error
+paths do, can take some of its caller's bytes, and after a call to it the caller's pushes are
+counted from what is left. Where the ways a routine returns leave different amounts, or one
+of them goes somewhere nt65 cannot follow, the caller's stack is unknown after the call, and
+a pull after it restores nothing known.
+
+To name stack slots, `.frame name: T` lays the struct `T` over the top of the stack,
 and `name::member,s` is that member's offset from the current stack pointer, counting every
 push and pull since the frame:
 

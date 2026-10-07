@@ -91,6 +91,26 @@ internal sealed class SourceStack : IEquatable<SourceStack>
             : null;
 
     /// <summary>
+    /// Returns this stack as a call to a routine with <paramref name="effect"/> leaves it once the
+    /// routine returns, or null where what it leaves is not known. It follows
+    /// <see cref="SavedStack.AfterCall"/>, and bytes the routine leaves saved nothing that can be
+    /// followed.
+    /// </summary>
+    public SourceStack? AfterCall(StackEffect effect)
+    {
+        if (effect.KeepsTheStack)
+            return this;
+        if (effect.Kind == StackEffectKind.Unknown || (effect.Bytes < 0 && pushes.Length > 0))
+            return null;
+        if (effect.Bytes < 0)
+            return new SourceStack(pushes, offset + effect.Bytes);
+        var left = pushes.ToBuilder();
+        for (var i = 0; i < effect.Bytes; i++)
+            left.Add(new SourcePush([], PushSize.OneByte, Semantics.Width.Eight));
+        return new SourceStack(left.ToImmutable(), offset);
+    }
+
+    /// <summary>
     /// Returns this stack with its top push taken off, or null where the pull does not match that
     /// push. As with <see cref="SavedStack.Pull"/>, a pull from an empty stack leaves it empty and
     /// lowers its height.

@@ -18,6 +18,15 @@ public sealed record Cause(string Reason, string Fix)
         cause is null ? "" : $", because {cause.Reason}: {cause.Fix}";
 
     /// <summary>
+    /// Returns the cause for a stack that a call leaves unknown, because nt65 cannot work out what
+    /// the routine <paramref name="call"/> reaches leaves on its caller's stack.
+    /// </summary>
+    public static Cause CallLeavesUnknown(string call) => new(
+        $"what {call} leaves on the stack is not known",
+        "keep what is pushed before it off the stack across it, or make every way that routine returns "
+            + "leave the same number of bytes");
+
+    /// <summary>
     /// Returns the cause for a stack that two paths leave unknown where they meet, because they
     /// pushed different things. <paramref name="depths"/> says whether they pushed different
     /// amounts, which is the usual reason.

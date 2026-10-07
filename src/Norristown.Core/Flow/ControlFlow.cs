@@ -82,6 +82,12 @@ public sealed class ControlFlow
     internal Func<Symbol, RoutineReads>? ReadsOf { get; set; }
 
     /// <summary>
+    /// Gets what each routine leaves on its caller's stack, as <see cref="StackEffects"/> worked it
+    /// out across the program. Before then, every routine leaves the stack as it found it.
+    /// </summary>
+    public StackEffects Effects { get; internal set; } = StackEffects.None;
+
+    /// <summary>
     /// Gets each instruction that stands on a label a <c>.patch</c> names, in every expansion it
     /// is laid out in. The program rewrites such an instruction's operand as it runs, so the
     /// operand as written says only where the program starts from.
@@ -228,6 +234,7 @@ public sealed class ControlFlow
             Registers = Registers,
             KeepsOf = KeepsOf,
             ReadsOf = ReadsOf,
+            Effects = Effects,
         };
         copy.regions.AddRange(regions.Select(region => region.ForComposing()));
         return copy;
