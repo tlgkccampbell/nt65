@@ -72,7 +72,7 @@
 ; A jump into another routine's label is a way out of this one: control never comes back here,
 ; so what this routine hands its caller is what the path from the label hands back.
 .proc hands_off: keeps a {
-    jmp loses_a::partway    ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway` in `loses_a`, and the path from there does not keep a: restore it there, or add `.next ?` here to end the path unchecked
+    jmp loses_a::partway    ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway` in `loses_a`, and the path from there does not keep a: restore it there
 }
 
 .proc loses_a {
@@ -84,7 +84,7 @@
 
 ; A branch into another routine's label is the same way out, on the path where it is taken.
 .proc branches_in: keeps x {
-    beq loses_x::partway    ;! error[keeps-broken]: `branches_in` promises `keeps x`, but X is not the same as on entry here: control does not come back from `partway` in `loses_x`, and the path from there does not keep x: restore it there, or add `.next ?` here to end the path unchecked
+    beq loses_x::partway    ;! error[keeps-broken]: `branches_in` promises `keeps x`, but X is not the same as on entry here: control does not come back from `partway` in `loses_x`, and the path from there does not keep x: restore it there
     rts
 }
 
@@ -112,13 +112,13 @@
 ; it: on the path it is taken, control goes there and comes back to this routine's caller.
 .proc branches_off: keeps a {
     ldx #1
-    bne loses_it            ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it, or add `.next ?` here to end the path unchecked
+    bne loses_it            ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it
     rts
 }
 
 ; And so is a `.next` naming one, which is how a jump through a pointer says where it goes.
 .proc next_hands_off: keeps a {
-    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it, or add `.next ?` here to end the path unchecked
+    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it
     .next loses_it
 }
 

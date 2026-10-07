@@ -3,7 +3,7 @@ namespace Norristown;
 /// <summary>Identifies what a <see cref="DiagnosticFix"/> changes.</summary>
 public enum FixKind
 {
-    /// <summary>A <c>.next ?</c> after the statement reported, which ends the path there.</summary>
+    /// <summary>A <c>.next ?</c> after the statement reported, which says control goes somewhere nt65 is not told about.</summary>
     EndPath,
 
     /// <summary>

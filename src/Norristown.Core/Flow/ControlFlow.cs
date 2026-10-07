@@ -741,6 +741,14 @@ public sealed class ControlFlow
             // too, which is where a `.next` is most needed.
             if (tail.Next is { } next)
             {
+                // `.next ?` withholds where control goes, so it goes to a routine nothing is known
+                // about. A call still comes back, and anything else hands control over for good.
+                if (next.QuestionToken is not null)
+                {
+                    blocks[i].CallsUnknown = true;
+                    if (!blocks[i].EndsInCall)
+                        blocks[i].End = BlockEnd.TailCall;
+                }
                 foreach (var named in Named(next, tail.Step.On))
                 {
                     if (found.TryGetValue(named, out var to))

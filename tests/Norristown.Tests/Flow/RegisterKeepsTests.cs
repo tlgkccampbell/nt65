@@ -360,9 +360,43 @@ public sealed class RegisterKeepsTests
             ".proc owner {\n    ldx #0\ntail:\n    lda #1\n    rts\n}\n.proc p: keeps x {\n    jmp owner::tail\n}\n"));
         Assert.Equal(
             ["main.nt65:8: `p` promises `keeps x`, but X is not the same as on entry here: control does not come "
-                + "back from `tail` in `owner`, and the path from there does not keep x: restore it there, "
-                + "or add `.next ?` here to end the path unchecked"],
+                + "back from `tail` in `owner`, and the path from there does not keep x: restore it there"],
             Problems(".proc owner {\n    lda #1\ntail:\n    ldx #0\n    rts\n}\n.proc p: keeps x {\n    jmp owner::tail\n}\n"));
+    }
+
+    /// <summary>
+    /// A <c>.next ?</c> hands control to somewhere nt65 is not told about, which may change
+    /// anything. A routine whose only way out is one keeps nothing, and the answer is incomplete,
+    /// so a caller that relies on the routine is not told it keeps more than it does.
+    /// </summary>
+    [Fact]
+    public void ANextQuestionKeepsNothing()
+    {
+        var found = Found(".proc p {\n    jmp (slot)\n    .next ?\n}\n.segment BSS\n.data slot: .addr\n", "p");
+
+        Assert.Equal(Registers.None, found.Kept);
+        Assert.False(found.Complete);
+        Assert.Equal(
+            ["main.nt65:7: `outer` promises `keeps x`, but X is not the same as on entry here: restore it before "
+                + "returning, or add `.state keeps x` at the point where the entry value is restored"],
+            Problems(".proc p {\n    jmp (slot)\n    .next ?\n}\n.proc outer: keeps x {\n    jsr p\n    rts\n}\n"
+                + ".export outer\n.segment BSS\n.data slot: .addr\n"));
+    }
+
+    /// <summary>
+    /// A promise cannot hold across a <c>.next ?</c>, whether it follows a jump or a branch, so
+    /// the message asks for the places control goes. After a branch, the path where the branch
+    /// is not taken is given up too.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc p: keeps x {\n    ldx #0\n    jmp (slot)\n    .next ?\n}\n", 3)]
+    [InlineData(".proc p: keeps x {\n    beq @done\n    .next ?\n    ldx #0\n@done:\n    rts\n}\n", 2)]
+    public void APromiseDoesNotHoldAcrossANextQuestion(string text, int line)
+    {
+        Assert.Equal(
+            [$"main.nt65:{line}: `p` promises `keeps x`, but X is not the same as on entry here: control goes "
+                + "somewhere nt65 cannot follow, which may change anything: name the places it goes with `.next`"],
+            Problems(text + ".export p\n.segment BSS\n.data slot: .addr\n"));
     }
 
     private static Registers Kept(string text, string routine) => Found(text, routine).Kept;

@@ -321,7 +321,7 @@ internal sealed class Requirements
                 routine, "the end of a segment block", "that segment holds next", "add a `.next` saying where flow goes");
 
         // Where the routine emitted next is known, the fix names it. Anywhere else the fix is a
-        // `.next ?`, which ends the path without claiming anything about what comes next.
+        // `.next ?`, which says control goes somewhere nt65 is not told about.
         var after = own ? flow.EmittedAfter(region) : null;
         var runsInto = after is { } next
             ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
@@ -407,7 +407,7 @@ internal sealed class Requirements
     /// <summary>
     /// Returns a fix that adds a <c>.next ?</c> after the step's statement, or null where the
     /// programmer cannot add it there. The fix is offered only in this file and not in a macro body,
-    /// where a <c>.next ?</c> would end the path of every call.
+    /// where a <c>.next ?</c> would give up the path of every call.
     /// </summary>
     private DiagnosticFix? EndPath(Step step) =>
         step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.EndPath) : null;

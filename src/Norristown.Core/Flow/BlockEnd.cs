@@ -36,7 +36,9 @@ public enum BlockEnd
 
     /// <summary>
     /// A jump to a place outside the routine, which hands control to another routine for good. That
-    /// routine returns to this routine's caller, so the jump is a tail call.
+    /// routine returns to this routine's caller, so the jump is a tail call. A statement other than
+    /// a call with a <c>.next ?</c> under it ends this way too, handing control to a routine nothing
+    /// is known about, and its block sets <see cref="BasicBlock.CallsUnknown"/>.
     /// </summary>
     TailCall,
 
@@ -47,8 +49,8 @@ public enum BlockEnd
     Elsewhere,
 
     /// <summary>
-    /// A statement other than a call with a <c>.next</c> under it. Control goes only where the
-    /// <c>.next</c> says, in place of what the operand says.
+    /// A statement other than a call with a <c>.next</c> under it that names where control goes.
+    /// Control goes only where the <c>.next</c> says, in place of what the operand says.
     /// </summary>
     Declared,
 

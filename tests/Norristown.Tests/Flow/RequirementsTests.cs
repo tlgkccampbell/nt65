@@ -76,7 +76,7 @@ public sealed class RequirementsTests
         var only = Assert.Single(analysis.Diagnostics);
         Assert.Equal(Severity.Error, only.Severity);
         Assert.Equal("`first` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine "
-            + "it runs into, or use `.next ?` to end the path", only.Message);
+            + "it runs into, or use `.next ?` where that cannot be named", only.Message);
         Assert.Equal(new DiagnosticFix(FixKind.Fallthrough, "second", only.Fix?.At), only.Fix);
         Assert.Equal(6, only.Fix?.At?.Line);
     }
@@ -291,7 +291,7 @@ public sealed class RequirementsTests
 
         Assert.Equal(
             ["main.nt65:8: `p` runs off the end of a segment block into whatever that segment holds next: "
-                + "add a `.next` saying where flow goes, or use `.next ?` to end the path"],
+                + "add a `.next` saying where flow goes, or use `.next ?` where that cannot be named"],
             Program(Text).Problems());
     }
 

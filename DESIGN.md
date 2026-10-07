@@ -1594,8 +1594,10 @@ label:
   members stands for the values those members are given, at any depth, and passes over the
   others, so a table of three-byte entries, an address less one and the bank it is in, is
   named as it is. Mixed data stands for what each of its members holds. A target
-  naming data that holds no addresses is an error that asks for the address type. `.next ?` ends
-  the path with nothing checked, and may stand after any statement. A `.next` that names
+  naming data that holds no addresses is an error that asks for the address type. `.next ?` says
+  control goes somewhere it does not name, and may stand after any statement. It is a tail call
+  to a routine nothing is known about, or on a call a call to one: the path ends there, no
+  register is kept across it, nothing is known of the state after it, and its cost is unknown. A `.next` that names
   targets after a statement whose successors nt65 already knows — an ordinary instruction, a
   direct `jsr` or `jmp` to a label or routine — is an error, since it could only contradict
   them; where it is the last line of a routine's body its message says `.fallthrough` is what
@@ -2110,8 +2112,7 @@ memory can see that the byte came back unchanged. Seeing it would mean ruling ou
 that could have reached it, and nt65 never knows an address, so whether `sta table,x` reached
 `save` cannot be answered wherever the two are not in one stream — which, for a zero-page slot
 and a table in another segment, is always. The annotation is therefore the answer and not a
-stand-in for a better analysis. Like `.next ?` it is a claim with nothing to check it against,
-which is the contract every annotation of §7.4 has, and a program it is wrong about is wrong in
+stand-in for a better analysis. It is a claim with nothing to check it against, which is the contract every annotation of §7.4 has, and a program it is wrong about is wrong in
 the same way. Written where the register was never destroyed it says nothing, which is a
 warning. A `.state` carrying only `keeps` is not a label's declaration: it says what a register
 holds, not what the processor state at that label is.
@@ -4689,6 +4690,12 @@ Recorded so the reasoning survives. None is open.
   let a routine claim to keep a register on a path nobody checked. A jump into another proc's
   interior is the exception: off the 65816 the label is treated as an entry with unknown
   registers, because there is no processor state there to declare.
+- **`.next ?` goes somewhere unknown; it does not end the path unchecked.** It first meant that
+  the path ended and nothing beyond it was checked, so a path left by `.next ?` was dropped from
+  `keeps`, and a routine whose only way out was one was inferred to keep every register. Once the
+  unchecked constructs needed an annotation everywhere, the annotation they were given most was
+  the one that turned the check off. `.next ?` withholds where control goes, so the analysis
+  assumes the worst of it; the way to a better answer is to name the targets.
 - **Text is built by functions, and is text wherever a literal is.** A text constant crosses
   modules by value, and nothing in ca65 can hold one, so none reaches it. At first there was no
   arithmetic or concatenation on text, so a constant could not build text a literal could not

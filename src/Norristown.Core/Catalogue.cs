@@ -456,7 +456,7 @@ public static class Catalogue
         "expected {0}",
         "`.next` names where execution continues, `.fallthrough` the routine that execution runs into, and "
             + "`.patch` the instruction whose bytes are overwritten. Each takes a label; `.next` also takes `?`, "
-            + "which ends the path so that nothing beyond it is checked.");
+            + "which says execution continues somewhere nt65 is not told about.");
 
     internal static DiagnosticDescriptor NestingTooDeep { get; } = Entry(
         Area.ReadingALine,
@@ -2622,12 +2622,12 @@ public static class Catalogue
         Area.ControlFlow,
         "routine-runs-off-the-end",
         Severity.Error,
-        "`{0}` runs off {1} into whatever {2}: {3}, or use `.next ?` to end the path",
+        "`{0}` runs off {1} into whatever {2}: {3}, or use `.next ?` where that cannot be named",
         "The routine's last instruction does not return, jump or branch away, so execution continues into "
             + "whatever the linker puts after it. Usually an `rts`, `rtl` or `jmp` is missing. Where running on "
             + "was meant, end the body with `.fallthrough NAME`, naming the routine it runs into; nt65 checks that "
-            + "NAME starts where this routine ends, and checks it as a tail call. `.next ?` ends the path without "
-            + "claiming anything.");
+            + "NAME starts where this routine ends, and checks it as a tail call. `.next ?` says control goes "
+            + "somewhere nt65 is not told about, and the analysis then assumes it may change anything.");
 
     internal static DiagnosticDescriptor NextTargetNotCode { get; } = Entry(
         Area.ControlFlow,
@@ -2665,8 +2665,8 @@ public static class Catalogue
             + "call, an `rts` or `rtl` used as a jump, a jump to a computed address, or data that execution falls "
             + "into. After a conditional branch it may name the branch's own target, to state that the branch is always "
             + "taken. After any other statement nt65 already knows where flow goes, and a `.next` could only "
-            + "contradict it. To state that a routine runs into the one after it, use `.fallthrough`; `.next ?` "
-            + "may end a path after any statement.");
+            + "contradict it. To state that a routine runs into the one after it, use `.fallthrough`. `.next ?` "
+            + "may stand after any statement, to say control goes somewhere nt65 is not told about.");
 
     internal static DiagnosticDescriptor NextNotTheBranchTarget { get; } = Entry(
         Area.ControlFlow,
@@ -2675,8 +2675,8 @@ public static class Catalogue
         "`.next` after {0} can name only the branch's own target, `{1}`, to state that the branch is always taken",
         "Under a conditional branch, a `.next` states that the branch is always taken, because the flags are known there, "
             + "so flow never continues past it. It must then name exactly the branch's own target; naming anything "
-            + "else would claim the branch goes somewhere its operand does not. To end the path there instead, "
-            + "use `.next ?`.");
+            + "else would claim the branch goes somewhere its operand does not. Where control goes somewhere that "
+            + "cannot be named, use `.next ?`.");
 
     internal static DiagnosticDescriptor FallthroughMisplaced { get; } = Entry(
         Area.ControlFlow,
@@ -2744,20 +2744,22 @@ public static class Catalogue
         "indirect-jump-unchecked",
         Severity.Error,
         "{0} is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or "
-            + "`.next ?` to end the path",
+            + "`.next ?` where they cannot be named",
         "The jump goes to an address read at run time. A `.next` after it names the labels it may reach, or the "
-            + "jump table that holds them, and the analysis continues at each. `.next ?` states that the path ends here, "
-            + "and nothing beyond it is checked.");
+            + "jump table that holds them, and the analysis continues at each. `.next ?` states that the jump goes "
+            + "somewhere nt65 is not told about. The path ends there, and the analysis assumes the code it reaches "
+            + "may change anything, so no register is kept across it and its cost is unknown.");
 
     internal static DiagnosticDescriptor ComputedJumpUnchecked { get; } = Entry(
         Area.ControlFlow,
         "computed-jump-unchecked",
         Severity.Error,
         "{0} jumps to a computed address, which nt65 cannot follow: add a `.next` naming the labels it may reach, "
-            + "or `.next ?` to end the path",
+            + "or `.next ?` where they cannot be named",
         "The target is an expression rather than a label, so the analysis has no label at which to continue. A "
             + "`.next` after the jump names the labels it may reach. Where the target is not the start of an "
-            + "instruction, such as a jump into the middle of one, use `.next ?` to end the path there.");
+            + "instruction, such as a jump into the middle of one, use `.next ?`. The analysis then assumes "
+            + "the code it reaches may change anything.");
 
     internal static DiagnosticDescriptor PushedReturnUnchecked { get; } = Entry(
         Area.ControlFlow,
@@ -2773,10 +2775,10 @@ public static class Catalogue
         "jump-target-not-a-label",
         Severity.Error,
         "{0} goes to `{1}`, which is {2}, not a label, so nt65 cannot follow it: add a `.next` naming the labels "
-            + "it reaches, or `.next ?` to end the path",
+            + "it reaches, or `.next ?` where they cannot be named",
         "A jump or branch normally names a label in code. This one names something else, such as a constant, so "
             + "the analysis cannot tell where flow goes. A `.next` after it names the labels it reaches, or `.next "
-            + "?` ends the path.");
+            + "?` says it goes somewhere nt65 is not told about.");
 
     internal static DiagnosticDescriptor JumpIntoData { get; } = Entry(
         Area.ControlFlow,

@@ -44,7 +44,7 @@
 ; the path from that label hands back. A `keeps` on the routine the label is in does not cover that
 ; path, because it is checked only from the routine's entry.
 .proc hands_off: a8, i8, keeps a {
-    jmp widens::partway     ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway` in `widens`, and the path from there does not keep a: restore it there, or add `.next ?` here to end the path unchecked
+    jmp widens::partway     ;! error[keeps-broken]: `hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `partway` in `widens`, and the path from there does not keep a: restore it there
 }
 
 .proc widens: a8, i8 {
@@ -70,12 +70,12 @@
 ; hand control on the same way: control comes back from neither.
 .proc branches_off: a8, i8, keeps a {
     ldx #1
-    bne widens              ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it, or add `.next ?` here to end the path unchecked
+    bne widens              ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it
     rts
 }
 
 .proc next_hands_off: a8, i8, keeps a {
-    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it, or add `.next ?` here to end the path unchecked
+    jmp (vector)            ;! error[keeps-broken]: `next_hands_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it
     .next widens
 }
 

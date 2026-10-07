@@ -23,7 +23,7 @@ public sealed class CodeActionsTests
     public static TheoryData<string, string, string> Fixes => new()
     {
         {
-            "End the path here with `.next ?`",
+            "Add `.next ?`: control goes somewhere unnamed",
             ".export .proc main {\n    jmp ($1234)\n}\n",
             ".export .proc main {\n    jmp ($1234)\n    .next ?\n}\n"
         },

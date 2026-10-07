@@ -315,7 +315,8 @@ internal sealed class FlowChecks
     /// last statement runs into whatever the segment holds next. Under a conditional branch a
     /// <c>.next</c> names the branch's own target and nothing else, which says the branch is always
     /// taken. After any other statement nt65 already knows where flow goes, and the <c>.next</c>
-    /// could only contradict it. <c>.next ?</c> ends a path wherever it stands.
+    /// could only contradict it. <c>.next ?</c> may stand anywhere, and says control goes somewhere
+    /// nt65 is not told about.
     /// </summary>
     private void CheckNextIsNeeded(IReadOnlyList<ControlFlow.Unit> units)
     {

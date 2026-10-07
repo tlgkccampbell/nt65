@@ -74,8 +74,9 @@ public sealed class BasicBlock
 
     /// <summary>
     /// Gets a value indicating whether the block calls somewhere nt65 cannot identify. Such a call
-    /// goes through a pointer, or to an address where no declaration is. What such a call costs
-    /// cannot be worked out from the program.
+    /// goes through a pointer, or to an address where no declaration is. A block whose last
+    /// statement has a <c>.next ?</c> under it calls such a place too, or hands control to one in a
+    /// tail call. What such a call does and costs cannot be worked out from the program.
     /// </summary>
     public bool CallsUnknown { get; internal set; }
 

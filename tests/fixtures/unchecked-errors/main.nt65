@@ -14,7 +14,7 @@
 ; An indirect jump and an indirect call.
 .segment CODE
 .proc indirect: a8, i8 {
-    jmp (@table,x)          ;! error[indirect-jump-unchecked]: `jmp (@table,x)` is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` to end the path
+    jmp (@table,x)          ;! error[indirect-jump-unchecked]: `jmp (@table,x)` is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` where they cannot be named
 @table: .addr @go                   ;! error[code-label-as-data]: the address of code label `@go` is taken here, so it may be jumped to where nt65 cannot see: add a `.state` after the label, or name it in a `.next` in `indirect`
 @go:
     jsr (@table,x)          ;! error[indirect-call-unchecked]: `jsr (@table,x)` is an indirect call, which nt65 cannot follow: add a `.next` naming the routines it may call
@@ -33,7 +33,7 @@
 
 ; A computed jump.
 .proc computed: a8, i8 {
-    jmp computed+3          ;! error[computed-jump-unchecked]: `jmp computed+3` jumps to a computed address, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` to end the path
+    jmp computed+3          ;! error[computed-jump-unchecked]: `jmp computed+3` jumps to a computed address, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` where they cannot be named
 }
 
 ; `rts` used as a jump.
@@ -150,7 +150,7 @@
     beq @data               ;! error[jump-into-data]: `@data` labels data, and this jumps to it: add a `.state` after the label and a `.next` after the data stating where flow goes
     rts
 @data:
-    .byte $ea               ;! error[routine-runs-off-the-end]: `onto_data` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine it runs into, or use `.next ?` to end the path
+    .byte $ea               ;! error[routine-runs-off-the-end]: `onto_data` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine it runs into, or use `.next ?` where that cannot be named
 }
 
 ; A jump into a segment block, whose code then runs off the end of the block.
@@ -160,7 +160,7 @@
     @inside:
         nop
     @after:
-        nop                 ;! error[routine-runs-off-the-end]: `into_block` runs off the end of a segment block into whatever that segment holds next: add a `.next` saying where flow goes, or use `.next ?` to end the path
+        nop                 ;! error[routine-runs-off-the-end]: `into_block` runs off the end of a segment block into whatever that segment holds next: add a `.next` saying where flow goes, or use `.next ?` where that cannot be named
     }
 }
 
@@ -171,7 +171,7 @@
 }
 
 .proc off_the_end: a8, i8 {
-    nop                     ;! error[routine-runs-off-the-end]: `off_the_end` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine it runs into, or use `.next ?` to end the path
+    nop                     ;! error[routine-runs-off-the-end]: `off_the_end` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine it runs into, or use `.next ?` where that cannot be named
 }
 
 .proc not_adjacent: a8, i8 {

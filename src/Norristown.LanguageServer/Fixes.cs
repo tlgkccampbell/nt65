@@ -45,7 +45,7 @@ internal static class Fixes
         switch (fix.Kind)
         {
             case FixKind.EndPath:
-                yield return Fix(diagnostic, "End the path here with `.next ?`",
+                yield return Fix(diagnostic, "Add `.next ?`: control goes somewhere unnamed",
                     [Edits.InsertAfter(tree, line, $"{Edits.IndentOf(tree, line)}.next ?")]);
                 break;
 

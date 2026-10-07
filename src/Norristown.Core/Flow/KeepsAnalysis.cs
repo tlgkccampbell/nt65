@@ -113,8 +113,13 @@ internal static class KeepsAnalysis
         // When the stack is unknown, that is why the restore could not be seen. Saying what
         // made it unknown points nearer the mistake than telling the routine to restore the
         // register again.
+        // A path that hands control to somewhere nt65 is not told about keeps nothing, and only
+        // naming where it goes can show otherwise.
         var fix = missing != Registers.None
             ? Handing(into!, missing)
+            : into is null && block.End == BlockEnd.TailCall && block.CallsUnknown
+                ? ": control goes somewhere nt65 cannot follow, which may change anything: name the places it goes "
+                    + "with `.next`"
             : state.Stack is null && state.WhyStack is { } lost
                 ? Cause.Because(lost)
                 : $": restore {(one ? "it" : "them")} before returning, or add `.state keeps {items}` "
@@ -143,11 +148,9 @@ internal static class KeepsAnalysis
         if (owner != into)
         {
             return $": control does not come back from `{into.DisplayName}` in `{name}`, and the path from "
-                + $"there does not keep {items}: restore {(one ? "it" : "them")} there, "
-                + "or add `.next ?` here to end the path unchecked";
+                + $"there does not keep {items}: restore {(one ? "it" : "them")} there";
         }
         var gone = $"control does not come back from `{name}`, which does not promise to keep {items}";
-        return $": {gone}: add `keeps {items}` to `{name}` if it preserves {(one ? "it" : "them")}, "
-            + "or add `.next ?` here to end the path unchecked";
+        return $": {gone}: add `keeps {items}` to `{name}` if it preserves {(one ? "it" : "them")}";
     }
 }

@@ -197,8 +197,8 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Parses <c>.next @a, gfx::init</c>, which names the labels execution can continue at after
-    /// the statement above, or <c>.next ?</c>, which ends the path so that nothing beyond it is
-    /// checked. <c>.next {</c> opens an item block for the labels.
+    /// the statement above, or <c>.next ?</c>, which says execution continues somewhere nt65 is
+    /// not told about. <c>.next {</c> opens an item block for the labels.
     /// </summary>
     private GreenNode ParseNext()
     {
