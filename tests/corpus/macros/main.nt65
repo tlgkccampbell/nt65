@@ -291,6 +291,7 @@
 
     inc check
     bra!(@over)
+    .allow "code-unreachable", "fails the test where bra! does not branch"
     jmp fail
 @over:
 

@@ -17,11 +17,13 @@
     sta (ptr)
     jmp (table,x)           ; 65C02: through a table of pointers
     .next ?
+    .allow "code-unreachable", "an operand form after a transfer, never run"
     bit #$80                ; 65C02: an immediate for bit
     bit z:flags,x
     inc a                   ; 65C02: the accumulator forms
     dec a
     bra @skip               ; 65C02: an unconditional branch
+    .allow "code-unreachable", "an operand form after a transfer, never run"
     stz z:flags
     stz a:table
     trb z:flags

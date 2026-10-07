@@ -293,7 +293,6 @@ public sealed class ConfigurationTests
             @loop:
                 jmp @loop
             }
-                rts
             }
             """);
 

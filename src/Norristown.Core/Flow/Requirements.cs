@@ -28,17 +28,26 @@ internal sealed class Requirements
     // The labels a `.next` names, keyed by the routine the `.next` is in.
     private readonly HashSet<(Symbol Routine, Symbol Label)> named = [];
 
-    private Requirements(SemanticModel model, CodeLayout layout, ControlFlow flow)
+    // Where data that code runs into is already reported. A routine that ends in such data is
+    // not reported as running off its end too, because the two describe the same edge.
+    private readonly HashSet<Span> runIntoData;
+
+    private Requirements(SemanticModel model, CodeLayout layout, ControlFlow flow, HashSet<Span> runIntoData)
     {
         this.model = model;
         this.layout = layout;
         this.flow = flow;
+        this.runIntoData = runIntoData;
     }
 
-    /// <summary>Reports each construct in <paramref name="flow"/>'s file that lacks the annotation it needs.</summary>
+    /// <summary>
+    /// Reports each construct in <paramref name="flow"/>'s file that lacks the annotation it needs.
+    /// <paramref name="diagnostics"/> holds what the other flow checks found, and receives these.
+    /// </summary>
     public static void Check(SemanticModel model, CodeLayout layout, ControlFlow flow, List<Diagnostic> diagnostics)
     {
-        var requirements = new Requirements(model, layout, flow);
+        var requirements = new Requirements(model, layout, flow,
+            [.. diagnostics.Where(d => d.Id == Catalogue.RunsIntoData.Id).Select(d => d.Span)]);
         requirements.Collect();
         foreach (var region in flow.Regions)
         {
@@ -52,6 +61,25 @@ internal sealed class Requirements
 
     /// <summary>Returns the statement's source text in backticks, for a message that quotes it.</summary>
     private static string Quoted(SyntaxNode statement) => $"`{statement.GetText().Trim()}`";
+
+    /// <summary>
+    /// Returns the message for a routine that runs off the end of its own stream, when
+    /// <paramref name="own"/> is set, or off the end of a nested segment block. Where the last
+    /// statement is a conditional <paramref name="branch"/>, the message offers the <c>.next</c>
+    /// that says it is always taken.
+    /// </summary>
+    private static DiagnosticMessage RunsOff(string routine, bool own, bool branch)
+    {
+        var otherwise = own
+            ? "add a `.fallthrough` naming the routine it runs into"
+            : "add a `.next` saying where flow goes";
+        var fix = branch
+            ? "where the branch is always taken, add a `.next` naming its own target; otherwise " + otherwise
+            : otherwise + ", or use `.next ?` where that cannot be named";
+        return own
+            ? Catalogue.RoutineRunsOffTheEnd.Message(routine, "its end", "is emitted after it", fix)
+            : Catalogue.RoutineRunsOffTheEnd.Message(routine, "the end of a segment block", "that segment holds next", fix);
+    }
 
     /// <summary>
     /// Returns whether a label stands on code. It does when the first thing after it, past any
@@ -322,16 +350,8 @@ internal sealed class Requirements
         if (!Enters(region.Blocks, last))
             return;
 
+        // Where the routine emitted next is known, the fix names it.
         var routine = region.Routine.DisplayName;
-        var message = own
-            ? Catalogue.RoutineRunsOffTheEnd.Message(
-                routine, "its end", "is emitted after it",
-                "add a `.fallthrough` naming the routine it runs into")
-            : Catalogue.RoutineRunsOffTheEnd.Message(
-                routine, "the end of a segment block", "that segment holds next", "add a `.next` saying where flow goes");
-
-        // Where the routine emitted next is known, the fix names it. Anywhere else the fix is a
-        // `.next ?`, which says control goes somewhere nt65 is not told about.
         var after = own ? flow.EmittedAfter(region) : null;
         var runsInto = after is { } next
             ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
@@ -339,17 +359,35 @@ internal sealed class Requirements
         if (last.Steps.Count == 0)
         {
             var at = last.Label ?? region.Routine;
-            diagnostics.Add(new Diagnostic(at.DeclarationSpan, message) { Fix = runsInto });
+            diagnostics.Add(new Diagnostic(at.DeclarationSpan, RunsOff(routine, own, branch: false)) { Fix = runsInto });
             return;
         }
+
         // A `.next` on the last statement says where flow goes, so the routine is not reported
-        // even where the statement is a call, which returns and so runs on.
+        // even where the statement is a call, which returns and so runs on. Data that code runs
+        // into is reported already, as the same edge.
         var step = last.Steps[^1];
-        if (last.Next is not null || !last.RunsOn)
-            return;
-        diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), message)
+        if (last.Next is not null || !last.RunsOn
+            || last.Steps.Any(each => runIntoData.Contains(each.Statement.Tree.GetSpan(each.Statement.Span))))
         {
-            Fix = runsInto ?? EndPath(step),
+            return;
+        }
+
+        // A routine that ends in a conditional branch nearly always means the branch is taken,
+        // so the `.next` naming its own target comes first. A `.next ?` is an error after a
+        // branch, so it is not offered there.
+        var statement = step.Statement as InstructionStatementSyntax;
+        var mode = statement is null ? null : layout.Of(statement, step.On)?.Mode;
+        var branch = statement is not null && flow.RelativeCallAt(step) is null
+            && Transfers.Of(statement, mode) == Transfer.Branch;
+        var taken = branch && step.On is null && statement!.Tree == model.Tree
+            && Transfers.TargetOf(statement, mode) is { } target
+                ? new DiagnosticFix(FixKind.AlwaysTaken, target.GetText().Trim(), statement.Tree.GetSpan(statement.Span))
+                : null;
+        diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), RunsOff(routine, own, branch))
+        {
+            Fix = taken ?? runsInto ?? (branch ? null : EndPath(step)),
+            Also = taken is null ? null : runsInto,
         });
     }
 

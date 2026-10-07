@@ -49,6 +49,7 @@
         reused:                 ; an anonymous scope's names are generated too
         jmp reused
     }
+    .allow "code-unreachable", "the scope above loops forever"
     jmp outer::inner
 }
 

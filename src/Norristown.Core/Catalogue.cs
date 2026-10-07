@@ -2591,12 +2591,14 @@ public static class Catalogue
         Area.ControlFlow,
         "code-unreachable",
         Severity.Warning,
-        "this code is never reached: execution does not fall into a nested segment block, so start it with a label "
-            + "that is jumped to, named by a `.next`, or declared by a `.state`",
-        "A nested segment block's bytes are placed in another segment, away from the code around them, so "
-            + "execution never falls into them from above. Code at the start of the block is reached only through "
-            + "a label: one something branches, jumps or calls to, one a `.next` names, or one a `.state` declares "
-            + "as an entry point. Without one, the code is assembled but never runs.");
+        "this code is never reached: {0}",
+        "No path from the routine's entry reaches the code. The statement above it returns, jumps, or calls a "
+            + "routine that never returns, and nothing branches or jumps to it, so it is assembled but never runs. "
+            + "A nested segment block's bytes are placed in another segment, away from the code around them, so "
+            + "execution never falls into them from above either. Code is reached only through a label: one "
+            + "something branches, jumps or calls to, one a `.next` names, or one a `.state` declares as an entry "
+            + "point. Where the code is reached in a way nt65 cannot follow, such as a branch into the middle of an "
+            + "instruction, `.allow \"code-unreachable\"` says so.");
 
     internal static DiagnosticDescriptor LabelUnreachable { get; } = Entry(
         Area.ControlFlow,
@@ -2622,12 +2624,14 @@ public static class Catalogue
         Area.ControlFlow,
         "routine-runs-off-the-end",
         Severity.Error,
-        "`{0}` runs off {1} into whatever {2}: {3}, or use `.next ?` where that cannot be named",
+        "`{0}` runs off {1} into whatever {2}: {3}",
         "The routine's last instruction does not return, jump or branch away, so execution continues into "
             + "whatever the linker puts after it. Usually an `rts`, `rtl` or `jmp` is missing. Where running on "
             + "was meant, end the body with `.fallthrough NAME`, naming the routine it runs into; nt65 checks that "
-            + "NAME starts where this routine ends, and checks it as a tail call. `.next ?` says control goes "
-            + "somewhere nt65 is not told about, and the analysis then assumes it may change anything.");
+            + "NAME starts where this routine ends, and checks it as a tail call. Where the last instruction is a "
+            + "conditional branch that is always taken, a `.next` naming the branch's own target says so. "
+            + "Elsewhere, `.next ?` says control goes somewhere nt65 is not told about, and the analysis then "
+            + "assumes it may change anything.");
 
     internal static DiagnosticDescriptor NextTargetNotCode { get; } = Entry(
         Area.ControlFlow,

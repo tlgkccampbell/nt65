@@ -174,8 +174,8 @@ internal sealed class FlowChecks
     }
 
     /// <summary>
-    /// Reports each label that nothing falls into and nothing names, and each unlabelled start of a
-    /// nested segment block. nt65 sees every reference in the source, so such a label can only be
+    /// Reports each label that nothing falls into and nothing names, and each run of code that
+    /// nothing reaches, such as the code after a return or a jump that has no label. nt65 sees every reference in the source, so such a label can only be
     /// reached in a way nt65 cannot see. This diagnostic pushes the programmer to declare how. A <c>.state</c> directly
     /// after the label declares it an entry point, which acknowledges that it is reached from
     /// somewhere nt65 cannot see. A label on data is read rather than run, so control never
@@ -187,14 +187,21 @@ internal sealed class FlowChecks
             return;
         foreach (var block in region.Blocks)
         {
-            // Code that opens a nested segment block with no label is somewhere fall-through
-            // never goes, and nothing can name it either.
+            // Code with no label that nothing falls into is reached by nothing, since nothing can
+            // name it. That is code after a transfer that ends the path, or code that opens a
+            // nested segment block, which fall-through never enters. The run is reported once, at
+            // its first instruction.
             if (block.Index > 0 && block.Label is null && block.Predecessors.Count == 0
-                && block.Stream != region.Blocks[block.Index - 1].Stream
                 && block.Steps is [{ Statement: InstructionStatementSyntax } first, ..])
             {
                 diagnostics.Add(new Diagnostic(first.Statement.Tree.GetSpan(first.Statement.Span),
-                    Catalogue.CodeUnreachable));
+                    Catalogue.CodeUnreachable.Message(block.Stream != region.Blocks[block.Index - 1].Stream
+                        ? "execution does not fall into a nested segment block, so start it with a label that is "
+                            + "jumped to, named by a `.next`, or declared by a `.state`"
+                        : "the statement above does not fall through, and nothing branches or jumps here"))
+                {
+                    IsUnnecessary = true,
+                });
                 continue;
             }
             if (block.Index == 0 || block.Label is not { Kind: not SymbolKind.Data } label || block.Predecessors.Count > 0
@@ -212,13 +219,11 @@ internal sealed class FlowChecks
     /// <summary>
     /// Reports data that the instruction above falls through into, as happens with the
     /// <c>.byte $2c</c> skip trick and with opcodes ca65 lacks that are given as bytes. A
-    /// <c>.next</c> on the data says where flow goes instead of through it.
+    /// <c>.next</c> on the data says where flow goes instead of through it. The analysis cannot
+    /// follow flow into data on any CPU, so the annotation is required on every CPU.
     /// </summary>
     private void CheckDataReachedByFallingThrough(IReadOnlyList<ControlFlow.Unit> units, HashSet<ControlFlow.Unit> inline)
     {
-        // On the 65816 flow that runs into data reaches the analysis, which cannot follow it,
-        // so there the annotation is required rather than suggested.
-        var severity = layout.Cpu == Cpu.Wdc65816 ? Severity.Error : Severity.Warning;
         var fromCode = false;
         int? stream = null;
         ControlFlow.Unit? before = null;
@@ -242,8 +247,7 @@ internal sealed class FlowChecks
             if (data && fromCode && unit.Next is null)
             {
                 diagnostics.Add(new Diagnostic(
-                    unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), severity,
-                    Catalogue.RunsIntoData)
+                    unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), Catalogue.RunsIntoData)
                 {
                     Fix = AlwaysTaken(before),
                 });

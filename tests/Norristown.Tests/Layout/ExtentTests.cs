@@ -105,8 +105,9 @@ public sealed class ExtentTests
     {
         var written = Written("""
             .proc f {
-                nop
+                jmp @aligned
                 .align 256
+            @aligned:
                 rts
             }
 

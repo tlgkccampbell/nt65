@@ -810,10 +810,9 @@ operator, and `signature-item-needs-65816` ends in a number. A name nt65 has no 
 error, with the name it is nearly. `.allow` hides only what is reported as a warning, before
 the project's severities apply, so it still hides one a configuration raises to an error. It
 cannot name an error, and it cannot name a diagnostic whose fix is an annotation that tells nt65
-what really happens, such as `runs-into-data`, which the 6502 reports as a warning: hiding it
-would leave the analysis following paths that are not there. An `.allow` that hides nothing is
-the warning `allow-unused`, as Rust's `#[expect]` is, so a suppression does not outlive the code
-it was written for. One in a branch the build configuration leaves out, or in a macro body,
+what really happens, such as `runs-into-data`: hiding it would leave the analysis following
+paths that are not there. An `.allow` that hides nothing is the warning `allow-unused`, as
+Rust's `#[expect]` is, so a suppression does not outlive the code it was written for. One in a branch the build configuration leaves out, or in a macro body,
 which another call may need, is not reported. A warning in another file's macro body is
 reported at the call, so an `.allow` before the call covers it, and so does one in the body.
 
@@ -1661,11 +1660,12 @@ The third directive is about the end of a routine rather than a statement:
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary; for a branch, `bne NULL-1`, the label at that address written as the operand, since a branch reaches only code within its range |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the memory operand of an instruction that reads it, the argument of `.sizeof`, `.countof`, `.endof`, `.spanof`, `.addrsize`, `.mincycles`, `.maxcycles` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
-| data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next |
+| code nothing reaches: an instruction with no label after an `rts`, a `jmp` or a call that never returns | no fall-through and no label, so nothing can name it | a warning at its first instruction, faded as unneeded; `.allow "code-unreachable"` where it is reached in a way nt65 cannot see |
+| data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next. A routine that ends in such data is reported once, as running into it |
 | a conditional branch that is always taken: `bne L ; always`, `bcs` over inline text | the flags are known where the branch stands, which nt65 does not work out | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7). On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
-| falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; the fix writes the `.fallthrough` where the routine written next is known. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
+| falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; the fix writes the `.fallthrough` where the routine written next is known. Where the last statement is a conditional branch, the message offers first the `.next` naming the branch's own target, for a branch that is always taken, and no `.next ?`, which cannot follow a branch. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`. A segment block is not a routine, so this is a claim about where flow goes and nothing about what is written next, and `.fallthrough` does not stand there; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
@@ -4154,7 +4154,8 @@ alone and without an assembler:
 - find a declaration anywhere in the workspace by name;
 - fix what a diagnostic names as its fix: a `.next ?` where the analysis cannot follow a
   transfer, a `.fallthrough` naming the routine written next where a routine runs off its end (a
-  `.next ?` where nothing is known to be next), `.fallthrough` for a `.next` that ends a
+  `.next ?` where nothing is known to be next, and first the `.next` naming its own target where
+  the routine ends in a conditional branch), `.fallthrough` for a `.next` that ends a
   routine's body after a statement nt65 can follow, `jsl` for a `jsr` to a far routine and the
   other way, the long branch where a short one cannot reach, `rti` where an interrupt handler
   returns, the missing `.export` in the module that declares a name or the `.use` that brings it

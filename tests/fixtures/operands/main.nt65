@@ -38,6 +38,7 @@
     lda (ptr,x)
     jmp (vector)
     .next ?
+    .allow "code-unreachable", "an operand form after a transfer, never run"
     bne @loop               ; relative
     brk #0                  ; the signature byte is required, and both bytes are counted
     lda (hi + lo) * 2       ; parentheses around part of an expression, not an indirection

@@ -55,6 +55,7 @@
     lda #1
     bne computed_end-1
     .next ?                 ;! error[next-unknown-after-branch]: `.next ?` cannot follow `bne computed_end-1`, because it would also give up the path where the branch is not taken: write the label the branch goes to as its operand
+    .allow "code-unreachable", "the `.next ?` above is the error under test"
     rts
 }
 .proc computed_end {

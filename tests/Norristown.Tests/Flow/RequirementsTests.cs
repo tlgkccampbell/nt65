@@ -116,6 +116,51 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
+    /// A routine that ends in a conditional branch nearly always means the branch is taken. The
+    /// fix that says so comes first, and the <c>.fallthrough</c> second. A <c>.next ?</c> is an
+    /// error after a branch, so it is not suggested.
+    /// </summary>
+    [Fact]
+    public void ARoutineEndingInABranchOffersTheNextThatSaysItIsTaken()
+    {
+        const string Text = """
+            .module main
+            .cpu 6502
+            .segment CODE
+            .proc first {
+                lda #1
+                bne first
+            }
+            .proc second {
+                rts
+            }
+            """;
+
+        var only = Assert.Single(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics);
+
+        Assert.Equal("`first` runs off its end into whatever is emitted after it: where the branch is always taken, add a "
+            + "`.next` naming its own target; otherwise add a `.fallthrough` naming the routine it runs into", only.Message);
+        Assert.Equal(new DiagnosticFix(FixKind.AlwaysTaken, "first", only.Fix?.At), only.Fix);
+        Assert.Equal(6, only.Fix?.At?.Line);
+        Assert.Equal("second", only.Also?.Text);
+    }
+
+    /// <summary>
+    /// A routine whose last statement is data that code runs into is reported once, as running
+    /// into data, which is an error on every CPU.
+    /// </summary>
+    [Fact]
+    public void DataAtTheEndIsReportedOnceAsAnErrorOnThe6502()
+    {
+        const string Text = ".module main\n.cpu 6502\n.segment CODE\n.proc p {\n    lda #1\n    .byte $2c\n}\n";
+
+        var only = Assert.Single(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics);
+
+        Assert.Equal("runs-into-data", only.Id);
+        Assert.Equal(Severity.Error, only.Severity);
+    }
+
+    /// <summary>
     /// A routine returns past its inline data on every processor, so the data is checked on every
     /// CPU.
     /// </summary>

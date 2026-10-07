@@ -21,6 +21,7 @@
     lda away                ;! error[address-size-unreachable]: `lda` cannot reach a far address on the 6502
     jmp (ptr,x)             ;! error[operand-not-taken]: `jmp` does not take this operand on the 6502
     jmp a:reaching          ;! error[transfer-prefix]: `jmp` does not take an address-size prefix: a jump, branch or call is sized by its target
+    .allow "code-unreachable", "an operand form after a transfer, never run"
     jsr away                ;! error[target-too-far]: `jsr` reaches only a near target, in the current bank, and this one is far
     lda #$1234              ;! error[immediate-too-wide]: $1234 does not fit: an immediate is one byte
     stz z:ptr               ;! error[instruction-not-on-cpu]: `stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816

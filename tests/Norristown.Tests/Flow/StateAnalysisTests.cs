@@ -348,7 +348,6 @@ public sealed class StateAnalysisTests
         const string Text = """
             .proc p: a8, i8 {
                 bra @entry
-                rts
             @entry:
                 .state a16
                 lda #$1234
@@ -357,7 +356,7 @@ public sealed class StateAnalysisTests
             }
             """;
 
-        Assert.Equal(["main.nt65:5: `.state a16` does not match: A is 8-bit here"], Problems(Text));
+        Assert.Equal(["main.nt65:4: `.state a16` does not match: A is 8-bit here"], Problems(Text));
     }
 
     /// <summary>

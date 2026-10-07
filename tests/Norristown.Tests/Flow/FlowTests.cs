@@ -222,6 +222,26 @@ public sealed class FlowTests
     }
 
     /// <summary>
+    /// Code with no label after a statement that ends the path is never reached. It is reported
+    /// once, at its first instruction, and marked as unnecessary so that an editor fades it. A
+    /// call to a routine that never returns ends the path too.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc p {\n    rts\n    nop\n    nop\n}\n", 3)]
+    [InlineData(".proc stop: noreturn {\n    jmp stop\n}\n.proc p {\n    jsr stop\n    rts\n}\n", 6)]
+    public void CodeNothingReachesIsReported(string text, int line)
+    {
+        var diagnostic = Assert.Single(FlowFragment.Analyze("6502", text).Diagnostics);
+
+        Assert.Equal("code-unreachable", diagnostic.Id);
+        Assert.Equal(line + FlowFragment.HeaderLines, diagnostic.Span.Line);
+        Assert.Equal(
+            "this code is never reached: the statement above does not fall through, and nothing branches or jumps here",
+            diagnostic.Message);
+        Assert.True(diagnostic.IsUnnecessary);
+    }
+
+    /// <summary>
     /// <c>.next</c> and <c>.patch</c> name places in code, so naming a constant with either
     /// is reported.
     /// </summary>
