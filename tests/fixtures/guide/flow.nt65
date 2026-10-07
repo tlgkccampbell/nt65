@@ -2,12 +2,14 @@
 
 .cpu 6502
 
-.export dispatch, set_value, always_taken, clear_screen, greet
+.export dispatch, set_value, always_taken, push_sign, clear_screen, greet
 
 .segment ZEROPAGE
 .data command: .byte
 .data value:   .byte
 .data flag:    .byte
+.data ret:     .addr
+.data sign:    .byte
 
 .segment CODE
 .proc dispatch {
@@ -49,6 +51,18 @@
     .byte "INLINE TEXT", 0
 @over:
     rts
+}
+
+.proc push_sign {
+    pla                             ; the return address, less one
+    sta ret
+    pla
+    sta ret + 1
+    inc ret                         ; bug: assumes not on a page boundary
+    lda sign
+    pha                             ; left on the caller's stack
+    jmp (ret)
+    .next .return
 }
 
 .proc clear_screen {

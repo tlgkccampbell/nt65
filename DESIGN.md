@@ -1637,7 +1637,7 @@ The third directive is about the end of a routine rather than a statement:
 
 | quirk | how it is recognized | what is required |
 |---|---|---|
-| indirect jump: `jmp (t,x)`, `jml [t]` | addressing mode | `.next` listing the targets, or `.next ?` |
+| indirect jump: `jmp (t,x)`, `jml [t]` | addressing mode | `.next` listing the targets, `.next .return` where it goes back to the caller through a return address the routine pulled, or `.next ?` |
 | indirect call: `jsr (t,x)` | addressing mode | `.next` listing the routines; the call returns with the merge of their exits |
 | `rts` used as a jump | a block pushes a code label and then returns | `.next` on the `rts` |
 | a routine that returns past inline data: `jsr print` then `.strz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.strz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
@@ -4716,6 +4716,15 @@ Recorded so the reasoning survives. None is open.
   took one the program turns out to differ on is analyzed again. Moving the whole state
   analysis into the program stage was weighed and rejected: each round would lay every affected
   file out again, which would make a keystroke several times slower.
+- **A hand-made return is `.next .return`, and what it leaves belongs to the exit.** Some
+  routines pull their return address, push values for the caller or take the caller's, and
+  jump back. `.next ?` threw away that the target was the caller. `.next .return` makes the
+  jump a return for every check, and what it leaves on the caller's stack is counted there,
+  or written as `.next .return n`, which is then checked, or `?`. A count in the signature was
+  considered and rejected: the count is a fact about one exit, and a routine reached through a
+  run-on, such as msbasic's `FRM_STACK2` into `FRM_STACK3`, has its effect worked out by
+  adding along the path rather than declared. `.return` is spelled like a directive so that no
+  label can be taken for it.
 - **Text is built by functions, and is text wherever a literal is.** A text constant crosses
   modules by value, and nothing in ca65 can hold one, so none reaches it. At first there was no
   arithmetic or concatenation on text, so a constant could not build text a literal could not

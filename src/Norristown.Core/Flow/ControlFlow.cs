@@ -756,6 +756,11 @@ public sealed class ControlFlow
                     if (!blocks[i].EndsInCall)
                         blocks[i].End = BlockEnd.TailCall;
                 }
+
+                // `.next .return` says the statement goes back to the routine's caller, as the
+                // routine's own return would. The labels listed after it are followed as well.
+                if (next.ReturnToken is not null && !blocks[i].EndsInCall)
+                    blocks[i].End = BlockEnd.Return;
                 foreach (var named in Named(next, tail.Step.On))
                 {
                     if (found.TryGetValue(named, out var to))

@@ -198,7 +198,9 @@ internal sealed partial class Parser
     /// <summary>
     /// Parses <c>.next @a, gfx::init</c>, which names the labels execution can continue at after
     /// the statement above, or <c>.next ?</c>, which says execution continues somewhere nt65 is
-    /// not told about. <c>.next {</c> opens an item block for the labels.
+    /// not told about. <c>.next .return</c> says execution goes back to the routine's caller, and
+    /// may carry a count or a <c>?</c> and be followed by labels, as in <c>.next .return 5, @a</c>.
+    /// <c>.next {</c> opens an item block for the labels.
     /// </summary>
     private GreenNode ParseNext()
     {
@@ -206,13 +208,27 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.Question)
         {
             var question = Advance();
-            return new NextDirectiveSyntax(keyword, question, null, ParseItemsBrace(keyword, listed: true));
+            return new NextDirectiveSyntax(keyword, question, null, null, null, null, null, ParseItemsBrace(keyword, listed: true));
         }
         if (Kind == SyntaxKind.OpenBrace)
-            return new NextDirectiveSyntax(keyword, null, null, Advance());
+            return new NextDirectiveSyntax(keyword, null, null, null, null, null, null, Advance());
+
+        // `.return` is spelled like a directive, so no label can be mistaken for it.
+        if (Kind == SyntaxKind.Directive && Current.Text.Equals(".return", StringComparison.OrdinalIgnoreCase))
+        {
+            var returns = Advance();
+            var unknown = Kind == SyntaxKind.Question ? Advance() : null;
+            var count = unknown is not null || AtEnd || Kind is SyntaxKind.Comma or SyntaxKind.OpenBrace ? null : ParseExpression();
+            if (Kind != SyntaxKind.Comma)
+                return new NextDirectiveSyntax(keyword, null, returns, unknown, count, null, null, ParseItemsBrace(keyword, listed: true));
+            var comma = Advance();
+            var after = ParseSeparatedList(
+                () => ParseTarget(Catalogue.ExpectedLabel.Message("a label flow continues at")));
+            return new NextDirectiveSyntax(keyword, null, returns, unknown, count, comma, after, ParseItemsBrace(keyword, listed: true));
+        }
         var targets = ParseSeparatedList(
-            () => ParseTarget(Catalogue.ExpectedLabel.Message("a label flow continues at, or `?`")));
-        return new NextDirectiveSyntax(keyword, null, targets, ParseItemsBrace(keyword, targets is not null));
+            () => ParseTarget(Catalogue.ExpectedLabel.Message("a label flow continues at, `?` or `.return`")));
+        return new NextDirectiveSyntax(keyword, null, null, null, null, null, targets, ParseItemsBrace(keyword, targets is not null));
     }
 
     /// <summary>

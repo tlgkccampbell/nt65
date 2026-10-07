@@ -2681,12 +2681,42 @@ public static class Catalogue
         Area.ControlFlow,
         "next-unknown-after-branch",
         Severity.Error,
-        "`.next ?` cannot follow {0}, because it would also give up the path where the branch is not taken: {1}",
+        "`{0}` cannot follow {1}, because it would also give up the path where the branch is not taken: {2}",
         "A `.next` under a conditional branch replaces both of the branch's ways on, so `.next ?` there would "
             + "say that neither is known, and the code after the branch would go unchecked. A branch always goes "
-            + "to its operand or to the next statement, so neither is unknown. Where the branch is always taken, "
-            + "say so with a `.next` naming its target. Where the operand is not a label, such as `NULL-1`, write "
-            + "the label at that address instead.");
+            + "to its operand or to the next statement, so neither is unknown, and neither is a return to the "
+            + "caller, so `.next .return` cannot stand there either. Where the branch is always taken, say so "
+            + "with a `.next` naming its target. Where the operand is not a label, such as `NULL-1`, write the "
+            + "label at that address instead.");
+
+    internal static DiagnosticDescriptor ReturnAfterCall { get; } = Entry(
+        Area.ControlFlow,
+        "return-after-call",
+        Severity.Error,
+        "`.next .return` cannot follow {0}, because a call comes back to the statement after it",
+        "`.next .return` says that a jump goes back to the routine's caller, as the routine's own return "
+            + "would, which is how a routine that pulls its return address and jumps back through it returns. A "
+            + "call does not leave the routine: the routine it calls returns to the statement after it. Name the "
+            + "routines an indirect call reaches with `.next` instead.");
+
+    internal static DiagnosticDescriptor ReturnCountNotConstant { get; } = Entry(
+        Area.ControlFlow,
+        "return-count-not-constant",
+        Severity.Error,
+        "the count of `.next .return` must be a constant number of bytes",
+        "`.next .return n` promises how many bytes the caller's stack holds after the return beyond what it "
+            + "held before the call. nt65 has to know the number to use it at every call, so it must be a "
+            + "constant. Leave the count out to have nt65 count the bytes, or write `?` where it cannot.");
+
+    internal static DiagnosticDescriptor ReturnCountMismatch { get; } = Entry(
+        Area.ControlFlow,
+        "return-count-mismatch",
+        Severity.Error,
+        "`.next .return {0}` promises the caller's stack holds {0} more bytes than before the call, but nt65 counts {1} here",
+        "nt65 counts what the routine has pushed and pulled since it was called, starting from the return "
+            + "address, and the count it finds where the routine returns must be the one written. Callers use the "
+            + "written count, so a wrong one would have them pair a pull with the wrong push. The fix writes the "
+            + "count nt65 found; leaving the count out has nt65 use that count without writing it.");
 
     internal static DiagnosticDescriptor FallthroughMisplaced { get; } = Entry(
         Area.ControlFlow,
@@ -2756,7 +2786,8 @@ public static class Catalogue
         "{0} is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or "
             + "`.next ?` where they cannot be named",
         "The jump goes to an address read at run time. A `.next` after it names the labels it may reach, or the "
-            + "jump table that holds them, and the analysis continues at each. `.next ?` states that the jump goes "
+            + "jump table that holds them, and the analysis continues at each. Where it goes back to the routine's "
+            + "caller through a return address the routine pulled, `.next .return` says so. `.next ?` states that the jump goes "
             + "somewhere nt65 is not told about. The path ends there, and the analysis assumes the code it reaches "
             + "may change anything, so no register is kept across it and its cost is unknown.");
 

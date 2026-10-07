@@ -1915,8 +1915,8 @@
     <Kind Name="NextDirective"/>
     <TypeComment>
       <summary>
-        Represents a <c>.next @a, gfx::init</c> or <c>.next ?</c> line, or <c>.next {</c>, which
-        lists the labels in the item block it opens.
+        Represents a <c>.next @a, gfx::init</c>, <c>.next ?</c> or <c>.next .return, @a</c> line,
+        or <c>.next {</c>, which lists the labels in the item block it opens.
       </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
@@ -1930,6 +1930,38 @@
         <summary>Gets the <c>?</c> token of <c>.next ?</c>, or null.</summary>
       </PropertyComment>
       <Kind Name="Question"/>
+    </Field>
+    <Field Name="ReturnToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the <c>.return</c> token of <c>.next .return</c>, which says that control goes back to
+          the routine's caller as the routine's own return would, or null.
+        </summary>
+      </PropertyComment>
+      <Kind Name="Directive"/>
+    </Field>
+    <Field Name="ReturnUnknownToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the <c>?</c> of <c>.next .return ?</c>, which says that what the return leaves on the
+          caller's stack is not known, or null.
+        </summary>
+      </PropertyComment>
+      <Kind Name="Question"/>
+    </Field>
+    <Field Name="ReturnCount" Type="ExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the count of <c>.next .return 5</c>, which promises how many bytes the caller's stack
+          holds after the return beyond what it held before the call, or null.
+        </summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="ReturnCommaToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>,</c> between <c>.return</c> and the labels after it, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Comma"/>
     </Field>
     <Field Name="InlineTargets" Type="SeparatedSyntaxList&lt;NameExpressionSyntax&gt;">
       <PropertyComment>

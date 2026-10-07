@@ -284,18 +284,24 @@ internal sealed class FlowChecks
         foreach (var unit in units)
         {
             var statement = unit.Step.Statement;
-            if (unit.Next is null && routine.Signature is { HasNoCaller: true } own
-                && statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl } instruction)
+            var returned = unit.Next switch
             {
-                var returned = SyntaxFacts.TextOf(instruction.MnemonicKind);
+                null when statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl } instruction
+                    => SyntaxFacts.TextOf(instruction.MnemonicKind),
+                { ReturnToken: not null } => ".next .return",
+                _ => null,
+            };
+            if (returned is not null && routine.Signature is { HasNoCaller: true } own)
+            {
                 Report(statement, own.IsInterrupt
                     ? Catalogue.HandlerReturnsNotRti.Message(routine.DisplayName, returned)
                     : Catalogue.NoreturnReturns.Message(routine.DisplayName, returned),
 
                     // A handler is left by `rti`, which is the instruction to use instead. A
                     // routine that never returns has no instruction that would do. It should
-                    // leave some other way there, or not say `noreturn`.
-                    own.IsInterrupt ? new DiagnosticFix(FixKind.Return, "rti") : null);
+                    // leave some other way there, or not say `noreturn`. A `.next .return` has
+                    // no instruction to replace.
+                    own.IsInterrupt && unit.Next is null ? new DiagnosticFix(FixKind.Return, "rti") : null);
             }
             if (flow.CalledAt(unit.Step) is { Signature.IsInterrupt: true } handler)
             {
@@ -317,7 +323,9 @@ internal sealed class FlowChecks
     /// taken. After any other statement nt65 already knows where flow goes, and the <c>.next</c>
     /// could only contradict it. <c>.next ?</c> says control goes somewhere nt65 is not told about,
     /// and may stand anywhere but under a conditional branch. A branch goes only to its operand or
-    /// to the next statement, so neither of its ways on is unknown.
+    /// to the next statement, so neither of its ways on is unknown, and neither is a return. So
+    /// <c>.next .return</c> cannot stand there either, nor under a call, which comes back, nor
+    /// under a return, which already goes back to the caller.
     /// </summary>
     private void CheckNextIsNeeded(IReadOnlyList<ControlFlow.Unit> units)
     {
@@ -331,15 +339,35 @@ internal sealed class FlowChecks
             .ToHashSet();
         foreach (var unit in units)
         {
-            if (unit.Next is { QuestionToken: not null } unknown && IsBranch(unit))
+            var statement = $"`{unit.Step.Statement.GetText().Trim()}`";
+            if (unit.Next is { } claimed && (claimed.QuestionToken ?? claimed.ReturnToken) is { } unknown && IsBranch(unit))
             {
-                diagnostics.Add(new Diagnostic(unknown.Tree.GetSpan(unknown.Span), Severity.Error,
+                diagnostics.Add(new Diagnostic(claimed.Tree.GetSpan(claimed.Span), Severity.Error,
                     Catalogue.NextUnknownAfterBranch.Message(
-                        $"`{unit.Step.Statement.GetText().Trim()}`",
+                        $".next {unknown.Text}",
+                        statement,
                         BranchTarget(unit) is { } taken
                             ? $"if the branch is always taken, write `.next {taken.DisplayName}`, and otherwise remove the `.next`"
                             : "write the label the branch goes to as its operand")));
                 continue;
+            }
+
+            // A call comes back, and a return already goes back to the caller, so neither is a
+            // place for `.next .return`.
+            if (unit.Next is { ReturnToken: not null } returning && unit.Step.Statement is InstructionStatementSyntax instruction)
+            {
+                if (Instructions.IsCall(instruction.MnemonicKind) || flow.RelativeCallAt(unit.Step) is not null)
+                {
+                    diagnostics.Add(new Diagnostic(returning.Tree.GetSpan(returning.Span), Severity.Error,
+                        Catalogue.ReturnAfterCall.Message(statement)));
+                    continue;
+                }
+                if (instruction.MnemonicKind is MnemonicKind.Rts or MnemonicKind.Rtl or MnemonicKind.Rti)
+                {
+                    diagnostics.Add(new Diagnostic(returning.Tree.GetSpan(returning.Keyword.Span), Severity.Error,
+                        Catalogue.NextSuccessorsKnown.Message(statement, "returns to its caller", "")));
+                    continue;
+                }
             }
             if (unit.Next is not { QuestionToken: null } next || endsASegmentBlock.Contains(unit))
                 continue;

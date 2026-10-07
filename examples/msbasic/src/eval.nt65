@@ -316,7 +316,7 @@
     lda FAC
     pha
     jmp (INDEX)
-    .next ?
+    .next .return, STEP
     L2D02:
     ldy #$FF
     pla

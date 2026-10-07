@@ -2075,6 +2075,8 @@ internal sealed partial class Binder
         /// <param name="node">The annotation.</param>
         public override void VisitNextDirective(NextDirectiveSyntax node)
         {
+            if (node.ReturnCount is { } count)
+                binder.CollectUses(count);
             foreach (var target in node.Targets)
                 binder.CollectUses(target);
         }

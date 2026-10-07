@@ -14,7 +14,9 @@ namespace Norristown.Flow;
 /// caller's stack there, less the return address it pulls. A tail call, a branch or a
 /// <c>.fallthrough</c> into another routine leaves what that routine leaves, from the height it
 /// was handed control at. An exit nt65 cannot follow leaves something unknown, and a call to a
-/// routine that never returns leaves nothing, because no path goes on from it.
+/// routine that never returns leaves nothing, because no path goes on from it. A jump with
+/// <c>.next .return</c> under it goes back to the caller without pulling anything, so it leaves
+/// the whole height, or the count written after <c>.return</c>, which is checked against it.
 /// </para>
 /// <para>
 /// The height is counted in bytes by a walk of its own, rather than read off the stacks that
@@ -33,6 +35,12 @@ public sealed class StackEffects
     private readonly Dictionary<RoutineKey, StackEffect> found;
 
     private StackEffects(Dictionary<RoutineKey, StackEffect> found) => this.found = found;
+
+    /// <summary>
+    /// Gets what is wrong with the counts written after <c>.next .return</c>: a count that is not a
+    /// constant, or one that is not what nt65 counts there.
+    /// </summary>
+    public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
 
     /// <summary>
     /// Gets effects in which every routine leaves the stack as it found it, for an analysis that
@@ -125,6 +133,12 @@ public sealed class StackEffects
                     queue.Enqueue(dependent);
             }
         }
+
+        // The counts written after `.next .return` are checked once, against the settled effects.
+        var report = new List<Diagnostic>();
+        foreach (var (owner, start) in entries.Values)
+            Exits(walks[owner], regions[owner], start, effects, report);
+        effects.Diagnostics = Norristown.Diagnostics.Ordered(report.DistinctBy(d => (d.Span, d.Id, d.Message)));
         return effects;
     }
 
@@ -179,9 +193,11 @@ public sealed class StackEffects
     /// <summary>
     /// Returns what the exits of <paramref name="region"/>'s routine leave, where it is entered at
     /// the block at <paramref name="start"/>, with <paramref name="effects"/> giving what each
-    /// routine it calls or hands control to leaves so far.
+    /// routine it calls or hands control to leaves so far. <paramref name="report"/>, where it is
+    /// given, collects what is wrong with the counts written after <c>.next .return</c>.
     /// </summary>
-    private static StackEffect Exits(RegisterWalk walk, FlowRegion region, int start, StackEffects effects)
+    private static StackEffect Exits(
+        RegisterWalk walk, FlowRegion region, int start, StackEffects effects, List<Diagnostic>? report = null)
     {
         // An interrupt handler has no caller, and a routine that never returns hands nothing back.
         if (region.Routine.Signature is { HasNoCaller: true } || !region.IsEntered || region.Blocks.Count == 0)
@@ -197,7 +213,7 @@ public sealed class StackEffects
             if (solver.Reached[block.Index] is not { } reached)
                 continue;
             effect = StackEffect.Join(effect, Exit(block, Through(walk, block, reached, effects).Bytes));
-            if (effect.Kind == StackEffectKind.Unknown)
+            if (effect.Kind == StackEffectKind.Unknown && report is null)
                 return effect;
         }
         return effect;
@@ -205,16 +221,22 @@ public sealed class StackEffects
         StackEffect Exit(BasicBlock block, int? height)
         {
             var last = block.Steps.Count > 0 ? block.Steps[^1].Statement as InstructionStatementSyntax : null;
-            switch (block.End)
+            var returned = StackEffect.NeverReturns;
+            if (block.Next is { ReturnToken: not null } returning)
+                returned = Returned(returning, block.Steps[^1], height);
+            else
             {
-                case BlockEnd.Return when last?.MnemonicKind == MnemonicKind.Rti:
-                case BlockEnd.Stop or BlockEnd.CallNeverReturns:
-                    return StackEffect.NeverReturns;
-                case BlockEnd.Return:
-                    return height is { } h ? StackEffect.Leaving(h - returnSize) : StackEffect.Unknown;
-                case BlockEnd.Elsewhere:
-                case BlockEnd.TailCall when block.CallsUnknown:
-                    return StackEffect.Unknown;
+                switch (block.End)
+                {
+                    case BlockEnd.Return when last?.MnemonicKind == MnemonicKind.Rti:
+                    case BlockEnd.Stop or BlockEnd.CallNeverReturns:
+                        return StackEffect.NeverReturns;
+                    case BlockEnd.Return:
+                        return height is { } h ? StackEffect.Leaving(h - returnSize) : StackEffect.Unknown;
+                    case BlockEnd.Elsewhere:
+                    case BlockEnd.TailCall when block.CallsUnknown:
+                        return StackEffect.Unknown;
+                }
             }
 
             // A return used as a jump pulls the address it jumps to before control arrives there.
@@ -226,7 +248,7 @@ public sealed class StackEffects
             var handed = walk.Leaves(block, region.Routine);
             if (block.End == BlockEnd.TailCall)
                 handed = handed.Concat(block.Calls);
-            var leaves = StackEffect.NeverReturns;
+            var leaves = returned;
             foreach (var target in handed.Distinct())
             {
                 var into = effects.Of(target);
@@ -239,6 +261,30 @@ public sealed class StackEffects
                         : StackEffect.Leaving(height.Value - size + into.Bytes));
             }
             return leaves;
+        }
+
+        // What a `.next .return` leaves: the height, or the count written after `.return`, which
+        // must be the height where nt65 knows it.
+        StackEffect Returned(NextDirectiveSyntax returning, Layout.Step step, int? height)
+        {
+            if (returning.ReturnUnknownToken is not null)
+                return StackEffect.Unknown;
+            if (returning.ReturnCount is not { } count)
+                return height is { } h ? StackEffect.Leaving(h) : StackEffect.Unknown;
+            if (walk.Model.ValueOf(count, step.On).AsNumber() is not { } promised)
+            {
+                report?.Add(new Diagnostic(count.Tree.GetSpan(count.Span), Severity.Error, Catalogue.ReturnCountNotConstant.Message()));
+                return StackEffect.Unknown;
+            }
+            if (height is { } counted && counted != promised)
+            {
+                report?.Add(new Diagnostic(count.Tree.GetSpan(count.Span), Severity.Error,
+                    Catalogue.ReturnCountMismatch.Message(promised, counted))
+                {
+                    Fix = new DiagnosticFix(FixKind.Spelling, counted.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                });
+            }
+            return StackEffect.Leaving((int)promised);
         }
     }
 

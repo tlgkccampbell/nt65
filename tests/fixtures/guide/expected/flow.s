@@ -11,6 +11,7 @@
 .export flow__dispatch
 .export flow__set_value
 .export flow__always_taken
+.export flow__push_sign
 .export flow__clear_screen
 .export flow__greet
 
@@ -18,9 +19,11 @@
 command: .res 1
 value:   .res 1
 flag:    .res 1
+ret:     .res 2
+sign:    .res 1
 
 .segment "CODE": absolute
-; .proc dispatch  flow.nt65:13
+; .proc dispatch  flow.nt65:15
 flow__dispatch:
     lda z:command
     asl a
@@ -39,7 +42,7 @@ dispatch__cmd_fire:
     rts
 ; end of dispatch
 
-; .proc set_value  flow.nt65:32
+; .proc set_value  flow.nt65:34
 flow__set_value:
     lda z:flag
     beq set_value__two
@@ -52,7 +55,7 @@ set_value__store:
     rts
 ; end of set_value
 
-; .proc always_taken  flow.nt65:45
+; .proc always_taken  flow.nt65:47
 flow__always_taken:
     lda #1
     bne always_taken__over
@@ -61,12 +64,24 @@ always_taken__over:
     rts
 ; end of always_taken
 
-; .proc clear_screen  flow.nt65:54
+; .proc push_sign  flow.nt65:56
+flow__push_sign:
+    pla
+    sta z:ret
+    pla
+    sta z:ret + 1
+    inc z:ret
+    lda z:sign
+    pha
+    jmp (ret)
+; end of push_sign
+
+; .proc clear_screen  flow.nt65:68
 flow__clear_screen:
     lda #$20                        ; ' '
 ; end of clear_screen
 
-; .proc fill_screen  flow.nt65:59
+; .proc fill_screen  flow.nt65:73
 fill_screen:
     ldx #0
 fill_screen__loop:
@@ -76,13 +91,13 @@ fill_screen__loop:
     rts
 ; end of fill_screen
 
-; .proc print: inline .strz  flow.nt65:68
+; .proc print: inline .strz  flow.nt65:82
 print:
 
     rts
 ; end of print
 
-; .proc greet  flow.nt65:73
+; .proc greet  flow.nt65:87
 flow__greet:
     jsr print
     .byte $48, $45, $4c, $4c, $4f, $00  ; "HELLO"

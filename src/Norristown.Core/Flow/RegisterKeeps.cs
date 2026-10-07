@@ -82,7 +82,7 @@ public static class RegisterKeeps
         }
         while (moved);
 
-        var diagnostics = new List<Diagnostic>();
+        var diagnostics = new List<Diagnostic>(effects.Diagnostics);
         foreach (var (name, region) in regions)
         {
             region.Registers = found[name];

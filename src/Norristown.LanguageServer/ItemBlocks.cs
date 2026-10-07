@@ -70,7 +70,7 @@ internal static class ItemBlocks
         {
             ExportDirectiveSyntax export => new(export, [.. export.InlineItems], [.. export.Items], export.OpenBraceToken, null, export.ItemBlock),
             ImportDirectiveSyntax import => new(import, [.. import.InlineItems], [.. import.Items], import.OpenBraceToken, null, import.ItemBlock),
-            NextDirectiveSyntax { QuestionToken: null } next =>
+            NextDirectiveSyntax { QuestionToken: null, ReturnToken: null } next =>
                 new(next, [.. next.InlineTargets], [.. next.Targets], next.OpenBraceToken, null, next.ItemBlock),
             UseDirectiveSyntax { OpenBraceToken: not null } use =>
                 new(use, [.. use.InlineItems], [.. use.Items], use.OpenBraceToken, use.CloseBraceToken, use.ItemBlock),

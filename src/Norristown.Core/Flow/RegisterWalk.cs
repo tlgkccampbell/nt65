@@ -49,6 +49,9 @@ internal sealed class RegisterWalk
     /// <summary>Gets the control flow of the file the walk goes through.</summary>
     internal ControlFlow Flow => flow;
 
+    /// <summary>Gets the semantic model of the file the walk goes through.</summary>
+    internal SemanticModel Model => model;
+
     /// <summary>Returns whether every call a block makes is one nt65 could follow into a body.</summary>
     public static bool Followed(BasicBlock block, Func<Symbol, RoutineRegisters> of) =>
         !block.CallsUnknown && block.Calls.All(callee => of(callee).Complete);
@@ -278,7 +281,7 @@ internal sealed class RegisterWalk
     /// </summary>
     public IEnumerable<Symbol> Leaves(BasicBlock block, Symbol routine)
     {
-        if (block.Steps.Count == 0 || block.EndsInCall || block.End == BlockEnd.Return)
+        if (block.Steps.Count == 0 || block.EndsInCall || (block.End == BlockEnd.Return && block.Next is null))
             yield break;
         var step = block.Steps[^1];
         if (block.RunsInto is { } runsInto)

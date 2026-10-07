@@ -69,8 +69,9 @@ internal static class KeepsAnalysis
             }
             // `stp` and `jam` stop the processor, so nothing ever reads what they left. `rti`
             // goes back to the code the interrupt broke into, which is exactly where the
-            // registers matter.
-            if (left || block.End is not (BlockEnd.Return or BlockEnd.TailCall))
+            // registers matter. A `.next .return` that also lists labels returns as well as
+            // passing control to them, so it is checked as a return too.
+            if ((left && block.End != BlockEnd.Return) || block.End is not (BlockEnd.Return or BlockEnd.TailCall))
                 continue;
             leaves = true;
             kept &= after.Kept;

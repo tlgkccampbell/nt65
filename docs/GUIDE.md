@@ -1066,6 +1066,30 @@ address, and a jump through a vector that the program itself, or the system at s
 with one routine names that routine. `.next ?` is for code the program cannot know, such as a
 user's machine code that a monitor runs.
 
+Some routines pull their own return address, adjust the stack, and jump back through it.
+`.next .return` says that such a jump goes back to the caller, as the routine's return would:
+
+```nt65
+.proc push_sign {
+    pla                             ; the return address, less one
+    sta ret
+    pla
+    sta ret + 1
+    inc ret                         ; bug: assumes not on a page boundary
+    lda sign
+    pha                             ; left on the caller's stack
+    jmp (ret)
+    .next .return
+}
+```
+
+The jump is checked as a return: a `keeps` promise must hold there, and on the 65816 so must
+the exit state. nt65 counts what the routine leaves on its caller's stack, here one byte, and
+the caller's analysis goes on from there. `.next .return 1` writes the count, which is then a
+promise nt65 checks, and `.next .return ?` says it cannot be known. Labels may follow, as in
+`.next .return, step`, for a jump that goes back to the caller on some paths and to `step` on
+others.
+
 The same annotation covers the `bit` skip trick, where one instruction's operand hides the
 next instruction:
 

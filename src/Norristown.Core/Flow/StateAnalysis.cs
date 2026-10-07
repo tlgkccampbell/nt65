@@ -684,6 +684,10 @@ public sealed class StateAnalysis : IProcessorStates
         }
         if (report is not null && next is not null)
             CheckNamed(step, next, state, routine, report);
+
+        // A `.next .return` goes back to the caller, so the state there is checked as a return's.
+        if (next?.ReturnToken is not null && end == BlockEnd.Return && routine.Signature is not { HasNoCaller: true })
+            report?.CheckExit(step, "`.next .return`:", "here", (routine.Signature ?? Signature.Default).Exit, state.Processor, routine.DisplayName, routine);
         return state;
     }
 
