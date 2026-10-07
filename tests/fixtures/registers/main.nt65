@@ -20,7 +20,7 @@
 
 ; The 6502 has no `phx`, so X is saved through the accumulator: the value has to be followed
 ; across the transfers as well as the pushes for the save and the restore to cancel.
-.proc keeps_by_saving: keeps a, x {
+.proc keeps_by_saving: keeps a, x, y {
     pha
     txa
     pha

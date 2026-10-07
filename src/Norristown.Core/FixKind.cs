@@ -146,6 +146,12 @@ public enum FixKind
     Reads,
 
     /// <summary>
+    /// The register the fix's <see cref="DiagnosticFix.Text"/> names, added to the <c>keeps</c>
+    /// item of the signature of the routine declared at the fix's <see cref="DiagnosticFix.At"/>.
+    /// </summary>
+    Keeps,
+
+    /// <summary>
     /// The constant reported, declared instead as data found elsewhere at its value, with
     /// <c>.data</c> or, for a hardware register, <c>.mmio</c>.
     /// </summary>

@@ -528,6 +528,7 @@
         "union-many-members-given",
         "unmatched-brace",
         "unnamed-label",
+        "unpromised-keep",
         "unused-symbol",
         "unused-use-item",
         "use-brings-in-twice",

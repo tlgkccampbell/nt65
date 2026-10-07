@@ -2978,6 +2978,19 @@ public static class Catalogue
             + "changed and not restored. Save and restore it, for example with `pha` and `pla`, or, where it is "
             + "restored in a way the analysis cannot see, add `.state keeps REG` at that point.");
 
+    internal static DiagnosticDescriptor UnpromisedKeep { get; } = Entry(
+        Area.ControlFlow,
+        "unpromised-keep",
+        Severity.Warning,
+        "this {0} relies on `{1}` keeping {2}, which it does but does not promise (it declares `keeps {3}`)",
+        "A routine that declares `keeps` promises the registers it lists, and only those. nt65 still finds what "
+            + "its body keeps and uses that, so the analysis stays accurate, but a register the list leaves out may "
+            + "change whenever the body does. Here the code after the call uses a value a register held before the "
+            + "call, or this routine's own `keeps` promise depends on it. Add the register to the called routine's "
+            + "`keeps`, save and restore it around the call, or, where the reliance is deliberate, say so with "
+            + "`.allow \"unpromised-keep\"`. A routine that declares no `keeps` promises what its body keeps, and "
+            + "one with no body keeps only what it declares, so neither draws this warning.");
+
     internal static DiagnosticDescriptor KeepsRedundant { get; } = Entry(
         Area.ControlFlow,
         "keeps-redundant",

@@ -22,7 +22,7 @@ CHROUT = $ffd2
 main__save_slot: .res 1
 
 .segment "CODE": absolute
-; .proc keeps_by_saving: keeps a, x  main.nt65:23
+; .proc keeps_by_saving: keeps a, x, y  main.nt65:23
 keeps_by_saving:
     pha
     txa

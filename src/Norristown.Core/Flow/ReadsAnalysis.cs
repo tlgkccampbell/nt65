@@ -18,17 +18,18 @@ internal static class ReadsAnalysis
     /// reads. <paramref name="readers"/> are the routines that reach below their own entry on the
     /// stack, which use what their caller pushed. <paramref name="sites"/>, where it is given,
     /// collects the first statement found to use each register's entry value, and the routine it
-    /// was used through, if any.
+    /// was used through, if any. <paramref name="solved"/>, where it is given, is what reaches
+    /// each block from <paramref name="start"/>, in place of what the walk finds from there.
     /// </summary>
     public static RoutineReads Of(
         RegisterWalk walk, FlowRegion region, Func<Symbol, RoutineRegisters> of, Func<Symbol, RoutineReads> reads,
         IReadOnlySet<RoutineKey> readers, Dictionary<Registers, (Step Step, Symbol? Through)>? sites = null,
-        int start = 0)
+        int start = 0, RegisterState?[]? solved = null)
     {
         var blocks = region.Blocks;
         if (!region.IsEntered || blocks.Count == 0)
             return RoutineReads.Nothing;
-        var reached = walk.Solved(region, of, start);
+        var reached = solved ?? walk.Solved(region, of, start);
 
         var read = Registers.None;
         var complete = true;

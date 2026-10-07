@@ -1255,6 +1255,19 @@ the `keeps y` would be an error at the `jmp`, saying what to do. On an extern pr
 import there is no body to check, so `keeps` is taken on trust, which gives the facts about a
 ROM routine somewhere to live.
 
+A routine that writes no `keeps` promises whatever its body keeps, and its callers may rely on
+all of it. Once it writes `keeps`, the list is the whole promise. nt65 still uses what the body
+keeps, but a caller that relies on a register the list leaves out gets `unpromised-keep` at the
+call:
+
+```text
+main.nt65:12:5: warning: this call relies on `print_digit` keeping Y, which it does but does not promise (it declares `keeps x`) [unpromised-keep]
+```
+
+A caller relies on a register when it uses, after the call, the value the register held before
+it, or when its own `keeps` hands that value back. The fix adds the register to the routine's
+`keeps`. Where the reliance is deliberate, `.allow "unpromised-keep"` before the call says so.
+
 When a routine saves a register to memory and reloads it, nt65 cannot see that the value came
 back unchanged. `.state keeps x` at the point where it has says so.
 

@@ -106,14 +106,17 @@ internal sealed class RegisterWalk
     /// Returns what reaches each block of <paramref name="region"/>, where the routine is entered
     /// at the block at <paramref name="start"/>, with <paramref name="of"/> giving what each
     /// routine it calls keeps. With <paramref name="fromOutside"/> false, a declared label the
-    /// path from the entry does not reach is not entered at all.
+    /// path from the entry does not reach is not entered at all. <paramref name="entered"/> is
+    /// what the registers hold at <paramref name="start"/>, which is each one's own entry value
+    /// unless it says otherwise.
     /// </summary>
-    public RegisterState?[] Solve(FlowRegion region, Func<Symbol, RoutineRegisters> of, int start, bool fromOutside = true)
+    public RegisterState?[] Solve(
+        FlowRegion region, Func<Symbol, RoutineRegisters> of, int start, bool fromOutside = true, RegisterState? entered = null)
     {
         var blocks = region.Blocks;
         var solver = Solver(blocks, of, block => ControlFlow.Onward(blocks, block));
         var called = SavedStack.Entered((region.Routine.Signature ?? Signature.Default).ReturnSize);
-        solver.Enter(start, RegisterState.Entered with { Stack = called });
+        solver.Enter(start, (entered ?? RegisterState.Entered) with { Stack = called });
 
         // A label a `.state` declares, or one that another routine names, may be jumped into
         // from another routine, so the registers there hold nothing this routine put in them. The stack there is what a

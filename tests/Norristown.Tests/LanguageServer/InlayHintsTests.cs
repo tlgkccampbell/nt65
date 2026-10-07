@@ -67,7 +67,7 @@ public sealed class InlayHintsTests
             fill!(count, 0)
             fill!(count = 1, with = 2)
             one!(5)
-            jcs done
+            jvs done
             jmp done
             .res 200
         done:
@@ -133,7 +133,7 @@ public sealed class InlayHintsTests
                 "41: jsr narrow → a8",
                 "43: fill!(count: 16, with: 0)",
                 "44: fill!(count, with: 0)",
-                "47: jcs done long",
+                "47: jvs done long",
             ],
             await ShownAsync(client, timeout));
 
@@ -159,7 +159,7 @@ public sealed class InlayHintsTests
             "The processor state changes from `a16, i16, native` to `a8, i16, native` after this line.",
             hints.Single(hint => hint.Position.Line == 41).Tooltip!.Value);
         Assert.Equal(
-            "`jcs` cannot reach its target in the two-byte form, so it is written as a `bcc` over "
+            "`jvs` cannot reach its target in the two-byte form, so it is written as a `bvc` over "
                 + "a `jmp`: 5 bytes and 3-5 cycles.",
             hints.Single(hint => hint.Position.Line == 47).Tooltip!.Value);
         Assert.Equal(

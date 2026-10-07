@@ -279,21 +279,21 @@ internal static class Edits
             : null;
 
     /// <summary>
-    /// Returns an edit that adds <paramref name="register"/> to the <c>reads</c> item in the
-    /// signature of the routine <paramref name="line"/> opens. It replaces <c>none</c>, or follows
-    /// the registers the item already names. Returns null where the signature writes no
-    /// <c>reads</c> of its own.
+    /// Returns an edit that adds <paramref name="register"/> to the <c>reads</c> or <c>keeps</c>
+    /// item, as <paramref name="item"/> names it, in the signature of the routine
+    /// <paramref name="line"/> opens. It replaces <c>none</c>, or follows the registers the item
+    /// already names. Returns null where the signature writes no such item of its own.
     /// </summary>
-    public static Edit? ReadsItem(SyntaxTree tree, int line, string register)
+    public static Edit? AddedRegister(SyntaxTree tree, int line, string item, string register)
     {
         if (RoutineHead(tree, line) is not ({ } signature, _)
             || signature.Entry.DescendantNodes().OfType<StateRegistersItemSyntax>()
-                .FirstOrDefault(item => item.Name.Text.Equals("reads", StringComparison.OrdinalIgnoreCase)) is not { } reads
-            || reads.Registers.Count == 0)
+                .FirstOrDefault(each => each.Name.Text.Equals(item, StringComparison.OrdinalIgnoreCase)) is not { } found
+            || found.Registers.Count == 0)
         {
             return null;
         }
-        var last = reads.Registers[^1];
+        var last = found.Registers[^1];
         return last.Name.Text.Equals("none", StringComparison.OrdinalIgnoreCase)
             ? new Edit(tree, last.Span, register)
             : new Edit(tree, new TextSpan(last.Span.End, 0), $", {register}");

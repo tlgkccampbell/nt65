@@ -154,8 +154,8 @@
     jmp @sequence
 }
 
-; Returns the next byte of the packed data in A, and moves `source` past it. Keeps X and Y.
-.proc get: keeps x, y {
+; Returns the next byte of the packed data in A, and moves `source` past it. Keeps X, Y and the carry.
+.proc get: keeps x, y, c {
     fetch:
     lda $FFFF                       ; the operand is `source`
     inc fetch + 1

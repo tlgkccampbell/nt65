@@ -116,6 +116,11 @@ public static class RegisterKeeps
         }
         while (moved);
 
+        // A declared `keeps` is a contract, and a call that relies on more than it promises is
+        // reported once what every routine keeps and reads is settled.
+        foreach (var (name, region) in regions)
+            UnpromisedKeeps.Check(walks[name], region, Of, ReadsOf, readers, diagnostics);
+
         // A routine that declares what it reads shows its declaration, which is what its callers
         // go by, and is checked against what its body was found to read.
         foreach (var (name, region) in regions)

@@ -215,8 +215,14 @@ internal static class Fixes
                 break;
 
             case FixKind.Reads when fix is { Text: { } register, At: { } routine }
-                && Edits.ReadsItem(tree, routine.LineIndex, register) is { } added:
+                && Edits.AddedRegister(tree, routine.LineIndex, "reads", register) is { } added:
                 yield return Fix(diagnostic, $"Add `{register}` to `reads`", [added]);
+                break;
+
+            case FixKind.Keeps when fix is { Text: { } kept, At: { } callee }
+                && analysis.ModelFor(callee.File) is { } declaring
+                && Edits.AddedRegister(declaring.Tree, callee.LineIndex, "keeps", kept) is { } promise:
+                yield return Fix(diagnostic, $"Add `{kept}` to the `keeps` of `{declaring.Tree.Text[Edits.SpanOf(declaring.Tree, callee).Start..Edits.SpanOf(declaring.Tree, callee).End]}`", [promise]);
                 break;
 
             case FixKind.Unused when fix.Text is { } unused:

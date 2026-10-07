@@ -33,6 +33,11 @@ public sealed class CodeActionsTests
             ".export .proc main {\n    .if 1 {\n        nop\n    }\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
         },
         {
+            "Add `y` to the `keeps` of `print_digit`",
+            ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr print_digit\n    sty $11\n    rts\n}\n",
+            ".proc print_digit: a8, i8, keeps x, y {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr print_digit\n    sty $11\n    rts\n}\n"
+        },
+        {
             "Add `.next @over`: the branch is always taken",
             ".export .proc main {\n    bcs @over\n    .byte 1\n@over:\n    rts\n}\n",
             ".export .proc main {\n    bcs @over\n    .next @over\n    .byte 1\n@over:\n    rts\n}\n"

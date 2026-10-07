@@ -4570,6 +4570,17 @@ Recorded so the reasoning survives. None is open.
   rather than inferred or folded into a general jump. A `.next` that could only repeat or
   contradict what nt65 reads is an error, so the old spelling of a fall-through is caught
   where it stands, with a fix that writes the new one.
+- **A declared `keeps` is a contract.** Where a routine with a body writes no `keeps`, what it
+  keeps is inferred and callers use all of it. Where it writes one, the list is the whole
+  promise: the body is checked against it, and a caller that relies on a register the list
+  leaves out is warned at its call or tail call, as `unpromised-keep`. The analysis still uses
+  what the body keeps, so it stays accurate; the warning marks where a change to the routine's
+  body would break its caller. A caller relies on a register when code after the call uses the
+  value it held before, or when the caller's own `keeps` hands that value back. The 65816's high
+  byte of A is left out, since 8-bit code keeps it without meaning to and a later read of A
+  cannot be told from a read of its low byte. A routine with no body keeps only what it
+  declares, so it never draws the warning. This is one case of a wider rule: anything left
+  undeclared is inferred and used, and anything declared in a category is a contract.
 - **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C and V as 0, 1 or
   unknown through each routine, before any other analysis reads its blocks. An immediate load,
   `clc`, `sec`, `clv`, and a `rep` or `sep` with a constant mask set a flag; a branch's taken
