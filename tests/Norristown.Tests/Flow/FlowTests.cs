@@ -410,7 +410,7 @@ public sealed class FlowTests
         var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n"
             + ".proc other {\n    rts\n}\n"
             + ".proc p {\n    beq other\n    nop\n    nop\n    rts\n}\n"
-            + ".proc q {\n    ldx #4\n@loop:\n    beq other\n    dex\n    bne @loop\n    rts\n}\n"));
+            + ".proc q {\n    ldx #4\n@loop:\n    lda $10\n    beq other\n    dex\n    bne @loop\n    rts\n}\n"));
         Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
         var regions = analysis.Files.Single().Flow.Regions;
         var p = regions.Single(region => region.Routine.Name == "p");

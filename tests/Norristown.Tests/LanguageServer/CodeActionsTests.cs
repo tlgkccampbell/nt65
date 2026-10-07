@@ -34,8 +34,8 @@ public sealed class CodeActionsTests
         },
         {
             "Add `.next @over`: the branch is always taken",
-            ".export .proc main {\n    sec\n    bcs @over\n    .byte 1\n@over:\n    rts\n}\n",
-            ".export .proc main {\n    sec\n    bcs @over\n    .next @over\n    .byte 1\n@over:\n    rts\n}\n"
+            ".export .proc main {\n    bcs @over\n    .byte 1\n@over:\n    rts\n}\n",
+            ".export .proc main {\n    bcs @over\n    .next @over\n    .byte 1\n@over:\n    rts\n}\n"
         },
         {
             "Change to `.fallthrough`",

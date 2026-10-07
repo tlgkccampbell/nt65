@@ -128,6 +128,20 @@ public enum FixKind
     /// </summary>
     Flags,
 
+    /// <summary>
+    /// The branch reported, replaced by the instruction the fix's <see cref="DiagnosticFix.Text"/>
+    /// spells, with the <c>jmp</c> it branched over, at the fix's <see cref="DiagnosticFix.At"/>,
+    /// removed. The label the branch went to goes too where nothing else names it.
+    /// </summary>
+    BranchOver,
+
+    /// <summary>
+    /// The operand reported, replaced by the one the fix's <see cref="DiagnosticFix.Text"/>
+    /// spells, with the <c>clc</c> or <c>sec</c> before it, at the fix's
+    /// <see cref="DiagnosticFix.At"/>, removed.
+    /// </summary>
+    CarryFolded,
+
     /// <summary>The register added to the <c>reads</c> item of the routine's signature.</summary>
     Reads,
 

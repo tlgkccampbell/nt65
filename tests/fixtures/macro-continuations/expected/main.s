@@ -39,8 +39,8 @@ main__main:
     sta z:ptr
     nop
     ; end of store!
-    ; if!(eq)  main.nt65:90
-    bne if__skip
+    ; if!(cs)  main.nt65:90
+    bcc if__skip
     lda #0
     jmp if__done
 if__skip:

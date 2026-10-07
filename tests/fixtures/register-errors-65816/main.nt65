@@ -69,7 +69,7 @@
 ; A branch that names the routine itself, and a `.next` naming one on a jump through a pointer,
 ; hand control on the same way: control comes back from neither.
 .proc branches_off: a8, i8, keeps a {
-    ldx #1
+    inx
     bne widens              ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `widens`, which does not promise to keep a: add `keeps a` to `widens` if it preserves it
     rts
 }
@@ -81,7 +81,7 @@
 
 ; And where the routine handed to promises to keep A, the branch is certified.
 .proc branches_on: a8, i8, keeps a {
-    ldx #1
+    inx
     bne holds
     rts
 }

@@ -11,6 +11,9 @@
 .data ret:     .addr
 .data sign:    .byte
 
+; The KERNAL routine that prints the character in A.
+.proc CHROUT = $ffd2: reads a
+
 .segment CODE
 .proc dispatch {
     lda command
@@ -45,8 +48,8 @@
 }
 
 .proc always_taken {
-    lda #1
-    bne @over                       ; A is not zero, so this is always taken
+    jsr CHROUT                      ; the ROM routine returns with carry clear
+    bcc @over                       ; so this is always taken
     .next @over
     .byte "INLINE TEXT", 0
 @over:

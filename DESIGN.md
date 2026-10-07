@@ -1121,7 +1121,7 @@ Standard forms, as in ca65:
     lda (ptr),y         ; indirect indexed
     lda (ptr,x)         ; indexed indirect
     bne @loop           ; relative
-    jeq @far            ; long branch — see 7.6
+    jcs @far            ; long branch — see 7.6
     brk #0              ; signature byte required, see below
     jmp (vector)        ; indirect
 ```
@@ -1620,9 +1620,11 @@ label:
   them; where it is the last line of a routine's body its message says `.fallthrough` is what
   was meant, and its fix writes that.
 - **After a conditional branch**, `.next` names the branch's own target and nothing else, and
-  says the branch is **always taken**: the flags are known where it stands, as in
-  `bne L297E ; always` after a load of a nonzero value, or `bcs over` after a routine that
-  always returns with carry set. The edge that runs on past the branch is removed and the one
+  says the branch is **always taken**: the flags are known where it stands from something nt65
+  does not follow, as in `bcs over` after a routine that always returns with carry set. A
+  branch whose flag the routine's own instructions decide needs no `.next`, as the flag
+  analysis below says, and where it has one the editor offers to remove it. A `.next` on a
+  branch the flags show is never taken is an error. The edge that runs on past the branch is removed and the one
   to its target stays, carrying the state after the branch, as a taken branch's edge does. What
   follows the branch is then reached only by what else names it, so text or a table there is
   not run into, and a label there that nothing else reaches is unreachable as usual. `.next ?`
@@ -1660,9 +1662,9 @@ The third directive is about the end of a routine rather than a statement:
 | jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary; for a branch, `bne NULL-1`, the label at that address written as the operand, since a branch reaches only code within its range |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the memory operand of an instruction that reads it, the argument of `.sizeof`, `.countof`, `.endof`, `.spanof`, `.addrsize`, `.mincycles`, `.maxcycles` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
-| code nothing reaches: an instruction with no label after an `rts`, a `jmp` or a call that never returns | no fall-through and no label, so nothing can name it | a warning at its first instruction, faded as unneeded; `.allow "code-unreachable"` where it is reached in a way nt65 cannot see |
+| code nothing reaches: an instruction with no label after an `rts`, a `jmp`, a call that never returns, or a branch the flags show is always taken | no fall-through and no label, so nothing can name it; in a macro body, no call of the macro reaches it | a warning at its first instruction, faded as unneeded; `.allow "code-unreachable"` where it is reached in a way nt65 cannot see |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next. A routine that ends in such data is reported once, as running into it |
-| a conditional branch that is always taken: `bne L ; always`, `bcs` over inline text | the flags are known where the branch stands, which nt65 does not work out | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
+| a conditional branch that is always taken: `bcs` over inline text after a routine that returns with carry set | the flags are known where the branch stands from something the flag analysis does not follow, such as what a routine returns with; a flag the routine's own instructions set is followed, and needs nothing | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7). On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
 | falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; the fix writes the `.fallthrough` where the routine written next is known. Where the last statement is a conditional branch, the message offers first the `.next` naming the branch's own target, for a branch that is always taken, and no `.next ?`, which cannot follow a branch. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
@@ -4568,6 +4570,21 @@ Recorded so the reasoning survives. None is open.
   rather than inferred or folded into a general jump. A `.next` that could only repeat or
   contradict what nt65 reads is an error, so the old spelling of a fall-through is caught
   where it stands, with a fix that writes the new one.
+- **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C and V as 0, 1 or
+  unknown through each routine, before any other analysis reads its blocks. An immediate load,
+  `clc`, `sec`, `clv`, and a `rep` or `sep` with a constant mask set a flag; a branch's taken
+  edge knows its flag and its fall-through the opposite; an instruction that sets N and Z from
+  one result ties them, so N known to be 1 means Z is 0. Paths meet keeping only what every one
+  agrees on. A call makes every flag unknown, because a signature does not say what a routine
+  does to them yet, and so does a label anything but the routine's own transfers names, a
+  `.state` label, or an instruction the program patches. A branch whose flag is known is then
+  a jump or nothing, and the edge it never takes is removed. Only what the CPU defines is used, so
+  nothing about memory is assumed. The same facts give the editor's flag hints: a `.next` the
+  flags prove, a branch never taken, a `jmp` that can be a branch, a branch over a `jmp`, and
+  a `clc` or `sec` that is not needed or can be folded into an `adc #n-1` or `sbc #n-1`. A
+  line of a macro body serves every call, so code there is reported as never reached only
+  where no call reaches it: a constant argument often decides a branch in one call and not in
+  another.
 - **An always-taken branch is a `.next` naming its own target.** 6502 code often branches on
   flags it knows, `bne` after loading a nonzero value or `bcs` after a routine that always sets
   carry, as a two-byte jump or to hop over text. Once `.next` stopped naming the successors of

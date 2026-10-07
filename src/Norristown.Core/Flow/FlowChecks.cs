@@ -20,6 +20,12 @@ internal sealed class FlowChecks
     private readonly List<Diagnostic> diagnostics = [];
     private readonly List<RunningOn> runningOn = [];
 
+    // A line of a macro body serves every call, so code there that one expansion never reaches
+    // is reported only where no expansion of the line is reached. The first holds what would be
+    // reported for each such line, and the second the lines some expansion reaches.
+    private readonly Dictionary<SyntaxNode, Diagnostic> unreachedInExpansions = [];
+    private readonly HashSet<SyntaxNode> reachedInExpansions = [];
+
     // Whether the file places another module or may be placed itself. In such a file a
     // `.fallthrough` may name a routine that the file's own layout cannot show comes next, so
     // the claim is left for the translation unit to check.
@@ -35,7 +41,8 @@ internal sealed class FlowChecks
     }
 
     /// <summary>Gets what the checks have found, in the order they were reported.</summary>
-    public IReadOnlyList<Diagnostic> Found => diagnostics;
+    public IReadOnlyList<Diagnostic> Found =>
+        [.. diagnostics, .. unreachedInExpansions.Where(pair => !reachedInExpansions.Contains(pair.Key)).Select(pair => pair.Value)];
 
     /// <summary>
     /// Gets every <c>.fallthrough</c> whose claim only the translation unit can check. See
@@ -191,17 +198,27 @@ internal sealed class FlowChecks
             // name it. That is code after a transfer that ends the path, or code that opens a
             // nested segment block, which fall-through never enters. The run is reported once, at
             // its first instruction.
-            if (block.Index > 0 && block.Label is null && block.Predecessors.Count == 0
-                && block.Steps is [{ Statement: InstructionStatementSyntax } first, ..])
+            var unreached = block.Index > 0 && block.Label is null && block.Predecessors.Count == 0;
+            if (!unreached)
+                reachedInExpansions.UnionWith(block.Steps.Where(step => step.On is not null).Select(step => step.Statement));
+            if (unreached && block.Steps is [{ Statement: InstructionStatementSyntax } first, ..])
             {
-                diagnostics.Add(new Diagnostic(first.Statement.Tree.GetSpan(first.Statement.Span),
-                    Catalogue.CodeUnreachable.Message(block.Stream != region.Blocks[block.Index - 1].Stream
+                var above = region.Blocks[block.Index - 1];
+                var found = new Diagnostic(first.Statement.Tree.GetSpan(first.Statement.Span),
+                    Catalogue.CodeUnreachable.Message(block.Stream != above.Stream
                         ? "execution does not fall into a nested segment block, so start it with a label that is "
                             + "jumped to, named by a `.next`, or declared by a `.state`"
-                        : "the statement above does not fall through, and nothing branches or jumps here"))
+                        : above.Steps is [.., var branch] && flow.Flags?.ProvedAt(branch) is { Taken: true } proved
+                            ? $"`{branch.Statement.GetText().Trim()}` above is always taken, because {proved.Why}, "
+                                + "and nothing branches or jumps here"
+                            : "the statement above does not fall through, and nothing branches or jumps here"))
                 {
                     IsUnnecessary = true,
-                });
+                };
+                if (first.On is null)
+                    diagnostics.Add(found);
+                else
+                    unreachedInExpansions.TryAdd(first.Statement, found);
                 continue;
             }
             if (block.Index == 0 || block.Label is not { Kind: not SymbolKind.Data } label || block.Predecessors.Count > 0
@@ -382,6 +399,12 @@ internal sealed class FlowChecks
                 if (flow.Named(next, unit.Step.On).Select(named => named.Symbol).ToList() is [var only] && only == target
                     && next.Targets.Count == 1)
                 {
+                    // The flags may show that the branch the `.next` calls always taken never is.
+                    if (flow.Flags?.ProvedAt(unit.Step) is { Taken: false } never)
+                    {
+                        diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Span), Severity.Error,
+                            Catalogue.NextNeverTaken.Message(target.DisplayName, unit.Step.Statement.GetText().Trim(), never.Why)));
+                    }
                     continue;
                 }
                 diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,

@@ -46,7 +46,7 @@ public sealed class SemanticTokensTests
             lda origin,x
             lda #twice(2)
             poke!({#Joy::X})
-            bne @loop
+            bcc @loop
             rts
         }
         """;

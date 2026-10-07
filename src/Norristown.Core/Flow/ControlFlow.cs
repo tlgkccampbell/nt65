@@ -88,6 +88,12 @@ public sealed class ControlFlow
     public StackEffects Effects { get; internal set; } = StackEffects.None;
 
     /// <summary>
+    /// Gets what is known about the flags at each statement, and which conditional branches go
+    /// one way only.
+    /// </summary>
+    internal FlagAnalysis? Flags { get; private set; }
+
+    /// <summary>
     /// Gets each instruction that stands on a label a <c>.patch</c> names, in every expansion it
     /// is laid out in. The program rewrites such an instruction's operand as it runs, so the
     /// operand as written says only where the program starts from.
@@ -124,6 +130,13 @@ public sealed class ControlFlow
             flow.returnAddresses.UnionWith(returnAddresses);
             built.Add((routine, units, blocks, inlineData));
         }
+
+        // A branch the flags decide is a jump, or transfers nothing, before anything else reads
+        // the blocks. Which instructions the program rewrites is known only once every routine's
+        // annotations have been gathered.
+        flow.Flags = new FlagAnalysis(model, layout, flow.Patched);
+        foreach (var (_, units, blocks, _) in built)
+            flow.Decide(units, blocks);
 
         var bodies = built.ToDictionary(each => each.Routine, each => (IReadOnlyList<BasicBlock>)each.Blocks);
         foreach (var (routine, units, blocks, inlineData) in built)
@@ -235,6 +248,7 @@ public sealed class ControlFlow
             KeepsOf = KeepsOf,
             ReadsOf = ReadsOf,
             Effects = Effects,
+            Flags = Flags,
         };
         copy.regions.AddRange(regions.Select(region => region.ForComposing()));
         return copy;
@@ -308,6 +322,7 @@ public sealed class ControlFlow
             return BlockEnd.Declared;
         return Transfers.Of(step.Statement, layout.Of(step.Statement, step.On)?.Mode) switch
         {
+            Transfer.Branch when Flags?.ProvedAt(step) is { } proved => proved.Taken ? BlockEnd.Jump : BlockEnd.Through,
             Transfer.Branch => BlockEnd.Branch,
             Transfer.Jump => BlockEnd.Jump,
             Transfer.Elsewhere => BlockEnd.Elsewhere,
@@ -490,6 +505,8 @@ public sealed class ControlFlow
     {
         if (blocks.Count == 0)
             return;
+        foreach (var block in blocks)
+            block.IsReached = false;
         var pending = new Queue<int>();
         pending.Enqueue(0);
         blocks[0].IsReached = true;
@@ -503,6 +520,58 @@ public sealed class ControlFlow
                 pending.Enqueue(edge.To);
             }
         }
+    }
+
+    /// <summary>
+    /// Makes each conditional branch that the flags decide go one way only. One that is always
+    /// taken becomes a jump, which is a tail call where its target is outside the routine, and
+    /// one that is never taken transfers nothing. The edge it does not take is removed, and what
+    /// the blocks reach is worked out again. A branch with a <c>.next</c> under it keeps the edges
+    /// the <c>.next</c> names, and one whose target nt65 cannot read keeps both.
+    /// </summary>
+    private void Decide(IReadOnlyList<Unit> units, List<BasicBlock> blocks)
+    {
+        var edges = units.Where(EndsBlock).Select(unit => (SyntaxNode)unit.Step.Statement)
+            .Concat(units.Select(unit => unit.Next).OfType<NextDirectiveSyntax>())
+            .Where(node => node.Tree == model.Tree)
+            .SelectMany(node => node.DescendantTokens())
+            .Select(token => token.Span)
+            .ToHashSet();
+        var proved = Flags!.Prove(blocks, edges);
+        if (proved.Count == 0)
+            return;
+        foreach (var (index, branch) in proved)
+        {
+            var block = blocks[index];
+            if (block.End != BlockEnd.Branch)
+                continue;
+            var step = block.Steps[^1];
+            var statement = (InstructionStatementSyntax)step.Statement;
+            var mode = layout.Of(statement, step.On)?.Mode;
+            var target = Targets.Of(model, Transfers.TargetOf(statement, mode), step.On)?.Symbol;
+            var taken = block.Successors.Where(edge => edge.Kind == EdgeKind.Taken).ToList();
+            if (taken.Count == 0 && target is null)
+                continue;
+            if (branch.Taken)
+            {
+                if (index + 1 < blocks.Count && blocks[index + 1].IsFallenInto)
+                {
+                    block.Unreach(new FlowEdge(index + 1, EdgeKind.FallThrough), blocks[index + 1]);
+                    blocks[index + 1].IsFallenInto = false;
+                }
+                block.End = taken.Count > 0 ? BlockEnd.Jump : BlockEnd.TailCall;
+                if (taken.Count == 0)
+                    block.Called(target!);
+            }
+            else
+            {
+                foreach (var edge in taken)
+                    block.Unreach(edge, blocks[edge.To]);
+                block.End = BlockEnd.Through;
+            }
+            block.BranchesOut = false;
+        }
+        Reach(blocks);
     }
 
     /// <summary>

@@ -88,7 +88,7 @@
         count = 2)                  ; a named argument
     store!({ptr}, scaled(2, 3), times = twice, pad = 1)
     if!(                            ; a block argument after arguments across lines
-        eq) {
+        cs) {
         lda #0
     } else {
         inx

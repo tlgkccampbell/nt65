@@ -28,7 +28,7 @@ public sealed class SymbolRequestsTests
                 lda #0
                 sta ptr
             @loop:
-                bne @loop
+                bvc @loop
                 rts
             }
         }
@@ -425,7 +425,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var hover = await client.HoverAsync(Uri, Locate.At(Source, "bne @loop"), timeout);
+        var hover = await client.HoverAsync(Uri, Locate.At(Source, "bvc @loop"), timeout);
         Assert.NotNull(hover);
         Assert.Contains("cycles  2-4       block 2-4", hover.Contents.Value, StringComparison.Ordinal);
     }

@@ -46,7 +46,7 @@ operands__loop:
     lda (ptr),y
     lda (ptr,x)
     bne operands__loop
-    beq operands__far
+    bcs operands__far
     brk #0
     jmp (vector)
 operands__far:

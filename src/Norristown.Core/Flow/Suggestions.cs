@@ -1,3 +1,4 @@
+using System.Globalization;
 using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
@@ -31,6 +32,13 @@ public static class Suggestions
         found.AddRange(TailCalls(file, regions, readsCallerStack));
         if (file.State is { } states)
             found.AddRange(RedundantWidths(file, regions, states));
+        if (file.Flow.Flags is { } flags)
+        {
+            found.AddRange(ProvedBranches(file, regions, flags));
+            found.AddRange(JumpsAsBranches(file, regions, flags));
+            found.AddRange(CarrySetups(file, regions, flags));
+        }
+        found.AddRange(BranchesOverJumps(file, regions));
         return Norristown.Diagnostics.Ordered(found);
     }
 
@@ -230,6 +238,257 @@ public static class Suggestions
             _ => "A, X and Y are",
         };
         return $"{registers} already {width} here";
+    }
+
+    /// <summary>
+    /// Returns a suggestion for each conditional branch that the flags show goes one way only,
+    /// where that is worth saying. A <c>.next</c> that says a branch is always taken is not needed
+    /// where the flags prove it, and a branch that is never taken is usually a mistake.
+    /// </summary>
+    private static IEnumerable<Diagnostic> ProvedBranches(
+        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
+    {
+        var model = file.Model;
+        var seen = new HashSet<SyntaxNode>();
+        foreach (var block in regions.SelectMany(region => region.Blocks))
+        {
+            if (block.Steps is not [.., { Statement: InstructionStatementSyntax branch } step]
+                || !Own(model, step) || !seen.Add(branch) || flags.ProvedAt(step) is not { } proved)
+            {
+                continue;
+            }
+            var text = branch.GetText().Trim();
+            if (proved.Taken && block.Next is { QuestionToken: null, ReturnToken: null, Targets.Count: 1 } next
+                && next.Tree == model.Tree)
+            {
+                yield return new Diagnostic(next.Tree.GetSpan(next.Span), Catalogue.NextProved.Message(text, proved.Why))
+                {
+                    Fix = new DiagnosticFix(FixKind.Redundant),
+                    IsUnnecessary = true,
+                };
+            }
+            else if (!proved.Taken && block.Next is null)
+            {
+                yield return new Diagnostic(branch.Tree.GetSpan(branch.Span), Catalogue.BranchNeverTaken.Message(text, proved.Why))
+                {
+                    Fix = new DiagnosticFix(FixKind.Redundant),
+                    IsUnnecessary = true,
+                };
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns a suggestion for each <c>jmp</c> to a label that a branch could reach, which saves a
+    /// byte. On a CPU with <c>bra</c> that branch is <c>bra</c>. On any other it is a branch on a
+    /// flag known on every path to the <c>jmp</c>, the carry first.
+    /// </summary>
+    private static IEnumerable<Diagnostic> JumpsAsBranches(
+        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
+    {
+        var model = file.Model;
+        var layout = file.Layout;
+        var always = Instructions.Has(layout.Cpu, MnemonicKind.Bra);
+        var seen = new HashSet<SyntaxNode>();
+        foreach (var step in regions.SelectMany(region => region.Blocks).SelectMany(block => block.Steps))
+        {
+            if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jmp } jump
+                || !Own(model, step) || !seen.Add(jump) || file.Flow.Patched.Contains(step.Key)
+                || layout.Of(jump, step.On)?.Mode != AddressingMode.Absolute
+                || Targets.Of(model, Transfers.TargetOf(jump, AddressingMode.Absolute), step.On) is not { Symbol.IsAddress: true } target
+                || layout.PositionOf(jump) is not { } from
+                || layout.PositionOf(target.Symbol, target.At) is not { } to || to.Stream != from.Stream)
+            {
+                continue;
+            }
+
+            // The branch is a byte shorter than the jump, which brings a target after it a byte nearer.
+            var reach = to.Offset >= from.End ? to.Offset - from.End : to.Offset - from.End + 1;
+            if (reach is < -128 or > 127)
+                continue;
+            string branch;
+            var why = "";
+            if (always)
+            {
+                branch = "bra";
+            }
+            else if (flags.Before(step) is { } state && Known(state) is { } flag)
+            {
+                var value = state.ValueOf(flag)!.Value;
+                branch = SyntaxFacts.TextOf(FlagAnalysis.BranchWhen(flag, value));
+                why = $", because {FlagState.Describe(flag, value)}";
+            }
+            else
+            {
+                continue;
+            }
+            var operand = jump.Operand!.GetText().Trim();
+            yield return new Diagnostic(jump.Tree.GetSpan(jump.Span),
+                Catalogue.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why))
+            {
+                Fix = new DiagnosticFix(FixKind.Branch, branch),
+            };
+        }
+
+        // The carry comes first, since it is the flag code most often sets on purpose.
+        static StatusFlags? Known(FlagState state) =>
+            new[] { StatusFlags.Carry, StatusFlags.Zero, StatusFlags.Negative, StatusFlags.Overflow }
+                .Where(flag => state.ValueOf(flag) is not null)
+                .Select(flag => (StatusFlags?)flag)
+                .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Returns a suggestion for each <c>clc</c> or <c>sec</c> that the carry makes unneeded. One
+    /// that sets C to what it already is can go. One before an immediate <c>adc</c> or
+    /// <c>sbc</c> that sets C to the opposite of what it is can go too, where the operand is made
+    /// one less. That holds only where the operand's sign and decimal digits come out the same.
+    /// </summary>
+    private static IEnumerable<Diagnostic> CarrySetups(
+        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
+    {
+        var model = file.Model;
+        var layout = file.Layout;
+        var seen = new HashSet<SyntaxNode>();
+        foreach (var block in regions.SelectMany(region => region.Blocks))
+        {
+            for (var i = 0; i < block.Steps.Count; i++)
+            {
+                var step = block.Steps[i];
+                if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc or MnemonicKind.Sec } setup
+                    || !Own(model, step) || !seen.Add(setup) || file.Flow.Patched.Contains(step.Key)
+                    || flags.Before(step)?.ValueOf(StatusFlags.Carry) is not { } carry)
+                {
+                    continue;
+                }
+                var sets = setup.MnemonicKind == MnemonicKind.Sec;
+                var text = setup.GetText().Trim();
+                if (carry == sets)
+                {
+                    yield return new Diagnostic(setup.Tree.GetSpan(setup.Span), Catalogue.CarryAlreadySet.Message(text, sets ? 1 : 0))
+                    {
+                        Fix = new DiagnosticFix(FixKind.Redundant),
+                        IsUnnecessary = true,
+                    };
+                    continue;
+                }
+
+                var uses = sets ? MnemonicKind.Sbc : MnemonicKind.Adc;
+                if (RegisterWalk.NextOf(block, i) is not { Statement: InstructionStatementSyntax arithmetic } next
+                    || arithmetic.MnemonicKind != uses || !Own(model, next) || file.Flow.Patched.Contains(next.Key)
+                    || !Adjacent(setup, arithmetic)
+                    || StepOperands.Immediate(model, layout, next) is not { } value
+                    || CodeLayout.Expression(arithmetic.Operand!) is not { } expression
+                    || !Foldable(value, layout.Of(arithmetic, next.On)?.Bits ?? 8))
+                {
+                    continue;
+                }
+                var folded = Decremented(expression, value);
+                yield return new Diagnostic(expression.Tree.GetSpan(expression.Span),
+                    Catalogue.CarryFolded.Message(
+                        text, arithmetic.GetText().Trim(), $"{SyntaxFacts.TextOf(uses)} #{folded}", carry ? 1 : 0))
+                {
+                    Fix = new DiagnosticFix(FixKind.CarryFolded, folded, setup.Tree.GetSpan(setup.Span)),
+                };
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns whether an immediate operand of <paramref name="bits"/> bits can be made one less
+    /// with the carry it adds folded in, and still give the same result and flags. Zero and the
+    /// value with only the top bit set change sign, and a low digit of 0 changes the decimal
+    /// digits.
+    /// </summary>
+    private static bool Foldable(long value, int bits)
+    {
+        var n = value & ((1L << bits) - 1);
+        return n != 0 && n != 1L << (bits - 1) && (n & 0xf) != 0;
+    }
+
+    /// <summary>
+    /// Returns the text of an expression one less than <paramref name="value"/>, which is the
+    /// expression's value. A number keeps the way it was written, and anything else has
+    /// <c>-1</c> after it.
+    /// </summary>
+    private static string Decremented(ExpressionSyntax expression, long value)
+    {
+        var text = expression.GetText().Trim();
+        if (expression is NumberExpressionSyntax)
+        {
+            var less = value - 1;
+            if (text.StartsWith('$'))
+            {
+                var digits = less.ToString(text.Any(char.IsUpper) ? "X" : "x", CultureInfo.InvariantCulture);
+                return "$" + digits.PadLeft(text.Length - 1, '0');
+            }
+            if (text.StartsWith('%'))
+                return "%" + Convert.ToString(less, 2).PadLeft(text.Length - 1, '0');
+            return less.ToString(CultureInfo.InvariantCulture);
+        }
+        return expression is NameExpressionSyntax ? $"{text}-1" : $"({text})-1";
+    }
+
+    /// <summary>
+    /// Returns a suggestion for each conditional branch over a <c>jmp</c>, where the opposite
+    /// branch to the jump's target can do both in one instruction. The <c>jmp</c> has to stand
+    /// alone between the branch and the label the branch goes to, with nothing else reaching it.
+    /// </summary>
+    private static IEnumerable<Diagnostic> BranchesOverJumps(FileAnalysis file, IReadOnlyList<FlowRegion> regions)
+    {
+        var model = file.Model;
+        var layout = file.Layout;
+        foreach (var region in regions)
+        {
+            var blocks = region.Blocks;
+            for (var i = 0; i + 2 < blocks.Count; i++)
+            {
+                var block = blocks[i];
+                if (block.End != BlockEnd.Branch || block.Next is not null
+                    || block.Steps is not [.., { Statement: InstructionStatementSyntax branch } branching]
+                    || !Own(model, branching) || file.Flow.Patched.Contains(branching.Key)
+                    || FlagAnalysis.Tested(branch.MnemonicKind) is not { } tested
+                    || SyntaxFacts.IsLongBranch(branch.MnemonicKind)
+                    || layout.Of(branch) is not { Length: 2, Inverted: false }
+                    || layout.PositionOf(branch) is not { } from)
+                {
+                    continue;
+                }
+                var over = blocks[i + 1];
+                if (over.Label is not null || over.Predecessors.Count != 1 || over.Next is not null
+                    || over.Steps is not [{ Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jmp } jump } jumping]
+                    || !Own(model, jumping) || file.Flow.Patched.Contains(jumping.Key)
+                    || layout.Of(jump)?.Mode != AddressingMode.Absolute
+                    || Targets.Of(model, Transfers.TargetOf(jump, AddressingMode.Absolute), null) is not { Symbol.IsAddress: true } target
+                    || layout.PositionOf(target.Symbol, target.At) is not { } to || to.Stream != from.Stream
+                    || layout.PositionOf(jump) is not { } skipped
+                    || blocks[i + 2].Label is not { } skip
+                    || Targets.Of(model, Transfers.TargetOf(branch, AddressingMode.Relative), null)?.Symbol != skip
+                    || target.Symbol == skip
+                    || !Adjacent(branch, jump))
+                {
+                    continue;
+                }
+
+                // The jump's 3 bytes go, which brings a target after them 3 bytes nearer.
+                int reach;
+                if (to.Offset >= skipped.End)
+                    reach = to.Offset - skipped.End;
+                else if (to.Offset <= from.Offset)
+                    reach = to.Offset - from.End;
+                else
+                    continue;
+                if (reach is < -128 or > 127)
+                    continue;
+                var opposite = SyntaxFacts.TextOf(FlagAnalysis.BranchWhen(tested.Flag, !tested.TakenWhen));
+                var replaced = $"{opposite} {jump.Operand!.GetText().Trim()}";
+                yield return new Diagnostic(branch.Tree.GetSpan(branch.Span),
+                    Catalogue.BranchOverJump.Message(branch.GetText().Trim(), jump.GetText().Trim(), replaced))
+                {
+                    Fix = new DiagnosticFix(FixKind.BranchOver, replaced, jump.Tree.GetSpan(jump.Span)),
+                };
+            }
+        }
     }
 
     /// <summary>

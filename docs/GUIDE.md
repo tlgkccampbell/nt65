@@ -1108,13 +1108,18 @@ next instruction:
 }
 ```
 
-After a conditional branch, `.next` naming the branch's own target says the branch is always
-taken, which is common in 6502 code that knows its flags:
+nt65 follows the N, Z, C and V flags through each routine, from what the instructions
+themselves set: a load of a constant, `clc` and `sec`, and the branches already taken on the
+way. Where the flag a branch tests is known on every path to it, the branch goes one way only,
+so `lda #1` then `bne @over` needs nothing more. A call leaves every flag unknown, because a
+signature does not say what a routine does to them. Where the flags are known from something
+nt65 cannot see, such as the way a ROM routine returns, `.next` naming the branch's own target
+says the branch is always taken:
 
 ```nt65
 .proc always_taken {
-    lda #1
-    bne @over                       ; A is not zero, so this is always taken
+    jsr CHROUT                      ; the ROM routine returns with carry clear
+    bcc @over                       ; so this is always taken
     .next @over
     .byte "INLINE TEXT", 0
 @over:
@@ -1123,7 +1128,9 @@ taken, which is common in 6502 code that knows its flags:
 ```
 
 `.next` is only for what nt65 cannot see. After an ordinary instruction or a direct `jsr`,
-where nt65 already knows where flow goes, it is an error. So is `.next ?` after a conditional
+where nt65 already knows where flow goes, it is an error. After a branch nt65 proves is always
+taken, the editor offers to remove it, and after one the flags show is never taken, it is an
+error. So is `.next ?` after a conditional
 branch, because the branch goes either to its operand or on, and neither is unknown. Where the
 operand is an expression, such as `NULL-1`, write the label at that address instead.
 
@@ -1805,7 +1812,11 @@ everything below works across modules.
   reported by a build: a `jsr` followed by `rts` that can be a `jmp` (and `jsl` with `rtl` a
   `jml`), a `rep` or `sep` that sets a width the register already has, and a `.const` that an
   instruction uses as an address, with fixes that declare it as data with `.data`, or as a
-  hardware register with `.mmio`. A tail call is not suggested to a
+  hardware register with `.mmio`. The flags bring more: a `.next` the flags prove, a branch
+  that is never taken, a `jmp` that can be a branch a byte shorter (`bra` on the 65C02 and
+  the 65816), a branch over a `jmp` that can be the opposite branch, a `clc` or `sec` that
+  sets C to what it already is, and a `clc` before `adc #n` where C is 1, which can be
+  `adc #n-1`. A tail call is not suggested to a
   routine that depends on how deep the stack is, such as one that pops its caller's return
   address, and a routine with a branch this configuration leaves out gets no suggestions.
 - **Refactorings** on a selection: bring a path in with `.use` or write it out in full; export

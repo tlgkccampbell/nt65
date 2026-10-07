@@ -101,6 +101,15 @@ internal static class Fixes
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), flags)]);
                 break;
 
+            case FixKind.CarryFolded when fix is { Text: { } folded, At: { } setup }:
+                yield return Fix(diagnostic, $"Fold the carry into `#{folded}`",
+                    [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), folded), Removed(tree, setup)]);
+                break;
+
+            case FixKind.BranchOver when fix is { Text: { } branch, At: { } jump }:
+                yield return Fix(diagnostic, $"Branch with `{branch}`", BranchedOver(model, diagnostic, branch, jump));
+                break;
+
             case FixKind.Mnemonic when fix.Text is { } mnemonic && ReplaceMnemonic(tree, line, mnemonic) is { } call:
                 yield return Fix(diagnostic, mnemonic is "jsr" or "jsl" ? $"Call with `{mnemonic}`" : $"Jump with `{mnemonic}`", [call]);
                 break;
@@ -460,6 +469,27 @@ internal static class Fixes
 
     private static Change Fix(Diagnostic diagnostic, string title, IReadOnlyList<Edit> edits, bool preferred = true) =>
         new(title, CodeActionKinds.QuickFix, edits, diagnostic, preferred);
+
+    /// <summary>
+    /// Returns the edits that make a branch over a <c>jmp</c> into the one branch
+    /// <paramref name="branch"/>. The <c>jmp</c> at <paramref name="jump"/> goes, and so does the
+    /// label after it where it stands on a line of its own and only the branch names it.
+    /// </summary>
+    private static List<Edit> BranchedOver(SemanticModel model, Diagnostic diagnostic, string branch, Span jump)
+    {
+        var tree = model.Tree;
+        var edits = new List<Edit> { new(tree, Edits.SpanOf(tree, diagnostic.Span), branch), Removed(tree, jump) };
+        var line = jump.LineIndex + 1;
+        while (Edits.StatementOn(tree, line) is BlankLineSyntax)
+            line++;
+        if (Edits.StatementOn(tree, line) is LabeledLineSyntax { Statement: null } labelled
+            && model.SymbolAt(labelled.Label.Name) is { } skip
+            && model.ReferencesTo(skip).Count(reference => !reference.IsDeclaration) == 1)
+        {
+            edits.Add(Edits.RemoveLines(tree, line, line));
+        }
+        return edits;
+    }
 
     /// <summary>
     /// Returns an edit that removes the statement at <paramref name="at"/>. A statement alone on

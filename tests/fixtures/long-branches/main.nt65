@@ -42,7 +42,7 @@
 .export .proc labeled {
 @wait: jeq @load
 @load: lda #-2
-    bne @wait
+    bcc @wait
     rts
 }
 

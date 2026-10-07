@@ -30,7 +30,7 @@ public sealed class InputSourcesTests
     {
         Assert.Equal(
             ["A: lda #1, lda #2"],
-            Sources(".proc p {\n    lda #1\n    beq @x\n    lda #2\n@x:\n    sta $10\n    rts\n}\n", "sta $10"));
+            Sources(".proc p {\n    lda #1\n    bcc @x\n    lda #2\n@x:\n    sta $10\n    rts\n}\n", "sta $10"));
         Assert.Equal(
             ["A: entry, lda #2"],
             Sources(".proc p {\n    beq @x\n    lda #2\n@x:\n    sta $10\n    rts\n}\n", "sta $10"));

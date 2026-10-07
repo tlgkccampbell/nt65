@@ -75,8 +75,12 @@ internal static class KeepsAnalysis
                 continue;
             leaves = true;
             kept &= after.Kept;
+
+            // A tail call to one routine hands control to it, so that routine's promise is where
+            // a register it loses has to be kept.
+            var handedTo = block.End == BlockEnd.TailCall && !block.CallsUnknown && block.Calls is [var only] ? only : null;
             if (report is not null)
-                Check(region, block, after, null, Registers.None, report);
+                Check(region, block, after, handedTo, handedTo is null ? Registers.None : of(handedTo).Kept, report);
         }
 
         // A routine no path leaves never returns anything to a caller, so there is nothing

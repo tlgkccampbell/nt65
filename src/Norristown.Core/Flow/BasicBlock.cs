@@ -181,6 +181,17 @@ public sealed class BasicBlock
             successors.Add(new FlowEdge(to, kind));
     }
 
+    /// <summary>
+    /// Removes the edge to <paramref name="to"/>, which no longer counts this block among its
+    /// predecessors unless another edge from this block still reaches it.
+    /// </summary>
+    internal void Unreach(FlowEdge edge, BasicBlock to)
+    {
+        successors.Remove(edge);
+        if (!successors.Any(other => other.To == edge.To))
+            to.predecessors.Remove(Index);
+    }
+
     internal void ReachedFrom(int from)
     {
         if (!predecessors.Contains(from))

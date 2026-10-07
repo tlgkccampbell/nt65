@@ -128,7 +128,7 @@ public sealed class RequirementsTests
             .cpu 6502
             .segment CODE
             .proc first {
-                lda #1
+                lda $10
                 bne first
             }
             .proc second {

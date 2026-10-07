@@ -50,7 +50,7 @@ labeled__wait:
     beq labeled__load
 labeled__load:
     lda #$fe                        ; -2
-    bne labeled__wait
+    bcc labeled__wait
     rts
 ; end of labeled
 

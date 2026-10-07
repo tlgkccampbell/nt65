@@ -2592,8 +2592,10 @@ public static class Catalogue
         "code-unreachable",
         Severity.Warning,
         "this code is never reached: {0}",
-        "No path from the routine's entry reaches the code. The statement above it returns, jumps, or calls a "
-            + "routine that never returns, and nothing branches or jumps to it, so it is assembled but never runs. "
+        "No path from the routine's entry reaches the code. The statement above it returns, jumps, calls a "
+            + "routine that never returns, or is a branch the flags show is always taken, and nothing branches or "
+            + "jumps to it, so it is assembled but never runs. In a macro body, it is reported only where no call "
+            + "of the macro reaches it. "
             + "A nested segment block's bytes are placed in another segment, away from the code around them, so "
             + "execution never falls into them from above either. Code is reached only through a label: one "
             + "something branches, jumps or calls to, one a `.next` names, or one a `.state` declares as an entry "
@@ -2679,7 +2681,19 @@ public static class Catalogue
         "`.next` after {0} can name only the branch's own target, `{1}`, to state that the branch is always taken",
         "Under a conditional branch, a `.next` states that the branch is always taken, because the flags are known there, "
             + "so flow never continues past it. It must then name exactly the branch's own target; naming anything "
-            + "else would claim the branch goes somewhere its operand does not.");
+            + "else would claim the branch goes somewhere its operand does not. Where nt65 can prove from the flags "
+            + "that the branch is always taken, the `.next` is not needed, and the editor offers to remove it.");
+
+    internal static DiagnosticDescriptor NextNeverTaken { get; } = Entry(
+        Area.ControlFlow,
+        "next-never-taken",
+        Severity.Error,
+        "`.next {0}` says `{1}` is always taken, but {2}, so it is never taken",
+        "nt65 follows the N, Z, C and V flags through each routine, from what the instructions themselves set. "
+            + "Where the flag a branch tests has the same value on every path to it, the branch goes one way only. "
+            + "A `.next` naming the branch's target says the branch is always taken, and here the flags show it "
+            + "never is, so the code after the branch, which does run, would go unchecked. Remove the `.next`, or "
+            + "correct the code that sets the flag.");
 
     internal static DiagnosticDescriptor NextUnknownAfterBranch { get; } = Entry(
         Area.ControlFlow,
@@ -3929,6 +3943,66 @@ public static class Catalogue
             + "cycles. One that changes only part of what it names can name less. Where the widths are only known "
             + "because the routine's signature or a `.state` declares them, that declaration is the promise the "
             + "line relies on.");
+
+    internal static DiagnosticDescriptor NextProved { get; } = Entry(
+        Area.Suggestions,
+        "next-proved",
+        Severity.Info,
+        "the `.next` is not needed: `{0}` is always taken, because {1}",
+        "nt65 follows the N, Z, C and V flags through each routine, from what the instructions themselves set, and "
+            + "here it proves the branch is always taken. The branch is then a jump to its target already, so a "
+            + "`.next` saying so adds nothing. Without it, nt65 checks the claim again whenever the code before the "
+            + "branch changes.");
+
+    internal static DiagnosticDescriptor BranchNeverTaken { get; } = Entry(
+        Area.Suggestions,
+        "branch-never-taken",
+        Severity.Info,
+        "`{0}` is never taken, because {1}",
+        "nt65 follows the N, Z, C and V flags through each routine, from what the instructions themselves set. The "
+            + "flag this branch tests has the value that does not branch on every path to it, so the branch only "
+            + "takes 2 cycles. That is usually a sign that the code before it does not set the flag the branch was "
+            + "meant to test. Where the branch is there on purpose, it can go.");
+
+    internal static DiagnosticDescriptor JumpAsBranch { get; } = Entry(
+        Area.Suggestions,
+        "jump-as-branch",
+        Severity.Info,
+        "`{0}` can be `{1}`, which saves a byte{2}",
+        "A conditional branch whose flag is known always branches, and takes 2 bytes where `jmp` takes 3. Where the "
+            + "target is within a branch's reach, the `jmp` can be that branch. It takes the same 3 cycles, or 4 "
+            + "where it crosses a page. On the 65C02 and the 65816, `bra` always branches, and needs no known flag. "
+            + "nt65 follows the flags from what the instructions themselves set, so the suggestion holds on any "
+            + "system.");
+
+    internal static DiagnosticDescriptor BranchOverJump { get; } = Entry(
+        Area.Suggestions,
+        "branch-over-jump",
+        Severity.Info,
+        "`{0}` over `{1}` can be the one branch `{2}`, which saves 3 bytes",
+        "A conditional branch over a `jmp` makes the jump only where the branch is not taken. The opposite branch "
+            + "to the jump's target does the same in one instruction, where the target is within a branch's reach. "
+            + "It saves 3 bytes, and 1 or 2 cycles on each path. The label the branch went to goes too, where "
+            + "nothing else names it.");
+
+    internal static DiagnosticDescriptor CarryAlreadySet { get; } = Entry(
+        Area.Suggestions,
+        "carry-already-set",
+        Severity.Info,
+        "`{0}` changes nothing: C is already {1} here",
+        "nt65 follows the carry through each routine, from what the instructions themselves set, such as a `clc`, "
+            + "a `sec`, or a branch that tested it. Here C already has the value this instruction gives it on every "
+            + "path, so the instruction can go, which saves a byte and 2 cycles.");
+
+    internal static DiagnosticDescriptor CarryFolded { get; } = Entry(
+        Area.Suggestions,
+        "carry-folded",
+        Severity.Info,
+        "`{0}` then `{1}` can be `{2}`, because C is {3} here, which saves a byte and 2 cycles",
+        "`adc` adds the carry, so where C is known to be 1, `adc #n-1` adds the same as `clc` then `adc #n`. "
+            + "Likewise, where C is known to be 0, `sbc #n-1` subtracts the same as `sec` then `sbc #n`. The result "
+            + "and C come out the same, and so does V unless n is 0 or $80, where n-1 has the other sign. Decimal "
+            + "mode agrees unless n's low digit is 0. The suggestion is not made in those cases.");
 
     // The list is found by reflecting over the class rather than listed by hand, so that a new
     // entry above is included automatically. It is built on first use rather than alongside the

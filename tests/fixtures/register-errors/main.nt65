@@ -111,7 +111,7 @@
 ; A branch that names the routine itself is the same way out as one that names a label inside
 ; it: on the path it is taken, control goes there and comes back to this routine's caller.
 .proc branches_off: keeps a {
-    ldx #1
+    inx
     bne loses_it            ;! error[keeps-broken]: `branches_off` promises `keeps a`, but A is not the same as on entry here: control does not come back from `loses_it`, which does not promise to keep a: add `keeps a` to `loses_it` if it preserves it
     rts
 }
@@ -129,7 +129,7 @@
 
 ; Where the routine handed to promises to keep the register, the branch is certified.
 .proc branches_on: keeps a {
-    ldx #1
+    inx
     bne holds_it
     rts
 }

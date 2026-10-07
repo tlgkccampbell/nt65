@@ -33,7 +33,7 @@
     lda (ptr),y         ; indirect indexed
     lda (ptr,x)         ; indexed indirect
     bne @loop           ; relative
-    jeq @far            ; long branch
+    jcs @far            ; long branch
     brk #0              ; signature byte required
     jmp (vector)        ; indirect
     .next ?

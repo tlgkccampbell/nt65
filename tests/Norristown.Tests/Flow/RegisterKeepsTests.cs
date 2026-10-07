@@ -233,7 +233,7 @@ public sealed class RegisterKeepsTests
     [Fact]
     public void ABranchToARoutineTakesWhatItBranchesTo()
     {
-        var branch = ".proc q {\n    ldy #1\n    rts\n}\n.proc p {\n    ldx #0\n    bne q\n    rts\n}\n";
+        var branch = ".proc q {\n    ldy #1\n    rts\n}\n.proc p {\n    ldx $10\n    bne q\n    rts\n}\n";
         var next = ".proc q {\n    ldy #1\n    rts\n}\n.proc p {\n    jmp (slot)\n    .next q\n}\n"
             + ".segment BSS\n.data slot: .addr\n";
 

@@ -31,6 +31,7 @@ public sealed class SourcesRequestsTests
             }
             .export .proc main {
                 lda #1
+                ldx $11
                 beq @skip
                 lda #2
             @skip:
@@ -46,7 +47,7 @@ public sealed class SourcesRequestsTests
         Assert.Equal(new Range(new Position(6, 0), new Position(6, 20)), result.Routine);
         var input = Assert.Single(result.Inputs);
         Assert.Equal(("A", "register"), (input.Name, input.Category));
-        Assert.Equal([7, 9], input.Sources.Select(source => source.Range.Start.Line));
+        Assert.Equal([7, 10], input.Sources.Select(source => source.Range.Start.Line));
         Assert.All(input.Sources, source => Assert.Equal(("instruction", "proven", 0), (source.Kind, source.Confidence, source.Range.Start.Character)));
         Assert.Equal(new Position(7, 10), input.Sources[0].Range.End);
         Assert.Empty(input.Through);

@@ -121,7 +121,7 @@ public sealed class CatalogueAreaTests
             "fallthrough-other-segment", "handler-called", "handler-returns-not-rti", "indirect-call-unchecked",
             "indirect-jump-unchecked", "inline-count-not-constant", "inline-data-missing", "jump-into-data",
             "jump-target-not-a-label", "keeps-broken", "keeps-redundant", "label-unreachable",
-            "next-not-the-branch-target", "next-successors-known", "next-table-has-no-labels",
+            "next-never-taken", "next-not-the-branch-target", "next-successors-known", "next-table-has-no-labels",
             "next-target-not-a-table", "next-target-not-code", "next-unknown-after-branch", "noreturn-returns", "pushed-return-unchecked",
             "reads-undeclared", "return-after-call", "return-count-mismatch", "return-count-not-constant",
             "routine-runs-off-the-end", "runs-into-data", "saves-not-a-store",
@@ -169,7 +169,11 @@ public sealed class CatalogueAreaTests
             "signature-value-out-of-range", "state-banks-invalid", "state-banks-not-dbr", "unchanged-needs-entry",
         ]),
         ("Allowing warnings", ["allow-about-nothing", "allow-answered", "allow-error", "allow-unused"]),
-        ("Suggestions", ["constant-used-as-address", "tail-call", "width-already-set"]),
+        ("Suggestions",
+        [
+            "branch-never-taken", "branch-over-jump", "carry-already-set", "carry-folded", "constant-used-as-address",
+            "jump-as-branch", "next-proved", "tail-call", "width-already-set",
+        ]),
     ];
 
     [Fact]

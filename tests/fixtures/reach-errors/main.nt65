@@ -21,7 +21,7 @@
     lda far_table           ;! error[segment-not-visible]: `far_table` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
     sta far_table,x         ;! error[segment-not-visible]: `far_table` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
     beq far_routine         ;! error[segment-not-visible]: `beq` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
-    jne far_routine         ;! error[segment-not-visible]: `jne` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    jcs far_routine         ;! error[segment-not-visible]: `jcs` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
 
     ; The bytes of an address are values, which is how a trampoline is told where to go.
     lda #<far_routine

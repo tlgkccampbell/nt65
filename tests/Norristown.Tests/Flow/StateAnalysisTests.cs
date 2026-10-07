@@ -264,7 +264,7 @@ public sealed class StateAnalysisTests
             }
 
             .proc p: a8, i8 {
-                lda #0
+                lda $10
                 beq wide
                 lda #1
                 rts
