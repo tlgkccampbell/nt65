@@ -92,6 +92,16 @@ public static class Compiler
         }
         var header = cHeader is null ? null : CHeader.Write(analysis.Program, cHeader, diagnostics);
 
+        // An `.allow` may hide a warning that only emission finds. The analysis reported it as
+        // hiding nothing, so that report is taken back.
+        var allowances = Allowances.Of(analysis.Program);
+        var used = new HashSet<Allowance>();
+        var emitted = allowances.Apply(diagnostics.Skip(analysis.Diagnostics.Count), used).ToList();
+        var unused = used.Select(allowance => allowance.Directive.Tree.GetSpan(allowance.Directive.Span)).ToHashSet();
+        diagnostics = [.. analysis.Diagnostics
+            .Where(d => d.Id != Catalogue.AllowUnused.Id || !unused.Contains(d.Span))
+            .Concat(emitted)];
+
         // A program with errors produces no output: what would be written for it is not a
         // translation of anything. The project can change the severity of each diagnostic by
         // name, so its settings are applied before the severities are checked for errors.
@@ -586,7 +596,14 @@ public static class Compiler
         diagnostics.AddRange(reuse.Analyzed.Values.SelectMany(found => found));
         if (target != Cpu.Wdc65816)
             diagnostics.AddRange(FarNeedsA65816(program.Segments, program));
-        return Diagnostics.Ordered(Diagnostics.WithSeverities(diagnostics, project.Severities));
+
+        // An `.allow` hides the warning it names before the project's severities apply, so a
+        // warning the project raises to an error can still be allowed where code relies on it.
+        var allowances = Allowances.Of(program);
+        var used = new HashSet<Allowance>();
+        var kept = allowances.Apply(diagnostics, used).ToList();
+        kept.AddRange(allowances.Unused(used));
+        return Diagnostics.Ordered(Diagnostics.WithSeverities(kept, project.Severities));
     }
 
     /// <summary>

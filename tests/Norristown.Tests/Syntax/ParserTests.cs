@@ -176,6 +176,7 @@ public sealed class ParserTests
     [InlineData("    .lobytes first, second", SyntaxKind.DataDirective)]
     [InlineData("    .ensure a16, i8", SyntaxKind.EnsureDirective)]
     [InlineData("    .frame locals: Locals", SyntaxKind.FrameDirective)]
+    [InlineData("    .allow \"unused-symbol\", \"why\"", SyntaxKind.AllowDirective)]
     public void EveryCoreItemParses(string line, SyntaxKind kind)
     {
         Assert.Equal(kind, Statement(line).Kind);

@@ -32,3 +32,8 @@ init__loop_2:
 ; end of init
 
 routines__CHROUT = $ffd2
+
+; .proc dump_registers  routines.nt65:32
+dump_registers:
+    rts
+; end of dump_registers

@@ -36,6 +36,7 @@ internal static class Directives
     {
         [DirectiveKind.Addr] = "two-byte addresses",
         [DirectiveKind.Align] = "pad to a multiple of",
+        [DirectiveKind.Allow] = "a warning the statement below relies on",
         [DirectiveKind.Assert] = "check that something holds",
         [DirectiveKind.BankBytes] = "the bank byte of each address",
         [DirectiveKind.BeDword] = "big-endian four-byte values",

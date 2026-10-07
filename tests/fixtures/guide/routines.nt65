@@ -27,3 +27,8 @@
 }
 
 .proc CHROUT = $FFD2                ; the C64 KERNAL's character output
+
+.allow "unused-symbol", "the monitor calls it by address"
+.proc dump_registers {
+    rts
+}

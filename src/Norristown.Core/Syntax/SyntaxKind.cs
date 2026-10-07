@@ -441,6 +441,9 @@ public enum SyntaxKind : byte
     /// <summary><c>.frame locals: Locals</c>, which names the top bytes of the stack as a struct.</summary>
     FrameDirective,
 
+    /// <summary><c>.allow "unused-symbol"</c>, which keeps a warning from being reported on the statement below.</summary>
+    AllowDirective,
+
     /// <summary>A line the parser could not read at all.</summary>
     ErrorLine,
 

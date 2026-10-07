@@ -1697,6 +1697,24 @@ label nothing reaches is `label-unreachable`. A name that is also an instruction
 constant called `lda`, is legal but is `mnemonic-name`, because the next reader will take it
 for an instruction.
 
+Where one place relies on what a warning reports, `.allow` says so there, rather than turning
+the warning off for the whole project. The reason is optional, and the editor shows it when you
+hover over the name:
+
+```nt65
+.allow "unused-symbol", "the monitor calls it by address"
+.proc dump_registers {
+    rts
+}
+```
+
+`.allow` applies to the statement below it. Before a line that opens a block, such as a
+`.proc`, it covers the whole block. It hides only a warning: an error cannot be allowed, and
+neither can a diagnostic whose fix is an annotation such as `.next` or `.patch`, because the
+analysis would go on following paths that are not there. An `.allow` that hides nothing is a
+warning of its own, `allow-unused`, so it goes when the code it was written for changes. The
+editor offers `.allow` as a fix on any warning it may hide.
+
 ## In the editor
 
 The VS Code extension runs nt65's language server. Other editors that speak LSP can run it

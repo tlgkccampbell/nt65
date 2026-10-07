@@ -57,7 +57,7 @@ internal static class Hovers
         var flow = analysis.FlowFor(model.Tree.Path);
         return (model.ReferenceAt(position) ?? InstanceAt(model, position)) is { } reference
             ? ToName(analysis, model, reference)
-            : ToPlaced(analysis, model, position) ?? ToComparedWord(model, position)
+            : ToPlaced(analysis, model, position) ?? ToAllowed(model, position) ?? ToComparedWord(model, position)
                 ?? ToParameterKind(analysis, model, position) ?? ToScope(model, flow, position)
                 ?? ToTiming(analysis, model, flow, position);
     }
@@ -182,6 +182,30 @@ internal static class Hovers
         }
         card.Row("file", placed.Tree.Path);
         return new Protocol.Hover(Protocol.MarkupContent.Markdown(card.ToString()), Lsp.ToRange(model.Tree, placed.Span));
+    }
+
+    /// <summary>
+    /// Returns the hover for the name in an <c>.allow</c>, which explains the warning it allows and
+    /// gives the lines it covers and the reason it was written, or null anywhere else.
+    /// </summary>
+    private static Protocol.Hover? ToAllowed(SemanticModel model, int position)
+    {
+        var token = model.Tree.Root.FindToken(position);
+        if (token.Parent is not AllowDirectiveSyntax allow || token.Span != allow.Name.Span
+            || Literals.Text(token.Text) is not { } name || Catalogue.Find(name) is not { } descriptor)
+        {
+            return null;
+        }
+        var card = new HoverCard(allow.GetText().Trim(), new HashSet<string>(["covers", "reason"], StringComparer.Ordinal));
+        card.Prose(descriptor.Explanation);
+        if (model.Allowances.FirstOrDefault(allowance => allowance.Directive == allow) is { Covered: var covered })
+        {
+            card.Row("covers", covered.StartLine == covered.EndLine
+                ? $"line {covered.StartLine + 1}"
+                : $"lines {covered.StartLine + 1}-{covered.EndLine + 1}");
+        }
+        card.Row("reason", allow.Reason is { IsMissing: false } reason ? Literals.Text(reason.Text) : null);
+        return new Protocol.Hover(Protocol.MarkupContent.Markdown(card.ToString()), Lsp.ToRange(model.Tree, token.Span));
     }
 
     /// <summary>

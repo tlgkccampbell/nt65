@@ -199,6 +199,7 @@ public static class SyntaxFacts
         [DirectiveKind.State] = new(SyntaxKind.StateDirective, new(DirectiveContexts.Code)),
         [DirectiveKind.Ensure] = new(SyntaxKind.EnsureDirective, new(DirectiveContexts.Code)),
         [DirectiveKind.Frame] = new(SyntaxKind.FrameDirective, new(DirectiveContexts.Code)),
+        [DirectiveKind.Allow] = new(SyntaxKind.AllowDirective, new(Bodies)),
     }.ToFrozenDictionary();
 
     // The processor-state items, grouped by the suffix that follows the name. A point item

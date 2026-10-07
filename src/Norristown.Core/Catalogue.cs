@@ -20,7 +20,7 @@ public static class Catalogue
     [
         Area.ReadingALine, Area.Names, Area.Values, Area.Macros, Area.Data, Area.Placement,
         Area.Instructions, Area.ControlFlow, Area.ProcessorState, Area.Output, Area.TheProjectFile, Area.Signatures,
-        Area.Suggestions,
+        Area.Allowing, Area.Suggestions,
     ];
 
     /// <summary>
@@ -3852,6 +3852,44 @@ public static class Catalogue
         "What a routine is and how it is called are true of it from entry to exit, so they are declared once, "
             + "before the arrow. What comes after the arrow is what the routine leaves.");
 
+    // Allowing warnings
+
+    internal static DiagnosticDescriptor AllowUnused { get; } = Entry(
+        Area.Allowing,
+        "allow-unused",
+        Severity.Warning,
+        "`.allow \"{0}\"` hides nothing: {1} has no such warning",
+        "An `.allow` that no longer hides a warning has outlived the code it was written for, and it would hide the "
+            + "next such warning there without anyone deciding to. Remove it. An `.allow` in a branch the build "
+            + "configuration leaves out, or in a macro body, is not reported, because another build or another call "
+            + "may need it.");
+
+    internal static DiagnosticDescriptor AllowError { get; } = Entry(
+        Area.Allowing,
+        "allow-error",
+        Severity.Error,
+        "`{0}` is an error, and `.allow` hides only warnings",
+        "A warning points at something that may be intended, and `.allow` records that it is. An error means nt65 "
+            + "cannot produce correct output for the program, and hiding it would not make the output right.");
+
+    internal static DiagnosticDescriptor AllowAnswered { get; } = Entry(
+        Area.Allowing,
+        "allow-answered",
+        Severity.Error,
+        "`.allow` cannot hide `{0}`: add the annotation its message names, which tells nt65 what really happens",
+        "Some diagnostics say that the analysis cannot see where flow goes or what an instruction becomes, and "
+            + "their fix is an annotation such as `.next`, `.patch` or `.state`. Hiding one would hide the message "
+            + "while the analysis went on following paths that are not there, so `.allow` refuses them.");
+
+    internal static DiagnosticDescriptor AllowAboutNothing { get; } = Entry(
+        Area.Allowing,
+        "allow-about-nothing",
+        Severity.Error,
+        "`.allow` applies to the statement below it, and there is none",
+        "An `.allow` goes directly before the statement it applies to, so that a reader sees it before the code it "
+            + "excuses. Before a line that opens a block, such as a `.proc`, it covers the whole block. Here nothing "
+            + "follows it in its block.");
+
     // Suggestions
 
     internal static DiagnosticDescriptor TailCall { get; } = Entry(
@@ -3902,6 +3940,26 @@ public static class Catalogue
     // looked up in a dictionary. It is built from All, on first use, for the same reason All is.
     private static readonly Lazy<FrozenDictionary<string, DiagnosticDescriptor>> byId = new(() =>
         All.ToFrozenDictionary(descriptor => descriptor.Id, StringComparer.Ordinal));
+
+    // Built on first use, like All, so that every entry exists before the set is made.
+    private static readonly Lazy<FrozenSet<DiagnosticDescriptor>> answered = new(() => new[]
+    {
+        RunsIntoData, IndirectJumpUnchecked, ComputedJumpUnchecked, SelfModifyingUnchecked, CodeLabelAsData,
+    }.ToFrozenSet());
+
+    /// <summary>
+    /// Gets the entries that <c>.allow</c> refuses to hide. The fix for each is an annotation that
+    /// tells nt65 what really happens, and hiding one would leave the analysis following paths that
+    /// are not there.
+    /// </summary>
+    internal static IReadOnlySet<DiagnosticDescriptor> AnsweredByAnnotations => answered.Value;
+
+    /// <summary>
+    /// Returns a value indicating whether <c>.allow</c> may hide the diagnostic named
+    /// <paramref name="id"/>. It may hide a warning that no annotation answers.
+    /// </summary>
+    public static bool IsAllowable(string id) =>
+        Find(id) is { Severity: Severity.Warning } descriptor && !AnsweredByAnnotations.Contains(descriptor);
 
     /// <summary>Gets every descriptor, in name order.</summary>
     public static IReadOnlyList<DiagnosticDescriptor> All => all.Value;
@@ -3958,6 +4016,9 @@ public static class Catalogue
 
         public static DiagnosticArea Signatures { get; } =
             new("Signatures", "What a routine or macro signature may declare, and what a signature set may hold.");
+
+        public static DiagnosticArea Allowing { get; } =
+            new("Allowing warnings", "`.allow`, which keeps a warning from being reported where code knowingly relies on it.");
 
         public static DiagnosticArea Suggestions { get; } =
             new("Suggestions", "Changes that make code smaller, faster or clearer about what it means, which only the editor shows.");

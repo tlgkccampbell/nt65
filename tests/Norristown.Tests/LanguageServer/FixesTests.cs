@@ -249,6 +249,16 @@ public sealed class FixesTests
             ".export .proc main: a8, i8, dp = $0000 {\n    .state a8, i8, native, dp = $2100\n    rts\n}\n",
             ".export .proc main: a8, i8, dp = $0000 {\n    .state a8, i8, native, dp = $0000\n    rts\n}\n"
         },
+        {
+            "Allow `unused-symbol` here with `.allow`",
+            ".proc helper {\n    rts\n}\n",
+            ".allow \"unused-symbol\"\n.proc helper {\n    rts\n}\n"
+        },
+        {
+            "Remove it",
+            ".export helper\n.allow \"unused-symbol\"\n.proc helper {\n    rts\n}\n",
+            ".export helper\n.proc helper {\n    rts\n}\n"
+        },
     };
 
     [Theory]
@@ -362,7 +372,7 @@ public sealed class FixesTests
         Assert.Equal("`fill` is brought in and nothing names it: the `.use` item may go", brought.Message);
         Assert.True(brought.IsUnnecessary);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
         Assert.Equal("Remove the `.use` of `fill`", action.Title);
         Assert.Equal(
             ".module main\n.use gfx::clear\n.segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n",
@@ -391,7 +401,7 @@ public sealed class FixesTests
         var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
         Assert.Equal("`fill` is brought in and nothing names it: the `.use` item may go", brought.Message);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
         Assert.Equal(".module main\n" + kept + Rest, Editing.Apply(main, action.Edit!.Changes[Uri]));
     }
 
@@ -444,7 +454,7 @@ public sealed class FixesTests
     {
         var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8 {\nlda:\n    bra lda\n}\n");
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
 
         Assert.Equal("Rename `lda`…", action.Title);
         Assert.Empty(action.Edit!.Changes);
@@ -462,6 +472,13 @@ public sealed class FixesTests
         Assert.DoesNotContain(CodeActions.In(analysis, model, Whole, ["refactor"]), action => action.Kind == "quickfix");
         Assert.NotEmpty(CodeActions.In(analysis, model, Whole, ["quickfix"]));
     }
+
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="action"/> is a quick fix other than the
+    /// one that allows a warning, which every warning offers.
+    /// </summary>
+    private static bool IsAFix(CodeAction action) =>
+        action.Kind == "quickfix" && !action.Title.StartsWith("Allow `", StringComparison.Ordinal);
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string text)
     {

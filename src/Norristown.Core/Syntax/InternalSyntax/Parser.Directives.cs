@@ -79,6 +79,7 @@ internal sealed partial class Parser
         SyntaxKind.EnsureDirective => ParseEnsure(),
         SyntaxKind.FrameDirective => ParseFrame(),
         SyntaxKind.PatchDirective => ParsePatch(),
+        SyntaxKind.AllowDirective => ParseAllow(),
         _ => null,
     };
 
@@ -287,6 +288,22 @@ internal sealed partial class Parser
         var keyword = Advance();
         return new PatchDirectiveSyntax(
             keyword, ParseTarget(Catalogue.ExpectedLabel.Message("the label of the instruction being written to")));
+    }
+
+    /// <summary>
+    /// Parses <c>.allow "unused-symbol", "reason"</c>, which keeps one warning from being reported
+    /// on the statement below. Whether the name is one nt65 reports is for the binder to check.
+    /// </summary>
+    private GreenNode ParseAllow()
+    {
+        var keyword = Advance();
+        var name = Expect(SyntaxKind.StringLiteral, Catalogue.ExpectedText.Message(
+            "the name of the warning, in quotes"));
+        if (Kind != SyntaxKind.Comma)
+            return new AllowDirectiveSyntax(keyword, name, null, null);
+        var comma = Advance();
+        return new AllowDirectiveSyntax(keyword, name, comma, Expect(SyntaxKind.StringLiteral,
+            Catalogue.ExpectedText.Message("the reason, in quotes")));
     }
 
     /// <summary>

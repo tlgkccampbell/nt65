@@ -168,6 +168,7 @@ public sealed class CatalogueAreaTests
             "signature-set-not-first", "signature-set-self-reference", "signature-value-not-constant",
             "signature-value-out-of-range", "state-banks-invalid", "state-banks-not-dbr", "unchanged-needs-entry",
         ]),
+        ("Allowing warnings", ["allow-about-nothing", "allow-answered", "allow-error", "allow-unused"]),
         ("Suggestions", ["constant-used-as-address", "tail-call", "width-already-set"]),
     ];
 

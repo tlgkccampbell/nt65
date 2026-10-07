@@ -800,6 +800,23 @@ object per line, with `file`, `line`, `column`, `endColumn`, `severity`, `id`, `
 What nt65 says about itself, the `nt65:` lines, stays on standard error either way, because it
 is not about the program.
 
+**Allowing one warning in the source.** `.allow "name"` or `.allow "name", "reason"` keeps
+the warning it names from being reported on the statement below it, for code that knowingly
+relies on what the warning reports. Before a line that opens a block, such as a `.proc`, a
+`.data` block or a macro call with a block argument, it covers the whole block. Several may
+stack, and each applies to the next statement that is not itself an `.allow`. The name is in
+quotes, as in the project file, because a diagnostic's name is not an nt65 name: `-` is an
+operator, and `signature-item-needs-65816` ends in a number. A name nt65 has no entry for is an
+error, with the name it is nearly. `.allow` hides only what is reported as a warning, before
+the project's severities apply, so it still hides one a configuration raises to an error. It
+cannot name an error, and it cannot name a diagnostic whose fix is an annotation that tells nt65
+what really happens, such as `runs-into-data`, which the 6502 reports as a warning: hiding it
+would leave the analysis following paths that are not there. An `.allow` that hides nothing is
+the warning `allow-unused`, as Rust's `#[expect]` is, so a suppression does not outlive the code
+it was written for. One in a branch the build configuration leaves out, or in a macro body,
+which another call may need, is not reported. A warning in another file's macro body is
+reported at the call, so an `.allow` before the call covers it, and so does one in the body.
+
 **Bringing a ca65 include over.** `nt65 import-inc <file.inc>` writes an nt65 module of
 constants from a ca65 include file of them, to standard output or to the file `-o` names, with
 `--module` naming the module. It is run once, by a person, and what it writes is the module's
@@ -4374,13 +4391,14 @@ Recorded so the reasoning survives. None is open.
   the point: it says what is wrong rather than which pass found it, so it survives the pass
   moving. The one number that stays a number is `NT1001`, which the source generator reports
   to whoever is building nt65 itself; that is a different audience.
-- **How much a diagnostic matters is set in the project file, and nowhere in the source.**
-  `"diagnostics": { "unused-symbol": "off" }` is the whole of it, and a named configuration
-  says it again for a stricter build. Suppression in the source — an `.allow` above a
-  declaration — is a language change, and is left out: the project file answers the case that
-  matters, which is a team agreeing what it wants to be told, and `.allow` stays the honest
-  spelling if one is ever wanted. Adding it later breaks nothing. An error is not a project's
-  to turn down either way: a warning is a matter of taste, and an error is a program nt65
+- **How much a diagnostic matters is set in the project file, and one place that relies on a
+  warning says so in the source.** `"diagnostics": { "unused-symbol": "off" }` answers a team
+  agreeing what it wants to be told, and a named configuration says it again for a stricter
+  build. A single call site that knowingly relies on something can be marked only in the
+  source, so `.allow` (§5.3) does that, for the statement below it and nothing more. It hides
+  nothing that a stated annotation answers, and one that hides nothing is reported, so it
+  cannot become a way to stop reading the diagnostics. An error is not a project's to turn
+  down, nor an `.allow`'s: a warning is a matter of taste, and an error is a program nt65
   refuses to translate.
 - **Braces, not end-keywords.** Simpler to parse and, as much to the point, an nt65
   file is visually distinct from a ca65 file at a glance.
@@ -5178,8 +5196,10 @@ region      := '.segment' ident NL                    ; at file level only
 item        := const | data-decl | padding | proc | multiproc | extern-proc | scope | macro
              | enum | struct | union | charmap | list | func | signature | export | import | use
              | cpu | segment-decl | segment | if-block | repeat-block | each-block | assert
-             | warning | error | place
+             | warning | error | place | allow
 place       := '.place' module-path                    ; at file level, in no block but a region
+allow       := '.allow' string (',' string)?           ; a warning's name, then a reason; applies
+                                                      ; to the next statement, or block, below
 assert      := '.assert' expr (',' string)?
 warning     := '.warning' string
 error       := '.error' string
@@ -5197,7 +5217,7 @@ data-decl   := '.data' ident ':' data
              | '.data' ident '{' NL mixed* '}'
              | '.data' ident (':' element count?)? '=' expr   ; found elsewhere
              | '.mmio' ident ':' element count? '=' expr      ; a hardware register
-mixed       := data | data-decl | local ':' data? | macro-call
+mixed       := data | data-decl | local ':' data? | macro-call | allow
              | if-block | repeat-block | each-block  ; their contents mixed too
 data        := element count? values?
              | element count? braced
@@ -5251,7 +5271,8 @@ assertion   := '.state' state                         ; not near, far, inline, a
 ensure      := '.ensure' width (',' width)*           ; other state items parse, and are errors
 width       := 'a8' | 'a16' | 'i8' | 'i16'
 frame       := '.frame' ident ':' path
-annotation  := '.next' (target (',' target)* | items(target) | '?')
+annotation  := '.next' (target (',' target)* | items(target) | '?'
+                       | '.return' (expr | '?')? (',' target)*)
                                                       ; after a conditional branch, its
                                                       ; own target only: always taken
              | '.patch' target

@@ -174,4 +174,7 @@ public enum DirectiveKind
 
     /// <summary><c>.frame</c>: states the stack frame the code from here works in.</summary>
     Frame,
+
+    /// <summary><c>.allow</c>: keeps a warning from being reported on the statement below.</summary>
+    Allow,
 }

@@ -87,6 +87,7 @@ internal sealed partial class Binder
 
     // The file's `.use` items, what they bring in once resolved, and what it re-exports.
     private readonly List<UseDirectiveSyntax> useDirectives = [];
+    private readonly List<Allowance> allowances = [];
     private readonly Dictionary<string, BroughtName> used = new(StringComparer.Ordinal);
     private readonly List<ProgramSymbols.Module> globs = [];
     private readonly List<ProgramSymbols.Reexport> reexports = [];
@@ -303,6 +304,7 @@ internal sealed partial class Binder
             Families = families.Declared,
             Brought = used,
             Globs = globs,
+            Allowances = [.. allowances.DistinctBy(allowance => allowance.Directive)],
         };
     }
 
@@ -1269,6 +1271,8 @@ internal sealed partial class Binder
         CheckAnnotation(line, statement);
         if (statement is FallthroughDirectiveSyntax fallthrough && !Fallthrough.EndsABody(line))
             Report(fallthrough.Keyword.Span, Catalogue.FallthroughMisplaced);
+        if (statement is AllowDirectiveSyntax allow)
+            BindAllow(line, allow);
         var label = bareLabel;
         if (statement is not BlankLineSyntax)
             bareLabel = null;
@@ -1284,6 +1288,36 @@ internal sealed partial class Binder
         // analysis, so a jump from another file can be checked against it too.
         if (statement is StateDirectiveSyntax state && label is not null)
             label.StateDeclaration = state;
+    }
+
+    /// <summary>
+    /// Records the warning an <c>.allow</c> names and the lines it covers. A name nt65 does not
+    /// report, an error, and a diagnostic an annotation answers are each reported instead.
+    /// </summary>
+    private void BindAllow(LineSyntax line, AllowDirectiveSyntax allow)
+    {
+        if (allow.Name.IsMissing || Literals.Text(allow.Name.Text) is not { } name)
+            return;
+        if (Catalogue.Find(name) is not { } descriptor)
+        {
+            var nearest = Spelling.Nearest(name, Catalogue.All.Select(d => d.Id));
+            Report(allow.Name.Span, Catalogue.DiagnosticNameUnknown.Message(
+                name, nearest is null ? "" : $"; did you mean `{nearest}`?"));
+            if (nearest is not null)
+                Fixed(new DiagnosticFix(FixKind.Spelling, $"\"{nearest}\""));
+            return;
+        }
+
+        // An annotation answers some diagnostics that a processor reports only as warnings, so
+        // those are checked for before the severity.
+        if (Catalogue.AnsweredByAnnotations.Contains(descriptor))
+            Report(allow.Name.Span, Catalogue.AllowAnswered.Message(name));
+        else if (descriptor.Severity == Severity.Error)
+            Report(allow.Name.Span, Catalogue.AllowError.Message(name));
+        else if (Allowance.CoveredBy(line) is not { } covered)
+            Report(allow.Keyword.Span, Catalogue.AllowAboutNothing.Message());
+        else
+            allowances.Add(new Allowance(allow, name, covered, InMacroBody));
     }
 
     private void BindStatement(StatementSyntax statement)
@@ -1886,6 +1920,9 @@ internal sealed partial class Binder
 
         /// <summary>Gets the families the file declares, each standing for one declaration per member.</summary>
         public IReadOnlyList<Family> Families { get; init; } = [];
+
+        /// <summary>Gets the file's <c>.allow</c> lines that name a warning and apply to a statement.</summary>
+        public IReadOnlyList<Allowance> Allowances { get; init; } = [];
     }
 
     /// <summary>

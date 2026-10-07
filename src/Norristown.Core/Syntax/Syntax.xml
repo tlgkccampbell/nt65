@@ -118,6 +118,40 @@
     </Field>
   </Node>
 
+  <Node Name="AllowDirectiveSyntax" Base="StatementSyntax">
+    <Kind Name="AllowDirective"/>
+    <TypeComment>
+      <summary>
+        Represents an <c>.allow "unused-symbol", "reason"</c> line, which keeps one warning from
+        being reported on the statement below it. The reason may be omitted.
+      </summary>
+    </TypeComment>
+    <Field Name="Keyword" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>Gets the <c>.allow</c> keyword that starts the line.</summary>
+      </PropertyComment>
+      <Kind Name="Directive"/>
+    </Field>
+    <Field Name="Name" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>Gets the quoted name of the warning that is allowed.</summary>
+      </PropertyComment>
+      <Kind Name="StringLiteral"/>
+    </Field>
+    <Field Name="CommaToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>,</c> token before the reason, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Comma"/>
+    </Field>
+    <Field Name="Reason" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the quoted reason the warning is allowed, or null.</summary>
+      </PropertyComment>
+      <Kind Name="StringLiteral"/>
+    </Field>
+  </Node>
+
   <Node Name="ArgumentListSyntax" Base="SyntaxNode">
     <Kind Name="ArgumentList"/>
     <TypeComment>

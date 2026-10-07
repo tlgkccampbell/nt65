@@ -64,6 +64,7 @@ public sealed class SemanticModel
         Brought = bound.Brought;
         Globs = bound.Globs;
         Families = bound.Families;
+        Allowances = bound.Allowances;
         byFamily = bound.Families.ToDictionary(family => family.Declaration);
 
         Diagnostics = Norristown.Diagnostics.Ordered(bound.Diagnostics.Concat(fromTheProgram));
@@ -144,6 +145,12 @@ public sealed class SemanticModel
     /// source and covers one declaration per member of the enum it iterates over.
     /// </summary>
     public IReadOnlyList<Family> Families { get; }
+
+    /// <summary>
+    /// Gets the file's <c>.allow</c> lines that name a warning and apply to a statement. Each
+    /// <see cref="Allowance"/> hides that warning on the lines it covers.
+    /// </summary>
+    public IReadOnlyList<Allowance> Allowances { get; }
 
     /// <summary>
     /// Gets the qualified names this file declares and does not export but that another file

@@ -73,6 +73,7 @@ public sealed class AnalysisApiTests
         Assert.Contains(model.Segments.Segments, segment => segment.Name == "CODE");
         Assert.True(model.Configuration.Omitted(model.Tree).Count == 0);
         Assert.Empty(model.Families);
+        Assert.Empty(model.Allowances);
         Assert.Null(model.FamilyAt(model.Tree.GetLine(0).Statement));
 
         // The model lists what the file's output brings in from elsewhere, and what it uses of
