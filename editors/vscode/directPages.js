@@ -1,13 +1,12 @@
 // The direct page map: a tree of the direct pages a program reaches memory through, the
-// locations in each and the routines that use them, with a legend beside it. The server works the
-// map out (`nt65/directPages`), and this file only draws it. Selecting a row marks the lines it
-// stands for in the source, and the grid panel in directPagesGrid.js shows one page byte by byte.
+// locations in each and the routines that use them. The server works the map out
+// (`nt65/directPages`), and this file only draws it. Selecting a row marks the lines it stands
+// for in the source, and the grid panel in directPagesGrid.js shows one page byte by byte.
 const vscode = require('vscode');
 const { Grid } = require('./directPagesGrid');
 const { Caret, keyOf, uriOf } = require('./directPagesCaret');
 
 const VIEW = 'nt65.directPages';
-const LEGEND = 'nt65.directPagesLegend';
 
 // How long the map waits after the last reason to ask for it before it asks.
 const DELAY = 150;
@@ -847,58 +846,6 @@ class Highlights {
   }
 }
 
-// The legend, a small fixed tree of what the colours, glyphs and marks mean.
-const LEGEND_ITEMS = [
-  {
-    label: 'Sharing',
-    children: [
-      { label: 'shared', description: 'several routines use it', icon: icon('circle-filled', COLOUR.shared) },
-      { label: 'temp clobbered by a call', description: 'relied on across a call that uses it as a temp', icon: icon('circle-filled', COLOUR.nested) },
-      { label: 'interrupt', description: 'a handler and the code it interrupts both use it', icon: icon('circle-filled', COLOUR.irq) },
-      { label: 'one owner', description: 'one routine uses it', icon: icon('circle-filled', COLOUR.own) },
-      { label: 'unused', description: 'nothing reaches it', icon: icon('circle-outline', COLOUR.unused) },
-      { label: 'address taken', description: 'used through a pointer or an index', icon: icon('target', COLOUR.referenced) },
-      { label: 'hardware', description: 'a register, declared with .mmio', icon: icon('circuit-board', COLOUR.hw) },
-    ],
-  },
-  {
-    label: 'Role',
-    children: [
-      { label: '↓', description: 'in, from the caller' },
-      { label: '↑', description: 'out, to the caller' },
-      { label: '↕', description: 'in · out' },
-      { label: '◦', description: 'temp' },
-      { label: 'w', description: 'hardware write' },
-      { label: 'r', description: 'hardware read' },
-    ],
-  },
-  {
-    label: 'Marks',
-    children: [
-      { label: '⧉', description: 'pages overlap, or bytes shared' },
-      { label: '◎', description: 'line that takes the address' },
-      { label: '⚠', description: 'hazard' },
-      { label: '⚡', description: 'interrupt handler', icon: icon('zap', COLOUR.irq) },
-      { label: '┃', description: 'line that writes' },
-      { label: '┆', description: 'line that only reads' },
-      { label: '↳', description: 'call' },
-      { label: '◆', description: 'declaration' },
-    ],
-  },
-];
-
-const legend = {
-  getChildren: element => (element ? element.children || [] : LEGEND_ITEMS),
-  getTreeItem: element => {
-    const item = new vscode.TreeItem(element.label, element.children
-      ? vscode.TreeItemCollapsibleState.Expanded
-      : vscode.TreeItemCollapsibleState.None);
-    item.description = element.description;
-    item.iconPath = element.icon;
-    return item;
-  },
-};
-
 // The map, its tree and the grid, and what keeps them up to date.
 class DirectPages {
   constructor(context, client) {
@@ -1141,7 +1088,6 @@ function register(context, client, outputChanged) {
   if (pages.wanted) pages.schedule();
   context.subscriptions.push(
     pages,
-    vscode.window.createTreeView(LEGEND, { treeDataProvider: legend }),
     pages.view.onDidChangeVisibility(() => {
       if (pages.view.visible && pages.stale) pages.schedule();
     }),

@@ -124,12 +124,6 @@
           "id": "nt65.directPages",
           "name": "Direct Pages",
           "contextualTitle": "nt65"
-        },
-        {
-          "id": "nt65.directPagesLegend",
-          "name": "Legend",
-          "contextualTitle": "nt65",
-          "visibility": "collapsed"
         }
       ]
     },
