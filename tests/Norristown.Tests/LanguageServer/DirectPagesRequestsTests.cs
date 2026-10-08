@@ -53,7 +53,7 @@ public sealed class DirectPagesRequestsTests
         Assert.Empty(main.Via);
         Assert.Equal([6, 8], main.Accesses.Select(access => access.Place.Range.Start.Line));
         Assert.Equal((0, 11), (main.Accesses[0].Place.Range.Start.Character, main.Accesses[0].Place.Range.End.Character));
-        Assert.Equal(["live across `jsr inner`", "`inner` sets it", "read again"], main.Hazards.Select(note => note.Text));
+        Assert.Equal(["live across `jsr inner`", "`inner` uses it as a temporary", "read again"], main.Hazards.Select(note => note.Text));
         Assert.Equal([7, 12, 8], main.Hazards.Select(note => note.Place!.Range.Start.Line));
 
         var inner = Assert.Single(main.Children);

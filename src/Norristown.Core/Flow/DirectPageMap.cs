@@ -669,9 +669,9 @@ public sealed class DirectPageMap
                         foreach (var location in held.May)
                         {
                             if (tracked.Contains(location) && writes.Contains(location) && !reads.Contains(location) && !clobbered.ContainsKey(location)
-                                && IsTempBelow(callee, location, roles))
+                                && TempBelow(callee, location, roles) is { } temp)
                             {
-                                clobbered = clobbered.Add(location, (callee, at));
+                                clobbered = clobbered.Add(location, (callee, temp, at));
                             }
                         }
                     }
@@ -681,7 +681,7 @@ public sealed class DirectPageMap
                 return new Held(block.CallsUnknown || always is null ? held.Must : held.Must.Union(always), held.May, clobbered);
             }
 
-            void Hazard(LocationKey location, (Symbol Callee, SyntaxNode At) call, SyntaxNode read)
+            void Hazard(LocationKey location, (Symbol Callee, Symbol Temp, SyntaxNode At) call, SyntaxNode read)
             {
                 if (!hazards.TryGetValue(location, out var notes))
                     hazards[location] = notes = [];
@@ -689,7 +689,7 @@ public sealed class DirectPageMap
                 if (notes.Any(note => note.At == call.At))
                     return;
                 notes.Add(new PageNote("⚠", $"live across `{callText}`", call.At));
-                notes.Add(new PageNote("⚠", $"`{call.Callee.DisplayName}` sets it", WriteIn(call.Callee, location)));
+                notes.Add(new PageNote("⚠", $"`{call.Temp.DisplayName}` uses it as a temporary", WriteIn(call.Temp, location)));
                 notes.Add(new PageNote("◦", "read again", read));
             }
         }
@@ -703,10 +703,11 @@ public sealed class DirectPageMap
             ?? (routines.TryGetValue(routine, out var known) && known.Region.Blocks is [{ Steps: [var first, ..] }, ..] ? first.Statement : null);
 
         /// <summary>
-        /// Returns whether <paramref name="routine"/>, or a routine it reaches through its calls,
-        /// gives <paramref name="location"/> the <see cref="PageRole.Temp"/> role.
+        /// Returns the first of <paramref name="routine"/> and the routines it reaches through its
+        /// calls that gives <paramref name="location"/> the <see cref="PageRole.Temp"/> role, or
+        /// null when none does.
         /// </summary>
-        private bool IsTempBelow(Symbol routine, LocationKey location, Dictionary<(Symbol Routine, LocationKey Location), PageRole> roles)
+        private Symbol? TempBelow(Symbol routine, LocationKey location, Dictionary<(Symbol Routine, LocationKey Location), PageRole> roles)
         {
             var seen = new HashSet<Symbol>();
             var pending = new Stack<Symbol>([routine]);
@@ -715,11 +716,11 @@ public sealed class DirectPageMap
                 if (!seen.Add(next))
                     continue;
                 if (roles.GetValueOrDefault((next, location), PageRole.In) == PageRole.Temp)
-                    return true;
+                    return next;
                 foreach (var callee in callees.GetValueOrDefault(next) ?? [])
                     pending.Push(callee);
             }
-            return false;
+            return null;
         }
 
         /// <summary>Returns the pages, each with its locations and their uses.</summary>
@@ -923,12 +924,14 @@ public sealed class DirectPageMap
 
         /// <summary>
         /// Represents what a point in a routine has stored: the locations every path has written,
-        /// those some path has written, and those a call has since overwritten, with the call.
+        /// those some path has written, and those a call has since overwritten, with the call and
+        /// the routine below it that uses the location as a temporary.
         /// </summary>
         private sealed record Held(
-            ImmutableHashSet<LocationKey> Must, ImmutableHashSet<LocationKey> May, ImmutableDictionary<LocationKey, (Symbol Callee, SyntaxNode At)> Clobbered)
+            ImmutableHashSet<LocationKey> Must, ImmutableHashSet<LocationKey> May,
+            ImmutableDictionary<LocationKey, (Symbol Callee, Symbol Temp, SyntaxNode At)> Clobbered)
         {
-            public static Held Nothing { get; } = new([], [], ImmutableDictionary<LocationKey, (Symbol, SyntaxNode)>.Empty);
+            public static Held Nothing { get; } = new([], [], ImmutableDictionary<LocationKey, (Symbol, Symbol, SyntaxNode)>.Empty);
 
             public static Held Merge(Held? known, Held arriving) =>
                 known is null ? arriving : new Held(
