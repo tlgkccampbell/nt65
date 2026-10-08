@@ -672,7 +672,8 @@ public sealed class DirectPageMapTests
     /// <summary>
     /// A constant address that an instruction reaches through the zero page takes those bytes as
     /// surely as a declaration does, so it is shown as a location named by its address. A pointer
-    /// read through such an address takes both of its bytes.
+    /// read through such an address takes both of its bytes. A constant with an index register
+    /// added is an offset from wherever the register points, so it names no location.
     /// </summary>
     [Fact]
     public void AConstantAddressIsALocation()
@@ -693,6 +694,8 @@ public sealed class DirectPageMapTests
                     sta $FC
                     ldy #0
                     lda ($FD),y
+                    lsr 1,x
+                    sta 3,y
                     rts
                 }
                 """));

@@ -587,8 +587,10 @@ public sealed class DirectPageMap
                     homes[key] = new Home(at, address - at, target.Symbol.Size, PageLayout.Fixed, TypeOf(declaration), IsMmio(declaration));
                 }
             }
-            else if (Anonymous(file.Model, operand, expression, step.On, page, width) is { } anonymous)
+            else if (!indexed && Anonymous(file.Model, operand, expression, step.On, page, width) is { } anonymous)
             {
+                // A constant with an index register added, as in `lda 1,x`, is a field offset
+                // from wherever the register points, so it names no address of its own.
                 key = anonymous;
                 offset = 0;
             }

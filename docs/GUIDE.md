@@ -1988,7 +1988,8 @@ everything below works across modules.
   temporary, or only writes one that the code it interrupts writes and reads back, is marked
   `⚠`; one that counts or flags something for that code is not. A constant address that an
   instruction reaches through the page, such as `lda $FB`, is shown as a location named by its
-  address, `$00FB`. Selecting a row marks the
+  address, `$00FB`; a constant with an index register added, such as `lda 1,x`, is an offset from
+  wherever the register points and is not. Selecting a row marks the
   lines it stands for. *Show Grid* draws a page as 16 rows of 16 bytes, with each location's
   bytes outlined, what is free, and what the page shares with other pages. A location is
   brighter, and its bar longer, the more often its instructions run in one pass: a loop that
