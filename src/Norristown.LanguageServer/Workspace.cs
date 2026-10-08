@@ -476,7 +476,7 @@ internal sealed class Workspace
         var path = document.Tree.Path;
         return new Published(
             UriOf(path), document.Version, document.Tree, [.. analysis.DiagnosticsFor(path), .. analysis.SuggestionsFor(path)],
-            analysis.Configuration);
+            analysis.Configuration, analysis.ModelFor(path));
     }
 
     /// <summary>
@@ -570,7 +570,8 @@ internal sealed class Workspace
                 versions.TryGetValue(file.Key, out var version) ? version : null,
                 file.Value.Tree,
                 now[file.Key].Diagnostics,
-                file.Value.Analysis.Configuration))];
+                file.Value.Analysis.Configuration,
+                file.Value.Tree is null ? null : file.Value.Analysis.ModelFor(file.Key)))];
     }
 
     /// <summary>

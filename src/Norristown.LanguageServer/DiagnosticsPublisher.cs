@@ -26,9 +26,9 @@ internal sealed class DiagnosticsPublisher : IDisposable
     private readonly ServerLog log;
     private readonly Workspace workspace;
 
-    // Asks the client to fetch semantic tokens, lenses and hints again, after a publish of the
-    // whole program that an edit reaching past its own file set off.
-    private readonly Action refetch;
+    // Asks the client to fetch lenses and hints again after a publish of the whole program, and
+    // semantic tokens too when it is told they may have changed.
+    private readonly Action<bool> refetch;
 
     // Publishing diagnostics for every file except the edited one waits for typing to stop. A
     // feature that follows the whole program rather than the caret, such as the output view
@@ -59,6 +59,15 @@ internal sealed class DiagnosticsPublisher : IDisposable
     // and read by the publishing code, which run on different threads.
     private volatile bool watchingOutput;
 
+    // Whether a document has been opened since the last publish of the whole program. Opening a
+    // file adds it to a program, so the client is asked to fetch every file's tokens again. It is
+    // 1 for true, so that it can be read and cleared in one step.
+    private int opened;
+
+    // The model each file's semantic tokens were last worked out from, by URI, as of the last
+    // publish of the whole program.
+    private IReadOnlyDictionary<string, SemanticModel?> models = new Dictionary<string, SemanticModel?>();
+
     // The binaries and linker configs the client has been asked to watch. The editor watches the
     // sources and the project files by itself, but which files `.incbin` directives include and
     // which configs a project links are not known until the programs have been read.
@@ -72,9 +81,10 @@ internal sealed class DiagnosticsPublisher : IDisposable
     /// <param name="outgoing">The last step every diagnostic passes through on its way out.</param>
     /// <param name="delay">The function that waits for typing to stop.</param>
     /// <param name="refetch">
-    /// The action that asks the client to fetch semantic tokens, lenses and hints again.
+    /// The action that asks the client to fetch lenses and hints again, and semantic tokens too
+    /// when it is given true.
     /// </param>
-    public DiagnosticsPublisher(ServerLog log, Workspace workspace, Outgoing outgoing, Delay delay, Action refetch)
+    public DiagnosticsPublisher(ServerLog log, Workspace workspace, Outgoing outgoing, Delay delay, Action<bool> refetch)
     {
         this.log = log;
         this.workspace = workspace;
@@ -122,8 +132,11 @@ internal sealed class DiagnosticsPublisher : IDisposable
     /// <param name="uri">The document's URI.</param>
     /// <param name="version">The version of the document the client now holds.</param>
     /// <param name="cancellation">The cancellation of the request that opened or edited it.</param>
-    public async Task PublishEditedAsync(string uri, int version, CancellationToken cancellation)
+    /// <param name="open">Whether the client has just opened the document rather than edited it.</param>
+    public async Task PublishEditedAsync(string uri, int version, CancellationToken cancellation, bool open = false)
     {
+        if (open)
+            Interlocked.Exchange(ref opened, 1);
         newest[uri] = version;
         await PublishOwnAsync(uri, cancellation).ConfigureAwait(false);
         PublishTheRestSoon(uri);
@@ -264,10 +277,12 @@ internal sealed class DiagnosticsPublisher : IDisposable
     private async Task PublishEverythingLockedAsync(string? changed, bool refresh, CancellationToken cancellation)
     {
         var current = new HashSet<string>(StringComparer.Ordinal);
+        var now = new Dictionary<string, SemanticModel?>(StringComparer.Ordinal);
         foreach (var file in await workspace.ToPublishAsync(cancellation).ConfigureAwait(false))
         {
             cancellation.ThrowIfCancellationRequested();
             current.Add(file.Uri);
+            now[file.Uri] = file.Model;
             _ = await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
         }
 
@@ -299,9 +314,30 @@ internal sealed class DiagnosticsPublisher : IDisposable
         // edited, from an analysis without the program-wide answers. What a routine costs with
         // its calls and what the registers hold come from those answers, so the client is asked
         // to fetch again once they are worked out, whether or not the edit reached past its file.
+        //
+        // Semantic tokens come from a file's model alone, which working those answers out never
+        // changes, and the client fetches the edited document's tokens by itself. So after an
+        // edit it is asked for tokens only where another file's model has changed since the last
+        // publish, which covers every edit made meanwhile. A file that an edit does not analyze
+        // again keeps its model, and an edit that changes how another file's names are coloured
+        // changes what that file sees, so that file is analyzed again. Tokens that came to read
+        // anything besides the model would need this check to change with them.
+        var wasOpened = Interlocked.Exchange(ref opened, 0) == 1;
+        var before = models;
+        models = now;
         if (refresh)
-            refetch();
+            refetch(changed is null || wasOpened || OthersChanged(before, now, changed));
     }
+
+    /// <summary>
+    /// Determines whether a file other than <paramref name="changed"/> has a model in
+    /// <paramref name="now"/> other than the one it had <paramref name="before"/>, or has joined
+    /// the files published since.
+    /// </summary>
+    private static bool OthersChanged(
+        IReadOnlyDictionary<string, SemanticModel?> before, Dictionary<string, SemanticModel?> now, string changed) =>
+        now.Any(file => file.Key != changed
+            && (!before.TryGetValue(file.Key, out var had) || !ReferenceEquals(had, file.Value)));
 
     /// <summary>
     /// Publishes one file's diagnostics, unless they match what was published last time or the

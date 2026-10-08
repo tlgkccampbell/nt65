@@ -137,6 +137,33 @@ public sealed class PublishingTests
     }
 
     /// <summary>
+    /// An edit that reaches past its own file still asks for tokens to be fetched again when a
+    /// keystroke that reaches nowhere follows it before typing stops. The whole program is
+    /// published once, after the last edit, and that edit alone changed nothing elsewhere.
+    /// </summary>
+    [Fact]
+    public async Task AnEditThatReachesPastItsFileIsNotForgottenByTheKeystrokesAfterIt()
+    {
+        var timeout = TestTimeout.Token();
+        var held = new HeldDelay();
+        await using var client = await OpenBothAsync(held, timeout, refreshesTokens: true);
+
+        // A constant that main reads is changed in gfx, and then main's body is edited, before
+        // either edit's wait for typing to stop is over.
+        await client.ChangeAsync(GfxUri, 2, new TextDocumentContentChangeEvent(
+            Locate.Span(Gfx, "$0400"), "$0800"));
+        await client.NextDiagnosticsAsync(GfxUri, timeout);
+        await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(
+            Locate.Span(Main, "rts"), "nop"));
+        await client.NextDiagnosticsAsync(MainUri, timeout);
+
+        // The first wait belongs to the publish the second edit replaced.
+        await held.ReleaseAsync(timeout);
+        await held.ReleaseAsync(timeout);
+        await client.NextTokensRefreshAsync(timeout);
+    }
+
+    /// <summary>
     /// A diagnostic that moves its end, changes its code or gains a tag is published again, even
     /// where its start and message stay the same, because the client shows each of those.
     /// </summary>

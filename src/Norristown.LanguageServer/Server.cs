@@ -468,7 +468,7 @@ internal sealed class Server : IDisposable
     {
         var document = workspace.Open(request.TextDocument);
         log.Write($"opened {document.Uri} ({document.Tree.LineCount} lines)");
-        await diagnostics.PublishEditedAsync(document.Uri, document.Version, cancellation).ConfigureAwait(false);
+        await diagnostics.PublishEditedAsync(document.Uri, document.Version, cancellation, open: true).ConfigureAwait(false);
     }
 
     [JsonRpcMethod("textDocument/didChange")]
@@ -936,14 +936,15 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// Asks the client to fetch semantic tokens, lenses and hints again, where it supports that.
-    /// The diagnostics publisher calls this after an edit that reached past the file it was made
-    /// in, because what a name in another file refers to, and what a routine costs including its
-    /// calls, may have changed.
+    /// Asks the client to fetch lenses and hints again, where it supports that, and semantic
+    /// tokens too when <paramref name="tokens"/> is true. The diagnostics publisher calls this
+    /// once the program-wide answers are worked out, because what a routine costs including its
+    /// calls may have changed. It passes true where what a name in another file refers to may
+    /// have changed as well.
     /// </summary>
-    private void RefetchEverything()
+    private void RefetchEverything(bool tokens)
     {
-        if (client.RefreshesTokens)
+        if (tokens && client.RefreshesTokens)
             _ = RefreshAsync("workspace/semanticTokens/refresh", "semantic tokens");
         if (client.RefreshesLenses)
             _ = RefreshAsync("workspace/codeLens/refresh", "code lenses");
