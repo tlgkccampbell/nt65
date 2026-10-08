@@ -198,7 +198,7 @@ class FlowArrows {
   }
 
   get enabled() {
-    return vscode.workspace.getConfiguration('nt65').get('flowArrows.enabled') !== false;
+    return vscode.workspace.getConfiguration('nt65').get('flowArrows.enabled') === true;
   }
 
   applies(editor) {

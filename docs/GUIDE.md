@@ -1977,7 +1977,7 @@ everything below works across modules.
   routine are drawn: a call returns to the line after it, and a tail call or a branch to
   another routine leaves it. The arrows take at most four columns, and hovering the line of one
   that had no room says where it goes. The setting `nt65.flowArrows.enabled`, or *Toggle Flow
-  Arrows*, turns them off.
+  Arrows*, turns them on; they are off by default.
 - **The direct page map**, in the nt65 view of the activity bar, shows how routines share the
   zero page, or on the 65816 each direct page. Each page is a value of D, with the segments
   reached through it, the locations on it and, under each location, the calls that lead to the
