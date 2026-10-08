@@ -6,7 +6,11 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Offset">The offset from D to its first byte, or null when it is not known.</param>
 /// <param name="Size">The number of bytes it takes, or null when that is not known.</param>
 /// <param name="Address">Its first address, or null when that is not known.</param>
-/// <param name="Fixed">Whether the source fixes its address, so that it is not a prediction.</param>
+/// <param name="Layout">
+/// Where its address comes from. It is <c>fixed</c> when the source fixes it, <c>built</c> when the
+/// last build gives it, <c>configured</c> when a linked config predicts it, and <c>guessed</c> when
+/// it is guessed from the page's base.
+/// </param>
 /// <param name="Type">The element it is declared with, such as <c>.word</c>, or an empty string.</param>
 /// <param name="Relation">How the routines that use it share it.</param>
 /// <param name="Hazard">Whether a routine's use of it is a hazard.</param>
@@ -22,5 +26,5 @@ namespace Norristown.LanguageServer.Protocol;
 /// </param>
 /// <param name="Routines">The call trees from the outermost callers down to each routine that reaches it.</param>
 internal sealed record DirectPageLocation(
-    string Name, Location? Declaration, long? Offset, long? Size, long? Address, bool Fixed, string Type, string Relation, bool Hazard,
+    string Name, Location? Declaration, long? Offset, long? Size, long? Address, string Layout, string Type, string Relation, bool Hazard,
     IReadOnlyList<DirectPageShared> Shared, int Accesses, long PerPass, int Uncounted, IReadOnlyList<DirectPageRoutine> Routines);

@@ -1985,10 +1985,14 @@ everything below works across modules.
   With the caret in a routine, the locations it uses are marked in both views, and the one under
   the caret more strongly.
 
-  The linker decides where data lands, so offsets are predicted. A segment starts where its
-  linked configuration's memory area does, or at the start of its page without one, and the
-  files' bytes follow in the order the project lists them. Like the input sources, the map
-  only shows what the analysis found and never reports a problem.
+  ld65 decides where data lands, and nt65 does not run it, so each location says where its
+  address comes from. It is *fixed* by the source, *built* from the last build, *predicted*
+  from the linked config (a segment starts at its `start`, at its `offset` into its memory area,
+  or after the segment before it), or *guessed* from the page's base without one. Files' bytes
+  follow in the order the project lists them, which a page notes when several files share a
+  segment. Overlaps and shared bytes between pages are reported only for addresses the map
+  trusts, never for guessed ones. Like the input sources, the map only shows what the analysis
+  found and never reports a problem.
 - **Inlay hints** at the end of a line, off by default for cycle counts: where a width or
   other state changes, where a long branch was written long, values a declaration implies,
   and parameter names in calls.

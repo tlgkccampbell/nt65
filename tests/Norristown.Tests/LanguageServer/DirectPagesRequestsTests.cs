@@ -41,11 +41,13 @@ public sealed class DirectPagesRequestsTests
 
         var result = await DirectPagesAsync(client, timeout);
         Assert.NotNull(result);
-        Assert.Equal(("6502", true), (result.Cpu, result.Predicted));
+        Assert.Equal("6502", result.Cpu);
         var page = Assert.Single(result.Pages);
         Assert.Equal(("$0000", 0L, "nested", true), (page.Id, page.Base!.Value, page.Relation, page.Hazard));
+        Assert.Equal(["no config · layout guessed"], page.Notes.Select(note => note.Text));
         var tmp = Assert.Single(page.Locations);
         Assert.Equal(("tmp", 0L, 1L, ".byte", 4), (tmp.Name, tmp.Offset!.Value, tmp.Size!.Value, tmp.Type, tmp.Accesses));
+        Assert.Equal("guessed", tmp.Layout);
         Assert.Equal(new Position(2, 6), tmp.Declaration?.Range.Start);
 
         var main = Assert.Single(tmp.Routines);
@@ -82,14 +84,14 @@ public sealed class DirectPagesRequestsTests
         var result = await DirectPagesAsync(client, timeout);
         Assert.NotNull(result);
         var location = Assert.Single(Assert.Single(result.Pages).Locations);
-        Assert.Equal(("$00FB", 0xFBL, true), (location.Name, location.Address!.Value, location.Fixed));
+        Assert.Equal(("$00FB", 0xFBL, "fixed"), (location.Name, location.Address!.Value, location.Layout));
         Assert.Null(location.Declaration);
         Assert.Equal(("main", "in"), (Assert.Single(location.Routines).Name, location.Routines[0].Role));
     }
 
     /// <summary>
-    /// On the 65816, each value of D is a page of its own. A page that overlaps another says so,
-    /// and the locations that take the same bytes name each other. An interrupt handler that
+    /// On the 65816, each value of D is a page of its own. Without a linked config the layout is
+    /// guessed, so pages that would overlap through it report no overlap. An interrupt handler that
     /// reaches memory after giving back the interrupted code's D is listed on the page whose D
     /// is not known, and under the location it names, marked as such.
     /// </summary>
@@ -137,10 +139,9 @@ public sealed class DirectPagesRequestsTests
         Assert.Equal(["ZEROPAGE"], zero.Segments);
         Assert.Equal(["HIGH"], high.Segments);
 
-        var overlap = Assert.Single(zero.Overlaps);
-        Assert.Equal(("$0080", 0x80L, 0xffL), (overlap.Page, overlap.First, overlap.Last));
-        var shared = Assert.Single(overlap.Shared);
-        Assert.Equal(("low", "high", 0x80L, 0x81L), (shared.Here, shared.There, shared.First, shared.Last));
+        Assert.Empty(zero.Overlaps);
+        Assert.Empty(high.Overlaps);
+        Assert.All(zero.Locations, location => Assert.Equal("guessed", location.Layout));
 
         var frames = zero.Locations.Single(location => location.Name == "frames");
         Assert.Equal("irq", frames.Relation);

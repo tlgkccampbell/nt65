@@ -127,6 +127,8 @@ public static class SegmentLinks
             Runs = area is { Start: { } first, Size: { } length } && length > 0
                 ? [new RunArea(config.Path, area.Name, first, first + length - 1, area.Declaration)]
                 : [],
+            Start = placed.Start?.Value,
+            Offset = placed.Offset?.Value,
             IsDefined = placed.Defines,
             Unwritten = Unwritten(placed, config),
         };

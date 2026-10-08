@@ -1,5 +1,6 @@
 using System.Globalization;
 using Norristown.Flow;
+using Norristown.Project;
 using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
@@ -20,6 +21,14 @@ internal static class FlowFragment
     /// </summary>
     public static ProgramAnalysis Analyze(string cpu, string text) =>
         Analysis.Program(Analysis.Fragment, (Analysis.Path, Header(cpu) + text));
+
+    /// <summary>
+    /// Returns the analysis of <paramref name="files"/>, each given as its path and text, for
+    /// <paramref name="cpu"/> under <paramref name="project"/>. Each file is compiled after the
+    /// header, with the module named after the file.
+    /// </summary>
+    public static ProgramAnalysis Analyze(ProjectSettings project, string cpu, params (string Path, string Text)[] files) =>
+        Analysis.Program(project, [.. files.Select(file => (file.Path, Header(cpu, Path.GetFileNameWithoutExtension(file.Path)) + file.Text))]);
 
     /// <summary>
     /// Returns the problems reported for <paramref name="text"/> on <paramref name="cpu"/>, each
@@ -93,5 +102,5 @@ internal static class FlowFragment
     }
 
     /// <summary>Returns the header's text for <paramref name="cpu"/>, which is <see cref="HeaderLines"/> lines long.</summary>
-    private static string Header(string cpu) => $".module main\n.cpu {cpu}\n.segment CODE\n";
+    private static string Header(string cpu, string module = "main") => $".module {module}\n.cpu {cpu}\n.segment CODE\n";
 }

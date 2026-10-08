@@ -12,9 +12,14 @@ namespace Norristown.Flow;
 /// <param name="Locations">The locations on the page, by offset, with those whose offset is not known last.</param>
 /// <param name="Unknown">The routines that reach memory through D while it is not known, for the page without a base.</param>
 /// <param name="Direct">The number of instructions that reach a location through this page with direct addressing.</param>
+/// <param name="Notes">
+/// The facts about the page's layout that are about no one line, such as a segment that lies
+/// outside the page. None of them is a problem with the program; each says how far to trust the
+/// layout shown.
+/// </param>
 public sealed record DirectPage(
     long? Base, IReadOnlyList<string> Segments, bool IsHardware, IReadOnlyList<PageLocation> Locations,
-    IReadOnlyList<UnknownPageUse> Unknown, int Direct)
+    IReadOnlyList<UnknownPageUse> Unknown, int Direct, IReadOnlyList<PageNote> Notes)
 {
     /// <summary>Gets the pages that cover some of the same addresses as this one.</summary>
     public IReadOnlyList<PageOverlap> Overlaps { get; internal set; } = [];

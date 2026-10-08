@@ -12,18 +12,19 @@ namespace Norristown.Flow;
 /// D, and says which routines use each one and how.
 /// <para>
 /// The map is only for showing, so it may track memory on a best-effort basis. Where data lands is
-/// decided by the linker, so an offset that the source does not fix is predicted. A segment is
-/// taken to start where its linked configuration's memory area starts, or at the start of its page
-/// without one. The files' bytes follow in the order the program lists the files. Nothing warns or
-/// errors because of the map.
+/// decided by ld65, which nt65 does not run, so each location says where its address comes from as
+/// a <see cref="PageLayout"/>. An address that neither the source nor the last build fixes is
+/// predicted. A segment starts where its linked configuration puts it, or at the start of its page
+/// without one, and the files' bytes follow in the order the program lists the files. Pages are
+/// found to share bytes only through addresses the map trusts, which excludes guessed ones. Nothing
+/// warns or errors because of the map.
 /// </para>
 /// </summary>
 public sealed class DirectPageMap
 {
-    private DirectPageMap(IReadOnlyList<DirectPage> pages, bool predicted, IReadOnlyList<PageCall> calls)
+    private DirectPageMap(IReadOnlyList<DirectPage> pages, IReadOnlyList<PageCall> calls)
     {
         Pages = pages;
-        IsPredicted = predicted;
         Calls = calls;
     }
 
@@ -33,15 +34,19 @@ public sealed class DirectPageMap
     /// </summary>
     public IReadOnlyList<DirectPage> Pages { get; }
 
-    /// <summary>Gets a value indicating whether any location's offset is a prediction rather than fixed by the source.</summary>
-    public bool IsPredicted { get; }
-
     /// <summary>Gets every call in the program that names a routine, in the order the files list them.</summary>
     public IReadOnlyList<PageCall> Calls { get; }
 
     /// <summary>Returns the map of <paramref name="analysis"/>'s program.</summary>
-    public static DirectPageMap Of(ProgramAnalysis analysis, CancellationToken cancellation = default) =>
-        new Builder(analysis, cancellation).Build();
+    /// <param name="analysis">The analysis of the program.</param>
+    /// <param name="built">
+    /// The absolute address the last build gave each symbol, or null when there is no build. A
+    /// zero-page data symbol found here is laid out at that address rather than at a predicted one.
+    /// </param>
+    /// <param name="cancellation">The token that cancels the work.</param>
+    public static DirectPageMap Of(
+        ProgramAnalysis analysis, IReadOnlyDictionary<Symbol, long>? built = null, CancellationToken cancellation = default) =>
+        new Builder(analysis, built, cancellation).Build();
 
     /// <summary>Represents one call from one routine to another.</summary>
     /// <param name="Caller">The routine that makes the call.</param>
@@ -55,7 +60,7 @@ public sealed class DirectPageMap
     public sealed record PageCall(Symbol Caller, Symbol Callee, SyntaxNode At, long Times, bool InUncountedLoop);
 
     /// <summary>Builds a map from one analysis.</summary>
-    private sealed class Builder(ProgramAnalysis analysis, CancellationToken cancellation)
+    private sealed class Builder(ProgramAnalysis analysis, IReadOnlyDictionary<Symbol, long>? built, CancellationToken cancellation)
     {
         // The routines by their canonical symbols, each with its region and its file.
         private readonly Dictionary<Symbol, (FlowRegion Region, FileAnalysis File)> routines = [];
@@ -71,7 +76,8 @@ public sealed class DirectPageMap
         private readonly Dictionary<long, int> direct = [];
         private readonly MemoryInference memory = new(analysis);
 
-        private bool predicted;
+        // The notes about each page's layout, by the page's base.
+        private readonly Dictionary<long, List<PageNote>> notes = [];
 
         /// <summary>Returns the map.</summary>
         public DirectPageMap Build()
@@ -84,7 +90,7 @@ public sealed class DirectPageMap
             var uses = Uses(interrupt, main);
             var pages = Pages(uses);
             Overlap(pages);
-            return new DirectPageMap(pages, predicted, calls);
+            return new DirectPageMap(pages, calls);
         }
 
         /// <summary>Returns the canonical symbol for <paramref name="symbol"/>, the one every file's model agrees on.</summary>
@@ -156,14 +162,15 @@ public sealed class DirectPageMap
 
         /// <summary>
         /// Collects the locations that live on a page: the data declared in a zero-page segment, and
-        /// the addresses below $100 that a data alias or <c>.mmio</c> names. Data is given its
-        /// predicted offset, segment by segment.
+        /// the addresses below $100 that a data alias or <c>.mmio</c> names. Data is given the
+        /// address the last build gave it, or else its predicted address, segment by segment.
         /// </summary>
         private void CollectHomes()
         {
             var segments = analysis.Program.Segments;
             var laid = new Dictionary<string, List<(Symbol Symbol, long Offset, string Type)>>(StringComparer.Ordinal);
             var lengths = new Dictionary<string, long>(StringComparer.Ordinal);
+            var files = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var file in analysis.Files)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -198,6 +205,7 @@ public sealed class DirectPageMap
                         at += length;
                     }
                     lengths[name] = at;
+                    files[name] = files.GetValueOrDefault(name) + 1;
                     if (!laid.TryGetValue(name, out var symbols))
                         laid[name] = symbols = [];
                     foreach (var item in placed.Where(item => item.Segment == name))
@@ -209,22 +217,45 @@ public sealed class DirectPageMap
                     if (symbol.Kind == SymbolKind.AddressAlias && symbol.ValueExpression?.Parent is DataDeclarationSyntax declaration
                         && symbol.Value.AsNumber() is { } address and >= 0 and < 0x100)
                     {
-                        homes.TryAdd(Key(symbol), new Home(0, address, symbol.Size, true, TypeOf(declaration), IsMmio(declaration)));
+                        homes.TryAdd(Key(symbol), new Home(0, address, symbol.Size, PageLayout.Fixed, TypeOf(declaration), IsMmio(declaration)));
                     }
                 }
             }
 
-            var starts2 = SegmentStarts(lengths);
+            var segmentStarts = SegmentStarts(lengths);
             foreach (var (name, symbols) in laid)
             {
-                if (segments.Find(name) is not { } segment)
+                if (segments.Find(name) is not { } segment || !segmentStarts.TryGetValue(name, out var start))
                     continue;
                 var page = BaseOf(segment);
+                var outside = (First: long.MaxValue, Last: long.MinValue);
+                var predicted = false;
                 foreach (var (symbol, offset, type) in symbols)
                 {
-                    predicted = true;
-                    homes.TryAdd(Key(symbol), new Home(page, starts2.GetValueOrDefault(name) + offset, symbol.Size, false, type, false));
+                    // The last build says where ld65 put the symbol, which no prediction can better.
+                    var (address, layout) = built is not null && (built.TryGetValue(symbol, out var at) || built.TryGetValue(Current(symbol), out at))
+                        ? (at, PageLayout.Built)
+                        : (start.Address + offset, start.Layout);
+                    predicted |= layout != PageLayout.Built;
+
+                    // A symbol the page cannot reach has no offset from D to show.
+                    var fromPage = address - page;
+                    var inPage = fromPage is >= 0 and <= 0xff;
+                    if (!inPage)
+                        outside = (Math.Min(outside.First, address), Math.Max(outside.Last, address + Math.Max(1, symbol.Size ?? 1) - 1));
+                    homes.TryAdd(Key(symbol), new Home(page, inPage ? fromPage : null, symbol.Size, layout, type, false));
                 }
+
+                if (outside.First <= outside.Last)
+                {
+                    Note(page, new PageNote(
+                        "?", $"`{name}` lies outside the page, at {StateValue.Hex(outside.First, 4)}-{StateValue.Hex(outside.Last, 4)}", null));
+                }
+
+                // The order of the object files on ld65's command line decides the order of their
+                // bytes in a segment, and nt65 does not run ld65.
+                if (predicted && files.GetValueOrDefault(name) > 1)
+                    Note(page, new PageNote("◦", $"`{name}` order between files is a guess", null));
             }
 
             static void Grow(Dictionary<string, List<(int Stream, long Length)>> runs, string name, int stream, long end)
@@ -240,39 +271,58 @@ public sealed class DirectPageMap
         }
 
         /// <summary>
-        /// Returns the predicted offset from its page at which each zero-page segment starts. With
-        /// linked configurations, the segments that run in one memory area follow one another in
-        /// the order the first configuration places them, from where the area starts. Without
-        /// them, the segments of one page follow one another, <c>ZEROPAGE</c> first.
+        /// Returns the predicted address at which each zero-page segment starts, with where the
+        /// prediction comes from.
         /// </summary>
-        private Dictionary<string, long> SegmentStarts(Dictionary<string, long> lengths)
+        /// <remarks>
+        /// With linked configurations, the segments that run in one memory area follow one another
+        /// in the order the first configuration places them, from where the area starts, as ld65
+        /// lays them out. A segment with <c>start</c> begins at that address, and one with
+        /// <c>offset</c> that far into its area, and the segments after it follow on from there.
+        /// ld65 also honours <c>align</c>, which nt65 does not read, so an aligned segment may
+        /// start later than predicted. Without a configuration, the segments of one page follow one
+        /// another from the page's base, <c>ZEROPAGE</c> first.
+        /// </remarks>
+        private Dictionary<string, (long Address, PageLayout Layout)> SegmentStarts(Dictionary<string, long> lengths)
         {
-            var starts = new Dictionary<string, long>(StringComparer.Ordinal);
+            var starts = new Dictionary<string, (long, PageLayout)>(StringComparer.Ordinal);
             var zeroPage = analysis.Program.Segments.Segments.Where(segment => segment.Size == AddressSize.ZeroPage).ToList();
             var linked = zeroPage.Where(segment => segment.Runs.Count > 0)
                 .GroupBy(segment => (segment.Runs[0].Config, segment.Runs[0].Area));
             foreach (var area in linked)
             {
                 var first = area.First().Runs[0].First;
-                var at = 0L;
+                var at = first;
                 foreach (var segment in area.OrderBy(segment => segment.Placements.Count > 0 ? segment.Placements[0].Line : int.MaxValue))
                 {
-                    var page = BaseOf(segment);
-                    var origin = first >= page && first <= page + 0xff ? first - page : first < 0x100 ? first : 0;
-                    starts[segment.Name] = origin + at;
+                    at = segment.Start ?? (segment.Offset is { } offset ? first + offset : at);
+                    starts[segment.Name] = (at, PageLayout.Configured);
                     at += lengths.GetValueOrDefault(segment.Name);
                 }
             }
-            foreach (var page in zeroPage.Where(segment => segment.Runs.Count == 0).GroupBy(BaseOf))
+
+            // A segment whose area nt65 cannot work out can still give its own start.
+            foreach (var segment in zeroPage.Where(segment => segment.Runs.Count == 0 && segment.Start is not null))
+                starts[segment.Name] = (segment.Start!.Value, PageLayout.Configured);
+
+            foreach (var page in zeroPage.Where(segment => segment.Runs.Count == 0 && segment.Start is null).GroupBy(BaseOf))
             {
-                var at = 0L;
+                var at = page.Key;
                 foreach (var segment in page.OrderBy(segment => segment.Name == "ZEROPAGE" ? 0 : 1).ThenBy(segment => segment.Name, StringComparer.Ordinal))
                 {
-                    starts[segment.Name] = at;
+                    starts[segment.Name] = (at, PageLayout.Guessed);
                     at += lengths.GetValueOrDefault(segment.Name);
                 }
             }
             return starts;
+        }
+
+        /// <summary>Adds a note about the layout of the page at <paramref name="page"/>.</summary>
+        private void Note(long page, PageNote note)
+        {
+            if (!notes.TryGetValue(page, out var list))
+                notes[page] = list = [];
+            list.Add(note);
         }
 
         /// <summary>Returns the page a zero-page segment's symbols are reached through.</summary>
@@ -396,7 +446,7 @@ public sealed class DirectPageMap
                         return null;
                     }
                     var declaration = target.Symbol.ValueExpression?.Parent as DataDeclarationSyntax;
-                    homes[key] = new Home(at, address - at, target.Symbol.Size, true, TypeOf(declaration), IsMmio(declaration));
+                    homes[key] = new Home(at, address - at, target.Symbol.Size, PageLayout.Fixed, TypeOf(declaration), IsMmio(declaration));
                 }
             }
             else if (Anonymous(file.Model, operand, expression, step.On, page, width) is { } anonymous)
@@ -434,7 +484,7 @@ public sealed class DirectPageMap
                 return null;
             var key = new LocationKey(null, at + offset);
             if (!homes.TryGetValue(key, out var home) || home.Size < size)
-                homes[key] = new Home(at, offset, size, true, "", false);
+                homes[key] = new Home(at, offset, size, PageLayout.Fixed, "", false);
             return key;
         }
 
@@ -766,13 +816,16 @@ public sealed class DirectPageMap
                 {
                     var routineUses = reached[key].Select(access => (access.Routine, access.Unknown)).Distinct()
                         .Select(use => uses.GetValueOrDefault((use.Routine!, key, use.Unknown))).OfType<PageUse>().ToList();
-                    var location = new PageLocation(key.Symbol, key.Name, home.Offset, home.Size, home.IsFixed, home.Type, routineUses);
+                    var location = new PageLocation(key.Symbol, key.Name, home.Offset, home.Size, home.Layout, home.Type, routineUses);
                     location.Relation = RelationOf(location, home);
                     locations.Add(location);
                 }
                 var hardware = locations.Count > 0 && locations.All(location => location.Relation == PageRelation.Hardware);
                 var named = segments[page.Key].Where(name => locations.Any(location => location.Symbol?.Segment == name)).ToList();
-                pages.Add(new DirectPage(page.Key, named, hardware, locations, [], direct.GetValueOrDefault(page.Key)));
+                List<PageNote> pageNotes = [.. notes.GetValueOrDefault(page.Key) ?? []];
+                if (locations.Any(location => location.Layout == PageLayout.Guessed))
+                    pageNotes.Add(new PageNote("◦", "no config · layout guessed", null));
+                pages.Add(new DirectPage(page.Key, named, hardware, locations, [], direct.GetValueOrDefault(page.Key), pageNotes));
             }
 
             var unknown = found.Where(access => access.Unknown).GroupBy(access => (access.Routine, access.Location)).ToList();
@@ -789,7 +842,7 @@ public sealed class DirectPageMap
                     // has no address to be named by until D is known.
                     list.Add(new UnknownPageUse(group.Key.Location.Symbol!, page, home.Offset, use, reason));
                 }
-                pages.Add(new DirectPage(null, [], false, [], list, 0));
+                pages.Add(new DirectPage(null, [], false, [], list, 0, []));
             }
             return pages;
         }
@@ -811,11 +864,15 @@ public sealed class DirectPageMap
             return uses.Count > 1 ? PageRelation.Shared : PageRelation.Own;
         }
 
-        /// <summary>Works out which pages cover the same addresses, and which locations on them take the same bytes.</summary>
+        /// <summary>
+        /// Works out which pages cover the same addresses, and which locations on them take the
+        /// same bytes. A finding is only as good as the addresses it rests on, so a guessed
+        /// location takes part in none, and neither does a page whose locations are all guessed.
+        /// </summary>
         private static void Overlap(List<DirectPage> pages)
         {
-            var based = pages.Where(page => page.Base is not null).ToList();
-            var overlaps = based.ToDictionary(page => page, _ => new List<PageOverlap>());
+            var based = pages.Where(page => page.Base is not null && page.Locations.Any(Trusted)).ToList();
+            var overlaps = pages.Where(page => page.Base is not null).ToDictionary(page => page, _ => new List<PageOverlap>());
             var shared = new Dictionary<PageLocation, List<SharedBytes>>();
             for (var i = 0; i < based.Count; i++)
             {
@@ -828,9 +885,9 @@ public sealed class DirectPageMap
                         continue;
                     var fromA = new List<SharedBytes>();
                     var fromB = new List<SharedBytes>();
-                    foreach (var here in a.Locations)
+                    foreach (var here in a.Locations.Where(Trusted))
                     {
-                        foreach (var there in b.Locations)
+                        foreach (var there in b.Locations.Where(Trusted))
                         {
                             if (Range(a, here) is not { } x || Range(b, there) is not { } y)
                                 continue;
@@ -852,6 +909,8 @@ public sealed class DirectPageMap
                 page.Overlaps = list;
             foreach (var (location, list) in shared)
                 location.Shared = list;
+
+            static bool Trusted(PageLocation location) => location.Layout != PageLayout.Guessed;
 
             static (long First, long Last)? Range(DirectPage page, PageLocation location) =>
                 location.Offset is { } offset && location.Size is { } size and > 0
@@ -898,10 +957,10 @@ public sealed class DirectPageMap
         /// <param name="Page">The page's base.</param>
         /// <param name="Offset">The offset from the page's base, or null when it is not known.</param>
         /// <param name="Size">The number of bytes, or null when it is not known.</param>
-        /// <param name="IsFixed">Whether the source fixes the address.</param>
+        /// <param name="Layout">Where the address comes from.</param>
         /// <param name="Type">The element it is declared with.</param>
         /// <param name="IsMmio">Whether it is a hardware register.</param>
-        private sealed record Home(long Page, long? Offset, long? Size, bool IsFixed, string Type, bool IsMmio);
+        private sealed record Home(long Page, long? Offset, long? Size, PageLayout Layout, string Type, bool IsMmio);
 
         /// <summary>
         /// Represents the key of a location in the builder. A location that a symbol names is keyed

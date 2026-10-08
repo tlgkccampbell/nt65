@@ -21,11 +21,11 @@ internal static class DirectPages
     /// <summary>Returns the map of <paramref name="analysis"/>'s program, with each file's URI from <paramref name="uriOf"/>.</summary>
     public static Protocol.DirectPagesResult Of(ProgramAnalysis analysis, Func<string, string> uriOf, CancellationToken cancellation)
     {
-        var map = DirectPageMap.Of(analysis, cancellation);
+        var map = DirectPageMap.Of(analysis, built: null, cancellation);
         var graph = new Graph(map.Calls, uriOf);
         var cpu = analysis.Files.Count > 0 ? analysis.Files[0].Layout.Cpu : analysis.Cpu;
         return new Protocol.DirectPagesResult(
-            CpuNames.Format(cpu), map.IsPredicted, [.. map.Pages.Select(page => Page(page, graph, uriOf))]);
+            CpuNames.Format(cpu), [.. map.Pages.Select(page => Page(page, graph, uriOf))]);
     }
 
     private static Protocol.DirectPageItem Page(DirectPage page, Graph graph, Func<string, string> uriOf) => new(
@@ -40,6 +40,7 @@ internal static class DirectPages
         [.. page.Overlaps.Select(overlap => new Protocol.DirectPageOverlap(
             Id(overlap.Page), overlap.First, overlap.Last, [.. overlap.Shared.Select(Shared)]))],
         [.. page.Locations.Select(location => Location(page, location, graph, uriOf))],
+        [.. page.Notes.Select(note => Note(note, uriOf))],
         [.. page.Unknown
             .GroupBy(use => use.Reason)
             .OrderBy(group => group.Key)
@@ -81,7 +82,7 @@ internal static class DirectPages
             location.Offset,
             location.Size,
             page.Base is { } at && location.Offset is { } offset ? at + offset : null,
-            location.IsFixed,
+            Name(location.Layout),
             location.Type,
             Name(location.Relation),
             location.IsHazard,
@@ -112,6 +113,14 @@ internal static class DirectPages
         PageRelation.Own => "own",
         PageRelation.Hardware => "hw",
         _ => "unused",
+    };
+
+    private static string Name(PageLayout layout) => layout switch
+    {
+        PageLayout.Fixed => "fixed",
+        PageLayout.Built => "built",
+        PageLayout.Configured => "configured",
+        _ => "guessed",
     };
 
     private static string Name(PageRole role) => role switch

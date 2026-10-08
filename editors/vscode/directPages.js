@@ -44,6 +44,13 @@ const COLOUR = {
   method: 'symbolIcon.methodForeground',
 };
 
+// What a location's tooltip adds to its address for each layout source; a fixed address needs nothing.
+const LAYOUTS = {
+  built: ' · built',
+  configured: ' · predicted',
+  guessed: ' · guessed',
+};
+
 const RELATIONS = {
   shared: 'shared',
   nested: 'nested temps',
@@ -274,6 +281,7 @@ function pageTip(result, page, hazards) {
   if ((page.base & 0xFF) !== 0 && page.direct > 0) {
     tip.row('⚠', COLOUR.nested, `not page-aligned · +1 cycle × ${page.direct}`, '');
   }
+  for (const note of page.notes) tip.row(note.glyph, COLOUR.dim, markdown(note.text), '');
   for (const overlap of page.overlaps) {
     if (overlap.shared.length === 0) {
       tip.row('⧉', COLOUR.dim, `${markdown(pageName(result, overlap.page))} page, no bytes shared`,
@@ -311,8 +319,8 @@ function locationTip(result, page, location, hazards) {
   const where = location.address === null
     ? '?'
     : addresses(location.address, location.address + Math.max(1, location.size || 1) - 1);
-  const predicted = result.predicted && !location.fixed && location.address !== null ? ' · predicted' : '';
-  const tip = new Tip(location.name, `${where}${location.type ? ` · ${location.type}` : ''}${predicted}`);
+  const source = location.address !== null ? LAYOUTS[location.layout] || '' : '';
+  const tip = new Tip(location.name, `${where}${location.type ? ` · ${location.type}` : ''}${source}`);
   const nodes = flatten(location.routines);
   const users = new Set(nodes.filter(node => node.role).map(node => node.name));
   const [glyph, colour] = relationMark(location.relation);

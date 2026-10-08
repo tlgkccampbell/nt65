@@ -69,6 +69,21 @@
     return page.segments.length > 0 ? page.segments.join(', ') : page.id;
   }
 
+  // Returns the words that say where a page's layout comes from, from the strongest source among
+  // its locations whose addresses the source does not fix, with a count of any weaker ones; or
+  // null when the source fixes every address.
+  function layoutBadge(page) {
+    const counts = { built: 0, configured: 0, guessed: 0 };
+    for (const location of page.locations) {
+      if (location.layout in counts) counts[location.layout]++;
+    }
+    const sources = Object.keys(counts).filter(source => counts[source] > 0);
+    if (sources.length === 0) return null;
+    const words = { built: 'layout from last build', configured: 'layout predicted from config', guessed: 'no config · layout guessed' };
+    const weaker = { configured: 'predicted', guessed: 'guessed' };
+    return [words[sources[0]], ...sources.slice(1).map(source => `${counts[source]} ${weaker[source]}`)].join(' · ');
+  }
+
   // Returns the location of a page that holds an absolute address, if any.
   function locationAt(page, address) {
     return page.locations.find(location => location.address !== null
@@ -214,7 +229,8 @@
     head.append(h('span', 't', `D = ${hex4(page.base)}`));
     if (page.segments.length > 0 || page.hardware) head.append(h('span', 'm', page.segments.join(', ') || 'hardware'));
     head.append(h('span', '', `${used} / 256 used`), h('span', 'm', `${free} free · largest run ${best[0]}`));
-    if (map.predicted && page.locations.some(location => !location.fixed)) head.append(h('span', 'p', 'predicted layout'));
+    const badge = layoutBadge(page);
+    if (badge) head.append(h('span', 'p', badge));
     body.append(head);
 
     // The grid, with its legend under it.
@@ -426,8 +442,8 @@
     return section;
   }
 
-  // Returns the checks: whether D is page-aligned, which pages overlap this one, and, when hazards
-  // are shown, which locations have one.
+  // Returns the checks, which say whether D is page-aligned, which pages overlap this one, what is
+  // known about its layout and, when hazards are shown, which locations have one.
   function checks(page) {
     const items = [];
     if ((page.base & 0xFF) === 0) {
@@ -446,6 +462,10 @@
       } else {
         items.push(['⧉', 'var(--dim)', `${name} overlaps, no bytes shared`, addresses(overlap.first, overlap.last)]);
       }
+    }
+    // The header's badge already says the layout is guessed.
+    for (const note of page.notes) {
+      if (note.text !== 'no config · layout guessed') items.push([note.glyph, 'var(--dim)', note.text, '']);
     }
     if (hazards) {
       for (const location of page.locations) {

@@ -14,10 +14,12 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Direct">The number of instructions that reach a location through the page with direct addressing.</param>
 /// <param name="Overlaps">The other pages that cover some of the same addresses.</param>
 /// <param name="Locations">The locations on the page, by offset.</param>
+/// <param name="Notes">The facts about the page's layout that are about no one line, such as a segment outside the page.</param>
 /// <param name="Groups">
 /// The routines that reach memory while D is not known, grouped by why, on the page whose D is not
 /// known.
 /// </param>
 internal sealed record DirectPageItem(
     string Id, long? Base, IReadOnlyList<string> Segments, bool Hardware, string Relation, bool Hazard, long Used, int Direct,
-    IReadOnlyList<DirectPageOverlap> Overlaps, IReadOnlyList<DirectPageLocation> Locations, IReadOnlyList<DirectPageGroup> Groups);
+    IReadOnlyList<DirectPageOverlap> Overlaps, IReadOnlyList<DirectPageLocation> Locations, IReadOnlyList<DirectPageNote> Notes,
+    IReadOnlyList<DirectPageGroup> Groups);
