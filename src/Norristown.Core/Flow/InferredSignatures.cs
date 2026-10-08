@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
@@ -48,6 +49,15 @@ namespace Norristown.Flow;
 /// </summary>
 public sealed class InferredSignatures
 {
+    // How many earlier analyses are kept for each layout. Solving takes a handful of rounds, and
+    // each round gives a file at most one new set of signatures.
+    private const int SolvedKept = 8;
+
+    // The processor-state analyses that solving has run on each file's layout, kept across rounds
+    // and across settles. A file an edit did not touch keeps its layout and its model, and solving
+    // gives it the same signatures round by round each time, so its analyses are found here.
+    private static readonly ConditionalWeakTable<CodeLayout, List<Solved>> solvedOn = new();
+
     // The routines each file names as where control goes, and those whose address it takes, by
     // the file's model, which is kept across edits that do not touch the file.
     private static readonly ConditionalWeakTable<SemanticModel, Uses> usesIn = new();
@@ -176,7 +186,7 @@ public sealed class InferredSignatures
             }
             cancellation.ThrowIfCancellationRequested();
             foreach (var file in stale)
-                states[file] = StateAnalysis.Of(file.Model, file.Layout, file.Flow, ranges, effects, signatures);
+                states[file] = StateOf(file, ranges, effects, signatures);
             solver.Learn(states.Values);
             signatures = solver.Signatures();
         }
@@ -259,6 +269,37 @@ public sealed class InferredSignatures
         StateParts.Index => ProcessorState.Format(StateRegister.Index, seen.Value == 0 ? Width.Eight : Width.Sixteen),
         _ => StateValue.Of(seen.Value).Format(StateRegister.DirectPage),
     };
+
+    /// <summary>
+    /// Returns the processor-state analysis of <paramref name="file"/> with
+    /// <paramref name="signatures"/> and <paramref name="effects"/>. An analysis that an earlier
+    /// round or settle ran on the same layout, model and blocks is reused when every signature
+    /// and stack effect it took is what they give now, since it would come out the same.
+    /// </summary>
+    private static StateAnalysis StateOf(
+        FileAnalysis file, IReadOnlyList<Project.AccessRange> ranges, StackEffects effects, InferredSignatures signatures)
+    {
+        var solved = solvedOn.GetOrCreateValue(file.Layout);
+        lock (solved)
+        {
+            foreach (var earlier in solved)
+            {
+                if (earlier.IsFor(file, ranges) && !earlier.State.TookStale(signatures)
+                    && earlier.State.Consumed.All(taken => effects.Of(taken.Key) == taken.Value))
+                {
+                    return earlier.State;
+                }
+            }
+        }
+        var state = StateAnalysis.Of(file.Model, file.Layout, file.Flow, ranges, effects, signatures);
+        lock (solved)
+        {
+            if (solved.Count == SolvedKept)
+                solved.RemoveAt(0);
+            solved.Add(new Solved(file.Model, [.. file.Flow.Regions.Select(region => region.Blocks)], ranges, state));
+        }
+        return state;
+    }
 
     /// <summary>
     /// Learns the program's signatures from the processor-state analyses of its files, keeping
@@ -418,6 +459,37 @@ public sealed class InferredSignatures
                 ? Seen.Of(known, part)
                 : Seen.Of(call.Caller.Signature?.Entry ?? ProcessorState.Default, part);
             return entered.Kind == SeenKind.Entered ? Seen.Unknown : entered;
+        }
+    }
+
+    /// <summary>
+    /// Represents a processor-state analysis that solving ran, with the inputs that are not
+    /// recorded in the analysis itself.
+    /// </summary>
+    /// <param name="Model">The model of the file analyzed.</param>
+    /// <param name="Blocks">The blocks of each region of the file's control flow, in order.</param>
+    /// <param name="Ranges">The table of which banks each range of addresses is reached from.</param>
+    /// <param name="State">The analysis.</param>
+    private sealed record Solved(
+        SemanticModel Model, IReadOnlyList<IReadOnlyList<BasicBlock>> Blocks, IReadOnlyList<Project.AccessRange> Ranges,
+        StateAnalysis State)
+    {
+        /// <summary>
+        /// Determines whether the analysis was run on <paramref name="file"/>'s model and blocks,
+        /// with <paramref name="ranges"/>. A control flow copied for composing shares its blocks
+        /// with the flow it was copied from.
+        /// </summary>
+        public bool IsFor(FileAnalysis file, IReadOnlyList<Project.AccessRange> ranges)
+        {
+            var regions = file.Flow.Regions;
+            if (!ReferenceEquals(Model, file.Model) || !ReferenceEquals(Ranges, ranges) || regions.Count != Blocks.Count)
+                return false;
+            for (var i = 0; i < Blocks.Count; i++)
+            {
+                if (!ReferenceEquals(Blocks[i], regions[i].Blocks))
+                    return false;
+            }
+            return true;
         }
     }
 

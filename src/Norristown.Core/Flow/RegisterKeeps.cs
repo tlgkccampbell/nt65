@@ -69,18 +69,23 @@ public static class RegisterKeeps
         // routine calls or jumps to is an entry point of its own, and what it keeps is worked out
         // from there, alongside the routines. It keeps what its own path keeps, not what its
         // routine promises, because the promise is checked only from the routine's entry.
+        //
+        // An entry point is worked out again only when an answer it read last time has changed,
+        // so after the first round only the callers of what moved are walked again.
+        List<Entry> entries = [.. regions.Keys.Select(Entry.Routine), .. labels.Keys.Select(Entry.Label)];
         var found = regions.Keys.ToDictionary(name => name, _ => RoutineRegisters.Everything);
         var foundAt = labels.Keys.ToDictionary(name => name, _ => RoutineRegisters.Everything);
-        bool moved;
-        do
+        var keepsReaders = new Dictionary<Entry, HashSet<Entry>>();
+        Entry? keeping = null;
+        Converge(entries, keepsReaders, entry =>
         {
-            moved = false;
-            foreach (var (name, region) in regions)
-                moved |= Narrow(found, name, Declared(region.Routine, KeepsAnalysis.Of(walks[name], region, Of, null)));
-            foreach (var (name, (owner, start)) in labels)
-                moved |= Narrow(foundAt, name, KeepsAnalysis.Of(walks[owner], regions[owner], Of, null, start));
-        }
-        while (moved);
+            keeping = entry;
+            if (!entry.IsLabel)
+                return Narrow(found, entry.Key, Declared(regions[entry.Key].Routine, KeepsAnalysis.Of(walks[entry.Key], regions[entry.Key], Of, null)));
+            var (owner, start) = labels[entry.Key];
+            return Narrow(foundAt, entry.Key, KeepsAnalysis.Of(walks[owner], regions[owner], Of, null, start));
+        });
+        keeping = null;
 
         var diagnostics = new List<Diagnostic>(effects.Diagnostics);
         foreach (var (name, region) in regions)
@@ -106,15 +111,17 @@ public static class RegisterKeeps
         var readers = CallerStack.Readers(files, pulls);
         var reads = regions.Keys.ToDictionary(name => name, _ => RoutineReads.Nothing);
         var readsAt = labels.Keys.ToDictionary(name => name, _ => RoutineReads.Nothing);
-        do
+        var readsReaders = new Dictionary<Entry, HashSet<Entry>>();
+        Entry? reading = null;
+        Converge(entries, readsReaders, entry =>
         {
-            moved = false;
-            foreach (var (name, region) in regions)
-                moved |= Widen(reads, name, ReadsAnalysis.Of(walks[name], region, Of, ReadsOf, readers));
-            foreach (var (name, (owner, start)) in labels)
-                moved |= Widen(readsAt, name, ReadsAnalysis.Of(walks[owner], regions[owner], Of, ReadsOf, readers, start: start));
-        }
-        while (moved);
+            reading = entry;
+            if (!entry.IsLabel)
+                return Widen(reads, entry.Key, ReadsAnalysis.Of(walks[entry.Key], regions[entry.Key], Of, ReadsOf, readers));
+            var (owner, start) = labels[entry.Key];
+            return Widen(readsAt, entry.Key, ReadsAnalysis.Of(walks[owner], regions[owner], Of, ReadsOf, readers, start: start));
+        });
+        reading = null;
 
         // A declared `keeps` is a contract, and a call that relies on more than it promises is
         // reported once what every routine keeps and reads is settled.
@@ -190,7 +197,12 @@ public static class RegisterKeeps
             if (routine.Signature is { NeverReturns: true })
                 return RoutineRegisters.Everything;
             if (routine != target && foundAt.TryGetValue(RoutineKey.Of(target), out var there))
+            {
+                Read(keepsReaders, keeping, Entry.Label(RoutineKey.Of(target)));
                 return there;
+            }
+            if (found.ContainsKey(RoutineKey.Of(routine)))
+                Read(keepsReaders, keeping, Entry.Routine(RoutineKey.Of(routine)));
             return found.TryGetValue(RoutineKey.Of(routine), out var known) ? known
                 : routine.Signature?.Keeps is { } keeps && keeps != Registers.None ? new RoutineRegisters(keeps, true, keeps)
                 : RoutineRegisters.Nothing;
@@ -223,7 +235,14 @@ public static class RegisterKeeps
         {
             var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
             if (routine != target)
-                return readsAt.TryGetValue(RoutineKey.Of(target), out var there) ? there : RoutineReads.Unknown;
+            {
+                if (!readsAt.TryGetValue(RoutineKey.Of(target), out var there))
+                    return RoutineReads.Unknown;
+                Read(readsReaders, reading, Entry.Label(RoutineKey.Of(target)));
+                return there;
+            }
+            if (routine.Signature?.Reads is null && reads.ContainsKey(RoutineKey.Of(routine)))
+                Read(readsReaders, reading, Entry.Routine(RoutineKey.Of(routine)));
             return routine.Signature?.Reads is { } declared ? new RoutineReads(declared, true)
                 : reads.TryGetValue(RoutineKey.Of(routine), out var known) ? known
                 : RoutineReads.Unknown;
@@ -269,6 +288,43 @@ public static class RegisterKeeps
     }
 
     /// <summary>
+    /// Works out every entry point's answer with <paramref name="evaluate"/>, which returns
+    /// whether the answer changed. Each entry point is worked out once, and then again whenever an
+    /// answer that <paramref name="readers"/> says it read changes, until none changes.
+    /// </summary>
+    private static void Converge(
+        List<Entry> entries, Dictionary<Entry, HashSet<Entry>> readers, Func<Entry, bool> evaluate)
+    {
+        var pending = new Queue<Entry>(entries);
+        var queued = new HashSet<Entry>(entries);
+        while (pending.TryDequeue(out var entry))
+        {
+            queued.Remove(entry);
+            if (!evaluate(entry) || !readers.TryGetValue(entry, out var waiting))
+                continue;
+            foreach (var next in waiting)
+            {
+                if (queued.Add(next))
+                    pending.Enqueue(next);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Records in <paramref name="readers"/> that the entry point being worked out, where there is
+    /// one, read the answer of <paramref name="answer"/>, so that it is worked out again when that
+    /// answer changes.
+    /// </summary>
+    private static void Read(Dictionary<Entry, HashSet<Entry>> readers, Entry? evaluating, Entry answer)
+    {
+        if (evaluating is not { } reader)
+            return;
+        if (!readers.TryGetValue(answer, out var waiting))
+            readers[answer] = waiting = [];
+        waiting.Add(reader);
+    }
+
+    /// <summary>
     /// Narrows what <paramref name="name"/> is known to keep to what a round found, and returns
     /// whether that changed it.
     /// </summary>
@@ -307,4 +363,19 @@ public static class RegisterKeeps
         routine.Signature?.Keeps is { } keeps && keeps != Registers.None
             ? found with { Kept = found.Kept | keeps, Backed = keeps }
             : found;
+
+    /// <summary>
+    /// Represents an entry point whose answers are worked out, which is a routine or a label that
+    /// another routine calls or jumps to.
+    /// </summary>
+    /// <param name="Key">The routine or the label.</param>
+    /// <param name="IsLabel">Whether the entry point is a label.</param>
+    private readonly record struct Entry(RoutineKey Key, bool IsLabel)
+    {
+        /// <summary>Returns the entry point at the start of a routine.</summary>
+        public static Entry Routine(RoutineKey key) => new(key, false);
+
+        /// <summary>Returns the entry point at a label.</summary>
+        public static Entry Label(RoutineKey key) => new(key, true);
+    }
 }
