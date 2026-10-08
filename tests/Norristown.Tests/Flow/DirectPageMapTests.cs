@@ -348,6 +348,102 @@ public sealed class DirectPageMapTests
                 """));
     }
 
+    /// <summary>
+    /// A write leaves a location set only when it reaches every byte of it. A store into part of an
+    /// array, or of one byte into a word, leaves the rest as it was, so a later read of the rest
+    /// reads what the routine was given.
+    /// </summary>
+    [Fact]
+    public void OnlyAWriteOfEveryByteSetsALocation()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Own hazard=False used=9 direct=8",
+                "  buf +0 x4 .byte[4] Own",
+                "    main InOut 2",
+                "  wide +4 x2 .word Own",
+                "    main Temp 2",
+                "  half +6 x2 .word Own",
+                "    main InOut 2",
+                "  one +8 x1 .byte Own",
+                "    main Temp 2",
+            ],
+            Render("65816", """
+                .segment ZEROPAGE
+                .data buf:  .byte[4]
+                .data wide: .word
+                .data half: .word
+                .data one:  .byte
+                .segment CODE
+                .export .proc main: a16, i16, dp = 0 {
+                    lda #0
+                    sta buf
+                    lda buf + 1
+                    sta wide
+                    lda wide
+                    sep #$20
+                    sta half
+                    lda half
+                    sta one
+                    lda one
+                    rep #$20
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A constant address that an instruction reaches through the zero page takes those bytes as
+    /// surely as a declaration does, so it is shown as a location named by its address. A pointer
+    /// read through such an address takes both of its bytes.
+    /// </summary>
+    [Fact]
+    public void AConstantAddressIsALocation()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [] Own hazard=False used=4 direct=3",
+                "  $00FB +251 x1  Own fixed",
+                "    main In 1",
+                "  $00FC +252 x1  Own fixed",
+                "    main Out 1",
+                "  $00FD +253 x2  Own fixed",
+                "    main In 1",
+            ],
+            Render("6502", """
+                .export .proc main {
+                    lda $FB
+                    sta $FC
+                    ldy #0
+                    lda ($FD),y
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// On the 65816 a constant address lands on the page D reaches. An operand with <c>d:</c> gives
+    /// the address itself, and a plain direct operand gives the offset from D, so both of these
+    /// reach $2105.
+    /// </summary>
+    [Fact]
+    public void AConstantAddressLandsOnThePageDReaches()
+    {
+        Assert.Equal(
+            [
+                "page $2100 [] Own hazard=False used=1 direct=2",
+                "  $2105 +5 x1  Own fixed",
+                "    main In 2",
+            ],
+            Render("65816", """
+                .export .proc main: a8, i16, dp = $2100 {
+                    lda d:$2105
+                    lda $05
+                    rts
+                }
+                """));
+    }
+
     /// <summary>Returns the map of <paramref name="text"/> as lines of text, one for each page, location, use and note.</summary>
     private static List<string> Render(string cpu, string text)
     {
@@ -361,11 +457,11 @@ public sealed class DirectPageMapTests
             foreach (var overlap in page.Overlaps)
             {
                 lines.Add($"  ⧉ {StateValue.Hex(overlap.Page.Base ?? 0, 4)} {StateValue.Hex(overlap.First, 4)}-{StateValue.Hex(overlap.Last, 4)} "
-                    + string.Join(";", overlap.Shared.Select(shared => $"{shared.Here.Name}/{shared.There.Name}")));
+                    + string.Join(";", overlap.Shared.Select(shared => $"{shared.Here}/{shared.There}")));
             }
             foreach (var location in page.Locations)
             {
-                lines.Add($"  {location.Symbol.Name} +{location.Offset} x{location.Size} {location.Type} {location.Relation}{(location.IsFixed ? " fixed" : "")}");
+                lines.Add($"  {location.Name} +{location.Offset} x{location.Size} {location.Type} {location.Relation}{(location.IsFixed ? " fixed" : "")}");
                 foreach (var use in location.Uses)
                 {
                     lines.Add($"    {use.Routine.Name} {use.Role} {use.Accesses.Count}{(use.IsHandler ? " handler" : "")}{(use.IsUnknownPage ? " unknown" : "")}"

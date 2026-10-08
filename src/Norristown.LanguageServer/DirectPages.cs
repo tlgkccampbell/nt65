@@ -76,8 +76,8 @@ internal static class DirectPages
                 pending.Push(child);
         }
         return new(
-            location.Symbol.Name,
-            Declaration(location.Symbol, uriOf),
+            location.Name,
+            location.Symbol is { } symbol ? Declaration(symbol, uriOf) : null,
             location.Offset,
             location.Size,
             page.Base is { } at && location.Offset is { } offset ? at + offset : null,
@@ -99,7 +99,7 @@ internal static class DirectPages
     private static long Saturated(long count) => Math.Clamp(count, 0, 999_999_999_999);
 
     private static Protocol.DirectPageShared Shared(SharedBytes shared) =>
-        new(shared.Here.Name, shared.There.Name, Id(shared.Page), shared.First, shared.Last);
+        new(shared.Here, shared.There, Id(shared.Page), shared.First, shared.Last);
 
     /// <summary>Returns a page's name, such as <c>$0080</c>, or <c>?</c> for the page whose D is not known.</summary>
     private static string Id(DirectPage page) => page.Base is { } at ? $"${at:X4}" : "?";

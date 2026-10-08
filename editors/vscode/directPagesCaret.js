@@ -25,7 +25,7 @@ function uriOf(key) {
 
 // Checks whether a place is the given position in the given document.
 function same(place, uri, position) {
-  return place.uri === uri
+  return !!place && place.uri === uri
     && place.range.start.line === position.line && place.range.start.character === position.character;
 }
 

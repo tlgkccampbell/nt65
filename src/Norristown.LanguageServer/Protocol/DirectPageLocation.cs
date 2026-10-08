@@ -1,8 +1,8 @@
 namespace Norristown.LanguageServer.Protocol;
 
 /// <summary>Represents one location on a page, with the routines that use it.</summary>
-/// <param name="Name">The location's name.</param>
-/// <param name="Declaration">Where its name is declared.</param>
+/// <param name="Name">The location's name, or for a constant address without a symbol the address, such as <c>$00FB</c>.</param>
+/// <param name="Declaration">Where its name is declared, or null for a constant address without a symbol.</param>
 /// <param name="Offset">The offset from D to its first byte, or null when it is not known.</param>
 /// <param name="Size">The number of bytes it takes, or null when that is not known.</param>
 /// <param name="Address">Its first address, or null when that is not known.</param>
@@ -22,5 +22,5 @@ namespace Norristown.LanguageServer.Protocol;
 /// </param>
 /// <param name="Routines">The call trees from the outermost callers down to each routine that reaches it.</param>
 internal sealed record DirectPageLocation(
-    string Name, Location Declaration, long? Offset, long? Size, long? Address, bool Fixed, string Type, string Relation, bool Hazard,
+    string Name, Location? Declaration, long? Offset, long? Size, long? Address, bool Fixed, string Type, string Relation, bool Hazard,
     IReadOnlyList<DirectPageShared> Shared, int Accesses, long PerPass, int Uncounted, IReadOnlyList<DirectPageRoutine> Routines);

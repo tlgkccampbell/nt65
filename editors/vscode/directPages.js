@@ -568,7 +568,7 @@ class Marks {
       case 'page': {
         const page = element.page;
         const first = page.locations[0];
-        this.first = first ? first.declaration : this.earliestMark();
+        this.first = (first && first.declaration) || this.earliestMark();
         this.summary = page.base === null
           ? `D = ? · ${count(page.groups.reduce((sum, group) => sum + group.routines.length, 0), 'routine')}`
           : `D = ${hex4(page.base)} · ${count(page.locations.length, 'variable')}`;
@@ -582,7 +582,7 @@ class Marks {
           walk(node.children || []);
         });
         walk(location.routines);
-        this.first = location.declaration;
+        this.first = location.declaration || this.earliestMark();
         this.summary = location.accesses === 0
           ? `${location.name} · never accessed`
           : `${location.name} · ${count(location.accesses, 'access', 'accesses')} in ${count(routines.size, 'routine')}`;
@@ -628,7 +628,7 @@ class Marks {
         for (const child of element.children) this.add(child);
         break;
       case 'location':
-        this.declaration(element.location.declaration);
+        if (element.location.declaration) this.declaration(element.location.declaration);
         for (const node of element.location.routines) this.node(node, true);
         break;
       case 'routine':

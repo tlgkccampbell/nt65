@@ -63,8 +63,8 @@ public sealed class DirectPageMap
         private readonly Dictionary<Symbol, List<Symbol>> callees = [];
         private readonly HashSet<Symbol> hasCaller = [];
 
-        // The locations that live on a page, by canonical symbol, before their uses are known.
-        private readonly Dictionary<Symbol, Home> homes = [];
+        // The locations that live on a page, by key, before their uses are known.
+        private readonly Dictionary<LocationKey, Home> homes = [];
 
         // Every access found, in the order the walk found them.
         private readonly List<Found> found = [];
@@ -209,7 +209,7 @@ public sealed class DirectPageMap
                     if (symbol.Kind == SymbolKind.AddressAlias && symbol.ValueExpression?.Parent is DataDeclarationSyntax declaration
                         && symbol.Value.AsNumber() is { } address and >= 0 and < 0x100)
                     {
-                        homes.TryAdd(Current(symbol), new Home(0, address, symbol.Size, true, TypeOf(declaration), IsMmio(declaration)));
+                        homes.TryAdd(Key(symbol), new Home(0, address, symbol.Size, true, TypeOf(declaration), IsMmio(declaration)));
                     }
                 }
             }
@@ -223,7 +223,7 @@ public sealed class DirectPageMap
                 foreach (var (symbol, offset, type) in symbols)
                 {
                     predicted = true;
-                    homes.TryAdd(Current(symbol), new Home(page, starts2.GetValueOrDefault(name) + offset, symbol.Size, false, type, false));
+                    homes.TryAdd(Key(symbol), new Home(page, starts2.GetValueOrDefault(name) + offset, symbol.Size, false, type, false));
                 }
             }
 
@@ -311,6 +311,15 @@ public sealed class DirectPageMap
                     }
                 }
             }
+
+            // A location named by its address grows with the widest access to it, so whether an
+            // access covers it is only known once every access is found.
+            for (var i = 0; i < found.Count; i++)
+            {
+                var access = found[i];
+                var size = homes[access.Location].Size;
+                found[i] = access with { Whole = access.Direct && access.Offset == 0 && (size is null || access.Width >= size) };
+            }
         }
 
         /// <summary>
@@ -353,20 +362,17 @@ public sealed class DirectPageMap
             {
                 return null;
             }
-            if (StepOperands.Of(file.Model, step) is not { } operand || CodeLayout.Expression(operand) is not { } expression
-                || Target(file.Model, expression, step.On, 0) is not { } target)
-            {
+            if (StepOperands.Of(file.Model, step) is not { } operand || CodeLayout.Expression(operand) is not { } expression)
                 return null;
-            }
 
-            var symbol = Current(target.Symbol);
             var throughPage = Instructions.Width(mode) == AddressSize.ZeroPage;
             var indexed = mode is AddressingMode.DirectX or AddressingMode.DirectY or AddressingMode.AbsoluteX
                 or AddressingMode.AbsoluteY or AddressingMode.LongX;
+            var state = file.Layout.Cpu == Cpu.Wdc65816 ? file.State?.Before(step.Statement, step.On)?.Processor : null;
+            var width = state is { } processor && RegisterOf(mnemonic) is { } register && processor.Of(register) == Width.Sixteen ? 2 : 1;
             var page = (long?)null;
             var unknown = false;
-            if (throughPage && file.Layout.Cpu == Cpu.Wdc65816
-                && file.State?.Before(step.Statement, step.On)?.Processor.D is { } d)
+            if (throughPage && state?.D is { } d)
             {
                 if (d.IsKnown)
                     page = d.Value;
@@ -378,23 +384,79 @@ public sealed class DirectPageMap
                 page = 0;
             }
 
-            if (!homes.ContainsKey(symbol))
+            LocationKey key;
+            long offset;
+            if (Target(file.Model, expression, step.On, 0) is { } target)
             {
-                // An address the source fixes that only a known direct page reaches, such as a
-                // hardware register reached with D at the start of the registers.
-                if (page is not { } at || target.Symbol.Value.AsNumber() is not { } address || address + target.Offset - at is < 0 or > 0xff
-                    || target.Symbol.Kind != SymbolKind.AddressAlias)
+                key = Key(target.Symbol);
+                offset = target.Offset;
+                if (!homes.ContainsKey(key))
                 {
-                    return null;
+                    // An address the source fixes that only a known direct page reaches, such as a
+                    // hardware register reached with D at the start of the registers.
+                    if (page is not { } at || target.Symbol.Value.AsNumber() is not { } address || address + target.Offset - at is < 0 or > 0xff
+                        || target.Symbol.Kind != SymbolKind.AddressAlias)
+                    {
+                        return null;
+                    }
+                    var declaration = target.Symbol.ValueExpression?.Parent as DataDeclarationSyntax;
+                    homes[key] = new Home(at, address - at, target.Symbol.Size, true, TypeOf(declaration), IsMmio(declaration));
                 }
-                var declaration = target.Symbol.ValueExpression?.Parent as DataDeclarationSyntax;
-                homes[symbol] = new Home(at, address - at, target.Symbol.Size, true, TypeOf(declaration), IsMmio(declaration));
+            }
+            else if (Anonymous(file.Model, operand, expression, step.On, page, !indirect ? width
+                : mode is AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY ? 3 : 2) is { } anonymous)
+            {
+                key = anonymous;
+                offset = 0;
+            }
+            else
+            {
+                return null;
             }
             if (throughPage && page is { } reached)
                 direct[reached] = direct.GetValueOrDefault(reached) + 1;
 
-            return new Found(symbol, page, unknown, Shown(step, file.Model.Tree), step, reads, writes, !indirect && !indexed);
+            return new Found(key, page, unknown, Shown(step, file.Model.Tree), step, reads, writes, !indirect && !indexed, offset, width);
         }
+
+        /// <summary>
+        /// Returns the location of a constant address that a direct operand reaches through
+        /// <paramref name="page"/>, with no symbol to name it, or null when the operand is not one.
+        /// Such a location is named by its address, and is as wide as the widest access to it. That
+        /// is <paramref name="size"/> bytes for this access, which is the pointer for an indirect one.
+        /// </summary>
+        /// <remarks>
+        /// An operand with a <c>d:</c> prefix gives the address itself, and any other direct operand
+        /// gives the offset from D, as the layout encodes them. While D is not known the address is
+        /// not known either, so such an access is left out of the map.
+        /// </remarks>
+        private LocationKey? Anonymous(SemanticModel model, SyntaxNode operand, SyntaxNode expression, Expansion? on, long? page, long size)
+        {
+            if (page is not { } at || AddressSymbols.In(model, expression, on).Any() || model.ValueOf(expression, on).AsNumber() is not { } value)
+                return null;
+            var offset = CodeLayout.ThroughDirectPage(operand) ? value - at : value;
+            if (offset is < 0 or > 0xff)
+                return null;
+            var key = new LocationKey(null, at + offset);
+            if (!homes.TryGetValue(key, out var home) || home.Size < size)
+                homes[key] = new Home(at, offset, size, true, "", false);
+            return key;
+        }
+
+        /// <summary>
+        /// Returns the register whose width sets how many bytes <paramref name="mnemonic"/> reaches
+        /// in memory on the 65816, or null when it always reaches one byte.
+        /// </summary>
+        private static WidthRegister? RegisterOf(MnemonicKind mnemonic) => Instructions.SizedBy(mnemonic) ?? mnemonic switch
+        {
+            MnemonicKind.Sta or MnemonicKind.Stz or MnemonicKind.Inc or MnemonicKind.Dec or MnemonicKind.Asl or MnemonicKind.Lsr
+                or MnemonicKind.Rol or MnemonicKind.Ror or MnemonicKind.Tsb or MnemonicKind.Trb => WidthRegister.A,
+            MnemonicKind.Stx or MnemonicKind.Sty => WidthRegister.Index,
+            _ => null,
+        };
+
+        /// <summary>Returns the key of the location that <paramref name="symbol"/> names.</summary>
+        private LocationKey Key(Symbol symbol) => new(Current(symbol), null);
 
         /// <summary>
         /// Returns the symbol <paramref name="expression"/> names and the constant added to it,
@@ -450,7 +512,7 @@ public sealed class DirectPageMap
         /// The roles are worked out for every routine before any hazard is, because whether a call
         /// clobbers a location depends on the role the routines it reaches give it.
         /// </remarks>
-        private Dictionary<(Symbol Routine, Symbol Location, bool Unknown), PageUse> Uses(HashSet<Symbol> interrupt, HashSet<Symbol> main)
+        private Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), PageUse> Uses(HashSet<Symbol> interrupt, HashSet<Symbol> main)
         {
             var regions = found.GroupBy(access => access.Region).Select(group => (
                 Region: group.Key!,
@@ -459,8 +521,8 @@ public sealed class DirectPageMap
                 Tracked: group.Where(access => !access.Unknown).Select(access => access.Location).ToHashSet())).ToList();
 
             // The role each routine gives each location it reaches while D is known.
-            var roles = new Dictionary<(Symbol Routine, Symbol Location), PageRole>();
-            var readsFirst = new Dictionary<FlowRegion, HashSet<Symbol>>();
+            var roles = new Dictionary<(Symbol Routine, LocationKey Location), PageRole>();
+            var readsFirst = new Dictionary<FlowRegion, HashSet<LocationKey>>();
             foreach (var (region, accesses, byStep, tracked) in regions)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -470,7 +532,7 @@ public sealed class DirectPageMap
                     roles.TryAdd((Current(region.Routine), location.Key), RoleOf(location.ToList(), location.Key, false, first));
             }
 
-            var uses = new Dictionary<(Symbol, Symbol, bool), PageUse>();
+            var uses = new Dictionary<(Symbol, LocationKey, bool), PageUse>();
             foreach (var (region, accesses, byStep, tracked) in regions)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -504,7 +566,7 @@ public sealed class DirectPageMap
         /// Returns the role a routine gives a location, from the routine's accesses to it and the
         /// locations it reads before it writes them.
         /// </summary>
-        private PageRole RoleOf(List<Found> accesses, Symbol location, bool unknown, HashSet<Symbol> readsFirst)
+        private PageRole RoleOf(List<Found> accesses, LocationKey location, bool unknown, HashSet<LocationKey> readsFirst)
         {
             var reads = accesses.Any(access => access.Reads);
             var writes = accesses.Any(access => access.Writes);
@@ -552,12 +614,12 @@ public sealed class DirectPageMap
         /// role. A call that only sets the location is how a routine returns a value, which is
         /// no hazard.
         /// </param>
-        private (HashSet<Symbol> ReadsFirst, Dictionary<Symbol, List<PageNote>> Hazards) Walk(
-            FlowRegion region, ILookup<StepKey, Found> byStep, HashSet<Symbol> tracked,
-            Dictionary<(Symbol Routine, Symbol Location), PageRole>? roles)
+        private (HashSet<LocationKey> ReadsFirst, Dictionary<LocationKey, List<PageNote>> Hazards) Walk(
+            FlowRegion region, ILookup<StepKey, Found> byStep, HashSet<LocationKey> tracked,
+            Dictionary<(Symbol Routine, LocationKey Location), PageRole>? roles)
         {
-            var readsFirst = new HashSet<Symbol>();
-            var hazards = new Dictionary<Symbol, List<PageNote>>();
+            var readsFirst = new HashSet<LocationKey>();
+            var hazards = new Dictionary<LocationKey, List<PageNote>>();
             var blocks = region.Blocks;
             if (blocks.Count == 0)
                 return (readsFirst, hazards);
@@ -595,15 +657,15 @@ public sealed class DirectPageMap
                 if (!RegisterWalk.CallsAtEnd(block) || block.Steps.Count == 0)
                     return held;
                 var at = Shown(block.Steps[^1], region.Routine.Tree);
-                var always = (ImmutableHashSet<Symbol>?)null;
+                var always = (ImmutableHashSet<LocationKey>?)null;
                 var clobbered = held.Clobbered;
                 foreach (var target in block.Calls)
                 {
                     if (roles is not null)
                     {
                         var callee = Current(RegisterWalk.Owner(target) ?? target);
-                        var reads = memory.ReadsOf(target).Select(location => location.Root).OfType<Symbol>().Select(Current).ToHashSet();
-                        var writes = memory.WritesOf(target).Select(location => location.Root).OfType<Symbol>().Select(Current).ToHashSet();
+                        var reads = memory.ReadsOf(target).Select(location => location.Root).OfType<Symbol>().Select(Key).ToHashSet();
+                        var writes = memory.WritesOf(target).Select(location => location.Root).OfType<Symbol>().Select(Key).ToHashSet();
                         foreach (var location in held.May)
                         {
                             if (tracked.Contains(location) && writes.Contains(location) && !reads.Contains(location) && !clobbered.ContainsKey(location)
@@ -613,13 +675,13 @@ public sealed class DirectPageMap
                             }
                         }
                     }
-                    var stored = memory.AlwaysWrittenBy(target).Select(location => location.Root).OfType<Symbol>().Select(Current).ToImmutableHashSet();
+                    var stored = memory.AlwaysWrittenBy(target).Select(location => location.Root).OfType<Symbol>().Select(Key).ToImmutableHashSet();
                     always = always is null ? stored : always.Intersect(stored);
                 }
                 return new Held(block.CallsUnknown || always is null ? held.Must : held.Must.Union(always), held.May, clobbered);
             }
 
-            void Hazard(Symbol location, (Symbol Callee, SyntaxNode At) call, SyntaxNode read)
+            void Hazard(LocationKey location, (Symbol Callee, SyntaxNode At) call, SyntaxNode read)
             {
                 if (!hazards.TryGetValue(location, out var notes))
                     hazards[location] = notes = [];
@@ -636,7 +698,7 @@ public sealed class DirectPageMap
         /// Returns the first instruction in <paramref name="routine"/> that writes
         /// <paramref name="location"/>, or the routine's declaration where only a routine it calls does.
         /// </summary>
-        private SyntaxNode? WriteIn(Symbol routine, Symbol location) =>
+        private SyntaxNode? WriteIn(Symbol routine, LocationKey location) =>
             found.FirstOrDefault(access => access.Routine == routine && access.Location == location && access.Writes && !access.Unknown)?.Line
             ?? (routines.TryGetValue(routine, out var known) && known.Region.Blocks is [{ Steps: [var first, ..] }, ..] ? first.Statement : null);
 
@@ -644,7 +706,7 @@ public sealed class DirectPageMap
         /// Returns whether <paramref name="routine"/>, or a routine it reaches through its calls,
         /// gives <paramref name="location"/> the <see cref="PageRole.Temp"/> role.
         /// </summary>
-        private bool IsTempBelow(Symbol routine, Symbol location, Dictionary<(Symbol Routine, Symbol Location), PageRole> roles)
+        private bool IsTempBelow(Symbol routine, LocationKey location, Dictionary<(Symbol Routine, LocationKey Location), PageRole> roles)
         {
             var seen = new HashSet<Symbol>();
             var pending = new Stack<Symbol>([routine]);
@@ -661,7 +723,7 @@ public sealed class DirectPageMap
         }
 
         /// <summary>Returns the pages, each with its locations and their uses.</summary>
-        private List<DirectPage> Pages(Dictionary<(Symbol Routine, Symbol Location, bool Unknown), PageUse> uses)
+        private List<DirectPage> Pages(Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), PageUse> uses)
         {
             var segments = analysis.Program.Segments.Segments
                 .Where(segment => segment.Size == AddressSize.ZeroPage)
@@ -671,16 +733,16 @@ public sealed class DirectPageMap
             foreach (var page in homes.GroupBy(home => home.Value.Page).OrderBy(page => page.All(home => home.Value.IsMmio)).ThenBy(page => page.Key))
             {
                 var locations = new List<PageLocation>();
-                foreach (var (symbol, home) in page.OrderBy(home => home.Value.Offset ?? long.MaxValue).ThenBy(home => home.Key.DisplayName, StringComparer.Ordinal))
+                foreach (var (key, home) in page.OrderBy(home => home.Value.Offset ?? long.MaxValue).ThenBy(home => home.Key.DisplayName, StringComparer.Ordinal))
                 {
-                    var routineUses = reached[symbol].Select(access => (access.Routine, access.Unknown)).Distinct()
-                        .Select(use => uses.GetValueOrDefault((use.Routine!, symbol, use.Unknown))).OfType<PageUse>().ToList();
-                    var location = new PageLocation(symbol, home.Offset, home.Size, home.IsFixed, home.Type, routineUses);
+                    var routineUses = reached[key].Select(access => (access.Routine, access.Unknown)).Distinct()
+                        .Select(use => uses.GetValueOrDefault((use.Routine!, key, use.Unknown))).OfType<PageUse>().ToList();
+                    var location = new PageLocation(key.Symbol, key.Name, home.Offset, home.Size, home.IsFixed, home.Type, routineUses);
                     location.Relation = RelationOf(location, home);
                     locations.Add(location);
                 }
                 var hardware = locations.Count > 0 && locations.All(location => location.Relation == PageRelation.Hardware);
-                var named = segments[page.Key].Where(name => locations.Any(location => location.Symbol.Segment == name)).ToList();
+                var named = segments[page.Key].Where(name => locations.Any(location => location.Symbol?.Segment == name)).ToList();
                 pages.Add(new DirectPage(page.Key, named, hardware, locations, [], direct.GetValueOrDefault(page.Key)));
             }
 
@@ -694,7 +756,9 @@ public sealed class DirectPageMap
                     var home = homes[group.Key.Location];
                     var page = pages.FirstOrDefault(page => page.Base == home.Page);
                     var reason = use.InInterrupt ? UnknownPageReason.Interrupted : UnknownPageReason.Unknown;
-                    list.Add(new UnknownPageUse(group.Key.Location, page, home.Offset, use, reason));
+                    // Only a symbol is reached while D is not known, because a constant address
+                    // has no address to be named by until D is known.
+                    list.Add(new UnknownPageUse(group.Key.Location.Symbol!, page, home.Offset, use, reason));
                 }
                 pages.Add(new DirectPage(null, [], false, [], list, 0));
             }
@@ -745,8 +809,8 @@ public sealed class DirectPageMap
                             var end = Math.Min(x.Last, y.Last);
                             if (start > end)
                                 continue;
-                            fromA.Add(new SharedBytes(here.Symbol, there.Symbol, b, start, end));
-                            fromB.Add(new SharedBytes(there.Symbol, here.Symbol, a, start, end));
+                            fromA.Add(new SharedBytes(here.Name, there.Name, b, start, end));
+                            fromB.Add(new SharedBytes(there.Name, here.Name, a, start, end));
                             Add(shared, here, fromA[^1]);
                             Add(shared, there, fromB[^1]);
                         }
@@ -810,17 +874,42 @@ public sealed class DirectPageMap
         /// <param name="IsMmio">Whether it is a hardware register.</param>
         private sealed record Home(long Page, long? Offset, long? Size, bool IsFixed, string Type, bool IsMmio);
 
+        /// <summary>
+        /// Represents the key of a location in the builder. A location that a symbol names is keyed
+        /// by the symbol's canonical symbol, and a constant address with no symbol by that address.
+        /// </summary>
+        /// <param name="Symbol">The canonical symbol that names the location, or null for a constant address.</param>
+        /// <param name="Address">The address of a location with no symbol, or null for one that a symbol names.</param>
+        private readonly record struct LocationKey(Symbol? Symbol, long? Address)
+        {
+            /// <summary>Gets the name the location is shown by, which is its symbol's name or its address, such as <c>$00FB</c>.</summary>
+            public string Name => Symbol?.Name ?? $"${Address:X4}";
+
+            /// <summary>Gets the name the locations of a page are ordered by when their offsets are the same.</summary>
+            public string DisplayName => Symbol?.DisplayName ?? Name;
+        }
+
         /// <summary>Represents one instruction's access to one location.</summary>
-        /// <param name="Location">The location's canonical symbol.</param>
+        /// <param name="Location">The location's key.</param>
         /// <param name="Page">The page the access goes through, or null when it goes through none or D is not known.</param>
         /// <param name="Unknown">Whether the access goes through the direct page while D is not known.</param>
         /// <param name="Line">The statement to show.</param>
         /// <param name="Step">The step of the instruction.</param>
         /// <param name="Reads">Whether it reads the location.</param>
         /// <param name="Writes">Whether it writes the location.</param>
-        /// <param name="Whole">Whether it names the location directly, rather than through an index.</param>
-        private sealed record Found(Symbol Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Whole)
+        /// <param name="Direct">Whether it names the location directly, rather than through an index or a pointer.</param>
+        /// <param name="Offset">The offset from the location's first byte to the first byte it reaches.</param>
+        /// <param name="Width">The number of bytes it reaches, which is 2 for a 16-bit register on the 65816 and 1 otherwise.</param>
+        private sealed record Found(
+            LocationKey Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Direct, long Offset, long Width)
         {
+            /// <summary>
+            /// Gets a value indicating whether the access reaches every byte of the location, so that
+            /// a write leaves the whole of it set. A write of only some of its bytes leaves the rest
+            /// as they were.
+            /// </summary>
+            public bool Whole { get; init; }
+
             public Symbol? Routine { get; init; }
 
             public BasicBlock? Block { get; init; }
@@ -837,9 +926,9 @@ public sealed class DirectPageMap
         /// those some path has written, and those a call has since overwritten, with the call.
         /// </summary>
         private sealed record Held(
-            ImmutableHashSet<Symbol> Must, ImmutableHashSet<Symbol> May, ImmutableDictionary<Symbol, (Symbol Callee, SyntaxNode At)> Clobbered)
+            ImmutableHashSet<LocationKey> Must, ImmutableHashSet<LocationKey> May, ImmutableDictionary<LocationKey, (Symbol Callee, SyntaxNode At)> Clobbered)
         {
-            public static Held Nothing { get; } = new([], [], ImmutableDictionary<Symbol, (Symbol, SyntaxNode)>.Empty);
+            public static Held Nothing { get; } = new([], [], ImmutableDictionary<LocationKey, (Symbol, SyntaxNode)>.Empty);
 
             public static Held Merge(Held? known, Held arriving) =>
                 known is null ? arriving : new Held(
