@@ -2982,14 +2982,16 @@ public static class Catalogue
         Area.ControlFlow,
         "unpromised-keep",
         Severity.Warning,
-        "this {0} relies on `{1}` keeping {2}, which it does but does not promise (it declares `keeps {3}`)",
+        "this {0} relies on `{1}` keeping {2}, {3}",
         "A routine that declares `keeps` promises the registers it lists, and only those. nt65 still finds what "
             + "its body keeps and uses that, so the analysis stays accurate, but a register the list leaves out may "
             + "change whenever the body does. Here the code after the call uses a value a register held before the "
-            + "call, or this routine's own `keeps` promise depends on it. Add the register to the called routine's "
-            + "`keeps`, save and restore it around the call, or, where the reliance is deliberate, say so with "
-            + "`.allow \"unpromised-keep\"`. A routine that declares no `keeps` promises what its body keeps, and "
-            + "one with no body keeps only what it declares, so neither draws this warning.");
+            + "call, or this routine's own `keeps` promise depends on it. A routine that declares no `keeps` keeps "
+            + "what its own code keeps, and passes on, without promoting it, whatever the routines it calls keep "
+            + "without promising: relying on that through it draws this warning too, naming the routine that "
+            + "declined. Add the register to that routine's `keeps`, save and restore it around the call, or, "
+            + "where the reliance is deliberate, say so with `.allow \"unpromised-keep\"`. A routine with no body "
+            + "keeps only what it declares, so it never draws this warning.");
 
     internal static DiagnosticDescriptor KeepsRedundant { get; } = Entry(
         Area.ControlFlow,

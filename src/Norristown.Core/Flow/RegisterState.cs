@@ -57,6 +57,24 @@ public sealed record RegisterState(
     /// <summary>Gets why the stack is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyStack { get; init; }
 
+    /// <summary>
+    /// Gets the registers that hold exactly their own entry value here without relying on a keep
+    /// nobody promised. See <see cref="RoutineRegisters.Backed"/>.
+    /// </summary>
+    public Registers Backed
+    {
+        get
+        {
+            var backed = Registers.None;
+            foreach (var register in RegisterEffects.Each(Registers.All))
+            {
+                if (Of(register).Backs(register) && (register != Registers.A || AHigh.Backs(register)))
+                    backed |= register;
+            }
+            return backed;
+        }
+    }
+
     /// <summary>Gets the registers that hold exactly their own entry value here.</summary>
     public Registers Kept
     {
@@ -122,6 +140,22 @@ public sealed record RegisterState(
         Registers.Y => this with { Y = value },
         _ => this with { C = value },
     };
+
+    /// <summary>
+    /// Returns this state after a routine that keeps <paramref name="registers"/> without
+    /// promising to, with what each of them holds marked as held only through that keep.
+    /// </summary>
+    public RegisterState Unbacking(Registers registers)
+    {
+        var state = this;
+        foreach (var register in RegisterEffects.Each(registers))
+        {
+            state = register == Registers.A
+                ? state with { A = state.A.Unbacking(), AHigh = state.AHigh.Unbacking() }
+                : state.With(register, state.Of(register).Unbacking());
+        }
+        return state;
+    }
 
     /// <summary>
     /// Returns this state with every register of <paramref name="registers"/> holding

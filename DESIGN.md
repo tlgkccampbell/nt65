@@ -4579,12 +4579,13 @@ Recorded so the reasoning survives. None is open.
   value it held before, or when the caller's own `keeps` hands that value back. The 65816's high
   byte of A is left out, since 8-bit code keeps it without meaning to and a later read of A
   cannot be told from a read of its low byte. A routine with no body keeps only what it
-  declares, so it never draws the warning. Only a call to the routine that declares `keeps`
-  is checked: a routine that declares none keeps whatever its body keeps, including what its
-  callees keep without promising, and its callers may rely on that as on any inferred fact.
-  An inferred keep records no trace of the promises behind it, because a declined promise deep
-  in a library reaching every caller up the chain would be a new rule, not this one. This is
-  one case of a wider rule: anything left undeclared is inferred and used, and anything
+  declares, so it never draws the warning. Inference does not promote trust: a routine that
+  declares no `keeps` backs what its own code keeps and what its callees promise, and passes on
+  what they keep without promising as still unpromised. Each routine carries both sets, kept
+  and backed, worked out in the same rounds; each register value the walk follows has a bit for
+  having passed through such a keep. A caller that relies on a kept register that is not backed
+  is warned whatever the depth, naming the routine that declined, and the fix goes there. This
+  is one case of a wider rule: anything left undeclared is inferred and used, and anything
   declared in a category is a contract.
 - **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C and V as 0, 1 or
   unknown through each routine, before any other analysis reads its blocks. An immediate load,

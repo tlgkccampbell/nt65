@@ -54,6 +54,7 @@ internal static class ScopeKeeps
         var reached = solver.Reached;
 
         var kept = Registers.All;
+        var backed = Registers.All;
         var complete = true;
         var leaves = false;
         for (var i = 0; i < blocks.Count; i++)
@@ -75,8 +76,9 @@ internal static class ScopeKeeps
             foreach (var into in left)
                 after = RegisterWalk.Handed(after, of(into));
             kept &= after.Kept;
+            backed &= after.Backed;
         }
-        return leaves ? new RoutineRegisters(kept, complete) : null;
+        return leaves ? new RoutineRegisters(kept, complete, backed & kept) : null;
     }
 
     /// <summary>
@@ -101,6 +103,6 @@ internal static class ScopeKeeps
             if (i == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block))
                 state = RegisterWalk.Calls(block, state, of);
         }
-        return any ? new RoutineRegisters(state.Kept, RegisterWalk.Followed(block, of)) : null;
+        return any ? new RoutineRegisters(state.Kept, RegisterWalk.Followed(block, of), state.Backed) : null;
     }
 }

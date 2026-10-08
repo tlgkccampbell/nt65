@@ -28,14 +28,18 @@ internal static class UnpromisedKeeps
     /// <param name="of">Returns what each routine keeps, once that is settled.</param>
     /// <param name="reads">Returns what each routine reads, once that is settled.</param>
     /// <param name="readers">The routines that reach below their own entry on the stack.</param>
+    /// <param name="declining">
+    /// Returns the routine whose <c>keeps</c> leaves out a register that a call to a routine
+    /// relies on, which is that routine itself where it declares <c>keeps</c>.
+    /// </param>
     /// <param name="report">Collects the warnings.</param>
     public static void Check(
         RegisterWalk walk, FlowRegion region, Func<Symbol, RoutineRegisters> of, Func<Symbol, RoutineReads> reads,
-        IReadOnlySet<RoutineKey> readers, List<Diagnostic> report)
+        IReadOnlySet<RoutineKey> readers, Func<Symbol, Registers, Symbol> declining, List<Diagnostic> report)
     {
         var blocks = region.Blocks;
         if (!region.IsEntered || blocks.Count == 0
-            || !blocks.Any(block => block.Calls is [{ Signature.Keeps: not Registers.None }]))
+            || !blocks.Any(block => block.Calls is [var called] && of(called).Unbacked != Registers.None))
         {
             return;
         }
@@ -46,12 +50,9 @@ internal static class UnpromisedKeeps
         Registers? restored = null;
         foreach (var block in blocks)
         {
-            if (reached[block.Index] is not { } state || block.CallsUnknown
-                || block.Calls is not [{ Signature: { Keeps: not Registers.None and var declared } } callee])
-            {
+            if (reached[block.Index] is not { } state || block.CallsUnknown || block.Calls is not [var callee])
                 continue;
-            }
-            var unpromised = of(callee).Kept & ~declared;
+            var unpromised = of(callee).Unbacked;
             if (unpromised == Registers.None)
                 continue;
             var call = block.Steps[^1];
@@ -131,13 +132,20 @@ internal static class UnpromisedKeeps
                 var related = used is { } step && where is not null
                     ? [new RelatedSpan(step.Statement.Tree.GetSpan(step.Statement.Span), where)]
                     : Array.Empty<RelatedSpan>();
+
+                // The promise was declined by the routine called, or, where that routine declares
+                // no `keeps`, by one it calls in turn.
+                var decliner = declining(callee, register);
+                var listed = $"`keeps {RegisterEffects.Format(decliner.Signature?.Keeps ?? Registers.None).ToLowerInvariant()}`";
+                var why = decliner == callee
+                    ? $"which it does but does not promise (it declares {listed})"
+                    : $"which it does only because `{decliner.DisplayName}` keeps it without promising to (it declares {listed})";
                 report.Add(new Diagnostic(
                     call.Statement.Tree.GetSpan(call.Statement.Span),
-                    Catalogue.UnpromisedKeep.Message(
-                        how, callee.DisplayName, name, RegisterEffects.Format(declared).ToLowerInvariant()),
+                    Catalogue.UnpromisedKeep.Message(how, callee.DisplayName, name, why),
                     related)
                 {
-                    Fix = new DiagnosticFix(FixKind.Keeps, name.ToLowerInvariant(), callee.DeclarationSpan),
+                    Fix = new DiagnosticFix(FixKind.Keeps, name.ToLowerInvariant(), decliner.DeclarationSpan),
                     Also = also,
                 });
             }

@@ -38,6 +38,11 @@ public sealed class CodeActionsTests
             ".proc print_digit: a8, i8, keeps x, y {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr print_digit\n    sty $11\n    rts\n}\n"
         },
         {
+            "Add `y` to the `keeps` of `c`",
+            ".proc c: a8, i8, keeps x {\n    inc $10\n    rts\n}\n.proc b: a8, i8 {\n    jsr c\n    nop\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n",
+            ".proc c: a8, i8, keeps x, y {\n    inc $10\n    rts\n}\n.proc b: a8, i8 {\n    jsr c\n    nop\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n"
+        },
+        {
             "Save it around the call with `phy` and `ply`",
             ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr print_digit\n    tya\n    sta $11\n    rts\n}\n",
             ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    phy\n    jsr print_digit\n    ply\n    tya\n    sta $11\n    rts\n}\n"

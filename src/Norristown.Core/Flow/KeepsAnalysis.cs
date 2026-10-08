@@ -32,6 +32,7 @@ internal static class KeepsAnalysis
         var reached = walk.Solve(region, of, start, fromOutside: report is not null);
         var entered = report is null ? reached : walk.Solve(region, of, start, fromOutside: false);
         var kept = Registers.All;
+        var backed = Registers.All;
         var complete = true;
         var leaves = false;
         foreach (var block in blocks)
@@ -64,6 +65,7 @@ internal static class KeepsAnalysis
                 leaves = true;
                 left = true;
                 kept &= onExit.Kept;
+                backed &= onExit.Backed;
                 if (report is not null)
                     Check(region, block, onExit, into, handed.Kept, report);
             }
@@ -75,6 +77,7 @@ internal static class KeepsAnalysis
                 continue;
             leaves = true;
             kept &= after.Kept;
+            backed &= after.Backed;
 
             // A tail call to one routine hands control to it, so that routine's promise is where
             // a register it loses has to be kept.
@@ -85,7 +88,7 @@ internal static class KeepsAnalysis
 
         // A routine no path leaves never returns anything to a caller, so there is nothing
         // it can fail to keep. What it does to the registers matters to no one else.
-        return leaves ? new RoutineRegisters(kept, complete) : RoutineRegisters.Everything;
+        return leaves ? new RoutineRegisters(kept, complete, backed & kept) : RoutineRegisters.Everything;
     }
 
     /// <summary>

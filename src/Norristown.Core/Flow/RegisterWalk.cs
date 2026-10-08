@@ -87,7 +87,7 @@ internal sealed class RegisterWalk
     /// registers that routine keeps are unchanged, and nothing is known about the rest.
     /// </summary>
     public static RegisterState Handed(RegisterState state, RoutineRegisters kept) =>
-        state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown);
+        state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown).Unbacking(kept.Unbacked);
 
     /// <summary>Returns the state the routines a block calls leave behind.</summary>
     public static RegisterState Calls(BasicBlock block, RegisterState state, Func<Symbol, RoutineRegisters> of)
@@ -100,8 +100,9 @@ internal sealed class RegisterWalk
         RegisterState? reached = null;
         foreach (var callee in block.Calls)
         {
-            var kept = of(callee).Kept;
-            reached = RegisterState.Merge(reached, state.WithEach(Registers.All & ~kept, RegisterValue.Unknown));
+            var kept = of(callee);
+            reached = RegisterState.Merge(
+                reached, state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown).Unbacking(kept.Unbacked));
         }
         return reached!;
     }

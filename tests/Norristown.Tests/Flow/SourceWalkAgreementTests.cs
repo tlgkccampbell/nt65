@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Norristown.Flow;
+using Norristown.Processor;
 using Norristown.Tests.Oracle;
 
 namespace Norristown.Tests.Flow;
@@ -79,6 +80,9 @@ public sealed class SourceWalkAgreementTests
 
     private static void Compare(string where, string name, RegisterValue expected, RegisterValue found, ConcurrentQueue<string> problems)
     {
+        // Whether an entry value is held only through a keep nobody promised is the register
+        // walk's alone, and the source walk does not follow it.
+        expected = expected with { Unbacked = Registers.None };
         if (expected != found)
             problems.Enqueue($"{where}: {name} is {expected} in the register walk but {found} in the source walk");
     }

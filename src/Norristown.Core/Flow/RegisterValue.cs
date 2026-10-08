@@ -17,7 +17,12 @@ namespace Norristown.Flow;
 /// <param name="Entry">The registers whose entry values it may hold.</param>
 /// <param name="IsWritten">Whether it may hold something an instruction here wrote.</param>
 /// <param name="IsUnknown">Whether it may hold something nothing at all is known about.</param>
-public readonly record struct RegisterValue(Registers Entry, bool IsWritten, bool IsUnknown)
+/// <param name="Unbacked">
+/// The registers among <paramref name="Entry"/> whose entry values it holds only because a
+/// routine it passed through kept them without promising to. See
+/// <see cref="RoutineRegisters.Backed"/>.
+/// </param>
+public readonly record struct RegisterValue(Registers Entry, bool IsWritten, bool IsUnknown, Registers Unbacked = Registers.None)
 {
     /// <summary>Gets a value an instruction in the routine wrote.</summary>
     public static RegisterValue Written => new(Registers.None, true, false);
@@ -30,8 +35,20 @@ public readonly record struct RegisterValue(Registers Entry, bool IsWritten, boo
 
     /// <summary>Returns what the register may hold where two paths meet, which is what either path left.</summary>
     public static RegisterValue Merge(RegisterValue a, RegisterValue b) =>
-        new(a.Entry | b.Entry, a.IsWritten || b.IsWritten, a.IsUnknown || b.IsUnknown);
+        new(a.Entry | b.Entry, a.IsWritten || b.IsWritten, a.IsUnknown || b.IsUnknown, a.Unbacked | b.Unbacked);
 
     /// <summary>Returns whether this is the entry value of <paramref name="register"/> and nothing else.</summary>
     public bool Holds(Registers register) => Entry == register && !IsWritten && !IsUnknown;
+
+    /// <summary>
+    /// Returns whether this is the entry value of <paramref name="register"/> and nothing else,
+    /// held without relying on a keep nobody promised.
+    /// </summary>
+    public bool Backs(Registers register) => Holds(register) && (Unbacked & register) == Registers.None;
+
+    /// <summary>
+    /// Returns this value as it is after passing through a routine that keeps it without
+    /// promising to, so that every entry value it holds is held only through that keep.
+    /// </summary>
+    public RegisterValue Unbacking() => this with { Unbacked = Entry };
 }

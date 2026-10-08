@@ -119,7 +119,7 @@ public static class RegisterKeeps
         // A declared `keeps` is a contract, and a call that relies on more than it promises is
         // reported once what every routine keeps and reads is settled.
         foreach (var (name, region) in regions)
-            UnpromisedKeeps.Check(walks[name], region, Of, ReadsOf, readers, diagnostics);
+            UnpromisedKeeps.Check(walks[name], region, Of, ReadsOf, readers, Declining, diagnostics);
 
         // A routine that declares what it reads shows its declaration, which is what its callers
         // go by, and is checked against what its body was found to read.
@@ -192,8 +192,24 @@ public static class RegisterKeeps
             if (routine != target && foundAt.TryGetValue(RoutineKey.Of(target), out var there))
                 return there;
             return found.TryGetValue(RoutineKey.Of(routine), out var known) ? known
-                : routine.Signature?.Keeps is { } keeps && keeps != Registers.None ? new RoutineRegisters(keeps, true)
+                : routine.Signature?.Keeps is { } keeps && keeps != Registers.None ? new RoutineRegisters(keeps, true, keeps)
                 : RoutineRegisters.Nothing;
+        }
+
+        // Returns the routine whose `keeps` leaves out a register that a call to target relies
+        // on, following the calls of routines that declare no `keeps` down to one that does.
+        Symbol Declining(Symbol target, Registers register)
+        {
+            var seen = new HashSet<Symbol>();
+            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            while (routine.Signature?.Keeps is null or Registers.None
+                && regions.TryGetValue(RoutineKey.Of(routine), out var region) && seen.Add(routine)
+                && region.Blocks.SelectMany(block => block.Calls)
+                    .FirstOrDefault(callee => (Of(callee).Unbacked & register) != Registers.None) is { } next)
+            {
+                routine = next is { Kind: SymbolKind.Label, Routine: { } inside } ? inside : next;
+            }
+            return routine;
         }
 
         // Returns what a routine reads. A routine that declares it is taken at its word, as its
@@ -258,7 +274,8 @@ public static class RegisterKeeps
     /// </summary>
     private static bool Narrow(Dictionary<RoutineKey, RoutineRegisters> found, RoutineKey name, RoutineRegisters computed)
     {
-        var narrowed = new RoutineRegisters(found[name].Kept & computed.Kept, found[name].Complete && computed.Complete);
+        var narrowed = new RoutineRegisters(
+            found[name].Kept & computed.Kept, found[name].Complete && computed.Complete, found[name].Backed & computed.Backed);
         if (narrowed == found[name])
             return false;
         found[name] = narrowed;
@@ -282,9 +299,12 @@ public static class RegisterKeeps
     private static string Listed(Registers registers) =>
         registers == Registers.None ? "none" : RegisterEffects.Format(registers).ToLowerInvariant();
 
-    /// <summary>Returns what a routine keeps, with what it declares taken as kept too.</summary>
+    /// <summary>
+    /// Returns what a routine keeps, with what it declares taken as kept too. What it declares is
+    /// all it promises, so that is what it backs.
+    /// </summary>
     private static RoutineRegisters Declared(Symbol routine, RoutineRegisters found) =>
         routine.Signature?.Keeps is { } keeps && keeps != Registers.None
-            ? found with { Kept = found.Kept | keeps }
+            ? found with { Kept = found.Kept | keeps, Backed = keeps }
             : found;
 }

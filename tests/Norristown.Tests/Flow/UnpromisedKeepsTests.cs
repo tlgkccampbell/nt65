@@ -47,6 +47,28 @@ public sealed class UnpromisedKeepsTests
     }
 
     /// <summary>
+    /// A routine that declares no <c>keeps</c> passes on what the routines it calls keep without
+    /// promising, without promoting it. Relying on that through it is reported at the call, naming
+    /// the routine that declined, and the fix adds the register to that routine's <c>keeps</c>.
+    /// What it keeps by its own code, or through a promise, may be relied on.
+    /// </summary>
+    [Fact]
+    public void AKeepNobodyPromisedIsNotPromotedThroughARoutineThatDeclaresNone()
+    {
+        const string Routines = ".proc c: keeps x {\n    inc $10\n    rts\n}\n.proc b {\n    jsr c\n    rts\n}\n";
+
+        var diagnostic = Assert.Single(Diagnostics(Routines + ".export .proc main {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n"));
+        Assert.Equal(
+            "this call relies on `b` keeping Y, which it does only because `c` keeps it without promising to (it declares `keeps x`)",
+            diagnostic.Message);
+        Assert.Equal(new DiagnosticFix(FixKind.Keeps, "y", diagnostic.Fix?.At), diagnostic.Fix);
+        Assert.Equal(4, diagnostic.Fix?.At?.Line);
+
+        Assert.Empty(Diagnostics(Routines + ".export .proc main {\n    ldx #1\n    jsr b\n    stx $11\n    rts\n}\n"));
+        Assert.Empty(Diagnostics(".proc b {\n    lda #1\n    rts\n}\n.export .proc main {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n"));
+    }
+
+    /// <summary>
     /// A routine whose own <c>keeps</c> promise depends on a routine it calls relies on that
     /// routine too, whether it returns after the call or hands control over in a tail call.
     /// </summary>
