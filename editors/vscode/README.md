@@ -44,6 +44,11 @@ build tasks and a schema for the project file.
   another color, and a branch the flags prove always or never taken is faded. Calls, lines that
   run on into the next, and transfers to other routines are not drawn. Brackets and arrows take
   at most four columns, and the hover names any arrow that had no room.
+- **Widths beside the line numbers.** On the 65816 each line gets an icon with two stripes,
+  the width of A on the left and of X and Y on the right, bright for 16 bits and dim for 8.
+  Both stripes are purple in emulation mode, and a width nt65 does not know has no stripe. A
+  line shows the widths its own instruction runs with, so a `rep` or `sep` shows the widths
+  before it, and the inlay hint at its end says what they become.
 - **Where the direct page goes.** The nt65 view in the activity bar lists every direct page the
   program reaches memory through: each `D` with its segments, the locations in it and the
   routines that use each one, down the calls that reach them. Colour says how a location is
@@ -121,6 +126,7 @@ The extension carries the language server and runs it on the installed .NET 10 r
 | `nt65.inlayHints.stateChanges`, `.longBranches`, `.impliedValues`, `.parameterNames` | each kind of hint, on unless switched off |
 | `nt65.sources.chipLength` | the most characters the chips after the caret line may take, 60 unless set; a `+N` box counts the rest, and 0 means no limit |
 | `nt65.sources.enabled` | where the values an instruction reads were set, shown when the caret rests on it; on unless switched off, and **nt65: Toggle Input Sources** switches it |
+| `nt65.widths.enabled` | the width stripes beside the line numbers on the 65816; on unless switched off, and **nt65: Toggle Width Stripes** switches it |
 | `nt65.margin` | what is drawn in front of a routine's lines: `off`, `loops` for a bracket and trip count on each loop of every routine, or `flow` for the loops and the arrows of the routine at the caret; `off` unless set, and **nt65: Choose What the Margin Shows** picks one |
 | `nt65.inlayHints.cycles` | cycle counts at the end of every instruction; off unless switched on |
 | `nt65.lineLength` | the longest a line may be before the editor suggests laying out a call's arguments, a set or a list of parameters one item to a line, or writing a list directive's items as a block, 100 unless set; 0 for no suggestion |

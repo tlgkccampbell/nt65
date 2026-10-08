@@ -63,6 +63,11 @@
         "category": "nt65"
       },
       {
+        "command": "nt65.toggleWidths",
+        "title": "Toggle Width Stripes",
+        "category": "nt65"
+      },
+      {
         "command": "nt65.chooseMargin",
         "title": "Choose What the Margin Shows",
         "category": "nt65"
@@ -722,6 +727,11 @@
           ],
           "default": "off",
           "description": "What nt65 draws in front of the lines of a routine. A loop's bracket is nested where loops nest, and its trip count is `×16` for a loop that counts a register down from 16, and `×?` where the program does not say. The bracket of the innermost loop that holds the caret is brighter. An arrow a `.next` declares has its own colour, a branch the flags prove one way is faded, and transfers to other routines are not drawn. A bracket that starts at its loop's label draws the branches back to it, so they are not arrows as well. `nt65: Choose What the Margin Shows` picks one."
+        },
+        "nt65.widths.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "On the 65816, draw an icon beside each line number with two stripes, for the width of A on the left and of X and Y on the right. A stripe is bright where the register is 16 bits and dim where it is 8, and both stripes are purple in emulation mode. A line's stripes are the widths its own instruction runs with, so a `rep` or `sep` shows the widths before it. A width nt65 does not know has no stripe. The icons share the column where breakpoints would go, which `editor.glyphMargin` turns on. `nt65: Toggle Width Stripes` turns this on and off."
         },
         "nt65.sources.chipLength": {
           "type": "integer",

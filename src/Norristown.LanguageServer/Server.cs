@@ -454,6 +454,18 @@ internal sealed class Server : IDisposable
             : null;
 
     /// <summary>
+    /// Returns the runs of lines of a document on which the 65816's register widths and mode are
+    /// the same, for the client to draw beside the line numbers. The answer is for showing and
+    /// feeds no diagnostic. For a document on another processor, the result is null.
+    /// </summary>
+    [JsonRpcMethod("nt65/widths")]
+    public async Task<WidthsResult?> WidthsAsync(WidthsParams request, CancellationToken cancellation) =>
+        await AtAsync(new TextDocumentPositionParams(request.TextDocument, new Position(0, 0)), cancellation)
+            .ConfigureAwait(false) is { } asked
+            ? Widths.Of(asked.Analysis, asked.Model)
+            : null;
+
+    /// <summary>
     /// Returns how the routines of the program that holds a document share the zero page, or on
     /// the 65816 each direct page. The answer is for showing and feeds no diagnostic. For a
     /// document that no program holds, the result is null.

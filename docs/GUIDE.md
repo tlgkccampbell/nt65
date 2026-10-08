@@ -1993,6 +1993,15 @@ everything below works across modules.
   routine are drawn: a call returns to the line after it, and a tail call or a branch to
   another routine leaves it. Brackets and arrows together take at most four columns, and
   hovering the line of an arrow that had no room says where it goes.
+- **Width stripes** beside the line numbers show, on the 65816, the width of A and of X and Y
+  on every line. The left stripe is A and the right one is X and Y, each bright for 16 bits
+  and dim for 8. Both are purple in emulation mode. A line shows the widths its own instruction
+  runs with, which are the widths that size its immediate, so a `rep` or `sep` shows the widths
+  before it and the inlay hint at its end says what they become. A comment or a blank line
+  takes the widths of the code below it. A width that is not known, a line nothing reaches and
+  a line after a routine's last instruction have no stripe. A macro's call shows the widths its
+  body is entered with. The setting `nt65.widths.enabled`, or *Toggle Width Stripes*, turns
+  them off.
 - **The direct page map**, in the nt65 view of the activity bar, shows how routines share the
   zero page, or on the 65816 each direct page. Each page is a value of D, with the segments
   reached through it, the locations on it and, under each location, the calls that lead to the
@@ -2072,7 +2081,8 @@ everything below works across modules.
   either text highlights the matching lines in the other. *Show Macro Expansion* writes a macro
   call out. *Select Configuration* chooses which configuration the editor analyzes, *Toggle
   Cycle Counts* switches the cycle hints on, *Toggle Input Sources* switches the
-  highlights of where an instruction's inputs come from, and *Choose What the
+  highlights of where an instruction's inputs come from, *Toggle Width Stripes* switches the
+  65816 width stripes, and *Choose What the
   Margin Shows* picks between nothing, loops, and loops with the caret routine's flow arrows.
 - **Formatting:** the same layout `nt65 fmt` writes.
 

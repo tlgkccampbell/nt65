@@ -7,6 +7,7 @@ const { LanguageClient } = require('vscode-languageclient/node');
 const views = require('./views');
 const sources = require('./sources');
 const margin = require('./margin');
+const widths = require('./widths');
 const directPages = require('./directPages');
 
 let client;
@@ -254,6 +255,7 @@ async function activate(context) {
   views.register(context, client, outputChanged.event);
   sources.register(context, client);
   margin.register(context, client);
+  widths.register(context, client);
   directPages.register(context, client, outputChanged.event);
   await client.start();
 }
