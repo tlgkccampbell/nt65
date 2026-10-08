@@ -2218,6 +2218,27 @@
     </Field>
   </Node>
 
+  <Node Name="EncodedDirectiveSyntax" Base="StatementSyntax">
+    <Kind Name="EncodedDirective"/>
+    <TypeComment>
+      <summary>
+        Represents a <c>.encoded $34</c> line, which gives the opcode byte the instruction below it
+        is written as, where the CPU runs more than one byte as that instruction.
+      </summary>
+    </TypeComment>
+    <Field Name="Keyword" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>Gets the <c>.encoded</c> keyword that starts the line.</summary>
+      </PropertyComment>
+      <Kind Name="Directive"/>
+    </Field>
+    <Field Name="Value" Type="ExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>Gets the opcode byte, or null if the source omits it.</summary>
+      </PropertyComment>
+    </Field>
+  </Node>
+
   <Node Name="PatchDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="PatchDirective"/>
     <TypeComment>

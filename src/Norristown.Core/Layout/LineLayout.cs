@@ -34,8 +34,12 @@ namespace Norristown.Layout;
 /// The offset into the direct page that a <c>d:</c> operand is emitted as, computed from the D
 /// the analysis found; null for every other line, and where D is not known.
 /// </param>
+/// <param name="Opcode">
+/// The opcode byte an <c>.encoded</c> gives the instruction, which is then written as bytes; null
+/// for a line written as nt65 reads it.
+/// </param>
 public sealed record LineLayout(
     int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false, CycleCount? Cycles = null,
     int? Bits = null, Ensured? Ensured = null, int? Slot = null, long? Direct = null,
-    IReadOnlyList<string>? Causes = null);
+    IReadOnlyList<string>? Causes = null, int? Opcode = null);
 

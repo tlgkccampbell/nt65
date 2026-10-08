@@ -72,6 +72,7 @@ internal static class Directives
         [DirectiveKind.MultiProc] = "one routine per member of an enum",
         [DirectiveKind.Next] = "where control goes from here",
         [DirectiveKind.Patch] = "the target this instruction is patched to",
+        [DirectiveKind.Encoded] = "the opcode byte the instruction below is written as",
         [DirectiveKind.Place] = "emit another module's code here",
         [DirectiveKind.Proc] = "a routine",
         [DirectiveKind.Repeat] = "assemble the block a number of times",

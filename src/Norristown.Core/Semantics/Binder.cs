@@ -1269,6 +1269,8 @@ internal sealed partial class Binder
         if (statement is not (BlankLineSyntax or ModuleDirectiveSyntax))
             pastFirstItem = true;
         CheckAnnotation(line, statement);
+        if (statement is EncodedDirectiveSyntax encoded && Encodings.Target(line) is null)
+            Report(encoded.Keyword.Span, Catalogue.EncodedAboutNothing);
         if (statement is FallthroughDirectiveSyntax fallthrough && !Fallthrough.EndsABody(line))
             Report(fallthrough.Keyword.Span, Catalogue.FallthroughMisplaced);
         if (statement is AllowDirectiveSyntax allow)
@@ -2121,6 +2123,9 @@ internal sealed partial class Binder
             foreach (var target in node.Targets)
                 binder.CollectUses(target);
         }
+
+        /// <summary>Collects the names the opcode byte of an <c>.encoded</c> uses.</summary>
+        public override void VisitEncodedDirective(EncodedDirectiveSyntax node) => binder.CollectUses(node.Value);
 
         /// <summary>
         /// Records the label a <c>.patch</c> names. The mnemonics after its <c>as</c> name

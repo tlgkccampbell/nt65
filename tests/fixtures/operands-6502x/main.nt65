@@ -36,6 +36,18 @@
     rts
 }
 
+; Bytes ca65 does not choose, for forms the CPU runs several bytes as. Each is written as the
+; byte and its operand.
+.export .proc encodings {
+    .encoded $34
+    nop $39,x                       ; ca65 writes $14
+    .encoded $3C
+    nop buf,x
+    .encoded $EB
+    sbc #$12
+    rts
+}
+
 ; Loads and stores that move A and X together.
 .export .proc paired {
     lax #$40

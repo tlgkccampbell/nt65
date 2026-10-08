@@ -1223,6 +1223,33 @@ public sealed class Emitter
     }
 
     /// <summary>
+    /// Writes an instruction an <c>.encoded</c> gives an opcode byte as that byte and its operand's
+    /// bytes, low first, since ca65 would choose another byte for it. The instruction as written
+    /// goes in the comment.
+    /// </summary>
+    private void Encoded(LineSyntax line, InstructionStatementSyntax statement, LineLayout laid, int opcode)
+    {
+        var bytes = new List<string> { Hex(opcode, 2) };
+        var width = laid.Length - 1;
+        var operand = Operands.Substituted(model, statement.Operand, context.Expansion)?.Operand ?? statement.Operand;
+        if (width > 0 && operand is not null && Operands.ExpressionOf(operand) is { } expression)
+        {
+            if ((laid.Direct ?? model.ValueOf(expression, context.Expansion).AsNumber()) is { } value)
+            {
+                for (var i = 0; i < width; i++)
+                    bytes.Add(Hex((value >> (8 * i)) & 0xff, 2));
+            }
+            else
+            {
+                var rendered = expressions.Rendered(expression);
+                string[] parts = [$".lobyte({rendered})", $".hibyte({rendered})", $".bankbyte({rendered})"];
+                bytes.AddRange(parts.Take(width));
+            }
+        }
+        Code(line, $"{Body}.byte {string.Join(", ", bytes)}", laid.Length, comment: statement.GetText().Trim());
+    }
+
+    /// <summary>
     /// Writes an assertion the linker checks, as ca65's <c>.assert</c> with the level that defers
     /// it to ld65.
     /// </summary>
@@ -1560,6 +1587,10 @@ public sealed class Emitter
                 && emitter.layout.Of(node, emitter.context.Expansion) is { } laid)
             {
                 emitter.Branch(Line, node, laid);
+            }
+            else if (emitter.layout.Of(node, emitter.context.Expansion) is { Opcode: { } opcode } encoded)
+            {
+                emitter.Encoded(Line, node, encoded, opcode);
             }
             else
             {

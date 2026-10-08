@@ -430,6 +430,15 @@ reach memory through the stack pointer or the high byte of their own address; `j
 processor. `nop` grows operands here and nowhere else, since its undocumented encodings read
 one.
 
+Several bytes run as some of these forms, six of them as `nop zp,x`, and `sbc #` has a second
+byte too. An instruction is written as the byte ca65 chooses unless an `.encoded $34` stands
+before it, with only blank lines, bare labels and `.allow` lines between. The byte has to run
+as that instruction, in a form its operand allows, and it decides between the direct-page and
+the absolute forms (encoded-mismatch). The line is written as that byte and the operand's bytes
+in a `.byte`, with the instruction in its comment, and is analyzed as the instruction. A branch
+and a block move have one encoding each, so `.encoded` before one is an error, and so is one
+with no instruction below it.
+
 What each *costs* is a fact about the NMOS timing and is counted like any other instruction.
 What each *leaves behind* is not always one answer: `ane`, `lax #`, and the stores that mix in
 the high byte of their own address depend on the part and on what the bus was last driven with.
@@ -5366,6 +5375,7 @@ annotation  := '.next' (target (',' target)* | items(target) | '?'
                                                       ; after a conditional branch, its
                                                       ; own target only: always taken
              | '.patch' target ('as' mnemonic (',' mnemonic)*)?
+             | '.encoded' expr                          ; before an instruction
 fallthrough := '.fallthrough' path                    ; the last line of a proc's body, or of
                                                       ; a branch of an if-block ending it
 target      := path                                   ; or an ident parameter, in macros;

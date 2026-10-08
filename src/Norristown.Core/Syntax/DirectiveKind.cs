@@ -166,6 +166,9 @@ public enum DirectiveKind
     /// <summary><c>.patch</c>: states the target the instruction above is patched to.</summary>
     Patch,
 
+    /// <summary><c>.encoded</c>: states the opcode byte the instruction below is written as.</summary>
+    Encoded,
+
     /// <summary><c>.state</c>: states what the processor state is here.</summary>
     State,
 

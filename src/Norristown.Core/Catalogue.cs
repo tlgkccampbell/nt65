@@ -2413,6 +2413,32 @@ public static class Catalogue
 
     // Instructions
 
+    internal static DiagnosticDescriptor EncodedAboutNothing { get; } = Entry(
+        Area.Instructions,
+        "encoded-about-nothing",
+        Severity.Error,
+        "`.encoded` applies to the instruction below it, and there is none",
+        "`.encoded $34` gives the opcode byte the instruction below it is written as. Only blank lines, bare labels "
+            + "and `.allow` lines may stand between them.");
+
+    internal static DiagnosticDescriptor EncodedNotAByte { get; } = Entry(
+        Area.Instructions,
+        "encoded-not-a-byte",
+        Severity.Error,
+        "`.encoded` takes the opcode byte the instruction below it is written as, a constant from 0 to 255",
+        "The byte is written in place of the opcode ca65 would choose, so it has to be known when nt65 lays the "
+            + "code out.");
+
+    internal static DiagnosticDescriptor EncodedMismatch { get; } = Entry(
+        Area.Instructions,
+        "encoded-mismatch",
+        Severity.Error,
+        "`.encoded {0}` cannot write `{1}`: {2}",
+        "Some processors run more than one byte as the same instruction, such as the NMOS 6502's undocumented "
+            + "`nop` encodings, and ca65 writes only one of them. `.encoded` chooses another, and the byte has to run "
+            + "as the instruction below it, in a form its operand allows. The form the byte runs as decides "
+            + "between the direct-page and the absolute form. A branch and a block move have one encoding each.");
+
     internal static DiagnosticDescriptor InstructionNotOnCpu { get; } = Entry(
         Area.Instructions,
         "instruction-not-on-cpu",

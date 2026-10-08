@@ -1997,6 +1997,19 @@ The CPUs are the NMOS `6502`; `6502x`, the NMOS 6502 with its undocumented opcod
 and `stp`; and the `65816`. Using an instruction the CPU lacks is an error that names the
 CPUs that have it.
 
+**Choosing an encoding.** The NMOS 6502 runs several bytes as some of its undocumented forms,
+six of them as `nop zp,x`, and ca65 writes only one. `.encoded` before an instruction gives the
+byte it is written as:
+
+```nt65
+    .encoded $34
+    nop $39,x                       ; ca65 writes $14
+```
+
+The instruction is still code that nt65 follows and shows on hover. The byte has to run as that
+instruction in a form its operand allows, and it picks between the direct-page and the absolute
+form.
+
 ## Migrating from ca65
 
 ### Directives

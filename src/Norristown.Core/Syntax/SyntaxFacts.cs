@@ -198,6 +198,7 @@ public static class SyntaxFacts
         [DirectiveKind.Fallthrough] = new(
             SyntaxKind.FallthroughDirective, new(DirectiveContexts.Code, Expanded, DirectiveNesting.Routine)),
         [DirectiveKind.Patch] = new(SyntaxKind.PatchDirective, new(DirectiveContexts.Code)),
+        [DirectiveKind.Encoded] = new(SyntaxKind.EncodedDirective, new(DirectiveContexts.Code)),
         [DirectiveKind.State] = new(SyntaxKind.StateDirective, new(DirectiveContexts.Code)),
         [DirectiveKind.Ensure] = new(SyntaxKind.EnsureDirective, new(DirectiveContexts.Code)),
         [DirectiveKind.Frame] = new(SyntaxKind.FrameDirective, new(DirectiveContexts.Code)),

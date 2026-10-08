@@ -429,6 +429,11 @@ public enum SyntaxKind : byte
     /// </summary>
     PatchDirective,
 
+    /// <summary>
+    /// <c>.encoded $34</c>, which gives the opcode byte the instruction below it is written as.
+    /// </summary>
+    EncodedDirective,
+
     /// <summary><c>.state a16, i8</c>, which asserts and sets the processor state at this point.</summary>
     StateDirective,
 

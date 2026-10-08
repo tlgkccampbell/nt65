@@ -9,6 +9,7 @@
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
 .export main__combined
+.export main__encodings
 .export main__paired
 .export main__immediate
 .export main__unstable
@@ -44,7 +45,15 @@ main__combined:
     rts
 ; end of combined
 
-; .proc paired  main.nt65:40
+; .proc encodings  main.nt65:41
+main__encodings:
+    .byte $34, $39                  ; nop $39,x
+    .byte $3c, .lobyte(buf), .hibyte(buf)  ; nop buf,x
+    .byte $eb, $12                  ; sbc #$12
+    rts
+; end of encodings
+
+; .proc paired  main.nt65:52
 main__paired:
     lax #$40
     lax z:ptr
@@ -60,7 +69,7 @@ main__paired:
     rts
 ; end of paired
 
-; .proc immediate  main.nt65:56
+; .proc immediate  main.nt65:68
 main__immediate:
     alr #%11110000
     anc #$7f
@@ -70,7 +79,7 @@ main__immediate:
     rts
 ; end of immediate
 
-; .proc unstable  main.nt65:67
+; .proc unstable  main.nt65:79
 main__unstable:
     sha buf,y
     sha (ptr),y
@@ -81,7 +90,7 @@ main__unstable:
     rts
 ; end of unstable
 
-; .proc idle  main.nt65:78
+; .proc idle  main.nt65:90
 main__idle:
     nop
     nop #$00
@@ -92,7 +101,7 @@ main__idle:
     rts
 ; end of idle
 
-; .proc halt  main.nt65:89
+; .proc halt  main.nt65:101
 main__halt:
     jam
 ; end of halt

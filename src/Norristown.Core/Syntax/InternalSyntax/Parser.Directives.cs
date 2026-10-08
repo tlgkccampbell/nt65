@@ -79,6 +79,7 @@ internal sealed partial class Parser
         SyntaxKind.EnsureDirective => ParseEnsure(),
         SyntaxKind.FrameDirective => ParseFrame(),
         SyntaxKind.PatchDirective => ParsePatch(),
+        SyntaxKind.EncodedDirective => ParseEncoded(),
         SyntaxKind.AllowDirective => ParseAllow(),
         _ => null,
     };
@@ -294,6 +295,21 @@ internal sealed partial class Parser
         var variants = ParseSeparatedList(
             () => ParseTarget(Catalogue.ExpectedLabel.Message("an instruction the store can write, such as `dex`")));
         return new PatchDirectiveSyntax(keyword, target, asKeyword, variants);
+    }
+
+    /// <summary>
+    /// Parses <c>.encoded $34</c>, which gives the opcode byte the instruction below it is written
+    /// as. Whether the byte is a constant that runs as that instruction is for layout to check.
+    /// </summary>
+    private GreenNode ParseEncoded()
+    {
+        var keyword = Advance();
+        if (AtEnd)
+        {
+            Report(Catalogue.ExpectedExpression);
+            return new EncodedDirectiveSyntax(keyword, null);
+        }
+        return new EncodedDirectiveSyntax(keyword, ParseExpression());
     }
 
     /// <summary>

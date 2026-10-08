@@ -406,6 +406,11 @@ public sealed partial class CodeLayout
             // them, so it is laid out before the CPU's instruction table is consulted.
             if (SyntaxFacts.IsLongBranch(statement.MnemonicKind))
             {
+                if (Encodings.Of(statement) is { } encoded)
+                {
+                    Report(encoded, Catalogue.EncodedMismatch.Message(
+                        encoded.Value?.GetText().Trim() ?? "", mnemonic.Text, "a long branch is one instruction or two"));
+                }
                 LongBranch(statement, mnemonic);
                 return;
             }
@@ -469,6 +474,12 @@ public sealed partial class CodeLayout
                 return;
             }
 
+            // An `.encoded` byte picks the form it runs as, which also decides between the
+            // direct-page and the absolute forms.
+            var opcode = Encoded(statement, candidates);
+            if (opcode is { } chosen)
+                candidates = [Opcodes.Decode(cpu, (byte)chosen)!.Value.Mode];
+
             // On the 65816 an immediate is as wide as the register it goes to, which is what the
             // analysis found reaching it. Where it found no width it has already reported that,
             // and the immediate is laid out a byte wide so the rest of the file can be laid out.
@@ -496,7 +507,7 @@ public sealed partial class CodeLayout
             IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
             Laid(statement, new LineLayout(
                 length, mode, prefix, false, timing?.Count, bits,
-                Slot: states?.SlotAt(statement, expansion), Direct: direct, Causes: causes));
+                Slot: states?.SlotAt(statement, expansion), Direct: direct, Causes: causes, Opcode: opcode));
             Place(statement, length);
             layout.steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
 
@@ -510,6 +521,40 @@ public sealed partial class CodeLayout
                 if (target is not null)
                     branches.Add(new Branch(statement, expansion, target, Long: false));
             }
+        }
+
+        /// <summary>
+        /// Returns the opcode byte the <c>.encoded</c> above <paramref name="statement"/> gives it,
+        /// or null where none does or the byte cannot be used. The byte has to run as the
+        /// instruction in one of <paramref name="candidates"/>, the forms its operand allows, and
+        /// a branch or a block move has only the one encoding ca65 writes.
+        /// </summary>
+        private int? Encoded(InstructionStatementSyntax statement, AddressingMode[] candidates)
+        {
+            if (Encodings.Of(statement) is not { Value: { } value } encoded)
+                return null;
+            var text = value.GetText().Trim();
+            if (model.ValueOf(value, expansion).AsNumber() is not (>= 0 and <= 255 and var opcode))
+            {
+                Report(value, Catalogue.EncodedNotAByte);
+                return null;
+            }
+            var written = statement.Mnemonic.Text;
+            string? problem = Opcodes.Decode(cpu, (byte)opcode) switch
+            {
+                null => $"the {CpuNames.Format(cpu)} has no instruction with that opcode",
+                { Mode: var one } when one is AddressingMode.Relative or AddressingMode.RelativeLong
+                    or AddressingMode.DirectRelative or AddressingMode.BlockMove =>
+                    "a branch or a block move has one encoding, the one ca65 writes",
+                var (decoded, mode) when decoded != statement.MnemonicKind || !candidates.Contains(mode) =>
+                    $"on the {CpuNames.Format(cpu)} it runs as `{SyntaxFacts.TextOf(decoded)}`"
+                        + (OpcodeCall.WordOf(mode) is { } word ? $" in the `{word}` form" : " with no operand"),
+                _ => null,
+            };
+            if (problem is null)
+                return (int)opcode;
+            Report(encoded, Catalogue.EncodedMismatch.Message(text, written, problem));
+            return null;
         }
 
         /// <summary>
