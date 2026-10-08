@@ -625,9 +625,10 @@ public sealed class DirectPageMap
         /// first and then writes it either counts something the interrupted code reads, or saves
         /// and restores it, and the roles do not tell those apart, so neither is a hazard. A use as
         /// a temporary is a hazard to interrupted code that reads the location, and a use that
-        /// only writes it is a hazard to interrupted code that both writes and reads it. A use
-        /// through the interrupted code's D counts only when that code holds D at the location's
-        /// own page.
+        /// only writes it is a hazard to interrupted code that both writes and reads it. A routine
+        /// that runs in both contexts can interrupt itself part-way through its own use, so its use
+        /// is on both sides. A use through the interrupted code's D counts only when that code
+        /// holds D at the location's own page.
         /// </remarks>
         /// <param name="uses">The uses, by routine and location, which this replaces with ones that carry the new notes.</param>
         /// <param name="held">The pages the interruptible code holds D at.</param>
@@ -638,7 +639,7 @@ public sealed class DirectPageMap
                 if (homes[location.Key].IsMmio)
                     continue;
                 var mains = location.Where(item => item.Value is { InMain: true, IsUnknownPage: false }).Select(item => item.Value).ToList();
-                foreach (var (key, use) in location.Where(item => item.Value is { InInterrupt: true, InMain: false }).ToList())
+                foreach (var (key, use) in location.Where(item => item.Value.InInterrupt).ToList())
                 {
                     if (use.IsUnknownPage && !held.Contains(homes[location.Key].Page))
                         continue;
@@ -646,13 +647,14 @@ public sealed class DirectPageMap
                         continue;
                     var name = use.Routine.DisplayName;
                     var what = use.Role == PageRole.Temp ? $"`{name}` uses it as a temporary" : $"`{name}` writes it";
+                    var whom = victim == use ? "interrupts itself part-way through" : $"interrupts `{victim.Routine.DisplayName}`, which relies on it";
                     uses[key] = use with
                     {
                         Hazards =
                         [
                             .. use.Hazards,
                             new PageNote("⚠", what, use.Accesses.FirstOrDefault(access => access.Writes).Line),
-                            new PageNote("⚠", $"interrupts `{victim.Routine.DisplayName}`, which relies on it", victim.Accesses.FirstOrDefault(access => access.Reads).Line),
+                            new PageNote("⚠", whom, victim.Accesses.FirstOrDefault(access => access.Reads).Line),
                         ],
                     };
                 }

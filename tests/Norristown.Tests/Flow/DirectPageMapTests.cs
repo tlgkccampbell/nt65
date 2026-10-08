@@ -333,10 +333,12 @@ public sealed class DirectPageMapTests
     {
         Assert.Equal(
             [
-                "page $0000 [ZEROPAGE] Interrupt hazard=False used=1 direct=2",
+                "page $0000 [ZEROPAGE] Interrupt hazard=True used=1 direct=2",
                 "  ◦ no config · layout guessed",
                 "  scratch +0 x1 .byte Interrupt Guessed",
                 "    util Temp 2 irq main",
+                "      ⚠ `util` uses it as a temporary @ sta scratch",
+                "      ⚠ interrupts itself part-way through @ lda scratch",
             ],
             Render("6502", """
                 .segment ZEROPAGE
