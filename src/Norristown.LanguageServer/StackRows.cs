@@ -80,7 +80,7 @@ internal static class StackRows
             // one of its pushes.
             var push = covered == 1 ? pushes[next] : (SavedPush?)null;
             next += covered;
-            var text = group.Name ?? (push is { } held ? Hovers.Held(held.Value, null) : "unknown");
+            var text = group.Name ?? (push is { } held ? Described(held) : "unknown");
 
             // Only the 65816 pushes a register whose width the caller cannot read off the CPU,
             // and only there does the width decide whether a pull gets the value back.
@@ -178,4 +178,18 @@ internal static class StackRows
         ?? (frame.TypeExpression is { } named
             ? analysis.ModelFor(frame.Tree.Path)?.SymbolOf(named)?.Size
             : null);
+
+    /// <summary>
+    /// Returns what a push holds, in words. A push of the status register lists its flags by what
+    /// each holds, such as <c>C, V as entered; Z, N new</c>.
+    /// </summary>
+    private static string Described(SavedPush push)
+    {
+        if (push.Flags is not { } flags)
+            return Hovers.Held(push.Value, null);
+        var held = new[] { (Registers.C, push.Value), (Registers.Z, flags.Z), (Registers.N, flags.N), (Registers.V, flags.V) };
+        return string.Join("; ", held
+            .GroupBy(each => Hovers.Held(each.Item2, each.Item1))
+            .Select(group => $"{RegisterEffects.Format(group.Aggregate(Registers.None, (all, each) => all | each.Item1))} {group.Key}"));
+    }
 }

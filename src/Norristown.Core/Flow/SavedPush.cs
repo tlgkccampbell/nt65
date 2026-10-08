@@ -4,7 +4,7 @@ using Norristown.Semantics;
 namespace Norristown.Flow;
 
 /// <summary>Represents one push a routine made, as it bears on saving and restoring a register.</summary>
-/// <param name="Value">What was pushed.</param>
+/// <param name="Value">What was pushed. For a push of the status register, it is what the carry held.</param>
 /// <param name="Size">How much of the stack it took.</param>
 /// <param name="Width">
 /// How wide the register was, where <paramref name="Size"/> is a register's size. A pull
@@ -12,4 +12,15 @@ namespace Norristown.Flow;
 /// only one width, and a routine that changes neither A's nor the index registers' width has
 /// <see cref="Width.Unchanged"/> at both the push and the pull.
 /// </param>
-public readonly record struct SavedPush(RegisterValue Value, PushSize Size, Width Width);
+public readonly record struct SavedPush(RegisterValue Value, PushSize Size, Width Width)
+{
+    /// <summary>
+    /// Gets what the other flags held, for a push of the status register, or null for any other
+    /// push.
+    /// </summary>
+    public PushedFlags? Flags { get; init; }
+
+    /// <summary>Gets the registers whose entry values the push may hold.</summary>
+    public Registers Entries =>
+        Value.Entry | (Flags is { } flags ? flags.Z.Entry | flags.N.Entry | flags.V.Entry : Registers.None);
+}

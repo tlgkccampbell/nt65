@@ -37,9 +37,9 @@ public sealed class HoverTests
         var scope = await client.HoverAsync(MainUri, Locate.At(Source, ".s|cope"), timeout);
 
         Assert.Contains("```nt65\n.proc main\n```", routine?.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("preserves  Y, C", routine?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("preserves  Y, C, V", routine?.Contents.Value, StringComparison.Ordinal);
         Assert.Contains("```nt65\n.scope\n```", scope?.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("preserves  A, Y, C", scope?.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("preserves  A, Y, C, V", scope?.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -67,11 +67,13 @@ public sealed class HoverTests
         var after = await client.HoverAsync(MainUri, Locate.At(Source, "sty $10"), timeout);
 
         Assert.Contains(
-            "A       as entered\nX       as entered\nY       as entered\nC       as entered\n```",
+            "A       as entered\nX       as entered\nY       as entered\nC       as entered\n"
+                + "Z       as entered\nN       as entered\nV       as entered\n```",
             entry?.Contents.Value,
             StringComparison.Ordinal);
         Assert.Contains(
-            "A       X as entered\nX       as entered\nY       new\nC       as entered\n```",
+            "A       X as entered\nX       as entered\nY       new\nC       as entered\n"
+                + "Z       new\nN       new\nV       as entered\n```",
             after?.Contents.Value,
             StringComparison.Ordinal);
 
@@ -134,9 +136,10 @@ public sealed class HoverTests
 
         var hover = await client.HoverAsync(MainUri, Locate.At(Source, "sta $10"), timeout);
 
-        // The `php` is on top; under it is the accumulator, which `txa` filled with X.
+        // The `php` is on top, holding the flags, of which `txa` set Z and N. Under it is the
+        // accumulator, which `txa` filled with X.
         Assert.Contains(
-            "C       as entered\n\nstack   C as entered\n        X as entered\n```",
+            "V       as entered\n\nstack   C, V as entered; Z, N new\n        X as entered\n```",
             hover?.Contents.Value,
             StringComparison.Ordinal);
     }

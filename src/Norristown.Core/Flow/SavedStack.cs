@@ -72,7 +72,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
         {
             var entries = Registers.None;
             foreach (var push in pushes)
-                entries |= push.Value.Entry;
+                entries |= push.Entries;
             return entries;
         }
     }
@@ -101,7 +101,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
             var (x, y) = (a.pushes[i], b.pushes[i]);
             if (x.Size != y.Size || x.Width != y.Width)
                 return null;
-            builder[i] = x with { Value = RegisterValue.Merge(x.Value, y.Value) };
+            builder[i] = x with { Value = RegisterValue.Merge(x.Value, y.Value), Flags = PushedFlags.Merge(x.Flags, y.Flags) };
         }
         return new SavedStack(builder.ToImmutable(), offset);
     }
@@ -121,10 +121,14 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// </para>
     /// </summary>
     public RegisterValue Pulled(PushSize size, Semantics.Width width) =>
-        pushes.Length > 0 && pushes[^1].Size == size && pushes[^1].Width == width
-            && width != Semantics.Width.Unknown
-            ? pushes[^1].Value
-            : RegisterValue.Unknown;
+        Top(size, width)?.Value ?? RegisterValue.Unknown;
+
+    /// <summary>
+    /// Returns what a <c>plp</c> gives back to the zero, negative and overflow flags. That is what
+    /// they held when the push on top was a <c>php</c>, and otherwise flags nothing is known about.
+    /// </summary>
+    public PushedFlags PulledFlags() =>
+        Top(PushSize.OneByte, Semantics.Width.Eight)?.Flags ?? PushedFlags.Unknown;
 
     /// <summary>
     /// Returns this stack as a call to a routine with <paramref name="effect"/> leaves it once the
@@ -179,4 +183,14 @@ public sealed class SavedStack : IEquatable<SavedStack>
             hash.Add(push);
         return hash.ToHashCode();
     }
+
+    /// <summary>
+    /// Returns the push on top when a pull of this size and width matches it, or null otherwise.
+    /// See <see cref="Pulled"/>.
+    /// </summary>
+    private SavedPush? Top(PushSize size, Semantics.Width width) =>
+        pushes.Length > 0 && pushes[^1].Size == size && pushes[^1].Width == width
+            && width != Semantics.Width.Unknown
+            ? pushes[^1]
+            : null;
 }

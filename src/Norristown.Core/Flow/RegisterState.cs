@@ -16,17 +16,26 @@ namespace Norristown.Flow;
 /// <param name="X">What X may hold.</param>
 /// <param name="Y">What Y may hold.</param>
 /// <param name="C">What the carry may hold.</param>
+/// <param name="Z">What the zero flag may hold.</param>
+/// <param name="N">What the negative flag may hold.</param>
+/// <param name="V">What the overflow flag may hold.</param>
 /// <param name="Stack">What the routine has pushed, or null when that is not known.</param>
 public sealed record RegisterState(
-    RegisterValue A, RegisterValue X, RegisterValue Y, RegisterValue C, SavedStack? Stack)
+    RegisterValue A, RegisterValue X, RegisterValue Y, RegisterValue C, RegisterValue Z, RegisterValue N, RegisterValue V,
+    SavedStack? Stack)
 {
+    // Every register, one at a time.
+    private static readonly Registers[] Every =
+        [Registers.A, Registers.X, Registers.Y, Registers.C, Registers.Z, Registers.N, Registers.V];
+
     /// <summary>
     /// Gets the state of a routine when it is entered, in which each register holds its own entry
     /// value and nothing is pushed.
     /// </summary>
     public static RegisterState Entered { get; } = new(
         RegisterValue.Of(Registers.A), RegisterValue.Of(Registers.X),
-        RegisterValue.Of(Registers.Y), RegisterValue.Of(Registers.C), SavedStack.Empty)
+        RegisterValue.Of(Registers.Y), RegisterValue.Of(Registers.C), RegisterValue.Of(Registers.Z),
+        RegisterValue.Of(Registers.N), RegisterValue.Of(Registers.V), SavedStack.Empty)
     {
         AHigh = RegisterValue.Of(Registers.A),
     };
@@ -36,7 +45,8 @@ public sealed record RegisterState(
     /// about any register or about the stack.
     /// </summary>
     public static RegisterState Unknown { get; } = new(
-        RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, null)
+        RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown,
+        RegisterValue.Unknown, RegisterValue.Unknown, RegisterValue.Unknown, null)
     {
         AHigh = RegisterValue.Unknown,
     };
@@ -66,7 +76,7 @@ public sealed record RegisterState(
         get
         {
             var backed = Registers.None;
-            foreach (var register in RegisterEffects.Each(Registers.All))
+            foreach (var register in Every)
             {
                 if (Of(register).Backs(register) && (register != Registers.A || AHigh.Backs(register)))
                     backed |= register;
@@ -81,7 +91,7 @@ public sealed record RegisterState(
         get
         {
             var kept = Registers.None;
-            foreach (var register in RegisterEffects.Each(Registers.All))
+            foreach (var register in Every)
             {
                 if (Of(register).Holds(register) && (register != Registers.A || AHigh.Holds(register)))
                     kept |= register;
@@ -104,6 +114,9 @@ public sealed record RegisterState(
             RegisterValue.Merge(known.X, arriving.X),
             RegisterValue.Merge(known.Y, arriving.Y),
             RegisterValue.Merge(known.C, arriving.C),
+            RegisterValue.Merge(known.Z, arriving.Z),
+            RegisterValue.Merge(known.N, arriving.N),
+            RegisterValue.Merge(known.V, arriving.V),
             stack)
         {
             AHigh = RegisterValue.Merge(known.AHigh, arriving.AHigh),
@@ -126,7 +139,10 @@ public sealed record RegisterState(
         Registers.A => A,
         Registers.X => X,
         Registers.Y => Y,
-        _ => C,
+        Registers.C => C,
+        Registers.Z => Z,
+        Registers.N => N,
+        _ => V,
     };
 
     /// <summary>
@@ -138,34 +154,44 @@ public sealed record RegisterState(
         Registers.A => this with { A = value, AHigh = value },
         Registers.X => this with { X = value },
         Registers.Y => this with { Y = value },
-        _ => this with { C = value },
+        Registers.C => this with { C = value },
+        Registers.Z => this with { Z = value },
+        Registers.N => this with { N = value },
+        _ => this with { V = value },
     };
 
     /// <summary>
     /// Returns this state after a routine that keeps <paramref name="registers"/> without
     /// promising to, with what each of them holds marked as held only through that keep.
     /// </summary>
-    public RegisterState Unbacking(Registers registers)
-    {
-        var state = this;
-        foreach (var register in RegisterEffects.Each(registers))
-        {
-            state = register == Registers.A
-                ? state with { A = state.A.Unbacking(), AHigh = state.AHigh.Unbacking() }
-                : state.With(register, state.Of(register).Unbacking());
-        }
-        return state;
-    }
+    public RegisterState Unbacking(Registers registers) =>
+        registers == Registers.None ? this : Each(registers, value => value.Unbacking());
 
     /// <summary>
     /// Returns this state with every register of <paramref name="registers"/> holding
     /// <paramref name="value"/>.
     /// </summary>
-    public RegisterState WithEach(Registers registers, RegisterValue value)
+    public RegisterState WithEach(Registers registers, RegisterValue value) =>
+        registers == Registers.None ? this : Each(registers, _ => value);
+
+    /// <summary>
+    /// Returns this state with what each register of <paramref name="registers"/> holds changed by
+    /// <paramref name="change"/>, as one new state. For the accumulator, both halves are changed.
+    /// </summary>
+    private RegisterState Each(Registers registers, Func<RegisterValue, RegisterValue> change)
     {
-        var state = this;
-        foreach (var register in RegisterEffects.Each(registers))
-            state = state.With(register, value);
-        return state;
+        RegisterValue Changed(Registers register, RegisterValue value) =>
+            (registers & register) != Registers.None ? change(value) : value;
+        return this with
+        {
+            A = Changed(Registers.A, A),
+            AHigh = Changed(Registers.A, AHigh),
+            X = Changed(Registers.X, X),
+            Y = Changed(Registers.Y, Y),
+            C = Changed(Registers.C, C),
+            Z = Changed(Registers.Z, Z),
+            N = Changed(Registers.N, N),
+            V = Changed(Registers.V, V),
+        };
     }
 }

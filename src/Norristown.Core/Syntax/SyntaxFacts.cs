@@ -37,11 +37,12 @@ public static class SyntaxFacts
     public static readonly IReadOnlyList<string> Registers = ["a", "x", "y", "s"];
 
     /// <summary>
-    /// The registers a <c>keeps</c> item may name, lower case. The list includes the carry and
-    /// leaves out the stack pointer, and <c>c</c> is an ordinary identifier everywhere else, so
-    /// it is not the same set as the names the lexer treats as registers.
+    /// The registers a <c>keeps</c> item may name, lower case. The list includes the carry, zero,
+    /// negative and overflow flags and leaves out the stack pointer, and the flags' names are
+    /// ordinary identifiers everywhere else, so it is not the same set as the names the lexer
+    /// treats as registers.
     /// </summary>
-    public static readonly IReadOnlyList<string> KeptRegisters = ["a", "x", "y", "c"];
+    public static readonly IReadOnlyList<string> KeptRegisters = ["a", "x", "y", "c", "z", "n", "v"];
 
     /// <summary>
     /// Every built-in function, in the order <see cref="BuiltinKind"/> declares them, with how many

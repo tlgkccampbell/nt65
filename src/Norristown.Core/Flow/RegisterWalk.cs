@@ -254,15 +254,26 @@ internal sealed class RegisterWalk
             return state;
 
         // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
-        // back. A handler that has left the stack where it found it therefore hands the carry
-        // back unchanged, no matter how it used the carry on the way.
+        // back. A handler that has left the stack where it found it therefore hands the flags
+        // back unchanged, no matter how it used them on the way.
         if (mnemonic == MnemonicKind.Rti)
-            return state.With(Registers.C, state.Stack is { Depth: 0 } ? RegisterValue.Of(Registers.C) : RegisterValue.Unknown);
+        {
+            foreach (var flag in RegisterEffects.Each(Registers.Flags))
+                state = state.With(flag, state.Stack is { Depth: 0 } ? RegisterValue.Of(flag) : RegisterValue.Unknown);
+            return state;
+        }
 
         if (facts.Pushes is { } push)
             return Saved(step, state, facts, push);
+
+        // Nearly every instruction sets Z and N from its result, a transfer and a pull among
+        // them. A `plp` gives the flags back what it pulls instead.
+        var written = mnemonic == MnemonicKind.Plp
+            ? Registers.None
+            : RegisterEffects.Written(mnemonic, mode, StepOperands.Immediate(model, layout, step));
+        const Registers OtherFlags = Registers.Z | Registers.N | Registers.V;
         if (facts.Pulls is { } pull)
-            return Restored(step, state, facts, pull, use);
+            return Restored(step, state.WithEach(written & OtherFlags, RegisterValue.Written), facts, pull, use);
 
         // Moving the stack pointer leaves nothing known about the saves on the stack.
         if (RegisterEffects.SetsStackPointer(mnemonic))
@@ -270,11 +281,10 @@ internal sealed class RegisterWalk
 
         if (RegisterEffects.Moved(mnemonic) is { } moved)
         {
+            state = state.WithEach(written & OtherFlags, RegisterValue.Written);
             return moved.To == Registers.A ? Accumulator(step, state, state.Of(moved.From))
                 : state.With(moved.To, moved.From == Registers.A ? Taken(step, mnemonic, state) : state.Of(moved.From));
         }
-        var written = RegisterEffects.Written(
-            mnemonic, mode, StepOperands.Immediate(model, layout, step));
         var after = state.WithEach(written & ~Registers.A, RegisterValue.Written);
         if (!written.HasFlag(Registers.A))
             return after;
@@ -604,7 +614,11 @@ internal sealed class RegisterWalk
             Registers.A => Taken(step, MnemonicKind.Pha, state),
             _ => state.Of(facts.Held),
         };
-        return state with { Stack = state.Stack?.Push(new SavedPush(value, size, Width(step, size))) };
+        var push = new SavedPush(value, size, Width(step, size))
+        {
+            Flags = facts.Held == Registers.C ? new PushedFlags(state.Z, state.N, state.V) : null,
+        };
+        return state with { Stack = state.Stack?.Push(push) };
     }
 
     /// <summary>
@@ -616,6 +630,7 @@ internal sealed class RegisterWalk
     {
         var width = Width(step, size);
         var value = state.Stack?.Pulled(size, width) ?? RegisterValue.Unknown;
+        var flags = state.Stack?.PulledFlags() ?? PushedFlags.Unknown;
         var pulled = state with { Stack = state.Stack?.Pull(size, width) };
 
         // A pull that does not match the push on top takes bytes of pushes other than the one
@@ -626,6 +641,7 @@ internal sealed class RegisterWalk
         {
             Registers.None => pulled,
             Registers.A => Accumulator(step, pulled, value),
+            Registers.C => pulled with { C = value, Z = flags.Z, N = flags.N, V = flags.V },
             _ => pulled.With(facts.Held, value),
         };
     }

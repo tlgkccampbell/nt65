@@ -8,9 +8,8 @@ namespace Norristown.Processor;
 /// datasheet facts. <see cref="Mnemonics.Flags"/> shows the flags an instruction writes beside it,
 /// and the walk that finds where an input's value was set follows them.
 /// <para>
-/// <see cref="Registers"/> leaves N and Z out on purpose, because nearly every instruction writes
-/// one of them and a promise about either would say nothing. This table is where they are
-/// followed instead.
+/// <see cref="RegisterEffects"/> takes the C, Z, N and V flags it follows as
+/// <see cref="Registers"/> from this table.
 /// </para>
 /// </summary>
 public static class FlagEffects

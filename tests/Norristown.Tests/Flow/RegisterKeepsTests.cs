@@ -19,18 +19,20 @@ public sealed class RegisterKeepsTests
         Assert.Equal(Registers.All, Kept(".proc p {\n    nop\n    rts\n}\n", "p"));
     }
 
-    /// <summary>A register (or the carry) that an instruction writes is not kept.</summary>
+    /// <summary>A register or a flag that an instruction writes is not kept.</summary>
     [Theory]
-    [InlineData("lda #1", Registers.X | Registers.Y | Registers.C)]
-    [InlineData("ldx #1", Registers.A | Registers.Y | Registers.C)]
-    [InlineData("ldy #1", Registers.A | Registers.X | Registers.C)]
-    [InlineData("clc", Registers.A | Registers.X | Registers.Y)]
+    [InlineData("lda #1", Registers.X | Registers.Y | Registers.C | Registers.V)]
+    [InlineData("ldx #1", Registers.A | Registers.Y | Registers.C | Registers.V)]
+    [InlineData("ldy #1", Registers.A | Registers.X | Registers.C | Registers.V)]
+    [InlineData("clc", Registers.A | Registers.X | Registers.Y | Registers.Z | Registers.N | Registers.V)]
     [InlineData("adc #1", Registers.X | Registers.Y)]
-    [InlineData("cmp #1", Registers.A | Registers.X | Registers.Y)]
-    [InlineData("inx", Registers.A | Registers.Y | Registers.C)]
+    [InlineData("cmp #1", Registers.A | Registers.X | Registers.Y | Registers.V)]
+    [InlineData("inx", Registers.A | Registers.Y | Registers.C | Registers.V)]
     [InlineData("sta $10", Registers.All)]
-    [InlineData("asl $10", Registers.A | Registers.X | Registers.Y)]
-    [InlineData("asl a", Registers.X | Registers.Y)]
+    [InlineData("asl $10", Registers.A | Registers.X | Registers.Y | Registers.V)]
+    [InlineData("asl a", Registers.X | Registers.Y | Registers.V)]
+    [InlineData("bit $10", Registers.A | Registers.X | Registers.Y | Registers.C)]
+    [InlineData("clv", Registers.All & ~Registers.V)]
     public void AnInstructionDoesNotHandBackWhatItWrites(string instruction, Registers kept)
     {
         Assert.Equal(kept, Kept($".proc p {{\n    {instruction}\n    rts\n}}\n", "p"));
@@ -39,12 +41,12 @@ public sealed class RegisterKeepsTests
     /// <summary>
     /// A save and its restore cancel, because the stack remembers whose value each push holds.
     /// The 6502 saves X through the accumulator, so the value has to be followed across the
-    /// transfers as well as the pushes.
+    /// transfers as well as the pushes. The pulls set Z and N, which are not kept.
     /// </summary>
     [Fact]
     public void ASaveAndItsRestoreCancel()
     {
-        Assert.Equal(Registers.All, Kept(".proc p {\n    pha\n    txa\n    pha\n    lda #1\n"
+        Assert.Equal(Registers.All & ~(Registers.Z | Registers.N), Kept(".proc p {\n    pha\n    txa\n    pha\n    lda #1\n"
             + "    ldx #2\n    pla\n    tax\n    pla\n    rts\n}\n", "p"));
     }
 
@@ -56,17 +58,17 @@ public sealed class RegisterKeepsTests
     public void APullThatDoesNotMatchItsPushRestoresNothing()
     {
         Assert.Equal(
-            Registers.Y | Registers.C, Kept(".proc p {\n    pha\n    lda #1\n    ldx #2\n    plx\n    rts\n}\n", "p"));
+            Registers.Y | Registers.C | Registers.V, Kept(".proc p {\n    pha\n    lda #1\n    ldx #2\n    plx\n    rts\n}\n", "p"));
     }
 
     /// <summary>
-    /// A `php` and its `plp` hand back the carry, even across a call to a routine that
-    /// changes it.
+    /// A `php` and its `plp` hand back every flag, even across a call to a routine that
+    /// changes them.
     /// </summary>
     [Fact]
-    public void APhpAndItsPlpHandBackTheCarry()
+    public void APhpAndItsPlpHandBackTheFlags()
     {
-        Assert.Equal(Registers.C, Kept(".proc q {\n    clc\n    rts\n}\n"
+        Assert.Equal(Registers.Flags, Kept(".proc q {\n    clc\n    rts\n}\n"
             + ".proc p {\n    php\n    lda #1\n    ldx #2\n    ldy #3\n    jsr q\n    plp\n    rts\n}\n", "p"));
     }
 
@@ -74,7 +76,7 @@ public sealed class RegisterKeepsTests
     [Fact]
     public void ASaveOnOnlyOnePathIsNoSave()
     {
-        Assert.Equal(Registers.X | Registers.Y | Registers.C, Kept(".proc p {\n    beq @skip\n    pha\n    lda #1\n"
+        Assert.Equal(Registers.X | Registers.Y | Registers.C | Registers.V, Kept(".proc p {\n    beq @skip\n    pha\n    lda #1\n"
             + "    pla\n@skip:\n    lda #2\n    rts\n}\n", "p"));
     }
 
@@ -84,8 +86,8 @@ public sealed class RegisterKeepsTests
     {
         var text = ".proc q {\n    ldy #1\n    rts\n}\n.proc p {\n    jsr q\n    rts\n}\n";
 
-        Assert.Equal(Registers.A | Registers.X | Registers.C, Kept(text, "q"));
-        Assert.Equal(Registers.A | Registers.X | Registers.C, Kept(text, "p"));
+        Assert.Equal(Registers.A | Registers.X | Registers.C | Registers.V, Kept(text, "q"));
+        Assert.Equal(Registers.A | Registers.X | Registers.C | Registers.V, Kept(text, "p"));
     }
 
     /// <summary>
@@ -98,8 +100,8 @@ public sealed class RegisterKeepsTests
     {
         var text = ".proc p {\n    ldx #1\n    jsr q\n    rts\n}\n.proc q {\n    ldy #1\n    jsr p\n    rts\n}\n";
 
-        Assert.Equal(Registers.A | Registers.C, Kept(text, "p"));
-        Assert.Equal(Registers.A | Registers.C, Kept(text, "q"));
+        Assert.Equal(Registers.A | Registers.C | Registers.V, Kept(text, "p"));
+        Assert.Equal(Registers.A | Registers.C | Registers.V, Kept(text, "q"));
     }
 
     /// <summary>
@@ -223,7 +225,7 @@ public sealed class RegisterKeepsTests
     {
         var text = ".proc q {\n    ldy #1\n    rts\n}\n.proc p {\n    jmp q\n}\n";
 
-        Assert.Equal(Registers.A | Registers.X | Registers.C, Kept(text, "p"));
+        Assert.Equal(Registers.A | Registers.X | Registers.C | Registers.V, Kept(text, "p"));
     }
 
     /// <summary>
@@ -237,8 +239,8 @@ public sealed class RegisterKeepsTests
         var next = ".proc q {\n    ldy #1\n    rts\n}\n.proc p {\n    jmp (slot)\n    .next q\n}\n"
             + ".segment BSS\n.data slot: .addr\n";
 
-        Assert.Equal(Registers.A | Registers.C, Kept(branch, "p"));
-        Assert.Equal(Registers.A | Registers.X | Registers.C, Kept(next, "p"));
+        Assert.Equal(Registers.A | Registers.C | Registers.V, Kept(branch, "p"));
+        Assert.Equal(Registers.A | Registers.X | Registers.C | Registers.V, Kept(next, "p"));
     }
 
     /// <summary>

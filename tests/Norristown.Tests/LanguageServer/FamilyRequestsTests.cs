@@ -131,7 +131,7 @@ public sealed class FamilyRequestsTests
                 private to  {scope}
                 cost        6 cycles
                 reads       none
-                preserves   A, X, Y, C
+                preserves   A, X, Y, C, Z, N, V
                 declares    {scope}::pulse1, {scope}::pulse2, {scope}::triangle
                 ```
                 """.ReplaceLineEndings("\n"), hover?.Contents.Value);

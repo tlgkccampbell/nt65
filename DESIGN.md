@@ -1221,8 +1221,8 @@ items are:
 | `args n` | the caller pushes n bytes before the call (below) | none |
 | `interrupt` | an interrupt handler (below) | none |
 | `noreturn` | the routine never returns (below) | none |
-| `keeps a, x, y, c` | the registers it hands back as it was entered with them (§7.7) | none |
-| `reads a, x, y, c`, `reads none` | the registers whose values from its caller it uses (§7.7) | none |
+| `keeps a, x, y, c, z, n, v` | the registers and flags it hands back as it was entered with them (§7.7) | none |
+| `reads a, x, y, c, z, n, v`, `reads none` | the registers and flags whose values from its caller it uses (§7.7) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
 | `?` | every part above unknown (below) | none |
 | a signature set's name | the items the set declares (below) | none |
@@ -2056,9 +2056,11 @@ itself: ca65 knows nothing about cycles.
 
 The first question anyone asks about someone else's routine is which registers survive it.
 nt65 answers every other question about a routine — what it costs, where control goes, what
-state it wants — so it answers this one too, on every CPU, of A, X, Y and the carry. N and Z
-are left out: nearly every instruction writes one of them, so a promise about either would say
-nothing.
+state it wants — so it answers this one too, on every CPU, of A, X, Y and the flags C, Z, N and
+V. Nearly every instruction writes Z and N, so few routines keep them, but a caller that sets a
+flag, calls a routine and then branches on the flag relies on the routine keeping it, and a
+routine entered just after a branch reads the flag its caller tested. A `php` saves all four
+and the `plp` that matches it gives each back.
 
 Each routine is followed the way the 65816's state is, over what each register may hold at each
 point: the value some register was entered with, a value an instruction here wrote, or nothing

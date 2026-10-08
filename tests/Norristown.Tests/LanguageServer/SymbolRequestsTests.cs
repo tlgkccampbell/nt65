@@ -253,7 +253,7 @@ public sealed class SymbolRequestsTests
 
         Assert.NotNull(hover);
         Assert.Contains("```nt65\n.proc gfx::init\n```", hover.Contents.Value, StringComparison.Ordinal);
-        Assert.Contains("cost       13+ cycles, loops\nreads      none\npreserves  X, Y, C", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("cost       13+ cycles, loops\nreads      V\npreserves  X, Y, C, V", hover.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -364,7 +364,7 @@ public sealed class SymbolRequestsTests
             ```nt65-hover
             cost       6 cycles
             reads      none
-            preserves  A, X, Y, C
+            preserves  A, X, Y, C, Z, N, V
             ```
             ---
             ```nt65-hover

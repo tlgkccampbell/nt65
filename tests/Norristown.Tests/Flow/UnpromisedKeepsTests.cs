@@ -85,6 +85,26 @@ public sealed class UnpromisedKeepsTests
     }
 
     /// <summary>
+    /// A flag is kept as a register is. A branch after the call on a flag set before it relies
+    /// on the routine keeping that flag, and promising it with <c>keeps</c> answers the warning.
+    /// A flag cannot be saved around the call alone, so the only fix is the promise.
+    /// </summary>
+    [Fact]
+    public void ABranchOnAFlagSetBeforeTheCallReliesOnTheKeep()
+    {
+        const string Main = ".export .proc main {\n    cmp #1\n    jsr store\n    beq @done\n    inc $11\n@done:\n    rts\n}\n";
+
+        var diagnostic = Assert.Single(Diagnostics(".proc store: keeps x {\n    sta $10\n    rts\n}\n" + Main));
+        Assert.Equal(
+            "this call relies on `store` keeping Z, which it does but does not promise (it declares `keeps x`)",
+            diagnostic.Message);
+        Assert.Equal(new DiagnosticFix(FixKind.Keeps, "z", diagnostic.Fix?.At), diagnostic.Fix);
+        Assert.Null(diagnostic.Also);
+
+        Assert.Empty(Diagnostics(".proc store: keeps x, z {\n    sta $10\n    rts\n}\n" + Main));
+    }
+
+    /// <summary>
     /// A shift through memory leaves the accumulator alone, so a use of A after one still relies
     /// on the call before it.
     /// </summary>

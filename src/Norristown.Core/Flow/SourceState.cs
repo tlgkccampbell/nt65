@@ -72,6 +72,9 @@ internal sealed class SourceState : IEquatable<SourceState>
         Tracked.X => RegisterValue.Of(Registers.X),
         Tracked.Y => RegisterValue.Of(Registers.Y),
         Tracked.C => RegisterValue.Of(Registers.C),
+        Tracked.Z => RegisterValue.Of(Registers.Z),
+        Tracked.N => RegisterValue.Of(Registers.N),
+        Tracked.V => RegisterValue.Of(Registers.V),
         _ => new RegisterValue(Registers.None, false, false),
     };
 
@@ -81,7 +84,10 @@ internal sealed class SourceState : IEquatable<SourceState>
         Registers.A => Tracked.A,
         Registers.X => Tracked.X,
         Registers.Y => Tracked.Y,
-        _ => Tracked.C,
+        Registers.C => Tracked.C,
+        Registers.Z => Tracked.Z,
+        Registers.N => Tracked.N,
+        _ => Tracked.V,
     };
 
     /// <summary>Returns where the value of <paramref name="tracked"/> was set.</summary>

@@ -48,7 +48,7 @@ public sealed class InlayHintsTests
 
         .segment CODE
 
-        .proc narrow: a16, keeps x, y -> a8 {
+        .proc narrow: a16, keeps x, y, v -> a8 {
             sep #$20
             rts
         }

@@ -643,8 +643,8 @@ internal static class Hovers
         }
 
         // A column a reader can scan beats a sentence they have to take apart, so wherever
-        // anything is known about the registers all four are listed, set apart by a gap from
-        // the rows about the line itself.
+        // anything is known about the registers every register and flag is listed, set apart by
+        // a gap from the rows about the line itself.
         var registers = flow?.Registers?.AnyBefore(statement);
         if (registers is { } held)
         {

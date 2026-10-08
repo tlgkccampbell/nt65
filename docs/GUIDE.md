@@ -1231,9 +1231,11 @@ A span with a call or a loop in it has no fixed count, so it is an error.
 
 ## What a routine preserves
 
-nt65 works out which of A, X, Y and the carry each routine hands back unchanged, on every CPU.
-It follows saves and restores through the stack, including the 6502's `txa`/`pha` … `pla`/`tax`
-for X, and it follows calls across the whole program. The editor shows the answer above each
+nt65 works out which of A, X, Y and the flags C, Z, N and V each routine hands back unchanged,
+on every CPU. It follows saves and restores through the stack, including the 6502's
+`txa`/`pha` … `pla`/`tax` for X and `php` … `plp` for the flags, and it follows calls across the
+whole program. Most instructions set Z and N, so few routines keep those, but many keep V, and a
+caller that branches on a flag it set before a call relies on the routine keeping it. The editor shows the answer above each
 routine, as `preserves X, Y` for instance, and on hover shows what each register holds at
 each instruction.
 
@@ -1378,8 +1380,8 @@ The signature items are:
 | `a*`, `i*`, `dp*`, `dbr*` | unchanged: the routine assumes nothing and hands the value back as it found it |
 | `a?`, `i?`, `e?`, `dp?`, `dbr?` | unknown |
 | `?` | everything unknown, for code entered from outside nt65 |
-| `keeps a, x, y, c` | registers handed back unchanged (see [What a routine preserves](#what-a-routine-preserves)) |
-| `reads a, x, y, c`, `reads none` | registers whose values from the caller it uses (see [What a routine preserves](#what-a-routine-preserves)) |
+| `keeps a, x, y, c, z, n, v` | registers and flags handed back unchanged (see [What a routine preserves](#what-a-routine-preserves)) |
+| `reads a, x, y, c, z, n, v`, `reads none` | registers and flags whose values from the caller it uses (see [What a routine preserves](#what-a-routine-preserves)) |
 | `inline n`, `inline .strz` | returns past data after each call |
 | `args n` | the caller pushes n bytes before the call |
 | `interrupt`, `noreturn` | an interrupt handler; a routine that never returns |

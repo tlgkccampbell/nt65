@@ -382,8 +382,6 @@ internal sealed class SourceWalk
     private SourceState Calls(BasicBlock block, Step step, SourceState state)
     {
         var called = SourceValue.Of(new Origin(SourceKind.Call, step.Key), RegisterValue.Unknown);
-        foreach (var (_, tracked) in Followed)
-            state = state.With(tracked, called);
         if (block.CallsUnknown || block.Calls.Count == 0)
             return EachRegister(state, _ => SourceValue.Unknown(step.Key));
 

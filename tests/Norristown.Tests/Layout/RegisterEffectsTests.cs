@@ -8,9 +8,16 @@ namespace Norristown.Tests.Layout;
 /// <see cref="RegisterEffects"/>, because a mnemonic left out of it would not fail anything on
 /// its own. The table would quietly say the instruction writes nothing, and a routine would
 /// promise to hand back a register it had destroyed.
+/// <para>
+/// Z, N and V come from <see cref="FlagEffects"/>, which has tests of its own, so these tests
+/// look only at the registers that hold values and the carry.
+/// </para>
 /// </summary>
 public sealed class RegisterEffectsTests
 {
+    // The flags these tests leave to the tests of FlagEffects.
+    private const Registers OtherFlags = Registers.Z | Registers.N | Registers.V;
+
     /// <summary>
     /// What each mnemonic writes, where that does not depend on the operand. The mnemonics
     /// whose answer does — the four shifts, `inc`, `dec`, `rep` and `sep` — are tested
@@ -38,7 +45,7 @@ public sealed class RegisterEffectsTests
         {
             Assert.Equal(
                 (mnemonic, written),
-                (mnemonic, RegisterEffects.Written(SyntaxFacts.MnemonicKindOf(mnemonic), AddressingMode.Implied, null)));
+                (mnemonic, Written(SyntaxFacts.MnemonicKindOf(mnemonic), AddressingMode.Implied, null)));
         }
     }
 
@@ -52,8 +59,8 @@ public sealed class RegisterEffectsTests
     [InlineData(MnemonicKind.Ror)]
     public void AShiftWritesTheAccumulatorOnlyWhenItGoesThroughIt(MnemonicKind mnemonic)
     {
-        Assert.Equal(Registers.A | Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Accumulator, null));
-        Assert.Equal(Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Absolute, null));
+        Assert.Equal(Registers.A | Registers.C, Written(mnemonic, AddressingMode.Accumulator, null));
+        Assert.Equal(Registers.C, Written(mnemonic, AddressingMode.Absolute, null));
     }
 
     /// <summary>
@@ -64,14 +71,14 @@ public sealed class RegisterEffectsTests
     [InlineData(MnemonicKind.Dec)]
     public void AnIncrementWritesTheAccumulatorOnlyWhenItGoesThroughIt(MnemonicKind mnemonic)
     {
-        Assert.Equal(Registers.A, RegisterEffects.Written(mnemonic, AddressingMode.Accumulator, null));
-        Assert.Equal(Registers.None, RegisterEffects.Written(mnemonic, AddressingMode.Direct, null));
+        Assert.Equal(Registers.A, Written(mnemonic, AddressingMode.Accumulator, null));
+        Assert.Equal(Registers.None, Written(mnemonic, AddressingMode.Direct, null));
     }
 
     /// <summary>
     /// Bit 0 of a `rep` or `sep` operand is the carry, so one whose operand clears that bit
-    /// leaves the carry alone. An operand nt65 cannot evaluate might set it, so it counts as
-    /// writing the carry.
+    /// leaves the carry alone, and the same goes for the other flags' bits. An operand nt65
+    /// cannot evaluate might set any of them, so it counts as writing every flag.
     /// </summary>
     [Theory]
     [InlineData(MnemonicKind.Rep)]
@@ -80,7 +87,8 @@ public sealed class RegisterEffectsTests
     {
         Assert.Equal(Registers.None, RegisterEffects.Written(mnemonic, AddressingMode.Immediate, 0x30));
         Assert.Equal(Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Immediate, 0x31));
-        Assert.Equal(Registers.C, RegisterEffects.Written(mnemonic, AddressingMode.Immediate, null));
+        Assert.Equal(Registers.Z | Registers.V, RegisterEffects.Written(mnemonic, AddressingMode.Immediate, 0x42));
+        Assert.Equal(Registers.Flags, RegisterEffects.Written(mnemonic, AddressingMode.Immediate, null));
     }
 
     /// <summary>A transfer between two of A, X and Y moves the value from one to the other.</summary>
@@ -100,6 +108,13 @@ public sealed class RegisterEffectsTests
     }
 
     /// <summary>
+    /// Returns the registers that hold values, and the carry, that <paramref name="mnemonic"/>
+    /// writes.
+    /// </summary>
+    private static Registers Written(MnemonicKind mnemonic, AddressingMode mode, long? constant) =>
+        RegisterEffects.Written(mnemonic, mode, constant) & ~OtherFlags;
+
+    /// <summary>
     /// Builds the table of what every mnemonic writes, with an implied or absolute operand.
     /// </summary>
     private static Dictionary<string, Registers> Table()
@@ -111,7 +126,7 @@ public sealed class RegisterEffectsTests
         Add(Registers.Y, "ldy", "ply", "tay", "txy", "iny", "dey");
         Add(Registers.C, "cmp", "cpx", "cpy", "clc", "sec", "plp", "rti", "asl", "lsr", "rol", "ror", "rep", "sep", "xce");
         Add(Registers.A | Registers.X | Registers.Y, "mvn", "mvp");
-        Add(Registers.All, "brk", "cop");
+        Add(Registers.All & ~OtherFlags, "brk", "cop");
 
         // Each undocumented opcode writes what the pair of documented instructions it combines
         // would write. `jam` halts the processor, so nothing it leaves behind is ever read.
@@ -120,7 +135,7 @@ public sealed class RegisterEffectsTests
         Add(Registers.A | Registers.X, "lax", "las");
         Add(Registers.X | Registers.C, "axs");
         Add(Registers.C, "dcp");
-        Add(Registers.All, "jam");
+        Add(Registers.All & ~OtherFlags, "jam");
 
         // Everything else leaves A, X, Y and the carry alone. That includes the stores, the
         // pushes, the branches, the jumps and returns, the flags that are not the carry, and the

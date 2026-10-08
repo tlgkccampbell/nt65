@@ -447,7 +447,8 @@ public static class Catalogue
         "`keeps` lists the registers a routine returns with the same values they had on entry, for example `keeps "
             + "x, y`, and `reads` lists those whose values from its caller it uses, for example `reads a, c`. "
             + "`saves x`, in a `.state`, names the register the store above it saves. Each must list at least one "
-            + "register, except that `reads none` declares a routine that reads nothing.");
+            + "register, except that `reads none` declares a routine that reads nothing. The registers are `a`, `x` "
+            + "and `y`, and the flags `c`, `z`, `n` and `v`.");
 
     internal static DiagnosticDescriptor ExpectedLabel { get; } = Entry(
         Area.ReadingALine,

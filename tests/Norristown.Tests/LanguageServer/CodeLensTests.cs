@@ -377,7 +377,7 @@ public sealed class CodeLensTests
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
         Assert.Equal(
-            ["preserves A, X, Y, C", "preserves Y, C", "preserves A, X, Y, C", "preserves ?"],
+            ["preserves A, X, Y, C, Z, N, V", "preserves Y, C, V", "preserves A, X, Y, C, V", "preserves ?"],
             lenses.Where(lens => lens.Command.Title.Contains("preserves", StringComparison.Ordinal))
                 .Select(lens => lens.Command.Title));
     }
@@ -623,7 +623,7 @@ public sealed class CodeLensTests
 
         // The routine clobbers A and X; the block restores A, so the only register it clobbers is X.
         Assert.Equal(
-            [(2, "preserves Y, C"), (4, "preserves A, Y, C")],
+            [(2, "preserves Y, C, V"), (4, "preserves A, Y, C, V")],
             lenses.Where(lens => lens.Command.Title.Contains("preserves", StringComparison.Ordinal))
                 .Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
     }
