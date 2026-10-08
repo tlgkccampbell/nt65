@@ -350,16 +350,11 @@ internal sealed class Requirements
         if (!Enters(region.Blocks, last))
             return;
 
-        // Where the routine emitted next is known, the fix names it.
         var routine = region.Routine.DisplayName;
-        var after = own ? flow.EmittedAfter(region) : null;
-        var runsInto = after is { } next
-            ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
-            : null;
         if (last.Steps.Count == 0)
         {
             var at = last.Label ?? region.Routine;
-            diagnostics.Add(new Diagnostic(at.DeclarationSpan, RunsOff(routine, own, branch: false)) { Fix = runsInto });
+            diagnostics.Add(new Diagnostic(at.DeclarationSpan, RunsOff(routine, own, branch: false)) { Fix = RunsInto(region, own) });
             return;
         }
 
@@ -376,6 +371,7 @@ internal sealed class Requirements
         // A routine that ends in a conditional branch nearly always means the branch is taken,
         // so the `.next` naming its own target comes first. A `.next ?` is an error after a
         // branch, so it is not offered there.
+        var runsInto = RunsInto(region, own);
         var statement = step.Statement as InstructionStatementSyntax;
         var mode = statement is null ? null : layout.Of(statement, step.On)?.Mode;
         var branch = statement is not null && flow.RelativeCallAt(step) is null
@@ -398,6 +394,16 @@ internal sealed class Requirements
     /// out the label's address, so flow may arrive at the label without the analysis seeing it,
     /// which needs a declaration or a <c>.next</c>.
     /// </summary>
+    /// <summary>
+    /// Returns the fix that adds a <c>.fallthrough</c> naming the routine emitted after
+    /// <paramref name="region"/>, or null where that routine is not known. Finding it searches the
+    /// whole layout, so it is looked for only for a routine that runs off its end.
+    /// </summary>
+    private DiagnosticFix? RunsInto(FlowRegion region, bool own) =>
+        own && flow.EmittedAfter(region) is { } next
+            ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
+            : null;
+
     private void CheckUses()
     {
         foreach (var step in layout.Steps)
