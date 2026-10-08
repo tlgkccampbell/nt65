@@ -1386,7 +1386,7 @@ The signature items are:
 | `a*`, `i*`, `dp*`, `dbr*` | unchanged: the routine assumes nothing and hands the value back as it found it |
 | `a?`, `i?`, `e?`, `dp?`, `dbr?` | unknown |
 | `?` | everything unknown, for code entered from outside nt65 |
-| `c = 0`, `c = 1`, and the same for `z`, `n`, `v`, `d` and `i` | before `->`, the value each call must give the flag; after it, the value the routine returns with (see [Flags in signatures](#flags-in-signatures)) |
+| `c = 0`, `c = 1`, and the same for `z`, `n`, `v`, `d` and `i`; `cz = 0` for several at once | before `->`, the value each call must give the flag; after it, the value the routine returns with (see [Flags in signatures](#flags-in-signatures)) |
 | `c`, `z`, `n` or `v` alone, after `->` | a flag the routine sets for its caller on every path, such as a found-or-not carry |
 | `keeps a, x, y, c, z, n, v` | registers and flags handed back unchanged (see [What a routine preserves](#what-a-routine-preserves)) |
 | `reads a, x, y, c, z, n, v`, `reads none` | registers and flags whose values from the caller it uses (see [What a routine preserves](#what-a-routine-preserves)) |
@@ -1451,8 +1451,10 @@ tell nt65 what it expects. `?` says nothing is known.
 A signature can say what a routine needs of the flags and what it returns with. A flag takes a
 value with `=`, as `dp = e` does. Before `->` it is the value every call must give it; after
 `->` it is the value the routine returns with. A flag named alone after `->` is a result the
-routine sets on every path, such as a carry that says whether a search found anything. The
-entry may be empty:
+routine sets on every path, such as a carry that says whether a search found anything. Several
+flags that take one value are written as one run of letters, in any order: `cz = 0, n = 1` is
+`c = 0, z = 0, n = 1`, and nt65 shows it as `zc = 0, n = 1`, zeros first, each run in the order
+the status register holds the flags (N V D I Z C). The entry may be empty:
 
 ```nt65
 .proc SCROLL_UP = $E8EA: -> z = 1   ; the KERNAL's scroll returns with Z set

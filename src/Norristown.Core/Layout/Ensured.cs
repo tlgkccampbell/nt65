@@ -93,17 +93,22 @@ public readonly record struct Ensured(StatusFlags Reset, StatusFlags Set)
             {
                 continue;
             }
-            var flag = item.Flag;
             var one = value == 1;
-            if (known?.ValueOf(flag) == one || Clearing(flag) == MnemonicKind.None || (one && Raising(flag) == MnemonicKind.None))
-                continue;
-            ensured = (one, ensured.Set != StatusFlags.None, ensured.Reset != StatusFlags.None) switch
+            foreach (var flag in FlagValues.Named)
             {
-                (true, true, _) => ensured with { Set = ensured.Set | flag },
-                (true, false, _) => ensured with { Raised = ensured.Raised | flag },
-                (false, _, true) => ensured with { Reset = ensured.Reset | flag },
-                (false, _, false) => ensured with { Cleared = ensured.Cleared | flag },
-            };
+                if ((item.Flags & flag) == 0 || known?.ValueOf(flag) == one || Clearing(flag) == MnemonicKind.None
+                    || (one && Raising(flag) == MnemonicKind.None))
+                {
+                    continue;
+                }
+                ensured = (one, ensured.Set != StatusFlags.None, ensured.Reset != StatusFlags.None) switch
+                {
+                    (true, true, _) => ensured with { Set = ensured.Set | flag },
+                    (true, false, _) => ensured with { Raised = ensured.Raised | flag },
+                    (false, _, true) => ensured with { Reset = ensured.Reset | flag },
+                    (false, _, false) => ensured with { Cleared = ensured.Cleared | flag },
+                };
+            }
         }
         return ensured;
     }

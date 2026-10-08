@@ -558,7 +558,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is not a processor-state item",
         "The items a signature, a `.state` or an `.ensure` may hold are a fixed set, such as `a8`, `i16`, `dp = 0`, "
-            + "`c = 0` or `keeps x`. This word looks like an item, or has an item's form, but is not one; check "
+            + "`c = 0`, `cz = 0` or `keeps x`. This word looks like an item, or has an item's form, but is not one; check "
             + "its spelling. A plain word that is not an item is read as the name of a signature set.");
 
     internal static DiagnosticDescriptor StateItemIsAWidth { get; } = Entry(
@@ -3039,7 +3039,7 @@ public static class Catalogue
         Area.ControlFlow,
         "state-flag-mismatch",
         Severity.Error,
-        "`.state {0}` does not match: {1} is {2} here",
+        "`.state {0}` does not match: {1} here",
         "A `.state` that gives a flag a value declares it where nt65 cannot know it, such as after a call to a ROM "
             + "routine with no signature, and asserts it where nt65 can. Here the flags prove the other value on at "
             + "least one path. Fix the code on that path, or correct the `.state`.");

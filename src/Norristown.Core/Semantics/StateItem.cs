@@ -43,10 +43,11 @@ public readonly record struct StateItem(
     public bool IsAboutRegisters => Part is StatePart.Keeps or StatePart.Reads or StatePart.Saves;
 
     /// <summary>
-    /// Gets the flag a <see cref="StatePart.Flag"/> item is about, or
+    /// Gets the flags a <see cref="StatePart.Flag"/> item is about, which is more than one where
+    /// its name is a run of flag letters, as in <c>cz = 0</c>, or
     /// <see cref="Processor.StatusFlags.None"/> for every other item.
     /// </summary>
-    public Processor.StatusFlags Flag => Part != StatePart.Flag
+    public Processor.StatusFlags Flags => Part != StatePart.Flag
         ? Processor.StatusFlags.None
         : FlagValues.Of(Node switch
         {
@@ -169,8 +170,9 @@ public readonly record struct StateItem(
     {
         var name = word.Text.ToLowerInvariant();
 
-        // A flag takes a value with `=`, and C, Z, N and V also stand alone after `->`. `i` is the
-        // index width when `*` or `?` follows it, and the interrupt flag when `=` does.
+        // A flag takes a value with `=`, and C, Z, N and V also stand alone after `->`. Several
+        // flags take one value together, as in `cz = 0`. `i` is the index width when `*` or `?`
+        // follows it, and the interrupt flag when `=` does.
         if (suffix == SyntaxKind.Equals && FlagValues.Of(name) != Processor.StatusFlags.None
             || suffix == SyntaxKind.None && name is "c" or "z" or "n" or "v")
         {

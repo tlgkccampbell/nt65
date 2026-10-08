@@ -476,9 +476,19 @@ public static class SyntaxFacts
     public static bool IsStateItem(string name, SyntaxKind suffix) => suffix switch
     {
         SyntaxKind.Star or SyntaxKind.Question => trackedStateParts.Contains(name),
-        SyntaxKind.Equals => valuedStateParts.Contains(name),
+        SyntaxKind.Equals => valuedStateParts.Contains(name) || IsFlagRun(name),
         _ => pointStateItems.Contains(name),
     };
+
+    /// <summary>
+    /// Checks whether <paramref name="name"/> is a run of flag letters, <c>c</c>, <c>z</c>,
+    /// <c>n</c>, <c>v</c>, <c>d</c> and <c>i</c>, in any order and each at most once, which gives
+    /// every flag it names one value, as in <c>cz = 0</c>.
+    /// </summary>
+    public static bool IsFlagRun(string name) =>
+        name.Length > 0
+        && name.All(letter => "cznvdiCZNVDI".Contains(letter))
+        && name.ToLowerInvariant().Distinct().Count() == name.Length;
 
     /// <summary>Checks whether a token of this kind may begin an expression as a prefix operator.</summary>
     public static bool IsUnaryOperator(SyntaxKind kind) => kind is SyntaxKind.Plus or SyntaxKind.Minus

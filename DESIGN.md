@@ -1221,7 +1221,7 @@ items are:
 | `args n` | the caller pushes n bytes before the call (below) | none |
 | `interrupt` | an interrupt handler (below) | none |
 | `noreturn` | the routine never returns (below) | none |
-| `c = 0` `c = 1`, and the same for `z` `n` `v` `d` `i` | before `->`, the flag's value at every call; after it, its value at every return (below) | none |
+| `c = 0` `c = 1`, and the same for `z` `n` `v` `d` `i`; `cz = 0` for several | before `->`, the flag's value at every call; after it, its value at every return (below) | none |
 | `c` `z` `n` `v` alone, after `->` | a flag the routine sets for its caller on every path (below) | none |
 | `keeps a, x, y, c, z, n, v` | the registers and flags it hands back as it was entered with them (§7.7) | none |
 | `reads a, x, y, c, z, n, v`, `reads none` | the registers and flags whose values from its caller it uses (§7.7) | none |
@@ -4592,8 +4592,10 @@ Recorded so the reasoning survives. None is open.
   is warned whatever the depth, naming the routine that declined, and the fix goes there. This
   is one case of a wider rule: anything left undeclared is inferred and used, and anything
   declared in a category is a contract.
-- **Flags join the signature.** A flag takes a value with `=`, as `dp = e` does: before `->`
-  it is what every call must give it, after `->` what every return gives it, and a flag named
+- **Flags join the signature.** A flag takes a value with `=`, as `dp = e` does, and a run of
+  flag letters gives each the same value, so `cz = 0` is `c = 0, z = 0`; a letter written twice,
+  or a flag in two of a list's own items, is an error, and nt65 writes runs back zeros first, in
+  the status register's order. Before `->` it is what every call must give it, after `->` what every return gives it, and a flag named
   alone after `->` is a result the routine sets on every path. They are checked as widths are,
   on every CPU: an entry flag at each call, an exit flag at each return and against what a tail
   call's target returns with, and a result through the register walk, which shows where the

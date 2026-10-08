@@ -490,17 +490,32 @@ internal sealed class FlagAnalysis
         }
     }
 
-    /// <summary>Reports where a <c>.state</c> gives a flag a value the flags prove it does not have.</summary>
+    /// <summary>
+    /// Reports where a <c>.state</c> gives a flag a value the flags prove it does not have. The fix
+    /// gives each flag of the item the value the flags prove, or the one the item gave where they
+    /// prove nothing.
+    /// </summary>
     private void CheckState(Step step, FlagState state, List<Diagnostic> report)
     {
         foreach (var (item, value) in Items(step))
         {
-            Consume(state, item.Flag);
-            if (state.ValueOf(item.Flag) is { } known && known != value)
+            var wrong = new List<string>();
+            var fixedValues = FlagValues.None;
+            foreach (var flag in FlagValues.Named)
+            {
+                if ((item.Flags & flag) == 0)
+                    continue;
+                Consume(state, flag);
+                var known = state.ValueOf(flag);
+                if (known is { } other && other != value)
+                    wrong.Add($"{FlagState.Name(flag)} is {(other ? 1 : 0)}");
+                fixedValues = fixedValues.With(flag, known ?? value);
+            }
+            if (wrong.Count > 0)
             {
                 Report(report, step, item.Node,
-                    Catalogue.StateFlagMismatch.Message(item.Text, FlagState.Name(item.Flag), known ? 1 : 0),
-                    new DiagnosticFix(FixKind.StateItem, FlagValues.Item(item.Flag, known)));
+                    Catalogue.StateFlagMismatch.Message(item.Text, string.Join(" and ", wrong)),
+                    new DiagnosticFix(FixKind.StateItem, fixedValues.ToString()));
             }
         }
     }
@@ -512,10 +527,16 @@ internal sealed class FlagAnalysis
         {
             if (item.Part != StatePart.Flag)
                 continue;
-            if (Before(step) is { } here)
-                Consume(here, item.Flag);
-            if (item.IsResult || Value(step, item) is not { } value || !Ensurable(item.Flag, value))
+            foreach (var flag in FlagValues.Named)
+            {
+                if ((item.Flags & flag) != 0 && Before(step) is { } here)
+                    Consume(here, flag);
+            }
+            if (item.IsResult || Value(step, item) is not { } value
+                || FlagValues.Named.Any(flag => (item.Flags & flag) != 0 && !Ensurable(flag, value)))
+            {
                 Report(report, step, item.Node, Catalogue.EnsureItemNotAWidth.Message(item.Text), null);
+            }
         }
     }
 
@@ -616,7 +637,7 @@ internal sealed class FlagAnalysis
             // An `.ensure` emits only `rep`, `sep` and instructions that set the flags it names,
             // none of which change any other flag followed here.
             foreach (var (item, value) in Items(step))
-                state = state.With(item.Flag, value);
+                state = state.With(item.Flags, value);
             return state;
         }
         if (step.Statement is not InstructionStatementSyntax instruction)

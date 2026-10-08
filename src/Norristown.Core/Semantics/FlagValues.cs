@@ -18,35 +18,62 @@ public readonly record struct FlagValues(StatusFlags Known, StatusFlags Set)
         StatusFlags.Decimal, StatusFlags.InterruptDisable,
     ];
 
+    // The flags in the order the status register holds them, N V D I Z C, which is the order
+    // their letters are written in.
+    private static readonly StatusFlags[] RegisterOrder =
+    [
+        StatusFlags.Negative, StatusFlags.Overflow, StatusFlags.Decimal, StatusFlags.InterruptDisable,
+        StatusFlags.Zero, StatusFlags.Carry,
+    ];
+
     /// <summary>Gets values that give no flag a value.</summary>
     public static FlagValues None => default;
 
-    /// <summary>Returns the flag an item's name stands for, or <see cref="StatusFlags.None"/>.</summary>
-    public static StatusFlags Of(string name) => name.ToLowerInvariant() switch
+    /// <summary>
+    /// Returns the flags an item's name stands for, which is one flag for one letter and several
+    /// for a run of letters such as <c>cz</c>, or <see cref="StatusFlags.None"/> where the name is
+    /// not a run of flag letters each written once.
+    /// </summary>
+    public static StatusFlags Of(string name)
     {
-        "c" => StatusFlags.Carry,
-        "z" => StatusFlags.Zero,
-        "n" => StatusFlags.Negative,
-        "v" => StatusFlags.Overflow,
-        "d" => StatusFlags.Decimal,
-        "i" => StatusFlags.InterruptDisable,
-        _ => StatusFlags.None,
-    };
+        if (!Syntax.SyntaxFacts.IsFlagRun(name))
+            return StatusFlags.None;
+        var flags = StatusFlags.None;
+        foreach (var letter in name.ToLowerInvariant())
+        {
+            flags |= letter switch
+            {
+                'c' => StatusFlags.Carry,
+                'z' => StatusFlags.Zero,
+                'n' => StatusFlags.Negative,
+                'v' => StatusFlags.Overflow,
+                'd' => StatusFlags.Decimal,
+                _ => StatusFlags.InterruptDisable,
+            };
+        }
+        return flags;
+    }
 
-    /// <summary>Returns the lower-case name an item gives <paramref name="flag"/>, such as <c>c</c>.</summary>
-    public static string NameOf(StatusFlags flag) => flag switch
-    {
-        StatusFlags.Carry => "c",
-        StatusFlags.Zero => "z",
-        StatusFlags.Negative => "n",
-        StatusFlags.Overflow => "v",
-        StatusFlags.Decimal => "d",
-        StatusFlags.InterruptDisable => "i",
-        _ => flag.ToString().ToLowerInvariant(),
-    };
+    /// <summary>
+    /// Returns the lower-case letters an item writes for <paramref name="flags"/>, in the order the
+    /// status register holds them, such as <c>zc</c>.
+    /// </summary>
+    public static string NameOf(StatusFlags flags) =>
+        string.Concat(RegisterOrder.Where(flag => (flags & flag) != 0).Select(flag => flag switch
+        {
+            StatusFlags.Carry => "c",
+            StatusFlags.Zero => "z",
+            StatusFlags.Negative => "n",
+            StatusFlags.Overflow => "v",
+            StatusFlags.Decimal => "d",
+            _ => "i",
+        }));
 
-    /// <summary>Returns the item that gives <paramref name="flag"/> <paramref name="value"/>, such as <c>c = 0</c>.</summary>
-    public static string Item(StatusFlags flag, bool value) => $"{NameOf(flag)} = {(value ? 1 : 0)}";
+    /// <summary>
+    /// Returns the item that gives every flag of <paramref name="flags"/> <paramref name="value"/>,
+    /// such as <c>c = 0</c> or <c>zc = 0</c>.
+    /// </summary>
+    public static string Item(StatusFlags flags, bool value) => $"{NameOf(flags)} = {(value ? 1 : 0)}";
 
     /// <summary>Returns the value given <paramref name="flag"/>, or null where none is given.</summary>
     public bool? ValueOf(StatusFlags flag) => (Known & flag) == 0 ? null : (Set & flag) != 0;
@@ -55,10 +82,16 @@ public readonly record struct FlagValues(StatusFlags Known, StatusFlags Set)
     public FlagValues With(StatusFlags flag, bool value) =>
         new(Known | flag, value ? Set | flag : Set & ~flag);
 
-    /// <summary>Returns each value as an item spells it, such as <c>c = 0, z = 1</c>.</summary>
+    /// <summary>
+    /// Returns the values as items spell them, the flags that are 0 in one item and those that
+    /// are 1 in another, such as <c>zc = 0, n = 1</c>.
+    /// </summary>
     public override string ToString()
     {
-        var (known, set) = (Known, Set);
-        return string.Join(", ", Named.Where(flag => (known & flag) != 0).Select(flag => Item(flag, (set & flag) != 0)));
+        var clear = Known & ~Set;
+        var set = Set;
+        return string.Join(", ", new[] { (clear, false), (set, true) }
+            .Where(group => group.Item1 != StatusFlags.None)
+            .Select(group => Item(group.Item1, group.Item2)));
     }
 }

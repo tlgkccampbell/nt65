@@ -273,8 +273,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         // Every `reads` the list gives, and whether a signature set gave it, in the same way.
         public readonly List<(StateItem Item, bool FromSet)> Reads = [];
 
-        // Every flag item the list gives, in order. A later item for the same flag replaces an
-        // earlier one, as an item after a set replaces what the set gives.
+        // Every flag item the list gives, in order. A later item for a flag replaces what an
+        // earlier one gives it, as an item after a set replaces what the set gives.
         public readonly List<(StateItem Item, bool FromSet)> Flags = [];
 
         // The parts the list gives itself, rather than taking from the set.
@@ -420,11 +420,14 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             var (exitFlags, results) = FlagsOf(exit);
             foreach (var (item, _) in exit.Flags)
             {
-                if ((Processor.RegisterEffects.Of(item.Flag) & keeps) != Processor.Registers.None && Here(item))
+                var both = FlagValues.Named
+                    .Where(flag => (item.Flags & flag) != 0 && (Processor.RegisterEffects.Of(flag) & keeps) != Processor.Registers.None)
+                    .Aggregate(Processor.StatusFlags.None, (all, flag) => all | flag);
+                if (both != Processor.StatusFlags.None && Here(item))
                 {
-                    var flag = item.Flag;
                     Report(item.Node.Span, Catalogue.KeepsAndExitFlag.Message(
-                        FlagValues.NameOf(flag), Processor.RegisterEffects.Format(Processor.RegisterEffects.Of(flag)), item.Text));
+                        string.Join(", ", FlagValues.NameOf(both).Select(letter => letter.ToString())),
+                        Processor.RegisterEffects.Format(Processor.RegisterEffects.Of(both)), item.Text));
                 }
             }
             return new(entered, exited, entry.Far?.IsFar ?? false, entry.Inline)
@@ -450,7 +453,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             var results = Processor.StatusFlags.None;
             foreach (var (item, _) in parts.Flags)
             {
-                var flag = item.Flag;
+                var flag = item.Flags;
                 if (item.IsResult)
                 {
                     results |= flag;
@@ -667,10 +670,17 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     break;
                 case StatePart.Flag when item.IsResult && !isExit:
                     Report(At(parts, item), Catalogue.FlagResultAtEntry.Message(
-                        item.Text, Processor.RegisterEffects.Format(Processor.RegisterEffects.Of(item.Flag))));
+                        item.Text, Processor.RegisterEffects.Format(Processor.RegisterEffects.Of(item.Flags))));
                     break;
                 case StatePart.Flag:
-                    parts.Flags.RemoveAll(earlier => earlier.Item.Flag == item.Flag);
+                    // A later item gives a flag its value in place of an earlier one, as an item
+                    // after a set replaces what the set gives. Two items of the list's own that
+                    // name one flag are a mistake.
+                    if (!fromSet && parts.Flags.FirstOrDefault(earlier => !earlier.FromSet && (earlier.Item.Flags & item.Flags) != 0)
+                        is { Item.Node: not null } twice)
+                    {
+                        Report(item.Node.Span, Catalogue.SignatureItemTwice.Message(twice.Item.Text, item.Text));
+                    }
                     parts.Flags.Add((item, fromSet));
                     break;
                 case StatePart.Keeps or StatePart.Reads when isExit:

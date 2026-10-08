@@ -157,6 +157,40 @@ public sealed class FlagSignatureTests
         Assert.Equal("a*, i*, native, near, c = 0 -> z = 1, n", q.Signature!.ToString());
     }
 
+    /// <summary>
+    /// A run of flag letters gives each flag it names one value. A signature shows the flags by
+    /// value, the zeros first, each run in the order the status register holds the flags.
+    /// </summary>
+    [Fact]
+    public void ARunOfFlagLettersGivesEachTheSameValue()
+    {
+        const string Rom = ".proc q = $1234: -> cz = 0, n = 1\n";
+        Assert.Empty(Problems(Rom + ".export .proc main {\n    jsr q\n    bcc @x\n    .byte 1\n@x:\n    bne @y\n    .byte 1\n@y:\n    rts\n}\n"));
+
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", Header + Rom));
+        var q = Assert.Single(analysis.File("main.nt65").Symbols, symbol => symbol.Name == "q");
+        Assert.Equal("a*, i*, native, near -> zc = 0, n = 1", q.Signature!.ToString());
+
+        Assert.Contains("    clc\n    cld\n", Output("6502", ".export .proc p {\n    .ensure dc = 0\n    rts\n}\n"));
+    }
+
+    /// <summary>
+    /// A letter twice in a run, or a flag in two of a list's own items, is a mistake. A
+    /// <c>.state</c> that gives a run the wrong value is fixed flag by flag.
+    /// </summary>
+    [Fact]
+    public void ARunIsCheckedFlagByFlag()
+    {
+        Assert.Contains("`cc` is not a processor-state item", Diagnostics(".export .proc p: -> cc = 0 {\n    rts\n}\n").Select(d => d.Message));
+        Assert.Contains(
+            "`cz = 0` and `c = 1` both describe the same part of the state",
+            Diagnostics(".proc q = $1234: -> cz = 0, c = 1\n").Select(d => d.Message));
+
+        var diagnostic = Assert.Single(Diagnostics(".export .proc main {\n    clc\n    .state cz = 1\n    rts\n}\n"));
+        Assert.Equal("`.state cz = 1` does not match: C is 0 here", diagnostic.Message);
+        Assert.Equal(new DiagnosticFix(FixKind.StateItem, "c = 0, z = 1"), diagnostic.Fix);
+    }
+
     /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/>, each with its line.</summary>
     private static IReadOnlyList<string> Problems(string text) =>
         Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Problems();

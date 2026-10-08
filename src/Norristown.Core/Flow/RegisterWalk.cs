@@ -313,7 +313,7 @@ internal sealed class RegisterWalk
     {
         var flags = Registers.None;
         foreach (var item in StateItem.Read(ensure))
-            flags |= RegisterEffects.Of(item.Flag);
+            flags |= RegisterEffects.Of(item.Flags);
         return flags;
     }
 
