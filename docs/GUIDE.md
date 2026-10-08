@@ -1273,6 +1273,10 @@ a branch skip the save; and not where the code after the call reads N or Z befor
 since the pull sets both. Where the reliance is deliberate, `.allow "unpromised-keep"` before
 the call says so.
 
+The warning is about calls to a routine that declares `keeps`. A routine that declares none
+keeps what its body keeps, including what the routines it calls keep without promising, and its
+callers may rely on all of it, as on anything nt65 infers.
+
 When a routine saves a register to memory and reloads it, nt65 cannot see that the value came
 back unchanged. `.state keeps x` at the point where it has says so.
 
