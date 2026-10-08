@@ -407,7 +407,7 @@
 .const C097 = C098 + 1
 .const C098 = C099 + 1
 .const C099 = C100 + 1
-.const C100 = C101 + 1              ;! error[defined-too-deep]: `C100` is defined through more than 100 other names: nt65 works out no further
+.const C100 = C101 + 1              ;! error[defined-too-deep]: `C100` is defined through more than 100 other names
 .const C101 = C102 + 1
 .const C102 = C103 + 1
 .const C103 = C104 + 1

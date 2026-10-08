@@ -110,7 +110,7 @@ public sealed class NextReturnTests
     [Theory]
     [InlineData("    beq @out\n    .next .return\n@out:\n    rts\n", "`.next .return` cannot follow `beq @out`")]
     [InlineData("    jsr (table,x)\n    .next .return\n    rts\n", "`.next .return` cannot follow `jsr (table,x)`, because a call comes back")]
-    [InlineData("    rts\n    .next .return\n", "nt65 already knows that `rts` returns to its caller")]
+    [InlineData("    rts\n    .next .return\n", "`rts` already returns to its caller")]
     public void AReturnStandsOnlyUnderAJump(string body, string problem)
     {
         var problems = FlowFragment.Problems("65816",

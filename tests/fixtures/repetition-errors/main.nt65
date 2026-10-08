@@ -50,7 +50,7 @@
 
 .data by_handler: .addr[] {
     .each handlers, h {
-        actions::h              ;! error[binding-not-over-an-enum]: `h` does not iterate over an enum, so it cannot end a path: only an `.each` over an enum names a member this way
+        actions::h              ;! error[binding-not-over-an-enum]: `h` cannot end a path: only the binding of an `.each` over an enum can
     }
 }
 
@@ -64,7 +64,7 @@
 
 .data lots {
     big!(20000)
-    big!(20000)                 ;! error[expansion-limit]: the expansions in this file come to more than 65536 statements, which is as far as nt65 goes
+    big!(20000)                 ;! error[expansion-limit]: macro expansions in this file exceed the limit of 65536 statements
 }
 
 ; One repetition that runs further than nt65 unrolls is said where its count is written,

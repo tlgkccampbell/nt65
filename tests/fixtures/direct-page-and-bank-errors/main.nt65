@@ -26,9 +26,9 @@
 .data frames: .byte
 
 ; A segment's `dp` and `bank` are constants in range, given once, and `dp` is for `zp`.
-.segment SLOW: abs, dp = $2100        ;! error[segment-dp-not-zp]: segment "SLOW" is not `zp`, and only a `zp` segment takes a `dp`
+.segment SLOW: abs, dp = $2100        ;! error[segment-dp-not-zp]: segment `SLOW` is not `zp`, and only a `zp` segment takes a `dp`
 .segment WIDE: abs, bank = $100       ;! error[segment-attribute-out-of-range]: `bank` must be $00 to $ff: a bank is one byte
-.segment TWICE: zp, dp = 0, dp = 1    ;! error[segment-attribute-twice]: segment "TWICE" already has a `dp`
+.segment TWICE: zp, dp = 0, dp = 1    ;! error[segment-attribute-twice]: segment `TWICE` already has a `dp`
 .segment NAMED: abs, bank = score     ;! error[segment-attribute-not-constant]: `bank` must be a constant
 
 ; Signature values are constants in range too.
@@ -39,9 +39,9 @@
 
 ; A direct operand reaches D plus its offset, and an absolute one reaches its address in bank B.
 .proc wrong: a8, i8, dp = $0000, dbr = $00 {
-    lda ptr                 ;! error[direct-page-mismatch]: `ptr` is in segment "ZP2", which expects the direct page at $2100, but D is $0000 here
-    sta score               ;! error[bank-mismatch]: `score` is in segment "WRAM", which is in bank $7e, but B is $00 here
-    lda pair::hi            ;! error[bank-mismatch]: `pair` is in segment "BANK1", which is in bank $01, but B is $00 here
+    lda ptr                 ;! error[direct-page-mismatch]: `ptr` is in segment `ZP2`, which expects the direct page at $2100, but D is $0000 here
+    sta score               ;! error[bank-mismatch]: `score` is in segment `WRAM`, which is in bank $7e, but B is $00 here
+    lda pair::hi            ;! error[bank-mismatch]: `pair` is in segment `BANK1`, which is in bank $01, but B is $00 here
     rts
 }
 
@@ -69,14 +69,14 @@
 
 ; A standard segment, once declared, is checked like any other.
 .proc standard: a8, i8, dp = 0, dbr = $00 {
-    lda temp                ;! error[direct-page-mismatch]: `temp` is in segment "ZEROPAGE", which expects the direct page at $2000, but D is $0000 here
-    sta frames              ;! error[bank-mismatch]: `frames` is in segment "BSS", which is in bank $7e, but B is $00 here
+    lda temp                ;! error[direct-page-mismatch]: `temp` is in segment `ZEROPAGE`, which expects the direct page at $2000, but D is $0000 here
+    sta frames              ;! error[bank-mismatch]: `frames` is in segment `BSS`, which is in bank $7e, but B is $00 here
     rts
 }
 
 ; A set of banks is checked bank by bank: what each one reaches, and what each caller holds.
 .proc anywhere: a8, i8, dbr = [$00..$3f, $80..$bf] {
-    sta score               ;! error[bank-mismatch]: `score` is in segment "WRAM", which is in bank $7e, but B is one of $00-$3f, $80-$bf here
+    sta score               ;! error[bank-mismatch]: `score` is in segment `WRAM`, which is in bank $7e, but B is one of $00-$3f, $80-$bf here
     rts
 }
 
@@ -102,8 +102,8 @@
 
 ; A symbol in a segment reached through a direct page other than 0 is only a direct operand.
 .proc absolute: a8, i8 {
-    lda a:ptr               ;! error[direct-page-only]: `ptr` is in "ZP2", reached through the direct page at $2100, so it works only as a direct-page operand: as an absolute operand it would address its offset in the data bank instead
-    lda ptr,y               ;! error[direct-page-only]: `ptr` is in "ZP2", reached through the direct page at $2100, so it works only as a direct-page operand: as an absolute operand it would address its offset in the data bank instead
+    lda a:ptr               ;! error[direct-page-only]: `ptr` is in direct-page segment `ZP2`, so it must be a direct-page operand; as an absolute operand it would address the data bank
+    lda ptr,y               ;! error[direct-page-only]: `ptr` is in direct-page segment `ZP2`, so it must be a direct-page operand; as an absolute operand it would address the data bank
     rts
 }
 
@@ -124,10 +124,10 @@
 ; A direct operand on a symbol whose segment declares `dp` reaches the symbol only when D holds
 ; that value, so D must be known there too.
 .proc assumes: a8, i8 -> a8, i8, dp? {
-    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment "ZP2", which expects the direct page at $2100, and `assumes` declares `dp*`, which assumes nothing about D
+    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment `ZP2`, which expects the direct page at $2100, and `assumes` declares `dp*`, which assumes nothing about D
     tax
     tcd
-    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment "ZP2", which expects the direct page at $2100, and D is not known here: a `.state dp = ...` declares what it is
+    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment `ZP2`, which expects the direct page at $2100, and D is not known here: a `.state dp = ...` declares what it is
     .state dp = $2100
     lda ptr
     rts
@@ -142,7 +142,7 @@
     pld
     lda ptr
     pld
-    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment "ZP2", which expects the direct page at $2100, and D is not known here: a `.state dp = ...` declares what it is
+    lda ptr                 ;! error[direct-page-unknown]: `ptr` is in segment `ZP2`, which expects the direct page at $2100, and D is not known here: a `.state dp = ...` declares what it is
     rti
 }
 
@@ -179,7 +179,7 @@
 ; A `.state` asserts as well as sets.
 .proc asserts: a8, i8, dbr = $00 -> a8, i8, dp?, dbr? {
     .state dbr = $7e        ;! error[state-value-mismatch]: `.state dbr = $7e` does not match: B is $00 here
-    .state dp = score       ;! error[state-value-not-constant]: `.state dp = score` needs a constant, because the analysis tracks D as an exact value
+    .state dp = score       ;! error[state-value-not-constant]: `.state dp = score` needs a constant value for D
     rts
 }
 
@@ -191,14 +191,14 @@
 
 .segment BANK2
 .proc high: a8, i8 {
-    jsr low                 ;! error[jump-leaves-bank]: `jsr` cannot leave bank $02, and `low` is in segment "BANK1" in bank $01: use `jsl`
+    jsr low                 ;! error[jump-leaves-bank]: `low` is in bank $01, and `jsr` cannot leave bank $02: use `jsl`
     rts
 }
 
 ; A conditional branch has no long form to suggest instead, so reaching the other bank takes
 ; a `jml`, skipped over by the opposite branch.
 .proc branches: a8, i8 {
-    beq low                 ;! error[jump-leaves-bank]: `beq` cannot leave bank $02, and `low` is in segment "BANK1" in bank $01: a branch cannot leave its bank, so branch the other way around a `jml` to it
+    beq low                 ;! error[jump-leaves-bank]: `low` is in bank $01, and `beq` cannot leave bank $02: branch the other way around a `jml` to it
     rts
 }
 

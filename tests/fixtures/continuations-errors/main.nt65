@@ -6,7 +6,7 @@
 .cpu 6502
 
 .macro pair(first, second) {
-    .byte first, second             ;! error[value-too-wide]: $012c does not fit in this directive
+    .byte first, second             ;! error[value-too-wide]: $012c does not fit in `.byte`
 }
 
 .macro load(source: operand) {
@@ -16,16 +16,16 @@
 ; A list of parameters continues too, but a line there that starts like a label with no kind
 ; after it still starts a statement of its own.
 .macro twice(first,                 ;! error[expected-name]: expected a parameter name
-loop:                               ;! error[label-outside-a-routine]: `loop` is a label outside a `.proc`: labels mark positions in code, and data is named by a declaration, `.data loop: ...`
+loop:                               ;! error[label-outside-a-routine]: `loop` is a label outside a `.proc`; to name data, write `.data loop: ...`
 
 .segment ZEROPAGE
 .data ptr: .word
 
 .segment CODE
 .export .proc main {
-    lda (ptr                        ;! error[continuation-outside-expression]: a line continues onto the next only inside an expression's brackets, a macro call's arguments or a list of parameters
+    lda (ptr                        ;! error[continuation-outside-expression]: a line can continue only inside brackets, a macro call's arguments or a parameter list
     ),y
-    load!({(ptr                     ;! error[continuation-outside-expression]: a line continues onto the next only inside an expression's brackets, a macro call's arguments or a list of parameters
+    load!({(ptr                     ;! error[continuation-outside-expression]: a line can continue only inside brackets, a macro call's arguments or a parameter list
     ),y})
     rts
     .next ?

@@ -45,23 +45,23 @@
 }
 
 ; A call takes as long as the routine it names, which is no part of this sum.
-.assert .mincycles(calling::before, calling::after) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count the cycles between these positions: the span contains a call, `jsr`, whose time depends on the routine it calls
+.assert .mincycles(calling::before, calling::after) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span contains a call, `jsr`, whose time depends on the routine it calls
 
 ; A loop runs its body once per iteration, and the sum would count the body only once.
-.assert .maxcycles(looping::start, looping::done) == 0     ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count the cycles between these positions: the span contains a loop: `bne` goes back to `again`
+.assert .maxcycles(looping::start, looping::done) == 0     ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: `bne` loops back to `again`
 
 ; A target nt65 cannot follow could be anywhere, this span included.
-.assert .mincycles(elsewhere::here, elsewhere::gone) == 0  ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count the cycles between these positions: the span contains `jmp`, whose target nt65 cannot follow
+.assert .mincycles(elsewhere::here, elsewhere::gone) == 0  ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span contains `jmp`, whose target nt65 cannot follow
 
 ; Two positions in different routines are not a span at all.
-.assert .mincycles(calling::before, other::far_off) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count the cycles between these positions: the two positions are in different routines
+.assert .mincycles(calling::before, other::far_off) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the two positions are in different routines
 
 ; The end position comes before the start, so the pass would run backwards.
-.assert .mincycles(calling::after, calling::before) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count the cycles between these positions: `before` comes before `after`
+.assert .mincycles(calling::after, calling::before) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: `before` comes before `after`
 
 ; Neither end is a position in code.
 .const LIMIT = 4
-.assert .mincycles(LIMIT, calling::after) == 0             ;! error[cycles-needs-a-position]: `LIMIT` is a constant, not a position in code: a cycle count runs from one label or routine name to another
+.assert .mincycles(LIMIT, calling::after) == 0             ;! error[cycles-needs-a-position]: `LIMIT` is a constant: a cycle count needs a label or routine name
 
 ; A cycle count is known only once code is laid out, so it cannot size a declaration.
 .segment BSS

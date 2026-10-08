@@ -571,13 +571,13 @@ internal sealed partial class Evaluator
         }
         var what = symbol.Kind switch
         {
-            SymbolKind.Label => "a label, which is only a position",
-            SymbolKind.Scope => "a scope, which is only a namespace",
+            SymbolKind.Label => "a label",
+            SymbolKind.Scope => "a scope",
 
             // An import declares nothing about its shape unless it gives an element type, and
             // nt65 does not read ca65 source to find one.
             SymbolKind.ImportedAddress when symbol.Data is null =>
-                "an import that does not declare what its bytes are: `.import name: .byte[n]` declares them",
+                "an import with no element type",
             _ => null,
         };
         if (what is null)

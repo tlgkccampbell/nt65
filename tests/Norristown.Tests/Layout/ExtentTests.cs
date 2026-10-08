@@ -129,14 +129,14 @@ public sealed class ExtentTests
             + ".data n: .byte .countof(f)\n"));
 
         Assert.Equal(
-            ["main.nt65:9: `f` is a routine, which has bytes and no elements: `.sizeof(f)` is how many bytes it takes"],
+            ["main.nt65:9: `f` is a routine and has no elements: use `.sizeof(f)` for its size in bytes"],
             program.Problems());
     }
 
     /// <summary>A label is only a position, and a scope only a namespace: neither has an extent.</summary>
     [Theory]
-    [InlineData(".proc f {\n@here:\n    rts\n    .assert .spanof(@here) == 1\n}\n", "main.nt65:6: `@here` is a label, which is only a position: `.spanof` measures a `.data` declaration, a routine or a type")]
-    [InlineData(".scope s {\n}\n.data n: .word .endof(s)\n", "main.nt65:5: `s` is a scope, which is only a namespace: `.endof` measures a `.data` declaration, a routine or a type")]
+    [InlineData(".proc f {\n@here:\n    rts\n    .assert .spanof(@here) == 1\n}\n", "main.nt65:6: `.spanof` cannot measure `@here`, a label: it measures data, routines and types")]
+    [InlineData(".scope s {\n}\n.data n: .word .endof(s)\n", "main.nt65:5: `.endof` cannot measure `s`, a scope: it measures data, routines and types")]
     public void ALabelAndAScopeHaveNoExtent(string text, string problem)
     {
         Assert.Contains(problem, Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text)).Problems());

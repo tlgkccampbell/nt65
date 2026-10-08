@@ -15,26 +15,26 @@
 
 .segment RODATA
 ; An array's count must equal the number of values given, whether there are too few or too many.
-.data short: .byte[4] { 1, 2, 3 }   ;! error[element-count-mismatch]: this array is declared with 4 elements, but 3 given
-.data long:  .addr[2] {             ;! error[element-count-mismatch]: this array is declared with 2 elements, but 3 given
+.data short: .byte[4] { 1, 2, 3 }   ;! error[element-count-mismatch]: this array declares 4 elements, but 3 values are given
+.data long:  .addr[2] {             ;! error[element-count-mismatch]: this array declares 2 elements, but 3 values are given
     0, 0, 0
 }
 ; Empty braces give no values, whether they close on the declaration's line or the next.
-.data empty_line:  .byte[4] { }     ;! error[element-count-mismatch]: this array is declared with 4 elements, but 0 given
-.data empty_tight: .byte[4] {}      ;! error[element-count-mismatch]: this array is declared with 4 elements, but 0 given
-.data empty_body:  .byte[4] {       ;! error[element-count-mismatch]: this array is declared with 4 elements, but 0 given
+.data empty_line:  .byte[4] { }     ;! error[element-count-mismatch]: this array declares 4 elements, but 0 values are given
+.data empty_tight: .byte[4] {}      ;! error[element-count-mismatch]: this array declares 4 elements, but 0 values are given
+.data empty_body:  .byte[4] {       ;! error[element-count-mismatch]: this array declares 4 elements, but 0 values are given
 }
-.data no_points:      .type Point[2] { }  ;! error[element-count-mismatch]: this array is declared with 2 elements, but 0 given
-.data no_points_body: .type Point[2] {    ;! error[element-count-mismatch]: this array is declared with 2 elements, but 0 given
+.data no_points:      .type Point[2] { }  ;! error[element-count-mismatch]: this array declares 2 elements, but 0 values are given
+.data no_points_body: .type Point[2] {    ;! error[element-count-mismatch]: this array declares 2 elements, but 0 values are given
 }
-.data empty_any:      .byte[] { }   ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.byte[n]` to reserve n elements
-.data empty_any_body: .byte[] {     ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.byte[n]` to reserve n elements
+.data empty_any:      .byte[] { }   ;! error[element-count-empty]: `[]` counts the values given, and there are none: use `.byte[n]` to reserve n elements
+.data empty_any_body: .byte[] {     ;! error[element-count-empty]: `[]` counts the values given, and there are none: use `.byte[n]` to reserve n elements
 }
 ; Without a count, empty braces are one record that sets no member.
 .data blank_point: .type Point { }
 
-.data none:    .word[]              ;! error[element-count-empty]: `[]` takes its count from the values given, and there are none: use `.word[n]` to reserve n elements
-.data padding: .res 4               ;! error[res-not-a-declaration]: a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros where no values are given
+.data none:    .word[]              ;! error[element-count-empty]: `[]` counts the values given, and there are none: use `.word[n]` to reserve n elements
+.data padding: .res 4               ;! error[res-not-a-declaration]: a named declaration cannot use `.res`: use a type such as `.byte[n]`, which is zero-filled
 
 ; An element is a value, or a record for an array of records.
 .data records: .type Point[] {
@@ -55,22 +55,22 @@
 
 ; Outside a routine, bytes belong to a declaration and code to a routine.
 .byte 3                             ;! error[padding-outside-a-routine]: `.byte` outside a `.proc` must be part of a `.data` declaration: `.data name: .byte ...`
-label: .word 4                      ;! error[label-outside-a-routine]: `label` is a label outside a `.proc`: labels mark positions in code, and data is named by a declaration, `.data label: ...`
+label: .word 4                      ;! error[label-outside-a-routine]: `label` is a label outside a `.proc`; to name data, write `.data label: ...`
 rts                                 ;! error[instruction-outside-a-routine]: an instruction belongs in a `.proc`: nt65 follows and checks code only inside routines
 .res 2                              ; padding is fine
 
 .segment CODE
 .proc main {
 @here:
-    lda #.sizeof(@here)                 ;! error[not-measurable]: `@here` is a label, which is only a position: `.sizeof` measures a `.data` declaration, a routine or a type
-    lda #.countof(mixed)                ;! error[countof-has-no-elements]: `mixed` is mixed data, which has bytes and no elements: `.sizeof(mixed)` is how many bytes it takes
+    lda #.sizeof(@here)                 ;! error[not-measurable]: `.sizeof` cannot measure `@here`, a label: it measures data, routines and types
+    lda #.countof(mixed)                ;! error[countof-has-no-elements]: `mixed` is mixed data and has no elements: use `.sizeof(mixed)` for its size in bytes
     jmp (bytes)
-    .next bytes                         ;! error[next-target-not-a-table]: `bytes` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` values, directly or as members of records
+    .next bytes                         ;! error[next-target-not-a-table]: `bytes` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` values
 }
 
 ; A `.segment NAME` region belongs at file level; inside a block, a segment is braced.
 .scope place {
-    .segment BSS                        ;! error[segment-region-misplaced]: a `.segment NAME` region belongs at file level, outside every block: inside one, `.segment NAME { }` places what it holds
+    .segment BSS                        ;! error[segment-region-misplaced]: a `.segment NAME` line must be at file level; inside a block, use `.segment NAME { }`
 }
 
 ; A 16-bit width cannot hold where the registers are eight bits, wherever it is written. The

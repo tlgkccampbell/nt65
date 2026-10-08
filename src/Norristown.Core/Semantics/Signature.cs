@@ -178,7 +178,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (item.Part == StatePart.Set && setOf(item.SetName!) is { Kind: SymbolKind.SignatureSet } named
                 && Reaches(named, set, setOf, []))
             {
-                report(item.Node.Span, Catalogue.SignatureSetSelfReference.Message(set.Name, item.Text, set.Name), null);
+                report(item.Node.Span, Catalogue.SignatureSetSelfReference.Message(set.Name, item.Text), null);
             }
         }
         Read(declaration, forMacro: false, valueOf, setOf, report);
@@ -707,7 +707,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     break;
                 case StatePart.Keeps or StatePart.Reads when isExit:
                     Report(item.Node.Span,
-                        Catalogue.ItemBelongsAtEntry.Message(item.Text, "is about a routine from entry to exit"),
+                        Catalogue.ItemBelongsAtEntry.Message(item.Text),
                         ToEntry(fromSet));
                     break;
                 case StatePart.Keeps:
@@ -731,7 +731,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt
                     or StatePart.NoReturn when isExit:
                     Report(item.Node.Span,
-                        Catalogue.ItemBelongsAtEntry.Message(item.Text, "describes how a routine is called, entered or left"),
+                        Catalogue.ItemBelongsAtEntry.Message(item.Text),
                         ToEntry(fromSet));
                     break;
                 case StatePart.NoReturn:

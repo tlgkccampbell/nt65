@@ -131,7 +131,7 @@ public sealed class SuggestionsTests
 
         var suggestion = Assert.Single(analysis.SuggestionsFor(path), found => found.Id == "constant-used-as-address");
         Assert.Equal(
-            "`BORDER` is used as an address; declaring it as data says what is there, or with `.mmio` that it is a hardware register",
+            "`BORDER` is used as an address: declare it as data, or with `.mmio` if it is a hardware register",
             suggestion.Message);
         Assert.Equal(4, suggestion.Span.Line);
 

@@ -132,7 +132,7 @@ public sealed class AddressSizeTests
     {
         var model = Analysis.Model(".module main\n.segment NOWHERE\n.data lost:   .byte 0\n");
 
-        Assert.Equal(["2: segment \"NOWHERE\" is not declared"], model.Problems());
+        Assert.Equal(["2: segment `NOWHERE` is not declared"], model.Problems());
         Assert.Null(model.Symbol("lost").AddressSize);
     }
 }

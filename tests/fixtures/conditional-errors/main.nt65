@@ -7,11 +7,11 @@
 
 .const SIZE = .sizeof(table)
 
-.if SIZE > 2 {                  ;! error[condition-uses-a-measurement]: an `.if` cannot test `SIZE`, which uses a measurement of a declaration; check it with `.assert`
+.if SIZE > 2 {                  ;! error[condition-uses-a-measurement]: an `.if` cannot test `SIZE`, which measures a declaration; check it with `.assert`
     .const NOPE = 1
 }
 
-.if .sizeof(table) == 1 {       ;! error[condition-uses-a-measurement]: an `.if` cannot test `.sizeof(table)`, which uses a measurement of a declaration; check it with `.assert`
+.if .sizeof(table) == 1 {       ;! error[condition-uses-a-measurement]: an `.if` cannot test `.sizeof(table)`, which measures a declaration; check it with `.assert`
     .const NOPE = 2
 }
 
@@ -45,7 +45,7 @@
 }
 
 .assert SIZE == 8, "SIZE must be 8"      ;! error[assertion-failed]: SIZE must be 8
-.assert SIZE == 8, error, "SIZE must be 8"  ;! error[assertion-failed]: SIZE must be 8;! error[assert-level]: nt65's `.assert` takes no level: remove `error`, since a failed assertion is always an error
+.assert SIZE == 8, error, "SIZE must be 8"  ;! error[assertion-failed]: SIZE must be 8;! error[assert-level]: `.assert` takes no level: remove `error`, since a failed assertion is always an error
 
 .if 0 {
     .error "this branch is not taken, so nothing is said"

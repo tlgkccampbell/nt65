@@ -2,10 +2,10 @@
 .module first
 
 .export shared as "common", WIDE: abs
-.export SMALL: zp       ;! error[export-narrows-address-size]: `SMALL` is `abs`, and an export may widen an address size but not narrow it: `SMALL: abs` or wider
+.export SMALL: zp       ;! error[export-narrows-address-size]: `SMALL` is `abs`, and an export cannot narrow it: write `SMALL: abs` or wider
 
 ; A segment the project file already declares.
-.segment VRAM: abs    ;! error[segment-declared-twice]: segment "VRAM" is already declared
+.segment VRAM: abs    ;! error[segment-declared-twice]: segment `VRAM` is already declared
 
 .const shared = 1
 .const SMALL  = $1234
@@ -21,11 +21,11 @@
 .export pal__ink        ;! error[export-name-taken]: `first::pal__ink` and `first::pal::ink` are both exported to the linker as `first__pal__ink`
 
 ; A file names its module first, and names it only once.
-.module again           ;! error[module-declared-twice]: this file already has a `.module` line: a file is exactly one module
+.module again           ;! error[module-declared-twice]: this file already has a `.module` line
 
 ; An exported macro expands in the module that calls it, where it has to be able to reach
 ; everything it names.
-.export .macro poke(value) {        ;! error[macro-names-unexported]: `poke!` is exported but uses `shadow`, which is not exported: the macro expands in the caller's module, where `shadow` cannot be reached
+.export .macro poke(value) {        ;! error[macro-names-unexported]: exported macro `poke!` uses `shadow`, which is not exported, so callers in other modules cannot reach it
     lda #value
     sta shadow
 }

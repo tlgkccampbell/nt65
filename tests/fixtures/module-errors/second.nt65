@@ -3,12 +3,12 @@
 ; Two modules exporting under one linker name would be one symbol to the linker, so it is
 ; reported at the export that collides.
 .export other as "common"   ;! error[export-name-taken]: `second::other` and `first::shared` are both exported to the linker as `common`
-.export .use first::*       ;! error[reexport-star]: `.export .use` must name what it re-exports: `*` would re-export everything the other module exports, including names it adds later
+.export .use first::*       ;! error[reexport-star]: `.export .use` cannot re-export `*`: name each item
 
 .const other = 3
 
 ; A name a `.use` brings in may not also be declared here, and two may not bring in one name.
-.use first::shared          ;! error[use-collides-with-declaration]: `shared` is already declared in this module, so a `.use` cannot bring in another: use `as` to give it a different name
+.use first::shared          ;! error[use-collides-with-declaration]: `.use` cannot bring in `shared`: this module already declares it, so rename it with `as`
 .use first::WIDE
 .use first::WIDE            ;! error[use-brings-in-twice]: a `.use` already brings in `WIDE`
 .use first::nothing         ;! error[not-declared-in]: `nothing` is not declared in module `first`
@@ -21,8 +21,8 @@
 .proc use {
     lda #first::hidden      ;! error[not-exported]: `first::hidden` is not exported by module `first`
     lda #nowhere            ;! error[not-declared]: `nowhere` is not declared
-    lda #SMALL              ;! error[export-ambiguous]: `SMALL` is ambiguous: modules `first` and `third` both export it, and both are brought in with `::*`; use `third::SMALL` to choose
-    lda #first              ;! error[module-used-as-a-name]: `first` is a module: a name in it is `first::name`
+    lda #SMALL              ;! error[export-ambiguous]: `SMALL` could be `first::SMALL` or `third::SMALL`: write the one you mean
+    lda #first              ;! error[module-used-as-a-name]: `first` is a module, not a name: write `first::name` for a name in it
     .use first::SMALL       ;! error[use-misplaced]: `.use` belongs at the top level of a module
     rts
 }

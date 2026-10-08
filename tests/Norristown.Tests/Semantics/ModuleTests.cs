@@ -55,8 +55,8 @@ public sealed class ModuleTests
             ("main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    jsr clear\n    rts\n}\n"));
 
         Assert.Equal(
-            ["main.nt65:4: `clear` is not declared here, and module `gfx` exports it: use `gfx::clear`, "
-                + "or bring it in with `.use gfx::clear`"],
+            ["main.nt65:4: `clear` is not declared here; module `gfx` exports it, so write `gfx::clear` "
+                + "or `.use gfx::clear`"],
             program.Problems());
     }
 
@@ -365,12 +365,12 @@ public sealed class ModuleTests
 
         Assert.Equal(
             [
-                "main.nt65:3: `REP` is an instruction on the 65816; as a name it is legal and easy to misread",
-                "main.nt65:6: `per` is an instruction on the 65816; as a name it is legal and easy to misread",
+                "main.nt65:3: `REP` is legal as a name but reads as the 65816 instruction",
+                "main.nt65:6: `per` is legal as a name but reads as the 65816 instruction",
             ],
             program.Problems());
         Assert.Equal(
-            ["main.nt65:3: `REP` is an instruction on the 65816; as a name it is legal and easy to misread"],
+            ["main.nt65:3: `REP` is legal as a name but reads as the 65816 instruction"],
             Analysis.Program(("main.nt65", ".module main\n.cpu 65816\n.const REP = 1\n.export REP\n")).Problems());
     }
 
@@ -391,7 +391,7 @@ public sealed class ModuleTests
             ["main.nt65:4: `lib::hidden` is not exported by module `lib`"],
             Analysis.Program(("lib.nt65", Lib), ("main.nt65", Uses)).Problems());
         Assert.Equal(
-            ["lib.nt65:2: `hidden` is never used: nothing names it, and it is not exported"],
+            ["lib.nt65:2: `hidden` is never used or exported"],
             Analysis.Program(("lib.nt65", Lib), ("main.nt65", Leaves)).Problems());
     }
 

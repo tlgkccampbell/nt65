@@ -29,7 +29,7 @@
 
 .proc not_adjacent: a8 {
     lda #1
-    .fallthrough second ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
+    .fallthrough second ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` names the routine directly after it
 }
 
 .proc first: a8 {
@@ -38,7 +38,7 @@
 
 .proc second: a8 {
     lda #2
-    .fallthrough other_segment  ;! error[fallthrough-other-segment]: `other_segment` is in segment "BANKED", and this routine ends in "CODE": a routine can only run into what comes next in its own segment
+    .fallthrough other_segment  ;! error[fallthrough-other-segment]: `other_segment` is in segment `BANKED`, and this routine ends in `CODE`: a routine can only run into what comes next in its own segment
 }
 
 .segment BANKED
@@ -61,18 +61,18 @@
 ; instruction or a direct call, the error says to write `.fallthrough` instead.
 .proc after_lda: a8 {
     lda #4
-    .next after_call    ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `lda #4` continues with the next statement; if this routine runs into the one after it, use `.fallthrough`
+    .next after_call    ;! error[next-successors-known]: `.next` is not needed: `lda #4` already continues with the next statement; if this routine runs into the one after it, use `.fallthrough`
 }
 
 .proc after_call: a8 {
     jsr first
-    .next in_the_middle ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `jsr first` calls `first` and comes back; if this routine runs into the one after it, use `.fallthrough`
+    .next in_the_middle ;! error[next-successors-known]: `.next` is not needed: `jsr first` already calls `first` and comes back; if this routine runs into the one after it, use `.fallthrough`
 }
 
 ; A `.next` in the middle of a body says nothing that is not already known either.
 .proc in_the_middle: a8 {
     jmp @out
-    .next @out          ;! error[next-successors-known]: `.next` is not allowed here: nt65 already knows that `jmp @out` goes to `@out`
+    .next @out          ;! error[next-successors-known]: `.next` is not needed: `jmp @out` already goes to `@out`
 @out:
     rts
 }
@@ -120,7 +120,7 @@
 .proc taken_not_adjacent: a8 {
     lda #7
     .if 1 {
-        .fallthrough narrows    ;! error[fallthrough-not-adjacent]: `narrows` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
+        .fallthrough narrows    ;! error[fallthrough-not-adjacent]: `narrows` does not start where this routine ends: `.fallthrough` names the routine directly after it
     } .else {
         .fallthrough no_such_routine
     }

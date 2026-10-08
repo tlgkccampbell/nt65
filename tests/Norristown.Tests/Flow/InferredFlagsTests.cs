@@ -35,7 +35,7 @@ public sealed class InferredFlagsTests
     [InlineData(".proc q {\n    clc\n    jmp ($10)\n    .next ?\n}\n.export .proc main {\n    jsr q\n    bcc @y\n    .byte 1\n@y:\n    rts\n}\n")]
     public void AFlagNotSetOnEveryPathIsNotKnown(string text)
     {
-        Assert.Contains(Problems(text), problem => problem.Contains("falls through", StringComparison.Ordinal));
+        Assert.Contains(Problems(text), problem => problem.Contains("falls into this data", StringComparison.Ordinal));
     }
 
     /// <summary>

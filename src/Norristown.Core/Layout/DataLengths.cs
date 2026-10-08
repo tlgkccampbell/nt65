@@ -101,7 +101,7 @@ public static class DataLengths
             return null;
         }
         var text = address.GetText().Trim();
-        var fix = bytes == 1 ? $"`<{text}` is its low byte" : $"`.loword({text})` is its low 16 bits";
+        var fix = bytes == 1 ? $"use `<{text}` for its low byte" : $"use `.loword({text})` for its low 16 bits";
         return Catalogue.AddressDoesNotFit.Message(
             text, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
     }
@@ -153,7 +153,7 @@ public static class DataLengths
                 Terminated(directive, operands, model, diagnostics, on);
                 break;
             case DirectiveKind.Byte:
-                Values(operands, model, diagnostics, Holds(kind), on);
+                Values(operands, model, diagnostics, kind, on);
                 foreach (var operand in operands)
                 {
                     if (TooWide(operand, 1, "`.byte` holds 8 bits", model, on) is { } message)
@@ -166,7 +166,7 @@ public static class DataLengths
             case DirectiveKind.Word:
             case DirectiveKind.BeWord:
             case DirectiveKind.Addr:
-                Values(operands, model, diagnostics, Holds(kind), on);
+                Values(operands, model, diagnostics, kind, on);
                 NoFarAddresses(name, operands, model, diagnostics, on);
                 break;
             case DirectiveKind.Long:
@@ -174,7 +174,7 @@ public static class DataLengths
             case DirectiveKind.FarAddr:
             case DirectiveKind.Dword:
             case DirectiveKind.BeDword:
-                Values(operands, model, diagnostics, Holds(kind), on);
+                Values(operands, model, diagnostics, kind, on);
                 break;
 
             // The byte directives take an address and keep one byte of it, so no range limit
@@ -268,7 +268,7 @@ public static class DataLengths
             Report(countExpression, model, diagnostics, on, Catalogue.ElementCountNegative.Message(declared));
         else if (given is { } values && values != declared && PaddedText.Padding(directive, model, on) is null)
             Report(count, model, diagnostics, on, Catalogue.ElementCountMismatch.Message(
-                declared, Elements(declared.Value), values));
+                declared, Elements(declared.Value), values, values == 1 ? "value is" : "values are"));
     }
 
     private static string Elements(long count) => count == 1 ? "element" : "elements";
@@ -308,8 +308,9 @@ public static class DataLengths
 
     private static void Values(
         SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
-        (long Low, long High)? limit, Expansion? on)
+        DirectiveKind? holding, Expansion? on)
     {
+        var limit = holding is { } kind ? Holds(kind) : null;
         foreach (var operand in operands)
         {
             CheckAscii(operand, model, diagnostics, on);
@@ -323,7 +324,7 @@ public static class DataLengths
                 continue;
             }
             if (limit is { } range)
-                CheckRange(operand, model, diagnostics, range, on);
+                CheckRange(operand, model, diagnostics, range, on, $"`{SyntaxFacts.TextOf(holding!.Value)}`");
         }
     }
 
@@ -517,7 +518,7 @@ public static class DataLengths
         if (model.ValueOf(fill, on).AsNumber() is null && !model.ValueOf(fill, on).IsString)
             Report(fill, model, diagnostics, on, Catalogue.FillNotConstant.Message(directive));
         else
-            CheckRange(fill, model, diagnostics, Holds(DirectiveKind.Byte)!.Value, on);
+            CheckRange(fill, model, diagnostics, Holds(DirectiveKind.Byte)!.Value, on, "a byte");
     }
 
     /// <summary>
@@ -555,7 +556,7 @@ public static class DataLengths
 
     private static void CheckRange(
         SyntaxNode argument, SemanticModel model, List<Diagnostic>? diagnostics, (long Low, long High) limit,
-        Expansion? on, string slot = "this directive")
+        Expansion? on, string slot)
     {
         if (model.ValueOf(argument, on).AsNumber() is not { } value)
             return;

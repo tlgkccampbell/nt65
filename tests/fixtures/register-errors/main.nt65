@@ -42,11 +42,11 @@
 
 ; `keeps` is about a routine from entry to exit, so it has no place after `->`, and a macro is
 ; expanded into the routine that calls it rather than called.
-.proc after_the_arrow: a8 -> a8, keeps x {     ;! error[item-belongs-at-entry]: `keeps x` is about a routine from entry to exit, and belongs before `->`
+.proc after_the_arrow: a8 -> a8, keeps x {     ;! error[item-belongs-at-entry]: `keeps x` belongs before `->`
     rts
 }
 
-.macro spill(): keeps a {   ;! error[macro-keeps]: `keeps a` does not apply to a macro: its body becomes part of the routine it is expanded into, whose signature declares what it keeps, reads and does to the flags
+.macro spill(): keeps a {   ;! error[macro-keeps]: `keeps a` does not apply to a macro: the routine it expands into declares that
     lda #0
 }
 

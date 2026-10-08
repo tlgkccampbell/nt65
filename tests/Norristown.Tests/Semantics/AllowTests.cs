@@ -19,7 +19,7 @@ public sealed class AllowTests
     [InlineData(".allow \"unused-symbol\", \"the debugger calls it\"\n")]
     public void AnAllowHidesTheWarningItNames(string allow)
     {
-        Assert.Equal(["main.nt65:1: `helper` is never used: nothing names it, and it is not exported"],
+        Assert.Equal(["main.nt65:1: `helper` is never used or exported"],
             Problems(Unused));
         Assert.Empty(Problems(allow + Unused));
     }
@@ -33,7 +33,7 @@ public sealed class AllowTests
     {
         Assert.Empty(Problems(
             ".export p\n.allow \"label-unreachable\"\n.proc p {\n    rts\n@dead:\n    rts\n}\n"));
-        Assert.Equal(["main.nt65:5: `other` is never used: nothing names it, and it is not exported"],
+        Assert.Equal(["main.nt65:5: `other` is never used or exported"],
             Problems(".allow \"unused-symbol\"\n" + Unused + ".proc other {\n    rts\n}\n"));
     }
 

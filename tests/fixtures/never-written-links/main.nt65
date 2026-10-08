@@ -9,7 +9,7 @@
 
 ; Neither link writes a `bss` segment.
 .segment BSS
-.data table: .byte[2] { 1, 2 }      ;! error[never-written]: `table` has values in segment "BSS", which has `type = bss`, so ld65 never writes them
+.data table: .byte[2] { 1, 2 }      ;! error[never-written]: `table` has values in segment `BSS`, which has `type = bss`, so ld65 never writes them
 
 .segment CODE
 .proc main {

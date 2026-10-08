@@ -6,12 +6,12 @@
 
 ; A kind belongs to a macro's parameter. The parameter is still declared, so the call below
 ; has the right number of arguments.
-.func typed(v: expr) = v + 1    ;! error[function-parameter-kind]: a `.func` parameter takes no kind: a kind belongs to a `.macro` parameter, and a function's argument is always a value
+.func typed(v: expr) = v + 1    ;! error[function-parameter-kind]: a `.func` parameter takes no kind; only `.macro` parameters have kinds
 
 ; A kind that holds parentheses and commas of its own is skipped whole, on a list that
 ; continues across lines too.
 .func listed(
-    first: one(a, b),    ;! error[function-parameter-kind]: a `.func` parameter takes no kind: a kind belongs to a `.macro` parameter, and a function's argument is always a value
+    first: one(a, b),    ;! error[function-parameter-kind]: a `.func` parameter takes no kind; only `.macro` parameters have kinds
     second = 3
 ) = first + second
 
@@ -36,8 +36,8 @@
     .byte scaled(factor = 3, factor = 4, value = 1)  ;! error[argument-given-twice]: parameter `factor` is given twice
     .byte scaled(factor = 3, 1)             ;! error[argument-after-a-named-one]: a positional argument cannot follow a named one
     .byte scaled(factor = 3)                ;! error[argument-missing]: `scaled` needs an argument for `value`
-    .byte scaled(1, 2, 3)                   ;! error[argument-count]: `scaled` takes 1 to 2 arguments, and this call gives more
-    .byte screen(text = "HI")               ;! error[charmap-argument-named]: `screen` is a charmap, which takes one argument, the text it maps, by position
-    .byte .strlen(text = "HI")              ;! error[builtin-argument-named]: `.strlen` takes its arguments by position: a built-in function has no named parameters
+    .byte scaled(1, 2, 3)                   ;! error[argument-count]: `scaled` takes 1 to 2 arguments, and this call gives 3
+    .byte screen(text = "HI")               ;! error[charmap-argument-named]: charmap `screen` takes its text by position, not by name
+    .byte .strlen(text = "HI")              ;! error[builtin-argument-named]: `.strlen` is built in and takes no named arguments
     note!(frames = 2, 60)                   ;! error[argument-after-a-named-one]: a positional argument cannot follow a named one
 }

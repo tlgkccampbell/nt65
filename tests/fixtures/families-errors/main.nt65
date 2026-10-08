@@ -31,12 +31,12 @@
 ; A scope or data block named after the binding would declare itself and everything inside it
 ; once per member, which a family may not do.
 .each Channel, ch {
-    .scope ch {                 ;! error[family-declares-too-much]: `ch` would declare one scope per member, repeating everything inside it: a family declares only routines and data, so declare one family per role, such as `note::ch` and `stop::ch`
+    .scope ch {                 ;! error[family-declares-too-much]: `ch` would declare one scope per member: a family declares only routines and data, so declare one family per role, such as `note::ch` and `stop::ch`
         .const VALUE = 1
     }
 }
 .each Channel, ch {
-    .data ch {                  ;! error[family-declares-too-much]: `ch` would declare one `.data` block per member, repeating everything inside it: a family declares only routines and data, so declare one family per role, such as `note::ch` and `stop::ch`
+    .data ch {                  ;! error[family-declares-too-much]: `ch` would declare one `.data` block per member: a family declares only routines and data, so declare one family per role, such as `note::ch` and `stop::ch`
         .byte 1
     }
 }
@@ -51,7 +51,7 @@
     rts
 }
 .proc outer2 {
-    .multiproc Channel, d {     ;! error[multiproc-misplaced]: `.multiproc` declares routines, and this one is inside a routine: a routine belongs at file level or in a `.scope`
+    .multiproc Channel, d {     ;! error[multiproc-misplaced]: `.multiproc` must be at file level or in a `.scope`, not inside a routine
         rts
     }
     rts
@@ -96,7 +96,7 @@
 .proc pulse1 {
     rts
 }
-.multiproc Channel, ch {        ;! error[family-member-collides]: `pulse1` is a member of `Channel` and is already declared in this scope: a family declares one name per member
+.multiproc Channel, ch {        ;! error[family-member-collides]: `pulse1` is a member of `Channel` and is already declared in this scope
     rts
 }
 

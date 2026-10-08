@@ -6,7 +6,7 @@
   "outputs": "build",     // ;! error[project-key-unknown]: `outputs` is not a key of nt65.json
   "setting": {},          // ;! error[project-key-unknown]: `setting` is not a key of nt65.json; did you mean `settings`?
   "settings": {
-    "SIZE": "twelve"      // ;! error[setting-not-a-number]: `SIZE`: a setting's value must be a number
+    "SIZE": "twelve"      // ;! error[setting-not-a-number]: setting `SIZE` must be a number
   },
   "diagnostics": {
     "unused-symbols": "off",   // ;! error[diagnostic-name-unknown]: `unused-symbols` is not a diagnostic nt65 reports; did you mean `unused-symbol`?
@@ -17,11 +17,11 @@
     "spc": "sound"        // ;! error[project-space-holds-unknown]: space `spc` must be "code" or "data"
   },
   "segments": {
-    "VRAM": { "size": "word" },  // ;! error[project-segment-size-missing]: segment "VRAM" needs a `size` of "zp", "abs" or "far"
-    "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error[segment-dp-not-zp]: segment "SLOW" is not `zp`, and only a `zp` segment takes a `dp`
+    "VRAM": { "size": "word" },  // ;! error[project-segment-size-missing]: segment `VRAM` needs a `size` of "zp", "abs" or "far"
+    "SLOW": { "size": "abs", "dp": "$2100" },  // ;! error[segment-dp-not-zp]: segment `SLOW` is not `zp`, and only a `zp` segment takes a `dp`
     "WIDE": { "size": "abs", "bank": 256 },    // ;! error[segment-attribute-out-of-range]: `bank` must be $00 to $ff: a bank is one byte
-    "CODE": { "size": "far" },                 // ;! error[segment-standard-size]: "CODE" is a standard segment and is always `abs`
-    "ODD":  { "size": "abs", "base": 1 },      // ;! error[project-segment-key-unknown]: segment "ODD" cannot set `base`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`
+    "CODE": { "size": "far" },                 // ;! error[segment-standard-size]: `CODE` is a standard segment and is always `abs`
+    "ODD":  { "size": "abs", "base": 1 },      // ;! error[project-segment-key-unknown]: segment `ODD` cannot set `base`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`
     "APU":  { "size": "abs", "space": "apu" }  // ;! error[space-undeclared]: space `apu` is not declared
   },
   "ranges": {

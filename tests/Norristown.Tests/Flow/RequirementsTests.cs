@@ -184,7 +184,7 @@ public sealed class RequirementsTests
         Assert.Equal(
             [
                 "main.nt65:8: `print` expects one `.strz` directly after each call, and none follows this one",
-                "main.nt65:9: the instruction above falls through into this data: add a `.next` after the data stating where flow goes instead",
+                "main.nt65:9: the instruction above falls into this data: add a `.next` after the data saying where flow goes",
             ],
             Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Problems());
     }

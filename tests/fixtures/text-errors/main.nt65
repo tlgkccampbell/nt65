@@ -16,12 +16,12 @@
 .data direct: .byte $7b
 
 ; Everywhere else there is nothing to say what the byte is.
-.const K = 'é'                      ;! error[text-not-ascii]: text is ASCII outside a charmap; use `\xHH` for a byte above $7f
-.const T = "é"                      ;! error[text-not-ascii]: text is ASCII outside a charmap; use `\xHH` for a byte above $7f
-.data plain: .byte "é"              ;! error[text-not-ascii]: text is ASCII outside a charmap; use `\xHH` for a byte above $7f
+.const K = 'é'                      ;! error[text-not-ascii]: this character is not ASCII: outside a charmap, write a byte above $7f as `\xHH`
+.const T = "é"                      ;! error[text-not-ascii]: this character is not ASCII: outside a charmap, write a byte above $7f as `\xHH`
+.data plain: .byte "é"              ;! error[text-not-ascii]: this character is not ASCII: outside a charmap, write a byte above $7f as `\xHH`
 
 .segment CODE
 .proc start {
-    lda #'é'                            ;! error[text-not-ascii]: text is ASCII outside a charmap; use `\xHH` for a byte above $7f
+    lda #'é'                            ;! error[text-not-ascii]: this character is not ASCII: outside a charmap, write a byte above $7f as `\xHH`
     rts
 }

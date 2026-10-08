@@ -6,6 +6,6 @@
 
 .segment CODE
 .proc start {
-    lda:                                ;! error[mnemonic-name]: `lda` is an instruction on the 6502; as a name it is legal and easy to misread
+    lda:                                ;! error[mnemonic-name]: `lda` is legal as a name but reads as the 6502 instruction
     rts
 }

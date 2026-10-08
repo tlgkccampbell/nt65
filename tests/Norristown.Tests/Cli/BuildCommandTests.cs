@@ -368,11 +368,11 @@ public sealed class BuildCommandTests : IDisposable
         var app = Path.Combine(root.FullName, "app");
 
         Assert.Equal(
-            "main.nt65:4:8: [33mwarning:[0m `UNUSED` is never used: nothing names it, and it is not "
-                + "exported [unused-symbol]\n",
+            "main.nt65:4:8: [33mwarning:[0m `UNUSED` is never used or exported "
+                + "[unused-symbol]\n",
             Apart(app, true, "build").Error);
         Assert.Equal(
-            "main.nt65:4:8: warning: `UNUSED` is never used: nothing names it, and it is not exported "
+            "main.nt65:4:8: warning: `UNUSED` is never used or exported "
                 + "[unused-symbol]\n",
             Apart(app, false, "build").Error);
 

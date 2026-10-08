@@ -21,11 +21,11 @@
 
 .segment RODATA
 ; A count catches a table with too few values; only a single text is padded out to the count.
-.data table:   .addr[4] { one, one }  ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
-.data letters: .byte[4] { "a", "b" }  ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
-.data letter:  .byte[4] { 'A' }       ;! error[element-count-mismatch]: this array is declared with 4 elements, but 1 given
-.data over:    .byte[2] { "hello" }   ;! error[element-count-mismatch]: this array is declared with 2 elements, but 5 given
-.data words:   .word[4] { "hi" }      ;! error[element-count-mismatch]: this array is declared with 4 elements, but 2 given
+.data table:   .addr[4] { one, one }  ;! error[element-count-mismatch]: this array declares 4 elements, but 2 values are given
+.data letters: .byte[4] { "a", "b" }  ;! error[element-count-mismatch]: this array declares 4 elements, but 2 values are given
+.data letter:  .byte[4] { 'A' }       ;! error[element-count-mismatch]: this array declares 4 elements, but 1 value is given
+.data over:    .byte[2] { "hello" }   ;! error[element-count-mismatch]: this array declares 2 elements, but 5 values are given
+.data words:   .word[4] { "hi" }      ;! error[element-count-mismatch]: this array declares 4 elements, but 2 values are given
 
 .list order {
     one
@@ -33,26 +33,26 @@
 
 ; Only a data declaration can be indexed, and only when it is named directly.
 .macro row(items) {
-    lda items[1]              ;! error[not-indexable]: `items` cannot be indexed with `[i]`: it is a macro parameter, not an array
+    lda items[1]              ;! error[not-indexable]: `items` is a macro parameter, not an array, so it cannot be indexed
 }
 
 .segment CODE
 .proc main {
     row!(buffer)
     .repeat 2, i {
-        lda i[0]            ;! error[not-indexable]: `i` cannot be indexed with `[i]`: it is a repetition binding, not an array
+        lda i[0]            ;! error[not-indexable]: `i` is a repetition binding, not an array, so it cannot be indexed
     }
-    lda order[0]            ;! error[not-indexable]: `order` cannot be indexed with `[i]`: it is a list, not an array
-    lda buffer[4]           ;! error[element-index-out-of-range]: index 4 is past the end of `buffer`: it holds 4 elements, so the last index is 3
+    lda order[0]            ;! error[not-indexable]: `order` is a list, not an array, so it cannot be indexed
+    lda buffer[4]           ;! error[element-index-out-of-range]: index 4 is past the end of `buffer`, whose last index is 3
     lda buffer[-1]          ;! error[element-index-out-of-range]: element index -1 is negative; indexes start at 0
     lda buffer[one]         ;! error[element-index-not-constant]: an element index must be a constant: to index at run time, use indexed addressing such as `buffer,x`
     lda buffer[nope]        ;! error[not-declared]: `nope` is not declared
-    lda outside[0]          ;! error[not-indexable]: `outside` cannot be indexed with `[i]`: it is an imported address, not an array
-    lda one[1]              ;! error[element-index-out-of-range]: index 1 is past the end of `one`: it holds 1 element, so the last index is 0
-    lda stub[0]             ;! error[not-indexable]: `stub` cannot be indexed with `[i]`: it is mixed data, which has no elements
-    lda main[0]             ;! error[not-indexable]: `main` cannot be indexed with `[i]`: it is a routine, not an array
-    lda #COUNT[0]           ;! error[not-indexable]: `COUNT` cannot be indexed with `[i]`: it is a constant, not an array
-    lda #Point[0]           ;! error[not-indexable]: `Point` cannot be indexed with `[i]`: it is a structure, not an array
+    lda outside[0]          ;! error[not-indexable]: `outside` is an imported address, not an array, so it cannot be indexed
+    lda one[1]              ;! error[element-index-out-of-range]: index 1 is past the end of `one`, whose last index is 0
+    lda stub[0]             ;! error[not-indexable]: `stub` is mixed data, which has no elements, so it cannot be indexed
+    lda main[0]             ;! error[not-indexable]: `main` is a routine, not an array, so it cannot be indexed
+    lda #COUNT[0]           ;! error[not-indexable]: `COUNT` is a constant, not an array, so it cannot be indexed
+    lda #Point[0]           ;! error[not-indexable]: `Point` is a structure, not an array, so it cannot be indexed
     lda buffer[]            ;! error[expected-element-index]: expected an index between the brackets: `name[i]` is element `i` of `name`
     lda buffer[1            ;! error[expected-bracket]: expected `]`
     lda #.sizeof(buffer[1]) ;! error[measures-a-declaration]: `.sizeof` takes a whole declaration, not an element of one like `buffer[1]`

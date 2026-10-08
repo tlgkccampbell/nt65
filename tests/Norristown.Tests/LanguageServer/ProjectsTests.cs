@@ -189,7 +189,7 @@ public sealed class ProjectsTests : IDisposable
         root.Write("cfg/prg.cfg", "MEMORY { M: start = $0800, size = $1000; } SEGMENTS { CODE: load = M; }\n");
         root.Write("main.nt65", ".module main\n.segment DATA\n.export .data table: .byte 1\n");
         await using var client = await TestClient.StartAsync(Uri(""), null, timeout);
-        Assert.Equal(["segment \"DATA\" is not in any linked config, so ld65 has nowhere to put it"],
+        Assert.Equal(["segment `DATA` is not in any linked config, so ld65 has nowhere to put it"],
             (await NextForAsync(client, "main.nt65", timeout)).Diagnostics.Select(d => d.Message));
 
         root.Write("cfg/prg.cfg", "MEMORY { M: start = $0800, size = $1000; } SEGMENTS { CODE: load = M; DATA: load = M; }\n");

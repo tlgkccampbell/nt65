@@ -369,7 +369,7 @@ public sealed class FixesTests
         var model = analysis.ModelFor(document.Tree.Path)!;
 
         var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
-        Assert.Equal("`fill` is brought in and nothing names it: the `.use` item may go", brought.Message);
+        Assert.Equal("`fill` is brought in by `.use` and never used", brought.Message);
         Assert.True(brought.IsUnnecessary);
 
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
@@ -399,7 +399,7 @@ public sealed class FixesTests
         var model = analysis.ModelFor(document.Tree.Path)!;
 
         var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
-        Assert.Equal("`fill` is brought in and nothing names it: the `.use` item may go", brought.Message);
+        Assert.Equal("`fill` is brought in by `.use` and never used", brought.Message);
 
         var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
         Assert.Equal(".module main\n" + kept + Rest, Editing.Apply(main, action.Edit!.Changes[Uri]));

@@ -90,7 +90,7 @@ public sealed class MacroCallTests
     }
 
     [Theory]
-    [InlineData("note!(C4, 8, 9)", "`note` takes 1 to 2 arguments, and this call gives more")]
+    [InlineData("note!(C4, 8, 9)", "`note` takes 1 to 2 arguments, and this call gives 3")]
     [InlineData("note!()", "`note` needs an argument for `pitch`")]
     [InlineData("note!(C4, tempo = 1)", "`note` has no parameter called `tempo`")]
     [InlineData("note!(C4, pitch = 1)", "parameter `pitch` is given twice")]
@@ -156,7 +156,7 @@ public sealed class MacroCallTests
     {
         var model = Analysis.Model(".module main\n.const SIZE = 1\n\n.proc main {\n    SIZE!(1)\n    rts\n}\n");
 
-        Assert.Equal(["5: `SIZE` is a constant, not a macro: only a macro is called with `!`"], model.Problems());
+        Assert.Equal(["5: `SIZE` is a constant, not a macro, so it cannot be called with `!`"], model.Problems());
     }
 
     [Fact]
@@ -329,7 +329,7 @@ public sealed class MacroCallTests
     {
         var program = Analysis.Program(("main.nt65", Set16 + "\n.segment CODE\n.proc main {\n    set16!(s, 0)\n    rts\n}\n"));
 
-        Assert.Equal(["main.nt65:11: `s` is a register name and cannot be used as a name"], program.Problems());
+        Assert.Equal(["main.nt65:11: `s` is a register and cannot be a name"], program.Problems());
     }
 
     /// <summary>Two calls to the same macro are not a cycle, no matter how many there are.</summary>

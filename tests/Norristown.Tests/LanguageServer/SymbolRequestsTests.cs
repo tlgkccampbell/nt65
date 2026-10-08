@@ -673,7 +673,7 @@ public sealed class SymbolRequestsTests
     }
 
     [Theory]
-    [InlineData("x", "is a register name")]
+    [InlineData("x", "is a register and cannot be a name")]
     [InlineData("2fast", "is not a name")]
     [InlineData("SCREEN", "is already declared in this scope")]
     public async Task ARenameThatWouldNotCompileIsRefused(string newName, string reason)

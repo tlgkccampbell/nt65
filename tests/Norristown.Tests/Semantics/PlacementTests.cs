@@ -163,7 +163,7 @@ public sealed class PlacementTests
         var error = Assert.Single(analysis.Diagnostics, d => d.Severity == Severity.Error);
         Assert.Equal("fallthrough-other-segment", error.Id);
         Assert.Equal(
-            "`enter` is in segment \"BANKED\", and this routine ends in \"CODE\": a routine can only run into what "
+            "`enter` is in segment `BANKED`, and this routine ends in `CODE`: a routine can only run into what "
                 + "comes next in its own segment",
             error.Message);
     }

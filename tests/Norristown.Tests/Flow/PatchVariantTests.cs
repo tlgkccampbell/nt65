@@ -22,7 +22,7 @@ public sealed class PatchVariantTests
             + $"    {patch}\n    sec\n@step:\n    inx\n    bcs @x\n    .byte 1\n@x:\n    rts\n}}\n";
 
         Assert.Empty(Problems(Main(".patch @step as dex")));
-        Assert.Contains(Problems(Main(".patch @step")), problem => problem.Contains("falls through", StringComparison.Ordinal));
+        Assert.Contains(Problems(Main(".patch @step")), problem => problem.Contains("falls into this data", StringComparison.Ordinal));
     }
 
     /// <summary>A register only a variant writes is written, so a routine that keeps it breaks its promise.</summary>

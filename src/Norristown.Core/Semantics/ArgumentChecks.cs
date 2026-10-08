@@ -146,7 +146,7 @@ public static class ArgumentChecks
             var why = compared.IsMode && !ComparedWord.Modes.Contains(compared.Word.Text.ToLowerInvariant())
                 ? $"`.mode` gives {Format(ComparedWord.Modes)}"
                 : compared.IsMode
-                    ? $"`{compared.Name}` takes an operand in {Format(compared.Choices)}"
+                    ? $"`{compared.Name}` takes only {Either(compared.Choices)}"
                     : $"`{compared.Name}` is {Format(compared.Choices)}";
             report(compared.Word.Span, Catalogue.ComparisonNeverHolds.Message(
                 compared.Compared, compared.Word.Text,
@@ -205,4 +205,12 @@ public static class ArgumentChecks
     /// </summary>
     private static string Format(IReadOnlyList<string> words) =>
         words.Count == 1 ? $"`{words[0]}`" : "one of " + string.Join(", ", words.Select(word => $"`{word}`"));
+
+    /// <summary>
+    /// Formats words as alternatives, such as <c>`imm`</c> or <c>`imm`, `zp` or `abs`</c>.
+    /// </summary>
+    private static string Either(IReadOnlyList<string> words) =>
+        words.Count == 1
+            ? $"`{words[0]}`"
+            : string.Join(", ", words.SkipLast(1).Select(word => $"`{word}`")) + $" or `{words[^1]}`";
 }

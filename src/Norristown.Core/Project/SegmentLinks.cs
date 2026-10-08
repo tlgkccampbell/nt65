@@ -144,7 +144,7 @@ public static class SegmentLinks
         if (placed.Type is "bss" or "zp")
             return $"has `type = {placed.Type}`";
         return placed.Load is { } load && config.Area(load) is { IsWritten: false }
-            ? $"loads into memory area \"{load}\", whose `file` is empty"
+            ? $"loads into memory area `{load}`, whose `file` is empty"
             : null;
     }
 

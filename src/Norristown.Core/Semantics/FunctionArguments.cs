@@ -64,7 +64,7 @@ public static class FunctionArguments
             }
             if (next >= parameters.Count)
             {
-                Fail(argument.Span, Count(function));
+                Fail(argument.Span, Count(function, call.Arguments.Arguments.TakeWhile(a => a is not NamedArgumentSyntax).Count()));
                 continue;
             }
             given[next++] = argument as ExpressionSyntax;
@@ -105,14 +105,20 @@ public static class FunctionArguments
     }
 
     /// <summary>
-    /// Returns the message for a call that gives <paramref name="function"/> more positional
-    /// arguments than it has parameters, stating how many it takes.
+    /// Returns how many arguments a function or macro takes, such as <c>1 argument</c> or
+    /// <c>1 to 2 arguments</c>.
     /// </summary>
-    private static DiagnosticMessage Count(Symbol function)
+    internal static string Arguments(int least, int most) =>
+        least == most ? $"{most} {(most == 1 ? "argument" : "arguments")}" : $"{least} to {most} arguments";
+
+    /// <summary>
+    /// Returns the message for a call that gives <paramref name="function"/> more positional
+    /// arguments than it has parameters, stating how many it takes and how many the call gives.
+    /// </summary>
+    private static DiagnosticMessage Count(Symbol function, int given)
     {
         var all = function.ParameterSymbols.Count;
         var least = function.ParameterSymbols.Count(parameter => parameter.Default is null);
-        return Catalogue.ArgumentCount.Message(
-            function.Name, all == least ? $"{all} argument(s)" : $"{least} to {all} arguments");
+        return Catalogue.ArgumentCount.Message(function.Name, Arguments(least, all), given);
     }
 }

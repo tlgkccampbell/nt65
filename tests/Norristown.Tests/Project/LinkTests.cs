@@ -151,7 +151,7 @@ public sealed class LinkTests
         var diagnostic = Assert.Single(project.Diagnostics);
         Assert.Equal(("linked-segments-disagree", "spc.cfg", 6), (diagnostic.Id, diagnostic.Span.File, diagnostic.Span.Line));
         Assert.Equal(
-            "segment \"SPCIMAGE\" is in the host's space here and in space `spc` in `rom.cfg`", diagnostic.Message);
+            "segment `SPCIMAGE` is in the host's space here and in space `spc` in `rom.cfg`", diagnostic.Message);
         Assert.Equal("rom.cfg", Assert.Single(diagnostic.Related).Span.File);
     }
 
@@ -177,13 +177,13 @@ public sealed class LinkTests
         Assert.NotNull(Find(project, "HUGE").Addition);
         Assert.Equal(
             [
-                ("project-segment-from-link", "segment \"CODE\" is linked, so its `size` comes from `type` in `rom.cfg`, "
+                ("project-segment-from-link", "segment `CODE` is linked, so its `size` comes from `type` in `rom.cfg`, "
                     + "and only an absolute segment may be made `far`"),
-                ("project-segment-from-link", "segment \"CODE\" is linked, so its `mirrors` is given on the memory area it "
+                ("project-segment-from-link", "segment `CODE` is linked, so its `mirrors` is given on the memory area it "
                     + "runs in, under `links`"),
-                ("project-segment-from-link", "segment \"CODE\" is linked, so its `bank` comes from `rom.cfg`, which runs it "
+                ("project-segment-from-link", "segment `CODE` is linked, so its `bank` comes from `rom.cfg`, which runs it "
                     + "in bank $80"),
-                ("segment-not-linked", "segment \"MISSING\" is not in any linked config, so ld65 has nowhere to put it"),
+                ("segment-not-linked", "segment `MISSING` is not in any linked config, so ld65 has nowhere to put it"),
             ],
             project.Diagnostics.Select(diagnostic => (diagnostic.Id, diagnostic.Message)));
     }

@@ -5,13 +5,13 @@
 
 ; A parameter with a reserved name is reported where it is declared, and is still the
 ; macro's parameter for its call and its uses.
-.macro load(x) {            ;! error[register-name]: `x` is a register name and cannot be used as a name
+.macro load(x) {            ;! error[register-name]: `x` is a register and cannot be a name
     lda #x
     sta x
 }
 
 ; A type with a reserved name is reported once, and an instance of it is not reported again.
-.struct S {                 ;! error[register-name]: `S` is a register name and cannot be used as a name
+.struct S {                 ;! error[register-name]: `S` is a register and cannot be a name
     q: .byte
 }
 
@@ -32,7 +32,7 @@
     lda #lib::twice(3)
 
     ; A name another module exports, used without its module's path, and then used correctly.
-    lda #thrice(1)          ;! error[declared-in-another-module]: `thrice` is not declared here, and module `lib` exports it: use `lib::thrice`, or bring it in with `.use lib::thrice`
+    lda #thrice(1)          ;! error[declared-in-another-module]: `thrice` is not declared here; module `lib` exports it, so write `lib::thrice` or `.use lib::thrice`
     lda #lib::thrice(1)
 
     ; A call through a pointer with no `.next` leaves the state as it was.

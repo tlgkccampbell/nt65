@@ -20,9 +20,9 @@
 ; A set is declared once and checked there.
 .signature std = a8, i16, dp = 0
 .signature a8 = i16             ;! error[signature-set-name-is-an-item]: `a8` is a signature item, and cannot name a signature set
-.signature loop = again         ;! error[signature-set-self-reference]: signature set `loop` names `again`, which leads back to `loop`: a set cannot include itself
-.signature again = loop         ;! error[signature-set-self-reference]: signature set `again` names `loop`, which leads back to `again`: a set cannot include itself
-.signature noisy = interrupt, a8 ;! error[handler-assumes-state]: `a8`: an interrupt handler can be entered at any instruction, so its signature can give only the mode: `interrupt, native` or `interrupt, emu`
+.signature loop = again         ;! error[signature-set-self-reference]: signature set `loop` includes itself through `again`
+.signature again = loop         ;! error[signature-set-self-reference]: signature set `again` includes itself through `loop`
+.signature noisy = interrupt, a8 ;! error[handler-assumes-state]: an interrupt handler cannot assume `a8`, because it can interrupt any instruction: give only `native` or `emu`
 
 ; A set comes first in its list, and names a set.
 .segment CODE0
@@ -43,7 +43,7 @@
     stp
 }
 
-.proc late_never: a8 -> noreturn { ;! error[item-belongs-at-entry]: `noreturn` describes how a routine is called, entered or left, and belongs before `->`
+.proc late_never: a8 -> noreturn { ;! error[item-belongs-at-entry]: `noreturn` belongs before `->`
     rts
 }
 
@@ -67,7 +67,7 @@
 }
 
 .proc tail: std {
-    jmp handler                 ;! error[tail-call-to-handler]: `jmp handler` is a tail call into interrupt handler `handler`, whose `rti` would not return to this routine's caller: only a `noreturn` routine or another interrupt handler may jump to one
+    jmp handler                 ;! error[tail-call-to-handler]: `jmp handler` is a tail call into interrupt handler `handler`, whose `rti` would not return to this routine's caller
 }
 
 .macro entered(): interrupt {   ;! error[macro-distance]: `interrupt` does not apply to a macro: it describes how a routine is called, and a macro is expanded in place
@@ -86,7 +86,7 @@
     rts
 }
 
-.proc pointed: std, args LIMIT + counter { ;! error[args-not-constant]: `args LIMIT + counter` needs a constant: the byte count has to be known while nt65 builds
+.proc pointed: std, args LIMIT + counter { ;! error[args-not-constant]: `args LIMIT + counter` needs a constant byte count
     rts
 }
 
@@ -102,7 +102,7 @@
 }
 
 .proc wrong_mirror: std, noreturn {
-    jml ($81 << 16) | .loword(near_std) ;! error[mirror-bank-mismatch]: `near_std` is in segment "CODE0", in bank $80 and mirrored in banks $00-$3f, but this reaches it through bank $81
+    jml ($81 << 16) | .loword(near_std) ;! error[mirror-bank-mismatch]: `near_std` is in segment `CODE0`, in bank $80 and mirrored in banks $00-$3f, but this reaches it through bank $81
 }
 
 .segment CODE0
@@ -116,7 +116,7 @@
 
 .segment CODE0
 .proc reads: a8, dbr = $c0 {
-    lda counter                 ;! error[bank-mismatch]: `counter` is in segment "LORAM", which is in bank $7e and mirrored in banks $00-$3f, $80-$bf, but B is $c0 here
+    lda counter                 ;! error[bank-mismatch]: `counter` is in segment `LORAM`, which is in bank $7e and mirrored in banks $00-$3f, $80-$bf, but B is $c0 here
     rts
 }
 

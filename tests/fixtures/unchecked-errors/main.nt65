@@ -15,7 +15,7 @@
 .segment CODE
 .proc indirect: a8, i8 {
     jmp (@table,x)          ;! error[indirect-jump-unchecked]: `jmp (@table,x)` is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` where they cannot be named
-@table: .addr @go                   ;! error[code-label-as-data]: the address of code label `@go` is taken here, so it may be jumped to where nt65 cannot see: add a `.state` after the label, or name it in a `.next` in `indirect`
+@table: .addr @go                   ;! error[code-label-as-data]: taking the address of `@go` lets code jump to it unseen: add a `.state` after the label, or name it in a `.next` in `indirect`
 @go:
     jsr (@table,x)          ;! error[indirect-call-unchecked]: `jsr (@table,x)` is an indirect call, which nt65 cannot follow: add a `.next` naming the routines it may call
     rts
@@ -28,7 +28,7 @@
 .segment CODE
 .proc dispatch: a8, i8 {
     jmp (handlers,x)
-    .next handlers          ;! error[next-target-not-a-table]: `handlers` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` values, directly or as members of records
+    .next handlers          ;! error[next-target-not-a-table]: `handlers` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` values
 }
 
 ; A computed jump.
@@ -38,7 +38,7 @@
 
 ; `rts` used as a jump.
 .proc pushed: a8, i8 {
-    pea @there - 1          ;! error[code-label-as-data]: the address of code label `@there` is taken here, so it may be jumped to where nt65 cannot see: add a `.state` after the label, or name it in a `.next` in `pushed`
+    pea @there - 1          ;! error[code-label-as-data]: taking the address of `@there` lets code jump to it unseen: add a `.state` after the label, or name it in a `.next` in `pushed`
     rts                     ;! error[pushed-return-unchecked]: `rts` returns to an address pushed in this block, so it is really a jump: add a `.next` naming where it goes
 @there:
     rts
@@ -55,7 +55,7 @@
 ; Data reached by falling through.
 .proc skip: a8, i8 {
     lda #1
-    .byte $2c               ;! error[runs-into-data]: the instruction above falls through into this data: add a `.next` after the data stating where flow goes instead
+    .byte $2c               ;! error[runs-into-data]: the instruction above falls into this data: add a `.next` after the data saying where flow goes
     lda #2
     rts
 }
@@ -68,7 +68,7 @@
 }
 
 .proc intruder: a8, i8 {
-    jmp owner::inner        ;! error[entry-not-declared]: `inner` is inside routine `owner`: to jump into another routine, declare the label an entry point with a `.state` after it
+    jmp owner::inner        ;! error[entry-not-declared]: `inner` is inside routine `owner`: mark it an entry point with a `.state` after the label
 }
 
 ; A declared label, jumped into in the wrong state.
@@ -176,7 +176,7 @@
 
 .proc not_adjacent: a8, i8 {
     nop
-    .fallthrough falls      ;! error[fallthrough-not-adjacent]: `falls` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
+    .fallthrough falls      ;! error[fallthrough-not-adjacent]: `falls` does not start where this routine ends: `.fallthrough` names the routine directly after it
 }
 
 ; A `.next` on a return says the return is a jump to the routines it names, which is a tail
@@ -210,7 +210,7 @@
 ; An exported label inside a routine is another way in.
 .proc exported_inner: a8, i8 {
     rts
-    .export inside              ;! error[exported-entry-not-declared]: `inside` is inside routine `exported_inner`, and exporting it lets other modules jump into it: declare it an entry point with a `.state` after the label
+    .export inside              ;! error[exported-entry-not-declared]: `inside` is exported from inside routine `exported_inner`: mark it an entry point with a `.state` after the label
     inside:
     rts
 }

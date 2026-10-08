@@ -31,11 +31,11 @@
     .byte n
 }
 
-.macro typed(n: SPEED) {    ;! error[parameter-kind-not-an-enum]: `SPEED` is a constant, and a parameter's kind is one of the kind words or an enum
+.macro typed(n: SPEED) {    ;! error[parameter-kind-not-an-enum]: `SPEED` is a constant, not a parameter kind: use a kind word or an enum
     .byte n
 }
 
-.macro spc(p: operand(dp)) {    ;! error[operand-mode-unknown]: `dp` is not an addressing mode an `operand` takes: one of `imm`, `acc`, `abs`, `absx`, `absy`, `zp`, `zpx`, `zpy`, `ind`, `indx`, `indy`, `sr`, `sry`, `long`, `longy`
+.macro spc(p: operand(dp)) {    ;! error[operand-mode-unknown]: `dp` is not an addressing mode: use one of `imm`, `acc`, `abs`, `absx`, `absy`, `zp`, `zpx`, `zpy`, `ind`, `indx`, `indy`, `sr`, `sry`, `long`, `longy`
     lda p
 }
 
@@ -48,7 +48,7 @@
         nop
     } .elseif .mode(src) == imx {       ;! warning[comparison-never-holds]: `.mode(src)` is never `imx`, so this comparison never holds: `.mode` gives one of `imm`, `acc`, `abs`, `absx`, `absy`, `ind`, `indx`, `indy`, `sr`, `sry`, `long`, `longy`
         nop
-    } .elseif .mode(src) == absx {      ;! warning[comparison-never-holds]: `.mode(src)` is never `absx`, so this comparison never holds: `src` takes an operand in one of `imm`, `abs`
+    } .elseif .mode(src) == absx {      ;! warning[comparison-never-holds]: `.mode(src)` is never `absx`, so this comparison never holds: `src` takes only `imm` or `abs`
         nop
     }
     .if reg != z {                      ;! warning[comparison-never-holds]: `reg` is never `z`, so this comparison always holds: `reg` is one of `x`, `y`

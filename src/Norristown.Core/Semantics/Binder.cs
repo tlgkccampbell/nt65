@@ -1488,7 +1488,7 @@ internal sealed partial class Binder
             return;
         }
         Report(name.Span, Catalogue.LabelOutsideARoutine.Message(
-            name.Text, $", and data is named by a declaration, `.data {name.Text.TrimStart('@')}: ...`"));
+            name.Text, $"; to name data, write `.data {name.Text.TrimStart('@')}: ...`"));
         if (name.Kind == SyntaxKind.Identifier)
             Fixed(new DiagnosticFix(FixKind.DataDeclaration));
     }

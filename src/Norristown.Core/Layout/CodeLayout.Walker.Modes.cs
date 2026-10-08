@@ -222,7 +222,7 @@ public sealed partial class CodeLayout
             if (value < low || value > high)
             {
                 Report(expression, Catalogue.ImmediateTooWide.Message(
-                    bits == 16 ? "this immediate is two bytes" : "an immediate is one byte", Value.Of(value)));
+                    Value.Of(value), bits == 16 ? "this two-byte immediate" : "a one-byte immediate"));
             }
         }
 
@@ -336,12 +336,11 @@ public sealed partial class CodeLayout
             }
             foreach (var symbol in AddressSymbols.In(model, expression, expansion))
             {
-                if (symbol.Segment is not { } name || model.Segments.Find(name) is not { DirectPage: { } page and not 0 } segment)
+                if (symbol.Segment is not { } name || model.Segments.Find(name) is not { DirectPage: not (null or 0) } segment)
                     continue;
                 Report(expression, Catalogue.DirectPageOnly.Message(
                     symbol.DisplayName,
                     segment.Name,
-                    StateValue.Hex(page, 4),
                     (mode == AddressingMode.Long || mode == AddressingMode.LongX ? "a long" : "an absolute")));
             }
         }

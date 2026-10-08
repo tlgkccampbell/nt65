@@ -1,6 +1,6 @@
 ; A module's name is a path, and nothing in a module may have the path of another module.
 .module hw
 
-.export .scope vic {        ;! error[name-is-a-module-path]: `hw::vic` is the path of a module, and module `hw` may not declare `vic` as well
+.export .scope vic {        ;! error[name-is-a-module-path]: `hw` cannot declare `vic`: `hw::vic` is already a module
     .const BORDER = $d020
 }

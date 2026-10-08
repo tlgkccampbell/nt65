@@ -14,5 +14,5 @@
 }
 
 .proc undeclared: a8, i8 {
-    jmp owner::owner::plain     ;! error[entry-not-declared]: `plain` is inside routine `owner`: to jump into another routine, declare the label an entry point with a `.state` after it
+    jmp owner::owner::plain     ;! error[entry-not-declared]: `plain` is inside routine `owner`: mark it an entry point with a `.state` after the label
 }

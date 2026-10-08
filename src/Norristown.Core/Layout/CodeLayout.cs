@@ -301,7 +301,7 @@ public sealed partial class CodeLayout
         if (Targets.Of(model, Transfers.TargetOf(instruction, mode), step.On) is not { } target)
             return null;
         return At(target.Symbol) is { } landing && landing >= start && landing <= i
-            ? $"the span contains a loop: `{mnemonic}` goes back to `{target.Symbol.DisplayName}`"
+            ? $"`{mnemonic}` loops back to `{target.Symbol.DisplayName}`"
             : null;
     }
 

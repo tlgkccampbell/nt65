@@ -6,26 +6,26 @@
 .segment CODE
 .export .proc first {
     lda #1
-    .fallthrough inner::second      ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
+    .fallthrough inner::second      ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` names the routine directly after it
 }
 
 .place inner
 
 .export .proc third {
     lda #3
-    .fallthrough fourth             ;! error[fallthrough-not-adjacent]: `fourth` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly after it in the same segment
+    .fallthrough fourth             ;! error[fallthrough-not-adjacent]: `fourth` does not start where this routine ends: `.fallthrough` names the routine directly after it
 }
 
 .place middle                       ; its bytes go between `third` and `fourth`
 
 .export .proc fourth {
     lda #4
-    .fallthrough alone::entry       ;! error[fallthrough-not-placed]: `entry` is in module `alone`, and the two modules are separate translation units, whose order only the linker knows: use `.place` to lay one out inside the other
+    .fallthrough alone::entry       ;! error[fallthrough-not-placed]: `entry` is in module `alone`, whose order only the linker decides: use `.place` to lay one module out inside the other
 }
 
 .export .proc fifth {
     lda #5
-    .fallthrough spare::go          ;! error[fallthrough-not-placed]: `go` is in module `spare`, and the two modules are separate translation units, whose order only the linker knows: use `.place` to lay one out inside the other
+    .fallthrough spare::go          ;! error[fallthrough-not-placed]: `go` is in module `spare`, whose order only the linker decides: use `.place` to lay one module out inside the other
 }
 
 .if FAST {
@@ -37,7 +37,7 @@
 }
 
 .place nowhere                      ;! error[module-unknown]: no module `nowhere` is in this build
-.place alone                        ;! error[place-not-placeable]: module `alone` is not marked as placeable: declare it `.module alone: placed` so that another module can place it
+.place alone                        ;! error[place-not-placeable]: module `alone` cannot be placed: declare it `.module alone: placed`
 .place twice
 
 .export .proc sixth {

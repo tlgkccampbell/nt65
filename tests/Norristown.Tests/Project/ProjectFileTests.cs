@@ -52,10 +52,10 @@ public sealed class ProjectFileTests
     [InlineData("""{ "cpu": "z80" }""", "`z80` is not a supported `cpu`: use `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`")]
     [InlineData("""{ "files": "main.nt65" }""", "`files` must be a list of strings")]
     [InlineData("""{ "settings": [] }""", "`settings` must be an object")]
-    [InlineData("""{ "settings": { "N": true } }""", "`N`: a setting's value must be a number")]
+    [InlineData("""{ "settings": { "N": true } }""", "setting `N` must be a number")]
     [InlineData("""{ "settings": { "2N": 1 } }""", "`2N` is not a valid setting name: use letters, digits and `_`, optionally after a module path such as `hw::`")]
-    [InlineData("""{ "segments": { "X": "zp" } }""", "segment \"X\" must be an object with a `size`")]
-    [InlineData("""{ "segments": { "X": {} } }""", "segment \"X\" needs a `size` of \"zp\", \"abs\" or \"far\"")]
+    [InlineData("""{ "segments": { "X": "zp" } }""", "segment `X` must be an object with a `size`")]
+    [InlineData("""{ "segments": { "X": {} } }""", "segment `X` needs a `size` of \"zp\", \"abs\" or \"far\"")]
     [InlineData("""{ "nope": 1 }""", "`nope` is not a key of nt65.json")]
     public void WhatIsWrongWithTheFileIsReported(string text, string message)
     {
@@ -250,9 +250,9 @@ public sealed class ProjectFileTests
             """);
 
         Assert.Equal(
-            [(4, "`N`: a setting's value must be a number"),
-                (4, "configuration `a` cannot set `cpu`: a configuration may set only `settings`, "
-                    + "`diagnostics`, `links` and `out`")],
+            [(4, "configuration `a` cannot set `cpu`: a configuration may set only `settings`, "
+                    + "`diagnostics`, `links` and `out`"),
+                (4, "setting `N` must be a number")],
             project.Diagnostics.Select(diagnostic => (diagnostic.Span.Line, diagnostic.Message)).Order());
     }
 
@@ -275,7 +275,7 @@ public sealed class ProjectFileTests
     }
 
     [Theory]
-    [InlineData("DEBUG=yes", "`DEBUG`: a setting's value must be a number")]
+    [InlineData("DEBUG=yes", "setting `DEBUG` must be a number")]
     [InlineData("2DEBUG=1", "`2DEBUG` is not a valid setting name: use letters, digits and `_`, optionally after a module path such as `hw::`")]
     public void ASettingValueThatIsNotOneIsReported(string argument, string message)
     {

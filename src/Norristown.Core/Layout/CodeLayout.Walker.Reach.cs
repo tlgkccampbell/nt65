@@ -90,7 +90,7 @@ public sealed partial class CodeLayout
                     var from = AddressSpace.Format(segments.SpaceOf(segment)?.Name);
                     var to = AddressSpace.Format(segments.SpaceOf(there)?.Name);
                     return transfer
-                        ? Catalogue.TransferToAnotherSpace.Message(text, name, there, to, from)
+                        ? Catalogue.TransferToAnotherSpace.Message(name, to, text)
                         : Catalogue.OperandInAnotherSpace.Message(name, there, to, from);
                 case SegmentReach.NeverMapped:
                     var (fromArea, toArea) = segments.Find(segment!)!.Excluding(segments.Find(there)!)!.Value;
@@ -103,14 +103,13 @@ public sealed partial class CodeLayout
                     {
                         MnemonicKind.Jsr => "use `jsl`",
                         MnemonicKind.Jmp or MnemonicKind.Bra or MnemonicKind.Brl => "use `jml`",
-                        _ => "a branch cannot leave its bank, so branch the other way around a `jml` to it",
+                        _ => "branch the other way around a `jml` to it",
                     };
                     return Catalogue.JumpLeavesBank.Message(
                         text,
-                        StateValue.Hex(segments.Find(segment!)!.Bank!.Value, 2),
                         name,
-                        there,
                         StateValue.Hex(segments.Find(there)!.Bank!.Value, 2),
+                        StateValue.Hex(segments.Find(segment!)!.Bank!.Value, 2),
                         reaches);
                 default:
                     return null;

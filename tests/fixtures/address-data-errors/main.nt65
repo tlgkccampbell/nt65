@@ -10,13 +10,13 @@
 .segment RODATA
 .data table {
     .byte 0
-    .addr sprite            ;! error[far-address-in-word]: `sprite` is a far address, and `.addr` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
-    .addr sprite + 2        ;! error[far-address-in-word]: `sprite` is a far address, and `.addr` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
-    .word sprite            ;! error[far-address-in-word]: `sprite` is a far address, and `.word` holds 16 bits: `.faraddr` holds all of it, and `.loword(sprite)` the low 16 bits
-    .addr $12345            ;! error[value-too-wide]: $012345 does not fit in this directive
-    .faraddr $1234567       ;! error[value-too-wide]: $01234567 does not fit in this directive
-    .byte table             ;! error[address-does-not-fit]: `table` is an absolute address, and `.byte` holds 8 bits: `<table` is its low byte
-    .byte table + 1         ;! error[address-does-not-fit]: `table` is an absolute address, and `.byte` holds 8 bits: `<table` is its low byte
+    .addr sprite            ;! error[far-address-in-word]: `sprite` is a far address and `.addr` holds 16 bits: use `.faraddr`, or `.loword(sprite)` for the low 16 bits
+    .addr sprite + 2        ;! error[far-address-in-word]: `sprite` is a far address and `.addr` holds 16 bits: use `.faraddr`, or `.loword(sprite)` for the low 16 bits
+    .word sprite            ;! error[far-address-in-word]: `sprite` is a far address and `.word` holds 16 bits: use `.faraddr`, or `.loword(sprite)` for the low 16 bits
+    .addr $12345            ;! error[value-too-wide]: $012345 does not fit in `.addr`
+    .faraddr $1234567       ;! error[value-too-wide]: $01234567 does not fit in `.faraddr`
+    .byte table             ;! error[address-does-not-fit]: `table` is an absolute address, and `.byte` holds 8 bits: use `<table` for its low byte
+    .byte table + 1         ;! error[address-does-not-fit]: `table` is an absolute address, and `.byte` holds 8 bits: use `<table` for its low byte
 
     ; A form that says which bits it keeps is accepted.
     .addr .loword(sprite)
@@ -28,14 +28,14 @@
 
 .segment CODE
 .proc main: a8, i8 {
-    lda #table              ;! error[address-does-not-fit]: `table` is an absolute address, and an immediate is one byte: `<table` is its low byte
+    lda #table              ;! error[address-does-not-fit]: `table` is an absolute address, and an immediate is one byte: use `<table` for its low byte
     lda #<table
     rep #$20
-    lda #sprite             ;! error[address-does-not-fit]: `sprite` is a far address, and this immediate is two bytes: `.loword(sprite)` is its low 16 bits
+    lda #sprite             ;! error[address-does-not-fit]: `sprite` is a far address, and this immediate is two bytes: use `.loword(sprite)` for its low 16 bits
     sep #$20
 
     ; `per` reaches its target the way `brl` does, so what it pushes is a near address.
-    per sprite              ;! error[target-too-far]: `per` reaches only a near target, in the current bank, and this one is far
+    per sprite              ;! error[target-too-far]: `per` cannot reach a far target outside the current bank
     pla
     pla
     rts
@@ -43,6 +43,6 @@
 
 ; An enum member is a constant number, so it cannot name an address.
 .enum Handler {
-    first = main            ;! error[enum-member-is-not-an-address]: `first` is an enum member, so its value must be a constant, and this is an address
+    first = main            ;! error[enum-member-is-not-an-address]: `first` is an enum member, so its value must be a constant, not an address
     second
 }

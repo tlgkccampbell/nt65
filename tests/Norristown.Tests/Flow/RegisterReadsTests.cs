@@ -241,7 +241,7 @@ public sealed class RegisterReadsTests
                 + "signature, not in `.state`"],
             Problems(".proc p {\n    .state reads a\n    rts\n}\n"));
         Assert.Equal(
-            ["main.nt65:1: `reads a` is about a routine from entry to exit, and belongs before `->`"],
+            ["main.nt65:1: `reads a` belongs before `->`"],
             FlowFragment.Problems("65816", ".proc p: a8 -> a16, reads a {\n    rep #$20\n    rts\n}\n"));
     }
 

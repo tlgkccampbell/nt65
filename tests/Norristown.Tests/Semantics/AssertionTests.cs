@@ -34,7 +34,7 @@ public sealed class AssertionTests
 
         Assert.Equal(
             ["main.nt65:2: only a warning",
-             "main.nt65:2: nt65's `.assert` takes no level: remove `warning`, since a failed assertion is always an "
+             "main.nt65:2: `.assert` takes no level: remove `warning`, since a failed assertion is always an "
                 + "error"],
             program.Problems());
     }

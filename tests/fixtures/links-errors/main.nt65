@@ -4,9 +4,9 @@
 
 .export start, unplaced, image, copied
 
-.segment CODE: abs              ;! error[segment-declared-twice]: segment "CODE" is already declared
+.segment CODE: abs              ;! error[segment-declared-twice]: segment `CODE` is already declared
 
-.segment DATA                   ;! error[segment-not-linked]: segment "DATA" is not in any linked config, so ld65 has nowhere to put it
+.segment DATA                   ;! error[segment-not-linked]: segment `DATA` is not in any linked config, so ld65 has nowhere to put it
 .data unplaced: .byte 0
 
 .segment IMAGE
@@ -17,7 +17,7 @@
 
 .segment CODE
 .proc start {
-    lda .loadof(IMAGE)          ;! error[segment-not-defined]: `.loadof` needs `define = yes` on segment "IMAGE" in `link.cfg`: ld65 defines `__IMAGE_LOAD__` only for such a segment
+    lda .loadof(IMAGE)          ;! error[segment-not-defined]: `.loadof` needs `define = yes` on segment `IMAGE` in `link.cfg`: ld65 defines `__IMAGE_LOAD__` only for such a segment
     lda .loadof(COPIED)
     rts
 }

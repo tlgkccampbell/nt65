@@ -44,7 +44,7 @@ public static class Catalogue
         Area.Output,
         "long-line",
         Severity.Info,
-        "this line is longer than {0} columns: it can be laid out across lines",
+        "this line is longer than {0} columns",
         "The formatter keeps the line breaks a file has and adds none, so a long line stays long until it is "
             + "broken. Where an expression's calls and sets could go one item to a line, the editor suggests it, "
             + "and the refactoring there lays the expression out. Where the items of an `.export`, `.import`, "
@@ -228,7 +228,7 @@ public static class Catalogue
         Area.ReadingALine,
         "data-needs-a-name",
         Severity.Error,
-        "`.data` declares data, and needs a name: the segment is `.segment DATA`",
+        "`.data` needs a name; to switch segments, write `.segment DATA`",
         "`.data` is a declaration, and a declaration has a name. The segment called DATA is named on a "
             + "`.segment` line.");
 
@@ -391,7 +391,7 @@ public static class Catalogue
         Area.ReadingALine,
         "import-holds-no-values",
         Severity.Error,
-        "an import describes its `{0}` data but cannot give it values: the bytes are defined in another object file",
+        "an import cannot give values: its bytes are defined in another object file",
         "An import declares what a symbol another object defines looks like, so that nt65 can size it and reach "
             + "its members. The bytes themselves belong to whoever defines it.");
 
@@ -426,8 +426,7 @@ public static class Catalogue
         Area.ReadingALine,
         "function-parameter-kind",
         Severity.Error,
-        "a `.func` parameter takes no kind: a kind belongs to a `.macro` parameter, and a function's argument is "
-            + "always a value",
+        "a `.func` parameter takes no kind; only `.macro` parameters have kinds",
         "A macro parameter may say what kind of argument it takes, such as a name, an operand or a block, because a "
             + "macro writes its arguments into code. A function's arguments are only ever values, so its parameters "
             + "are bare names, with a default if they need one: `.func scaled(value, factor = 2) = value * factor`.");
@@ -464,7 +463,7 @@ public static class Catalogue
         Area.ReadingALine,
         "nesting-too-deep",
         Severity.Error,
-        "expression nested more than {0} levels deep: nt65 reads no further",
+        "this expression nests more than {0} levels deep",
         "nt65 stops reading an expression nested deeper than this limit. The limit is far beyond anything typed "
             + "by hand; it is there so that a half-typed line of brackets cannot overflow the stack and crash the "
             + "assembler or the editor's language server.");
@@ -506,7 +505,7 @@ public static class Catalogue
         Area.ReadingALine,
         "assert-level",
         Severity.Error,
-        "nt65's `.assert` takes no level: remove `{0}`, since a failed assertion is always an error",
+        "`.assert` takes no level: remove `{0}`, since a failed assertion is always an error",
         "ca65's `.assert` takes a level such as `warning` or `error`, because ca65 cannot always decide the "
             + "condition itself. nt65 always reports a failed assertion as an error, checking it as soon as the "
             + "value is known and otherwise leaving it for the linker. Use `.assert condition, \"message\"`; the "
@@ -531,7 +530,7 @@ public static class Catalogue
         Area.ReadingALine,
         "export-declares-nothing",
         Severity.Error,
-        "`.export` goes before a declaration, and `{0}` declares nothing to export",
+        "`{0}` declares nothing, so there is nothing to export",
         "`.export` before a declaration exports what that declaration declares, so the directive after it has to "
             + "be one that declares something.");
 
@@ -549,7 +548,7 @@ public static class Catalogue
         Area.ReadingALine,
         "data-body-needs-a-count",
         Severity.Error,
-        "values in a body need a count: `{0}[] {{` counts them",
+        "values in a body need a count: write `{0}[] {{`",
         "A body of values belongs to an array, and an array states how many elements it holds. `[]` counts the "
             + "values given, which is what a body without a count usually meant.");
 
@@ -584,7 +583,7 @@ public static class Catalogue
         Area.ReadingALine,
         "continuation-outside-expression",
         Severity.Error,
-        "a line continues onto the next only inside an expression's brackets, a macro call's arguments or a list of parameters",
+        "a line can continue only inside brackets, a macro call's arguments or a parameter list",
         "A line whose `(` or `[` is still open at its end continues onto the next, so a long expression, macro "
             + "call or list of parameters can be written across lines. Only an expression's own brackets, a macro "
             + "call's arguments and a macro's or a function's parameters may hold a line break: a group's "
@@ -614,7 +613,7 @@ public static class Catalogue
         Area.ReadingALine,
         "builtin-argument-named",
         Severity.Error,
-        "`{0}` takes its arguments by position: a built-in function has no named parameters",
+        "`{0}` is built in and takes no named arguments",
         "A call to a `.func` may give an argument by its parameter's name, as `scaled(3, factor = 4)`. A built-in "
             + "function's parameters have no names, so each of its arguments is given in its place.");
 
@@ -649,7 +648,7 @@ public static class Catalogue
         Area.Names,
         "declared-in-another-module",
         Severity.Error,
-        "`{0}` is not declared here, and module `{1}` exports it: use `{2}::{3}`, or bring it in with `.use {4}::{5}`",
+        "`{0}` is not declared here; module `{1}` exports it, so write `{2}::{3}` or `.use {4}::{5}`",
         "The name is not in scope in this file, and exactly one module in the program exports it, which is almost "
             + "always the one meant.");
 
@@ -673,8 +672,7 @@ public static class Catalogue
         Area.Names,
         "export-ambiguous",
         Severity.Error,
-        "`{0}` is ambiguous: modules `{1}` and `{2}` both export it, and both are brought in with `::*`; use "
-            + "`{3}::{4}` to choose",
+        "`{0}` could be `{1}::{0}` or `{2}::{0}`: write the one you mean",
         "Two modules brought in with `.use module::*` export the same name, so which one is meant would depend on "
             + "the order the `.use` lines are read in. Use the full path, or bring in the one you mean by name "
             + "with `.use module::name`, which takes precedence over `::*`.");
@@ -718,7 +716,7 @@ public static class Catalogue
         Area.Names,
         "register-name",
         Severity.Error,
-        "`{0}` is a register name and cannot be used as a name",
+        "`{0}` is a register and cannot be a name",
         "Register names are reserved everywhere, because a symbol with the same name could not be told apart from "
             + "the register: `asl a` could mean the accumulator or a symbol called `a`. Mnemonics are not "
             + "reserved; register names are. Rename the symbol.");
@@ -727,7 +725,7 @@ public static class Catalogue
         Area.Names,
         "mnemonic-name",
         Severity.Warning,
-        "`{0}` is an instruction on the {1}; as a name it is legal and easy to misread",
+        "`{0}` is legal as a name but reads as the {1} instruction",
         "No mnemonic is reserved: when a line's first word is followed by `:` or `=`, it declares that word as a "
             + "name, even if it is spelled like an instruction. ca65 cannot define a bare symbol spelled like an "
             + "instruction, so nt65 writes a top-level one with its module in front, `main__lda`, as it already "
@@ -754,7 +752,7 @@ public static class Catalogue
         Area.Names,
         "module-used-as-a-name",
         Severity.Error,
-        "`{0}` is a module: a name in it is `{1}::name`",
+        "`{0}` is a module, not a name: write `{1}::name` for a name in it",
         "A module is not a value and has no address. What is wanted is a name inside it.");
 
     internal static DiagnosticDescriptor NameAloneOnALine { get; } = Entry(
@@ -769,7 +767,7 @@ public static class Catalogue
         Area.Names,
         "not-a-macro",
         Severity.Error,
-        "`{0}` is {1}, not a macro: only a macro is called with `!`",
+        "`{0}` is {1}, not a macro, so it cannot be called with `!`",
         "`!` after a name calls a macro, and marks the line as one whose code comes from somewhere else. Nothing "
             + "else is called that way: a routine is called with `jsr` or `jsl`.");
 
@@ -794,8 +792,7 @@ public static class Catalogue
         Area.Names,
         "multiproc-misplaced",
         Severity.Error,
-        "`.multiproc` declares routines, and this one is inside {0}: a routine belongs at file level or in a "
-            + "`.scope`",
+        "`.multiproc` must be at file level or in a `.scope`, not inside {0}",
         "`.multiproc` declares one routine per member of an enum, so it follows the same placement rule as "
             + "`.proc`: at file level or inside a `.scope`, not inside a routine, a `.data` block or a type.");
 
@@ -803,7 +800,7 @@ public static class Catalogue
         Area.Names,
         "module-declared-twice",
         Severity.Error,
-        "this file already has a `.module` line: a file is exactly one module",
+        "this file already has a `.module` line",
         "A file is one module. A large module is split into submodules, each its own file.");
 
     internal static DiagnosticDescriptor ModuleNotFirst { get; } = Entry(
@@ -817,9 +814,9 @@ public static class Catalogue
         Area.Names,
         "module-name-taken",
         Severity.Error,
-        "module `{0}` is already declared by `{1}`: a module is one file, and a large one is split into submodules",
+        "module `{0}` is already declared in `{1}`",
         "A module name is the path everything in it is reached by, and the name its output file is named after, so "
-            + "two files may not share one.");
+            + "two files may not share one. A large module is split into submodules, each its own file.");
 
     internal static DiagnosticDescriptor ModuleNameReserved { get; } = Entry(
         Area.Names,
@@ -833,7 +830,7 @@ public static class Catalogue
         Area.Names,
         "module-names-differ-in-case",
         Severity.Error,
-        "modules `{0}` and `{1}` differ only in case, and a file system that ignores case writes both to one file",
+        "modules `{0}` and `{1}` differ only in case, so a case-insensitive file system would write both to one file",
         "Output is named after the module, and on a file system that ignores case two such names are one file. "
             + "The build would depend on which ran last.");
 
@@ -852,8 +849,7 @@ public static class Catalogue
         Area.Names,
         "place-not-placeable",
         Severity.Error,
-        "module `{0}` is not marked as placeable: declare it `.module {0}: placed` so that another module can "
-            + "place it",
+        "module `{0}` cannot be placed: declare it `.module {0}: placed`",
         "A module whose `.module` line has no marker is assembled on its own, into an output file of its own. A "
             + "module that another module places has to state that on its own `.module` line, so that its file can "
             + "be read correctly by itself: `placed` means another module always places it, and `placeable` means "
@@ -879,7 +875,7 @@ public static class Catalogue
         Area.Names,
         "placed-nowhere",
         Severity.Error,
-        "module `{0}` is declared `placed`, and nothing places it: `.place {0}` goes where its bytes belong, or `placeable` lets it stand alone",
+        "module `{0}` is declared `placed`, but nothing places it: add `.place {0}` where its bytes belong, or declare it `placeable`",
         "A module declared `placed` has no output of its own: its bytes are written where another module places "
             + "it. One that nothing places would be written nowhere.");
 
@@ -887,7 +883,7 @@ public static class Catalogue
         Area.Names,
         "name-is-a-module-path",
         Severity.Error,
-        "`{0}` is the path of a module, and module `{1}` may not declare `{2}` as well",
+        "`{1}` cannot declare `{2}`: `{0}` is already a module",
         "A path reaches either a module or a name in one, so a module may not declare a name that is already the "
             + "start of another module's path.");
 
@@ -911,8 +907,7 @@ public static class Catalogue
         Area.Names,
         "use-collides-with-declaration",
         Severity.Error,
-        "`{0}` is already declared in this module, so a `.use` cannot bring in another: use `as` to give it a "
-            + "different name",
+        "`.use` cannot bring in `{0}`: this module already declares it, so rename it with `as`",
         "Names brought in with `.use` share the file's namespace with its own declarations, so one name cannot "
             + "mean both. Use `.use module::name as other` to bring it in under a different name.");
 
@@ -927,8 +922,7 @@ public static class Catalogue
         Area.Names,
         "reexport-star",
         Severity.Error,
-        "`.export .use` must name what it re-exports: `*` would re-export everything the other module exports, "
-            + "including names it adds later",
+        "`.export .use` cannot re-export `*`: name each item",
         "A `.export .use` makes another module's names part of this module's interface. A `*` would make that "
             + "interface whatever the other module exports later, which is not a promise this module can keep.");
 
@@ -953,7 +947,7 @@ public static class Catalogue
         Area.Names,
         "label-outside-a-routine",
         Severity.Error,
-        "`{0}` is a label outside a `.proc`: labels mark positions in code{1}",
+        "`{0}` is a label outside a `.proc`{1}",
         "Labels belong inside a `.proc`, where they mark positions in code. Outside a routine, data is named by a "
             + "`.data` declaration, such as `.data name: .byte 1, 2`; the fix can rewrite the line as one.");
 
@@ -970,7 +964,7 @@ public static class Catalogue
         Area.Names,
         "segment-region-misplaced",
         Severity.Error,
-        "a `.segment NAME` region belongs at file level, outside every block: inside one, `.segment NAME {{ }}` places what it holds",
+        "a `.segment NAME` line must be at file level; inside a block, use `.segment NAME {{ }}`",
         "A `.segment NAME` region sets where everything after it in the file goes, which only makes sense at file "
             + "level. Inside a block, the block form places what it holds.");
 
@@ -1013,8 +1007,7 @@ public static class Catalogue
         Area.Names,
         "family-declares-too-much",
         Severity.Error,
-        "`{0}` would declare one {1} per member, repeating everything inside it: a family declares only routines "
-            + "and data, so declare one family per role, such as `note::{2}` and `stop::{3}`",
+        "`{0}` would declare one {1} per member: a family declares only routines and data, so declare one family per role, such as `note::{2}` and `stop::{3}`",
         "A family declares one routine or data declaration per enum member. A scope or `.data` block named after "
             + "the binding would repeat everything inside it once per member, which is really several families "
             + "in one. Declare one family per role instead, each inside the scope for that role.");
@@ -1023,7 +1016,7 @@ public static class Catalogue
         Area.Names,
         "family-member-collides",
         Severity.Error,
-        "`{0}` is a member of `{1}` and is already declared in this scope: a family declares one name per member",
+        "`{0}` is a member of `{1}` and is already declared in this scope",
         "Each instance of a family takes the member's name, so a name already declared in the scope would be "
             + "declared twice.");
 
@@ -1040,7 +1033,7 @@ public static class Catalogue
         Area.Names,
         "export-narrows-address-size",
         Severity.Error,
-        "`{0}` is `{1}`, and an export may widen an address size but not narrow it: `{2}: {3}` or wider",
+        "`{0}` is `{1}`, and an export cannot narrow it: write `{2}: {3}` or wider",
         "Other modules reach the name at the size the export gives, and reaching a two-byte address as if it were "
             + "one byte reads the wrong place. Widening is safe; narrowing is not.");
 
@@ -1048,8 +1041,7 @@ public static class Catalogue
         Area.Names,
         "linker-name-is-an-instruction",
         Severity.Error,
-        "cannot export as `{0}`: ca65 reads it as an instruction, and an `as` name is written to the output "
-            + "unchanged",
+        "cannot export as `{0}`: ca65 would read it as an instruction",
         "An `as` name is written into the output exactly as given, with no module in front, and ca65 reads a line "
             + "that starts with an instruction name, for any CPU it supports, as an instruction, so it could never "
             + "define this symbol. Choose another linker name. This is an error, where `mnemonic-name` is only a "
@@ -1059,7 +1051,7 @@ public static class Catalogue
         Area.Names,
         "unused-symbol",
         Severity.Warning,
-        "`{0}` is never used: nothing names it, and it is not exported",
+        "`{0}` is never used or exported",
         "Nothing in the program names the declaration and the file does not export it, so nothing reads it. Data "
             + "that holds values may be there for where it lands, so only a declaration that reserves storage is "
             + "reported. A declaration that another module names although it is not exported is "
@@ -1069,7 +1061,7 @@ public static class Catalogue
         Area.Names,
         "unused-use-item",
         Severity.Warning,
-        "`{0}` is brought in and nothing names it: the `.use` item may go",
+        "`{0}` is brought in by `.use` and never used",
         "The `.use` brings the name in and the file never uses it. A `.export .use` re-exports rather than "
             + "uses, and is not reported.");
 
@@ -1088,7 +1080,7 @@ public static class Catalogue
         Area.Values,
         "defined-too-deep",
         Severity.Error,
-        "`{0}` is defined through more than {1} other names: nt65 works out no further",
+        "`{0}` is defined through more than {1} other names",
         "nt65 works out a name's value by working out the names it uses first, and each of those in turn. It stops "
             + "at this depth, far beyond what a program needs, so that a generated chain of definitions cannot "
             + "overflow the stack and crash the assembler or the editor's language server. Define the name from a "
@@ -1098,7 +1090,7 @@ public static class Catalogue
         Area.Values,
         "number-too-wide",
         Severity.Error,
-        "{0} does not fit in 32 bits: a value written to the ca65 output must be between -$80000000 and $ffffffff",
+        "{0} does not fit in 32 bits; ca65 takes -$80000000 to $ffffffff",
         "nt65 computes in 64-bit signed arithmetic, but ca65 computes in 32 bits, so every value that reaches the "
             + "output must fit ca65's range. The output writes a declaration, an operand or a data value as the "
             + "source has it, so each step of that expression is checked too. A name is checked where it is "
@@ -1116,7 +1108,7 @@ public static class Catalogue
         Area.Values,
         "shift-count-out-of-range",
         Severity.Error,
-        "shift count {0} is out of range: a shift moves 0 to 63 places",
+        "shift count {0} is out of range: it must be 0 to 63",
         "Values are 64 bits wide, so `<<` and `>>` shift by 0 to 63 places. A count outside that range, including "
             + "a negative one, is an error rather than being reduced or clamped.");
 
@@ -1124,7 +1116,7 @@ public static class Catalogue
         Area.Values,
         "sqrt-of-a-negative",
         Severity.Error,
-        "`.sqrt({0})` has no result: the argument cannot be negative",
+        "`.sqrt({0})` has no result, because its argument is negative",
         "`.sqrt(n)` is the largest whole number whose square is at most n. No number has a negative square, so n "
             + "must be 0 or more.");
 
@@ -1140,7 +1132,7 @@ public static class Catalogue
         Area.Values,
         "strcat-not-a-byte",
         Severity.Error,
-        "`.strcat` adds a number as a single byte, and {0} is not in the range 0 to 255",
+        "{0} is not a byte: `.strcat` adds a number as one byte, 0 to 255",
         "`.strcat` joins texts, and a number among its arguments is added as one byte, as in `.strcat(\"A\", $80 | "
             + "'X')`. A number outside 0 to 255 does not fit in a byte, and nt65 does not truncate it. Mask it "
             + "with `& $ff`, or use `<` for its low byte, if that is what was meant.");
@@ -1158,7 +1150,7 @@ public static class Catalogue
         Area.Values,
         "cycles-needs-a-position",
         Severity.Error,
-        "`{0}` is {1}, not a position in code: a cycle count runs from one label or routine name to another",
+        "`{0}` is {1}: a cycle count needs a label or routine name",
         "`.mincycles(from, to)` and `.maxcycles(from, to)` count the cycles one pass takes from one point in the "
             + "code to another, so each argument must be a label or a routine's name.");
 
@@ -1166,7 +1158,7 @@ public static class Catalogue
         Area.Values,
         "cycles-span-has-no-bound",
         Severity.Error,
-        "`{0}` cannot count the cycles between these positions: {1}",
+        "`{0}` cannot count these cycles: {1}",
         "`.mincycles` and `.maxcycles` add up the cycles of the instructions between two positions, which gives a "
             + "true count only when that code runs straight through once. A call takes as long as the routine it "
             + "calls, a loop repeats its body an unknown number of times, and a jump nt65 cannot follow could go "
@@ -1208,7 +1200,7 @@ public static class Catalogue
         Area.Values,
         "enum-member-is-not-an-address",
         Severity.Error,
-        "`{0}` is an enum member, so its value must be a constant, and this is an address",
+        "`{0}` is an enum member, so its value must be a constant, not an address",
         "An enum member is a number, and a member with no value counts on from the one before, so a member cannot "
             + "be set to an address. Where an address was meant, use a constant or an address alias outside the "
             + "enum, or refer to the routine or data declared for that member.");
@@ -1217,7 +1209,7 @@ public static class Catalogue
         Area.Values,
         "not-indexable",
         Severity.Error,
-        "`{0}` cannot be indexed with `[i]`: it is {1}",
+        "`{0}` is {1}, so it cannot be indexed",
         "`[i]` selects the i-th element of a data declaration that holds a counted list of elements, such as "
             + "`.byte[8]` or `.type Point[4]`. Anything else, including mixed data, has no elements to select.");
 
@@ -1250,7 +1242,7 @@ public static class Catalogue
         Area.Values,
         "bank-has-no-segment",
         Severity.Error,
-        "{0}, so `.bankof` has no memory area to give the bank of",
+        "{0}, so `.bankof` cannot find its bank",
         "`.bankof(name)` is the `bank` attribute that the linker configuration gives the memory area the name's "
             + "segment runs in, which is the area ca65's `.bank` reads, not the one it is loaded from. ld65 finds "
             + "the area from the segment, so the argument must be a routine, a label or data in a segment, not a "
@@ -1260,7 +1252,7 @@ public static class Catalogue
         Area.Values,
         "countof-has-no-elements",
         Severity.Error,
-        "`{0}` is {1}, which has bytes and no elements: `.sizeof({2})` is how many bytes it takes",
+        "`{0}` is {1} and has no elements: use `.sizeof({2})` for its size in bytes",
         "`.countof` answers how many elements a counted declaration holds. Something that is bytes and not "
             + "elements is measured with `.sizeof`.");
 
@@ -1268,8 +1260,7 @@ public static class Catalogue
         Area.Values,
         "sizeof-depends-on-expansion",
         Severity.Error,
-        "cannot compute `.sizeof({0})`: a macro call inside it is expanded only after constants are known; "
-            + "`.spanof({1})` gives its size at link time",
+        "cannot compute `.sizeof({0})`: it contains a macro call, which expands after constants are known; use `.spanof({1})` for its size at link time",
         "Constants and data sizes are worked out before any macro is expanded, and how many bytes a macro call in "
             + "a data declaration emits is known only once it is expanded. So the declaration's size is not a "
             + "constant. `.spanof` asks the linker for the size instead, which makes it a link-time value.");
@@ -1278,8 +1269,7 @@ public static class Catalogue
         Area.Values,
         "sizeof-depends-on-alignment",
         Severity.Error,
-        "cannot compute `.sizeof({0})`: its `.align` padding depends on where it is placed; `.spanof({1})` gives "
-            + "its size at link time",
+        "cannot compute `.sizeof({0})`: its `.align` padding depends on where it is placed; use `.spanof({1})` for its size at link time",
         "An `.align` inside a declaration pads to the next boundary, and how much padding that takes depends on "
             + "where the linker places it. So the declaration's size is not a constant. `.spanof` asks the linker "
             + "for the size instead, which makes it a link-time value.");
@@ -1297,7 +1287,7 @@ public static class Catalogue
         Area.Values,
         "not-measurable",
         Severity.Error,
-        "`{0}` is {1}: `{2}` measures a `.data` declaration, a routine or a type",
+        "`{2}` cannot measure `{0}`, {1}: it measures data, routines and types",
         "The measuring functions take something that occupies bytes, such as a `.data` declaration or a routine, "
             + "or a type, which states how many bytes it takes. A label is only a position and a scope only groups "
             + "names, so neither has a size. An import can be measured once it states its type, as in `.import "
@@ -1307,7 +1297,7 @@ public static class Catalogue
         Area.Values,
         "charmap-argument-named",
         Severity.Error,
-        "`{0}` is a charmap, which takes one argument, the text it maps, by position",
+        "charmap `{0}` takes its text by position, not by name",
         "A charmap is applied as a call, `screen(\"HI\")`, but it is not a `.func` and has no named parameters, so "
             + "its one argument is given without a name.");
 
@@ -1344,7 +1334,7 @@ public static class Catalogue
         Area.Values,
         "mmio-needs-an-address",
         Severity.Error,
-        "`.mmio` declares a hardware register at the address the hardware gives it: write `.mmio {0}: .byte = $address`",
+        "`.mmio {0}` needs an address: write `.mmio {0}: .byte = $address`",
         "A memory-mapped register is not laid out by the program. It is found at the address the hardware gives it, "
             + "so `.mmio` takes only the form of data found elsewhere, `.mmio name: element = address`. Everything "
             + "else about it is as `.data` at that address would be. The difference is that what it holds is set by "
@@ -1364,7 +1354,7 @@ public static class Catalogue
         Area.Values,
         "condition-uses-a-measurement",
         Severity.Error,
-        "an `.if` cannot test {0}, which uses a measurement of a declaration; check it with `.assert`",
+        "an `.if` cannot test {0}, which measures a declaration; check it with `.assert`",
         "An `.if` decides which declarations exist, so nt65 answers it before it reads any declaration. It can test "
             + "only what the configuration decides: literals, settings, built-ins such as `.target`, and the constants, "
             + "functions and enum members declared at file level from those. A size, an offset, a count or a distance "
@@ -1416,8 +1406,7 @@ public static class Catalogue
         Area.Values,
         "switch-arguments",
         Severity.Error,
-        "`.switch` takes a value, then a set and a result for each arm, and may end with a result for when no set "
-            + "holds the value: `.switch(v, [a, b], x, [c], y, otherwise)`",
+        "`.switch` takes a value, a set and a result for each arm, and an optional default: `.switch(v, [a, b], x, [c], y, otherwise)`",
         "`.switch(v, [a, b], x, [c], y, otherwise)` is `x` when `v` is `a` or `b`, `y` when it is `c`, and `otherwise` "
             + "when it is none of them. It takes a value and at least one arm.");
 
@@ -1441,7 +1430,7 @@ public static class Catalogue
         Area.Values,
         "switch-no-arm",
         Severity.Error,
-        "no arm of this `.switch` holds {0}, and it has no result for otherwise",
+        "no arm of this `.switch` holds {0}, and it has no default result",
         "A `.switch` without a last result for otherwise must have an arm for every value it is given. Add the "
             + "value to an arm's set, or end the `.switch` with a result for the values no arm holds.");
 
@@ -1457,7 +1446,7 @@ public static class Catalogue
         Area.Values,
         "set-out-of-place",
         Severity.Error,
-        "a set in brackets stands only after `.in` or as an arm of `.switch`",
+        "a bracketed set can appear only after `.in` or as a `.switch` arm",
         "A set has no value of its own. `v .in [a, b]` asks whether it holds `v`, and `.switch` chooses a result by "
             + "the first of its sets that holds a value.");
 
@@ -1481,7 +1470,7 @@ public static class Catalogue
         Area.Values,
         "cpu-disagrees",
         Severity.Error,
-        "`.cpu {1}` conflicts with the processor this program is built for, the {0}",
+        "`.cpu {1}` conflicts with this build's processor, the {0}",
         "A program is built for one processor. When the project file, the command line or another file sets it, a "
             + "`.cpu` in a source file must name the same processor. Change or remove the `.cpu`.");
 
@@ -1572,8 +1561,7 @@ public static class Catalogue
         Area.Values,
         "binding-not-over-an-enum",
         Severity.Error,
-        "`{0}` does not iterate over an enum, so it cannot end a path: only an `.each` over an enum names a member "
-            + "this way",
+        "`{0}` cannot end a path: only the binding of an `.each` over an enum can",
         "Inside `.each Enum, e`, a path such as `handlers::e` names the member of `handlers` that has the same "
             + "name as the current enum member. When `.each` iterates over a `.list` or a list parameter, its "
             + "variable stands for a value rather than a name, so it cannot be used at the end of a path.");
@@ -1705,8 +1693,7 @@ public static class Catalogue
         Area.Macros,
         "macro-names-unexported",
         Severity.Error,
-        "`{0}!` is exported but uses `{1}`, which is not exported: the macro expands in the caller's module, where "
-            + "`{1}` cannot be reached",
+        "exported macro `{0}!` uses `{1}`, which is not exported, so callers in other modules cannot reach it",
         "An exported macro expands in the module that calls it, so every name its body uses must be reachable from "
             + "there. Export the name it uses, or stop exporting the macro.");
 
@@ -1751,7 +1738,7 @@ public static class Catalogue
         Area.Macros,
         "argument-count",
         Severity.Error,
-        "`{0}` takes {1}, and this call gives more",
+        "`{0}` takes {1}, and this call gives {2}",
         "The call gives more positional arguments than the macro or the `.func` has parameters to bind them to.");
 
     internal static DiagnosticDescriptor BlockArgumentInParentheses { get; } = Entry(
@@ -1875,7 +1862,7 @@ public static class Catalogue
         Area.Macros,
         "parameter-kind-not-an-enum",
         Severity.Error,
-        "`{0}` is {1}, and a parameter's kind is one of the kind words or an enum",
+        "`{0}` is {1}, not a parameter kind: use a kind word or an enum",
         "A name after a parameter's `:` that is not one of the kinds' words names the enum whose members the "
             + "parameter takes.");
 
@@ -1883,7 +1870,7 @@ public static class Catalogue
         Area.Macros,
         "operand-mode-unknown",
         Severity.Error,
-        "`{0}` is not an addressing mode an `operand` takes: {1}",
+        "`{0}` is not an addressing mode: use {1}",
         "The modes are the words `.mode` gives, and `zp`, `zpx` and `zpy` for the direct-page addresses among "
             + "`abs`, `absx` and `absy`.");
 
@@ -1902,7 +1889,7 @@ public static class Catalogue
         Area.Macros,
         "expansion-limit",
         Severity.Error,
-        "the expansions in this file come to more than {0} statements, which is as far as nt65 goes",
+        "macro expansions in this file exceed the limit of {0} statements",
         "Expansion is bounded, and the bound is far beyond any program typed by hand. Reaching it means a "
             + "repetition or a nest of macros is multiplying out further than was meant.");
 
@@ -1921,7 +1908,7 @@ public static class Catalogue
         Area.Data,
         "element-count-empty",
         Severity.Error,
-        "`[]` takes its count from the values given, and there are none: use `{0}[n]` to reserve n elements",
+        "`[]` counts the values given, and there are none: use `{0}[n]` to reserve n elements",
         "`[]` means as many elements as there are values, and no values are given. To reserve room without giving "
             + "values, give the count, as in `.byte[16]`; the elements are filled with zeros.");
 
@@ -1944,7 +1931,7 @@ public static class Catalogue
         Area.Data,
         "element-count-mismatch",
         Severity.Error,
-        "this array is declared with {0} {1}, but {2} given",
+        "this array declares {0} {1}, but {2} {3} given",
         "A declaration with a count holds exactly that many elements: nt65 neither pads missing values nor drops "
             + "extra ones. Correct the count, or use `[]` to take the count from the values.");
 
@@ -1982,14 +1969,14 @@ public static class Catalogue
         Area.Data,
         "member-given-twice",
         Severity.Error,
-        "`{0}` is given a value twice: a member is named at most once",
+        "`{0}` is given a value twice",
         "A record initializer gives each member at most one value. Remove the duplicate.");
 
     internal static DiagnosticDescriptor UnionManyMembersGiven { get; } = Entry(
         Area.Data,
         "union-many-members-given",
         Severity.Error,
-        "`{0}` is a union, whose members all start at offset 0, so it takes a value for at most one of them",
+        "`{0}` is a union, so it takes a value for only one member",
         "A union's members share the same bytes, so giving two of them values would write each over the other.");
 
     internal static DiagnosticDescriptor MemberNeedsARecord { get; } = Entry(
@@ -2032,7 +2019,7 @@ public static class Catalogue
         Area.Data,
         "member-not-text",
         Severity.Error,
-        "`{0}` is one `{1}`, and this text is {2} bytes: text takes a member reserved with `.res`",
+        "`{0}` is one `{1}` and cannot hold text: reserve a text member with `.res`",
         "A member of a plain type holds one value. Room for text is reserved with `.res`, which states how much.");
 
     internal static DiagnosticDescriptor StrzNotText { get; } = Entry(
@@ -2046,7 +2033,7 @@ public static class Catalogue
         Area.Data,
         "strz-zero-in-text",
         Severity.Error,
-        "{0}: `.strz` writes the zero that ends it",
+        "{0}; `.strz` adds the terminating zero itself",
         "A zero byte is what ends the text, so a charmap that maps a character to zero would end it in the "
             + "middle.");
 
@@ -2054,7 +2041,7 @@ public static class Catalogue
         Area.Data,
         "text-not-ascii",
         Severity.Error,
-        "text is ASCII outside a charmap; use `\\xHH` for a byte above $7f",
+        "this character is not ASCII: outside a charmap, write a byte above $7f as `\\xHH`",
         "Which byte a character above $7f becomes depends on an encoding nt65 does not choose. A charmap states "
             + "what the bytes are, and `\\xHH` gives one directly.");
 
@@ -2070,7 +2057,7 @@ public static class Catalogue
         Area.Data,
         "far-address-in-word",
         Severity.Error,
-        "`{0}` is a far address, and `{1}` holds 16 bits: `.faraddr` holds all of it, and `.loword({2})` the low 16 bits",
+        "`{0}` is a far address and `{1}` holds 16 bits: use `.faraddr`, or `.loword({2})` for the low 16 bits",
         "A far address is a bank and a sixteen-bit offset. Writing it into two bytes would drop the bank "
             + "silently, so nt65 asks which was meant.");
 
@@ -2139,8 +2126,7 @@ public static class Catalogue
         Area.Data,
         "res-not-a-declaration",
         Severity.Error,
-        "a named declaration cannot use `.res`: declare it with a type such as `.byte[n]`, which fills with zeros "
-            + "where no values are given",
+        "a named declaration cannot use `.res`: use a type such as `.byte[n]`, which is zero-filled",
         "In nt65, `.res` is only padding inside a declaration. A named declaration states what its bytes are with a "
             + "type: `buf: .res 16` in ca65 becomes `.data buf: .byte[16]`, which reserves the same room.");
 
@@ -2158,7 +2144,7 @@ public static class Catalogue
         Area.Placement,
         "segment-undeclared",
         Severity.Error,
-        "segment \"{0}\" is not declared",
+        "segment `{0}` is not declared",
         "Every segment is declared once, with the address size it is reached at: in a source file "
             + "(`.segment NAME: abs`), in the project file's `segments`, or in a linked ld65 config. nt65 does not "
             + "create a segment just because a line names it. Declare the segment, or check the spelling of its "
@@ -2168,7 +2154,7 @@ public static class Catalogue
         Area.Placement,
         "segment-declared-twice",
         Severity.Error,
-        "segment \"{0}\" is already declared",
+        "segment `{0}` is already declared",
         "A segment is declared, with its size, once for the whole program, in one file or in the project, so that "
             + "every file reaches it the same way. After that, `.segment NAME` with no size just switches to it. "
             + "Remove the size from this line, or remove one of the declarations.");
@@ -2177,7 +2163,7 @@ public static class Catalogue
         Area.Placement,
         "segment-not-linked",
         Severity.Error,
-        "segment \"{0}\" is not in any linked config, so ld65 has nowhere to put it",
+        "segment `{0}` is not in any linked config, so ld65 has nowhere to put it",
         "A project with `links` in its project file takes its segments from the `SEGMENTS` block of each linked "
             + "ld65 config. A segment none of them places would stop the link with \"missing memory area "
             + "assignment\", so nt65 reports it where it is named. Add the segment to a config, or check the "
@@ -2187,7 +2173,7 @@ public static class Catalogue
         Area.Placement,
         "linked-segments-disagree",
         Severity.Error,
-        "segment \"{0}\" {1} in `{2}`",
+        "segment `{0}` {1} in `{2}`",
         "nt65 analyzes each module once, whichever links it goes into, so a segment that two linked configs both "
             + "place must be the same segment to nt65 in each: the same size, space, bank and mirrors. Make the "
             + "configs agree, or give one of the segments another name.");
@@ -2196,7 +2182,7 @@ public static class Catalogue
         Area.Placement,
         "segment-not-defined",
         Severity.Error,
-        "`{0}` needs `define = yes` on segment \"{1}\" in `{2}`: ld65 defines `{3}` only for such a segment",
+        "`{0}` needs `define = yes` on segment `{1}` in `{2}`: ld65 defines `{3}` only for such a segment",
         "`.loadof`, `.runof` and `.spanof` stand for the symbols ld65 defines for a segment whose config entry has "
             + "`define = yes`. Without it the link fails with an unresolved import, so nt65 reports it here. Add "
             + "`define = yes` to the segment's line in the config.");
@@ -2205,8 +2191,7 @@ public static class Catalogue
         Area.Placement,
         "code-in-a-data-space",
         Severity.Error,
-        "segment \"{0}\" is in space `{1}`, which holds data, not code for this processor: put another "
-            + "processor's code there as data or macro calls",
+        "segment `{0}` is in data space `{1}` and cannot hold this processor's code",
         "An address space declared as `\"data\"` in the project's `spaces` is another processor's memory, such as "
             + "a sound CPU's RAM. nt65 does not assemble that processor's instructions, so its code is given as "
             + "data, or through macros that emit the bytes. A space whose code this program's processor runs is "
@@ -2216,8 +2201,7 @@ public static class Catalogue
         Area.Placement,
         "transfer-to-another-space",
         Severity.Error,
-        "`{0}` targets {1}, in segment \"{2}\" of {3}, but this code runs in {4}: that code belongs to another "
-            + "processor",
+        "{0} is code for another processor, in {1}, so `{2}` cannot reach it",
         "Each address space is a different processor's memory. To this code, a name in another space is only a "
             + "number, such as the address the other processor starts at. A jump, branch or call to it would go to "
             + "that number in this processor's memory, which is something else. Use the value as an immediate or "
@@ -2227,7 +2211,7 @@ public static class Catalogue
         Area.Placement,
         "operand-in-another-space",
         Severity.Error,
-        "{0} is in segment \"{1}\" of {2}, and this code runs in {3}: here it can only be used as an immediate "
+        "{0} is in segment `{1}` of {2}, and this code runs in {3}: here it can only be used as an immediate "
             + "value or in data",
         "An operand that reads or writes memory reaches this processor's memory, where a name from another address "
             + "space is only a number. Take its value as an immediate (`#<name`) or put it in data. To reach the "
@@ -2237,9 +2221,7 @@ public static class Catalogue
         Area.Placement,
         "segment-not-visible",
         Severity.Error,
-        "{0} in segment \"{1}\", which is never mapped together with segment \"{2}\": `{3}` runs them in memory "
-            + "areas `{4}` and `{5}` at the same addresses; go through code both can see, such as a trampoline in a "
-            + "fixed bank",
+        "{0} in segment `{1}`, which is never mapped at the same time as segment `{2}`: `{3}` gives memory areas `{4}` and `{5}` the same addresses",
         "A linked configuration that runs two segments in different memory areas covering the same addresses, "
             + "such as the switchable banks of a cartridge mapper or disk overlays that share a load address, means "
             + "that only one of them is mapped at a time. Code in one can never jump to, call, branch to, read or write "
@@ -2271,7 +2253,7 @@ public static class Catalogue
         Area.Placement,
         "segment-standard-size",
         Severity.Error,
-        "\"{0}\" is a standard segment and is always `{1}`",
+        "`{0}` is a standard segment and is always `{1}`",
         "The standard segments `CODE`, `RODATA`, `DATA`, `BSS` and `ZEROPAGE` are predeclared with the size ca65 "
             + "gives them in every object file. One may be declared once more to give it a direct page, a bank or "
             + "mirrors, but only at that size. Use a segment of your own for a different size.");
@@ -2280,7 +2262,7 @@ public static class Catalogue
         Area.Placement,
         "segment-attribute-twice",
         Severity.Error,
-        "segment \"{0}\" already has a `{1}`",
+        "segment `{0}` already has a `{1}`",
         "Each of a segment's attributes (`dp`, `bank`, `mirrors`, `space`) takes one value, so it is given once. "
             + "List every mirrored bank in a single `mirrors = [...]`.");
 
@@ -2288,7 +2270,7 @@ public static class Catalogue
         Area.Placement,
         "segment-dp-not-zp",
         Severity.Error,
-        "segment \"{0}\" is not `zp`, and only a `zp` segment takes a `dp`",
+        "segment `{0}` is not `zp`, and only a `zp` segment takes a `dp`",
         "`dp` gives the direct-page base (the 65816's D register) that a `zp` segment's symbols are reached "
             + "through. Symbols in any other segment are reached by absolute or long addresses, so `dp` means "
             + "nothing there. Declare the segment `zp`, or remove the `dp`.");
@@ -2321,7 +2303,7 @@ public static class Catalogue
         Area.Placement,
         "segment-mirrors-need-a-bank",
         Severity.Error,
-        "segment \"{0}\" has `mirrors` but no `bank`: mirrors repeat a home bank, so give the segment a `bank`",
+        "segment `{0}` has `mirrors` but no `bank` for them to mirror",
         "`mirrors` lists other banks where the segment's home bank also appears, so the segment needs a home bank, "
             + "given with `bank = ...`.");
 
@@ -2329,8 +2311,7 @@ public static class Catalogue
         Area.Placement,
         "segment-block-redundant",
         Severity.Error,
-        "this block names \"{0}\", the segment it is already in, so it moves nothing: its contents stay inline, "
-            + "where execution falls into them",
+        "this block is already in segment `{0}`, so it moves nothing, and execution falls into it",
         "A nested segment block moves its contents out of line into another segment, so that execution does not "
             + "fall through into them. A block that names the segment it is already in moves nothing, and its "
             + "contents stay where the code above runs into them. Name a different segment, or remove the block.");
@@ -2359,7 +2340,7 @@ public static class Catalogue
         Area.Placement,
         "never-written",
         Severity.Error,
-        "{0} in segment \"{1}\", which {2}, so ld65 never writes them",
+        "{0} in segment `{1}`, which {2}, so ld65 never writes them",
         "ld65 writes a segment's bytes only when the segment is `ro` or `rw` and the memory area it loads into "
             + "has a file. A `bss` or `zp` segment, or one that loads into an area with `file = \"\"`, only reserves "
             + "room, so values given there never reach memory and the program starts with whatever the memory "
@@ -2395,7 +2376,7 @@ public static class Catalogue
         Area.Placement,
         "far-needs-65816",
         Severity.Error,
-        "{0} is declared `far`, and a far address needs the 65816",
+        "{0} is `far`, which needs the 65816",
         "A far address is a 24-bit bank and offset, which only the 65816 has. ca65 rejects `far` on every other "
             + "processor, so nt65 reports it where it is declared rather than emitting output ca65 would reject. "
             + "Declare the segment or import `abs` or `zp`, or build for the 65816.");
@@ -2490,7 +2471,7 @@ public static class Catalogue
         Area.Instructions,
         "target-too-far",
         Severity.Error,
-        "`{0}` reaches only a near target, in the current bank, and this one is far",
+        "`{0}` cannot reach a far target outside the current bank",
         "`jmp`, `jsr`, the branches and `per` reach an address within the current bank, and this target is in "
             + "another bank. On the 65816 use the long form: `jml` instead of `jmp`, or `jsl` instead of `jsr` for "
             + "a routine that returns with `rtl`.");
@@ -2508,7 +2489,7 @@ public static class Catalogue
         Area.Instructions,
         "branch-out-of-reach",
         Severity.Error,
-        "`{0}` would branch {1} bytes, and a branch reaches only -128 to 127{2}",
+        "`{0}` would branch {1} bytes, beyond a branch's reach of -128 to 127{2}",
         "A branch stores its target as one signed byte counted from the instruction after it, so it reaches 128 "
             + "bytes back or 127 forward. Reverse the condition and branch over a `jmp`, or use the long branch "
             + "(`jeq`, `jne` and so on), which nt65 writes as the short branch where it reaches and as a branch "
@@ -2545,7 +2526,7 @@ public static class Catalogue
         Area.Instructions,
         "immediate-too-wide",
         Severity.Error,
-        "{1} does not fit: {0}",
+        "{0} does not fit in {1}",
         "An immediate is one byte, or, on the 65816, two bytes when the register it goes to is 16-bit at this "
             + "point, as the analysis tracks it from `rep`, `sep` and the routine's signature. Use a value that "
             + "fits, take one byte of it with `<` or `>`, or widen the register.");
@@ -2590,8 +2571,7 @@ public static class Catalogue
         Area.Instructions,
         "direct-page-only",
         Severity.Error,
-        "`{0}` is in \"{1}\", reached through the direct page at {2}, so it works only as a direct-page operand: "
-            + "as {3} operand it would address its offset in the data bank instead",
+        "`{0}` is in direct-page segment `{1}`, so it must be a direct-page operand; as {2} operand it would address the data bank",
         "A symbol in a `zp` segment with a nonzero `dp` is an offset from the direct page. As a direct-page "
             + "operand it reaches the direct page plus that offset. As an absolute or long operand, whether forced "
             + "with a prefix or because the instruction has no direct-page form with this index (`lda dp,y`, for "
@@ -2660,8 +2640,7 @@ public static class Catalogue
         Area.ControlFlow,
         "runs-into-data",
         Severity.Error,
-        "the instruction above falls through into this data: add a `.next` after the data stating where flow goes "
-            + "instead",
+        "the instruction above falls into this data: add a `.next` after the data saying where flow goes",
         "Execution falls from the instruction above into these bytes, so the processor would run them as code, as "
             + "in the `.byte $2c` skip trick or an opcode given as bytes. nt65 cannot follow flow through "
             + "data, so add a `.next` after the data naming where flow really goes. If the instruction above is "
@@ -2732,8 +2711,7 @@ public static class Catalogue
         Area.ControlFlow,
         "next-target-not-a-table",
         Severity.Error,
-        "`{0}` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` "
-            + "values, directly or as members of records",
+        "`{0}` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` values",
         "A `.next` that names data follows the code labels the data holds, so the data must be a table of "
             + "addresses: data declared with `.addr` or `.faraddr`, records whose type has members declared so, "
             + "or mixed data made of either. In records, the other members are passed over.");
@@ -2742,7 +2720,7 @@ public static class Catalogue
         Area.ControlFlow,
         "next-successors-known",
         Severity.Error,
-        "`.next` is not allowed here: nt65 already knows that {0} {1}{2}",
+        "`.next` is not needed: {0} already {1}{2}",
         "`.next` states where flow goes after a statement it cannot follow by itself: an indirect jump or "
             + "call, an `rts` or `rtl` used as a jump, a jump to a computed address, or data that execution falls "
             + "into. After a conditional branch it may name the branch's own target, to state that the branch is always "
@@ -2834,8 +2812,7 @@ public static class Catalogue
         Area.ControlFlow,
         "fallthrough-not-adjacent",
         Severity.Error,
-        "`{0}` does not start where this routine ends: `.fallthrough` can only name the routine that comes directly "
-            + "after it in the same segment",
+        "`{0}` does not start where this routine ends: `.fallthrough` names the routine directly after it",
         "A routine that reaches its end runs on into whatever comes next in its segment: the next thing the file "
             + "puts in that segment, even when regions of other segments come between in the text, as ca65 lays "
             + "the bytes out. `.fallthrough` must name that routine; naming any other would claim something the "
@@ -2846,7 +2823,7 @@ public static class Catalogue
         Area.ControlFlow,
         "fallthrough-other-segment",
         Severity.Error,
-        "`{0}` is in segment \"{2}\", and this routine ends in \"{1}\": a routine can only run into what comes "
+        "`{0}` is in segment `{2}`, and this routine ends in `{1}`: a routine can only run into what comes "
             + "next in its own segment",
         "A segment's bytes are laid out in the order they appear, whatever other segments appear in "
             + "between, so the end of a routine is followed by the next thing in its own segment. A routine in "
@@ -2857,8 +2834,7 @@ public static class Catalogue
         Area.ControlFlow,
         "fallthrough-not-placed",
         Severity.Error,
-        "`{0}` is in module `{1}`, and the two modules are separate translation units, whose order only the linker "
-            + "knows: use `.place` to lay one out inside the other",
+        "`{0}` is in module `{1}`, whose order only the linker decides: use `.place` to lay one module out inside the other",
         "Across translation units the order of the bytes is decided at link time, which nt65 does not see, so it "
             + "cannot check that one routine runs into another. Where one module places the other with `.place` "
             + "(the other declared `placed`), both are laid out in one output file, and running into the other "
@@ -2940,8 +2916,7 @@ public static class Catalogue
         Area.ControlFlow,
         "entry-not-declared",
         Severity.Error,
-        "`{0}` is inside routine `{1}`: to jump into another routine, declare the label an entry point with a "
-            + "`.state` after it",
+        "`{0}` is inside routine `{1}`: mark it an entry point with a `.state` after the label",
         "A jump into the middle of another routine arrives with a processor state that routine's own paths do not "
             + "give, and the widths, mode and registers there cannot be inferred from the jump. A `.state` directly "
             + "after the label declares it an entry point and what the processor state is there, and both the jump "
@@ -2952,8 +2927,7 @@ public static class Catalogue
         Area.ControlFlow,
         "exported-entry-not-declared",
         Severity.Error,
-        "`{0}` is inside routine `{1}`, and exporting it lets other modules jump into it: declare it an entry "
-            + "point with a `.state` after the label",
+        "`{0}` is exported from inside routine `{1}`: mark it an entry point with a `.state` after the label",
         "An exported label inside a routine lets other modules jump into the middle of it, with a processor state "
             + "this module cannot see. A `.state` after the label declares it an entry point and what the processor "
             + "state is there, so the routine is checked from it. Only 65816 code needs this, because only there does "
@@ -2963,8 +2937,7 @@ public static class Catalogue
         Area.ControlFlow,
         "code-label-as-data",
         Severity.Error,
-        "the address of code label `{0}` is taken here, so it may be jumped to where nt65 cannot see: add a "
-            + "`.state` after the label, or name it in a `.next` in `{1}`",
+        "taking the address of `{0}` lets code jump to it unseen: add a `.state` after the label, or name it in a `.next` in `{1}`",
         "Taking the address of an instruction, in a table, a `pea` or an immediate, means something may later jump "
             + "to it indirectly, where the analysis cannot follow. Declare the label an entry point with a "
             + "`.state` after it, or name it in a `.next` on the indirect jump in its own routine, so the analysis "
@@ -3027,8 +3000,7 @@ public static class Catalogue
         Area.ControlFlow,
         "tail-call-to-handler",
         Severity.Error,
-        "{0} is a tail call into interrupt handler `{1}`, whose `rti` would not return to this routine's caller: "
-            + "only a `noreturn` routine or another interrupt handler may jump to one",
+        "{0} is a tail call into interrupt handler `{1}`, whose `rti` would not return to this routine's caller",
         "A tail call is a jump that leaves the callee to return to this routine's caller. An interrupt handler "
             + "returns with `rti`, which pulls the status flags as well as the address, and nothing pushed them, "
             + "so it would not return properly. Call the handler's code some other way, or jump to it only from "
@@ -3094,8 +3066,7 @@ public static class Catalogue
         Area.ControlFlow,
         "return-flag-not-set",
         Severity.Error,
-        "`{0}` gives {1} as a result (`-> {2}`), but on a path to this return nothing after its entry sets {1}, so "
-            + "its caller's {1} comes back",
+        "`{0}` declares `-> {2}`, but on this path nothing sets {1} before the return",
         "A flag named on its own after `->`, as in `-> c`, is a result the routine computes, such as a carry that "
             + "says whether a search found anything. Its caller branches on it, so every path through the routine "
             + "has to set it. On this path the flag still holds what the caller left in it. Set the flag on that "
@@ -3210,7 +3181,7 @@ public static class Catalogue
         Area.ProcessorState,
         "ensure-item-not-a-width",
         Severity.Error,
-        "`.ensure` takes only `a8`, `a16`, `i8`, `i16`, `c`, `d` or `i` = 0 or 1, and `v = 0`, not `{0}`",
+        "`.ensure` cannot set `{0}`: it sets only widths, `c`, `d` and `i` to 0 or 1, and `v` to 0",
         "`.ensure` emits the `rep` or `sep` that makes a register width true, and the `clc`, `sec`, `cld`, `sed`, "
             + "`cli`, `sei` or `clv` that sets a flag, each only where the analysis does not find it already so. "
             + "Those are the only parts of the processor state it can set without changing a register: Z and N "
@@ -3231,7 +3202,7 @@ public static class Catalogue
         Area.ProcessorState,
         "state-outside-a-routine",
         Severity.Error,
-        "`{0}` is only allowed inside a `.proc`: it describes a point in a routine's code",
+        "`{0}` must be inside a `.proc`",
         "`.state`, `.ensure` and `.frame` describe or change the processor state or the stack at one point in a "
             + "routine's code, and the analysis follows that state only inside a `.proc`. Move the directive into "
             + "the routine it belongs to.");
@@ -3267,7 +3238,7 @@ public static class Catalogue
         Area.ProcessorState,
         "state-value-not-constant",
         Severity.Error,
-        "`.state {0}` needs a constant, because the analysis tracks {1} as an exact value",
+        "`.state {0}` needs a constant value for {1}",
         "The analysis tracks the direct page register D and the data bank register B as exact values, to check "
             + "each direct-page and absolute operand against them. So the value in `.state dp = ...` or `.state "
             + "dbr = ...` must be a constant expression that nt65 can evaluate while it builds.");
@@ -3313,8 +3284,7 @@ public static class Catalogue
         Area.ProcessorState,
         "call-target-unknown",
         Severity.Error,
-        "`{0}` must call a named routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import, whose "
-            + "signature is checked",
+        "`{0}` must call a routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import",
         "On the 65816 every call is checked against the called routine's signature, which declares what register "
             + "widths, mode, D and B it expects. A call to a bare address, or to anything else without a "
             + "signature, cannot be checked, so the target has to be a `.proc`, an extern proc or a `proc(...)` "
@@ -3324,8 +3294,7 @@ public static class Catalogue
         Area.ProcessorState,
         "call-target-not-a-routine",
         Severity.Error,
-        "`{0}` is not a routine: on the 65816 a call must target a `.proc`, an extern proc or a `proc(...)` "
-            + "import, whose signature is checked",
+        "`{0}` is not a routine: on the 65816, a call must target a `.proc`, an extern proc or a `proc(...)` import",
         "On the 65816 every call is checked against the called routine's signature. What this call names has no "
             + "signature, so there is nothing to check it against. Call a `.proc`, an extern proc or a `proc(...)` "
             + "import instead.");
@@ -3382,7 +3351,7 @@ public static class Catalogue
         Area.ProcessorState,
         "jump-leaves-bank",
         Severity.Error,
-        "`{0}` cannot leave bank {1}, and {2} is in segment \"{3}\" in bank {4}: {5}",
+        "{1} is in bank {2}, and `{0}` cannot leave bank {3}: {4}",
         "`jsr`, `jmp` and the branches change only the 16-bit address and keep the program bank, so they cannot "
             + "reach code in a segment that the project places in another bank. Use `jsl` or `jml`, which set the "
             + "bank too; a conditional branch has no long form, so branch on the opposite condition around a `jml` "
@@ -3418,7 +3387,7 @@ public static class Catalogue
         Area.ProcessorState,
         "direct-page-mismatch",
         Severity.Error,
-        "`{0}` is in segment \"{1}\", which expects the direct page at {2}, but D is {3} here",
+        "`{0}` is in segment `{1}`, which expects the direct page at {2}, but D is {3} here",
         "A segment in the project file can declare `dp`, the value D must hold for its variables to be reached "
             + "with one-byte direct-page operands. Here D holds another value, so the operand would reach a "
             + "different address. Set D before this line, or declare its value with `.state dp = ...` or `dp = "
@@ -3447,7 +3416,7 @@ public static class Catalogue
         Area.ProcessorState,
         "bank-mismatch",
         Severity.Error,
-        "`{0}` is in segment \"{1}\", which is {2}, but B is {3} here",
+        "`{0}` is in segment `{1}`, which is {2}, but B is {3} here",
         "A segment in the project file can declare the bank its contents are in. An absolute operand is read from "
             + "the bank in the data bank register B, so with B holding another bank it would reach the same "
             + "address in the wrong bank. Set B first (for example with `plb`), declare it with `.state dbr = "
@@ -3466,7 +3435,7 @@ public static class Catalogue
         Area.ProcessorState,
         "mirror-bank-mismatch",
         Severity.Error,
-        "`{0}` is in segment \"{1}\", {2}, but this reaches it through bank {3}",
+        "`{0}` is in segment `{1}`, {2}, but this reaches it through bank {3}",
         "The segment's `bank` and `mirrors` in the project file state which banks its contents appear in. This long "
             + "address names the routine in a bank that is neither, so it would land somewhere else. Use an "
             + "address in the segment's bank or in one of its mirrors.");
@@ -3511,7 +3480,7 @@ public static class Catalogue
         Area.ProcessorState,
         "frame-member-not-stack-relative",
         Severity.Error,
-        "`{0}` is a stack slot, usable only on its own as a stack-relative operand: `{1},s`",
+        "`{0}` is a stack slot: use it as `{1},s`",
         "A frame member is an offset from the stack pointer, not an address, so it can only be the whole operand "
             + "of a stack-relative instruction, as in `lda locals::count,s` or `lda (locals::ptr,s),y`. It cannot "
             + "be used in an expression or with another addressing mode.");
@@ -3547,7 +3516,7 @@ public static class Catalogue
         Area.Output,
         "cannot-be-translated",
         Severity.Error,
-        "`{0}` cannot be translated to ca65, and no other error explains why: this is a bug in nt65",
+        "internal error: nt65 cannot translate `{0}` to ca65; please report this bug",
         "Everything nt65 accepts should have a ca65 translation, and anything it cannot translate should have been "
             + "reported as an error first. Reaching this means neither happened, which is a bug in nt65 rather "
             + "than in the program. Please report it with the line that triggers it.");
@@ -3623,7 +3592,7 @@ public static class Catalogue
         Area.TheProjectFile,
         "setting-not-a-number",
         Severity.Error,
-        "`{0}`: a setting's value must be a number",
+        "setting `{0}` must be a number",
         "A setting is a number. In the project file give a JSON number or a string in nt65 number syntax, such as "
             + "\"$20\"; on the command line, `-D NAME=value` takes the same syntax, and `-D NAME` alone sets it to "
             + "1.");
@@ -3667,7 +3636,7 @@ public static class Catalogue
         Area.TheProjectFile,
         "project-segment-not-an-object",
         Severity.Error,
-        "segment \"{0}\" must be an object with a `size`",
+        "segment `{0}` must be an object with a `size`",
         "Each entry under `segments` is an object describing that segment: its address `size`, which is required, "
             + "and optionally `dp`, `bank`, `mirrors` and `space`.");
 
@@ -3675,7 +3644,7 @@ public static class Catalogue
         Area.TheProjectFile,
         "project-segment-size-missing",
         Severity.Error,
-        "segment \"{0}\" needs a `size` of \"zp\", \"abs\" or \"far\"",
+        "segment `{0}` needs a `size` of \"zp\", \"abs\" or \"far\"",
         "A segment's `size` is how wide addresses in it are: \"zp\" for one-byte zero-page addresses, \"abs\" for "
             + "two-byte absolute ones, and \"far\" for three-byte long ones. It decides how every reference to the "
             + "segment's contents is assembled, so every segment has to give one.");
@@ -3684,7 +3653,7 @@ public static class Catalogue
         Area.TheProjectFile,
         "project-segment-from-link",
         Severity.Error,
-        "segment \"{0}\" is linked, so its `{1}` {2}",
+        "segment `{0}` is linked, so its `{1}` {2}",
         "With `links`, a segment is declared by the ld65 configs that place it. Its size comes from its `type`, "
             + "and its bank from where it runs. Mirrors and spaces are facts about memory, so they are given on the "
             + "memory area under the link. An entry under `segments` adds only what no config can say: `far`, a "
@@ -3745,7 +3714,7 @@ public static class Catalogue
         Area.TheProjectFile,
         "project-segment-key-unknown",
         Severity.Error,
-        "segment \"{0}\" cannot set `{1}`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`",
+        "segment `{0}` cannot set `{1}`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`",
         "A segment's entry states how wide its addresses are (`size`), which direct page and banks its contents are "
             + "reached through (`dp`, `bank`, `mirrors`), and which address space it is in (`space`). Any other "
             + "key is an error, so that a misspelt one does not silently do nothing.");
@@ -3812,7 +3781,7 @@ public static class Catalogue
         Area.Signatures,
         "signature-set-self-reference",
         Severity.Error,
-        "signature set `{0}` names `{1}`, which leads back to `{2}`: a set cannot include itself",
+        "signature set `{0}` includes itself through `{1}`",
         "A signature set is replaced by the items it names. If it names itself, directly or through other sets, "
             + "that replacement never ends. Remove the reference that closes the loop.");
 
@@ -3840,7 +3809,7 @@ public static class Catalogue
         Area.Signatures,
         "args-not-constant",
         Severity.Error,
-        "`{0}` needs a constant: the byte count has to be known while nt65 builds",
+        "`{0}` needs a constant byte count",
         "`args n` states how many bytes the caller pushes before the call. The analysis uses it to check every call "
             + "and to work out where the routine finds its arguments on the stack, so n has to be a constant "
             + "expression that nt65 can evaluate while it builds.");
@@ -3892,8 +3861,7 @@ public static class Catalogue
         Area.Signatures,
         "handler-assumes-state",
         Severity.Error,
-        "`{0}`: an interrupt handler can be entered at any instruction, so its signature can give only the mode: "
-            + "`interrupt, native` or `interrupt, emu`",
+        "an interrupt handler cannot assume `{0}`, because it can interrupt any instruction: give only `native` or `emu`",
         "An interrupt can arrive between any two instructions, so a handler cannot assume anything about the "
             + "register widths, D or B; it has to set what it needs itself. Only the mode is known on entry, "
             + "because the processor takes native-mode and emulation-mode interrupts through different vectors. "
@@ -3940,7 +3908,7 @@ public static class Catalogue
         Area.Signatures,
         "signature-value-not-constant",
         Severity.Error,
-        "`{0}` needs a constant, because the analysis tracks D and B as exact values",
+        "`{0}` needs a constant value",
         "The analysis tracks the direct page register D and the data bank register B as exact values, and checks "
             + "every call against the values in the callee's signature. So `dp = ...` or `dbr = ...` in a "
             + "signature has to be a constant expression that nt65 can evaluate while it builds.");
@@ -3991,8 +3959,7 @@ public static class Catalogue
         Area.Signatures,
         "macro-keeps",
         Severity.Error,
-        "`{0}` does not apply to a macro: its body becomes part of the routine it is expanded into, whose "
-            + "signature declares what it keeps, reads and does to the flags",
+        "`{0}` does not apply to a macro: the routine it expands into declares that",
         "A macro's body is expanded into a routine, so what it saves, restores, uses and sets is part of what that "
             + "routine keeps, reads and returns with, and `keeps`, `reads` and the flags belong in the routine's "
             + "signature. Remove it from the macro's.");
@@ -4053,7 +4020,7 @@ public static class Catalogue
         Area.Signatures,
         "item-belongs-at-entry",
         Severity.Error,
-        "`{0}` {1}, and belongs before `->`",
+        "`{0}` belongs before `->`",
         "What a routine is and how it is called are true of it from entry to exit, so they are declared once, "
             + "before the arrow. What comes after the arrow is what the routine leaves.");
 
@@ -4112,7 +4079,7 @@ public static class Catalogue
         Area.Suggestions,
         "constant-used-as-address",
         Severity.Info,
-        "`{0}` is used as an address; declaring it as data says what is there, or with `.mmio` that it is a hardware register",
+        "`{0}` is used as an address: declare it as data, or with `.mmio` if it is a hardware register",
         "A constant is a number to nt65, even where an instruction reaches memory through it, so what is at that "
             + "address has no element type, size or fields, and the editor cannot follow values stored there. Declared "
             + "as data found elsewhere, `.data name: .byte = address`, the same name has all of those, and with "

@@ -185,9 +185,9 @@ public sealed class BindingTests
 
         Assert.Equal(
             [
-                "2: `lda` is an instruction on the 6502; as a name it is legal and easy to misread",
-                "3: `X` is a register name and cannot be used as a name",
-                "4: `jeq` is an instruction on the 6502; as a name it is legal and easy to misread",
+                "2: `lda` is legal as a name but reads as the 6502 instruction",
+                "3: `X` is a register and cannot be a name",
+                "4: `jeq` is legal as a name but reads as the 6502 instruction",
             ],
             model.Problems());
     }

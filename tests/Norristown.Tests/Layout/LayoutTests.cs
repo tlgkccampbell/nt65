@@ -91,15 +91,15 @@ public sealed class LayoutTests
     }
 
     [Theory]
-    [InlineData("stz ptr", "`stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816")]
-    [InlineData("jml (ptr)", "`jml` is not available on the 6502, and is on the 65816")]
+    [InlineData("stz ptr", "`stz` is not available on the 6502; it needs the 65sc02, r65c02, 65c02 or 65816")]
+    [InlineData("jml (ptr)", "`jml` is not available on the 6502; it needs the 65816")]
     [InlineData("lda (ptr)", "`lda` does not take this operand on the 6502")]
     [InlineData("lda 3,s", "`lda` does not take this operand on the 6502")]
     [InlineData("stx ptr,x", "`stx` does not take this operand on the 6502")]
-    [InlineData("lda #$1234", "$1234 does not fit: an immediate is one byte")]
+    [InlineData("lda #$1234", "$1234 does not fit in a one-byte immediate")]
     [InlineData("jmp a:here", "`jmp` does not take an address-size prefix: a jump, branch or call is sized by its target")]
     [InlineData(".res ptr", "a `.res` count must be a constant")]
-    [InlineData(".byte 300", "$012c does not fit in this directive")]
+    [InlineData(".byte 300", "$012c does not fit in `.byte`")]
     public void WhatTheCpuMakesWrongIsReported(string line, string message)
     {
         var (layout, _) = Layout(line, Cpu.Mos6502);
@@ -165,7 +165,7 @@ public sealed class LayoutTests
         var model = SemanticModel.Create(tree, SegmentTable.Build([tree], []));
 
         var layout = CodeLayout.Create(model, Cpu.Mos6502);
-        Assert.Equal("`jsr` reaches only a near target, in the current bank, and this one is far",
+        Assert.Equal("`jsr` cannot reach a far target outside the current bank",
             Assert.Single(layout.Diagnostics).Message);
     }
 

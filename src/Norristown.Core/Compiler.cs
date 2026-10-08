@@ -882,7 +882,7 @@ public static class Compiler
         foreach (var segment in segments.Segments)
         {
             if (segment is { Size: AddressSize.Far, Declaration: { } declared })
-                yield return new Diagnostic(declared, Catalogue.FarNeeds65816.Message($"segment \"{segment.Name}\""));
+                yield return new Diagnostic(declared, Catalogue.FarNeeds65816.Message($"segment `{segment.Name}`"));
         }
         foreach (var symbol in program.Files.SelectMany(file => file.Symbols))
         {

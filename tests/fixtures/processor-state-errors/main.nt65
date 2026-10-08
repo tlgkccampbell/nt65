@@ -58,8 +58,8 @@
 .proc calls: a8, i8 {
     jsr far_away            ;! error[call-distance-mismatch]: `far_away` is far, so call it with `jsl`
     jsl calls               ;! error[call-distance-mismatch]: `calls` is near, so call it with `jsr`
-    jsr plain               ;! error[call-target-not-a-routine]: `plain` is not a routine: on the 65816 a call must target a `.proc`, an extern proc or a `proc(...)` import, whose signature is checked
-    jsr @inside             ;! error[call-target-not-a-routine]: `@inside` is not a routine: on the 65816 a call must target a `.proc`, an extern proc or a `proc(...)` import, whose signature is checked
+    jsr plain               ;! error[call-target-not-a-routine]: `plain` is not a routine: on the 65816, a call must target a `.proc`, an extern proc or a `proc(...)` import
+    jsr @inside             ;! error[call-target-not-a-routine]: `@inside` is not a routine: on the 65816, a call must target a `.proc`, an extern proc or a `proc(...)` import
     rts
 @inside:
     rts
@@ -99,7 +99,7 @@
 }
 
 ; Outside a routine there is no processor state.
-.state a8               ;! error[state-outside-a-routine]: `.state` is only allowed inside a `.proc`: it describes a point in a routine's code
+.state a8               ;! error[state-outside-a-routine]: `.state` must be inside a `.proc`
 
 ; A long call or jump reaches a far target; a near label is reached by the near form.
 .proc long_to_near: a8, i8 {

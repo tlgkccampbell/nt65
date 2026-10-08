@@ -196,7 +196,7 @@ public sealed class BlockTests
     [InlineData(
         new[] { ".segment CODE: abs", ".export .segment CODE {", ".proc f {", "    rts", "}", "}" },
         "Unknown 3-7\n  Proc 4-6\n",
-        new[] { "3: `.export` goes before a declaration, and `.segment` declares nothing to export" })]
+        new[] { "3: `.segment` declares nothing, so there is nothing to export" })]
     // A block argument may have a reserved word for its name, which the binder reports.
     [InlineData(
         new[]
@@ -205,17 +205,17 @@ public sealed class BlockTests
             ".proc f {", "    two!() {", "        nop", "    } a {", "        nop", "    }", "    rts", "}",
         },
         "Macro 2-4\nProc 5-12\n  MacroBlock 6-7 no closer\n  MacroBlock 8-10\n",
-        new[] { "2: `a` is a register name and cannot be used as a name" })]
+        new[] { "2: `a` is a register and cannot be a name" })]
     // An element type with no count before `{` opens a body of values, which the parser reports
     // needs a count.
     [InlineData(
         new[] { ".data table: .word {", "    1, 2", "    3, 4", "}" },
         "DataBody 2-5\n",
-        new[] { "2: values in a body need a count: `.word[] {` counts them" })]
+        new[] { "2: values in a body need a count: write `.word[] {`" })]
     [InlineData(
         new[] { ".proc f {", "    .word {", "        1, 2", "    }", "    rts", "}" },
         "Proc 2-7\n  DataBody 3-5\n",
-        new[] { "3: values in a body need a count: `.word[] {` counts them" })]
+        new[] { "3: values in a body need a count: write `.word[] {`" })]
     // Tokens before the `:` of a data line are reported once and skipped, so the line still
     // opens the body its element type and count give.
     [InlineData(

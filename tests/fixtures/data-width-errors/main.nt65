@@ -14,11 +14,11 @@
 .data two:     .strz "A", "B"       ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one
 .data number:  .strz 5              ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one
 .data letter:  .strz 'A'            ;! error[strz-not-text]: `.strz` takes one text: a string, a string constant, a call that returns text, or a charmap applied to one
-.data early:   .strz screen("A@B")  ;! error[strz-zero-in-text]: `screen` maps `@` to $00, which would end the text early: `.strz` writes the zero that ends it
-.data zero:    .strz "A\x00B"       ;! error[strz-zero-in-text]: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
-.data short:   .strz "A\0B"         ;! error[strz-zero-in-text]: the text holds a zero, which would end it early: `.strz` writes the zero that ends it
-.data bytes:   .byte 256, -129      ;! error[value-too-wide]: $0100 does not fit in this directive;! error[value-too-wide]: -129 does not fit in this directive
-.data longs:   .long $1000000       ;! error[value-too-wide]: $01000000 does not fit in this directive
+.data early:   .strz screen("A@B")  ;! error[strz-zero-in-text]: `screen` maps `@` to $00, which would end the text early; `.strz` adds the terminating zero itself
+.data zero:    .strz "A\x00B"       ;! error[strz-zero-in-text]: the text holds a zero, which would end it early; `.strz` adds the terminating zero itself
+.data short:   .strz "A\0B"         ;! error[strz-zero-in-text]: the text holds a zero, which would end it early; `.strz` adds the terminating zero itself
+.data bytes:   .byte 256, -129      ;! error[value-too-wide]: $0100 does not fit in `.byte`;! error[value-too-wide]: -129 does not fit in `.byte`
+.data longs:   .long $1000000       ;! error[value-too-wide]: $01000000 does not fit in `.long`
 .data address: .addr -1             ;! error[address-negative]: an address cannot be negative, but this one is -1
 .data far:     .faraddr -2          ;! error[address-negative]: an address cannot be negative, but this one is -2
 .data joined:  .byte TEXT + 1       ;! error[operator-on-text]: `+` cannot be used on a string
@@ -27,8 +27,8 @@
 .segment CODE
 .proc main: a8 {
     lda #TEXT                           ;! error[operand-is-text]: `TEXT` is a string, and an instruction's operand must be a number or an address
-    lda #-129                           ;! error[immediate-too-wide]: -129 does not fit: an immediate is one byte
-    .assert 1 == 1, warning, "fine"     ;! error[assert-level]: nt65's `.assert` takes no level: remove `warning`, since a failed assertion is always an error
+    lda #-129                           ;! error[immediate-too-wide]: -129 does not fit in a one-byte immediate
+    .assert 1 == 1, warning, "fine"     ;! error[assert-level]: `.assert` takes no level: remove `warning`, since a failed assertion is always an error
     rts
 }
 

@@ -410,7 +410,7 @@ file that states it must agree. The CPUs are:
 Each checks exactly its own instructions, and the output sets the matching ca65 CPU (§13).
 The CPU does not affect parsing: all mnemonics and addressing modes always lex and parse,
 and using one the target lacks is a semantic diagnostic that says which CPUs have it
-("`stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816").
+("`stz` is not available on the 6502; it needs the 65sc02, r65c02, 65c02 or 65816").
 
 Code that differs between CPUs tests what the CPU has, `.if .has(phx)`, which holds on every
 CPU with the instruction; `.target(65c02)` names one CPU exactly (§9, §10). The CPU is

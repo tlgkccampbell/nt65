@@ -51,7 +51,7 @@ internal static class Lookup
             }
             if (chosen is { } other)
             {
-                report?.Invoke(Catalogue.ExportAmbiguous.Message(name, other.From, module.Name, module.Name, name), null);
+                report?.Invoke(Catalogue.ExportAmbiguous.Message(name, other.From, module.Name), null);
                 return Resolution.Reported;
             }
             chosen = new Resolution(exported, From: module.Name);

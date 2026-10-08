@@ -19,16 +19,16 @@
 .segment CODE
 .proc start: a8, i8 {
     jsl far_routine
-    jsr near_routine        ;! error[jump-leaves-bank]: `jsr` cannot leave bank $80, and `near_routine` is in segment "BANK1" in bank $81: use `jsl`
-    jeq near_routine        ;! error[jump-leaves-bank]: `jeq` cannot leave bank $80, and `near_routine` is in segment "BANK1" in bank $81: a branch cannot leave its bank, so branch the other way around a `jml` to it
+    jsr near_routine        ;! error[jump-leaves-bank]: `near_routine` is in bank $81, and `jsr` cannot leave bank $80: use `jsl`
+    jeq near_routine        ;! error[jump-leaves-bank]: `near_routine` is in bank $81, and `jeq` cannot leave bank $80: branch the other way around a `jml` to it
     jsl overlay_a
     rts
 }
 
 .segment OVERLAYA
 .proc overlay_a: far, a8, i8 {
-    jsl overlay_b           ;! error[segment-not-visible]: `jsl` targets `overlay_b` in segment "OVERLAYB", which is never mapped together with segment "OVERLAYA": `rom.cfg` runs them in memory areas `OVLB` and `OVLA` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
-    lda f:table_b           ;! error[segment-not-visible]: `table_b` in segment "OVERLAYB", which is never mapped together with segment "OVERLAYA": `rom.cfg` runs them in memory areas `OVLB` and `OVLA` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    jsl overlay_b           ;! error[segment-not-visible]: `jsl` targets `overlay_b` in segment `OVERLAYB`, which is never mapped at the same time as segment `OVERLAYA`: `rom.cfg` gives memory areas `OVLB` and `OVLA` the same addresses
+    lda f:table_b           ;! error[segment-not-visible]: `table_b` in segment `OVERLAYB`, which is never mapped at the same time as segment `OVERLAYA`: `rom.cfg` gives memory areas `OVLB` and `OVLA` the same addresses
     jsl far_routine
     rtl
 }

@@ -102,7 +102,7 @@ public sealed class MacroInvocation
         {
             if (next >= positional.Count)
             {
-                Report(argument.Span, Count(macro));
+                Report(argument.Span, Count(macro, call.Arguments!.Arguments.TakeWhile(a => a is not NamedArgumentSyntax).Count()));
                 return;
             }
             var parameter = positional[next];
@@ -288,15 +288,13 @@ public sealed class MacroInvocation
 
     /// <summary>
     /// Returns the message for a call that gives <paramref name="macro"/> more arguments than it
-    /// takes, stating how many it takes.
+    /// takes, stating how many it takes and how many the call gives.
     /// </summary>
-    private static DiagnosticMessage Count(Symbol macro)
+    private static DiagnosticMessage Count(Symbol macro, int given)
     {
         var positional = macro.Parameters.Count(parameter => !parameter.IsBlock);
         var least = macro.Parameters.Count(parameter => !parameter.IsBlock && !parameter.IsOptional);
-        return Catalogue.ArgumentCount.Message(
-            macro.Name,
-            positional == least ? $"{positional} argument(s)" : $"{least} to {positional} arguments");
+        return Catalogue.ArgumentCount.Message(macro.Name, FunctionArguments.Arguments(least, positional), given);
     }
 
     /// <summary>

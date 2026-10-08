@@ -258,7 +258,7 @@ public sealed partial class CodeLayout
                     continue;
                 var mnemonic = branch.Statement.Mnemonic.Text;
                 var longer = Instructions.LongFormOf(branch.Statement.MnemonicKind) is { } form ? SyntaxFacts.TextOf(form) : null;
-                var fix = longer is not null ? $": use `{longer}`, which reaches any near target" : "";
+                var fix = longer is not null ? $": use `{longer}`" : "";
                 ReportOnLine(branch.Target, branch.On,
                     Catalogue.BranchOutOfReach.Message(mnemonic, reach, fix),
 

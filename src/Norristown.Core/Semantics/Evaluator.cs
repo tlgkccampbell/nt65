@@ -923,8 +923,7 @@ internal sealed partial class Evaluator
             {
                 Report(indexExpression, Catalogue.ElementIndexOutOfRange.Message(at < 0
                     ? $"element index {at} is negative; indexes start at 0"
-                    : $"index {at} is past the end of `{symbol.DisplayName}`: it holds {count} "
-                        + $"{(count == 1 ? "element" : "elements")}, so the last index is {count - 1}"));
+                    : $"index {at} is past the end of `{symbol.DisplayName}`, whose last index is {count - 1}"));
                 return null;
             }
             offset += at * stride;

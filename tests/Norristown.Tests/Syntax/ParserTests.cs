@@ -196,13 +196,13 @@ public sealed class ParserTests
     [InlineData(".segment X: zp, page = 1", "expected `dp`, `bank`, `mirrors` or `space`")]
     [InlineData(".rodata {", "ca65's `.rodata` is `.segment RODATA` in nt65")]
     [InlineData(".tag Point", "`.tag T` is `.type T` in nt65, and `.tag T, n` is `.type T[n]`")]
-    [InlineData(".data {", "`.data` declares data, and needs a name: the segment is `.segment DATA`")]
+    [InlineData(".data {", "`.data` needs a name; to switch segments, write `.segment DATA`")]
     [InlineData(".data x .byte", "expected `:` before what the data is")]
     [InlineData(".data x: lda", "expected what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, `.type T`, or bytes such as `.incbin`")]
     [InlineData(".data x: .byte[4 {", "expected `]`")]
     [InlineData(".data x: .byte[4] 1, 2, 3, 4", "the values of an array go in braces: `.byte[n] { 1, 2 }`")]
     [InlineData(".data x: .type Point 1", "a record's values go in braces: `.type T { member = value }`")]
-    [InlineData(".data x: .byte {", "values in a body need a count: `.byte[] {` counts them")]
+    [InlineData(".data x: .byte {", "values in a body need a count: write `.byte[] {`")]
     [InlineData(".cpu 6510", "expected `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`")]
     [InlineData(".frame", "expected a name for the frame")]
     [InlineData(".frame locals Locals", "expected `:` and the struct the frame is laid out as")]
@@ -214,7 +214,7 @@ public sealed class ParserTests
     [InlineData(".import x: .incbin \"a.bin\"",
         "`.incbin` is not an element type: an import states what its bytes are as `.byte`, `.word`, `.addr` or `.type T`")]
     [InlineData(".import x: .byte 1, 2",
-        "an import describes its `.byte` data but cannot give it values: the bytes are defined in another object file")]
+        "an import cannot give values: its bytes are defined in another object file")]
     [InlineData(".export", "expected a name to export")]
     [InlineData("lda #1 junk", "unexpected `junk`")]
     [InlineData("label: .proc p {", "`.proc` may not follow a label")]
@@ -336,7 +336,7 @@ public sealed class ParserTests
             + (closed ? string.Concat(Enumerable.Repeat(close, depth)) : "") + "\n";
         var tree = SyntaxTree.Parse("test.nt65", line);
         var diagnostic = Assert.Single(tree.Diagnostics);
-        Assert.Equal("expression nested more than 100 levels deep: nt65 reads no further", diagnostic.Message);
+        Assert.Equal("this expression nests more than 100 levels deep", diagnostic.Message);
         Assert.Equal(line, tree.Root.ToFullString());
     }
 
@@ -352,7 +352,7 @@ public sealed class ParserTests
             + string.Concat(Enumerable.Repeat(")", depth)) + ") {\n}\n";
         var tree = SyntaxTree.Parse("test.nt65", line);
         var diagnostic = Assert.Single(tree.Diagnostics);
-        Assert.Equal("expression nested more than 100 levels deep: nt65 reads no further", diagnostic.Message);
+        Assert.Equal("this expression nests more than 100 levels deep", diagnostic.Message);
         Assert.Equal(line, tree.Root.ToFullString());
     }
 

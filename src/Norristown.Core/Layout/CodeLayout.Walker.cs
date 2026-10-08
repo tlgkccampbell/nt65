@@ -444,10 +444,10 @@ public sealed partial class CodeLayout
                     CpuNames.Format(cpu),
                     formatted.Count == 0 ? ""
                         : undocumented
-                            ? $", and is an undocumented opcode of the NMOS 6502, which the {CpuNames.Format(Cpu.Mos6502X)} has"
-                            : ", and is on the " + (formatted.Count == 1
+                            ? $"; it is an undocumented NMOS 6502 opcode, which needs the {CpuNames.Format(Cpu.Mos6502X)}"
+                            : "; it needs the " + (formatted.Count == 1
                                 ? formatted[0]
-                                : string.Join(", ", formatted.SkipLast(1)) + " and " + formatted[^1])));
+                                : string.Join(", ", formatted.SkipLast(1)) + " or " + formatted[^1])));
                 Unlayable();
                 return;
             }

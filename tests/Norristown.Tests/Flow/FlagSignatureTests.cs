@@ -34,7 +34,7 @@ public sealed class FlagSignatureTests
     {
         Assert.Contains(
             Problems(".proc SCROLL_UP = $E8EA: -> z = 1\n.export .proc main {\n    jsr SCROLL_UP\n    bcc @x\n    .byte 1\n@x:\n    rts\n}\n"),
-            problem => problem.Contains("falls through", StringComparison.Ordinal));
+            problem => problem.Contains("falls into this data", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -96,7 +96,7 @@ public sealed class FlagSignatureTests
         var diagnostic = Assert.Single(Diagnostics(".export .proc find_slot: reads x -> c {\n    lda $1000,x\n    beq @empty\n    cmp #1\n@empty:\n    rts\n}\n"));
         Assert.Equal("return-flag-not-set", diagnostic.Id);
         Assert.Equal(
-            "`find_slot` gives C as a result (`-> c`), but on a path to this return nothing after its entry sets C, so its caller's C comes back",
+            "`find_slot` declares `-> c`, but on this path nothing sets C before the return",
             diagnostic.Message);
     }
 
@@ -109,7 +109,7 @@ public sealed class FlagSignatureTests
     [InlineData(".export .proc p: -> c = 2 {\n    rts\n}\n", "`c = 2` gives a flag a value, which must be the constant 0 or 1")]
     [InlineData(".export .proc p: m = 0 {\n    rts\n}\n", "`m` is not an item: the accumulator's width is written `a8` or `a16`")]
     [InlineData(".export .proc p {\n    .ensure z = 1\n    rts\n}\n",
-        "`.ensure` takes only `a8`, `a16`, `i8`, `i16`, `c`, `d` or `i` = 0 or 1, and `v = 0`, not `z = 1`")]
+        "`.ensure` cannot set `z = 1`: it sets only widths, `c`, `d` and `i` to 0 or 1, and `v` to 0")]
     public void AFlagItemThatCannotMeanAnythingIsReported(string text, string message)
     {
         Assert.Contains(message, Diagnostics(text).Select(diagnostic => diagnostic.Message));

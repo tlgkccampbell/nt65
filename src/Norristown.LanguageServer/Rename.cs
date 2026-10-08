@@ -78,7 +78,7 @@ internal static class Rename
         // A mnemonic may be used as a name (it draws a warning, not an error), so the only
         // reserved words a rename refuses are register names.
         if (!symbol.IsCheapLocal && SyntaxFacts.IsRegister(name))
-            return $"`{newName}` is a register name and cannot be used as a name";
+            return $"`{newName}` is a register and cannot be a name";
 
         var taken = symbol.IsCheapLocal ? symbol.Scope.FindCheapLocal(name) : (alias ?? symbol.Scope).FindMember(name);
         return taken is null || taken == symbol ? null : $"`{newName}` is already declared in this scope";

@@ -13,7 +13,7 @@
 .segment CODE
 .proc pinned: emu -> emu {
     .ensure a16             ;! error[ensure-needs-native]: `.ensure a16` needs native mode, and the processor is in emulation mode here, where both widths are 8 bits
-    .ensure native          ;! error[ensure-item-not-a-width]: `.ensure` takes only `a8`, `a16`, `i8`, `i16`, `c`, `d` or `i` = 0 or 1, and `v = 0`, not `native`
+    .ensure native          ;! error[ensure-item-not-a-width]: `.ensure` cannot set `native`: it sets only widths, `c`, `d` and `i` to 0 or 1, and `v` to 0
     rts
 }
 
@@ -23,7 +23,7 @@
     .frame short: Locals    ;! error[frame-past-the-stack]: frame `short` is 4 bytes, but only 2 bytes are pushed here
     pea 0
     .frame locals: Locals
-    lda #locals::count      ;! error[frame-member-not-stack-relative]: `locals::count` is a stack slot, usable only on its own as a stack-relative operand: `locals::count,s`
+    lda #locals::count      ;! error[frame-member-not-stack-relative]: `locals::count` is a stack slot: use it as `locals::count,s`
     pla
     pla
     lda locals::src,s       ;! error[frame-gone]: `locals::src` is in frame `locals`, which has been pulled off the stack here
@@ -65,4 +65,4 @@
 }
 
 ; Outside a routine there is no stack and no widths to set.
-.ensure a8              ;! error[state-outside-a-routine]: `.ensure` is only allowed inside a `.proc`: it describes a point in a routine's code
+.ensure a8              ;! error[state-outside-a-routine]: `.ensure` must be inside a `.proc`

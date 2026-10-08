@@ -17,11 +17,11 @@
 
 .segment BANK00
 .proc near_routine {
-    jsr far_routine         ;! error[segment-not-visible]: `jsr` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
-    lda far_table           ;! error[segment-not-visible]: `far_table` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
-    sta far_table,x         ;! error[segment-not-visible]: `far_table` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
-    beq far_routine         ;! error[segment-not-visible]: `beq` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
-    jcs far_routine         ;! error[segment-not-visible]: `jcs` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    jsr far_routine         ;! error[segment-not-visible]: `jsr` targets `far_routine` in segment `BANK01`, which is never mapped at the same time as segment `BANK00`: `rom.cfg` gives memory areas `ROM01` and `ROM00` the same addresses
+    lda far_table           ;! error[segment-not-visible]: `far_table` in segment `BANK01`, which is never mapped at the same time as segment `BANK00`: `rom.cfg` gives memory areas `ROM01` and `ROM00` the same addresses
+    sta far_table,x         ;! error[segment-not-visible]: `far_table` in segment `BANK01`, which is never mapped at the same time as segment `BANK00`: `rom.cfg` gives memory areas `ROM01` and `ROM00` the same addresses
+    beq far_routine         ;! error[segment-not-visible]: `beq` targets `far_routine` in segment `BANK01`, which is never mapped at the same time as segment `BANK00`: `rom.cfg` gives memory areas `ROM01` and `ROM00` the same addresses
+    jcs far_routine         ;! error[segment-not-visible]: `jcs` targets `far_routine` in segment `BANK01`, which is never mapped at the same time as segment `BANK00`: `rom.cfg` gives memory areas `ROM01` and `ROM00` the same addresses
 
     ; The bytes of an address are values, which is how a trampoline is told where to go.
     lda #<far_routine
@@ -31,13 +31,13 @@
 }
 
 .proc tail_call {
-    jmp far_routine         ;! error[segment-not-visible]: `jmp` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    jmp far_routine         ;! error[segment-not-visible]: `jmp` targets `far_routine` in segment `BANK01`, which is never mapped at the same time as segment `BANK00`: `rom.cfg` gives memory areas `ROM01` and `ROM00` the same addresses
 }
 
 ; A `.next` names where an indirect jump goes, and those places have to be in sight too.
 .proc dispatch {
     jmp (ptr)
-    .next near_routine, far_routine     ;! error[segment-not-visible]: `.next` targets `far_routine` in segment "BANK01", which is never mapped together with segment "BANK00": `rom.cfg` runs them in memory areas `ROM01` and `ROM00` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    .next near_routine, far_routine     ;! error[segment-not-visible]: `.next` targets `far_routine` in segment `BANK01`, which is never mapped at the same time as segment `BANK00`: `rom.cfg` gives memory areas `ROM01` and `ROM00` the same addresses
 }
 
 ; The fixed bank is mapped beside whichever switchable bank is, so nothing it names is reported:
@@ -67,7 +67,7 @@
 ; Two overlays that load at the same address are never in memory together.
 .segment OVERLAY1
 .proc overlay_one {
-    jsr overlay_two         ;! error[segment-not-visible]: `jsr` targets `overlay_two` in segment "OVERLAY2", which is never mapped together with segment "OVERLAY1": `rom.cfg` runs them in memory areas `OVL2` and `OVL1` at the same addresses; go through code both can see, such as a trampoline in a fixed bank
+    jsr overlay_two         ;! error[segment-not-visible]: `jsr` targets `overlay_two` in segment `OVERLAY2`, which is never mapped at the same time as segment `OVERLAY1`: `rom.cfg` gives memory areas `OVL2` and `OVL1` the same addresses
     jsr loader
     rts
 }

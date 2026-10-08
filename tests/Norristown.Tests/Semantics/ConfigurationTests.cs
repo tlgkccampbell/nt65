@@ -219,8 +219,8 @@ public sealed class ConfigurationTests
             """);
 
         Assert.Equal([
-            "main.nt65:7: an `.if` cannot test `VOICES`, which uses a measurement of a declaration; check it with `.assert`",
-            "main.nt65:10: an `.if` cannot test `.sizeof(Voice)`, which uses a measurement of a declaration; check it "
+            "main.nt65:7: an `.if` cannot test `VOICES`, which measures a declaration; check it with `.assert`",
+            "main.nt65:10: an `.if` cannot test `.sizeof(Voice)`, which measures a declaration; check it "
                 + "with `.assert`",
         ], program.Problems());
         var chain = program.Diagnostics.First(diagnostic => diagnostic.Id == "condition-uses-a-measurement");

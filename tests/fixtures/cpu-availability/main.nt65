@@ -8,7 +8,7 @@
 .segment ZEROPAGE
 .data ptr: .word
 
-.segment FAR: far    ;! error[far-needs-65816]: segment "FAR" is declared `far`, and a far address needs the 65816
+.segment FAR: far    ;! error[far-needs-65816]: segment `FAR` is `far`, which needs the 65816
 .segment FAR
 .data away: .byte
 
@@ -22,17 +22,17 @@
     jmp (ptr,x)             ;! error[operand-not-taken]: `jmp` does not take this operand on the 6502
     jmp a:reaching          ;! error[transfer-prefix]: `jmp` does not take an address-size prefix: a jump, branch or call is sized by its target
     .allow "code-unreachable", "an operand form after a transfer, never run"
-    jsr away                ;! error[target-too-far]: `jsr` reaches only a near target, in the current bank, and this one is far
-    lda #$1234              ;! error[immediate-too-wide]: $1234 does not fit: an immediate is one byte
-    stz z:ptr               ;! error[instruction-not-on-cpu]: `stz` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816
-    bra @out                ;! error[instruction-not-on-cpu]: `bra` is not available on the 6502, and is on the 65sc02, r65c02, 65c02 and 65816
-    bbr0 ptr, @out          ;! error[instruction-not-on-cpu]: `bbr0` is not available on the 6502, and is on the r65c02 and 65c02
-    jml [ptr]               ;! error[instruction-not-on-cpu]: `jml` is not available on the 6502, and is on the 65816
-    cop #1                  ;! error[instruction-not-on-cpu]: `cop` is not available on the 6502, and is on the 65816
-    mvn #$7e, #$00          ;! error[instruction-not-on-cpu]: `mvn` is not available on the 6502, and is on the 65816
+    jsr away                ;! error[target-too-far]: `jsr` cannot reach a far target outside the current bank
+    lda #$1234              ;! error[immediate-too-wide]: $1234 does not fit in a one-byte immediate
+    stz z:ptr               ;! error[instruction-not-on-cpu]: `stz` is not available on the 6502; it needs the 65sc02, r65c02, 65c02 or 65816
+    bra @out                ;! error[instruction-not-on-cpu]: `bra` is not available on the 6502; it needs the 65sc02, r65c02, 65c02 or 65816
+    bbr0 ptr, @out          ;! error[instruction-not-on-cpu]: `bbr0` is not available on the 6502; it needs the r65c02 or 65c02
+    jml [ptr]               ;! error[instruction-not-on-cpu]: `jml` is not available on the 6502; it needs the 65816
+    cop #1                  ;! error[instruction-not-on-cpu]: `cop` is not available on the 6502; it needs the 65816
+    mvn #$7e, #$00          ;! error[instruction-not-on-cpu]: `mvn` is not available on the 6502; it needs the 65816
     ; An undocumented opcode says what it is, rather than reading as a name nobody declared.
-    lax z:ptr               ;! error[instruction-not-on-cpu]: `lax` is not available on the 6502, and is an undocumented opcode of the NMOS 6502, which the 6502x has
-    jam                     ;! error[instruction-not-on-cpu]: `jam` is not available on the 6502, and is an undocumented opcode of the NMOS 6502, which the 6502x has
+    lax z:ptr               ;! error[instruction-not-on-cpu]: `lax` is not available on the 6502; it is an undocumented NMOS 6502 opcode, which needs the 6502x
+    jam                     ;! error[instruction-not-on-cpu]: `jam` is not available on the 6502; it is an undocumented NMOS 6502 opcode, which needs the 6502x
     jeq a:@out              ;! error[transfer-prefix]: `jeq` does not take an address-size prefix: a jump, branch or call is sized by its target
     lda z:(ptr),y           ;! error[addressing-mode-missing]: `lda` has no direct-page form of this operand on the 6502: remove the address-size prefix
     lda d:$05               ;! error[direct-page-needs-65816]: `d:` needs the 65816, and this program is built for the 6502: use `z:` for a zero-page address

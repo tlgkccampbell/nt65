@@ -193,7 +193,7 @@ internal sealed class StateChecks
             {
                 if (SegmentOf(symbol) is not { DirectPage: { } page } segment)
                     continue;
-                var what = $"`{symbol.DisplayName}` is in segment \"{segment.Name}\", which expects the direct page at {StateValue.Hex(page, 4)}";
+                var what = $"`{symbol.DisplayName}` is in segment `{segment.Name}`, which expects the direct page at {StateValue.Hex(page, 4)}";
                 if (state.D.Kind == StateValueKind.Unchanged)
                 {
                     Report(step, Catalogue.DirectPageUnknown.Message(
