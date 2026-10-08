@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
@@ -18,6 +19,11 @@ namespace Norristown.Flow;
 /// </summary>
 public static class Suggestions
 {
+    // The suggestions other than tail calls that each file was last found to have, by the layout
+    // they were found in. A file that an edit leaves alone keeps its layout, so its suggestions
+    // are not looked for again unless what they depend on has changed.
+    private static readonly ConditionalWeakTable<CodeLayout, Found> foundByLayout = new();
+
     /// <summary>
     /// Returns the suggestions for <paramref name="file"/>, in the order they are reported.
     /// <paramref name="omitted"/> holds the branches of the file that this build leaves out, and
@@ -27,9 +33,32 @@ public static class Suggestions
     public static IReadOnlyList<Diagnostic> For(
         FileAnalysis file, IReadOnlyList<TextSpan> omitted, Func<Symbol, bool> readsCallerStack)
     {
-        var regions = file.Flow.Regions.Where(region => Unconditional(region, omitted)).ToList();
+        // Every routine of a file whose branches the build all takes is unconditional.
+        List<FlowRegion> regions = omitted.Count == 0
+            ? [.. file.Flow.Regions]
+            : [.. file.Flow.Regions.Where(region => Unconditional(region, omitted))];
+        return Norristown.Diagnostics.Ordered([.. TailCalls(file, regions, readsCallerStack), .. OfTheFile(file, regions, omitted)]);
+    }
+
+    /// <summary>
+    /// Returns the suggestions for <paramref name="file"/> other than tail calls, looking for them
+    /// again only where something they depend on has changed. They depend on the file's own
+    /// analysis, the branches the build leaves out, and the flags each routine the file calls
+    /// reads. A tail call depends on more of the program than that, so it is always looked for.
+    /// </summary>
+    private static IReadOnlyList<Diagnostic> OfTheFile(
+        FileAnalysis file, IReadOnlyList<FlowRegion> regions, IReadOnlyList<TextSpan> omitted)
+    {
+        var read = FlagLiveness.ReadByCalls(file.Flow, regions);
+        if (foundByLayout.TryGetValue(file.Layout, out var known)
+            && known.Model == file.Model && known.State == file.State && known.Flags == file.Flow.Flags
+            && known.Omitted.SequenceEqual(omitted)
+            && (known.Read is null ? read is null : read is not null && known.Read.SequenceEqual(read)))
+        {
+            return known.Suggestions;
+        }
+
         var found = new List<Diagnostic>();
-        found.AddRange(TailCalls(file, regions, readsCallerStack));
         if (file.State is { } states)
             found.AddRange(RedundantWidths(file, regions, states));
         if (file.Flow.Flags is { } flags)
@@ -42,7 +71,8 @@ public static class Suggestions
             found.AddRange(Loads(file, regions, flags, liveness));
         }
         found.AddRange(BranchesOverJumps(file, regions));
-        return Norristown.Diagnostics.Ordered(found);
+        foundByLayout.AddOrUpdate(file.Layout, new Found(file.Model, file.State, file.Flow.Flags, omitted, read, found));
+        return found;
     }
 
     /// <summary>
@@ -657,4 +687,15 @@ public static class Suggestions
     /// only kind of line a suggestion can change.
     /// </summary>
     private static bool Own(SemanticModel model, Step step) => step.On is null && step.Statement.Tree == model.Tree;
+
+    /// <summary>
+    /// The suggestions other than tail calls found for one file, with what they were found from.
+    /// </summary>
+    private sealed record Found(
+        SemanticModel Model,
+        StateAnalysis? State,
+        FlagAnalysis? Flags,
+        IReadOnlyList<TextSpan> Omitted,
+        List<StatusFlags>? Read,
+        List<Diagnostic> Suggestions);
 }

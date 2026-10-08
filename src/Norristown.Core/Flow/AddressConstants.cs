@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
@@ -18,27 +20,26 @@ namespace Norristown.Flow;
 /// </summary>
 public static class AddressConstants
 {
-    /// <summary>Returns every constant that some instruction of <paramref name="files"/> uses as an address.</summary>
-    public static IReadOnlySet<Symbol> UsedAsAddresses(IReadOnlyList<FileAnalysis> files)
+    // The constants each file uses as addresses, by the layout they were found in. A file that
+    // an edit leaves alone keeps its layout and its model, so what it uses is not looked for again.
+    private static readonly ConditionalWeakTable<CodeLayout, Used> usedByLayout = new();
+
+    // The declarations of each tree that the fix can rewrite.
+    private static readonly ConditionalWeakTable<SyntaxTree, List<ConstantDeclarationSyntax>> rewritableByTree = new();
+
+    /// <summary>
+    /// Returns every constant that some instruction of <paramref name="files"/> uses as an address,
+    /// as <paramref name="current"/> gives each one. A file that was not analyzed again after an
+    /// edit still refers to the constants another file declared before it, and the current symbol
+    /// is the one the declaring file's suggestions look for.
+    /// </summary>
+    public static IReadOnlySet<Symbol> UsedAsAddresses(IReadOnlyList<FileAnalysis> files, Func<Symbol, Symbol> current)
     {
         var used = new HashSet<Symbol>();
         foreach (var file in files)
         {
-            foreach (var step in file.Layout.Steps)
-            {
-                if (step.Statement is not InstructionStatementSyntax statement
-                    || !ReachesMemory(statement.MnemonicKind, file.Layout.Of(statement, step.On)?.Mode)
-                    || StepOperands.Of(file.Model, step) is not { } operand
-                    || Named(file.Model, Layout.CodeLayout.Expression(operand), step.On) is not { } symbol)
-                {
-                    continue;
-                }
-                if (symbol is { Kind: SymbolKind.Constant, IsSetting: false, IsEnumMember: false, IsCheapLocal: false }
-                    && symbol.Value.IsNumber)
-                {
-                    used.Add(symbol);
-                }
-            }
+            foreach (var symbol in UsedIn(file))
+                used.Add(current(symbol));
         }
         return used;
     }
@@ -51,14 +52,10 @@ public static class AddressConstants
     public static IEnumerable<Diagnostic> For(FileAnalysis file, IReadOnlySet<Symbol> used)
     {
         var tree = file.Model.Tree;
-        foreach (var declaration in tree.Root.DescendantNodes().OfType<ConstantDeclarationSyntax>())
+        foreach (var declaration in Rewritable(tree))
         {
-            if (declaration.EqualsToken.Kind != SyntaxKind.Equals
-                || declaration.Ancestors().OfType<BlockSyntax>().Any(block => block.Opener.Statement is MacroDeclarationSyntax)
-                || used.FirstOrDefault(symbol => symbol.Tree == tree && symbol.NameSpan == declaration.Name.Span) is not { } symbol)
-            {
+            if (used.FirstOrDefault(symbol => symbol.Tree == tree && symbol.NameSpan == declaration.Name.Span) is not { } symbol)
                 continue;
-            }
             yield return new Diagnostic(
                 tree.GetSpan(declaration.Name.Span),
                 Catalogue.ConstantUsedAsAddress.Message(symbol.DisplayName))
@@ -66,6 +63,43 @@ public static class AddressConstants
                 Fix = new DiagnosticFix(FixKind.AddressData),
             };
         }
+    }
+
+    /// <summary>
+    /// Returns the constants that <paramref name="tree"/> declares with <c>=</c> outside every macro,
+    /// which are the declarations the fix can rewrite. They are found once for each tree.
+    /// </summary>
+    private static List<ConstantDeclarationSyntax> Rewritable(SyntaxTree tree) =>
+        rewritableByTree.GetValue(tree, tree => [.. tree.Root.DescendantNodes().OfType<ConstantDeclarationSyntax>()
+            .Where(declaration => declaration.EqualsToken.Kind == SyntaxKind.Equals
+                && !declaration.Ancestors().OfType<BlockSyntax>().Any(block => block.Opener.Statement is MacroDeclarationSyntax))]);
+
+    /// <summary>
+    /// Returns the constants that some instruction of <paramref name="file"/> uses as an address,
+    /// looking for them only where the file's layout or model is not the one they were found in.
+    /// </summary>
+    private static IReadOnlyList<Symbol> UsedIn(FileAnalysis file)
+    {
+        if (usedByLayout.TryGetValue(file.Layout, out var known) && known.Model == file.Model)
+            return known.Symbols;
+        var used = new List<Symbol>();
+        foreach (var step in file.Layout.Steps)
+        {
+            if (step.Statement is not InstructionStatementSyntax statement
+                || !ReachesMemory(statement.MnemonicKind, file.Layout.Of(statement, step.On)?.Mode)
+                || StepOperands.Of(file.Model, step) is not { } operand
+                || Named(file.Model, CodeLayout.Expression(operand), step.On) is not { } symbol)
+            {
+                continue;
+            }
+            if (symbol is { Kind: SymbolKind.Constant, IsSetting: false, IsEnumMember: false, IsCheapLocal: false }
+                && symbol.Value.IsNumber)
+            {
+                used.Add(symbol);
+            }
+        }
+        usedByLayout.AddOrUpdate(file.Layout, new Used(file.Model, used));
+        return used;
     }
 
     /// <summary>
@@ -111,4 +145,7 @@ public static class AddressConstants
                 return null;
         }
     }
+
+    /// <summary>The constants one file uses as addresses, with the model they were found under.</summary>
+    private sealed record Used(SemanticModel Model, IReadOnlyList<Symbol> Symbols);
 }

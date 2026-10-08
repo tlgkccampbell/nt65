@@ -147,6 +147,38 @@ public sealed class SuggestionsTests
             Editing.Apply(Header + Body, mmio.Edit!.Changes[Uri]), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A constant that another file uses as an address is still suggested as data after an edit
+    /// to the file that declares it. The other file is not analyzed again, so it still refers to
+    /// the constant as it was declared before the edit.
+    /// </summary>
+    [Fact]
+    public void AConstantAnotherFileUsesAsAnAddressIsStillSuggestedAfterAnEditBesideIt()
+    {
+        const string HardwareUri = "file:///c:/work/hw.nt65";
+        const string Hardware = ".module hw\n.export BORDER\n.const BORDER = $D020\n.segment CODE\n"
+            + ".export .proc flash {\n    lda #0\n    rts\n}\n";
+        const string Main = ".module main\n.use hw::{BORDER, flash}\n.segment CODE\n"
+            + ".export .proc main {\n    jsr flash\n    sta BORDER\n    rts\n}\n";
+        var workspace = new Workspace();
+        var hardware = workspace.Open(new TextDocumentItem(HardwareUri, "nt65", 1, Hardware));
+        workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Main));
+        var path = hardware.Tree.Path;
+        Assert.Contains(Suggested(), found => found.Id == "constant-used-as-address");
+
+        // `lda #0` becomes `lda #1`, which leaves main's view of `hw` as it was.
+        workspace.Change(new VersionedTextDocumentIdentifier(HardwareUri, 2), [new TextDocumentContentChangeEvent(
+            new Range(new Position(5, 9), new Position(5, 10)), "1")]);
+        var edited = Suggested();
+        Assert.Contains(edited, found => found.Id == "constant-used-as-address");
+
+        IReadOnlyList<Diagnostic> Suggested()
+        {
+            var analysis = workspace.AnalysisForAsync(path, TestTimeout.Token()).GetAwaiter().GetResult();
+            return analysis.SuggestionsFor(path);
+        }
+    }
+
     private static (ProgramAnalysis Analysis, string Path) Analyzed(string body)
     {
         var workspace = new Workspace();

@@ -47,6 +47,25 @@ internal sealed class FlagLiveness
     }
 
     /// <summary>
+    /// Returns the flags each routine that <paramref name="regions"/> call reads, in the order of
+    /// the calls, or null when <paramref name="flow"/> has no answers about what routines read.
+    /// Those answers are the program's, so a liveness worked out over the same regions is the same
+    /// wherever this returns the same flags.
+    /// </summary>
+    public static List<StatusFlags>? ReadByCalls(ControlFlow flow, IEnumerable<FlowRegion> regions)
+    {
+        if (flow.ReadsOf is not { } readsOf)
+            return null;
+        var read = new List<StatusFlags>();
+        foreach (var block in regions.SelectMany(region => region.Blocks))
+        {
+            foreach (var callee in block.Calls)
+                read.Add(FlagsOf(readsOf(callee).Assumed));
+        }
+        return read;
+    }
+
+    /// <summary>
     /// Returns the flags among N, Z, C and V that may be read after <paramref name="step"/> before
     /// anything writes them, which is all of them for a statement no routine reaches.
     /// </summary>

@@ -38,7 +38,7 @@ public sealed record ProgramAnalysis(
     // The constants some instruction of the program uses as an address, found the first time a
     // file's suggestions are asked for, because a constant is used across the program and declared
     // in one file.
-    private readonly Lazy<IReadOnlySet<Symbol>> usedAsAddresses = new(() => Flow.AddressConstants.UsedAsAddresses(Files));
+    private readonly Lazy<IReadOnlySet<Symbol>> usedAsAddresses = new(() => Flow.AddressConstants.UsedAsAddresses(Files, Program.Current));
 
     /// <summary>
     /// Gets what analyzing each file of <see cref="Program"/> on its own found, in the same order.
