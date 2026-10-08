@@ -22,6 +22,9 @@ public sealed class Configuration
     // A file's settings, wherever they appear, read once per tree.
     private static readonly ConditionalWeakTable<SyntaxTree, List<ConstantDeclarationSyntax>> settingsByTree = new();
 
+    // Whether each tree has a condition anywhere, worked out once for each tree.
+    private static readonly ConditionalWeakTable<SyntaxTree, StrongBox<bool>> conditionsByTree = new();
+
     // The positions a tree with no conditions answered has.
     private static readonly HashSet<int> NoPositions = [];
 
@@ -60,6 +63,8 @@ public sealed class Configuration
         var answered = new Dictionary<SyntaxTree, HashSet<int>>();
         foreach (var tree in all)
         {
+            if (!HasConditions(tree))
+                continue;
             var left = new List<TextSpan>();
             var positions = new HashSet<int>();
             new Reader(tree, evaluator, diagnostics, left, positions).Container(tree.Root);
@@ -197,6 +202,30 @@ public sealed class Configuration
         argument is NameExpressionSyntax name ? name.SimpleName
         : argument.ChildTokens is [var only] ? only
         : null;
+
+    /// <summary>
+    /// Determines whether <paramref name="tree"/> has an <c>.if</c>, <c>.elseif</c> or <c>.else</c>
+    /// anywhere. A tree with none has no condition to read, and leaves nothing out.
+    /// </summary>
+    private static bool HasConditions(SyntaxTree tree) =>
+        conditionsByTree.GetValue(tree, tree => new StrongBox<bool>(HoldsACondition(tree.Root))).Value;
+
+    /// <summary>
+    /// Determines whether a block within <paramref name="container"/>, at any depth, opens with
+    /// <c>.if</c>, <c>.elseif</c> or <c>.else</c>. Only blocks are searched, since a condition opens one.
+    /// </summary>
+    private static bool HoldsACondition(SyntaxNode container)
+    {
+        foreach (var child in container.ChildNodes)
+        {
+            if (child is BlockSyntax block
+                && (block.Opener.Statement is IfDirectiveSyntax or ElseIfDirectiveSyntax or ElseDirectiveSyntax || HoldsACondition(block)))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private static List<ConstantDeclarationSyntax> SettingsIn(SyntaxTree tree) =>
         settingsByTree.GetValue(tree, tree => [.. tree.Root.DescendantNodes().OfType<ConstantDeclarationSyntax>()
@@ -374,6 +403,9 @@ public sealed class Configuration
     /// </summary>
     private sealed class Table
     {
+        // What each file declares at file level, worked out once for each tree.
+        private static readonly ConditionalWeakTable<SyntaxTree, FileDeclarations> declaredByTree = new();
+
         private readonly Cpu cpu;
         private readonly ProgramSymbols program;
         private readonly Dictionary<SyntaxTree, Scope> scopes;
@@ -417,17 +449,12 @@ public sealed class Configuration
             var modules = new List<ProgramSymbols.Module>();
             foreach (var tree in trees)
             {
-                var scope = new Scope(ScopeKind.File, null, null, null) { Module = ModuleSyntax.ModuleOf(tree) };
-                scopes[tree] = scope;
-                foreach (var setting in SettingsIn(tree))
-                {
-                    if (!IsWellPlaced(setting))
-                        diagnostics.Add(new Diagnostic(tree.GetSpan(setting.EqualsToken.Span), Catalogue.SettingMisplaced));
-                }
-                new Declarer(tree, ExportedNames(tree), entries).Container(tree.Root, scope, UndecidedCause.Measurement);
-                modules.Add(new ProgramSymbols.Module(
-                    tree, scope.Module, default, scope, [.. scope.Symbols.Where(symbol => symbol.IsExported)],
-                    [.. Reexports(tree)]));
+                var declared = declaredByTree.GetValue(tree, Declared);
+                scopes[tree] = declared.Module.FileScope;
+                diagnostics.AddRange(declared.Misplaced);
+                foreach (var (symbol, entry) in declared.Entries)
+                    entries[symbol] = entry;
+                modules.Add(declared.Module);
             }
 
             // Problems with the modules themselves are the binder's to report.
@@ -527,6 +554,27 @@ public sealed class Configuration
                 : (measurement.GetText().Trim(), "a measurement");
             return new RelatedSpan(owner.DeclarationSpan,
                 $"`{owner.DisplayName}` measures `{what}` with `{with}`");
+        }
+
+        /// <summary>
+        /// Returns what <paramref name="tree"/> declares at file level, with what is wrong with its
+        /// settings' placement. Nothing in it depends on another file, and a table only reads it,
+        /// so every table of a program that has the tree shares it.
+        /// </summary>
+        private static FileDeclarations Declared(SyntaxTree tree)
+        {
+            var misplaced = new List<Diagnostic>();
+            foreach (var setting in SettingsIn(tree))
+            {
+                if (!IsWellPlaced(setting))
+                    misplaced.Add(new Diagnostic(tree.GetSpan(setting.EqualsToken.Span), Catalogue.SettingMisplaced));
+            }
+            var scope = new Scope(ScopeKind.File, null, null, null) { Module = ModuleSyntax.ModuleOf(tree) };
+            var entries = new Dictionary<Symbol, Entry>();
+            new Declarer(tree, ExportedNames(tree), entries).Container(tree.Root, scope, UndecidedCause.Measurement);
+            var module = new ProgramSymbols.Module(
+                tree, scope.Module, default, scope, [.. scope.Symbols.Where(symbol => symbol.IsExported)], [.. Reexports(tree)]);
+            return new FileDeclarations(module, entries, misplaced);
         }
 
         /// <summary>Returns the names in a file's <c>.export</c> lists.</summary>
@@ -1072,4 +1120,11 @@ public sealed class Configuration
     /// <param name="Brought">The names brought in one by one, and where each leads.</param>
     /// <param name="Globs">The modules whose exports a <c>.use module::*</c> brings in.</param>
     private sealed record Reach(Dictionary<string, BroughtName> Brought, List<ProgramSymbols.Module> Globs);
+
+    /// <summary>
+    /// Represents what one file declares at file level, as a <see cref="Table"/> reads it, with
+    /// the diagnostics for its misplaced settings.
+    /// </summary>
+    private sealed record FileDeclarations(
+        ProgramSymbols.Module Module, Dictionary<Symbol, Entry> Entries, List<Diagnostic> Misplaced);
 }
