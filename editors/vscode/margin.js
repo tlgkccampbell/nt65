@@ -260,7 +260,7 @@ class Margin {
   // Gets what `nt65.margin` asks for: `off`, `loops`, or `flow`, which adds the caret's arrows.
   get level() {
     const level = vscode.workspace.getConfiguration('nt65').get('margin');
-    return LEVELS.some(each => each.level === level) ? level : 'loops';
+    return LEVELS.some(each => each.level === level) ? level : 'off';
   }
 
   get arrows() {

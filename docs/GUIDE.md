@@ -1968,7 +1968,7 @@ everything below works across modules.
 - **The margin** in front of a routine's lines draws its loops and, if asked, where control
   goes. The setting `nt65.margin`, or *Choose What the Margin Shows*, picks how much: `off`
   draws nothing, `loops` draws the loops of every routine, and `flow` also draws the branches
-  and jumps of the routine at the caret. It is `loops` by default. Every line of a routine
+  and jumps of the routine at the caret. It is `off` by default. Every line of a routine
   gets the same width, so the code does not jog.
 
   Each loop is a bracket from its first line to its last, nested where loops nest. A trip
