@@ -393,7 +393,7 @@ function unknownRoutineTip(group, routine, hazards) {
     const role = ROLES[use.role];
     tip.row(role ? role.glyph : '?', role ? role.colour : COLOUR.dim, `\`${use.name}\``,
       lineLinks(use.accesses.map(access => access.place)));
-    if (hazards && use.hazard) tip.row('⚠', COLOUR.nested, 'through the interrupted D', '');
+    if (hazards) noteRows(tip, use.hazards || []);
   }
   return tip.build();
 }
@@ -405,8 +405,16 @@ function useTip(result, routine, use, hazards) {
   const role = ROLES[use.role];
   tip.row(role ? role.glyph : '?', role ? role.colour : COLOUR.dim, role ? role.word : '', lineLinks(use.accesses.map(access => access.place)));
   if (use.home) tip.row('●', COLOUR.dim, `home ${markdown(pageName(result, use.home))}`, coloured(COLOUR.dim, use.home));
-  if (hazards && use.hazard) tip.row('⚠', COLOUR.nested, 'an interrupt, through the interrupted D', '');
+  if (hazards) noteRows(tip, use.hazards || []);
   return tip.build();
+}
+
+// Adds a row for each of a use's notes on the page whose D is not known: that D is the
+// interrupted code's, where the access lands on each page that code holds D at, and any hazard.
+function noteRows(tip, notes) {
+  for (const note of notes) {
+    tip.row(note.glyph || '⚠', note.glyph === '◦' ? COLOUR.dim : COLOUR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+  }
 }
 
 // Returns the marks that end a description: ⧉ for an overlap and ⚠ for a hazard.
@@ -566,6 +574,9 @@ class Marks {
     for (const access of use.accesses) {
       this.access(access, routine.interrupt);
       if (use.hazard) this.note(access.place, 'reached through the interrupted D');
+    }
+    for (const note of use.hazards || []) {
+      if (note.glyph !== '◦') this.note(note.place, note.text);
     }
   }
 

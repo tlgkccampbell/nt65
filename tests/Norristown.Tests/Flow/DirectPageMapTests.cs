@@ -158,6 +158,9 @@ public sealed class DirectPageMapTests
                 "    main In 1",
                 "    nmi InOut 1 handler unknown",
                 "      ⚠ D is the interrupted code's @ ",
+                "      ◦ D = $0000 here reaches $0004, `frames` @ inc frames",
+                "      ⚠ D = $0080 here reaches $0084, `matrix`+4 @ inc frames",
+                "      ⚠ D = $2100 here reaches $2104, `OAMDATA` @ inc frames",
                 "  hdma +5 x128 .byte[128] Unused Guessed",
                 "page $0080 [M7ZP] Own hazard=False used=8 direct=4",
                 "  ◦ no config · layout guessed",
@@ -350,6 +353,148 @@ public sealed class DirectPageMapTests
                 }
                 .export .proc nmi: interrupt {
                     jsr util
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A handler that uses a location as a temporary can fire between the program's write of the
+    /// location and its read, and change what the program reads. The handler's use is a hazard.
+    /// </summary>
+    [Fact]
+    public void AHandlerThatUsesALocationAsATemporaryIsAHazard()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=True used=1 direct=4",
+                "  ◦ no config · layout guessed",
+                "  tmp +0 x1 .byte Interrupt Guessed",
+                "    main Temp 2",
+                "    nmi Temp 2 handler",
+                "      ⚠ `nmi` uses it as a temporary @ stx tmp",
+                "      ⚠ interrupts `main`, which relies on it @ lda tmp",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data tmp: .byte
+                .segment CODE
+                .export .proc main {
+                    sta tmp
+                    lda tmp
+                    rts
+                }
+                .export .proc nmi: interrupt {
+                    stx tmp
+                    ldx tmp
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A handler that keeps the interrupted code's D reaches a location's own page whenever it
+    /// interrupts code that holds D there, so its use of the location as a temporary is a hazard
+    /// there too. Each page the program holds D at says where the access lands.
+    /// </summary>
+    [Fact]
+    public void AHandlerThroughTheInterruptedDCanBeAHazard()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=True used=1 direct=2",
+                "  ◦ no config · layout guessed",
+                "  tmp +0 x1 .byte Interrupt Guessed",
+                "    main Temp 2",
+                "    nmi Temp 2 handler unknown",
+                "      ⚠ D is the interrupted code's @ ",
+                "      ◦ D = $0000 here reaches $0000, `tmp` @ stx tmp",
+                "      ⚠ `nmi` uses it as a temporary @ stx tmp",
+                "      ⚠ interrupts `main`, which relies on it @ lda tmp",
+                "page ? [] Unused hazard=True used=0 direct=0",
+                "  ? nmi tmp Interrupted Temp",
+            ],
+            Render("65816", """
+                .segment ZEROPAGE
+                .data tmp: .byte
+                .segment CODE
+                .export .proc main: a8, i8, dp = 0 {
+                    sta tmp
+                    lda tmp
+                    rts
+                }
+                .export .proc nmi: interrupt, native {
+                    sep #$30
+                    stx tmp
+                    ldx tmp
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A handler that bumps a counter the program reads is how the two are meant to talk, so it
+    /// is shared with an interrupt but no hazard.
+    /// </summary>
+    [Fact]
+    public void AHandlerThatCountsForTheProgramIsNoHazard()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=False used=1 direct=2",
+                "  ◦ no config · layout guessed",
+                "  frames +0 x1 .byte Interrupt Guessed",
+                "    main In 1",
+                "    nmi InOut 1 handler",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data frames: .byte
+                .segment CODE
+                .export .proc main {
+                @wait:
+                    lda frames
+                    beq @wait
+                    rts
+                }
+                .export .proc nmi: interrupt {
+                    inc frames
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A handler that saves a location before it uses it and restores it after gives back what
+    /// the program wrote, so its use is no hazard.
+    /// </summary>
+    [Fact]
+    public void AHandlerThatSavesAndRestoresALocationIsNoHazard()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=False used=1 direct=6",
+                "  ◦ no config · layout guessed",
+                "  tmp +0 x1 .byte Interrupt Guessed",
+                "    main Temp 2",
+                "    nmi InOut 4 handler",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data tmp: .byte
+                .segment CODE
+                .export .proc main {
+                    sta tmp
+                    lda tmp
+                    rts
+                }
+                .export .proc nmi: interrupt {
+                    ldx tmp
+                    stx $0100
+                    sty tmp
+                    ldy tmp
+                    ldx $0100
+                    stx tmp
                     rti
                 }
                 """));

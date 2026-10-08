@@ -67,7 +67,8 @@ internal static class DirectPages
                         use.Offset,
                         Name(use.Use.Role),
                         [.. use.Use.Accesses.Select(access => Access(access, uriOf))],
-                        use.Use.Hazards.Count > 0))]))]))]);
+                        use.Use.Hazards.Count > 0,
+                        [.. use.Use.Hazards.Select(note => Note(note, uriOf))]))]))]))]);
 
     private static Protocol.DirectPageLocation Location(DirectPage page, PageLocation location, Graph graph, Func<string, string> uriOf)
     {

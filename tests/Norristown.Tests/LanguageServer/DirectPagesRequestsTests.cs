@@ -154,6 +154,10 @@ public sealed class DirectPagesRequestsTests
         var nmi = Assert.Single(group.Routines);
         var use = Assert.Single(nmi.Uses);
         Assert.Equal(("frames", "$0000", "inout", true), (use.Name, use.Home, use.Role, use.Hazard));
+        Assert.Equal(
+            ["D is the interrupted code's", "D = $0000 here reaches $0082, `frames`", "D = $0080 here reaches $0102, free"],
+            use.Hazards.Select(note => note.Text));
+        Assert.Equal([null, 26, 26], use.Hazards.Select(note => note.Place?.Range.Start.Line));
     }
 
     /// <summary>

@@ -578,6 +578,11 @@ public sealed class DirectPageMap
                     roles.TryAdd((Current(region.Routine), location.Key), RoleOf(location.ToList(), location.Key, false, first));
             }
 
+            // The pages the interruptible code holds D at, which are where a handler that keeps the
+            // interrupted code's D reaches.
+            var held = found.Where(access => access is { Unknown: false, Page: not null } && InMain(access.Routine!))
+                .Select(access => access.Page!.Value).Distinct().Order().ToList();
+
             var uses = new Dictionary<(Symbol, LocationKey, bool), PageUse>();
             foreach (var (region, accesses, byStep, tracked) in regions)
             {
@@ -586,16 +591,13 @@ public sealed class DirectPageMap
                 var hazards = Walk(region, byStep, tracked, roles).Hazards;
                 var handler = IsHandler(routine);
                 var inInterrupt = handler || interrupt.Contains(routine);
-
-                // A routine that neither the program's starts nor a handler reaches, such as one
-                // only a loop of calls reaches, is taken as the rest of the program's.
-                var inMain = !handler && (main.Contains(routine) || !interrupt.Contains(routine));
+                var inMain = InMain(routine);
                 foreach (var location in accesses.GroupBy(access => (access.Location, access.Unknown)))
                 {
                     var list = location.ToList();
                     var role = RoleOf(list, location.Key.Location, location.Key.Unknown, readsFirst[region]);
                     var notes = location.Key.Unknown
-                        ? UnknownNotes(inInterrupt)
+                        ? UnknownNotes(inInterrupt, location.Key.Location, list[0].Line, held)
                         : hazards.GetValueOrDefault(location.Key.Location) ?? [];
                     notes = [.. notes, .. Strays(list)];
                     var use = new PageUse(
@@ -605,7 +607,63 @@ public sealed class DirectPageMap
                     uses[(routine, location.Key.Location, location.Key.Unknown)] = use;
                 }
             }
+            InterruptHazards(uses, held);
             return uses;
+
+            // A routine that neither the program's starts nor a handler reaches, such as one
+            // only a loop of calls reaches, is taken as the rest of the program's.
+            bool InMain(Symbol routine) => !IsHandler(routine) && (main.Contains(routine) || !interrupt.Contains(routine));
+        }
+
+        /// <summary>
+        /// Adds the hazards where code that runs only in an interrupt can change a location between
+        /// a write and a read that the code it interrupts relies on. The notes go on the use in the
+        /// interrupt.
+        /// </summary>
+        /// <remarks>
+        /// A use in the interrupt that only reads the location cannot change it. One that reads it
+        /// first and then writes it either counts something the interrupted code reads, or saves
+        /// and restores it, and the roles do not tell those apart, so neither is a hazard. A use as
+        /// a temporary is a hazard to interrupted code that reads the location, and a use that
+        /// only writes it is a hazard to interrupted code that both writes and reads it. A use
+        /// through the interrupted code's D counts only when that code holds D at the location's
+        /// own page.
+        /// </remarks>
+        /// <param name="uses">The uses, by routine and location, which this replaces with ones that carry the new notes.</param>
+        /// <param name="held">The pages the interruptible code holds D at.</param>
+        private void InterruptHazards(Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), PageUse> uses, List<long> held)
+        {
+            foreach (var location in uses.GroupBy(item => item.Key.Location).ToList())
+            {
+                if (homes[location.Key].IsMmio)
+                    continue;
+                var mains = location.Where(item => item.Value is { InMain: true, IsUnknownPage: false }).Select(item => item.Value).ToList();
+                foreach (var (key, use) in location.Where(item => item.Value is { InInterrupt: true, InMain: false }).ToList())
+                {
+                    if (use.IsUnknownPage && !held.Contains(homes[location.Key].Page))
+                        continue;
+                    if (mains.FirstOrDefault(other => Clobbers(use.Role, other.Role)) is not { } victim)
+                        continue;
+                    var name = use.Routine.DisplayName;
+                    var what = use.Role == PageRole.Temp ? $"`{name}` uses it as a temporary" : $"`{name}` writes it";
+                    uses[key] = use with
+                    {
+                        Hazards =
+                        [
+                            .. use.Hazards,
+                            new PageNote("⚠", what, use.Accesses.FirstOrDefault(access => access.Writes).Line),
+                            new PageNote("⚠", $"interrupts `{victim.Routine.DisplayName}`, which relies on it", victim.Accesses.FirstOrDefault(access => access.Reads).Line),
+                        ],
+                    };
+                }
+            }
+
+            static bool Clobbers(PageRole interrupting, PageRole interrupted) => interrupting switch
+            {
+                PageRole.Temp => interrupted is PageRole.In or PageRole.InOut or PageRole.Temp,
+                PageRole.Out => interrupted is PageRole.InOut or PageRole.Temp,
+                _ => false,
+            };
         }
 
         /// <summary>
@@ -626,11 +684,73 @@ public sealed class DirectPageMap
         }
 
         /// <summary>
-        /// Returns the notes for a routine that reaches memory through D while it is not known.
-        /// When an interrupt reaches the routine, D there is whatever page the interrupted code held.
+        /// Returns the notes for a routine that reaches <paramref name="location"/> through D while
+        /// it is not known. When an interrupt reaches the routine, D there is whatever page the
+        /// interrupted code held, so there is a note for where the access lands on each such page.
         /// </summary>
-        private static IReadOnlyList<PageNote> UnknownNotes(bool inInterrupt) =>
-            inInterrupt ? [new PageNote("⚠", "D is the interrupted code's", null)] : [];
+        /// <param name="inInterrupt">Whether the routine runs in an interrupt.</param>
+        /// <param name="location">The location the operand names.</param>
+        /// <param name="at">The routine's first instruction that names the location.</param>
+        /// <param name="held">The pages the interruptible code holds D at.</param>
+        private List<PageNote> UnknownNotes(bool inInterrupt, LocationKey location, SyntaxNode at, List<long> held)
+        {
+            if (!inInterrupt)
+                return [];
+            List<PageNote> notes = [new PageNote("⚠", "D is the interrupted code's", null)];
+            if (homes[location] is not { Offset: { } offset } home)
+                return notes;
+            foreach (var page in held)
+            {
+                var address = page + offset;
+                var reaches = $"D = {StateValue.Hex(page, 4)} here reaches {StateValue.Hex(address, 4)}";
+                if (page == home.Page)
+                {
+                    notes.Add(new PageNote("◦", $"{reaches}, `{location.Name}`", at));
+                    continue;
+                }
+                if (LocationAt(address, page) is not { } landed)
+                {
+                    notes.Add(new PageNote("◦", $"{reaches}, free", at));
+                    continue;
+                }
+                var into = address - landed.Start;
+                notes.Add(new PageNote(
+                    landed.Name == location.Name ? "◦" : "⚠", $"{reaches}, `{landed.Name}`{(into > 0 ? $"+{into}" : "")}", at));
+            }
+            return notes;
+        }
+
+        /// <summary>
+        /// Returns the name and first address of the location that takes <paramref name="address"/>,
+        /// or null when none does. A location on the page at <paramref name="page"/> is preferred,
+        /// and a fixed address the source declares but no instruction reaches, such as a hardware
+        /// register, is looked for last.
+        /// </summary>
+        private (string Name, long Start)? LocationAt(long address, long page)
+        {
+            var home = homes.Where(item => item.Value.Offset is not null)
+                .Select(item => (item.Key.Name, item.Value.Page, Start: item.Value.Page + item.Value.Offset!.Value, item.Value.Size))
+                .Where(item => Takes(item.Start, item.Size))
+                .OrderBy(item => item.Page == page ? 0 : 1)
+                .Select(item => ((string Name, long Start)?)(item.Name, item.Start))
+                .FirstOrDefault();
+            if (home is not null)
+                return home;
+            foreach (var file in analysis.Files)
+            {
+                foreach (var symbol in file.Model.Symbols)
+                {
+                    if (symbol is { Kind: SymbolKind.AddressAlias, ValueExpression.Parent: DataDeclarationSyntax }
+                        && symbol.Value.AsNumber() is { } start && Takes(start, symbol.Size))
+                    {
+                        return (symbol.Name, start);
+                    }
+                }
+            }
+            return null;
+
+            bool Takes(long start, long? size) => address >= start && address < start + Math.Max(1, size ?? 1);
+        }
 
         /// <summary>
         /// Returns a note for each access that reaches a location through a page other than its own,

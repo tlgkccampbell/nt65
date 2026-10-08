@@ -1974,7 +1974,10 @@ everything below works across modules.
   routine does with it: `↓` reads it first, `↑` only writes it, `↕` both, `◦` uses it as a
   temporary. `⧉` marks pages that overlap. Hardware registers reached through D, such as the
   SNES's at $2100, are a page of their own, and code that reaches memory while D is not known,
-  such as a handler after it gives D back, is listed under `D = ?`. A constant address that an
+  such as a handler after it gives D back, is listed under `D = ?`, with where each access
+  lands on every page the interrupted code holds D at. A handler that uses a location as a
+  temporary, or only writes one that the code it interrupts writes and reads back, is marked
+  `⚠`; one that counts or flags something for that code is not. A constant address that an
   instruction reaches through the page, such as `lda $FB`, is shown as a location named by its
   address, `$00FB`. Selecting a row marks the
   lines it stands for. *Show Grid* draws a page as 16 rows of 16 bytes, with each location's
