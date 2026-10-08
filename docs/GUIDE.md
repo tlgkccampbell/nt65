@@ -1440,7 +1440,7 @@ calls and at its returns. A part it writes nothing for is inferred:
   on is unknown after a call, which is an error only where a caller then needs it.
 - **The entry comes from the callers.** Where every call, tail call and `.fallthrough` into a
   routine agrees on a part, the routine is entered with it, so its immediates are sized from
-  it. Callers in other files count too.
+  it. Callers in other modules count too.
 
 ```nt65
 .proc draw {                ; declares nothing
@@ -1455,11 +1455,12 @@ calls and at its returns. A part it writes nothing for is inferred:
 }
 ```
 
-Some routines have callers nt65 cannot see, and keep the default entry, `a*, i*, native, dp*,
-dbr*`. These are exported routines, which other modules or the linker may call, and routines
-whose address is taken, as `.addr`, `pea` and `#<` take it. A routine nothing calls, such as a
-reset handler, keeps it too. A width-dependent immediate in such a routine needs a width the
-signature writes:
+Only callers in the program count. C code or a ca65 object that calls an exported routine is
+not checked, as nothing outside nt65 is, so a routine such code calls declares the entry it
+expects. A routine whose address is taken, as `.addr`, `pea` and `#<` take it, may be called
+through it from anywhere, and keeps the default entry, `a*, i*, native, dp*, dbr*`. So does a
+routine nothing calls, such as a reset handler. A width-dependent immediate in such a routine
+needs a width the signature writes:
 
 ```text
 main.nt65:4:5: error: `lda #` needs the width of A, and `f` declares `a*`, which assumes nothing about it [width-unknown]

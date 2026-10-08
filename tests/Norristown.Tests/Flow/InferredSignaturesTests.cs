@@ -94,17 +94,35 @@ public sealed class InferredSignaturesTests
     }
 
     /// <summary>
-    /// A routine whose callers cannot all be seen keeps the default entry, and an immediate in it
-    /// needs a width it declares. That is a routine other modules or the linker may call, and one
-    /// whose address is taken.
+    /// A routine whose address is taken may be called through it from anywhere, so it keeps the
+    /// default entry, and an immediate in it needs a width it declares.
+    /// </summary>
+    [Fact]
+    public void ARoutineWhoseAddressIsTakenKeepsTheDefaultEntry()
+    {
+        const string Text = ".proc draw {\n    lda #$12\n    rts\n}\n.export .proc main: a8 {\n    jsr draw\n    rts\n}\n"
+            + ".segment RODATA\n.data table: .addr draw\n";
+
+        Assert.Contains(FlowFragment.Problems("65816", Text),
+            problem => problem.Contains("`draw` declares `a*`, which assumes nothing about it", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// An exported routine is entered with what its callers in the program agree on, in its own
+    /// module or another. Code outside nt65 that calls it is not checked, and the routine
+    /// declares its entry where that code needs one.
     /// </summary>
     [Theory]
-    [InlineData(".export .proc draw {\n    lda #$12\n    rts\n}\n.export .proc main: a8 {\n    jsr draw\n    rts\n}\n")]
-    [InlineData(".proc draw {\n    lda #$12\n    rts\n}\n.export .proc main: a8 {\n    jsr draw\n    rts\n}\n.segment RODATA\n.data table: .addr draw\n")]
-    public void ARoutineWithCallersUnseenKeepsTheDefaultEntry(string text)
+    [InlineData(".export .proc draw {\n    lda #$12\n    rts\n}\n")]
+    [InlineData(".export draw\n.proc draw {\n    lda #$12\n    rts\n}\n")]
+    public void AnExportedRoutineIsEnteredWithWhatItsCallersAgreeOn(string draw)
     {
-        Assert.Contains(FlowFragment.Problems("65816", text),
-            problem => problem.Contains("`draw` declares `a*`, which assumes nothing about it", StringComparison.Ordinal));
+        var lib = ".module lib\n.cpu 65816\n.segment CODE\n" + draw;
+        const string Main = ".module main\n.cpu 65816\n.use lib::draw\n.segment CODE\n"
+            + ".export .proc main: a16 {\n    jsr draw\n    rts\n}\n";
+
+        Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", Main), ("lib.nt65", lib)).Problems());
+        Assert.Empty(Analysis.Program(Analysis.Fragment, ("lib.nt65", lib), ("main.nt65", Main)).Problems());
     }
 
     /// <summary>

@@ -20,9 +20,11 @@ namespace Norristown.Flow;
 /// </item>
 /// <item>
 /// <description>
-/// The entry comes from what the routine's callers agree on. A routine another module or the
-/// linker may call, one whose address is taken, and one that nothing calls keep the default
-/// entry, because some of their callers cannot be seen.
+/// The entry comes from what the routine's callers in the program agree on, in any module. Code
+/// outside nt65 that calls an exported routine is not checked, as nothing outside nt65 is, and a
+/// routine it calls declares its entry where the two have to agree. A routine whose address is
+/// taken, and one that nothing calls, keep the default entry, because some of their callers
+/// cannot be seen.
 /// </description>
 /// </item>
 /// </list>
@@ -291,7 +293,7 @@ public sealed class InferredSignatures
                 var routine = region.Routine;
                 var declared = routine.Signature!;
                 entries[key] = declared.Entry;
-                if (!routine.IsExported && called.Contains(key) && !taken.Contains(key))
+                if (called.Contains(key) && !taken.Contains(key))
                     pending[key] = StateParts.All & ~declared.Declared;
             }
         }
@@ -423,7 +425,9 @@ public sealed class InferredSignatures
     /// Represents the routines one file names as where control goes, and those whose address it
     /// takes. Any use of a routine's name other than as where a call, a jump, a branch, a
     /// <c>.next</c> or a <c>.fallthrough</c> goes takes its address, as <c>.addr</c>, <c>pea</c>
-    /// and <c>#&lt;</c> do. The program may hand control to such a routine from anywhere.
+    /// and <c>#&lt;</c> do, and the program may hand control to such a routine from anywhere. An
+    /// <c>.export</c> that names a routine does neither: callers outside nt65 are the author's to
+    /// answer for.
     /// </summary>
     /// <param name="Called">The routines named as where control goes.</param>
     /// <param name="Taken">The routines whose address is taken.</param>
@@ -437,33 +441,55 @@ public sealed class InferredSignatures
             {
                 if (reference is not { IsDeclaration: false, InUse: false, IsStep: false, Symbol: { Signature: not null } routine })
                     continue;
-                (IsTransfer(model.Tree, reference.Span) ? uses.Called : uses.Taken).Add(RoutineKey.Of(routine));
+                switch (UseAt(model.Tree, reference.Span))
+                {
+                    case Use.Transfer:
+                        uses.Called.Add(RoutineKey.Of(routine));
+                        break;
+                    case Use.Address:
+                        uses.Taken.Add(RoutineKey.Of(routine));
+                        break;
+                    default:
+                        break;
+                }
             }
             return uses;
         }
 
-        /// <summary>
-        /// Returns a value indicating whether the name at <paramref name="span"/> is where a
-        /// transfer of control goes.
-        /// </summary>
-        private static bool IsTransfer(SyntaxTree tree, TextSpan span)
+        /// <summary>Returns how the name at <paramref name="span"/> uses the routine it names.</summary>
+        private static Use UseAt(SyntaxTree tree, TextSpan span)
         {
             foreach (var node in tree.Root.FindToken(span.Start).Parent?.AncestorsAndSelf() ?? [])
             {
                 switch (node)
                 {
                     case ImmediateOperandSyntax:
-                        return false;
+                        return Use.Address;
                     case NextDirectiveSyntax or FallthroughDirectiveSyntax:
-                        return true;
+                        return Use.Transfer;
+                    case ExportDirectiveSyntax or ExportItemsSyntax:
+                        return Use.Export;
                     case InstructionStatementSyntax instruction:
-                        return Instructions.IsControlTransfer(instruction.MnemonicKind);
+                        return Instructions.IsControlTransfer(instruction.MnemonicKind) ? Use.Transfer : Use.Address;
                     case StatementSyntax:
-                        return false;
+                        return Use.Address;
                 }
             }
-            return false;
+            return Use.Address;
         }
+    }
+
+    /// <summary>Specifies how a file uses a routine's name.</summary>
+    private enum Use
+    {
+        /// <summary>As where control goes.</summary>
+        Transfer,
+
+        /// <summary>For its address, which control may reach from anywhere.</summary>
+        Address,
+
+        /// <summary>To export it.</summary>
+        Export,
     }
 
     /// <summary>Specifies what a call says about one part of the state.</summary>

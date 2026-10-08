@@ -1248,11 +1248,13 @@ inferred from the program, across files:
   entered with is unchanged; a part every return gives one value has it; a part the returns
   disagree on is unknown after a call, an error only where a caller then needs it. A tail call
   returns with what the routine it calls leaves.
-- The entry comes from the routine's callers: every call, tail call, `.fallthrough` and `.next`
-  that hands control to its start. Where they agree on a part, the routine is entered with it.
-  A routine whose callers cannot all be seen keeps the default entry, `a*, i*, native, dp*,
-  dbr*`: an exported routine, which another module or the linker may call; one whose address
-  is taken, by any use of its name other than as where control goes; and one nothing calls.
+- The entry comes from the routine's callers in the program, in any module: every call, tail
+  call, `.fallthrough` and `.next` that hands control to its start. Where they agree on a part,
+  the routine is entered with it. Code outside nt65 that calls an exported routine is not
+  checked, as nothing outside nt65 is; a routine such code calls declares the entry it expects,
+  which is the contract between the two. A routine whose address is taken, by any use of its
+  name other than as where control goes, may be called through it from anywhere, and keeps the
+  default entry, `a*, i*, native, dp*, dbr*`; so does one nothing calls.
 
 This is sound where an assumed width was not. nt65 sizes every immediate from the state the
 processor will be in, so an inferred width describes what the CPU does, and the bytes follow
@@ -4608,8 +4610,8 @@ Recorded so the reasoning survives. None is open.
 - **Merge disagreement is not an error.** The lattice already has unknown; reporting at
   the use is precise, reporting at the label is not.
 - **What a signature does not declare is inferred**, and what it declares is a contract.
-  The exit comes from the body and the entry from the callers, except where callers cannot
-  all be seen. The cost is a program-wide solve, which runs once typing stops rather than on
+  The exit comes from the body and the entry from the callers in the program, except where
+  a routine's address is taken. The cost is a program-wide solve, which runs once typing stops rather than on
   each keystroke.
 - **`*` for unchanged state, and no project-wide `assume`.** A routine that does not
   touch part of the state should not erase what its caller knows, and the values of D
