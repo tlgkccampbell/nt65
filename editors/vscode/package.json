@@ -413,6 +413,16 @@
         }
       },
       {
+        "id": "nt65.directPages.referenced",
+        "description": "A direct page location that no instruction accesses but whose address the program takes, and the mark of a line that takes it, in the direct page map.",
+        "defaults": {
+          "dark": "#B180D7",
+          "light": "#652D90",
+          "highContrast": "#D0A8F0",
+          "highContrastLight": "#5A1E80"
+        }
+      },
+      {
         "id": "nt65.directPages.hw",
         "description": "A hardware register reached through the direct page, in the direct page map.",
         "defaults": {

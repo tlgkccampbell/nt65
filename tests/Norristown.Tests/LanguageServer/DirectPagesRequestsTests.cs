@@ -207,6 +207,45 @@ public sealed class DirectPagesRequestsTests
         Assert.Equal((3L, false), (bump.Accesses[0].Times, bump.Accesses[0].Uncounted));
     }
 
+    /// <summary>
+    /// A location whose address is taken carries the lines that take it, and two locations on one
+    /// page that take the same byte each name the other with the kind of sharing.
+    /// </summary>
+    [Fact]
+    public async Task ReferencesAndSharedBytesOnOnePage()
+    {
+        var timeout = TestTimeout.Token();
+        const string Text = """
+            .module main
+            .data ptr: .addr = $FB
+            .data low: .byte = $FB
+            .segment ZEROPAGE
+            .data tmp: .byte
+            .segment CODE
+            .export .proc main {
+                sta low
+                ldy #0
+                lda (ptr),y
+                ldx #tmp
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
+
+        var result = await DirectPagesAsync(client, timeout);
+        Assert.NotNull(result);
+        var page = Assert.Single(result.Pages);
+        var tmp = page.Locations.Single(location => location.Name == "tmp");
+        Assert.Equal(("unused", 0), (tmp.Relation, tmp.Accesses));
+        Assert.Equal([10], tmp.References.Select(place => place.Range.Start.Line));
+        Assert.Equal((0, 12), (tmp.References[0].Range.Start.Character, tmp.References[0].Range.End.Character));
+
+        var low = page.Locations.Single(location => location.Name == "low");
+        var shared = Assert.Single(low.Shared);
+        Assert.Equal(("low", "ptr", "$0000", 0xFBL, 0xFBL, "deliberate"), (shared.Here, shared.There, shared.Page, shared.First, shared.Last, shared.Kind));
+        Assert.Empty(low.References);
+    }
+
     private static Task<DirectPagesResult?> DirectPagesAsync(TestClient client, CancellationToken timeout) =>
         client.RequestAsync<DirectPagesResult?>("nt65/directPages", new DirectPagesParams(new TextDocumentIdentifier(Uri)), timeout);
 }

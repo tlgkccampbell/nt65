@@ -41,6 +41,17 @@
   // Returns the bytes a location takes, at least one.
   const sizeOf = location => Math.max(1, location.size || 1);
 
+  // Checks whether no instruction reaches a location but the program takes its address, so that
+  // it is used through a pointer or an index the map cannot follow.
+  const taken = location => location.relation === 'unused' && (location.references || []).length > 0;
+
+  // Checks whether no instruction reaches a location and nothing takes its address.
+  const never = location => location.relation === 'unused' && !taken(location);
+
+  // Returns the colour of a location's relation, with address-taken locations in their own.
+  const colourOf = location => (taken(location) ? 'var(--referenced)'
+    : `var(--${location.relation in RELATIONS ? location.relation : 'own'})`);
+
   // Returns how hot a location is: how many times its instructions run in a pass, counting the
   // loops whose counts are known. It is on a logarithmic scale, so that a location used once
   // still shows beside one used thousands of times.
@@ -93,15 +104,28 @@
       && address >= location.address && address < location.address + sizeOf(location)) || null;
   }
 
-  // Works out what each of a page's 256 bytes holds: its own location, if any, and the other page
-  // that covers it with that page's location there, if any.
+  // Works out what each of a page's 256 bytes holds: its own locations, if any, with the first
+  // of them apart; how two of them share it, if they do; and the other page that covers it with
+  // that page's location there, if any. Two own locations on one byte are `collision` unless the
+  // source fixes both, which makes them `deliberate`.
   function model(page) {
     const own = new Array(256).fill(null);
+    const owners = Array.from({ length: 256 }, () => []);
+    const same = new Array(256).fill(null);
     for (const location of page.locations) {
       if (location.offset === null) continue;
       for (let i = 0; i < sizeOf(location); i++) {
         const at = location.offset + i;
-        if (at < 256 && !own[at]) own[at] = location;
+        if (at >= 256) continue;
+        if (!own[at]) own[at] = location;
+        owners[at].push(location);
+      }
+      for (const bytes of location.shared || []) {
+        if (bytes.kind !== 'collision' && bytes.kind !== 'deliberate') continue;
+        for (let address = bytes.first; address <= bytes.last; address++) {
+          const at = address - page.base;
+          if (at >= 0 && at < 256 && same[at] !== 'collision') same[at] = bytes.kind;
+        }
       }
     }
     const other = new Array(256).fill(null);
@@ -115,7 +139,7 @@
         if (!other[at] || (!other[at].location && location)) other[at] = { page: there, location };
       }
     }
-    return { own, other };
+    return { own, owners, same, other };
   }
 
   // Shows a tooltip beside an element: a header with a name and a few words, then rows of a
@@ -196,13 +220,14 @@
   }
 
   function drawPage(page) {
-    const { own, other } = model(page);
+    const { own, owners, same, other } = model(page);
     const ownLocations = page.locations.filter(location => location.offset !== null);
     const maxHeat = Math.max(1, ...ownLocations.map(heatOf));
 
     // Counts the page's bytes.
     let used = 0;
-    let never = 0;
+    let unreached = 0;
+    let referenced = 0;
     let shared = 0;
     let foreign = 0;
     let run = 0;
@@ -212,7 +237,8 @@
       const theirs = other[i] && other[i].location;
       if (own[i]) {
         used++;
-        if (own[i].relation === 'unused') never++;
+        if (owners[i].every(never)) unreached++;
+        else if (owners[i].every(location => location.relation === 'unused')) referenced++;
         if (theirs) shared++;
       } else if (theirs) {
         foreign++;
@@ -253,7 +279,7 @@
       const mine = own[at];
       const theirs = other[at];
       if (mine && theirs && theirs.location) return { key: `o:${mine.name}`, edge: 'var(--edge-strong)' };
-      if (mine) return { key: `o:${mine.name}`, edge: mine.relation === 'unused' ? 'var(--edge-unused)' : 'var(--edge-sym)' };
+      if (mine) return { key: `o:${mine.name}`, edge: never(mine) ? 'var(--edge-unused)' : 'var(--edge-sym)' };
       if (theirs && theirs.location) return { key: `u:${theirs.page.id}:${theirs.location.name}`, edge: 'var(--edge-foreign)' };
       if (theirs) return { key: `p:${theirs.page.id}`, edge: 'var(--edge-page)' };
       return { key: `f:${at}`, edge: 'transparent' };
@@ -294,9 +320,12 @@
         cell.edges = { plain: cell.style.boxShadow, used: sides(at, c, 2), direct: sides(at, c, 3) };
         if (mine && mine.relation !== 'unused') {
           const share = Math.round(30 + 70 * heatOf(mine) / maxHeat);
-          cell.style.background = `color-mix(in srgb, var(--${mine.relation in RELATIONS ? mine.relation : 'own'}) ${share}%, transparent)`;
+          cell.style.background = `color-mix(in srgb, ${colourOf(mine)} ${share}%, transparent)`;
         }
-        if (mine && mine.relation === 'unused') cell.classList.add('unused');
+        if (mine && never(mine)) cell.classList.add('unused');
+        else if (mine && taken(mine)) cell.classList.add('taken');
+        if (same[at] === 'collision') cell.classList.add('twin');
+        else if (same[at] === 'deliberate') cell.classList.add('alias');
         if (mine && theirs && theirs.location) cell.classList.add('clash');
         else if (!mine && theirs && theirs.location) cell.classList.add('otherused');
         else if (!mine && theirs) cell.classList.add('other');
@@ -308,12 +337,18 @@
           cell.addEventListener('click', () => select(target.page.id, target.location.name));
         }
         const rows = [];
-        if (mine) {
-          const colour = mine.relation === 'unused' ? 'var(--dim)' : `var(--${mine.relation in RELATIONS ? mine.relation : 'own'})`;
-          const into = address - mine.address;
-          rows.push([mine.relation === 'unused' ? '○' : '●', colour, `\`${mine.name}\`${into > 0 ? ` +${into}` : ''}`]);
-          rows.push(['#', 'var(--dim)', heatText(mine)]);
-        }
+        // Every own location on the byte is listed, the first with how often it is used and the
+        // others marked as taking the same byte.
+        owners[at].forEach((location, index) => {
+          const into = address - location.address;
+          const name = `\`${location.name}\`${into > 0 ? ` +${into}` : ''}`;
+          if (index === 0) {
+            rows.push([glyphOf(location), never(location) ? 'var(--dim)' : colourOf(location), name]);
+            rows.push(['#', 'var(--dim)', heatText(location)]);
+          } else {
+            rows.push(['=', same[at] === 'collision' ? 'var(--nested)' : 'var(--dim)', name]);
+          }
+        });
         if (theirs && theirs.location) {
           const into = address - theirs.location.address;
           rows.push(['⧉', mine ? 'var(--nested)' : 'var(--dim)', `${pageName(theirs.page)} \`${theirs.location.name}\`${into > 0 ? ` +${into}` : ''}`]);
@@ -338,12 +373,22 @@
 
     // The side column: the locations, the budget and the checks.
     const side = h('div', 'side');
-    side.append(symbols(page, maxHeat), budget(used, never, shared, foreign, free, best, page), checks(page));
+    side.append(symbols(page, maxHeat), budget(used, unreached, referenced, shared, foreign, free, best, page), checks(page));
     body.append(side);
   }
 
-  // Returns how often a location is used, in words.
+  // Returns the glyph that stands for a location's relation.
+  function glyphOf(location) {
+    if (taken(location)) return '◎';
+    return location.relation === 'unused' ? '○' : '●';
+  }
+
+  // Returns how often a location is used, in words, or how many lines take its address.
   function heatText(location) {
+    if (taken(location)) {
+      const n = location.references.length;
+      return `address taken on ${n} line${n === 1 ? '' : 's'}`;
+    }
     const instructions = `${location.accesses} instruction${location.accesses === 1 ? '' : 's'}`;
     const open = location.uncounted > 0 ? ` · ${location.uncounted} in a loop of unknown count` : '';
     return `${instructions} · ${location.perPass.toLocaleString('en-US')}× a pass${open}`;
@@ -383,8 +428,8 @@
       row.dataset.key = `${entry.page.id}/${location.name}`;
       const swatch = h('span', 'sw');
       if (entry.foreign) swatch.classList.add('foreign');
-      else if (location.relation === 'unused') swatch.classList.add('never');
-      else swatch.style.background = `var(--${location.relation in RELATIONS ? location.relation : 'own'})`;
+      else if (never(location)) swatch.classList.add('never');
+      else swatch.style.background = colourOf(location);
       const name = h('span', 'nm', location.name);
       if (entry.foreign) name.append(h('span', 'rg', ` ${pageName(entry.page)}`));
       const range = entry.first === null ? '?' : offsets(entry.first, entry.last);
@@ -401,8 +446,11 @@
         : `${range} · ${sizeOf(location)} B${location.type ? ` · ${location.type}` : ''}`;
       const rows = entry.foreign
         ? [['⧉', 'var(--dim)', 'another page\'s bytes']]
-        : [[location.relation === 'unused' ? '○' : '●', 'var(--dim)', RELATIONS[location.relation] || location.relation],
-          ['#', 'var(--dim)', heatText(location)]];
+        : [[glyphOf(location), 'var(--dim)', taken(location) ? 'address taken' : RELATIONS[location.relation] || location.relation],
+          ['#', 'var(--dim)', heatText(location)],
+          ...(location.shared || []).filter(bytes => bytes.kind === 'collision' || bytes.kind === 'deliberate')
+            .map(bytes => ['=', bytes.kind === 'collision' ? 'var(--nested)' : 'var(--dim)',
+              `\`${bytes.there}\` ${offsets(bytes.first - page.base, bytes.last - page.base)}`])];
       row.addEventListener('mouseenter', () => {
         peek(row.dataset.key);
         showTip(row, location.name, meta, rows);
@@ -424,12 +472,15 @@
     return section;
   }
 
-  // Returns the budget: a stacked meter and what each part of the page's 256 bytes is.
-  function budget(used, never, shared, foreign, free, best, page) {
+  // Returns the budget: a stacked meter and what each part of the page's 256 bytes is. A byte
+  // whose address the program takes is counted apart from one nothing uses, because it is used
+  // through a pointer or an index.
+  function budget(used, unreached, referenced, shared, foreign, free, best, page) {
     const section = h('div');
     section.append(h('h3', '', 'Budget'));
     const meter = h('div', 'meter');
-    for (const [count, className] of [[used - never - shared, 'own'], [never, 'never'], [shared, 'shared'], [foreign, 'foreign']]) {
+    const parts = [[used - unreached - referenced - shared, 'own'], [referenced, 'taken'], [unreached, 'never'], [shared, 'shared'], [foreign, 'foreign']];
+    for (const [count, className] of parts) {
       if (count <= 0) continue;
       const part = h('span', className);
       part.style.width = `${count / 256 * 100}%`;
@@ -438,7 +489,8 @@
     const values = h('div', 'kv');
     const pairs = [
       ['used', used],
-      ['never accessed', never],
+      ['address taken', referenced],
+      ['never accessed', unreached],
       ['shared with another page', shared],
       ['another page\'s only', foreign],
       ['free', free],
@@ -472,7 +524,7 @@
     }
     // The header's badge already says the layout is guessed.
     for (const note of page.notes) {
-      if (note.text !== 'no config · layout guessed') items.push([note.glyph, 'var(--dim)', note.text, '']);
+      if (note.text !== 'no config · layout guessed') items.push([note.glyph, note.glyph === '⧉' ? 'var(--nested)' : 'var(--dim)', note.text, '']);
     }
     if (hazards) {
       for (const location of page.locations) {
@@ -506,12 +558,21 @@
     for (const relation of ['shared', 'nested', 'irq', 'own']) {
       key(RELATIONS[relation], swatch => { swatch.style.background = `var(--${relation})`; });
     }
+    key('address taken', swatch => { swatch.style.background = 'var(--referenced)'; });
     key('never accessed', swatch => swatch.classList.add('neverkey'));
     key('free', swatch => { swatch.style.background = 'var(--free)'; });
     key('another page', swatch => swatch.classList.add('cell', 'other'));
     key('both', swatch => {
       swatch.classList.add('clashkey');
       swatch.textContent = '⧉';
+    });
+    key('collide', swatch => {
+      swatch.classList.add('twinkey');
+      swatch.textContent = '=';
+    });
+    key('alias', swatch => {
+      swatch.classList.add('aliaskey');
+      swatch.textContent = '=';
     });
     key('colder → hotter', swatch => swatch.classList.add('heat'));
     key('one location', swatch => swatch.classList.add('shape'));

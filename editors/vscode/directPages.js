@@ -36,6 +36,7 @@ const COLOUR = {
   irq: 'nt65.directPages.irq',
   own: 'nt65.directPages.own',
   unused: 'nt65.directPages.unused',
+  referenced: 'nt65.directPages.referenced',
   hw: 'nt65.directPages.hw',
   unknown: 'nt65.directPages.unknown',
   access: 'nt65.directPages.access',
@@ -111,6 +112,12 @@ function pageKind(page) {
   if (page.segments.length > 0) return page.segments.join(', ');
   if (page.hardware) return 'hardware';
   return page.base === null ? 'not known' : '';
+}
+
+// Checks whether no instruction reaches a location but the program takes its address, as
+// `ldx #tmp` or `.addr tmp` does, so that it is used through a pointer or an index.
+function addressTaken(location) {
+  return location.relation === 'unused' && (location.references || []).length > 0;
 }
 
 // Returns the page with an id from a map.
@@ -281,7 +288,7 @@ function pageTip(result, page, hazards) {
   if ((page.base & 0xFF) !== 0 && page.direct > 0) {
     tip.row('⚠', COLOUR.nested, `not page-aligned · +1 cycle × ${page.direct}`, '');
   }
-  for (const note of page.notes) tip.row(note.glyph, COLOUR.dim, markdown(note.text), '');
+  for (const note of page.notes) tip.row(note.glyph, note.glyph === '⧉' ? COLOUR.nested : COLOUR.dim, markdown(note.text), '');
   for (const overlap of page.overlaps) {
     if (overlap.shared.length === 0) {
       tip.row('⧉', COLOUR.dim, `${markdown(pageName(result, overlap.page))} page, no bytes shared`,
@@ -323,9 +330,13 @@ function locationTip(result, page, location, hazards) {
   const tip = new Tip(location.name, `${where}${location.type ? ` · ${location.type}` : ''}${source}`);
   const nodes = flatten(location.routines);
   const users = new Set(nodes.filter(node => node.role).map(node => node.name));
-  const [glyph, colour] = relationMark(location.relation);
-  const relation = RELATIONS[location.relation] || location.relation;
-  tip.row(glyph, colour, users.size > 1 ? `${relation} · ${users.size} routines` : relation, '');
+  if (addressTaken(location)) {
+    tip.row('◎', COLOUR.referenced, 'address taken', lineLinks(location.references));
+  } else {
+    const [glyph, colour] = relationMark(location.relation);
+    const relation = RELATIONS[location.relation] || location.relation;
+    tip.row(glyph, colour, users.size > 1 ? `${relation} · ${users.size} routines` : relation, '');
+  }
   if (location.accesses > 0) {
     tip.row('#', COLOUR.dim, `${count(location.accesses, 'instruction')} · ${times(location.perPass)} a pass`, '');
     if (location.uncounted > 0) tip.row('∞', COLOUR.dim, `${location.uncounted} in a loop of unknown count`, '');
@@ -343,7 +354,11 @@ function locationTip(result, page, location, hazards) {
   }
   for (const bytes of location.shared) {
     const at = location.address === null ? '' : `+${hex2(bytes.first - page.base)} `;
-    tip.row('⧉', COLOUR.nested, `${at}= ${markdown(pageName(result, bytes.page))} \`${bytes.there}\``,
+    // Two locations on this page that take one byte collide unless the source fixes both.
+    const here = bytes.kind === 'deliberate' || bytes.kind === 'collision';
+    const where = here ? 'on this page' : markdown(pageName(result, bytes.page));
+    tip.row('⧉', bytes.kind === 'deliberate' ? COLOUR.dim : COLOUR.nested,
+      here ? `${at}= \`${bytes.there}\` ${where}` : `${at}= ${where} \`${bytes.there}\``,
       coloured(COLOUR.dim, addresses(bytes.first, bytes.last)));
   }
   return tip.build();
@@ -454,9 +469,9 @@ function itemOf(result, element, hazards) {
       const { location } = element;
       item = new vscode.TreeItem(location.name, state(page.locations.length <= OPEN_LOCATIONS));
       item.description = joined(offsets(location), marks(location.shared.length > 0, location.hazard, hazards));
-      item.iconPath = location.relation === 'unused'
-        ? icon('circle-outline', COLOUR.unused)
-        : icon('symbol-variable', COLOUR[location.relation]);
+      item.iconPath = addressTaken(location) ? icon('target', COLOUR.referenced)
+        : location.relation === 'unused' ? icon('circle-outline', COLOUR.unused)
+          : icon('symbol-variable', COLOUR[location.relation]);
       item.tooltip = locationTip(result, page, location, hazards);
       item.contextValue = 'location';
       // The URI is only there so that the caret's decorations can colour the row.
@@ -528,7 +543,7 @@ class Marks {
     if (!this.byUri.has(uri)) this.byUri.set(uri, new Map());
     const lines = this.byUri.get(uri);
     const line = place.range.start.line;
-    if (!lines.has(line)) lines.set(line, { write: false, read: false, call: false, irq: false, declaration: false, notes: [] });
+    if (!lines.has(line)) lines.set(line, { write: false, read: false, call: false, irq: false, declaration: false, reference: false, notes: [] });
     return lines.get(line);
   }
 
@@ -543,6 +558,11 @@ class Marks {
   // Adds the line that declares a variable.
   declaration(place) {
     this.at(place).declaration = true;
+  }
+
+  // Adds a line that takes a location's address without reaching it.
+  reference(place) {
+    this.at(place).reference = true;
   }
 
   // Adds a call that leads to a routine that accesses a location.
@@ -602,9 +622,11 @@ class Marks {
         });
         walk(location.routines);
         this.first = location.declaration || this.earliestMark();
-        this.summary = location.accesses === 0
-          ? `${location.name} · never accessed`
-          : `${location.name} · ${count(location.accesses, 'access', 'accesses')} in ${count(routines.size, 'routine')}`;
+        this.summary = location.accesses > 0
+          ? `${location.name} · ${count(location.accesses, 'access', 'accesses')} in ${count(routines.size, 'routine')}`
+          : addressTaken(location)
+            ? `${location.name} · address taken · ${count(location.references.length, 'line')}`
+            : `${location.name} · never accessed`;
         break;
       }
       case 'routine': {
@@ -648,6 +670,7 @@ class Marks {
         break;
       case 'location':
         if (element.location.declaration) this.declaration(element.location.declaration);
+        for (const place of element.location.references || []) this.reference(place);
         for (const node of element.location.routines) this.node(node, true);
         break;
       case 'routine':
@@ -717,13 +740,20 @@ function decorationTypes() {
     overviewRulerLane: vscode.OverviewRulerLane.Left,
     after: { contentText: '◆', color: new vscode.ThemeColor(COLOUR.access), margin: '0 0 0 0.6em' },
   });
+  types.reference = vscode.window.createTextEditorDecorationType({
+    isWholeLine: true,
+    backgroundColor: new vscode.ThemeColor('nt65.directPages.accessBackground'),
+    overviewRulerColor: new vscode.ThemeColor(COLOUR.referenced),
+    overviewRulerLane: vscode.OverviewRulerLane.Left,
+    after: { contentText: '◎', color: new vscode.ThemeColor(COLOUR.referenced), margin: '0 0 0 0.6em' },
+  });
   types.hazard = tag('⚠', COLOUR.nested);
   return types;
 }
 
 // Returns every decoration type in a set of them.
 function allTypes(types) {
-  return [...Object.values(types.lines), types.call, types.hazard, types.declaration];
+  return [...Object.values(types.lines), types.call, types.hazard, types.declaration, types.reference];
 }
 
 // Draws the lines of the selected row in the editors that show them.
@@ -757,6 +787,10 @@ class Highlights {
           ranges.get(this.types.declaration).push(range);
           continue;
         }
+        if (mark.reference && !mark.write && !mark.read) {
+          ranges.get(this.types.reference).push(range);
+          continue;
+        }
         const bar = mark.write ? 'write' : mark.read ? 'read' : 'none';
         const tint = mark.notes.length > 0 ? 'warning' : mark.irq ? 'interrupt' : 'access';
         ranges.get(this.types.lines[`${bar}:${tint}`]).push(range);
@@ -786,6 +820,7 @@ const LEGEND_ITEMS = [
       { label: 'interrupt', icon: icon('circle-filled', COLOUR.irq) },
       { label: 'one owner', icon: icon('circle-filled', COLOUR.own) },
       { label: 'unused', icon: icon('circle-outline', COLOUR.unused) },
+      { label: 'address taken', icon: icon('target', COLOUR.referenced) },
       { label: 'hardware', icon: icon('circuit-board', COLOUR.hw) },
     ],
   },
@@ -804,6 +839,7 @@ const LEGEND_ITEMS = [
     label: 'Marks',
     children: [
       { label: '⧉', description: 'pages overlap, or bytes shared' },
+      { label: '◎', description: 'line that takes the address' },
       { label: '⚠', description: 'hazard' },
       { label: '⚡', description: 'interrupt handler', icon: icon('zap', COLOUR.irq) },
       { label: '┃', description: 'line that writes' },

@@ -33,6 +33,13 @@ public sealed record DirectPage(
     /// <summary>Gets a value indicating whether a use of some location on the page is a hazard.</summary>
     public bool IsHazard => Locations.Any(location => location.IsHazard) || Unknown.Any(use => use.Use.Hazards.Count > 0);
 
-    /// <summary>Gets the number of bytes the page's locations take, counting only those whose offsets are known.</summary>
-    public long Used => Locations.Sum(location => location.Offset is not null && location.Size is { } size ? size : 0);
+    /// <summary>
+    /// Gets the number of bytes the page's locations take, counting only those whose offsets are
+    /// known. A byte that two locations on the page take counts once.
+    /// </summary>
+    public long Used => Locations
+        .Where(location => location.Offset is not null && location.Size is > 0)
+        .SelectMany(location => Enumerable.Range(0, (int)location.Size!.Value).Select(i => location.Offset!.Value + i))
+        .Distinct()
+        .LongCount();
 }

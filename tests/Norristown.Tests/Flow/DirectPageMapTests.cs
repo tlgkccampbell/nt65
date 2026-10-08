@@ -893,6 +893,133 @@ public sealed class DirectPageMapTests
             Render(analysis, built));
     }
 
+    /// <summary>
+    /// An address alias that falls inside a segment's predicted bytes takes the same bytes as the
+    /// data laid out there. The layout chose those addresses, so the two collide, and the page
+    /// notes each collision.
+    /// </summary>
+    [Fact]
+    public void AnAliasInsideASegmentCollidesWithItsData()
+    {
+        var project = Linked("""
+            MEMORY {
+                ZP:  start = $0080, size = $0080;
+                ROM: start = $8000, size = $1000;
+            }
+            SEGMENTS {
+                ZEROPAGE: load = ZP, type = zp;
+                CODE:     load = ROM, type = ro;
+            }
+            """);
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Own hazard=False used=3 direct=3",
+                "  ⧉ `count` and `ptr` share $0080",
+                "  ⧉ `ptr` and `total` share $0081",
+                "  count +128 x1 .byte Own Configured",
+                "    ⧉ Collision ptr $0080-$0080",
+                "    main Out 1",
+                "  ptr +128 x2 .addr Own Fixed",
+                "    ⧉ Collision count $0080-$0080",
+                "    ⧉ Collision total $0081-$0081",
+                "    main In 1",
+                "  total +129 x2 .word Own Configured",
+                "    ⧉ Collision ptr $0081-$0081",
+                "    main Out 1",
+            ],
+            Render(FlowFragment.Analyze(project, "6502", (Analysis.Path, """
+                .data ptr: .addr = $80
+                .segment ZEROPAGE
+                .data count: .byte
+                .data total: .word
+                .segment CODE
+                .export .proc main {
+                    sta count
+                    sta total
+                    ldy #0
+                    lda (ptr),y
+                    rts
+                }
+                """))));
+    }
+
+    /// <summary>
+    /// Two address aliases on one byte name it two ways on purpose, as msbasic's zero page does, so
+    /// they share the byte without a note.
+    /// </summary>
+    [Fact]
+    public void TwoAliasesOnOneByteAreDeliberate()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [] Own hazard=False used=2 direct=2",
+                "  low +251 x1 .byte Own Fixed",
+                "    ⧉ Deliberate ptr $00fb-$00fb",
+                "    main Out 1",
+                "  ptr +251 x2 .addr Own Fixed",
+                "    ⧉ Deliberate low $00fb-$00fb",
+                "    main In 1",
+            ],
+            Render("6502", """
+                .data ptr: .addr = $FB
+                .data low: .byte = $FB
+                .export .proc main {
+                    sta low
+                    ldy #0
+                    lda (ptr),y
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A location whose address the program takes is used through a pointer or an index that the
+    /// map cannot follow. It is still unused by any instruction of its own, but it carries the
+    /// statements that take its address. Those are an immediate operand, with or without
+    /// <c>&lt;</c> and <c>&gt;</c>, a value in a data table, and an argument a macro puts in one.
+    /// A macro in the location's own file is shown at the line of its body, as its accesses are.
+    /// </summary>
+    [Fact]
+    public void ALocationWhoseAddressIsTakenIsReferenced()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Unused hazard=False used=9 direct=0",
+                "  ◦ no config · layout guessed",
+                "  ptr +0 x2 .addr Unused Guessed",
+                "    ◎ lda #<ptr",
+                "    ◎ ldx #>ptr",
+                "  tmp +2 x1 .byte Unused Guessed",
+                "    ◎ ldy #tmp",
+                "  buf +3 x4 .byte[4] Unused Guessed",
+                "    ◎ .data table: .addr buf",
+                "  out +7 x1 .byte Unused Guessed",
+                "    ◎ ldx #.lobyte(p)",
+                "  idle +8 x1 .byte Unused Guessed",
+            ],
+            Render("6502", """
+                .macro point(p: expr) {
+                    ldx #.lobyte(p)
+                }
+                .segment ZEROPAGE
+                .data ptr: .addr
+                .data tmp: .byte
+                .data buf: .byte[4]
+                .data out: .byte
+                .data idle: .byte
+                .segment CODE
+                .export .proc main {
+                    lda #<ptr
+                    ldx #>ptr
+                    ldy #tmp
+                    point!(out)
+                    rts
+                }
+                .segment RODATA
+                .data table: .addr buf
+                """));
+    }
+
     /// <summary>Returns the map of <paramref name="text"/> as lines of text, one for each page, location, use and note.</summary>
     private static List<string> Render(string cpu, string text) => Render(FlowFragment.Analyze(cpu, text));
 
@@ -919,6 +1046,10 @@ public sealed class DirectPageMapTests
             foreach (var location in page.Locations)
             {
                 lines.Add($"  {location.Name} +{location.Offset} x{location.Size} {location.Type} {location.Relation} {location.Layout}");
+                foreach (var shared in location.Shared)
+                    lines.Add($"    ⧉ {shared.Kind} {shared.There} {StateValue.Hex(shared.First, 4)}-{StateValue.Hex(shared.Last, 4)}");
+                foreach (var reference in location.References)
+                    lines.Add($"    ◎ {reference.GetText().Trim()}");
                 foreach (var use in location.Uses)
                 {
                     lines.Add($"    {use.Routine.Name} {use.Role} {use.Accesses.Count}{(use.IsHandler ? " handler" : "")}{(use.IsUnknownPage ? " unknown" : "")}"

@@ -97,6 +97,7 @@ internal static class DirectPages
             Name(location.Relation),
             location.IsHazard,
             [.. location.Shared.Select(Shared)],
+            [.. location.References.Select(reference => Line(reference, uriOf))],
             location.Uses.Sum(use => use.Accesses.Count),
             perPass,
             uncounted,
@@ -110,7 +111,7 @@ internal static class DirectPages
     private static long Saturated(long count) => Math.Clamp(count, 0, 999_999_999_999);
 
     private static Protocol.DirectPageShared Shared(SharedBytes shared) =>
-        new(shared.Here, shared.There, Id(shared.Page), shared.First, shared.Last);
+        new(shared.Here, shared.There, Id(shared.Page), shared.First, shared.Last, Name(shared.Kind));
 
     /// <summary>Returns a page's name, such as <c>$0080</c>, or <c>?</c> for the page whose D is not known.</summary>
     private static string Id(DirectPage page) => page.Base is { } at ? $"${at:X4}" : "?";
@@ -123,6 +124,13 @@ internal static class DirectPages
         PageRelation.Own => "own",
         PageRelation.Hardware => "hw",
         _ => "unused",
+    };
+
+    private static string Name(SharedBytesKind kind) => kind switch
+    {
+        SharedBytesKind.Deliberate => "deliberate",
+        SharedBytesKind.Collision => "collision",
+        _ => "page",
     };
 
     private static string Name(PageLayout layout) => layout switch

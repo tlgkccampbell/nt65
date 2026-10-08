@@ -7,6 +7,7 @@ body {
   --irq: var(--vscode-nt65-directPages-irq, #f48771);
   --own: var(--vscode-nt65-directPages-own, #75beff);
   --unused: var(--vscode-nt65-directPages-unused, #6e6e6e);
+  --referenced: var(--vscode-nt65-directPages-referenced, #b180d7);
   --hw: var(--vscode-nt65-directPages-hw, #8a8a8a);
   --unknown: var(--vscode-nt65-directPages-unknown, #9d9d9d);
   --caret: var(--vscode-nt65-directPages-caret, #ff8ac8);
@@ -44,6 +45,7 @@ body.vscode-light {
   --irq: var(--vscode-nt65-directPages-irq, #c72e0f);
   --own: var(--vscode-nt65-directPages-own, #0070c1);
   --unused: var(--vscode-nt65-directPages-unused, #a0a0a0);
+  --referenced: var(--vscode-nt65-directPages-referenced, #652d90);
   --hw: var(--vscode-nt65-directPages-hw, #6e6e6e);
   --unknown: var(--vscode-nt65-directPages-unknown, #717171);
   --free: rgba(0, 0, 0, 0.06);
@@ -63,6 +65,7 @@ body.vscode-high-contrast {
   --nested: var(--vscode-nt65-directPages-nested, #ffd700);
   --irq: var(--vscode-nt65-directPages-irq, #ffa090);
   --own: var(--vscode-nt65-directPages-own, #9acfff);
+  --referenced: var(--vscode-nt65-directPages-referenced, #d0a8f0);
   --edge-sym: #ffffff;
   --edge-strong: #ffffff;
   --edge-page: #808080;
@@ -74,6 +77,7 @@ body.vscode-high-contrast-light {
   --nested: var(--vscode-nt65-directPages-nested, #7a5c00);
   --irq: var(--vscode-nt65-directPages-irq, #a1260d);
   --own: var(--vscode-nt65-directPages-own, #0050a0);
+  --referenced: var(--vscode-nt65-directPages-referenced, #5a1e80);
   --free: rgba(0, 0, 0, 0.06);
   --track: rgba(0, 0, 0, 0.1);
   --hatch: rgba(0, 0, 0, 0.3);
@@ -116,10 +120,19 @@ body.vscode-high-contrast-light {
 .cell { position: relative; background: var(--free); --edge: transparent; }
 .cell.sym { cursor: pointer; }
 .cell.unused { background: transparent; }
+.cell.taken { background: color-mix(in srgb, var(--referenced) 35%, transparent); }
 .cell.other { background: repeating-linear-gradient(135deg, var(--hatch) 0 2px, var(--free) 2px 5px); }
 .cell.otherused { background: repeating-linear-gradient(135deg, var(--hatch-used) 0 2px, var(--free) 2px 5px); }
 .cell.clash { background: var(--nested) !important; }
 .cell.clash::after { content: "⧉"; position: absolute; right: 2px; bottom: 1px; font-size: 9px; line-height: 1; color: var(--on-amber); }
+/* A byte that two of the page's own locations take is striped amber where they collide. Where the
+   source aliases the byte on purpose, it only carries a mark. */
+.cell.twin { background: repeating-linear-gradient(135deg, var(--nested) 0 3px, color-mix(in srgb, var(--nested) 45%, transparent) 3px 6px) !important; }
+.cell.twin::after, .cell.alias::after { content: "="; position: absolute; right: 2px; bottom: 1px; font-size: 9px; line-height: 1; }
+.cell.twin::after { color: var(--on-amber); }
+.cell.alias::after { color: var(--fg); opacity: 0.7; }
+/* A byte that another page's location takes as well keeps its own mark. */
+.cell.clash::after { content: "⧉"; }
 .cell.hot, .cell.peek { --edge: var(--edge-hot) !important; }
 .cell.peek:not(.hot) { filter: brightness(1.2); }
 
@@ -130,6 +143,9 @@ body.vscode-high-contrast-light {
 .legend .shape { width: 30px; background: color-mix(in srgb, var(--shared) 60%, transparent); box-shadow: inset 0 0 0 1px var(--edge-sym); }
 .legend .clashkey { background: var(--nested); color: var(--on-amber); font-size: 9px; text-align: right; line-height: 12px; }
 .legend .neverkey { box-shadow: inset 0 0 0 1px var(--edge-unused); }
+.legend .twinkey { background: repeating-linear-gradient(135deg, var(--nested) 0 3px, color-mix(in srgb, var(--nested) 45%, transparent) 3px 6px);
+  color: var(--on-amber); font-size: 9px; text-align: right; line-height: 12px; }
+.legend .aliaskey { background: var(--free); color: var(--fg); font-size: 9px; text-align: right; line-height: 12px; }
 
 .side { display: grid; gap: 18px; min-width: 0; font-size: 12.5px; }
 .side h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
@@ -168,6 +184,7 @@ body.vscode-high-contrast-light {
 .meter span { display: block; height: 100%; }
 .meter .own { background: var(--own); }
 .meter .never { background: var(--unused); }
+.meter .taken { background: var(--referenced); }
 .meter .shared { background: var(--nested); }
 .meter .foreign { background: var(--hatch-used); }
 

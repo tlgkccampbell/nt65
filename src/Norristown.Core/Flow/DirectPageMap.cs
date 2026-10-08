@@ -76,6 +76,10 @@ public sealed class DirectPageMap
         private readonly Dictionary<long, int> direct = [];
         private readonly MemoryInference memory = new(analysis);
 
+        // The statements that take each location's address without reaching it, in the order the
+        // walk found them.
+        private readonly Dictionary<LocationKey, List<SyntaxNode>> references = [];
+
         // The notes about each page's layout, by the page's base.
         private readonly Dictionary<long, List<PageNote>> notes = [];
 
@@ -335,7 +339,10 @@ public sealed class DirectPageMap
         /// </summary>
         private bool HasDirectPage => analysis.Files.Any(file => file.Layout.Cpu == Cpu.Wdc65816);
 
-        /// <summary>Collects every instruction that reaches a location, with the page it reaches it through.</summary>
+        /// <summary>
+        /// Collects every instruction that reaches a location, with the page it reaches it through,
+        /// and every statement that takes a location's address.
+        /// </summary>
         private void CollectAccesses()
         {
             foreach (var file in analysis.Files)
@@ -361,6 +368,99 @@ public sealed class DirectPageMap
                         }
                     }
                 }
+            }
+
+            // Every location a page holds is known once the accesses are, because an access can
+            // give a page an address the source fixes.
+            foreach (var file in analysis.Files)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                foreach (var step in file.Layout.Steps)
+                {
+                    if (step.Closes)
+                        continue;
+                    foreach (var value in TakenValues(file.Model, step))
+                    {
+                        if (Taken(file.Model, value, step.On, 0) is not { } target)
+                            continue;
+                        var key = Key(target.Symbol);
+                        if (!homes.ContainsKey(key))
+                            continue;
+                        if (!references.TryGetValue(key, out var list))
+                            references[key] = list = [];
+                        // A declaration's directive is shown as the whole declaration.
+                        var shown = Shown(step, file.Model.Tree);
+                        if (shown is DataDirectiveSyntax { Parent: DataDeclarationSyntax declaration })
+                            shown = declaration;
+                        if (!list.Contains(shown))
+                            list.Add(shown);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns the expressions of <paramref name="step"/> that give a value rather than reach
+        /// memory. Those are the operand of an immediate instruction, such as <c>ldx #tmp</c>, and
+        /// the values of a data directive, such as <c>.addr tmp</c>.
+        /// </summary>
+        private static IEnumerable<SyntaxNode> TakenValues(SemanticModel model, Step step)
+        {
+            var statement = step.Statement is LabeledLineSyntax { Statement: { } labeled } ? labeled : step.Statement;
+            switch (statement)
+            {
+                case InstructionStatementSyntax:
+                    if (StepOperands.Of(model, step) is ImmediateOperandSyntax immediate)
+                        yield return immediate.Value;
+                    break;
+
+                // A data declaration's directive is a step of its own. An address alias has no
+                // values, because its address is where it is rather than a value the program holds.
+                case DataDirectiveSyntax { Tail: { } tail }:
+                    foreach (var value in Values(tail))
+                        yield return value;
+                    break;
+                case DataValuesSyntax line:
+                    foreach (var value in line.Values.SelectMany(Values))
+                        yield return value;
+                    break;
+                default:
+                    break;
+            }
+
+            // A data body's lines are statements of their own, so its values are found there.
+            static IEnumerable<SyntaxNode> Values(SyntaxNode node) => node switch
+            {
+                ExpressionSyntax expression => [expression],
+                DataBodySyntax => [],
+                _ => node.ChildNodes.SelectMany(Values),
+            };
+        }
+
+        /// <summary>
+        /// Returns the symbol whose address <paramref name="expression"/> takes, and the constant
+        /// added to it, as <see cref="Target"/> finds them. The <c>&lt;</c>, <c>&gt;</c> and
+        /// <c>^</c> operators, and the <c>.lobyte</c>, <c>.hibyte</c> and <c>.bankbyte</c>
+        /// functions, take a part of the address, so the symbol is found inside them.
+        /// </summary>
+        private static (Symbol Symbol, long Offset)? Taken(SemanticModel model, SyntaxNode expression, Expansion? on, int depth)
+        {
+            if (depth > 8)
+                return null;
+            switch (expression)
+            {
+                case ParenthesizedExpressionSyntax parenthesized:
+                    return Taken(model, parenthesized.Expression, on, depth + 1);
+                case UnaryExpressionSyntax unary when unary.OperatorToken.Kind is SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret:
+                    return Taken(model, unary.Operand, on, depth + 1);
+                case CallExpressionSyntax { BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte, Arguments.Arguments: [var argument] }:
+                    return Taken(model, argument, on, depth + 1);
+                case NameExpressionSyntax name when model.SymbolOf(name, on) is { Kind: SymbolKind.MacroParameter } parameter:
+                    return model.GivenAt(parameter, on) is { Argument.Value: { } given, Caller: var caller }
+                        ? Taken(model, given, caller, depth + 1)
+                        : null;
+                default:
+                    return Target(model, expression, on, 0);
             }
         }
 
@@ -939,7 +1039,10 @@ public sealed class DirectPageMap
                 {
                     var routineUses = reached[key].Select(access => (access.Routine, access.Unknown)).Distinct()
                         .Select(use => uses.GetValueOrDefault((use.Routine!, key, use.Unknown))).OfType<PageUse>().ToList();
-                    var location = new PageLocation(key.Symbol, key.Name, home.Offset, home.Size, home.Layout, home.Type, routineUses);
+                    var location = new PageLocation(key.Symbol, key.Name, home.Offset, home.Size, home.Layout, home.Type, routineUses)
+                    {
+                        References = references.GetValueOrDefault(key) ?? [],
+                    };
                     location.Relation = RelationOf(location, home);
                     locations.Add(location);
                 }
@@ -948,6 +1051,15 @@ public sealed class DirectPageMap
                 List<PageNote> pageNotes = [.. notes.GetValueOrDefault(page.Key) ?? []];
                 if (locations.Any(location => location.Layout == PageLayout.Guessed))
                     pageNotes.Add(new PageNote("◦", "no config · layout guessed", null));
+                foreach (var (here, there, first, last) in SamePage(locations))
+                {
+                    if (KindOf(here, there) != SharedBytesKind.Collision)
+                        continue;
+                    var span = first == last
+                        ? StateValue.Hex(page.Key + first, 4)
+                        : $"{StateValue.Hex(page.Key + first, 4)}-{StateValue.Hex(page.Key + last, 4)}";
+                    pageNotes.Add(new PageNote("⧉", $"`{here.Name}` and `{there.Name}` share {span}", null));
+                }
                 pages.Add(new DirectPage(page.Key, named, hardware, locations, [], direct.GetValueOrDefault(page.Key), pageNotes));
             }
 
@@ -988,15 +1100,25 @@ public sealed class DirectPageMap
         }
 
         /// <summary>
-        /// Works out which pages cover the same addresses, and which locations on them take the
-        /// same bytes. A finding is only as good as the addresses it rests on, so a guessed
-        /// location takes part in none, and neither does a page whose locations are all guessed.
+        /// Works out which pages cover the same addresses, and which locations take the same
+        /// bytes, on two pages or on one. A finding is only as good as the addresses it rests on,
+        /// so a guessed location takes part in none, and neither does a page whose locations are
+        /// all guessed.
         /// </summary>
         private static void Overlap(List<DirectPage> pages)
         {
             var based = pages.Where(page => page.Base is not null && page.Locations.Any(Trusted)).ToList();
             var overlaps = pages.Where(page => page.Base is not null).ToDictionary(page => page, _ => new List<PageOverlap>());
             var shared = new Dictionary<PageLocation, List<SharedBytes>>();
+            foreach (var page in based)
+            {
+                foreach (var (here, there, first, last) in SamePage(page.Locations))
+                {
+                    var kind = KindOf(here, there);
+                    Add(shared, here, new SharedBytes(here.Name, there.Name, page, page.Base!.Value + first, page.Base.Value + last, kind));
+                    Add(shared, there, new SharedBytes(there.Name, here.Name, page, page.Base.Value + first, page.Base.Value + last, kind));
+                }
+            }
             for (var i = 0; i < based.Count; i++)
             {
                 for (var j = i + 1; j < based.Count; j++)
@@ -1018,8 +1140,8 @@ public sealed class DirectPageMap
                             var end = Math.Min(x.Last, y.Last);
                             if (start > end)
                                 continue;
-                            fromA.Add(new SharedBytes(here.Name, there.Name, b, start, end));
-                            fromB.Add(new SharedBytes(there.Name, here.Name, a, start, end));
+                            fromA.Add(new SharedBytes(here.Name, there.Name, b, start, end, SharedBytesKind.OtherPage));
+                            fromB.Add(new SharedBytes(there.Name, here.Name, a, start, end, SharedBytesKind.OtherPage));
                             Add(shared, here, fromA[^1]);
                             Add(shared, there, fromB[^1]);
                         }
@@ -1033,8 +1155,6 @@ public sealed class DirectPageMap
             foreach (var (location, list) in shared)
                 location.Shared = list;
 
-            static bool Trusted(PageLocation location) => location.Layout != PageLayout.Guessed;
-
             static (long First, long Last)? Range(DirectPage page, PageLocation location) =>
                 location.Offset is { } offset && location.Size is { } size and > 0
                     ? (page.Base!.Value + offset, page.Base.Value + offset + size - 1)
@@ -1047,6 +1167,37 @@ public sealed class DirectPageMap
                 list.Add(bytes);
             }
         }
+
+        /// <summary>Returns whether the map trusts <paramref name="location"/>'s address enough to find shared bytes with it.</summary>
+        private static bool Trusted(PageLocation location) => location.Layout != PageLayout.Guessed;
+
+        /// <summary>
+        /// Returns each pair of trusted locations among <paramref name="locations"/>, which are on
+        /// one page, that take some of the same bytes, with the first and last offset both take.
+        /// </summary>
+        private static IEnumerable<(PageLocation Here, PageLocation There, long First, long Last)> SamePage(IReadOnlyList<PageLocation> locations)
+        {
+            var placed = locations.Where(location => Trusted(location) && location.Offset is not null && location.Size is > 0).ToList();
+            for (var i = 0; i < placed.Count; i++)
+            {
+                for (var j = i + 1; j < placed.Count; j++)
+                {
+                    var (here, there) = (placed[i], placed[j]);
+                    var first = Math.Max(here.Offset!.Value, there.Offset!.Value);
+                    var last = Math.Min(here.Offset.Value + here.Size!.Value, there.Offset.Value + there.Size!.Value) - 1;
+                    if (first <= last)
+                        yield return (here, there, first, last);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns how two locations on one page come to take the same bytes. Two addresses the
+        /// source fixes alias the bytes on purpose, as a program that names one byte two ways does.
+        /// An address from the layout was not chosen to land there, so it collides.
+        /// </summary>
+        private static SharedBytesKind KindOf(PageLocation here, PageLocation there) =>
+            here.Layout == PageLayout.Fixed && there.Layout == PageLayout.Fixed ? SharedBytesKind.Deliberate : SharedBytesKind.Collision;
 
         /// <summary>Returns the element a data declaration names, such as <c>.word</c>, without any values it gives.</summary>
         private static string TypeOf(DataDeclarationSyntax? declaration)

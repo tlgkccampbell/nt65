@@ -1,4 +1,5 @@
 using Norristown.Semantics;
+using Norristown.Syntax;
 
 namespace Norristown.Flow;
 
@@ -34,8 +35,20 @@ public sealed record PageLocation(
     /// <summary>Gets a value indicating whether a routine's use of the location is a hazard.</summary>
     public bool IsHazard => Uses.Any(use => use.Hazards.Count > 0);
 
-    /// <summary>Gets the runs of addresses the location shares with locations on other pages.</summary>
+    /// <summary>
+    /// Gets the runs of addresses the location shares with other locations, on other pages or on
+    /// its own. <see cref="SharedBytes.Kind"/> tells them apart.
+    /// </summary>
     public IReadOnlyList<SharedBytes> Shared { get; internal set; } = [];
+
+    /// <summary>
+    /// Gets the statements that take the location's address without reaching it, such as
+    /// <c>ldx #tmp</c>, <c>lda #&lt;ptr</c> or <c>.addr tmp</c> in a table. The program uses such a
+    /// location through a pointer or an index that the map cannot follow, so it is not unused even
+    /// when its <see cref="Relation"/> is <see cref="PageRelation.Unused"/>. Inside a macro
+    /// expansion, the statement is the outermost call in the location's file.
+    /// </summary>
+    public IReadOnlyList<SyntaxNode> References { get; init; } = [];
 
     /// <summary>Gets a value indicating whether the location is a hardware register, which <c>.mmio</c> declares.</summary>
     public bool IsHardware => Relation == PageRelation.Hardware;

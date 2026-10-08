@@ -1972,7 +1972,11 @@ everything below works across modules.
   interrupt handler and the code it interrupts, or by a routine that relies on it across a call
   to another that uses it as a temporary of its own, which is marked `⚠`. A glyph says what each
   routine does with it: `↓` reads it first, `↑` only writes it, `↕` both, `◦` uses it as a
-  temporary. `⧉` marks pages that overlap. Hardware registers reached through D, such as the
+  temporary. `⧉` marks pages that overlap, and locations that take the same bytes. On one page,
+  two addresses the source fixes are an alias, and a byte the layout also gives to another
+  location is a collision, which the page notes and the grid stripes. A location that no
+  instruction reaches but whose address the program takes, as `ldx #tmp`, `lda #<ptr` or
+  `.addr tmp` does, is marked `◎` *address taken* rather than unused. Hardware registers reached through D, such as the
   SNES's at $2100, are a page of their own, and code that reaches memory while D is not known,
   such as a handler after it gives D back, is listed under `D = ?`, with where each access
   lands on every page the interrupted code holds D at. A handler that uses a location as a
