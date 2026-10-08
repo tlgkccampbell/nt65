@@ -87,13 +87,25 @@ public static class RegisterKeeps
         });
         keeping = null;
 
+        // With what every routine keeps settled, each routine is walked once more to check it and
+        // to record what the registers hold along the way. Only that file's walk records anything,
+        // so the files are walked at once, and what they report is gathered in the program's order.
         var diagnostics = new List<Diagnostic>(effects.Diagnostics);
-        foreach (var (name, region) in regions)
+        List<List<(RoutineKey Name, FlowRegion Region)>> inFiles =
+            [.. regions.GroupBy(pair => walks[pair.Key]).Select(file => file.Select(pair => (pair.Key, pair.Value)).ToList())];
+        var reported = new List<Diagnostic>[inFiles.Count];
+        ParallelWork.For(inFiles.Count, i =>
         {
-            region.Registers = found[name];
-            region.ScopeRegisters = ScopeKeeps.Of(walks[name], region, Of);
-            KeepsAnalysis.Of(walks[name], region, Of, diagnostics);
-        }
+            reported[i] = [];
+            foreach (var (name, region) in inFiles[i])
+            {
+                region.Registers = found[name];
+                region.ScopeRegisters = ScopeKeeps.Of(walks[name], region, Of);
+                KeepsAnalysis.Of(walks[name], region, Of, reported[i]);
+            }
+        }, CancellationToken.None);
+        foreach (var file in reported)
+            diagnostics.AddRange(file);
         foreach (var (flow, walk) in byFile)
             flow.Registers = walk.Held;
 
