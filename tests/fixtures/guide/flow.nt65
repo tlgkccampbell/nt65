@@ -50,7 +50,7 @@
 .proc step_down {
     ldy #.opcode(dex)
     sty @step
-    .patch @step
+    .patch @step as dex
 @step:
     inx                             ; runs as `dex` once the store has run
     rts

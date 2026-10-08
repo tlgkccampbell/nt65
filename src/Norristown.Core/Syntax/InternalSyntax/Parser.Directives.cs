@@ -281,13 +281,19 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Parses <c>.patch @op</c>, which names the instruction whose bytes the store above
-    /// overwrites.
+    /// overwrites, and <c>.patch @op as dex, iny</c>, which also lists the instructions the store
+    /// can turn it into.
     /// </summary>
     private GreenNode ParsePatch()
     {
         var keyword = Advance();
-        return new PatchDirectiveSyntax(
-            keyword, ParseTarget(Catalogue.ExpectedLabel.Message("the label of the instruction being written to")));
+        var target = ParseTarget(Catalogue.ExpectedLabel.Message("the label of the instruction being written to"));
+        if (!AtWord("as"))
+            return new PatchDirectiveSyntax(keyword, target, null, null);
+        var asKeyword = Advance();
+        var variants = ParseSeparatedList(
+            () => ParseTarget(Catalogue.ExpectedLabel.Message("an instruction the store can write, such as `dex`")));
+        return new PatchDirectiveSyntax(keyword, target, asKeyword, variants);
     }
 
     /// <summary>

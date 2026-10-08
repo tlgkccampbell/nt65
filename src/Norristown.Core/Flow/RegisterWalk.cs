@@ -237,7 +237,29 @@ internal sealed class RegisterWalk
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
 
-        var mnemonic = statement.MnemonicKind;
+        // A store may turn the instruction into another, and then the registers hold what either
+        // leaves, and either may use them.
+        var after = Instruction(step, statement.MnemonicKind, state, use, saved, next);
+        foreach (var variant in VariantsOf(step))
+            after = RegisterState.Merge(after, Instruction(step, variant, state, use, saved, next));
+        return after;
+    }
+
+    /// <summary>
+    /// Returns the instructions a store can turn <paramref name="step"/>'s instruction into, from
+    /// a <c>.patch … as</c>, or an empty list where it names none.
+    /// </summary>
+    internal IReadOnlyList<MnemonicKind> VariantsOf(Step step) =>
+        flow.Variants.TryGetValue(step.Key, out var variants) ? variants : [];
+
+    /// <summary>
+    /// Returns what the registers hold after <paramref name="step"/>'s instruction runs as
+    /// <paramref name="mnemonic"/>, from what they held before it.
+    /// </summary>
+    private RegisterState Instruction(
+        Step step, MnemonicKind mnemonic, RegisterState state, Action<Registers>? use, Registers saved, Step? next)
+    {
+        var statement = (InstructionStatementSyntax)step.Statement;
         var mode = layout.Of(statement, step.On)?.Mode;
         var facts = Instructions.Facts(mnemonic);
         if (use is not null)

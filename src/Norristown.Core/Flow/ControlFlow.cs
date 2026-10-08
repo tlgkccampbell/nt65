@@ -28,6 +28,8 @@ public sealed class ControlFlow
     // The instructions whose operands the program rewrites, found the first time any is asked
     // about. Two threads that ask at once find the same set.
     private HashSet<StepKey>? patched;
+    private Dictionary<StepKey, IReadOnlyList<MnemonicKind>>? variants;
+    private List<PatchVariant>? listedVariants;
 
     private ControlFlow(SemanticModel model, CodeLayout layout)
         : this(model, layout, [], [], [])
@@ -104,7 +106,41 @@ public sealed class ControlFlow
     /// is laid out in. The program rewrites such an instruction's operand as it runs, so the
     /// operand as written says only where the program starts from.
     /// </summary>
-    internal IReadOnlySet<StepKey> Patched => patched ??= FindPatched();
+    internal IReadOnlySet<StepKey> Patched
+    {
+        get
+        {
+            if (patched is null)
+                FindPatched();
+            return patched!;
+        }
+    }
+
+    /// <summary>
+    /// Gets the instructions a <c>.patch … as</c> says each patched instruction can be turned
+    /// into, in the addressing mode it is written in. A variant <see cref="PatchVariant.Problem"/>
+    /// rejects is left out, and an instruction with none is not listed.
+    /// </summary>
+    internal IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> Variants
+    {
+        get
+        {
+            if (variants is null)
+                FindPatched();
+            return variants!;
+        }
+    }
+
+    /// <summary>Gets every variant a <c>.patch … as</c> lists, with the instruction it stands in for.</summary>
+    internal IReadOnlyList<PatchVariant> ListedVariants
+    {
+        get
+        {
+            if (listedVariants is null)
+                FindPatched();
+            return listedVariants!;
+        }
+    }
 
     /// <summary>
     /// Works out where control goes in <paramref name="layout"/>'s file. A call to a routine
@@ -144,7 +180,7 @@ public sealed class ControlFlow
         // A branch the flags decide is a jump, or transfers nothing, before anything else reads
         // the blocks. Which instructions the program rewrites is known only once every routine's
         // annotations have been gathered.
-        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, exits ?? FlagExits.None);
+        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, flow.Variants, exits ?? FlagExits.None);
         foreach (var (routine, units, blocks, _) in built)
             flow.Decide(routine, units, blocks);
 
@@ -933,10 +969,13 @@ public sealed class ControlFlow
     /// Returns the labels a table or a list expands to. The result is empty when the target does
     /// not expand to labels and so names only itself.
     /// </summary>
-    /// <summary>Returns each instruction that stands on a label a <c>.patch</c> names.</summary>
-    private HashSet<StepKey> FindPatched()
+    /// <summary>
+    /// Finds each instruction that stands on a label a <c>.patch</c> names, and the variants
+    /// each <c>.patch … as</c> lists for it.
+    /// </summary>
+    private void FindPatched()
     {
-        var targets = new HashSet<Symbol>();
+        var targets = new Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Expansion? On)>>();
         foreach (var step in layout.Steps)
         {
             foreach (var patch in AnnotationsOf(step).OfType<PatchDirectiveSyntax>())
@@ -944,25 +983,52 @@ public sealed class ControlFlow
                 foreach (var target in Annotations.TargetsOf(patch))
                 {
                     if (Targets.Of(model, target, step.On)?.Symbol is { } symbol)
-                        targets.Add(symbol);
+                    {
+                        if (!targets.TryGetValue(symbol, out var patches))
+                            targets[symbol] = patches = [];
+                        patches.Add((patch, step.On));
+                    }
                 }
             }
         }
 
-        var found = new HashSet<StepKey>();
-        var labelled = false;
+        patched = [];
+        variants = [];
+        listedVariants = [];
+        List<(PatchDirectiveSyntax Patch, Expansion? On)>? naming = null;
         foreach (var step in layout.Steps)
         {
             if (step.Label is { } label)
             {
-                labelled |= targets.Contains(label);
+                if (targets.TryGetValue(label, out var patches))
+                    (naming ??= []).AddRange(patches);
                 continue;
             }
-            if (labelled && step.Statement is InstructionStatementSyntax)
-                found.Add(step.Key);
-            labelled = false;
+            if (naming is not null && step.Statement is InstructionStatementSyntax written)
+            {
+                patched.Add(step.Key);
+                var mode = layout.Of(written, step.On)?.Mode;
+                var kept = new List<MnemonicKind>();
+                var operand = false;
+                foreach (var (patch, on) in naming)
+                {
+                    operand |= patch.AsKeyword is null;
+                    foreach (var name in patch.Variants)
+                    {
+                        var variant = new PatchVariant(name, on, step, written.MnemonicKind, mode, layout.Cpu);
+                        listedVariants.Add(variant);
+                        if (variant.Problem is null && !kept.Contains(variant.Mnemonic))
+                            kept.Add(variant.Mnemonic);
+                    }
+                }
+
+                // A `.patch` with no `as` may rewrite the operand too, and then the operand as
+                // written says nothing, whichever instruction stands there.
+                if (kept.Count > 0 && !operand)
+                    variants[step.Key] = kept;
+            }
+            naming = null;
         }
-        return found;
     }
 
     private IEnumerable<(Symbol Symbol, Expansion? At)> Spread(Symbol target, Expansion? on)

@@ -34,6 +34,7 @@ internal sealed class FlagAnalysis
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly IReadOnlySet<StepKey> patched;
+    private readonly IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> variants;
     private readonly Dictionary<StepKey, FlagState> before = [];
 
     // What is known after each block that leaves the routine by running into another, keyed by
@@ -52,14 +53,18 @@ internal sealed class FlagAnalysis
     /// <summary>
     /// Initializes a new instance of the <see cref="FlagAnalysis"/> class for the file that
     /// <paramref name="layout"/> laid out. <paramref name="patched"/> holds the instructions the
-    /// program rewrites, about which nothing is assumed. <paramref name="exits"/> says what each
-    /// routine this file calls returns with.
+    /// program rewrites, about which nothing is assumed unless <paramref name="variants"/> lists
+    /// the instructions a store turns one into. <paramref name="exits"/> says what each routine
+    /// this file calls returns with.
     /// </summary>
-    public FlagAnalysis(SemanticModel model, CodeLayout layout, IReadOnlySet<StepKey> patched, FlagExits exits)
+    public FlagAnalysis(
+        SemanticModel model, CodeLayout layout, IReadOnlySet<StepKey> patched,
+        IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> variants, FlagExits exits)
     {
         this.model = model;
         this.layout = layout;
         this.patched = patched;
+        this.variants = variants;
         this.exits = exits;
     }
 
@@ -594,7 +599,8 @@ internal sealed class FlagAnalysis
     /// Returns whether control may enter <paramref name="block"/> from somewhere the routine's
     /// own edges do not show. That is a label a <c>.state</c> declares, a label with a
     /// signature of its own, an exported label, and a label named anywhere but at one of
-    /// <paramref name="edges"/>.
+    /// <paramref name="edges"/>, by a <c>.patch</c>, or as the address an instruction reads or
+    /// writes.
     /// </summary>
     private bool IsEntry(BasicBlock block, IReadOnlySet<TextSpan> edges)
     {
@@ -602,7 +608,31 @@ internal sealed class FlagAnalysis
             return false;
         if (block.IsDeclared || label.Signature is not null || label.IsExported)
             return true;
-        return model.ReferencesTo(label).Any(reference => !reference.IsDeclaration && !edges.Contains(reference.Span));
+        return model.ReferencesTo(label).Any(reference =>
+            !reference.IsDeclaration && !edges.Contains(reference.Span) && !Touches(reference.Span));
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether the name at <paramref name="span"/> names code only to
+    /// touch its bytes, as a <c>.patch</c> target does, and as the address of an instruction that
+    /// reads or writes memory there does. An immediate is a value that may be jumped to later, so
+    /// it does not count.
+    /// </summary>
+    private bool Touches(TextSpan span)
+    {
+        foreach (var node in model.Tree.Root.FindToken(span.Start).Parent?.AncestorsAndSelf() ?? [])
+        {
+            switch (node)
+            {
+                case PatchDirectiveSyntax:
+                    return true;
+                case ImmediateOperandSyntax:
+                    return false;
+                case InstructionStatementSyntax instruction:
+                    return !Instructions.IsControlTransfer(instruction.MnemonicKind);
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -646,10 +676,27 @@ internal sealed class FlagAnalysis
             // anything to the flags.
             return layout.Of(step.Statement, step.On) is { Length: > 0 } ? FlagState.Unknown : state;
         }
-        var mnemonic = instruction.MnemonicKind;
-        if (patched.Contains(step.Key) || ControlFlow.IsCall(instruction))
+        if (ControlFlow.IsCall(instruction))
             return FlagState.Unknown;
+        if (!patched.Contains(step.Key))
+            return After(step, instruction, instruction.MnemonicKind, state);
 
+        // A store may turn the instruction into another, and then the flags are what either
+        // leaves. Where nothing says what the store writes, nothing is known.
+        if (!variants.TryGetValue(step.Key, out var listed))
+            return FlagState.Unknown;
+        var after = After(step, instruction, instruction.MnemonicKind, state);
+        foreach (var variant in listed)
+            after = after.Merge(After(step, instruction, variant, state));
+        return after;
+    }
+
+    /// <summary>
+    /// Returns the flags after <paramref name="instruction"/> runs as <paramref name="mnemonic"/>,
+    /// from those before it.
+    /// </summary>
+    private FlagState After(Step step, InstructionStatementSyntax instruction, MnemonicKind mnemonic, FlagState state)
+    {
         var line = layout.Of(instruction, step.On);
         var immediate = StepOperands.Immediate(model, layout, step);
         switch (mnemonic)

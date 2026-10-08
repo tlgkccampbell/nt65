@@ -136,6 +136,26 @@ internal sealed class FlowChecks
         CheckNextIsNeeded(units);
         CheckFallthrough(units);
         CheckReturnsAndCalls(region.Routine, units);
+        CheckPatchVariants(units);
+    }
+
+    /// <summary>
+    /// Reports each instruction a <c>.patch … as</c> lists that cannot stand in for the patched
+    /// instruction, as <see cref="PatchVariant.Problem"/> decides.
+    /// </summary>
+    private void CheckPatchVariants(IReadOnlyList<ControlFlow.Unit> units)
+    {
+        if (flow.ListedVariants.Count == 0)
+            return;
+        var keys = units.Select(unit => unit.Step.Key).ToHashSet();
+        foreach (var variant in flow.ListedVariants)
+        {
+            if (keys.Contains(variant.Written.Key) && variant.Problem is { } problem)
+            {
+                diagnostics.Add(new Diagnostic(variant.Name.Tree.GetSpan(variant.Name.Span), Catalogue.PatchVariantRejected.Message(
+                    variant.Name.GetText().Trim(), SyntaxFacts.TextOf(variant.WrittenMnemonic), problem)));
+            }
+        }
     }
 
     /// <summary>

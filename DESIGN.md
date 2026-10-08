@@ -1645,6 +1645,18 @@ label:
   or a form with no operand or with `a`, which it then names. A mnemonic or a form the CPU
   lacks is an error, and so is a long branch, which is one instruction or two. Being a
   constant, `.opcode` may stand in a build's condition.
+- `.patch @op as dex, iny` also lists the instructions the store can turn the one at `@op`
+  into. The store writes only the opcode, so each variant keeps the instruction's addressing
+  mode and operand, and the CPU must have it in that form. The register, reads and flag analyses
+  then take the union of what the written instruction and each variant do: a register any of
+  them writes is written, any of them may read one, and a flag none of them writes stays known.
+  A `.patch` without `as` says nothing about what is written, so the flags are unknown after the
+  instruction, and only the instruction as written is followed for the registers. A variant may
+  not move the stack, change the widths or run a handler, and it runs on where the written
+  instruction runs on and branches where it branches, so a `beq` may become a `bne`; anything
+  else is an error (patch-variant-rejected). The cycle counts are still those of the instruction
+  as written. Naming a label as a `.patch` target, or as the address an instruction reads or
+  writes, does not make it a place control enters from elsewhere.
 
 The third directive is about the end of a routine rather than a statement:
 
@@ -5353,7 +5365,7 @@ annotation  := '.next' (target (',' target)* | items(target) | '?'
                        | '.return' (expr | '?')? (',' target)*)
                                                       ; after a conditional branch, its
                                                       ; own target only: always taken
-             | '.patch' target
+             | '.patch' target ('as' mnemonic (',' mnemonic)*)?
 fallthrough := '.fallthrough' path                    ; the last line of a proc's body, or of
                                                       ; a branch of an if-block ending it
 target      := path                                   ; or an ident parameter, in macros;

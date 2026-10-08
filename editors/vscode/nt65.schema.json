@@ -410,6 +410,7 @@
         "parameter-kind-not-an-enum",
         "parameter-range-invalid",
         "parameter-unknown",
+        "patch-variant-rejected",
         "place-misplaced",
         "place-not-placeable",
         "placed-nowhere",

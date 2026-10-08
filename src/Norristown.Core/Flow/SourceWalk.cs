@@ -201,22 +201,27 @@ internal sealed class SourceWalk
     /// </summary>
     private SourceState Step(Step step, SourceState state, Step? next)
     {
-        var after = Flagged(step, Registered(step, state, next));
+        var after = Flagged(step, Registered(step, state, next, null), null);
+
+        // A store may turn the instruction into another, and then values may have been set by
+        // either.
+        foreach (var variant in registers.VariantsOf(step))
+            after = SourceState.Merge(after, Flagged(step, Registered(step, state, next, variant), variant));
         return states is null ? after : Widened(step, after);
     }
 
     /// <summary>
     /// Returns where N, Z and V were set after one statement, given where every value was set after
-    /// its effect on the registers.
+    /// its effect on the registers. <paramref name="variant"/> is the instruction a store turned it
+    /// into, or null for the instruction as written.
     /// </summary>
-    private SourceState Flagged(Step step, SourceState after)
+    private SourceState Flagged(Step step, SourceState after, MnemonicKind? variant)
     {
-        if (step.Statement is not InstructionStatementSyntax { MnemonicKind: var mnemonic } statement
-            || mnemonic is MnemonicKind.Plp or MnemonicKind.Rti or MnemonicKind.Brk or MnemonicKind.Cop
-            || Instructions.IsCall(mnemonic))
-        {
+        if (step.Statement is not InstructionStatementSyntax statement)
             return after;
-        }
+        var mnemonic = variant ?? statement.MnemonicKind;
+        if (mnemonic is MnemonicKind.Plp or MnemonicKind.Rti or MnemonicKind.Brk or MnemonicKind.Cop || Instructions.IsCall(mnemonic))
+            return after;
 
         // N, Z and V are set by whatever instruction last wrote them. `plp` and `rti` restore
         // them, a software interrupt loses them, and a call sets them, all of which are handled
@@ -293,9 +298,10 @@ internal sealed class SourceWalk
     /// <summary>
     /// Returns where each register's value was set after one statement, and where the flags were
     /// set after a statement that restores or loses them. <paramref name="next"/> is the step after
-    /// it in its block, where there is one.
+    /// it in its block, where there is one, and <paramref name="variant"/> the instruction a store
+    /// turned it into, or null for the instruction as written.
     /// </summary>
-    private SourceState Registered(Step step, SourceState state, Step? next)
+    private SourceState Registered(Step step, SourceState state, Step? next, MnemonicKind? variant)
     {
         if (step.Statement is StateDirectiveSyntax)
             return Asserted(step, state);
@@ -311,7 +317,7 @@ internal sealed class SourceWalk
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
 
-        var mnemonic = statement.MnemonicKind;
+        var mnemonic = variant ?? statement.MnemonicKind;
         var mode = layout.Of(statement, step.On)?.Mode;
         var facts = Instructions.Facts(mnemonic);
 

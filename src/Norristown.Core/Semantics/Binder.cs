@@ -2122,8 +2122,11 @@ internal sealed partial class Binder
                 binder.CollectUses(target);
         }
 
-        /// <inheritdoc cref="VisitNextDirective"/>
-        public override void VisitPatchDirective(PatchDirectiveSyntax node) => binder.CollectUses(node);
+        /// <summary>
+        /// Records the label a <c>.patch</c> names. The mnemonics after its <c>as</c> name
+        /// instructions rather than symbols.
+        /// </summary>
+        public override void VisitPatchDirective(PatchDirectiveSyntax node) => binder.CollectUses(node.Target);
 
         /// <inheritdoc cref="VisitNextDirective"/>
         public override void VisitFallthroughDirective(FallthroughDirectiveSyntax node) => binder.CollectUses(node);

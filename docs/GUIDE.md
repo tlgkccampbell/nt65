@@ -1188,8 +1188,13 @@ store that turns one instruction into another can say which it writes:
 ```nt65
     ldy #.opcode(dex)
     sty @step
-    .patch @step
+    .patch @step as dex
 ```
+
+`as dex` lists what the store can turn the instruction into, and nt65 then follows both: after
+`@step`, X has been written either way, and the carry, which neither `inx` nor `dex` touches, is
+still known. A variant keeps the instruction's addressing mode and operand, and may not touch
+the stack or the widths; a branch may become another branch.
 
 An instruction with several forms names one with the words `.mode` uses, such as
 `.opcode(lda, absx)`, with `zp`, `zpx` and `zpy` for the direct page and `far` and `farx` for an

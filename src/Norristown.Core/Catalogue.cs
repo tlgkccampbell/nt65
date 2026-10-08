@@ -457,7 +457,8 @@ public static class Catalogue
         "expected {0}",
         "`.next` names where execution continues, `.fallthrough` the routine that execution runs into, and "
             + "`.patch` the instruction whose bytes are overwritten. Each takes a label; `.next` also takes `?`, "
-            + "which says execution continues somewhere nt65 is not told about.");
+            + "which says execution continues somewhere nt65 is not told about. After `as`, `.patch` lists the "
+            + "mnemonics of the instructions the store can write, as in `.patch @op as dex`.");
 
     internal static DiagnosticDescriptor NestingTooDeep { get; } = Entry(
         Area.ReadingALine,
@@ -2663,6 +2664,17 @@ public static class Catalogue
             + "conditional branch that is always taken, a `.next` naming the branch's own target says so. "
             + "Elsewhere, `.next ?` says control goes somewhere nt65 is not told about, and the analysis then "
             + "assumes it may change anything.");
+
+    internal static DiagnosticDescriptor PatchVariantRejected { get; } = Entry(
+        Area.ControlFlow,
+        "patch-variant-rejected",
+        Severity.Error,
+        "`.patch` cannot list `{0}` for `{1}`: {2}",
+        "`.patch @op as dex` says the store above it can turn the instruction at `@op` into `dex`. The store writes "
+            + "the opcode alone, so a variant keeps the instruction's addressing mode and operand, and the CPU must "
+            + "have it in that form. The analyses take the union of what the written instruction and each variant "
+            + "do, so a variant may not move the stack, change the processor's widths or run a handler, and it must "
+            + "run on where the written instruction runs on and branch where it branches.");
 
     internal static DiagnosticDescriptor NextTargetNotCode { get; } = Entry(
         Area.ControlFlow,

@@ -2223,7 +2223,8 @@
     <TypeComment>
       <summary>
         Represents a <c>.patch @op</c> line, which names the instruction whose bytes the store above
-        it overwrites.
+        it overwrites, or a <c>.patch @op as dex</c> line, which also lists the instructions the
+        store can turn it into.
       </summary>
     </TypeComment>
     <Field Name="Keyword" Type="SyntaxToken">
@@ -2237,6 +2238,20 @@
         <summary>
           Gets the label of the instruction that is overwritten, or null if the source omits the
           name.
+        </summary>
+      </PropertyComment>
+    </Field>
+    <Field Name="AsKeyword" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>as</c> keyword before the instructions the store can write, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Identifier"/>
+    </Field>
+    <Field Name="Variants" Type="SeparatedSyntaxList&lt;NameExpressionSyntax&gt;">
+      <PropertyComment>
+        <summary>
+          Gets the mnemonics of the instructions the store can turn the overwritten one into, each
+          in the overwritten one's addressing mode. The list is empty without <c>as</c>.
         </summary>
       </PropertyComment>
     </Field>

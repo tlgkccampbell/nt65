@@ -122,7 +122,7 @@ public sealed class CatalogueAreaTests
             "indirect-jump-unchecked", "inline-count-not-constant", "inline-data-missing", "jump-into-data",
             "jump-target-not-a-label", "keeps-broken", "keeps-redundant", "label-unreachable",
             "next-never-taken", "next-not-the-branch-target", "next-successors-known", "next-table-has-no-labels",
-            "next-target-not-a-table", "next-target-not-code", "next-unknown-after-branch", "noreturn-returns", "pushed-return-unchecked",
+            "next-target-not-a-table", "next-target-not-code", "next-unknown-after-branch", "noreturn-returns", "patch-variant-rejected", "pushed-return-unchecked",
             "reads-undeclared", "return-after-call", "return-count-mismatch", "return-count-not-constant",
             "return-flag-mismatch", "return-flag-not-set", "routine-runs-off-the-end", "runs-into-data", "saves-not-a-store",
             "self-modifying-unchecked",
