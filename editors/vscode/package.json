@@ -376,28 +376,28 @@
         "id": "nt65.loopBrackets.bracket",
         "description": "A bracket in the margin over the lines of a loop.",
         "defaults": {
-          "dark": "#9C8657",
-          "light": "#CCB47F",
-          "highContrast": "#E5C07B",
-          "highContrastLight": "#7A5200"
+          "dark": "#4E769A",
+          "light": "#80B2DC",
+          "highContrast": "#75BEFF",
+          "highContrastLight": "#0F4A85"
         }
       },
       {
         "id": "nt65.loopBrackets.caret",
         "description": "The bracket of the innermost loop that holds the caret, and the text and border of a loop's trip count.",
         "defaults": {
-          "dark": "#E5C07B",
-          "light": "#9A6A00",
-          "highContrast": "#FFD700",
-          "highContrastLight": "#5C3D00"
+          "dark": "#75BEFF",
+          "light": "#0066B8",
+          "highContrast": "#B3DCFF",
+          "highContrastLight": "#00335C"
         }
       },
       {
         "id": "nt65.loopBrackets.chipBackground",
         "description": "The background of a loop's trip count after its last line.",
         "defaults": {
-          "dark": "#E5C07B26",
-          "light": "#9A6A001A",
+          "dark": "#75BEFF26",
+          "light": "#0066B81A",
           "highContrast": "#00000000",
           "highContrastLight": "#00000000"
         }
