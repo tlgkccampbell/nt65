@@ -46,7 +46,7 @@ public sealed class DirectPagesRequestsTests
         Assert.Equal(("$0000", 0L, "nested", true), (page.Id, page.Base!.Value, page.Relation, page.Hazard));
         var tmp = Assert.Single(page.Locations);
         Assert.Equal(("tmp", 0L, 1L, ".byte", 4), (tmp.Name, tmp.Offset!.Value, tmp.Size!.Value, tmp.Type, tmp.Accesses));
-        Assert.Equal(new Position(2, 6), tmp.Declaration.Range.Start);
+        Assert.Equal(new Position(2, 6), tmp.Declaration?.Range.Start);
 
         var main = Assert.Single(tmp.Routines);
         Assert.Equal(("main", "temp"), (main.Name, main.Role));
@@ -59,6 +59,32 @@ public sealed class DirectPagesRequestsTests
         var inner = Assert.Single(main.Children);
         Assert.Equal(("inner", "temp"), (inner.Name, inner.Role));
         Assert.Equal(7, Assert.Single(inner.Via).Range.Start.Line);
+    }
+
+    /// <summary>
+    /// A constant address that an instruction reaches through the zero page is a location named by
+    /// its address. It has no declaration to go to.
+    /// </summary>
+    [Fact]
+    public async Task AConstantAddressHasNoDeclaration()
+    {
+        var timeout = TestTimeout.Token();
+        const string Text = """
+            .module main
+            .segment CODE
+            .export .proc main {
+                lda $FB
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
+
+        var result = await DirectPagesAsync(client, timeout);
+        Assert.NotNull(result);
+        var location = Assert.Single(Assert.Single(result.Pages).Locations);
+        Assert.Equal(("$00FB", 0xFBL, true), (location.Name, location.Address!.Value, location.Fixed));
+        Assert.Null(location.Declaration);
+        Assert.Equal(("main", "in"), (Assert.Single(location.Routines).Name, location.Routines[0].Role));
     }
 
     /// <summary>

@@ -1974,7 +1974,9 @@ everything below works across modules.
   routine does with it: `↓` reads it first, `↑` only writes it, `↕` both, `◦` uses it as a
   temporary. `⧉` marks pages that overlap. Hardware registers reached through D, such as the
   SNES's at $2100, are a page of their own, and code that reaches memory while D is not known,
-  such as a handler after it gives D back, is listed under `D = ?`. Selecting a row marks the
+  such as a handler after it gives D back, is listed under `D = ?`. A constant address that an
+  instruction reaches through the page, such as `lda $FB`, is shown as a location named by its
+  address, `$00FB`. Selecting a row marks the
   lines it stands for. *Show Grid* draws a page as 16 rows of 16 bytes, with each location's
   bytes outlined, what is free, and what the page shares with other pages. A location is
   brighter, and its bar longer, the more often its instructions run in one pass: a loop that
