@@ -90,6 +90,19 @@ public static class Instructions
     public static WidthRegister? SizedBy(MnemonicKind mnemonic) => Facts(mnemonic).SizedBy;
 
     /// <summary>
+    /// Returns the register whose width sets how many bytes <paramref name="mnemonic"/> reaches in
+    /// memory on the 65816, or null if it always reaches one byte. It is the register
+    /// <see cref="SizedBy"/> names, or for a store or read-modify-write, which has no immediate,
+    /// the register it stores or changes.
+    /// </summary>
+    public static WidthRegister? MemorySizedBy(MnemonicKind mnemonic) => SizedBy(mnemonic) ?? mnemonic switch
+    {
+        Sta or Stz or Inc or Dec or Asl or Lsr or Rol or Ror or Tsb or Trb => WidthRegister.A,
+        Stx or Sty => WidthRegister.Index,
+        _ => null,
+    };
+
+    /// <summary>
     /// Returns how wide the address in an operand of <paramref name="mode"/> is, or null if the
     /// mode has no address to size. The width is one byte for the direct page, two for absolute
     /// and three for long.

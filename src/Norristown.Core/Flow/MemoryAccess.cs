@@ -15,14 +15,26 @@ namespace Norristown.Flow;
 /// in the source is only where the program starts from.
 /// </summary>
 /// <param name="Direct">The location a direct operand names, or null.</param>
+/// <param name="Width">
+/// How many bytes the access reaches in memory, from where it lands. That is 2 on the 65816
+/// where the register that sizes the access is known to be 16 bits, and 1 otherwise.
+/// </param>
 /// <param name="Reads">Whether the instruction reads the memory it reaches.</param>
 /// <param name="Stores">Whether the instruction writes the memory it reaches, including by a read-modify-write.</param>
 /// <param name="Indexed">The location an indexed operand starts from, or null.</param>
 /// <param name="Indirect">Whether the operand reaches memory through a pointer.</param>
 /// <param name="Pointer">The bytes of the pointer an indirect operand reads, where it names one directly.</param>
 internal readonly record struct MemoryAccess(
-    Location? Direct, bool Reads, bool Stores, Location? Indexed, bool Indirect, ImmutableArray<Location> Pointer)
+    Location? Direct, int Width, bool Reads, bool Stores, Location? Indexed, bool Indirect, ImmutableArray<Location> Pointer)
 {
+    /// <summary>
+    /// Gets each byte a direct operand reaches, from the location it names on, or nothing where the
+    /// operand is not direct. A 16-bit access to <c>ptr</c> reaches <c>ptr</c> and <c>ptr+1</c>.
+    /// </summary>
+    public ImmutableArray<Location> DirectBytes => Direct is { } start
+        ? [.. Enumerable.Range(0, Width).Select(i => start with { Offset = start.Offset + i })]
+        : [];
+
     /// <summary>
     /// Returns how the instruction at <paramref name="step"/> in <paramref name="file"/> reaches
     /// memory, or null where it neither reads nor writes memory through its operand.
@@ -44,17 +56,21 @@ internal readonly record struct MemoryAccess(
             return null;
         }
 
+        // On the 65816 an access is as wide as the register that sizes it, while that width is
+        // known. An unknown width is taken as one byte.
+        var width = layout.Cpu == Cpu.Wdc65816 && Instructions.MemorySizedBy(mnemonic) is { } register
+            && file.State?.Before(step.Statement, step.On)?.Processor.Of(register) == Semantics.Width.Sixteen ? 2 : 1;
         var operand = StepOperands.Of(model, step);
         var location = operand is null ? null : Location.Of(model, CodeLayout.Expression(operand), step.On);
         if (file.Flow.Patched.Contains(step.Key))
-            return new MemoryAccess(null, reads, stores, location, false, []);
+            return new MemoryAccess(null, width, reads, stores, location, false, []);
         return mode switch
         {
             AddressingMode.Direct or AddressingMode.Absolute or AddressingMode.Long
-                => new MemoryAccess(location, reads, stores, null, false, []),
+                => new MemoryAccess(location, width, reads, stores, null, false, []),
             AddressingMode.DirectX or AddressingMode.DirectY or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY
-                or AddressingMode.LongX => new MemoryAccess(null, reads, stores, location, false, []),
-            _ => new MemoryAccess(null, reads, stores, null, true, Bytes(location, mode)),
+                or AddressingMode.LongX => new MemoryAccess(null, width, reads, stores, location, false, []),
+            _ => new MemoryAccess(null, width, reads, stores, null, true, Bytes(location, mode)),
         };
     }
 

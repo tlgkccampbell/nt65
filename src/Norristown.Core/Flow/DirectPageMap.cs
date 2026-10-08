@@ -516,7 +516,7 @@ public sealed class DirectPageMap
             var state = file.Layout.Cpu == Cpu.Wdc65816 ? file.State?.Before(step.Statement, step.On)?.Processor : null;
             var width = indirect
                 ? mode is AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY or AddressingMode.AbsoluteIndirectLong ? 3 : 2
-                : state is { } processor && RegisterOf(mnemonic) is { } register && processor.Of(register) == Width.Sixteen ? 2 : 1;
+                : state is { } processor && Instructions.MemorySizedBy(mnemonic) is { } register && processor.Of(register) == Width.Sixteen ? 2 : 1;
             var page = (long?)null;
             var unknown = false;
             if (throughPage && state?.D is { } d)
@@ -588,18 +588,6 @@ public sealed class DirectPageMap
                 homes[key] = new Home(at, offset, size, PageLayout.Fixed, "", false);
             return key;
         }
-
-        /// <summary>
-        /// Returns the register whose width sets how many bytes <paramref name="mnemonic"/> reaches
-        /// in memory on the 65816, or null when it always reaches one byte.
-        /// </summary>
-        private static WidthRegister? RegisterOf(MnemonicKind mnemonic) => Instructions.SizedBy(mnemonic) ?? mnemonic switch
-        {
-            MnemonicKind.Sta or MnemonicKind.Stz or MnemonicKind.Inc or MnemonicKind.Dec or MnemonicKind.Asl or MnemonicKind.Lsr
-                or MnemonicKind.Rol or MnemonicKind.Ror or MnemonicKind.Tsb or MnemonicKind.Trb => WidthRegister.A,
-            MnemonicKind.Stx or MnemonicKind.Sty => WidthRegister.Index,
-            _ => null,
-        };
 
         /// <summary>Returns the key of the location that <paramref name="symbol"/> names.</summary>
         private LocationKey Key(Symbol symbol) => new(Current(symbol), null);
@@ -951,9 +939,8 @@ public sealed class DirectPageMap
                             }
                         }
                     }
-                    // The inference keeps one location for each store, at its operand's offset and
-                    // without its width. Only that first byte counts as set, so a read of the high
-                    // byte of a 16-bit store counts as a read of what the routine was given.
+                    // The inference keeps each byte a store reaches, so the high byte of a 16-bit
+                    // store counts as set as well.
                     var stored = memory.AlwaysWrittenBy(target).Where(location => location.Root is not null)
                         .Select(location => (Key(location.Root!), location.Offset)).ToImmutableHashSet();
                     always = always is null ? stored : always.Intersect(stored);

@@ -236,6 +236,38 @@ public sealed class InputSourcesTests
     }
 
     /// <summary>
+    /// On the 65816 a 16-bit load reads both bytes of a word. Each byte is an input, and both are
+    /// grouped under the word's name, so they share one chip.
+    /// </summary>
+    [Fact]
+    public void ASixteenBitLoadReadsBothBytes()
+    {
+        var found = FlowFragment.Analyze("65816", ".segment ZEROPAGE\n.data ptr: .word\n.segment CODE\n"
+            + ".proc p: a16, i16 {\n    lda #0\n    sta ptr\n    lda ptr\n    rts\n}\n");
+        Assert.Equal(["ptr: sta ptr", "ptr+1: sta ptr"], FlowFragment.SourcesAt(found, "lda ptr"));
+        var model = found.File(Analysis.Path);
+        var inputs = InputSources.At(found, model, model.Offset("lda ptr"))!.Inputs.Where(input => input.Category == InputCategory.Memory);
+        Assert.All(inputs, input => Assert.Equal("ptr", input.Group));
+    }
+
+    /// <summary>
+    /// A 16-bit store writes the byte after the one it names, so it is the source of a later 8-bit
+    /// read of that byte, whether the routine reads it or a routine it calls does.
+    /// </summary>
+    [Fact]
+    public void ASixteenBitStoreIsTheSourceOfItsHighByte()
+    {
+        const string Data = ".segment ZEROPAGE\n.data ptr: .word\n.segment CODE\n";
+        Assert.Equal(
+            ["ptr+1: sta ptr"],
+            Wider(Data + ".proc p: a16, i16 -> a8, i16 {\n    lda #0\n    sta ptr\n    sep #$20\n    lda ptr+1\n    rts\n}\n", "lda ptr+1"));
+        Assert.Equal(
+            ["a8: sep #$20", "i16: entry", "ptr+1: sta ptr"],
+            Wider(Data + ".proc high: a8, i16 {\n    lda ptr+1\n    rts\n}\n"
+                + ".proc p: a16, i16 -> a8, i16 {\n    lda #0\n    sta ptr\n    sep #$20\n    jsr high\n    rts\n}\n", "jsr high"));
+    }
+
+    /// <summary>
     /// A hardware register that <c>.mmio</c> declares holds what the hardware puts there. It is
     /// never an input, and neither is a member of one, so a caller is not asked to set it.
     /// </summary>

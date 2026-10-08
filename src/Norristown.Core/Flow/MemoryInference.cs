@@ -7,7 +7,9 @@ namespace Norristown.Flow;
 /// Infers which locations in memory each routine reads and may write, for the memory part of
 /// <see cref="InputSources"/>. A location is one a routine reads when some path through it loads
 /// the location before storing to it, directly or through a routine it calls. Only a direct operand
-/// on a resolved symbol counts, so an indexed or indirect read is not an input.
+/// on a resolved symbol counts, so an indexed or indirect read is not an input. Each byte a direct
+/// access reaches is a location of its own, so a 16-bit store to <c>ptr</c> on the 65816 writes
+/// <c>ptr</c> and <c>ptr+1</c>.
 /// <para>
 /// The answer is worked out on demand, for the routines a question reaches, and kept for the rest
 /// of the question. It is a best guess for showing, and no check warns from it. A routine that
@@ -113,19 +115,19 @@ internal sealed class MemoryInference
             {
                 if (MemoryAccess.Of(file, step) is not { } access)
                     continue;
-                if (access.Reads && access.Direct is { } loaded && !locations.Contains(loaded))
-                    read?.Add(loaded);
-                foreach (var pointer in access.Pointer)
+                // A direct access reaches each of its bytes, so a 16-bit one reads or writes the
+                // byte after the one it names as well.
+                foreach (var loaded in access.Reads ? access.DirectBytes.AddRange(access.Pointer) : access.Pointer)
                 {
-                    if (!locations.Contains(pointer))
-                        read?.Add(pointer);
+                    if (!locations.Contains(loaded))
+                        read?.Add(loaded);
                 }
                 if (!access.Stores)
                     continue;
-                if (access.Direct is { } location)
+                if (access.Direct is not null)
                 {
-                    locations = locations.Add(location);
-                    written?.Add(location);
+                    locations = locations.Union(access.DirectBytes);
+                    written?.UnionWith(access.DirectBytes);
                 }
                 else if (access.Indexed is { } start)
                 {

@@ -90,8 +90,8 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
     /// Returns where each location in memory that the instruction at the caret reads was set, in the
     /// order of the locations' names. On a call, the locations are the ones the routine called reads
     /// before writing, which <see cref="MemoryInference"/> works out. On any other instruction, they
-    /// are the location its direct operand reads, or the bytes of the pointer its indirect operand
-    /// reads.
+    /// are each byte its direct operand reads, which is two on the 65816 for a 16-bit access, or the
+    /// bytes of the pointer its indirect operand reads.
     /// </summary>
     private static SortedDictionary<Location, MemoryWalk.Value> Memory(
         ProgramAnalysis analysis, FileAnalysis file, FlowRegion region, IReadOnlyList<(BasicBlock Block, int Index)> occurrences)
@@ -107,7 +107,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
             IReadOnlyList<Location> locations = index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block)
                 ? [.. block.Calls.SelectMany(inference.ReadsOf).Distinct()]
                 : MemoryAccess.Of(file, block.Steps[index]) is { } access
-                    ? [.. access.Reads && access.Direct is { } read ? [read] : Array.Empty<Location>(), .. access.Pointer]
+                    ? [.. access.Reads ? access.DirectBytes : [], .. access.Pointer]
                     : [];
             wanted.Add((block, index, locations));
         }

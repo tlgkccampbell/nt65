@@ -60,15 +60,17 @@ internal sealed class MemoryWalk
 
     /// <summary>
     /// Returns what a store leaves for one followed location. A direct store to the location is its
-    /// new source. Any other store that might reach it is a doubt.
+    /// new source, and that includes a 16-bit store to the byte before it. Any other store that might
+    /// reach it is a doubt.
     /// </summary>
     private static Value Stored(Location location, Value value, MemoryAccess access, StepKey step)
     {
-        if (access.Direct is { } direct)
+        if (access.Direct is not null)
         {
-            if (direct == location)
+            var bytes = access.DirectBytes;
+            if (bytes.Contains(location))
                 return Value.Set(step);
-            return Overlaps(direct, location) ? value.Doubted(step) : value;
+            return bytes.Any(direct => Overlaps(direct, location)) ? value.Doubted(step) : value;
         }
         if (access.Indirect || (access.Indexed is { } start && start.Group == location.Group))
             return value.Doubted(step);

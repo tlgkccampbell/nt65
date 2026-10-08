@@ -632,6 +632,41 @@ public sealed class DirectPageMapTests
     }
 
     /// <summary>
+    /// A 16-bit store in a routine called writes both bytes of a word on the 65816, so the caller's
+    /// later read of the high byte reads what the call set rather than what the caller was given.
+    /// </summary>
+    [Fact]
+    public void ACalledSixteenBitStoreSetsTheHighByte()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Shared hazard=False used=2 direct=3",
+                "  ◦ no config · layout guessed",
+                "  tmp +0 x2 .word Shared Guessed",
+                "    main Temp 2",
+                "    fill Out 1",
+            ],
+            Render("65816", """
+                .segment ZEROPAGE
+                .data tmp: .word
+                .segment CODE
+                .export .proc main: a16, i16, dp = 0 {
+                    jsr fill
+                    sep #$20
+                    lda tmp + 1
+                    sta tmp
+                    rep #$20
+                    rts
+                }
+                .proc fill: a16, i16, dp = 0 {
+                    lda #0
+                    sta tmp
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
     /// A constant address that an instruction reaches through the zero page takes those bytes as
     /// surely as a declaration does, so it is shown as a location named by its address. A pointer
     /// read through such an address takes both of its bytes.
