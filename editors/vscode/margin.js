@@ -1,30 +1,33 @@
-// Draws the branches and jumps of the routine at the caret as arrows in the margin. The server
-// works out the arrows and the column each one's upright goes in (`nt65/flowArrows`), and this
-// file only draws them. VS Code cannot draw in its own gutter, so the arrows are a prefix before
-// the first character of every line of the routine, the same width on each line so that the code
-// does not jog.
+// Draws the loops of every routine as brackets in the margin, with each loop's trip count after
+// its last line, and the branches and jumps of the routine at the caret as arrows beside them. The
+// server works out the brackets, the arrows and the column each one's upright goes in
+// (`nt65/margin`), and this file only draws them. VS Code cannot draw in its own gutter, so the
+// margin is a prefix before the first character of every line of a routine, the same width on
+// each line so that the code does not jog.
 const vscode = require('vscode');
 
 // How long the caret has to rest on a line before the server is asked about it.
 const DELAY = 100;
 
-// How long the text has to rest after an edit before the arrows are asked for again. Until then
-// the old arrows stay, since VS Code moves them with the text, and taking them away on every
+// How long the text has to rest after an edit before the margin is asked for again. Until then
+// the old margin stays, since VS Code moves it with the text, and taking it away on every
 // keystroke would shift the code left and right while it is typed.
 const EDIT_DELAY = 300;
 
-// The styles an arrow is drawn in. Where arrows meet, the part drawn in the style that comes
-// first is drawn on top.
-const STYLES = ['caret', 'arrow', 'declared', 'faded'];
+// The styles a bracket or an arrow is drawn in. Where they meet, the part drawn in the style that
+// comes first is drawn on top.
+const STYLES = ['caret', 'bracketCaret', 'bracket', 'arrow', 'declared', 'faded'];
 
-// Returns how thick an arrow's lines are in a style, in pixels. The caret's arrow is drawn twice
-// as thick, so that it stands out from the others by more than its colour.
+// Returns how thick lines are in a style, in pixels. Brackets and the caret's arrow are drawn
+// twice as thick, so that they stand out from the other arrows by more than their colour.
 function thicknessOf(style) {
-  return style === 'caret' ? 2 : 1;
+  return style === 'caret' || style === 'bracket' || style === 'bracketCaret' ? 2 : 1;
 }
 
 // Returns the CSS colour of a style, which is the theme colour that VS Code exposes as a variable.
 function colour(style) {
+  if (style === 'bracket') return 'var(--vscode-nt65-loopBrackets-bracket)';
+  if (style === 'bracketCaret') return 'var(--vscode-nt65-loopBrackets-caret)';
   return `var(--vscode-nt65-flowArrows-${style})`;
 }
 
@@ -37,39 +40,69 @@ function styleOf(arrow, caret) {
   return arrow.declared ? 'declared' : 'arrow';
 }
 
-// Returns the cells of the prefix, one row per line of the routine. Each row holds a cell per
-// column and two cells that join the columns to the code. A column's cell index counts from the
-// left, and column 0 is the one nearest the code. A cell names the style of each part drawn in
+// Returns the drawn bracket of the innermost loop that holds the caret's line, or undefined where
+// no drawn bracket holds it.
+function innermostOf(routine, caret) {
+  let found;
+  for (const bracket of routine.brackets) {
+    if (bracket.column == null || caret < bracket.top || caret > bracket.bottom) continue;
+    if (!found || bracket.bottom - bracket.top < found.bottom - found.top) found = bracket;
+  }
+  return found;
+}
+
+// Returns the cells of a routine's prefix, one row per line of the routine. Each row holds a cell
+// per column and two cells that join the columns to the code. A column's cell index counts from
+// the left, and column 0 is the one nearest the code. A cell names the style of each part drawn in
 // it: the half lines `up`, `down`, `left` and `right` from its centre, and the head `into`.
-function cellsOf(result, caret) {
-  const width = result.columns + 2;
+function cellsOf(routine, caret) {
+  const width = routine.columns + 2;
   const rows = [];
-  for (let line = result.first; line <= result.last; line++) {
+  for (let line = routine.first; line <= routine.last; line++) {
     rows.push(Array.from({ length: width }, () => ({})));
   }
   const mark = (line, index, parts, style) => {
-    const cell = rows[line - result.first][index];
+    if (line < routine.first || line > routine.last) return;
+    const cell = rows[line - routine.first][index];
     for (const part of parts) {
       if (cell[part] === undefined || STYLES.indexOf(style) < STYLES.indexOf(cell[part])) cell[part] = style;
     }
   };
 
+  // Draws a horizontal from a column's upright to the code, ending in a head where `head` is set.
+  const across = (line, upright, style, head) => {
+    for (let index = upright + 1; index < width - 1; index++) mark(line, index, ['left', 'right'], style);
+    mark(line, width - 1, head ? ['left', 'into'] : ['left', 'right'], style);
+  };
+
+  // A bracket runs from its first line to its last, and joins the code at both ends and at each
+  // tee. The arrowhead at the top says the bracket stands for the branches back to that line.
+  const lit = innermostOf(routine, caret);
+  for (const bracket of routine.brackets) {
+    if (bracket.column == null) continue;
+    const style = bracket === lit ? 'bracketCaret' : 'bracket';
+    const upright = routine.columns - 1 - bracket.column;
+    mark(bracket.top, upright, ['down', 'right'], style);
+    mark(bracket.bottom, upright, ['up', 'right'], style);
+    for (let line = bracket.top + 1; line < bracket.bottom; line++) mark(line, upright, ['up', 'down'], style);
+    for (const tee of bracket.tees) mark(tee, upright, ['right'], style);
+    across(bracket.top, upright, style, bracket.head);
+    for (const line of [...bracket.tees, bracket.bottom]) across(line, upright, style, false);
+  }
+
   // The server leaves out a field whose value is null, so an arrow without room has no `column`.
-  const drawn = result.arrows
-    .filter(arrow => arrow.from >= result.first && arrow.from <= result.last && arrow.column != null);
+  const drawn = routine.arrows
+    .filter(arrow => arrow.from >= routine.first && arrow.from <= routine.last && arrow.column != null);
   for (const arrow of drawn) {
     const style = styleOf(arrow, caret);
-    const upright = result.columns - 1 - arrow.column;
+    const upright = routine.columns - 1 - arrow.column;
     const low = Math.min(arrow.from, arrow.to);
     const high = Math.max(arrow.from, arrow.to);
     mark(low, upright, ['down', 'right'], style);
     mark(high, upright, ['up', 'right'], style);
     for (let line = low + 1; line < high; line++) mark(line, upright, ['up', 'down'], style);
-    for (const line of [arrow.from, arrow.to]) {
-      for (let index = upright + 1; index < width - 1; index++) mark(line, index, ['left', 'right'], style);
-    }
-    mark(arrow.from, width - 1, ['left', 'right'], style);
-    mark(arrow.to, width - 1, ['left', 'into'], style);
+    across(arrow.from, upright, style, false);
+    across(arrow.to, upright, style, true);
   }
   return rows;
 }
@@ -136,13 +169,14 @@ function lineHeightOf(document) {
 }
 
 // Returns how one line's prefix is drawn: a box one line tall and as wide as the row's cells,
-// whose background draws the arrows. An attachment has no option for the box's display or its
-// background, so they go in through `textDecoration`, which is written into the style as it is.
+// whose background draws the brackets and arrows. An attachment has no option for the box's
+// display or its background, so they go in through `textDecoration`, which is written into the
+// style as it is.
 // <p>
-// The prefix comes before the line's indentation. Where an arrow ends on the line, its
-// horizontal goes on across the `indent` columns of indentation, so that the head touches the
-// label and the tail touches the branch. The box is widened by that much and a negative margin
-// draws it under the indentation, so the code stays where it would be.
+// The prefix comes before the line's indentation. Where a horizontal reaches the code on the
+// line, it goes on across the `indent` columns of indentation, so that a head touches the label
+// and a tail touches the branch. The box is widened by that much and a negative margin draws it
+// under the indentation, so the code stays where it would be.
 function prefixOf(row, height, indent) {
   const last = row[row.length - 1];
   const across = last.left ? indent : 0;
@@ -154,7 +188,7 @@ function prefixOf(row, height, indent) {
   const background = backgroundOf(cells, height);
   const margin = across === 0 ? '' : `; margin-right: -${across}ch`;
   return {
-    contentText: '\u00a0',
+    contentText: ' ',
     color: 'transparent',
     textDecoration: `none; display: inline-block; vertical-align: top; width: ${cells.length}ch; height: ${height}px${margin}`
       + (background ? `; background: ${background}` : ''),
@@ -177,12 +211,31 @@ function unshownOf(arrow) {
   return new vscode.MarkdownString(`Goes to line ${arrow.to + 1}. The margin has no room for this arrow.`);
 }
 
-class FlowArrows {
+// Returns the text of a loop's trip count: `×16` for a loop that runs 16 times each time it is
+// entered, and `×?` for one whose count the program does not say.
+function tripsOf(bracket) {
+  return `×${bracket.trips == null ? '?' : bracket.trips}`;
+}
+
+class Margin {
   constructor(client) {
     this.client = client;
 
     // Every line's prefix is drawn by this one type, each with a background of its own.
     this.prefix = vscode.window.createTextEditorDecorationType({});
+
+    // The trip counts after the last line of each loop.
+    const chip = new vscode.ThemeColor('nt65.loopBrackets.caret');
+    this.trips = vscode.window.createTextEditorDecorationType({
+      after: {
+        color: chip,
+        backgroundColor: new vscode.ThemeColor('nt65.loopBrackets.chipBackground'),
+        border: '1px solid',
+        borderColor: chip,
+        margin: '0 0 0 0.6em',
+        textDecoration: 'none; border-radius: 3px; padding: 0 3px; font-size: 90%',
+      },
+    });
 
     // The hover on the line of an arrow that had no room. It draws nothing.
     this.hover = vscode.window.createTextEditorDecorationType({});
@@ -197,8 +250,12 @@ class FlowArrows {
     this.asked = undefined;
   }
 
-  get enabled() {
+  get arrows() {
     return vscode.workspace.getConfiguration('nt65').get('flowArrows.enabled') === true;
+  }
+
+  get brackets() {
+    return vscode.workspace.getConfiguration('nt65').get('loopBrackets.enabled') !== false;
   }
 
   applies(editor) {
@@ -207,10 +264,11 @@ class FlowArrows {
   }
 
   // Redraws what is shown for the caret's new line at once, then waits for the caret to rest and
-  // asks about that line, which may be in another routine.
+  // asks again. Only the arrows depend on the caret's line, since it may be in another routine,
+  // so with the arrows off a caret that moves asks nothing.
   schedule(editor, delay = DELAY) {
     clearTimeout(this.timer);
-    if (!this.enabled || !this.applies(editor)) {
+    if (!(this.arrows || this.brackets) || !this.applies(editor)) {
       this.clear();
       return;
     }
@@ -223,7 +281,9 @@ class FlowArrows {
   async ask(editor, position) {
     const document = editor.document;
     const version = document.version;
-    const key = `${document.uri}@${version}:${position.line}`;
+    const arrows = this.arrows;
+    const brackets = this.brackets;
+    const key = `${document.uri}@${version}:${brackets}:${arrows ? position.line : ''}`;
     if (key === this.asked) return;
     this.asked = key;
 
@@ -233,48 +293,80 @@ class FlowArrows {
     this.cancel = cancel;
     let result;
     try {
-      result = await this.client.sendRequest('nt65/flowArrows', {
+      result = await this.client.sendRequest('nt65/margin', {
         textDocument: { uri: document.uri.toString() },
         position: { line: position.line, character: position.character },
+        brackets,
+        arrows,
       }, cancel.token);
     } catch {
       result = null;
     }
 
     // An answer that arrives after the text has changed, or for an editor no longer active, is
-    // dropped. One for a caret that has since moved still holds the right arrows.
+    // dropped. One for a caret that has since moved still holds the right margin.
     if (cancel.token.isCancellationRequested || document.version !== version
       || vscode.window.activeTextEditor !== editor) {
       return;
     }
     if (!result) {
-      this.clear();
+      this.forget();
       return;
     }
     this.shown = { editor, version, result };
     this.render();
   }
 
-  // Draws what is shown, with the arrows on the caret's line highlighted. Each line gets one
-  // decoration, since VS Code does not keep several at one place in the order they are given.
+  // Draws what is shown, with the caret's arrows and innermost bracket highlighted. Each line gets
+  // one decoration, since VS Code does not keep several at one place in the order they are given.
+  // Where one routine's text holds another's, the inner routine's prefix is drawn on its lines.
   render() {
     if (!this.shown) return;
     const { editor, result } = this.shown;
     const document = editor.document;
     const height = lineHeightOf(document);
-    const rows = cellsOf(result, editor.selection.active.line);
+    const caret = editor.selection.active.line;
     const tabSize = Number(editor.options.tabSize) || 4;
-    const prefixes = [];
-    for (let line = result.first; line <= result.last && line < document.lineCount; line++) {
-      prefixes.push({
-        range: new vscode.Range(line, 0, line, 0),
-        renderOptions: { before: prefixOf(rows[line - result.first], height, indentOf(document.lineAt(line).text, tabSize)) },
-      });
+    const prefixes = new Map();
+    const routines = [...result.routines].sort((a, b) => (b.last - b.first) - (a.last - a.first));
+    for (const routine of routines) {
+      if (routine.columns === 0) continue;
+      const rows = cellsOf(routine, caret);
+      for (let line = routine.first; line <= routine.last && line < document.lineCount; line++) {
+        prefixes.set(line, {
+          range: new vscode.Range(line, 0, line, 0),
+          renderOptions: { before: prefixOf(rows[line - routine.first], height, indentOf(document.lineAt(line).text, tabSize)) },
+        });
+      }
     }
-    editor.setDecorations(this.prefix, prefixes);
-    editor.setDecorations(this.hover, result.arrows
+    editor.setDecorations(this.prefix, [...prefixes.values()]);
+
+    // Loops that end on one line, as several can where a macro's call stands for its body, share
+    // one chip there.
+    const trips = new Map();
+    for (const bracket of result.routines.flatMap(routine => routine.brackets)) {
+      if (bracket.bottom >= document.lineCount) continue;
+      trips.set(bracket.bottom, [...(trips.get(bracket.bottom) || []), tripsOf(bracket)]);
+    }
+    editor.setDecorations(this.trips, [...trips].map(([line, texts]) => {
+      const end = document.lineAt(line).range.end;
+      return { range: new vscode.Range(end, end), renderOptions: { after: { contentText: texts.join(' ') } } };
+    }));
+    editor.setDecorations(this.hover, result.routines
+      .flatMap(routine => routine.arrows)
       .filter(arrow => arrow.column == null && arrow.from < document.lineCount)
       .map(arrow => ({ range: document.lineAt(arrow.from).range, hoverMessage: unshownOf(arrow) })));
+  }
+
+  // Takes away what is shown, but keeps the question asked, so that a caret that stays on its line
+  // does not ask it again.
+  forget() {
+    if (!this.shown) return;
+    const { editor } = this.shown;
+    this.shown = undefined;
+    editor.setDecorations(this.prefix, []);
+    editor.setDecorations(this.trips, []);
+    editor.setDecorations(this.hover, []);
   }
 
   clear() {
@@ -282,42 +374,49 @@ class FlowArrows {
     if (this.cancel) this.cancel.cancel();
     this.cancel = undefined;
     this.asked = undefined;
-    if (!this.shown) return;
-    const { editor } = this.shown;
-    this.shown = undefined;
-    editor.setDecorations(this.prefix, []);
-    editor.setDecorations(this.hover, []);
+    this.forget();
   }
 }
 
-// Everything the flow arrows need, registered once.
+// Everything the margin needs, registered once.
 function register(context, client) {
-  const arrows = new FlowArrows(client);
+  const margin = new Margin(client);
+  const toggle = setting => vscode.workspace.getConfiguration('nt65')
+    .update(setting, !vscode.workspace.getConfiguration('nt65').get(setting, setting === 'loopBrackets.enabled'),
+      vscode.ConfigurationTarget.Global);
   context.subscriptions.push(
-    arrows.prefix,
-    arrows.hover,
-    vscode.window.onDidChangeTextEditorSelection(event => arrows.schedule(event.textEditor)),
+    margin.prefix,
+    margin.trips,
+    margin.hover,
+    vscode.window.onDidChangeTextEditorSelection(event => margin.schedule(event.textEditor)),
     vscode.window.onDidChangeActiveTextEditor(editor => {
-      arrows.clear();
-      if (editor) arrows.schedule(editor);
+      margin.clear();
+      if (editor) margin.schedule(editor);
     }),
     vscode.workspace.onDidChangeTextDocument(event => {
       const editor = vscode.window.activeTextEditor;
       if (editor && event.document === editor.document && event.contentChanges.length > 0) {
-        arrows.schedule(editor, EDIT_DELAY);
+        margin.schedule(editor, EDIT_DELAY);
       }
     }),
     vscode.workspace.onDidChangeConfiguration(event => {
       if (event.affectsConfiguration('editor.fontSize') || event.affectsConfiguration('editor.lineHeight')) {
-        arrows.render();
+        margin.render();
       }
-      if (!event.affectsConfiguration('nt65.flowArrows.enabled')) return;
-      if (arrows.enabled && vscode.window.activeTextEditor) arrows.schedule(vscode.window.activeTextEditor);
-      else arrows.clear();
+      if (!event.affectsConfiguration('nt65.flowArrows.enabled') && !event.affectsConfiguration('nt65.loopBrackets.enabled')) {
+        return;
+      }
+      margin.clear();
+      if (vscode.window.activeTextEditor) margin.schedule(vscode.window.activeTextEditor);
     }),
-    vscode.commands.registerCommand('nt65.toggleFlowArrows', () => vscode.workspace.getConfiguration('nt65')
-      .update('flowArrows.enabled', !arrows.enabled, vscode.ConfigurationTarget.Global)),
-    { dispose: () => arrows.clear() });
+    vscode.commands.registerCommand('nt65.toggleFlowArrows', () => toggle('flowArrows.enabled')),
+    vscode.commands.registerCommand('nt65.toggleLoopBrackets', () => toggle('loopBrackets.enabled')),
+    // The editor open at start-up gets its brackets once the server runs, without waiting for
+    // the caret to move.
+    client.onDidChangeState(() => {
+      if (client.isRunning() && vscode.window.activeTextEditor) margin.schedule(vscode.window.activeTextEditor);
+    }),
+    { dispose: () => margin.clear() });
 }
 
 module.exports = { register };

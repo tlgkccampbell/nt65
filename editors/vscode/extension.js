@@ -6,7 +6,7 @@ const vscode = require('vscode');
 const { LanguageClient } = require('vscode-languageclient/node');
 const views = require('./views');
 const sources = require('./sources');
-const flowArrows = require('./flowArrows');
+const margin = require('./margin');
 const directPages = require('./directPages');
 
 let client;
@@ -253,7 +253,7 @@ async function activate(context) {
   cycleCounts(context);
   views.register(context, client, outputChanged.event);
   sources.register(context, client);
-  flowArrows.register(context, client);
+  margin.register(context, client);
   directPages.register(context, client, outputChanged.event);
   await client.start();
 }

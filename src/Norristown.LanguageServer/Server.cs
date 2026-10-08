@@ -441,14 +441,16 @@ internal sealed class Server : IDisposable
             : null;
 
     /// <summary>
-    /// Returns the branches, jumps and declared edges inside the routine that holds a position, for
-    /// the client to draw as arrows in the margin. The answer is for showing and feeds no
+    /// Returns, as far as the client asks for them, the brackets of the loops in every routine of a
+    /// document and the branches, jumps and declared edges inside the routine that holds a position,
+    /// for the client to draw in front of the lines. The answer is for showing and feeds no
     /// diagnostic.
     /// </summary>
-    [JsonRpcMethod("nt65/flowArrows")]
-    public async Task<FlowArrowsResult?> FlowArrowsAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        await AtAsync(request, cancellation, settled: true).ConfigureAwait(false) is { } asked
-            ? CaretFlow.At(asked.Analysis, asked.Model, asked.Position)
+    [JsonRpcMethod("nt65/margin")]
+    public async Task<MarginResult?> MarginAsync(MarginParams request, CancellationToken cancellation) =>
+        await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation, settled: true)
+            .ConfigureAwait(false) is { } asked
+            ? Margin.At(asked.Analysis, asked.Model, asked.Position, request.Brackets, request.Arrows)
             : null;
 
     /// <summary>

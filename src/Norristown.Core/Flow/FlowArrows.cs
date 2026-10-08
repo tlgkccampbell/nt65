@@ -90,7 +90,7 @@ public sealed record FlowArrows(TextSpan Routine, IReadOnlyList<FlowArrow> Arrow
     /// is not opened in that file. A routine a block opens runs to the block's closing line. Any
     /// other runs from its opening line to the last of its statements in the file.
     /// </summary>
-    private static TextSpan? Extent(SyntaxTree tree, FlowRegion region)
+    internal static TextSpan? Extent(SyntaxTree tree, FlowRegion region)
     {
         var routine = region.Routine;
         if (routine.Tree != tree)
@@ -113,7 +113,7 @@ public sealed record FlowArrows(TextSpan Routine, IReadOnlyList<FlowArrow> Arrow
     /// line of the file and not part of a macro's body, and the line of its first statement
     /// otherwise.
     /// </summary>
-    private static TextSpan? LineOf(SyntaxTree tree, BasicBlock block)
+    internal static TextSpan? LineOf(SyntaxTree tree, BasicBlock block)
     {
         var first = block.Steps.Count == 0 ? null : StepLines.Of(tree, block.Steps[0]);
         if (block.Label is { } label && label.Tree == tree && first is not { InMacro: true } && (first is not null || block.On is null))

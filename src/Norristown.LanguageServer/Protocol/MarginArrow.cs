@@ -10,4 +10,4 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Declared">Whether a <c>.next</c> declared the transfer.</param>
 /// <param name="Proved">Whether the transfer is a conditional branch the flags prove always or never taken.</param>
 /// <param name="Reached">Whether any path from the routine's entry reaches the line that transfers.</param>
-internal sealed record FlowArrowsItem(int From, int To, int? Column, bool Declared, bool Proved, bool Reached);
+internal sealed record MarginArrow(int From, int To, int? Column, bool Declared, bool Proved, bool Reached);

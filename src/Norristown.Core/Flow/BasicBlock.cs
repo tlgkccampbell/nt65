@@ -153,6 +153,13 @@ public sealed class BasicBlock
     public int? Repeats { get; internal set; }
 
     /// <summary>
+    /// Gets, for the latch of a counted loop, how many times the loop runs each time it is
+    /// entered. Unlike <see cref="Iterations"/>, it is not multiplied by the loops around it. It is
+    /// null for every other block.
+    /// </summary>
+    public int? Trips { get; internal set; }
+
+    /// <summary>
     /// Returns whether control may run on past a statement that ends a block the way
     /// <paramref name="end"/> says. It does after a statement that transfers nothing, a branch
     /// that is not taken, and a call that returns.

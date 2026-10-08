@@ -173,6 +173,8 @@ internal static class CountedLoops
                 continue;
             blocks[i].Iterations = iterations is { } many ? (blocks[i].Iterations ?? 1) * many : null;
             blocks[i].Repeats = iterations is null ? null : i == loop.Latch ? loop.Header : blocks[i].Repeats;
+            if (i == loop.Latch)
+                blocks[i].Trips = iterations;
         }
     }
 
