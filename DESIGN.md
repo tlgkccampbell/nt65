@@ -4319,20 +4319,28 @@ cannot be asked watches the first two and hears about a binary when something el
 that is gone. Four rules keep that:
 
 - the edited file's own diagnostics go out at once, from the analysis that edit asked for.
-  They are the whole answer about that file, program-wide problems with it included, so
-  nothing about it is briefly missing;
-- the rest of the program's go out after 200 ms with no further edit. An edit in one file can
-  change what is wrong with another, and a squiggle in a file nobody is looking at is worth
-  arriving a moment late rather than coming and going on every keystroke;
+  That analysis leaves the program-wide answers for later: what each routine keeps, reads,
+  costs with its calls, leaves on the stack and returns with in the flags. Working them out is
+  most of what an edit costs in a large program, and they rarely change while typing. Until
+  they are worked out again, the files the edit did not reach keep the answers from before it,
+  and the program-wide problems from before stay where they were, moved to follow the edit. A
+  problem in text the edit replaced is dropped. So nothing about the file is briefly missing,
+  but a program-wide problem the edit fixes or causes shows once typing stops;
+- the rest of the program's go out after 200 ms with no further edit, from the analysis with
+  the program-wide answers worked out again, and so does the edited file's where those answers
+  change it. An edit in one file can change what is wrong with another, and a squiggle in a
+  file nobody is looking at is worth arriving a moment late rather than coming and going on
+  every keystroke. Working the answers out runs beside the next edit's analysis rather than
+  before it, and that edit stops it, so a keystroke never waits for it;
 - a file's diagnostics stand until the ones that replace them arrive. A file that is still
   part of the program is never emptied and then filled in again; only a file that has left one
   is emptied;
 - nothing is published about a revision of a file older than the newest the editor has sent.
 
-The editor is asked to fetch the names' classes and the lenses again only where the edit
-reached past the file it was made in, which is exactly when what a name in another file refers
-to, or what a routine costs with its calls, can have moved. The edited file is never among
-them: the editor asks about the document it is showing by itself.
+The editor is asked to fetch the names' classes, the lenses and the hints again once the
+program-wide answers are worked out after an edit. It asks about the document it is showing by
+itself as that document changes, but what a routine costs with its calls and what the
+registers hold come from those answers, which that first answer goes without.
 
 **What the editor says it can take** is read once, when it connects, and everything that
 depends on it is settled from that: whether the outline is a tree or the flat list the

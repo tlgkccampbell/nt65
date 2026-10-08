@@ -72,7 +72,7 @@ internal sealed class Workspace
     {
         var analyze = analyzer
             ?? ((files, project, previous, cancellation) =>
-                Compiler.Analyze(files, project, binaryLength: null, previous, cancellation));
+                Compiler.AnalyzeUnsettled(files, project, binaryLength: null, previous, cancellation));
         this.analyzer = failed is null
             ? analyze
             : (files, project, previous, cancellation) =>
@@ -475,22 +475,12 @@ internal sealed class Workspace
     }
 
     /// <summary>
-    /// Returns whether the last analysis of the program that <paramref name="path"/> belongs to had
-    /// to re-analyze more than that one file. That is exactly when what names in other files refer
-    /// to can have changed, and with it those files' semantic colouring and lenses.
-    /// </summary>
-    public async Task<bool> ReachedOtherFilesAsync(string path, CancellationToken cancellation)
-    {
-        var analysis = await AnalysisForAsync(path, cancellation).ConfigureAwait(false);
-        return analysis.WholeProgram is not null || analysis.Reanalyzed > 1;
-    }
-
-    /// <summary>
     /// Returns every file whose diagnostics are published, with those diagnostics. The files are
     /// each file of each project, each project file, and each open document that belongs to no
     /// project. A file two projects share is reported by the nearer project, which is the one
     /// every other answer about the file comes from. A file that <see cref="PublishOnlyWhileOpen"/>
-    /// names is left out unless it is open.
+    /// names is left out unless it is open. The diagnostics come from analyses with the
+    /// program-wide answers worked out, which this waits for.
     /// <para>
     /// Which project each file belongs to, and the version of each open document, are taken
     /// together with the files the analyses are of, so that nothing published mixes an analysis
@@ -509,9 +499,9 @@ internal sealed class Workspace
             folders = roots;
             quiet = onlyWhileOpen;
             foreach (var project in projects)
-                programs.Add((project, project.AnalysisAsync(open.Values, cancellation)));
+                programs.Add((project, project.AnalysisAsync(open.Values, cancellation, settled: true)));
             if (open.Values.Any(document => Owner(document.Tree.Path) is null))
-                programs.Add((null, LooseAsync(cancellation)));
+                programs.Add((null, LooseAsync(cancellation, settled: true)));
             owners = projects.SelectMany(project => project.OnDisk().Select(tree => tree.Path))
                 .Concat(open.Values.Select(document => document.Tree.Path))
                 .Distinct(FilePaths.Comparer)
@@ -710,16 +700,18 @@ internal sealed class Workspace
     /// <summary>
     /// Returns the analysis of the open documents that no project names. Each open document
     /// supplies its own tree in place of the file on disk, and an edit re-parsed only the lines it
-    /// touched. The caller holds the lock.
+    /// touched. With <paramref name="settled"/>, it waits for the program-wide answers. The
+    /// caller holds the lock.
     /// </summary>
-    private Task<ProgramAnalysis> LooseAsync(CancellationToken cancellation) =>
+    private Task<ProgramAnalysis> LooseAsync(CancellationToken cancellation, bool settled = false) =>
         loose.AnalysisAsync(
             () => ([.. open.Values
                     .Where(document => Owner(document.Tree.Path) is null)
                     .DistinctBy(document => document.Tree.Path, FilePaths.Comparer)
                     .Select(document => document.Tree)],
                 ProjectSettings.None),
-            cancellation);
+            cancellation,
+            settled);
 
     /// <summary>
     /// Returns the project a file belongs to, or null for none. A library two projects share is part of

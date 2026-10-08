@@ -15,10 +15,22 @@ namespace Norristown.LanguageServer;
 /// analyzed again, and two analyses of the whole program never compete for the processor. An
 /// analysis that every request has stopped waiting for is cancelled.
 /// </para>
+/// <para>
+/// An analysis after an edit may leave the program-wide answers for later, as
+/// <see cref="ProgramAnalysis.IsSettled"/> describes. A request that needs them asks for the
+/// settled analysis, which works them out once for the files as they stand. Settling runs beside
+/// the next edit's analysis rather than before it, so that it never delays a keystroke, and a
+/// change to the files cancels it. Once it has finished, every request gets the settled analysis.
+/// </para>
 /// </summary>
 /// <param name="analyzer">The function that analyzes a program.</param>
-internal sealed class LiveAnalysis(Analyzer analyzer)
+/// <param name="settler">
+/// The function that works out the program-wide answers, or null for
+/// <see cref="Compiler.Settle"/>.
+/// </param>
+internal sealed class LiveAnalysis(Analyzer analyzer, Func<ProgramAnalysis, CancellationToken, ProgramAnalysis>? settler = null)
 {
+    private readonly Func<ProgramAnalysis, CancellationToken, ProgramAnalysis> settle = settler ?? Compiler.Settle;
     private readonly Lock gate = new();
 
     // The analysis of the files as they stand, or null when they have changed since it started.
@@ -55,7 +67,9 @@ internal sealed class LiveAnalysis(Analyzer analyzer)
         {
             lock (gate)
             {
-                return current?.Task is { IsCompletedSuccessfully: true } done ? done.Result : null;
+                return current?.Settled is { IsCompletedSuccessfully: true } settled ? settled.Result
+                    : current?.Task is { IsCompletedSuccessfully: true } done ? done.Result
+                    : null;
             }
         }
     }
@@ -70,8 +84,13 @@ internal sealed class LiveAnalysis(Analyzer analyzer)
     /// Stops this request waiting. The analysis itself stops only when no other request is waiting
     /// for it.
     /// </param>
+    /// <param name="settled">
+    /// Whether to wait for the program-wide answers. Without it, the settled analysis is returned
+    /// where it has finished, and the analysis that may leave them for later otherwise.
+    /// </param>
     public Task<ProgramAnalysis> AnalysisAsync(
-        Func<(IReadOnlyCollection<SyntaxTree> Files, ProjectSettings Project)> inputs, CancellationToken cancellation)
+        Func<(IReadOnlyCollection<SyntaxTree> Files, ProjectSettings Project)> inputs, CancellationToken cancellation,
+        bool settled = false)
     {
         Run run;
         lock (gate)
@@ -79,21 +98,28 @@ internal sealed class LiveAnalysis(Analyzer analyzer)
             if (current is null || !current.IsUsable)
                 current = Start(inputs());
             run = current;
+            if (run.Settled is { IsCompletedSuccessfully: true } done)
+                return done;
             run.Waiting++;
+            if (settled)
+                run.Settled ??= Settle(run);
         }
-        return WaitAsync(run, cancellation);
+        return WaitAsync(run, settled ? run.Settled! : run.Task, cancellation);
     }
 
     /// <summary>
-    /// Discards the analysis of the files as they stand, because one of them has changed. The last
-    /// analysis that finished is kept for the next one to start from.
+    /// Discards the analysis of the files as they stand, because one of them has changed, and
+    /// stops settling it. The last analysis that finished is kept for the next one to start from.
     /// </summary>
     public void Invalidate()
     {
+        Run? replaced;
         lock (gate)
         {
+            replaced = current;
             current = null;
         }
+        replaced?.StopSettling();
     }
 
     /// <summary>
@@ -127,14 +153,39 @@ internal sealed class LiveAnalysis(Analyzer analyzer)
     }
 
     /// <summary>
-    /// Returns the result of <paramref name="run"/> once it finishes, and cancels the run when this
-    /// was the last request waiting for it and it has not finished.
+    /// Starts working out the program-wide answers for the analysis <paramref name="run"/> makes,
+    /// once it has finished. It does not wait for the analyses before it, so it runs beside the
+    /// next edit's. The settled analysis becomes the one the next analysis starts from, unless a
+    /// later one has finished meanwhile.
     /// </summary>
-    private async Task<ProgramAnalysis> WaitAsync(Run run, CancellationToken cancellation)
+    private Task<ProgramAnalysis> Settle(Run run)
+    {
+        var cancellation = run.Settling.Token;
+        return Task.Run(
+            async () =>
+            {
+                var analysis = await run.Task.ConfigureAwait(false);
+                var settled = settle(analysis, cancellation);
+                lock (gate)
+                {
+                    if (ReferenceEquals(latest, analysis))
+                        latest = settled;
+                }
+                return settled;
+            },
+            cancellation);
+    }
+
+    /// <summary>
+    /// Returns the result of <paramref name="awaited"/>, which is <paramref name="run"/>'s
+    /// analysis or its settling, once it finishes. The run is cancelled when this was the last
+    /// request waiting for it and its analysis has not finished.
+    /// </summary>
+    private async Task<ProgramAnalysis> WaitAsync(Run run, Task<ProgramAnalysis> awaited, CancellationToken cancellation)
     {
         try
         {
-            return await run.Task.WaitAsync(cancellation).ConfigureAwait(false);
+            return await awaited.WaitAsync(cancellation).ConfigureAwait(false);
         }
         finally
         {
@@ -162,6 +213,15 @@ internal sealed class LiveAnalysis(Analyzer analyzer)
 
         public Task<ProgramAnalysis> Task { get; } = task;
 
+        /// <summary>Gets the source that stops settling the analysis once the files change.</summary>
+        public CancellationTokenSource Settling { get; } = new();
+
+        /// <summary>
+        /// Gets or sets the analysis with the program-wide answers worked out, or null until a
+        /// request asks for it.
+        /// </summary>
+        public Task<ProgramAnalysis>? Settled { get; set; }
+
         /// <summary>Gets or sets the number of requests waiting for the analysis.</summary>
         public int Waiting { get; set; }
 
@@ -177,5 +237,12 @@ internal sealed class LiveAnalysis(Analyzer analyzer)
         /// answer for the files as they stand, since running it again would only fail again.
         /// </summary>
         public bool IsUsable => Task.IsCompletedSuccessfully || Task.IsFaulted || (!Task.IsCompleted && !IsAbandoned);
+
+        /// <summary>Stops settling the analysis, unless that has finished.</summary>
+        public void StopSettling()
+        {
+            if (Settled is not { IsCompleted: true })
+                Settling.Cancel();
+        }
     }
 }

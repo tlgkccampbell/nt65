@@ -102,9 +102,13 @@ public sealed class CodeActionsTests
         Assert.Equal([MainUri], action.Edit!.Changes.Keys);
         Assert.Equal(Header + fixedBody, Editing.Apply(Header + body, action.Edit!.Changes[MainUri]));
 
-        // What the fix leaves is a file with nothing wrong.
+        // What the fix leaves is a file with nothing wrong. The edit is answered at once without
+        // the program-wide answers, so a warning they gave may stay until the file is published
+        // again once typing stops.
         await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(null, Header + fixedBody));
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics.Select(d => d.Message));
+        while ((await client.NextDiagnosticsAsync(MainUri, timeout)).Diagnostics.Any())
+        {
+        }
     }
 
     /// <summary>

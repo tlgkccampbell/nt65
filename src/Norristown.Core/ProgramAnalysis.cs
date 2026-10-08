@@ -53,6 +53,17 @@ public sealed record ProgramAnalysis(
     public WholeProgramReason? WholeProgram { get; internal init; }
 
     /// <summary>
+    /// Gets a value indicating whether the program-wide answers are worked out for these files.
+    /// Those answers are what each routine keeps, reads, costs with its calls, leaves on its
+    /// caller's stack and returns with in the flags. An editor asks for an analysis after an edit
+    /// without them, so that the edited file is answered at once, and <see cref="Compiler.Settle"/>
+    /// works them out once typing stops. Until then, the files the edit did not reach keep the
+    /// answers from before it, and the program-wide diagnostics are those from before, moved to
+    /// follow the edit.
+    /// </summary>
+    public bool IsSettled { get; internal init; } = true;
+
+    /// <summary>
     /// Gets which modules place which other modules, and so which translation units the program
     /// is emitted as.
     /// </summary>
@@ -154,5 +165,12 @@ public sealed record ProgramAnalysis(
         IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> Conditions,
         IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> Analyzed,
         IReadOnlyList<Diagnostic> SegmentTable,
-        IReadOnlyDictionary<string, long?> Lengths);
+        IReadOnlyDictionary<string, long?> Lengths)
+    {
+        /// <summary>
+        /// Gets the diagnostics found by working out the program-wide answers, which an analysis
+        /// that leaves those answers for later carries over from the one before it.
+        /// </summary>
+        public IReadOnlyList<Diagnostic> Composed { get; init; } = [];
+    }
 }

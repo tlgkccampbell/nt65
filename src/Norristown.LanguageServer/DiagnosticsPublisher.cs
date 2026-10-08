@@ -10,6 +10,8 @@ namespace Norristown.LanguageServer;
 /// <summary>
 /// Publishes the diagnostics of every file of the workspace's programs to one client. The file
 /// the client is editing is published at once, and the rest of the program once typing stops.
+/// The edited file is published from an analysis that may leave the program-wide answers for
+/// later, so it is published again once typing stops, where those answers change it.
 /// </summary>
 internal sealed class DiagnosticsPublisher : IDisposable
 {
@@ -136,7 +138,8 @@ internal sealed class DiagnosticsPublisher : IDisposable
     /// </summary>
     /// <param name="changed">
     /// The file the client is editing, which has already been published from its own analysis
-    /// and is skipped here; null when this is not an edit.
+    /// and is sent again only where the program-wide answers change its diagnostics; null when
+    /// this is not an edit.
     /// </param>
     /// <param name="cancellation">Checked between files, because a program may hold hundreds.</param>
     /// <param name="refresh">
@@ -247,8 +250,7 @@ internal sealed class DiagnosticsPublisher : IDisposable
         {
             cancellation.ThrowIfCancellationRequested();
             current.Add(file.Uri);
-            if (file.Uri != changed)
-                _ = await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
+            _ = await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
         }
 
         // The client keeps the diagnostics it was last sent until told otherwise, so a file that
@@ -275,17 +277,12 @@ internal sealed class DiagnosticsPublisher : IDisposable
                 new OutputChangedParams(changed)).ConfigureAwait(false);
         }
 
-        // What a name in another file refers to, and what a routine costs including its calls,
-        // can only have changed if the edit reached past the file it was made in. An edit that
-        // did not needs no refresh, because the client re-fetches for the document it is
-        // showing by itself.
-        if (!refresh
-            || (changed is not null
-                && !await workspace.ReachedOtherFilesAsync(Uris.ToPath(changed), cancellation).ConfigureAwait(false)))
-        {
-            return;
-        }
-        refetch();
+        // The client re-fetches the lenses and hints of the document it is showing as it is
+        // edited, from an analysis without the program-wide answers. What a routine costs with
+        // its calls and what the registers hold come from those answers, so the client is asked
+        // to fetch again once they are worked out, whether or not the edit reached past its file.
+        if (refresh)
+            refetch();
     }
 
     /// <summary>

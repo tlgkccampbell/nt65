@@ -182,14 +182,48 @@ public static class Compiler
     /// </param>
     public static ProgramAnalysis Analyze(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?>? binaryLength,
-        ProgramAnalysis? previous, CancellationToken cancellation = default)
+        ProgramAnalysis? previous, CancellationToken cancellation = default) =>
+        Analyze(files, project, binaryLength, previous, settle: true, cancellation);
+
+    /// <summary>
+    /// Analyzes already-parsed files as one program, as
+    /// <see cref="Analyze(IReadOnlyCollection{SyntaxTree}, ProjectSettings, Func{string, long?}?, ProgramAnalysis?, CancellationToken)"/>
+    /// does, but leaves the program-wide answers for later where only some files are analyzed
+    /// again. An editor calls it so that an edit is answered at once, and calls
+    /// <see cref="Settle"/> once typing stops. An analysis of the whole program always works the
+    /// answers out, because there are none from before to carry over. See
+    /// <see cref="ProgramAnalysis.IsSettled"/>.
+    /// </summary>
+    /// <param name="files">The program's files.</param>
+    /// <param name="project">The settings the program is built with.</param>
+    /// <param name="binaryLength">
+    /// The function that returns the length of each file an <c>.incbin</c> names, or null to read
+    /// the length from disk.
+    /// </param>
+    /// <param name="previous">The analysis from before an edit, or null to analyze from scratch.</param>
+    /// <param name="cancellation">
+    /// The token checked between files and between the stages of the analysis. A cancelled
+    /// analysis throws <see cref="OperationCanceledException"/>.
+    /// </param>
+    public static ProgramAnalysis AnalyzeUnsettled(
+        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?>? binaryLength,
+        ProgramAnalysis? previous, CancellationToken cancellation = default) =>
+        Analyze(files, project, binaryLength, previous, settle: false, cancellation);
+
+    /// <summary>
+    /// Analyzes already-parsed files as one program, reusing <paramref name="previous"/>, and
+    /// works out the program-wide answers only where <paramref name="settle"/> is true.
+    /// </summary>
+    private static ProgramAnalysis Analyze(
+        IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?>? binaryLength,
+        ProgramAnalysis? previous, bool settle, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         binaryLength ??= BinaryLengthOnDisk;
         var reason = previous is null
             ? WholeProgramReason.NoPreviousAnalysis
             : ReasonForWholeProgram(previous, files, project, binaryLength);
-        if (reason is null && Reanalyze(previous!, files, project, binaryLength, cancellation) is { } reused)
+        if (reason is null && Reanalyze(previous!, files, project, binaryLength, settle, cancellation) is { } reused)
             return reused;
 
         // An analysis of the changed files that finds a diagnostic in text an edit replaced
@@ -198,6 +232,31 @@ public static class Compiler
         {
             WholeProgram = reason ?? WholeProgramReason.DiagnosticInEditedText,
         };
+    }
+
+    /// <summary>
+    /// Returns <paramref name="analysis"/> with the program-wide answers worked out, or the
+    /// analysis itself when they already are. The analysis given is left as it is, so that a
+    /// request still reading it is not disturbed.
+    /// </summary>
+    /// <param name="analysis">An analysis, settled or not.</param>
+    /// <param name="cancellation">The token checked before each round of working the answers out.</param>
+    public static ProgramAnalysis Settle(ProgramAnalysis analysis, CancellationToken cancellation = default)
+    {
+        if (analysis.IsSettled || analysis.Reused is not { } reuse)
+            return analysis;
+        cancellation.ThrowIfCancellationRequested();
+        var cpu = new List<Diagnostic>();
+        ProgramCpu.Resolve(reuse.Trees, reuse.Project.Cpu, cpu);
+
+        // The answers are set on copies of the flows, which the analysis given keeps its own of.
+        var files = analysis.Files.Select(file => file with { Flow = file.Flow.ForComposing() }).ToList();
+        var copy = new ProgramAnalysis(analysis.Program, analysis.Cpu, files, analysis.Configuration, [])
+        {
+            Reanalyzed = analysis.Reanalyzed,
+            WholeProgram = analysis.WholeProgram,
+        };
+        return Composed(copy, reuse.Project, cpu, reuse, carried: null, cancellation);
     }
 
     /// <summary>
@@ -265,7 +324,7 @@ public static class Compiler
             {
                 Reanalyzed = program.Files.Count,
             },
-            project, cpu, reuse);
+            project, cpu, reuse, carried: null, cancellation);
     }
 
     /// <summary>
@@ -331,7 +390,7 @@ public static class Compiler
     /// </summary>
     private static ProgramAnalysis? Reanalyze(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
-        Func<string, long?> binaryLength, CancellationToken cancellation)
+        Func<string, long?> binaryLength, bool settle, CancellationToken cancellation)
     {
         var reuse = previous.Reused!;
         var sources = Sources(files);
@@ -404,7 +463,8 @@ public static class Compiler
             {
                 Reanalyzed = dirty.Count,
             },
-            project, cpu, new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths));
+            project, cpu, new ProgramAnalysis.Reuse(project, trees, conditions, analyzed, segmentTable, lengths),
+            settle ? null : Carried(previous, reuse, moved), cancellation);
     }
 
     /// <summary>
@@ -473,12 +533,21 @@ public static class Compiler
     /// Returns <paramref name="analysis"/>, whose files have each been analyzed on their own,
     /// completed with what only the whole program can answer, and with every diagnostic
     /// collected. Both a whole program and a program in which some files changed are completed
-    /// by this method, so the two report the same diagnostics.
+    /// by this method, so the two report the same diagnostics. Where <paramref name="carried"/>
+    /// is given, the program-wide answers are not worked out, and its diagnostics and the routines
+    /// it says read their caller's stack stand in for them until the analysis is settled.
     /// </summary>
     private static ProgramAnalysis Composed(
-        ProgramAnalysis analysis, ProjectSettings project, IReadOnlyList<Diagnostic> cpu, ProgramAnalysis.Reuse reuse)
+        ProgramAnalysis analysis, ProjectSettings project, IReadOnlyList<Diagnostic> cpu, ProgramAnalysis.Reuse reuse,
+        (IReadOnlyList<Diagnostic> Diagnostics, IReadOnlySet<Flow.RoutineKey> Readers)? carried,
+        CancellationToken cancellation)
     {
         var program = analysis.Program;
+        if (carried is var (carriedDiagnostics, carriedReaders))
+        {
+            return Completed(analysis with { IsSettled = false }, project, cpu, reuse with { Composed = carriedDiagnostics },
+                carriedDiagnostics, carriedReaders);
+        }
 
         // What a routine costs including its calls, which registers it preserves for its caller
         // and reads from it, and what it leaves on its caller's stack, are questions about the
@@ -512,6 +581,7 @@ public static class Compiler
                 .ToHashSet();
             if (stale.Count == 0 || round == StaleRounds)
                 break;
+            cancellation.ThrowIfCancellationRequested();
             var analyzed = reuse.Analyzed.ToDictionary(StringComparer.Ordinal);
             var files = new List<FileAnalysis>();
             foreach (var file in analysis.Files)
@@ -532,15 +602,29 @@ public static class Compiler
             reuse = reuse with { Analyzed = analyzed };
         }
 
+        return Completed(analysis with { IsSettled = true }, project, cpu, reuse with { Composed = registers }, registers, readers);
+    }
+
+    /// <summary>
+    /// Returns <paramref name="analysis"/> with the checks of the translation units made and every
+    /// diagnostic collected. <paramref name="composed"/> holds the diagnostics found by working
+    /// out the program-wide answers, and <paramref name="readers"/> the routines those answers
+    /// say read their caller's stack.
+    /// </summary>
+    private static ProgramAnalysis Completed(
+        ProgramAnalysis analysis, ProjectSettings project, IReadOnlyList<Diagnostic> cpu, ProgramAnalysis.Reuse reuse,
+        IReadOnlyList<Diagnostic> composed, IReadOnlySet<Flow.RoutineKey> readers)
+    {
         // Which modules place which others follows from the files alone. Which routine a routine
         // falls through into across a `.place` follows from the layouts of every file in its
         // translation unit, so an edit to any module of a translation unit can change it for the
         // others, and the placements are worked out again after any change.
+        var program = analysis.Program;
         var placements = Placements.Of(reuse.Trees);
         return analysis with
         {
             Diagnostics = Collected(project, analysis.Cpu, cpu, program, reuse, [
-                .. registers, .. placements.Diagnostics,
+                .. composed, .. placements.Diagnostics,
                 .. Flow.RunningOnChecks.Check(program, analysis.Files, placements),
                 .. OutputNames.Collisions(analysis, placements)]),
             Reused = reuse,
@@ -548,6 +632,16 @@ public static class Compiler
             CallerStackReaders = readers,
         };
     }
+
+    /// <summary>
+    /// Returns what an analysis that leaves the program-wide answers for later carries over from
+    /// <paramref name="previous"/>. Its program-wide diagnostics are moved to follow the edit,
+    /// and one in text the edit replaced is dropped, since only working the answers out again can
+    /// say whether it still holds.
+    /// </summary>
+    private static (IReadOnlyList<Diagnostic>, IReadOnlySet<Flow.RoutineKey>) Carried(
+        ProgramAnalysis previous, ProgramAnalysis.Reuse reuse, Func<Diagnostic, Diagnostic?> moved) =>
+        ([.. reuse.Composed.Select(moved).OfType<Diagnostic>()], previous.CallerStackReaders);
 
     /// <summary>
     /// Analyzes one file once its names are resolved. Returns the file's layout, its control flow

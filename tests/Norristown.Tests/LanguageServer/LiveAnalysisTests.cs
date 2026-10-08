@@ -22,7 +22,6 @@ public sealed class LiveAnalysisTests
             Interlocked.Increment(ref runs);
             throw new InvalidOperationException("a bug in the analysis");
         });
-        (IReadOnlyCollection<SyntaxTree>, ProjectSettings) Inputs() => ([], ProjectSettings.None);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => live.AnalysisAsync(Inputs, TestTimeout.Token()));
         await Assert.ThrowsAsync<InvalidOperationException>(() => live.AnalysisAsync(Inputs, TestTimeout.Token()));
@@ -31,6 +30,56 @@ public sealed class LiveAnalysisTests
         live.Invalidate();
         await Assert.ThrowsAsync<InvalidOperationException>(() => live.AnalysisAsync(Inputs, TestTimeout.Token()));
         Assert.Equal(2, runs);
+    }
+
+    /// <summary>
+    /// A request that needs the program-wide answers settles the analysis once, and from then on
+    /// every request for the same files gets the settled analysis.
+    /// </summary>
+    [Fact]
+    public async Task ASettledAnalysisIsWorkedOutOnceAndShared()
+    {
+        var settled = Compiler.Analyze([SyntaxTree.Parse("main.nt65", ".module main\n")], ProjectSettings.None);
+        var unsettled = settled with { IsSettled = false };
+        var settles = 0;
+        var live = new LiveAnalysis((_, _, _, _) => unsettled, (_, _) =>
+        {
+            Interlocked.Increment(ref settles);
+            return settled;
+        });
+
+        Assert.Same(unsettled, await live.AnalysisAsync(Inputs, TestTimeout.Token()));
+        Assert.Equal(0, settles);
+        Assert.Same(settled, await live.AnalysisAsync(Inputs, TestTimeout.Token(), settled: true));
+        Assert.Same(settled, await live.AnalysisAsync(Inputs, TestTimeout.Token(), settled: true));
+        Assert.Same(settled, await live.AnalysisAsync(Inputs, TestTimeout.Token()));
+        Assert.Equal(1, settles);
+    }
+
+    /// <summary>
+    /// Settling runs beside the next edit's analysis rather than before it, so a keystroke never
+    /// waits for it, and the edit stops it.
+    /// </summary>
+    [Fact]
+    public async Task AnEditStopsSettlingWithoutWaitingForIt()
+    {
+        var settled = Compiler.Analyze([SyntaxTree.Parse("main.nt65", ".module main\n")], ProjectSettings.None);
+        var unsettled = settled with { IsSettled = false };
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var live = new LiveAnalysis((_, _, _, _) => unsettled, (analysis, cancellation) =>
+        {
+            started.TrySetResult();
+            cancellation.WaitHandle.WaitOne();
+            cancellation.ThrowIfCancellationRequested();
+            return analysis;
+        });
+
+        var settling = live.AnalysisAsync(Inputs, TestTimeout.Token(), settled: true);
+        await started.Task.WaitAsync(TestTimeout.Token());
+        live.Invalidate();
+
+        Assert.Same(unsettled, await live.AnalysisAsync(Inputs, TestTimeout.Token()));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => settling);
     }
 
     /// <summary>
@@ -49,4 +98,6 @@ public sealed class LiveAnalysisTests
 
         Assert.IsType<InvalidOperationException>(Assert.Single(failures));
     }
+
+    private static (IReadOnlyCollection<SyntaxTree>, ProjectSettings) Inputs() => ([], ProjectSettings.None);
 }

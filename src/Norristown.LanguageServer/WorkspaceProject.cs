@@ -138,7 +138,10 @@ internal sealed class WorkspaceProject
     /// </summary>
     /// <param name="open">The documents the client has open.</param>
     /// <param name="cancellation">Stops this request waiting for the analysis.</param>
-    public Task<ProgramAnalysis> AnalysisAsync(IEnumerable<Document> open, CancellationToken cancellation) =>
+    /// <param name="settled">
+    /// Whether to wait for the program-wide answers. See <see cref="ProgramAnalysis.IsSettled"/>.
+    /// </param>
+    public Task<ProgramAnalysis> AnalysisAsync(IEnumerable<Document> open, CancellationToken cancellation, bool settled = false) =>
         analysis.AnalysisAsync(
             () =>
             {
@@ -147,5 +150,6 @@ internal sealed class WorkspaceProject
                     sources[document.Tree.Path] = document.Tree;
                 return ([.. sources.Values], Settings);
             },
-            cancellation);
+            cancellation,
+            settled);
 }

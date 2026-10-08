@@ -165,6 +165,36 @@ public sealed class IncrementalAnalysisTests
     }
 
     /// <summary>
+    /// An analysis that leaves the program-wide answers for later carries the program-wide
+    /// diagnostics from before the edit, so a warning that a change to the routine called removes
+    /// stays at the call until the analysis is settled. Settling then finds what an analysis from scratch finds, and leaves the
+    /// unsettled analysis as it was.
+    /// </summary>
+    [Fact]
+    public void AnUnsettledAnalysisSettlesToWhatAWholeAnalysisFinds()
+    {
+        var lib = SyntaxTree.Parse("lib.nt65", ".module lib\n.segment CODE\n.export .proc helper: keeps x {\n    rts\n}\n");
+        var main = SyntaxTree.Parse("main.nt65",
+            ".module main\n.use lib::helper\n.segment CODE\n.export .proc main {\n    ldy #1\n    jsr helper\n    sty $10\n    rts\n}\n");
+        var project = ProjectSettings.None;
+
+        var first = Compiler.Analyze([lib, main], project, Nothing);
+        Assert.Equal(["unpromised-keep"], first.Diagnostics.Select(d => d.Id));
+
+        var edited = lib.WithChange(new TextChange(lib.Text.IndexOf("keeps x", StringComparison.Ordinal), 7, "keeps x, y"));
+        var unsettled = Compiler.AnalyzeUnsettled([edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
+        Assert.False(unsettled.IsSettled);
+        Assert.Equal(["unpromised-keep"], unsettled.Diagnostics.Select(d => d.Id));
+
+        var settled = Compiler.Settle(unsettled, TestContext.Current.CancellationToken);
+        Assert.True(settled.IsSettled);
+        Assert.Equal(Compiler.Analyze([edited, main], project, Nothing).Problems(), settled.Problems());
+        Assert.Empty(settled.Diagnostics);
+        Assert.Equal(["unpromised-keep"], unsettled.Diagnostics.Select(d => d.Id));
+        Assert.Same(settled, Compiler.Settle(settled, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>
     /// A completed model's symbols are frozen, because the language server reads a model on
     /// several threads at once. An edit to one file builds new symbols for that file, which are
     /// frozen in turn, and keeps every other file's symbols as they are.

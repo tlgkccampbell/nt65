@@ -9,9 +9,10 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Measures what an edit costs, in the two stages in which the server publishes diagnostics.
-/// The first stage is what the typist waits for. It covers applying the edit, the analysis and
-/// the edited file's diagnostics, which are sent at once. The second stage is the whole
-/// program's diagnostics, which are sent once typing has stopped. The benchmark is not part of
+/// The first stage is what the typist waits for. It covers applying the edit, the analysis that
+/// leaves the program-wide answers for later, and the edited file's diagnostics, which are sent
+/// at once. The second stage works the program-wide answers out and gives the whole program's
+/// diagnostics, which are sent once typing has stopped. The benchmark is not part of
 /// the everyday test run. <c>scripts/test.ps1 -Benchmark</c> runs it, and the numbers mean most
 /// from a Release build.
 /// </summary>

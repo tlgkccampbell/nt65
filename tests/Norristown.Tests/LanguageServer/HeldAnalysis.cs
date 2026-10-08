@@ -41,6 +41,6 @@ internal sealed class HeldAnalysis
         Started.TrySetResult();
         using (cancellation.Register(() => Cancelled.TrySetResult()))
             released.Task.Wait(cancellation);
-        return Compiler.Analyze(files, project, binaryLength: null, previous, cancellation);
+        return Compiler.AnalyzeUnsettled(files, project, binaryLength: null, previous, cancellation);
     }
 }
