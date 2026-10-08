@@ -14,6 +14,13 @@ const DELAY = 100;
 // keystroke would shift the code left and right while it is typed.
 const EDIT_DELAY = 300;
 
+// The values of `nt65.margin`, with how the quick pick names each, from least drawn to most.
+const LEVELS = [
+  { level: 'off', label: 'Nothing', detail: 'Draw nothing in front of the lines.' },
+  { level: 'loops', label: 'Loops', detail: 'A bracket over each loop of every routine, with its trip count.' },
+  { level: 'flow', label: 'Loops and flow', detail: 'The loops, and the branches and jumps of the routine at the caret as arrows.' },
+];
+
 // The styles a bracket or an arrow is drawn in. Where they meet, the part drawn in the style that
 // comes first is drawn on top.
 const STYLES = ['caret', 'bracketCaret', 'bracket', 'arrow', 'declared', 'faded'];
@@ -250,12 +257,14 @@ class Margin {
     this.asked = undefined;
   }
 
-  get arrows() {
-    return vscode.workspace.getConfiguration('nt65').get('flowArrows.enabled') === true;
+  // Gets what `nt65.margin` asks for: `off`, `loops`, or `flow`, which adds the caret's arrows.
+  get level() {
+    const level = vscode.workspace.getConfiguration('nt65').get('margin');
+    return LEVELS.some(each => each.level === level) ? level : 'loops';
   }
 
-  get brackets() {
-    return vscode.workspace.getConfiguration('nt65').get('loopBrackets.enabled') !== false;
+  get arrows() {
+    return this.level === 'flow';
   }
 
   applies(editor) {
@@ -268,7 +277,7 @@ class Margin {
   // so with the arrows off a caret that moves asks nothing.
   schedule(editor, delay = DELAY) {
     clearTimeout(this.timer);
-    if (!(this.arrows || this.brackets) || !this.applies(editor)) {
+    if (this.level === 'off' || !this.applies(editor)) {
       this.clear();
       return;
     }
@@ -282,8 +291,7 @@ class Margin {
     const document = editor.document;
     const version = document.version;
     const arrows = this.arrows;
-    const brackets = this.brackets;
-    const key = `${document.uri}@${version}:${brackets}:${arrows ? position.line : ''}`;
+    const key = `${document.uri}@${version}:${arrows ? position.line : ''}`;
     if (key === this.asked) return;
     this.asked = key;
 
@@ -296,7 +304,6 @@ class Margin {
       result = await this.client.sendRequest('nt65/margin', {
         textDocument: { uri: document.uri.toString() },
         position: { line: position.line, character: position.character },
-        brackets,
         arrows,
       }, cancel.token);
     } catch {
@@ -381,9 +388,6 @@ class Margin {
 // Everything the margin needs, registered once.
 function register(context, client) {
   const margin = new Margin(client);
-  const toggle = setting => vscode.workspace.getConfiguration('nt65')
-    .update(setting, !vscode.workspace.getConfiguration('nt65').get(setting, setting === 'loopBrackets.enabled'),
-      vscode.ConfigurationTarget.Global);
   context.subscriptions.push(
     margin.prefix,
     margin.trips,
@@ -403,14 +407,19 @@ function register(context, client) {
       if (event.affectsConfiguration('editor.fontSize') || event.affectsConfiguration('editor.lineHeight')) {
         margin.render();
       }
-      if (!event.affectsConfiguration('nt65.flowArrows.enabled') && !event.affectsConfiguration('nt65.loopBrackets.enabled')) {
-        return;
-      }
+      if (!event.affectsConfiguration('nt65.margin')) return;
       margin.clear();
       if (vscode.window.activeTextEditor) margin.schedule(vscode.window.activeTextEditor);
     }),
-    vscode.commands.registerCommand('nt65.toggleFlowArrows', () => toggle('flowArrows.enabled')),
-    vscode.commands.registerCommand('nt65.toggleLoopBrackets', () => toggle('loopBrackets.enabled')),
+    vscode.commands.registerCommand('nt65.chooseMargin', async () => {
+      const current = margin.level;
+      const picked = await vscode.window.showQuickPick(
+        LEVELS.map(each => ({ ...each, description: each.level === current ? 'current' : undefined })),
+        { placeHolder: 'What the margin shows in front of each routine' });
+      if (picked) {
+        await vscode.workspace.getConfiguration('nt65').update('margin', picked.level, vscode.ConfigurationTarget.Global);
+      }
+    }),
     // The editor open at start-up gets its brackets once the server runs, without waiting for
     // the caret to move.
     client.onDidChangeState(() => {

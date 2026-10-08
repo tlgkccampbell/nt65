@@ -441,8 +441,8 @@ internal sealed class Server : IDisposable
             : null;
 
     /// <summary>
-    /// Returns, as far as the client asks for them, the brackets of the loops in every routine of a
-    /// document and the branches, jumps and declared edges inside the routine that holds a position,
+    /// Returns the brackets of the loops in every routine of a document and, where the client asks
+    /// for them, the branches, jumps and declared edges inside the routine that holds a position,
     /// for the client to draw in front of the lines. The answer is for showing and feeds no
     /// diagnostic.
     /// </summary>
@@ -450,7 +450,7 @@ internal sealed class Server : IDisposable
     public async Task<MarginResult?> MarginAsync(MarginParams request, CancellationToken cancellation) =>
         await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation, settled: true)
             .ConfigureAwait(false) is { } asked
-            ? Margin.At(asked.Analysis, asked.Model, asked.Position, request.Brackets, request.Arrows)
+            ? Margin.At(asked.Analysis, asked.Model, asked.Position, request.Arrows)
             : null;
 
     /// <summary>

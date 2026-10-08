@@ -63,13 +63,8 @@
         "category": "nt65"
       },
       {
-        "command": "nt65.toggleFlowArrows",
-        "title": "Toggle Flow Arrows",
-        "category": "nt65"
-      },
-      {
-        "command": "nt65.toggleLoopBrackets",
-        "title": "Toggle Loop Brackets",
+        "command": "nt65.chooseMargin",
+        "title": "Choose What the Margin Shows",
         "category": "nt65"
       },
       {
@@ -723,15 +718,16 @@
           "default": [],
           "markdownDescription": "Globs, relative to the workspace folder and in the form of `files` in nt65.json, naming files whose problems are shown only while they are open, such as `tests/fixtures/**/*`. Every other file of every project is reported whether or not it is open. The files are still analyzed with their projects."
         },
-        "nt65.flowArrows.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show the branches and jumps of the routine at the caret as arrows in front of its lines. An arrow a `.next` declares has its own colour, and a branch the flags prove one way is faded. Transfers to other routines are not drawn, and a branch back to the top of a loop is drawn by the loop's bracket. `nt65: Toggle Flow Arrows` turns this on and off."
-        },
-        "nt65.loopBrackets.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show each loop of every routine as a bracket in front of its lines, with its trip count after its last line: `×16` for a loop that counts a register down from 16, and `×?` where the program does not say. The bracket of the innermost loop that holds the caret is brighter. `nt65: Toggle Loop Brackets` turns this on and off."
+        "nt65.margin": {
+          "type": "string",
+          "enum": ["off", "loops", "flow"],
+          "enumDescriptions": [
+            "Draw nothing in front of the lines.",
+            "Draw each loop of every routine as a bracket, with its trip count after its last line.",
+            "Draw the loops, and also the branches and jumps of the routine at the caret as arrows."
+          ],
+          "default": "loops",
+          "description": "What nt65 draws in front of the lines of a routine. A loop's bracket is nested where loops nest, and its trip count is `×16` for a loop that counts a register down from 16, and `×?` where the program does not say. The bracket of the innermost loop that holds the caret is brighter. An arrow a `.next` declares has its own colour, a branch the flags prove one way is faded, and transfers to other routines are not drawn. A bracket that starts at its loop's label draws the branches back to it, so they are not arrows as well. `nt65: Choose What the Margin Shows` picks one."
         },
         "nt65.sources.chipLength": {
           "type": "integer",

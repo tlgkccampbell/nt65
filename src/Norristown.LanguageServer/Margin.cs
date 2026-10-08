@@ -24,14 +24,13 @@ internal static class Margin
     public const int MostColumns = 4;
 
     /// <summary>
-    /// Returns, where <paramref name="brackets"/> is set, the brackets of every routine in
-    /// <paramref name="model"/>'s file that has loops and, where <paramref name="arrows"/> is set,
-    /// the arrows of the routine that holds <paramref name="position"/>. It returns null where
-    /// there is nothing to draw.
+    /// Returns the brackets of every routine in <paramref name="model"/>'s file that has loops and,
+    /// where <paramref name="arrows"/> is set, the arrows of the routine that holds
+    /// <paramref name="position"/>. It returns null where there is nothing to draw.
     /// </summary>
-    public static Protocol.MarginResult? At(ProgramAnalysis analysis, SemanticModel model, int position, bool brackets, bool arrows)
+    public static Protocol.MarginResult? At(ProgramAnalysis analysis, SemanticModel model, int position, bool arrows)
     {
-        var routines = (brackets ? LoopBrackets.In(analysis, model) : [])
+        var routines = LoopBrackets.In(analysis, model)
             .Select(found => (found.Routine, found.Loops, Arrows: (IReadOnlyList<FlowArrow>)[]))
             .ToList();
         if (arrows && FlowArrows.At(analysis, model, position) is { Arrows.Count: > 0 } caret)

@@ -82,8 +82,7 @@ public sealed class MarginRequestsTests
     /// <summary>
     /// Brackets take the columns furthest from the code, with the outer loop furthest. A bracket
     /// that starts at its header stands for the branch back, which is then not an arrow, and an
-    /// exit branch is an arrow nearer the code that crosses both brackets. Without the brackets,
-    /// the branches back are arrows again.
+    /// exit branch is an arrow nearer the code that crosses both brackets.
     /// </summary>
     [Fact]
     public async Task BracketsGoOutsideTheArrows()
@@ -120,12 +119,6 @@ public sealed class MarginRequestsTests
         Assert.Equal(2, quiet.Columns);
         Assert.Equal([1, 0], quiet.Brackets.Select(bracket => bracket.Column));
         Assert.Empty(quiet.Arrows);
-
-        var bare = Assert.Single((await MarginAsync(client, position, arrows: true, timeout, brackets: false))!.Routines);
-        Assert.Empty(bare.Brackets);
-        Assert.Equal(
-            [(8, 13), (10, 6), (12, 4)],
-            bare.Arrows.Select(arrow => (arrow.From, arrow.To)));
     }
 
     /// <summary>
@@ -174,8 +167,7 @@ public sealed class MarginRequestsTests
         Assert.Empty(routines[1].Arrows);
     }
 
-    private static Task<MarginResult?> MarginAsync(
-        TestClient client, Position position, bool arrows, CancellationToken timeout, bool brackets = true) =>
+    private static Task<MarginResult?> MarginAsync(TestClient client, Position position, bool arrows, CancellationToken timeout) =>
         client.RequestAsync<MarginResult?>("nt65/margin",
-            new MarginParams(new TextDocumentIdentifier(Uri), position, brackets, arrows), timeout);
+            new MarginParams(new TextDocumentIdentifier(Uri), position, arrows), timeout);
 }

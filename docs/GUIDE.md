@@ -1965,33 +1965,34 @@ everything below works across modules.
   leaving the highlights in place, and *Peek Input Sources* lists them all. The setting
   `nt65.sources.enabled`, or *Toggle Input Sources*, turns the feature off. It only shows what
   the analysis found and never reports a problem.
-- **Flow arrows** draw where control goes in the routine at the caret. Each branch, jump and
-  edge a `.next` declares is an arrow in front of the routine's lines, from the line that
-  transfers to the label it goes to. A shorter arrow goes nearer the code, so an arrow inside
-  another is drawn inside it. Every line of the routine gets the same width, so the code does
-  not jog, and only the caret's routine is drawn, so a long file stays quiet.
+- **The margin** in front of a routine's lines draws its loops and, if asked, where control
+  goes. The setting `nt65.margin`, or *Choose What the Margin Shows*, picks how much: `off`
+  draws nothing, `loops` draws the loops of every routine, and `flow` also draws the branches
+  and jumps of the routine at the caret. It is `loops` by default. Every line of a routine
+  gets the same width, so the code does not jog.
 
-  The arrow that starts or ends on the caret's line is drawn thicker, in a colour of its own.
-  One a `.next` declares has another colour. A branch the flags prove always or never taken is
+  Each loop is a bracket from its first line to its last, nested where loops nest. A trip
+  count follows the last line: `×16` for a loop that counts a register down from 16, which is
+  the count the cycle hints multiply by, and `×?` for one whose count the program does not
+  say. The bracket of the innermost loop that holds the caret is brighter. A branch back that
+  the flags prove never taken makes no loop.
+
+  With `flow`, each branch, jump and edge a `.next` declares in the caret's routine is an arrow
+  from the line that transfers to the label it goes to. Only the caret's routine has arrows, so
+  a long file stays quiet. Brackets take the columns furthest from the code and arrows the
+  columns nearest it, and a shorter arrow goes nearer the code than a longer one. An exit
+  branch therefore crosses the brackets it leaves. Where a loop starts at the label its
+  branches go back to, the bracket is the drawing of those branches. Its top ends in an
+  arrowhead, an earlier branch back joins it as a tee, and none of them is drawn as an arrow as
+  well. A loop entered by a jump to its test at the bottom gets a bracket from its body to its
+  test, and its branch back stays an arrow.
+
+  The arrow that starts or ends on the caret's line is drawn thicker, in a color of its own.
+  One a `.next` declares has another color. A branch the flags prove always or never taken is
   faded, and so is an arrow from a line nothing reaches. Only transfers that land in the
   routine are drawn: a call returns to the line after it, and a tail call or a branch to
-  another routine leaves it. The arrows take at most four columns, and hovering the line of one
-  that had no room says where it goes. The setting `nt65.flowArrows.enabled`, or *Toggle Flow
-  Arrows*, turns them on; they are off by default.
-- **Loop brackets** draw each loop of every routine as a bracket in front of its lines, from
-  the loop's first line to its last, nested where loops nest. A trip count follows the last
-  line: `×16` for a loop that counts a register down from 16, which is the count the cycle
-  hints multiply by, and `×?` for one whose count the program does not say. The bracket of the
-  innermost loop that holds the caret is brighter.
-
-  Brackets and flow arrows share the margin. Brackets take the columns furthest from the code
-  and arrows the columns nearest it, so an exit branch crosses the brackets it leaves. Where a
-  loop starts at the label its branches go back to, the bracket is the drawing of those
-  branches: its top ends in an arrowhead, an earlier branch back joins it as a tee, and none of
-  them is drawn as an arrow as well. A loop entered by a jump to its test at the bottom gets a
-  bracket from its body to its test, and its branch back stays an arrow. A branch back that the
-  flags prove never taken makes no loop. Together they take at most four columns. The setting
-  `nt65.loopBrackets.enabled`, or *Toggle Loop Brackets*, turns the brackets off.
+  another routine leaves it. Brackets and arrows together take at most four columns, and
+  hovering the line of an arrow that had no room says where it goes.
 - **The direct page map**, in the nt65 view of the activity bar, shows how routines share the
   zero page, or on the 65816 each direct page. Each page is a value of D, with the segments
   reached through it, the locations on it and, under each location, the calls that lead to the
@@ -2071,8 +2072,8 @@ everything below works across modules.
   either text highlights the matching lines in the other. *Show Macro Expansion* writes a macro
   call out. *Select Configuration* chooses which configuration the editor analyzes, *Toggle
   Cycle Counts* switches the cycle hints on, *Toggle Input Sources* switches the
-  highlights of where an instruction's inputs come from, *Toggle Flow Arrows* switches the
-  arrows for the caret's routine, and *Toggle Loop Brackets* switches the brackets of loops.
+  highlights of where an instruction's inputs come from, and *Choose What the
+  Margin Shows* picks between nothing, loops, and loops with the caret routine's flow arrows.
 - **Formatting:** the same layout `nt65 fmt` writes.
 
 ## The command line

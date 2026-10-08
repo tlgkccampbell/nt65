@@ -32,17 +32,17 @@ build tasks and a schema for the project file.
   the last store to it as its source, and a line that might also have changed it, such as a
   store through a pointer, gets a thin dashed bar and a faded tag ending in `?`. **Shift+Alt+PageDown** and
   **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
-- **Where control goes.** Rest the caret in a routine and its branches and jumps are drawn as
-  arrows in front of its lines, from each one to the label it goes to, with shorter arrows
-  nearer the code. The arrow on the caret's line is drawn thicker and in its own colour, one a
-  `.next` declares has another colour, and a branch the flags prove always or never taken is
-  faded. Calls, lines that run on into the next, and transfers to other routines are not drawn.
-  The arrows take at most four columns, and the hover names any that had no room.
-- **Loops.** Each loop of every routine has a bracket in front of its lines, nested where loops
-  nest, and its trip count after its last line: `×16` for a loop that counts a register down
-  from 16, `×?` where the program does not say. The bracket of the innermost loop around the
-  caret is brighter. With the arrows on, brackets take the outer columns and arrows the inner
-  ones, and a bracket that starts at its loop's label stands for the branches back to it.
+- **Loops and where control goes.** Each loop of every routine has a bracket in front of its
+  lines, nested where loops nest, and its trip count after its last line: `×16` for a loop that
+  counts a register down from 16, `×?` where the program does not say. The bracket of the
+  innermost loop around the caret is brighter. Set `nt65.margin` to `flow` and the branches and
+  jumps of the caret's routine are drawn too, as arrows from each one to the label it goes to.
+  Brackets take the outer columns and arrows the inner ones, with shorter arrows nearer the
+  code, and a bracket that starts at its loop's label stands for the branches back to it. The
+  arrow on the caret's line is drawn thicker and in its own color, one a `.next` declares has
+  another color, and a branch the flags prove always or never taken is faded. Calls, lines that
+  run on into the next, and transfers to other routines are not drawn. Brackets and arrows take
+  at most four columns, and the hover names any arrow that had no room.
 - **Where the direct page goes.** The nt65 view in the activity bar lists every direct page the
   program reaches memory through: each `D` with its segments, the locations in it and the
   routines that use each one, down the calls that reach them. Colour says how a location is
@@ -120,8 +120,7 @@ The extension carries the language server and runs it on the installed .NET 10 r
 | `nt65.inlayHints.stateChanges`, `.longBranches`, `.impliedValues`, `.parameterNames` | each kind of hint, on unless switched off |
 | `nt65.sources.chipLength` | the most characters the chips after the caret line may take, 60 unless set; a `+N` box counts the rest, and 0 means no limit |
 | `nt65.sources.enabled` | where the values an instruction reads were set, shown when the caret rests on it; on unless switched off, and **nt65: Toggle Input Sources** switches it |
-| `nt65.flowArrows.enabled` | arrows for the branches and jumps of the routine at the caret; off unless switched on, and **nt65: Toggle Flow Arrows** switches it |
-| `nt65.loopBrackets.enabled` | a bracket over each loop of every routine, with its trip count after its last line; on unless switched off, and **nt65: Toggle Loop Brackets** switches it |
+| `nt65.margin` | what is drawn in front of a routine's lines: `off`, `loops` for a bracket and trip count on each loop of every routine, or `flow` for the loops and the arrows of the routine at the caret; `loops` unless set, and **nt65: Choose What the Margin Shows** picks one |
 | `nt65.inlayHints.cycles` | cycle counts at the end of every instruction; off unless switched on |
 | `nt65.lineLength` | the longest a line may be before the editor suggests laying out a call's arguments, a set or a list of parameters one item to a line, or writing a list directive's items as a block, 100 unless set; 0 for no suggestion |
 | `nt65.diagnostics.onlyWhileOpen` | globs, in the form of `files` in nt65.json, naming files whose problems show only while they are open, such as test inputs that are wrong on purpose; none unless set |
