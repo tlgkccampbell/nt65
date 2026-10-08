@@ -572,9 +572,11 @@
   // Returns the strip under the grid that says what its colours and shapes mean.
   function legend() {
     const strip = h('div', 'legend');
-    // Each key is a swatch drawn the way the cells are, a few words, and a sentence on hover.
+    // The keys sit in groups under small headings, two to a row. Each key is a swatch drawn the
+    // way the cells are, a few words, and a sentence on hover.
+    const group = text => strip.append(h('span', 'g', text));
     const key = (text, title, setup) => {
-      const span = h('span');
+      const span = h('span', 'k');
       span.title = title;
       const swatch = h('i');
       setup(swatch);
@@ -583,18 +585,21 @@
     };
     const fill = colour => swatch => { swatch.style.background = colour; };
     const classes = (...names) => swatch => swatch.classList.add(...names);
-    key(RELATIONS.shared, 'more than one routine uses it', fill('var(--shared)'));
-    key(RELATIONS.nested, 'a routine relies on it across a call to a routine that uses it as a temporary of its own', fill('var(--nested)'));
-    key(RELATIONS.irq, 'an interrupt and the code it interrupts both use it', fill('var(--irq)'));
+    group('who uses a location');
     key(RELATIONS.own, 'one routine uses it', fill('var(--own)'));
+    key(RELATIONS.shared, 'more than one routine uses it', fill('var(--shared)'));
+    key(RELATIONS.irq, 'an interrupt and the code it interrupts both use it', fill('var(--irq)'));
+    key(RELATIONS.nested, 'a routine relies on it across a call to a routine that uses it as a temporary of its own', fill('var(--nested)'));
     key('address taken', 'no instruction reaches it directly, but its address is taken, so it is used through a pointer or an index', fill('var(--referenced)'));
     key('never accessed', 'declared, but nothing reaches it or takes its address', classes('neverkey'));
-    key('free', 'nothing is placed here', fill('var(--free)'));
-    key('another page', 'another page covers these bytes, with nothing of its own placed here', classes('cell', 'other'));
-    key("another page's location", 'a location on another page takes these bytes', classes('cell', 'otherused'));
-    key('this page and another', 'a location on this page and one on another page both take the byte', classes('cell', 'clash'));
-    key('collision', 'two of this page’s locations take the byte, and the layout did not place them there on purpose', classes('cell', 'twin'));
+    group('bytes two locations take');
     key('alias', 'two names for one byte, on purpose: the source fixes both addresses, or the config places both', classes('cell', 'alias'));
+    key('collision', 'two of this page’s locations take the byte, and the layout did not place them there on purpose', classes('cell', 'twin'));
+    key('this page and another', 'a location on this page and one on another page both take the byte', classes('cell', 'clash'));
+    key("another page's location", 'a location on another page takes these bytes, and none of this page’s does', classes('cell', 'otherused'));
+    group('the rest of the page');
+    key('free', 'nothing is placed here', fill('var(--free)'));
+    key('another page', 'another page covers these bytes, with nothing placed here on either', classes('cell', 'other'));
     key('colder → hotter', 'a location is brighter the more often its instructions run in one pass', classes('heat'));
     key('one location', 'one outline is one location', classes('shape'));
     return strip;
