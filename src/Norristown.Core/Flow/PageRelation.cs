@@ -13,7 +13,10 @@ public enum PageRelation
     /// </summary>
     Nested,
 
-    /// <summary>An interrupt handler and the code it interrupts both use the location.</summary>
+    /// <summary>
+    /// An interrupt and the code it interrupts both use the location. One routine that runs both
+    /// in an interrupt and outside one is enough.
+    /// </summary>
     Interrupt,
 
     /// <summary>More than one routine uses the location.</summary>

@@ -240,6 +240,114 @@ public sealed class DirectPageMapTests
                 """));
     }
 
+    /// <summary>
+    /// A routine that writes a location to clear it and then calls a routine that only sets it is
+    /// using the call to return a value. The callee does not use the location as a temporary, so
+    /// reading it after the call is no hazard.
+    /// </summary>
+    [Fact]
+    public void ACallThatOnlySetsALocationIsNoHazard()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Shared hazard=False used=1 direct=3",
+                "  flag +0 x1 .byte Shared",
+                "    main Temp 2",
+                "    set_flag Out 1",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data flag: .byte
+                .segment CODE
+                .export .proc main {
+                    lda #0
+                    sta flag
+                    jsr set_flag
+                    lda flag
+                    rts
+                }
+                .proc set_flag {
+                    lda #1
+                    sta flag
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A routine that relies on a location across a call is a hazard when the callee, or a
+    /// routine it calls, writes the location and then reads it back as a temporary of its own.
+    /// </summary>
+    [Fact]
+    public void ACallThatUsesALocationAsATemporaryIsAHazard()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Nested hazard=True used=1 direct=4",
+                "  tmp +0 x1 .byte Nested",
+                "    main Temp 2",
+                "      ⚠ live across `jsr outer` @ jsr outer",
+                "      ⚠ `outer` sets it @ jsr inner",
+                "      ◦ read again @ lda tmp",
+                "    inner Temp 2",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data tmp: .byte
+                .segment CODE
+                .export .proc main {
+                    lda #0
+                    sta tmp
+                    jsr outer
+                    lda tmp
+                    rts
+                }
+                .proc outer {
+                    jsr inner
+                    rts
+                }
+                .proc inner {
+                    stx tmp
+                    lda tmp
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A helper that both the program and an interrupt handler call can be interrupted part-way
+    /// through its use of a location and run again by the handler. A location only that helper
+    /// uses is shared with an interrupt, and its use runs both in an interrupt and outside one.
+    /// </summary>
+    [Fact]
+    public void AHelperCalledFromAHandlerAndTheProgramSharesWithAnInterrupt()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=False used=1 direct=2",
+                "  scratch +0 x1 .byte Interrupt",
+                "    util Temp 2 irq main",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data scratch: .byte
+                .segment CODE
+                .export .proc main {
+                    jsr util
+                    rts
+                }
+                .proc util {
+                    sta scratch
+                    lda scratch
+                    rts
+                }
+                .export .proc nmi: interrupt {
+                    jsr util
+                    rti
+                }
+                """));
+    }
+
     /// <summary>Returns the map of <paramref name="text"/> as lines of text, one for each page, location, use and note.</summary>
     private static List<string> Render(string cpu, string text)
     {
@@ -260,7 +368,8 @@ public sealed class DirectPageMapTests
                 lines.Add($"  {location.Symbol.Name} +{location.Offset} x{location.Size} {location.Type} {location.Relation}{(location.IsFixed ? " fixed" : "")}");
                 foreach (var use in location.Uses)
                 {
-                    lines.Add($"    {use.Routine.Name} {use.Role} {use.Accesses.Count}{(use.IsHandler ? " handler" : "")}{(use.IsUnknownPage ? " unknown" : "")}");
+                    lines.Add($"    {use.Routine.Name} {use.Role} {use.Accesses.Count}{(use.IsHandler ? " handler" : "")}{(use.IsUnknownPage ? " unknown" : "")}"
+                        + $"{(use.InInterrupt && !use.IsHandler ? " irq" : "")}{(use.InInterrupt && use.InMain ? " main" : "")}");
                     foreach (var note in use.Hazards)
                         lines.Add($"      {note.Glyph} {note.Text} @ {note.At?.GetText().Trim()}");
                 }

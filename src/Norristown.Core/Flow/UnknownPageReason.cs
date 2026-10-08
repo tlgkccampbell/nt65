@@ -4,8 +4,8 @@ namespace Norristown.Flow;
 public enum UnknownPageReason
 {
     /// <summary>
-    /// An interrupt handler runs with whatever direct page the code it interrupted held, and has
-    /// not set its own.
+    /// An interrupt handler, or a routine it reaches, runs with whatever direct page the code it
+    /// interrupted held, and has not set its own.
     /// </summary>
     Interrupted,
 

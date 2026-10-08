@@ -50,6 +50,7 @@ internal static class DirectPages
                     Declaration(routine.Key, uriOf),
                     routine.First().Use.IsHandler,
                     routine.First().Use.InInterrupt,
+                    routine.First().Use.InMain,
                     [.. routine.Select(use => new Protocol.DirectPageUnknownUse(
                         use.Location.Name,
                         use.Home is { } home ? Id(home) : null,
@@ -230,6 +231,7 @@ internal static class DirectPages
                     Declaration(routine, uriOf),
                     first?.IsHandler ?? routine.Signature?.IsInterrupt == true,
                     first?.InInterrupt ?? false,
+                    first?.InMain ?? false,
                     use?.IsUnknownPage ?? false,
                     use is null ? null : Name(use.Role),
                     [.. via.Select(at => Line(at, uriOf))],

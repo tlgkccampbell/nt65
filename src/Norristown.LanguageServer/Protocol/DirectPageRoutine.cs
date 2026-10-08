@@ -4,7 +4,11 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Name">The routine's name.</param>
 /// <param name="Declaration">Where its name is declared.</param>
 /// <param name="Handler">Whether it is an interrupt handler.</param>
-/// <param name="Interrupt">Whether it runs only in an interrupt.</param>
+/// <param name="Interrupt">
+/// Whether it runs in an interrupt, as a handler or a routine a handler reaches. It may run outside
+/// one as well.
+/// </param>
+/// <param name="Main">Whether it runs outside interrupts, reached from where the rest of the program starts.</param>
 /// <param name="Unknown">Whether it reaches the location while D is not known.</param>
 /// <param name="Role">
 /// What it does with the location, which is <c>in</c>, <c>out</c>, <c>inout</c>, <c>temp</c>,
@@ -20,5 +24,5 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Hazards">The facts that make up a hazard in it, or none.</param>
 /// <param name="Children">The routines it calls that lead to one that reaches the location.</param>
 internal sealed record DirectPageRoutine(
-    string Name, Location Declaration, bool Handler, bool Interrupt, bool Unknown, string? Role, IReadOnlyList<Location> Via, long Runs, bool RunsUncounted,
+    string Name, Location Declaration, bool Handler, bool Interrupt, bool Main, bool Unknown, string? Role, IReadOnlyList<Location> Via, long Runs, bool RunsUncounted,
     IReadOnlyList<DirectPageAccess> Accesses, IReadOnlyList<DirectPageNote> Hazards, IReadOnlyList<DirectPageRoutine> Children);

@@ -446,38 +446,54 @@ public sealed class DirectPageMap
         /// Returns what each routine does with each location it reaches, worked out from its own
         /// instructions, with the hazards found in it.
         /// </summary>
+        /// <remarks>
+        /// The roles are worked out for every routine before any hazard is, because whether a call
+        /// clobbers a location depends on the role the routines it reaches give it.
+        /// </remarks>
         private Dictionary<(Symbol Routine, Symbol Location, bool Unknown), PageUse> Uses(HashSet<Symbol> interrupt, HashSet<Symbol> main)
         {
-            var uses = new Dictionary<(Symbol, Symbol, bool), PageUse>();
-            foreach (var group in found.GroupBy(access => access.Region))
+            var regions = found.GroupBy(access => access.Region).Select(group => (
+                Region: group.Key!,
+                Accesses: group.ToList(),
+                ByStep: group.ToLookup(access => access.Step.Key),
+                Tracked: group.Where(access => !access.Unknown).Select(access => access.Location).ToHashSet())).ToList();
+
+            // The role each routine gives each location it reaches while D is known.
+            var roles = new Dictionary<(Symbol Routine, Symbol Location), PageRole>();
+            var readsFirst = new Dictionary<FlowRegion, HashSet<Symbol>>();
+            foreach (var (region, accesses, byStep, tracked) in regions)
             {
                 cancellation.ThrowIfCancellationRequested();
-                var region = group.Key!;
+                var first = Walk(region, byStep, tracked, null).ReadsFirst;
+                readsFirst[region] = first;
+                foreach (var location in accesses.Where(access => !access.Unknown).GroupBy(access => access.Location))
+                    roles.TryAdd((Current(region.Routine), location.Key), RoleOf(location.ToList(), location.Key, false, first));
+            }
+
+            var uses = new Dictionary<(Symbol, Symbol, bool), PageUse>();
+            foreach (var (region, accesses, byStep, tracked) in regions)
+            {
+                cancellation.ThrowIfCancellationRequested();
                 var routine = Current(region.Routine);
-                var byStep = group.ToLookup(access => access.Step.Key);
-                var tracked = group.Where(access => !access.Unknown).Select(access => access.Location).ToHashSet();
-                var (readsFirst, hazards) = Walk(region, byStep, tracked);
-                var inInterrupt = interrupt.Contains(routine) && !main.Contains(routine);
-                foreach (var location in group.GroupBy(access => (access.Location, access.Unknown)))
+                var hazards = Walk(region, byStep, tracked, roles).Hazards;
+                var handler = IsHandler(routine);
+                var inInterrupt = handler || interrupt.Contains(routine);
+
+                // A routine that neither the program's starts nor a handler reaches, such as one
+                // only a loop of calls reaches, is taken as the rest of the program's.
+                var inMain = !handler && (main.Contains(routine) || !interrupt.Contains(routine));
+                foreach (var location in accesses.GroupBy(access => (access.Location, access.Unknown)))
                 {
-                    var accesses = location.ToList();
-                    var hardware = homes[location.Key.Location].IsMmio;
-                    var reads = accesses.Any(access => access.Reads);
-                    var writes = accesses.Any(access => access.Writes);
-                    var first = location.Key.Unknown ? accesses[0].Reads : readsFirst.Contains(location.Key.Location) || (reads && !writes);
-                    var role = hardware ? writes ? PageRole.Write : PageRole.Read
-                        : first && writes ? PageRole.InOut
-                        : first ? PageRole.In
-                        : reads ? PageRole.Temp
-                        : PageRole.Out;
+                    var list = location.ToList();
+                    var role = RoleOf(list, location.Key.Location, location.Key.Unknown, readsFirst[region]);
                     var notes = location.Key.Unknown
-                        ? UnknownNotes(region, inInterrupt)
+                        ? UnknownNotes(inInterrupt)
                         : hazards.GetValueOrDefault(location.Key.Location) ?? [];
-                    notes = [.. notes, .. Strays(accesses)];
+                    notes = [.. notes, .. Strays(list)];
                     var use = new PageUse(
                         routine, role,
-                        [.. accesses.Select(access => new PageAccess(access.Line, access.Reads, access.Writes, access.Times, access.InUncountedLoop))],
-                        notes, IsHandler(routine), inInterrupt, location.Key.Unknown);
+                        [.. list.Select(access => new PageAccess(access.Line, access.Reads, access.Writes, access.Times, access.InUncountedLoop))],
+                        notes, handler, inInterrupt, inMain, location.Key.Unknown);
                     uses[(routine, location.Key.Location, location.Key.Unknown)] = use;
                 }
             }
@@ -485,11 +501,28 @@ public sealed class DirectPageMap
         }
 
         /// <summary>
-        /// Returns the notes for a routine that reaches memory through D while it is not known.
-        /// In an interrupt, that is whatever page the interrupted code held.
+        /// Returns the role a routine gives a location, from the routine's accesses to it and the
+        /// locations it reads before it writes them.
         /// </summary>
-        private static IReadOnlyList<PageNote> UnknownNotes(FlowRegion region, bool inInterrupt) =>
-            inInterrupt || IsHandler(region.Routine) ? [new PageNote("⚠", "D is the interrupted code's", null)] : [];
+        private PageRole RoleOf(List<Found> accesses, Symbol location, bool unknown, HashSet<Symbol> readsFirst)
+        {
+            var reads = accesses.Any(access => access.Reads);
+            var writes = accesses.Any(access => access.Writes);
+            if (homes[location].IsMmio)
+                return writes ? PageRole.Write : PageRole.Read;
+            var first = unknown ? accesses[0].Reads : readsFirst.Contains(location) || (reads && !writes);
+            return first && writes ? PageRole.InOut
+                : first ? PageRole.In
+                : reads ? PageRole.Temp
+                : PageRole.Out;
+        }
+
+        /// <summary>
+        /// Returns the notes for a routine that reaches memory through D while it is not known.
+        /// When an interrupt reaches the routine, D there is whatever page the interrupted code held.
+        /// </summary>
+        private static IReadOnlyList<PageNote> UnknownNotes(bool inInterrupt) =>
+            inInterrupt ? [new PageNote("⚠", "D is the interrupted code's", null)] : [];
 
         /// <summary>
         /// Returns a note for each access that reaches a location through a page other than its own,
@@ -507,11 +540,21 @@ public sealed class DirectPageMap
 
         /// <summary>
         /// Walks one routine's blocks and returns the locations it reads before it writes them, and
-        /// the hazards where it relies on a location across a call to a routine that writes it
-        /// without reading it first.
+        /// the hazards where it relies on a location across a call that uses it as a temporary.
         /// </summary>
+        /// <param name="region">The routine's region.</param>
+        /// <param name="byStep">The routine's accesses, by the step that makes them.</param>
+        /// <param name="tracked">The locations the routine reaches while D is known.</param>
+        /// <param name="roles">
+        /// The role each routine gives each location, or null to look for no hazards. A call
+        /// clobbers a location only when it writes the location without reading it first, and
+        /// the callee or a routine it reaches gives the location the <see cref="PageRole.Temp"/>
+        /// role. A call that only sets the location is how a routine returns a value, which is
+        /// no hazard.
+        /// </param>
         private (HashSet<Symbol> ReadsFirst, Dictionary<Symbol, List<PageNote>> Hazards) Walk(
-            FlowRegion region, ILookup<StepKey, Found> byStep, HashSet<Symbol> tracked)
+            FlowRegion region, ILookup<StepKey, Found> byStep, HashSet<Symbol> tracked,
+            Dictionary<(Symbol Routine, Symbol Location), PageRole>? roles)
         {
             var readsFirst = new HashSet<Symbol>();
             var hazards = new Dictionary<Symbol, List<PageNote>>();
@@ -556,12 +599,19 @@ public sealed class DirectPageMap
                 var clobbered = held.Clobbered;
                 foreach (var target in block.Calls)
                 {
-                    var reads = memory.ReadsOf(target).Select(location => location.Root).OfType<Symbol>().Select(Current).ToHashSet();
-                    var writes = memory.WritesOf(target).Select(location => location.Root).OfType<Symbol>().Select(Current).ToHashSet();
-                    foreach (var location in held.May)
+                    if (roles is not null)
                     {
-                        if (tracked.Contains(location) && writes.Contains(location) && !reads.Contains(location) && !clobbered.ContainsKey(location))
-                            clobbered = clobbered.Add(location, (Current(RegisterWalk.Owner(target) ?? target), at));
+                        var callee = Current(RegisterWalk.Owner(target) ?? target);
+                        var reads = memory.ReadsOf(target).Select(location => location.Root).OfType<Symbol>().Select(Current).ToHashSet();
+                        var writes = memory.WritesOf(target).Select(location => location.Root).OfType<Symbol>().Select(Current).ToHashSet();
+                        foreach (var location in held.May)
+                        {
+                            if (tracked.Contains(location) && writes.Contains(location) && !reads.Contains(location) && !clobbered.ContainsKey(location)
+                                && IsTempBelow(callee, location, roles))
+                            {
+                                clobbered = clobbered.Add(location, (callee, at));
+                            }
+                        }
                     }
                     var stored = memory.AlwaysWrittenBy(target).Select(location => location.Root).OfType<Symbol>().Select(Current).ToImmutableHashSet();
                     always = always is null ? stored : always.Intersect(stored);
@@ -589,6 +639,26 @@ public sealed class DirectPageMap
         private SyntaxNode? WriteIn(Symbol routine, Symbol location) =>
             found.FirstOrDefault(access => access.Routine == routine && access.Location == location && access.Writes && !access.Unknown)?.Line
             ?? (routines.TryGetValue(routine, out var known) && known.Region.Blocks is [{ Steps: [var first, ..] }, ..] ? first.Statement : null);
+
+        /// <summary>
+        /// Returns whether <paramref name="routine"/>, or a routine it reaches through its calls,
+        /// gives <paramref name="location"/> the <see cref="PageRole.Temp"/> role.
+        /// </summary>
+        private bool IsTempBelow(Symbol routine, Symbol location, Dictionary<(Symbol Routine, Symbol Location), PageRole> roles)
+        {
+            var seen = new HashSet<Symbol>();
+            var pending = new Stack<Symbol>([routine]);
+            while (pending.TryPop(out var next))
+            {
+                if (!seen.Add(next))
+                    continue;
+                if (roles.GetValueOrDefault((next, location), PageRole.In) == PageRole.Temp)
+                    return true;
+                foreach (var callee in callees.GetValueOrDefault(next) ?? [])
+                    pending.Push(callee);
+            }
+            return false;
+        }
 
         /// <summary>Returns the pages, each with its locations and their uses.</summary>
         private List<DirectPage> Pages(Dictionary<(Symbol Routine, Symbol Location, bool Unknown), PageUse> uses)
@@ -623,7 +693,7 @@ public sealed class DirectPageMap
                     var use = uses[(group.Key.Routine!, group.Key.Location, true)];
                     var home = homes[group.Key.Location];
                     var page = pages.FirstOrDefault(page => page.Base == home.Page);
-                    var reason = use.IsHandler || use.InInterrupt ? UnknownPageReason.Interrupted : UnknownPageReason.Unknown;
+                    var reason = use.InInterrupt ? UnknownPageReason.Interrupted : UnknownPageReason.Unknown;
                     list.Add(new UnknownPageUse(group.Key.Location, page, home.Offset, use, reason));
                 }
                 pages.Add(new DirectPage(null, [], false, [], list, 0));
@@ -641,7 +711,9 @@ public sealed class DirectPageMap
                 return PageRelation.Unused;
             if (uses.Any(use => use.Hazards.Any(note => note.Text.StartsWith("live across", StringComparison.Ordinal))))
                 return PageRelation.Nested;
-            if (uses.Any(use => use.InInterrupt) && uses.Any(use => !use.InInterrupt))
+            // One routine reached from both is enough, because the interrupt can stop the
+            // routine part-way through its use and run it again.
+            if (uses.Any(use => use.InInterrupt) && uses.Any(use => use.InMain))
                 return PageRelation.Interrupt;
             return uses.Count > 1 ? PageRelation.Shared : PageRelation.Own;
         }

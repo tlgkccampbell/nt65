@@ -119,7 +119,8 @@ public sealed class DirectPagesRequestsTests
         var frames = zero.Locations.Single(location => location.Name == "frames");
         Assert.Equal("irq", frames.Relation);
         Assert.Equal(["main", "nmi"], frames.Routines.Select(routine => routine.Name));
-        Assert.True(frames.Routines[1] is { Handler: true, Unknown: true, Role: "inout" });
+        Assert.True(frames.Routines[0] is { Handler: false, Interrupt: false, Main: true });
+        Assert.True(frames.Routines[1] is { Handler: true, Interrupt: true, Main: false, Unknown: true, Role: "inout" });
 
         var group = Assert.Single(unknown.Groups);
         Assert.Equal("interrupted", group.Reason);

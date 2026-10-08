@@ -354,7 +354,7 @@ function routineTip(location, node, hazards) {
   }
   const tip = new Tip(node.name, `${location.name}${role ? ` · ${role.word}` : ''}`);
   if (node.handler) tip.row('⚡', COLOUR.irq, 'interrupt handler', '');
-  else if (node.interrupt) tip.row('⚡', COLOUR.irq, 'runs in an interrupt', '');
+  else if (node.interrupt) tip.row('⚡', COLOUR.irq, node.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
   if (role) {
     const writes = node.accesses.filter(access => access.writes).map(access => access.place);
     const reads = node.accesses.filter(access => !access.writes).map(access => access.place);
@@ -380,6 +380,7 @@ function routineTip(location, node, hazards) {
 function unknownRoutineTip(group, routine, hazards) {
   const tip = new Tip(routine.name, `D ${REASONS[group.reason] || group.reason}`);
   if (routine.handler) tip.row('⚡', COLOUR.irq, 'interrupt handler', '');
+  else if (routine.interrupt) tip.row('⚡', COLOUR.irq, routine.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
   for (const use of routine.uses) {
     const role = ROLES[use.role];
     tip.row(role ? role.glyph : '?', role ? role.colour : COLOUR.dim, `\`${use.name}\``,
