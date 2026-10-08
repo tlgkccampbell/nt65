@@ -396,6 +396,18 @@ internal sealed class Workspace
     }
 
     /// <summary>
+    /// Returns the project that <paramref name="path"/> belongs to for what the editor shows about
+    /// it, or null when no project holds it.
+    /// </summary>
+    public WorkspaceProject? ProjectOf(string path)
+    {
+        lock (gate)
+        {
+            return Owner(path);
+        }
+    }
+
+    /// <summary>
     /// Returns every program the workspace holds, which is one per project plus the program of the
     /// open documents that no project names. Each is built once and kept, so this normally reuses
     /// the analyses that publishing already built.

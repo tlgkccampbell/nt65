@@ -458,9 +458,13 @@ internal sealed class Server : IDisposable
         var uri = request.TextDocument.Uri;
         var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
         var analysis = await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false);
-        return analysis.FileFor(path) is null
-            ? null
-            : LanguageServer.DirectPages.Of(analysis, file => outgoing.ToClient(Uris.ToUri(file)), cancellation);
+        if (analysis.FileFor(path) is null)
+            return null;
+
+        // The last build's debug file, when the build wrote one, says where ld65 put the data.
+        var project = workspace.ProjectOf(path);
+        var built = project is null ? null : Norristown.Emit.BuiltAddresses.Of(analysis, project.Settings, project.Root);
+        return LanguageServer.DirectPages.Of(analysis, built, file => outgoing.ToClient(Uris.ToUri(file)), cancellation);
     }
 
     [JsonRpcMethod("textDocument/didOpen")]

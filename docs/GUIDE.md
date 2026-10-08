@@ -1986,9 +1986,11 @@ everything below works across modules.
   the caret more strongly.
 
   ld65 decides where data lands, and nt65 does not run it, so each location says where its
-  address comes from. It is *fixed* by the source, *built* from the last build, *predicted*
-  from the linked config (a segment starts at its `start`, at its `offset` into its memory area,
-  or after the segment before it), or *guessed* from the page's base without one. Files' bytes
+  address comes from. It is *fixed* by the source, *built* from the last build (the newest
+  `.dbg` under `out`, when the build runs ld65 with `--dbgfile`; the grid says when a source
+  has changed since), *predicted* from the linked config (a segment starts at its `start`, at
+  its `offset` into its memory area, or after the segment before it), or *guessed* from the
+  page's base without one. Files' bytes
   follow in the order the project lists them, which a page notes when several files share a
   segment. Overlaps and shared bytes between pages are reported only for addresses the map
   trusts, never for guessed ones. Like the input sources, the map only shows what the analysis

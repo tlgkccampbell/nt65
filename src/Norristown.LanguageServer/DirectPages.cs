@@ -1,3 +1,5 @@
+using System.Globalization;
+using Norristown.Emit;
 using Norristown.Flow;
 using Norristown.Processor;
 using Norristown.Semantics;
@@ -18,14 +20,21 @@ internal static class DirectPages
     /// <summary>The deepest a call tree goes.</summary>
     private const int Deepest = 16;
 
-    /// <summary>Returns the map of <paramref name="analysis"/>'s program, with each file's URI from <paramref name="uriOf"/>.</summary>
-    public static Protocol.DirectPagesResult Of(ProgramAnalysis analysis, Func<string, string> uriOf, CancellationToken cancellation)
+    /// <summary>
+    /// Returns the map of <paramref name="analysis"/>'s program, with each file's URI from
+    /// <paramref name="uriOf"/>. The addresses of <paramref name="built"/>, when there is a build,
+    /// replace the map's predictions.
+    /// </summary>
+    public static Protocol.DirectPagesResult Of(
+        ProgramAnalysis analysis, BuiltAddresses? built, Func<string, string> uriOf, CancellationToken cancellation)
     {
-        var map = DirectPageMap.Of(analysis, built: null, cancellation);
+        var map = DirectPageMap.Of(analysis, built?.Addresses, cancellation);
         var graph = new Graph(map.Calls, uriOf);
         var cpu = analysis.Files.Count > 0 ? analysis.Files[0].Layout.Cpu : analysis.Cpu;
         return new Protocol.DirectPagesResult(
-            CpuNames.Format(cpu), [.. map.Pages.Select(page => Page(page, graph, uriOf))]);
+            CpuNames.Format(cpu),
+            [.. map.Pages.Select(page => Page(page, graph, uriOf))],
+            built is null ? null : new Protocol.DirectPageBuild(built.DebugFilePath, built.BuiltAtUtc.ToString("o", CultureInfo.InvariantCulture), built.IsStale));
     }
 
     private static Protocol.DirectPageItem Page(DirectPage page, Graph graph, Func<string, string> uriOf) => new(

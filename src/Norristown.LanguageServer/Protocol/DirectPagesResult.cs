@@ -6,4 +6,5 @@ namespace Norristown.LanguageServer.Protocol;
 /// </summary>
 /// <param name="Cpu">The processor, as <c>.cpu</c> spells it.</param>
 /// <param name="Pages">The pages by base, then the hardware pages, then the page whose D is not known.</param>
-internal sealed record DirectPagesResult(string Cpu, IReadOnlyList<DirectPageItem> Pages);
+/// <param name="Build">The build whose debug file gave the built addresses, or null when there is none.</param>
+internal sealed record DirectPagesResult(string Cpu, IReadOnlyList<DirectPageItem> Pages, DirectPageBuild? Build);

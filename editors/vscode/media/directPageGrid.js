@@ -81,7 +81,10 @@
     if (sources.length === 0) return null;
     const words = { built: 'layout from last build', configured: 'layout predicted from config', guessed: 'no config · layout guessed' };
     const weaker = { configured: 'predicted', guessed: 'guessed' };
-    return [words[sources[0]], ...sources.slice(1).map(source => `${counts[source]} ${weaker[source]}`)].join(' · ');
+    const parts = [words[sources[0]], ...sources.slice(1).map(source => `${counts[source]} ${weaker[source]}`)];
+    // A build the sources have moved on from may no longer say where the data is.
+    if (counts.built > 0 && map.build && map.build.stale) parts.push('sources changed since');
+    return parts.join(' · ');
   }
 
   // Returns the location of a page that holds an absolute address, if any.
@@ -230,7 +233,11 @@
     if (page.segments.length > 0 || page.hardware) head.append(h('span', 'm', page.segments.join(', ') || 'hardware'));
     head.append(h('span', '', `${used} / 256 used`), h('span', 'm', `${free} free · largest run ${best[0]}`));
     const badge = layoutBadge(page);
-    if (badge) head.append(h('span', 'p', badge));
+    if (badge) {
+      const span = h('span', 'p', badge);
+      if (map.build) span.title = `${map.build.path}\n${new Date(map.build.at).toLocaleString()}`;
+      head.append(span);
+    }
     body.append(head);
 
     // The grid, with its legend under it.
