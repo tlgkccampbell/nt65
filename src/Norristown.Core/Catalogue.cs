@@ -3044,6 +3044,20 @@ public static class Catalogue
             + "routine with no signature, and asserts it where nt65 can. Here the flags prove the other value on at "
             + "least one path. Fix the code on that path, or correct the `.state`.");
 
+    internal static DiagnosticDescriptor UnpromisedFlag { get; } = Entry(
+        Area.ControlFlow,
+        "unpromised-flag",
+        Severity.Warning,
+        "{0} relies on `{1}` returning with `{2}`, {3}",
+        "A routine that names any flag after `->` promises the flags it names, and only those. nt65 still finds "
+            + "what its body returns the others with and uses that, so the analysis stays accurate, but a flag the "
+            + "signature leaves out may change whenever the body does. Here a branch, a call's entry flags or a "
+            + "return's exit flags depend on such a flag. A routine that names no flag after `->` returns what its "
+            + "body is found to, and passes on, without promoting it, what the routines it calls return without "
+            + "promising: relying on that through it draws this warning too, naming the routine that declined. "
+            + "Add the flag to that routine's exit, set the flag yourself, or, where the reliance is deliberate, "
+            + "say so with `.allow \"unpromised-flag\"`.");
+
     internal static DiagnosticDescriptor KeepsRedundant { get; } = Entry(
         Area.ControlFlow,
         "keeps-redundant",

@@ -88,6 +88,12 @@ public sealed class ControlFlow
     public StackEffects Effects { get; internal set; } = StackEffects.None;
 
     /// <summary>
+    /// Gets what each routine returns with in the flags, as <see cref="FlagExits"/> worked it out
+    /// across the program. Before then, every routine returns with what its signature says.
+    /// </summary>
+    public FlagExits FlagExits { get; internal set; } = FlagExits.None;
+
+    /// <summary>
     /// Gets what is known about the flags at each statement, and which conditional branches go
     /// one way only.
     /// </summary>
@@ -100,8 +106,12 @@ public sealed class ControlFlow
     /// </summary>
     internal IReadOnlySet<StepKey> Patched => patched ??= FindPatched();
 
-    /// <summary>Works out where control goes in <paramref name="layout"/>'s file.</summary>
-    public static ControlFlow Of(SemanticModel model, CodeLayout layout)
+    /// <summary>
+    /// Works out where control goes in <paramref name="layout"/>'s file. A call to a routine
+    /// returns with the flags <paramref name="exits"/> says it does, or, without it, with what the
+    /// routine's signature says.
+    /// </summary>
+    public static ControlFlow Of(SemanticModel model, CodeLayout layout, FlagExits? exits = null)
     {
         var flow = new ControlFlow(model, layout);
         var checks = new FlowChecks(model, layout, flow);
@@ -134,7 +144,7 @@ public sealed class ControlFlow
         // A branch the flags decide is a jump, or transfers nothing, before anything else reads
         // the blocks. Which instructions the program rewrites is known only once every routine's
         // annotations have been gathered.
-        flow.Flags = new FlagAnalysis(model, layout, flow.Patched);
+        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, exits ?? FlagExits.None);
         foreach (var (routine, units, blocks, _) in built)
             flow.Decide(routine, units, blocks);
 
@@ -250,6 +260,7 @@ public sealed class ControlFlow
             KeepsOf = KeepsOf,
             ReadsOf = ReadsOf,
             Effects = Effects,
+            FlagExits = FlagExits,
             Flags = Flags,
         };
         copy.regions.AddRange(regions.Select(region => region.ForComposing()));

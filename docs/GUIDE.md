@@ -1111,9 +1111,10 @@ next instruction:
 nt65 follows the N, Z, C and V flags through each routine, from what the instructions
 themselves set: a load of a constant, `clc` and `sec`, and the branches already taken on the
 way. Where the flag a branch tests is known on every path to it, the branch goes one way only,
-so `lda #1` then `bne @over` needs nothing more. A call returns with the flags its routine's
-signature gives after `->`, and with the flags its `keeps` names as they were (see
-[Flags in signatures](#flags-in-signatures)); every other flag is unknown after it. So the way a
+so `lda #1` then `bne @over` needs nothing more. A call returns with the flags its routine
+returns with: for a routine with a body, what nt65 finds its body returns with on every path,
+and for one without, what its signature gives after `->` and keeps with `keeps` (see
+[Flags in signatures](#flags-in-signatures)). Every other flag is unknown after it. So the way a
 ROM routine returns is written once, on the routine:
 
 ```nt65
@@ -1485,6 +1486,20 @@ nt65 checks these where it can:
   promise. A result named alone must be set on every path after entry; a path that leaves the
   caller's flag in place is an error.
 - **A routine with no body** is trusted, as its `keeps` is.
+
+A routine with a body that names no flag after `->` returns with what its body is found to: the
+flags it leaves as its caller set them, and the values it gives others on every path, through
+the routines it calls. Its callers use that, so a helper that ends `clc` then `rts` decides a
+`bcc` after a call to it. Once a routine names any flag after `->`, it promises the flags it
+names and only those. nt65 still uses what the body returns, but relying on a flag it does not
+name is a warning, as relying on an unpromised `keeps` is, and the fix adds the flag to its exit:
+
+```text
+main.nt65:12:5: warning: this call relies on `next_row` returning with `d = 0`, which it does but does not promise (it declares `-> c = 0`) [unpromised-flag]
+```
+
+A routine that names no flag passes on what the routines it calls return without promising, and
+does not promote it, so the warning names the routine that declined, at any depth.
 
 `keeps c` together with `-> c = 0` is an error, since the carry cannot both come back unchanged
 and come back 0. The 65816's m, x and e flags are not written this way: they are the widths and

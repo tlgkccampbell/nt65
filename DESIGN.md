@@ -4605,14 +4605,28 @@ Recorded so the reasoning survives. None is open.
   emits changes no edge and no flag, so a file with such an `.ensure` is laid out once more with
   the flag analysis's answers. `keeps c` beside `-> c = 0` is an error. On the 65816 m, x and e
   are spelled as the widths and the mode, so `m = 0` is an error that names `a16`.
+- **Exit flags are declared or inferred.** A routine with a body is worked out across the program:
+  the flags it returns as its caller left them, and the values it returns others with on every
+  path, from its own code and what the routines it calls return. Which of C, Z, N and V it keeps
+  comes from the register walk, which follows `php` and `plp`; D and I, and every value, from the
+  flag analysis. Once a routine names any flag after `->`, the rest are not promised, and a
+  branch, a call's entry flags or a return's exit flags that rely on one draw `unpromised-flag`;
+  a routine that names none passes on what its callees do not promise without promoting it, as
+  with `keeps`. Each file's flag analysis decides branches with the answers the program had when
+  it ran, and records the answers a decision or a check depended on; once the program's answers
+  are worked out, a file whose recorded answers differ is analyzed again, as one that took a stale
+  stack effect is. The answers themselves are worked out after every file's analysis, from the
+  blocks as they stand, so a change that touches no decision analyzes nothing again. An
+  `.ensure`, and the editor's hints, go only by values a routine promised, so neither relies on
+  another routine's body.
 - **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C, V, D and I as 0, 1 or
   unknown through each routine, before any other analysis reads its blocks. An immediate load,
   `clc`, `sec`, `clv`, `cld`, `sed`, `cli`, `sei`, and a `rep` or `sep` with a constant mask set a
   flag; a branch's taken edge knows its flag and its fall-through the opposite; an instruction
   that sets N and Z from one result ties them, so N known to be 1 means Z is 0. Paths meet
   keeping only what every one agrees on. A routine's entry knows the flags its signature gives
-  before `->`. A call returns with the flags the callee's signature gives after `->`, and with
-  those its `keeps` names as they were; every other flag is unknown, and so is every flag at a
+  before `->`. A call returns with what the callee returns with, declared or inferred (above);
+  every other flag is unknown, and so is every flag at a
   label anything but the routine's own transfers names, a `.state` label, or an instruction the
   program patches. A branch whose flag is known is then
   a jump or nothing, and the edge it never takes is removed. Only what the CPU defines is used, so

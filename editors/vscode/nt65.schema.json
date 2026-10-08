@@ -536,6 +536,7 @@
         "union-many-members-given",
         "unmatched-brace",
         "unnamed-label",
+        "unpromised-flag",
         "unpromised-keep",
         "unused-symbol",
         "unused-use-item",

@@ -126,7 +126,7 @@ public sealed class CatalogueAreaTests
             "reads-undeclared", "return-after-call", "return-count-mismatch", "return-count-not-constant",
             "return-flag-mismatch", "return-flag-not-set", "routine-runs-off-the-end", "runs-into-data", "saves-not-a-store",
             "self-modifying-unchecked",
-            "state-flag-mismatch", "tail-call-distance-mismatch", "tail-call-to-handler", "unpromised-keep",
+            "state-flag-mismatch", "tail-call-distance-mismatch", "tail-call-to-handler", "unpromised-flag", "unpromised-keep",
         ]),
         ("Processor state",
         [

@@ -30,13 +30,13 @@ public sealed class FlagAnalysisTests
 
     /// <summary>
     /// A flag is known only where every path agrees on it. One nothing in the routine sets is not
-    /// known at the entry, a call leaves every flag unknown, and a label another routine names may
-    /// be entered with anything.
+    /// known at the entry, a call to a routine with no body and no signature leaves every flag
+    /// unknown, and a label another routine names may be entered with anything.
     /// </summary>
     [Theory]
     [InlineData(".proc p {\n    bvc p\n}\n")]
     [InlineData(".proc p {\n    rol a\n    bne p\n}\n")]
-    [InlineData(".proc p {\n    lda #1\n    jsr q\n    bne p\n}\n")]
+    [InlineData(".proc rom = $1234\n.proc p {\n    lda #1\n    jsr rom\n    bne p\n}\n")]
     [InlineData(".proc p {\n    lda $10\n    beq @x\n    lda #1\n@x:\n    bne p\n}\n")]
     [InlineData(".proc p {\n    lda #1\nentry:\n    bne p\n}\n.proc r {\n    jmp p::entry\n}\n")]
     public void AFlagNotKnownOnEveryPathLeavesTheBranchBothWays(string routine)

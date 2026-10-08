@@ -253,7 +253,8 @@ public static class Suggestions
         foreach (var block in regions.SelectMany(region => region.Blocks))
         {
             if (block.Steps is not [.., { Statement: InstructionStatementSyntax branch } step]
-                || !Own(model, step) || !seen.Add(branch) || flags.ProvedAt(step) is not { } proved)
+                || !Own(model, step) || !seen.Add(branch) || flags.ProvedAt(step) is not { } proved
+                || flags.Before(step)?.IsBacked(proved.Flag) != true)
             {
                 continue;
             }
@@ -333,7 +334,7 @@ public static class Suggestions
         // The carry comes first, since it is the flag code most often sets on purpose.
         static StatusFlags? Known(FlagState state) =>
             new[] { StatusFlags.Carry, StatusFlags.Zero, StatusFlags.Negative, StatusFlags.Overflow }
-                .Where(flag => state.ValueOf(flag) is not null)
+                .Where(flag => state.ValueOf(flag) is not null && state.IsFirm(flag))
                 .Select(flag => (StatusFlags?)flag)
                 .FirstOrDefault();
     }
@@ -357,7 +358,8 @@ public static class Suggestions
                 var step = block.Steps[i];
                 if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc or MnemonicKind.Sec } setup
                     || !Own(model, step) || !seen.Add(setup) || file.Flow.Patched.Contains(step.Key)
-                    || flags.Before(step)?.ValueOf(StatusFlags.Carry) is not { } carry)
+                    || flags.Before(step) is not { } before || !before.IsFirm(StatusFlags.Carry)
+                    || before.ValueOf(StatusFlags.Carry) is not { } carry)
                 {
                     continue;
                 }

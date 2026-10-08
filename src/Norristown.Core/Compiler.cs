@@ -455,7 +455,9 @@ public static class Compiler
             // A file analyzed again starts from the stack effects the earlier analysis found, which
             // are what an edit to one file usually leaves them.
             var (layout, flow, state, found) = AnalyzeFile(
-                model, target, project, previous is { Files: [var any, ..] } ? any.Flow.Effects : Flow.StackEffects.None);
+                model, target, project,
+                previous is { Files: [var any, ..] } ? any.Flow.Effects : Flow.StackEffects.None,
+                previous is { Files: [var some, ..] } ? some.Flow.FlagExits : Flow.FlagExits.None);
             files.Add(new FileAnalysis(model, layout, flow, state));
             analyzed[model.Tree.Path] = found;
         }
@@ -491,14 +493,22 @@ public static class Compiler
         // composed again, until no file took a stale one. Each round only moves effects towards
         // unknown, but the rounds are capped as well, so a cycle the analysis does not foresee
         // cannot run on.
+        //
+        // The flag analysis of each file likewise takes what each routine it calls returns with in
+        // the flags. Those answers are worked out once every routine's registers are settled, and
+        // a file whose decisions or checks took an answer the program differs on is analyzed again.
         IReadOnlyList<Diagnostic> registers;
         IReadOnlySet<Flow.RoutineKey> readers;
         for (var round = 0; ; round++)
         {
             Flow.CallCosts.Compose(analysis.Files.Select(file => file.Flow));
             (registers, readers, var effects) = Flow.RegisterKeeps.Compose(analysis.Files);
+            var exits = Flow.FlagExits.Solve(analysis.Files);
+            foreach (var file in analysis.Files)
+                file.Flow.FlagExits = exits;
             var stale = analysis.Files
-                .Where(file => file.State?.Consumed.Any(taken => effects.Of(taken.Key) != taken.Value) == true)
+                .Where(file => file.State?.Consumed.Any(taken => effects.Of(taken.Key) != taken.Value) == true
+                    || file.Flow.Flags?.Consumed.Any(taken => taken.IsStale(exits)) == true)
                 .ToHashSet();
             if (stale.Count == 0 || round == StaleRounds)
                 break;
@@ -511,7 +521,7 @@ public static class Compiler
                     files.Add(file);
                     continue;
                 }
-                var (layout, flow, state, found) = AnalyzeFile(file.Model, analysis.Cpu, project, effects);
+                var (layout, flow, state, found) = AnalyzeFile(file.Model, analysis.Cpu, project, effects, exits);
                 files.Add(new FileAnalysis(file.Model, layout, flow, state));
                 analyzed[file.Path] = found;
             }
@@ -544,12 +554,12 @@ public static class Compiler
     /// and, on the 65816, its processor state, together with the diagnostics they found.
     /// </summary>
     private static (CodeLayout Layout, Flow.ControlFlow Flow, Flow.StateAnalysis? State, IReadOnlyList<Diagnostic> Found)
-        AnalyzeFile(SemanticModel model, Cpu target, ProjectSettings project, Flow.StackEffects effects)
+        AnalyzeFile(SemanticModel model, Cpu target, ProjectSettings project, Flow.StackEffects effects, Flow.FlagExits exits)
     {
         // Control flow is read from the order in which layout lays out the bytes, so the macros
         // are expanded and the repetitions unrolled before anything is asked about the path.
         var layout = CodeLayout.Create(model, target);
-        var flow = Flow.ControlFlow.Of(model, layout);
+        var flow = Flow.ControlFlow.Of(model, layout, exits);
         var found = new List<Diagnostic>();
 
         // On the 65816 an immediate is as wide as the register it goes to, and the
@@ -561,7 +571,7 @@ public static class Compiler
             state = Flow.StateAnalysis.Of(model, layout, flow, project.Ranges, effects);
             found.AddRange(state.Diagnostics);
             layout = CodeLayout.Create(model, target, state);
-            flow = Flow.ControlFlow.Of(model, layout);
+            flow = Flow.ControlFlow.Of(model, layout, exits);
         }
 
         // An `.ensure` that names a flag emits nothing where the flags already hold, which the
@@ -571,7 +581,7 @@ public static class Compiler
             && StateItem.Read(ensure).Any(item => item.Part == StatePart.Flag)))
         {
             layout = CodeLayout.Create(model, target, state, flow.Flags!.Known);
-            flow = Flow.ControlFlow.Of(model, layout);
+            flow = Flow.ControlFlow.Of(model, layout, exits);
         }
         found.AddRange(layout.Diagnostics);
         found.AddRange(flow.Diagnostics);
