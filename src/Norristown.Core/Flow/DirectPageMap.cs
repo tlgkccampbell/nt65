@@ -1050,7 +1050,22 @@ public sealed class DirectPageMap
                 var named = segments[page.Key].Where(name => locations.Any(location => location.Symbol?.Segment == name)).ToList();
                 List<PageNote> pageNotes = [.. notes.GetValueOrDefault(page.Key) ?? []];
                 if (locations.Any(location => location.Layout == PageLayout.Guessed))
-                    pageNotes.Add(new PageNote("◦", "no config · layout guessed", null));
+                {
+                    // A guess comes from having no linked configuration, or from one that does not
+                    // place the segment.
+                    var unplaced = locations.Where(location => location.Layout == PageLayout.Guessed)
+                        .Select(location => location.Symbol?.Segment).OfType<string>().Distinct().Select(name => $"`{name}`");
+                    var configured = analysis.Program.Segments.Segments.Any(segment => segment.Placements.Count > 0);
+                    pageNotes.Add(new PageNote(
+                        "◦", configured ? $"config does not place {string.Join(", ", unplaced)} · layout guessed" : "no config · layout guessed", null));
+                }
+
+                // The 6502's stack lives at $0100-$01FF, and so does the 65816's in emulation mode.
+                if (page.Key <= 0x1ff && page.Key + 0xff >= 0x100)
+                {
+                    pageNotes.Add(new PageNote(
+                        "◦", HasDirectPage ? "covers $0100-$01FF, the stack page in emulation mode" : "covers the stack page, $0100-$01FF", null));
+                }
                 foreach (var (here, there, first, last) in SamePage(locations))
                 {
                     if (KindOf(here, there) != SharedBytesKind.Collision)

@@ -90,7 +90,7 @@
     }
     const sources = Object.keys(counts).filter(source => counts[source] > 0);
     if (sources.length === 0) return null;
-    const words = { built: 'layout from last build', configured: 'layout predicted from config', guessed: 'no config · layout guessed' };
+    const words = { built: 'layout from last build', configured: 'layout predicted from config', guessed: 'layout guessed' };
     const weaker = { configured: 'predicted', guessed: 'guessed' };
     const parts = [words[sources[0]], ...sources.slice(1).map(source => `${counts[source]} ${weaker[source]}`)];
     // A build the sources have moved on from may no longer say where the data is.
@@ -505,10 +505,13 @@
   // known about its layout and, when hazards are shown, which locations have one.
   function checks(page) {
     const items = [];
-    if ((page.base & 0xFF) === 0) {
-      items.push(['✓', 'var(--shared)', 'D page-aligned', '']);
-    } else {
-      items.push(['⚠', 'var(--nested)', `D not page-aligned · +1 cycle × ${page.direct}`, '']);
+    // Only the 65816 has a D register to align; every other processor's one page is the zero page.
+    if (map.cpu === '65816') {
+      if ((page.base & 0xFF) === 0) {
+        items.push(['✓', 'var(--shared)', 'D page-aligned', '']);
+      } else {
+        items.push(['⚠', 'var(--nested)', `D not page-aligned · +1 cycle on ${page.direct} instruction${page.direct === 1 ? '' : 's'}`, '']);
+      }
     }
     for (const overlap of page.overlaps) {
       const there = map.pages.find(item => item.id === overlap.page);
@@ -524,7 +527,7 @@
     }
     // The header's badge already says the layout is guessed.
     for (const note of page.notes) {
-      if (note.text !== 'no config · layout guessed') items.push([note.glyph, note.glyph === '⧉' ? 'var(--nested)' : 'var(--dim)', note.text, '']);
+      if (!note.text.endsWith('layout guessed')) items.push([note.glyph, note.glyph === '⧉' ? 'var(--nested)' : 'var(--dim)', note.text, '']);
     }
     if (hazards) {
       for (const location of page.locations) {

@@ -73,7 +73,6 @@ const ROLES = {
 
 const REASONS = {
   interrupted: 'interrupted code',
-  caller: 'from caller',
   unknown: 'not known',
 };
 
@@ -286,7 +285,7 @@ function pageTip(result, page, hazards) {
   const tip = new Tip(pageLabel(page), meta);
   if (page.overlaps.length > 0) tip.block(pageBar(page));
   if ((page.base & 0xFF) !== 0 && page.direct > 0) {
-    tip.row('⚠', COLOUR.nested, `not page-aligned · +1 cycle × ${page.direct}`, '');
+    tip.row('⚠', COLOUR.nested, `not page-aligned · +1 cycle on ${count(page.direct, 'instruction')}`, '');
   }
   for (const note of page.notes) tip.row(note.glyph, note.glyph === '⧉' ? COLOUR.nested : COLOUR.dim, markdown(note.text), '');
   for (const overlap of page.overlaps) {
