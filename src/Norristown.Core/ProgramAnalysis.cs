@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Norristown.Flow;
 using Norristown.Layout;
 using Norristown.Processor;
@@ -26,6 +28,10 @@ public sealed record ProgramAnalysis(
     Configuration Configuration,
     IReadOnlyList<Diagnostic> Diagnostics)
 {
+    // What requests have asked of each analysis, kept by instance. It cannot be a field, because
+    // `with` copies fields, and a copy may have other diagnostics or other program-wide answers.
+    private static readonly ConditionalWeakTable<ProgramAnalysis, Answers> answers = new();
+
     // The files by their logical paths. Where two files share a path, the first is found.
     private readonly Dictionary<string, FileAnalysis> byPath = ByPath(Files);
 
@@ -88,21 +94,23 @@ public sealed record ProgramAnalysis(
     internal Reuse? Reused { get; init; }
 
     /// <summary>
-    /// Returns the diagnostics for one file, for an editor that shows a file at a time.
+    /// Returns the diagnostics for one file, for an editor that shows a file at a time. The
+    /// diagnostics are sorted into files the first time any file's are asked for.
     /// </summary>
     public IReadOnlyList<Diagnostic> DiagnosticsFor(string path) =>
-        [.. Diagnostics.Where(diagnostic => diagnostic.Span.File == path)];
+        Asked().ByFile.Value.GetValueOrDefault(path) ?? [];
 
     /// <summary>
     /// Returns the places in one file where the code could be smaller or faster, or where a constant
     /// used as an address could be declared as data, for an editor to suggest. No build reports them.
+    /// Each file's are looked for once, the first time they are asked for.
     /// </summary>
     public IReadOnlyList<Diagnostic> SuggestionsFor(string path) =>
-        FileFor(path) is { } file
+        Asked().Suggestions.GetOrAdd(path, path => FileFor(path) is { } file
             ? Norristown.Diagnostics.Ordered([
                 .. Flow.Suggestions.For(file, Configuration.Omitted(file.Model.Tree), ReadsCallerStack),
                 .. Flow.AddressConstants.For(file, usedAsAddresses.Value)])
-            : [];
+            : []);
 
     /// <summary>
     /// Returns whether a routine depends on the depth of the stack it was entered with, which a
@@ -148,6 +156,9 @@ public sealed record ProgramAnalysis(
         return byPath;
     }
 
+    /// <summary>Returns what requests have asked of this analysis so far.</summary>
+    private Answers Asked() => answers.GetValue(this, analysis => new Answers(analysis));
+
     /// <summary>Holds what an analysis keeps so that the next analysis can start from it.</summary>
     /// <param name="Project">
     /// The project it analyzed. The next analysis can reuse this one only for the same project.
@@ -172,5 +183,28 @@ public sealed record ProgramAnalysis(
         /// that leaves those answers for later carries over from the one before it.
         /// </summary>
         public IReadOnlyList<Diagnostic> Composed { get; init; } = [];
+    }
+
+    /// <summary>Holds what requests have asked of one analysis, so that it is worked out once.</summary>
+    /// <param name="analysis">The analysis asked about.</param>
+    private sealed class Answers(ProgramAnalysis analysis)
+    {
+        /// <summary>Gets each file's diagnostics, in the order the analysis has them, by path.</summary>
+        public Lazy<Dictionary<string, List<Diagnostic>>> ByFile { get; } = new(() =>
+        {
+            var byFile = new Dictionary<string, List<Diagnostic>>(StringComparer.Ordinal);
+            foreach (var diagnostic in analysis.Diagnostics)
+            {
+                if (diagnostic.Span.File is not { } file)
+                    continue;
+                if (!byFile.TryGetValue(file, out var found))
+                    byFile[file] = found = [];
+                found.Add(diagnostic);
+            }
+            return byFile;
+        });
+
+        /// <summary>Gets the suggestions found so far, by the path of their file.</summary>
+        public ConcurrentDictionary<string, IReadOnlyList<Diagnostic>> Suggestions { get; } = new(StringComparer.Ordinal);
     }
 }

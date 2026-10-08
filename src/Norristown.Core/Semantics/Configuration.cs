@@ -22,12 +22,16 @@ public sealed class Configuration
     // A file's settings, wherever they appear, read once per tree.
     private static readonly ConditionalWeakTable<SyntaxTree, List<ConstantDeclarationSyntax>> settingsByTree = new();
 
+    // The positions a tree with no conditions answered has.
+    private static readonly HashSet<int> NoPositions = [];
+
     private readonly Dictionary<SyntaxTree, List<TextSpan>> omitted;
-    private readonly HashSet<(SyntaxTree Tree, int Position)> answered;
+    // The positions of the conditions this pass evaluated, by tree.
+    private readonly Dictionary<SyntaxTree, HashSet<int>> answered;
     private readonly Table table;
 
     private Configuration(
-        Dictionary<SyntaxTree, List<TextSpan>> omitted, HashSet<(SyntaxTree, int)> answered, Cpu cpu, Table table)
+        Dictionary<SyntaxTree, List<TextSpan>> omitted, Dictionary<SyntaxTree, HashSet<int>> answered, Cpu cpu, Table table)
     {
         this.omitted = omitted;
         this.answered = answered;
@@ -53,13 +57,16 @@ public sealed class Configuration
         var table = Table.Read(all, cpu, given, diagnostics);
         var evaluator = table.ConditionEvaluator(diagnostics);
         var omitted = new Dictionary<SyntaxTree, List<TextSpan>>();
-        var answered = new HashSet<(SyntaxTree, int)>();
+        var answered = new Dictionary<SyntaxTree, HashSet<int>>();
         foreach (var tree in all)
         {
             var left = new List<TextSpan>();
-            new Reader(tree, evaluator, diagnostics, left, answered).Container(tree.Root);
+            var positions = new HashSet<int>();
+            new Reader(tree, evaluator, diagnostics, left, positions).Container(tree.Root);
             if (left.Count > 0)
                 omitted[tree] = left;
+            if (positions.Count > 0)
+                answered[tree] = positions;
         }
         return new Configuration(omitted, answered, cpu, table);
     }
@@ -70,7 +77,8 @@ public sealed class Configuration
     /// cannot reach are inside a macro body, a <c>.repeat</c> or an <c>.each</c>, where a condition
     /// may name what the expansion binds, and those are evaluated once per expansion instead.
     /// </summary>
-    public bool Answered(BlockSyntax block) => answered.Contains((block.Tree, block.Position));
+    public bool Answered(BlockSyntax block) =>
+        answered.TryGetValue(block.Tree, out var positions) && positions.Contains(block.Position);
 
     /// <summary>Determines whether the build includes the source at <paramref name="node"/>.</summary>
     public bool Includes(SyntaxNode node)
@@ -144,7 +152,7 @@ public sealed class Configuration
     /// </summary>
     internal bool AnswersAlike(Configuration other, SyntaxTree tree) =>
         Omitted(tree).SequenceEqual(other.Omitted(tree))
-        && answered.Where(at => at.Tree == tree).ToHashSet().SetEquals(other.answered.Where(at => at.Tree == tree));
+        && AnsweredIn(tree).SetEquals(other.AnsweredIn(tree));
 
     /// <summary>
     /// Returns the value the build gives the setting <paramref name="name"/> that
@@ -229,6 +237,13 @@ public sealed class Configuration
     }
 
     /// <summary>
+    /// Returns the positions of the conditions in <paramref name="tree"/> that this pass
+    /// evaluated, which is an empty set for a tree with none.
+    /// </summary>
+    private HashSet<int> AnsweredIn(SyntaxTree tree) =>
+        answered.TryGetValue(tree, out var positions) ? positions : NoPositions;
+
+    /// <summary>
     /// Reads one file's conditions. A chain is a run of sibling blocks, made up of the
     /// <c>.if</c> that starts it followed by any <c>.elseif</c> and <c>.else</c> blocks that
     /// continue it. The first branch whose condition holds is the one the build takes. The
@@ -240,7 +255,7 @@ public sealed class Configuration
         Evaluator evaluator,
         List<Diagnostic> diagnostics,
         List<TextSpan> omitted,
-        HashSet<(SyntaxTree, int)> answered)
+        HashSet<int> answered)
     {
         // How many branches of a chain the walk is inside. The outermost branch has already been
         // searched for `.cpu`, all the way down, so a branch inside it is not searched again.
@@ -284,7 +299,7 @@ public sealed class Configuration
         /// </summary>
         private bool Branch(BlockSyntax block, bool already)
         {
-            answered.Add((tree, block.Position));
+            answered.Add(block.Position);
 
             // The CPU is configuration, and a condition may test it with `.target`, so a
             // `.cpu` under an `.if` would change the very thing its condition may depend on. The

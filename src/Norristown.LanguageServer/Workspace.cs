@@ -553,17 +553,11 @@ internal sealed class Workspace
             before = reported;
         }
         var now = new Dictionary<string, (ProgramAnalysis Analysis, IReadOnlyList<Diagnostic> Diagnostics)>(StringComparer.Ordinal);
-        var lookups = new Dictionary<ProgramAnalysis, ILookup<string, Diagnostic>>(ReferenceEqualityComparer.Instance);
         foreach (var (path, (analysis, _)) in found)
         {
-            if (before.TryGetValue(path, out var had) && had.Analysis == analysis)
-            {
-                now[path] = had;
-                continue;
-            }
-            if (!lookups.TryGetValue(analysis, out var byFile))
-                lookups[analysis] = byFile = analysis.Diagnostics.ToLookup(diagnostic => diagnostic.Span.File, StringComparer.Ordinal);
-            now[path] = (analysis, [.. byFile[path], .. analysis.SuggestionsFor(path)]);
+            now[path] = before.TryGetValue(path, out var had) && had.Analysis == analysis
+                ? had
+                : (analysis, [.. analysis.DiagnosticsFor(path), .. analysis.SuggestionsFor(path)]);
         }
         lock (gate)
         {

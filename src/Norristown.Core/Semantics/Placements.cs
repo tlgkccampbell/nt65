@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Norristown.Syntax;
 
 namespace Norristown.Semantics;
@@ -14,6 +15,9 @@ namespace Norristown.Semantics;
 /// </summary>
 public sealed class Placements
 {
+    // A file's `.place` directives, wherever they appear, found once per tree.
+    private static readonly ConditionalWeakTable<SyntaxTree, List<PlaceDirectiveSyntax>> placesByTree = new();
+
     private readonly Dictionary<string, SyntaxTree> modules;
     private readonly Dictionary<string, ModulePlacement> declared;
     private readonly Dictionary<string, (SyntaxTree Placer, PlaceDirectiveSyntax At)> placedBy;
@@ -65,7 +69,7 @@ public sealed class Placements
         var named = new HashSet<string>(StringComparer.Ordinal);
         foreach (var tree in files)
         {
-            foreach (var place in tree.Root.DescendantNodes().OfType<PlaceDirectiveSyntax>())
+            foreach (var place in PlacesIn(tree))
             {
                 if (PathOf(place.Name) is not { } path)
                     continue;
@@ -217,6 +221,13 @@ public sealed class Placements
     /// </summary>
     private static string ModuleOf(SyntaxTree tree, Dictionary<string, ModuleDirectiveSyntax> declarations) =>
         declarations.TryGetValue(tree.Path, out var module) && PathOf(module.Name) is { } name ? name : tree.Path;
+
+    /// <summary>
+    /// Returns the <c>.place</c> directives of <paramref name="tree"/>, wherever they appear, in
+    /// source order. A tree never changes, so each tree is searched once.
+    /// </summary>
+    private static List<PlaceDirectiveSyntax> PlacesIn(SyntaxTree tree) =>
+        placesByTree.GetValue(tree, tree => [.. tree.Root.DescendantNodes().OfType<PlaceDirectiveSyntax>()]);
 
     /// <summary>
     /// Returns a description, starting from the target, of the cycle that

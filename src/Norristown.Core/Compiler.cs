@@ -220,10 +220,11 @@ public static class Compiler
     {
         cancellation.ThrowIfCancellationRequested();
         binaryLength ??= BinaryLengthOnDisk;
+        (Configuration, List<Diagnostic>)? resolved = null;
         var reason = previous is null
             ? WholeProgramReason.NoPreviousAnalysis
-            : ReasonForWholeProgram(previous, files, project, binaryLength);
-        if (reason is null && Reanalyze(previous!, files, project, binaryLength, settle, cancellation) is { } reused)
+            : ReasonForWholeProgram(previous, files, project, binaryLength, out resolved);
+        if (reason is null && Reanalyze(previous!, files, project, binaryLength, resolved, settle, cancellation) is { } reused)
             return reused;
 
         // An analysis of the changed files that finds a diagnostic in text an edit replaced
@@ -337,12 +338,15 @@ public static class Compiler
     /// again as a whole, now that its files are <paramref name="files"/>, or null when the files
     /// that changed can be analyzed on their own. The whole program is analyzed again when
     /// anything decided for it as a whole changes, such as the files in it, the project, the CPU
-    /// or the segments.
+    /// or the segments. Where deciding needed the configuration of the files as they now stand,
+    /// <paramref name="resolved"/> receives it with the diagnostics found resolving it, and
+    /// otherwise it receives null.
     /// </summary>
     private static WholeProgramReason? ReasonForWholeProgram(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
-        Func<string, long?> binaryLength)
+        Func<string, long?> binaryLength, out (Configuration Configuration, List<Diagnostic> Found)? resolved)
     {
+        resolved = null;
         if (previous.Reused is not { } reuse || reuse.Project != project)
             return WholeProgramReason.ProjectChanged;
         var sources = Sources(files);
@@ -372,6 +376,7 @@ public static class Compiler
         var found = new List<Diagnostic>();
         var trees = Current(reuse, sources);
         var fresh = Configuration.Resolve(trees, previous.Cpu, project.SettingValues, found);
+        resolved = (fresh, found);
         var byFile = ByFile(trees, found);
         foreach (var tree in earlier.Where(tree => sources[tree.Path] == tree))
         {
@@ -391,11 +396,13 @@ public static class Compiler
     /// changed, analyzing only those files and the files the changes affect. Returns null when a
     /// diagnostic from before points at text an edit replaced, and the whole program has to be
     /// analyzed again. <see cref="ReasonForWholeProgram"/> must already have found no reason to
-    /// analyze the whole program.
+    /// analyze the whole program. <paramref name="resolved"/> is the configuration that it
+    /// resolved for the files as they now stand, with its diagnostics, or null to resolve it here.
     /// </summary>
     private static ProgramAnalysis? Reanalyze(
         ProgramAnalysis previous, IReadOnlyCollection<SyntaxTree> files, ProjectSettings project,
-        Func<string, long?> binaryLength, bool settle, CancellationToken cancellation)
+        Func<string, long?> binaryLength, (Configuration Configuration, List<Diagnostic> Found)? resolved, bool settle,
+        CancellationToken cancellation)
     {
         var reuse = previous.Reused!;
         var sources = Sources(files);
@@ -410,8 +417,9 @@ public static class Compiler
 
         // The conditions of every other file are answered as they were, which is why only the
         // changed files are analyzed again, so only theirs are kept from this pass.
-        var reported = new List<Diagnostic>();
-        var configuration = Configuration.Resolve(trees, previous.Cpu, project.SettingValues, reported);
+        var reported = resolved?.Found ?? [];
+        var configuration = resolved?.Configuration
+            ?? Configuration.Resolve(trees, previous.Cpu, project.SettingValues, reported);
         var byFile = ByFile(trees, reported);
         var conditions = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
         foreach (var before in changed)

@@ -174,6 +174,21 @@ internal sealed class DiagnosticsPublisher : IDisposable
         JsonSerializer.Serialize(diagnostics);
 
     /// <summary>
+    /// Determines whether two lists of diagnostics hold equal diagnostics in the same order. The
+    /// workspace hands back the same list for a file whose program has not been analyzed again,
+    /// which is checked first.
+    /// </summary>
+    private static bool Alike(IReadOnlyList<Diagnostic> a, IReadOnlyList<Diagnostic> b) =>
+        ReferenceEquals(a, b) || a.SequenceEqual(b);
+
+    /// <summary>
+    /// Determines whether two configurations omit the same branches of <paramref name="tree"/>,
+    /// which is all that converting its diagnostics reads of them.
+    /// </summary>
+    private static bool OmitsAlike(Configuration a, Configuration b, SyntaxTree? tree) =>
+        ReferenceEquals(a, b) || tree is null || a.Omitted(tree).SequenceEqual(b.Omitted(tree));
+
+    /// <summary>
     /// Publishes the diagnostics of the file the client has just opened or edited, at once, from
     /// the analysis that edit triggered. It is the file the user is looking at, so it is
     /// published without waiting for anything.
@@ -305,13 +320,14 @@ internal sealed class DiagnosticsPublisher : IDisposable
         if (file.Version is { } version && newest.TryGetValue(file.Uri, out var latest) && latest > version)
             return false;
 
-        // The workspace hands back the same list for a file whose program has not been analyzed
-        // again since, and what the client is sent is worked out from that list, the tree and
-        // the line length alone. When none of them has changed, neither has what was sent.
+        // What the client is sent is worked out from the diagnostics, the tree, the branches the
+        // build omits from it and the line length alone. When none of them has changed, neither
+        // has what was sent. A file the edit did not reach usually gets equal diagnostics from
+        // the new analysis, so it is skipped without being converted again.
         var length = LineLength;
         var had = published.GetValueOrDefault(file.Uri);
-        if (!always && had is not null && had.From == file.Diagnostics && had.Tree == file.Tree
-            && had.Configuration == file.Configuration && had.LineLength == length)
+        if (!always && had is not null && had.Tree == file.Tree && had.LineLength == length
+            && Alike(had.From, file.Diagnostics) && OmitsAlike(had.Configuration, file.Configuration, file.Tree))
         {
             return false;
         }
