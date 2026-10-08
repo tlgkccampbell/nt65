@@ -695,9 +695,13 @@ public static class Compiler
             Flow.InferredSignatures signatures)
     {
         // Control flow is read from the order in which layout lays out the bytes, so the macros
-        // are expanded and the repetitions unrolled before anything is asked about the path.
+        // are expanded and the repetitions unrolled before anything is asked about the path. On
+        // the 65816 the file is laid out again from the processor state, so the first flow is
+        // only the graph that analysis walks, and the second is the one kept.
         var layout = CodeLayout.Create(model, target);
-        var flow = Flow.ControlFlow.Of(model, layout, exits, signatures);
+        var flow = target == Cpu.Wdc65816
+            ? Flow.ControlFlow.Graph(model, layout, exits, signatures)
+            : Flow.ControlFlow.Of(model, layout, exits, signatures);
         var found = new List<Diagnostic>();
 
         // On the 65816 an immediate is as wide as the register it goes to, and the

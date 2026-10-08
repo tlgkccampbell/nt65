@@ -165,73 +165,19 @@ public sealed class ControlFlow
     /// returns ends its path.
     /// </summary>
     public static ControlFlow Of(
-        SemanticModel model, CodeLayout layout, FlagExits? exits = null, InferredSignatures? signatures = null)
-    {
-        var flow = new ControlFlow(model, layout) { Signatures = signatures ?? InferredSignatures.None };
-        var checks = new FlowChecks(model, layout, flow);
-        var inline = Inline(model.Tree);
+        SemanticModel model, CodeLayout layout, FlagExits? exits = null, InferredSignatures? signatures = null) =>
+        Build(model, layout, exits, signatures, whole: true);
 
-        // Every routine's blocks are built before any loop is counted, because a loop that calls
-        // a routine in this file is counted only where that routine's body leaves the counter
-        // alone.
-        var built = new List<(Symbol Routine, List<Unit> Units, List<BasicBlock> Blocks, HashSet<Unit> InlineData)>();
-
-        // A routine's bytes are one stream unless a nested segment block takes some of them
-        // somewhere else. Fall-through stays inside a stream, but a jump may go from one to
-        // another, so all of a routine's streams are one graph, its own stream first.
-        foreach (var run in layout.Steps.Where(step => step.Routine is not null).GroupBy(step => step.Routine))
-        {
-            var routine = run.Key!;
-            var units = flow.Units([.. run.GroupBy(step => step.Stream).SelectMany(stream => stream)]);
-
-            // Where a block ends and what it costs depend on which branches are calls and on
-            // which data a call returns past, so both are found first and handed to the blocks.
-            var (calls, returnAddresses) = flow.FindRelativeCalls(units);
-            var inlineData = checks.FindInlineData(units, calls);
-            var blocks = flow.Blocks(units, calls, inlineData);
-            foreach (var (at, call) in calls)
-                flow.relativeCalls[at] = call;
-            flow.returnAddresses.UnionWith(returnAddresses);
-            built.Add((routine, units, blocks, inlineData));
-        }
-
-        // A branch the flags decide is a jump, or transfers nothing, before anything else reads
-        // the blocks. Which instructions the program rewrites is known only once every routine's
-        // annotations have been gathered.
-        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, flow.Variants, exits ?? FlagExits.None);
-        foreach (var (routine, units, blocks, _) in built)
-            flow.Decide(routine, units, blocks);
-
-        var bodies = built.ToDictionary(each => each.Routine, each => (IReadOnlyList<BasicBlock>)each.Blocks);
-        foreach (var (routine, units, blocks, inlineData) in built)
-        {
-            // The routine is entered at the label of its own name.
-            var entered = blocks.Count > 0 && blocks[0].Label == routine;
-            CountedLoops.Find(model, layout, blocks, bodies);
-
-            // A routine containing a line that layout could not lay out gets no count. The line
-            // is missing from the stream, so counting the rest would pass off part as the whole.
-            var (minimum, maximum, ends) = layout.Unlaid.Contains(routine)
-                ? (null, null, true)
-                : Paths.Through(blocks);
-            var region = new FlowRegion(
-                routine, entered, blocks, new RoutineCost(minimum, maximum, Calls(blocks), ends, Uncounted(blocks)),
-                flow.Costed(blocks, inline), inline);
-            flow.regions.Add(region);
-            checks.Check(region, units, inlineData);
-        }
-        flow.RunningOn = checks.RunningOn;
-
-        // The analysis of what each routine reads and keeps depends on flow it cannot see for
-        // itself, so each construct that hides some flow has to declare what it hides.
-        var diagnostics = new List<Diagnostic>(checks.Found);
-        foreach (var region in flow.regions)
-            flow.Flags.Check(region, diagnostics);
-        Requirements.Check(model, layout, flow, diagnostics);
-
-        flow.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
-        return flow;
-    }
+    /// <summary>
+    /// Works out where control goes in <paramref name="layout"/>'s file, as <see cref="Of"/> does,
+    /// but stops once each routine's blocks are built and its branches decided. Its loops are not
+    /// counted, its paths are not costed and nothing is checked, so its regions have no costs and
+    /// it reports nothing. The 65816's processor-state analysis reads no more than that, and the
+    /// file is laid out again from its results.
+    /// </summary>
+    internal static ControlFlow Graph(
+        SemanticModel model, CodeLayout layout, FlagExits exits, InferredSignatures signatures) =>
+        Build(model, layout, exits, signatures, whole: false);
 
     /// <summary>
     /// Returns whether a symbol is data that holds addresses, which is what a table of targets is.
@@ -496,6 +442,91 @@ public sealed class ControlFlow
                 return null;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Works out where control goes in <paramref name="layout"/>'s file. With
+    /// <paramref name="whole"/>, the flow is complete, as <see cref="Of"/> returns it. Without it,
+    /// the flow stops once the blocks are built and the branches decided, as
+    /// <see cref="Graph"/> returns it.
+    /// </summary>
+    private static ControlFlow Build(
+        SemanticModel model, CodeLayout layout, FlagExits? exits, InferredSignatures? signatures, bool whole)
+    {
+        var flow = new ControlFlow(model, layout) { Signatures = signatures ?? InferredSignatures.None };
+        var checks = new FlowChecks(model, layout, flow);
+        var inline = Inline(model.Tree);
+
+        // Every routine's blocks are built before any loop is counted, because a loop that calls
+        // a routine in this file is counted only where that routine's body leaves the counter
+        // alone.
+        var built = new List<(Symbol Routine, List<Unit> Units, List<BasicBlock> Blocks, HashSet<Unit> InlineData)>();
+
+        // A routine's bytes are one stream unless a nested segment block takes some of them
+        // somewhere else. Fall-through stays inside a stream, but a jump may go from one to
+        // another, so all of a routine's streams are one graph, its own stream first.
+        foreach (var run in layout.Steps.Where(step => step.Routine is not null).GroupBy(step => step.Routine))
+        {
+            var routine = run.Key!;
+            var units = flow.Units([.. run.GroupBy(step => step.Stream).SelectMany(stream => stream)]);
+
+            // Where a block ends and what it costs depend on which branches are calls and on
+            // which data a call returns past, so both are found first and handed to the blocks.
+            var (calls, returnAddresses) = flow.FindRelativeCalls(units);
+            var inlineData = checks.FindInlineData(units, calls);
+            var blocks = flow.Blocks(units, calls, inlineData);
+            foreach (var (at, call) in calls)
+                flow.relativeCalls[at] = call;
+            flow.returnAddresses.UnionWith(returnAddresses);
+            built.Add((routine, units, blocks, inlineData));
+        }
+
+        // A branch the flags decide is a jump, or transfers nothing, before anything else reads
+        // the blocks. Which instructions the program rewrites is known only once every routine's
+        // annotations have been gathered.
+        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, flow.Variants, exits ?? FlagExits.None);
+        foreach (var (routine, units, blocks, _) in built)
+            flow.Decide(routine, units, blocks);
+
+        if (!whole)
+        {
+            foreach (var (routine, _, blocks, _) in built)
+            {
+                var entered = blocks.Count > 0 && blocks[0].Label == routine;
+                flow.regions.Add(new FlowRegion(routine, entered, blocks, default, [], inline));
+            }
+            return flow;
+        }
+
+        var bodies = built.ToDictionary(each => each.Routine, each => (IReadOnlyList<BasicBlock>)each.Blocks);
+        foreach (var (routine, units, blocks, inlineData) in built)
+        {
+            // The routine is entered at the label of its own name.
+            var entered = blocks.Count > 0 && blocks[0].Label == routine;
+            CountedLoops.Find(model, layout, blocks, bodies);
+
+            // A routine containing a line that layout could not lay out gets no count. The line
+            // is missing from the stream, so counting the rest would pass off part as the whole.
+            var (minimum, maximum, ends) = layout.Unlaid.Contains(routine)
+                ? (null, null, true)
+                : Paths.Through(blocks);
+            var region = new FlowRegion(
+                routine, entered, blocks, new RoutineCost(minimum, maximum, Calls(blocks), ends, Uncounted(blocks)),
+                flow.Costed(blocks, inline), inline);
+            flow.regions.Add(region);
+            checks.Check(region, units, inlineData);
+        }
+        flow.RunningOn = checks.RunningOn;
+
+        // The analysis of what each routine reads and keeps depends on flow it cannot see for
+        // itself, so each construct that hides some flow has to declare what it hides.
+        var diagnostics = new List<Diagnostic>(checks.Found);
+        foreach (var region in flow.regions)
+            flow.Flags.Check(region, diagnostics);
+        Requirements.Check(model, layout, flow, diagnostics);
+
+        flow.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
+        return flow;
     }
 
     /// <summary>
