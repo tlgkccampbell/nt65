@@ -1036,17 +1036,6 @@ public static class Catalogue
             + "routine would then branch into them, out of sight of the flow analysis. Declare macros at file "
             + "level or in a `.scope`.");
 
-    internal static DiagnosticDescriptor SignatureMissing { get; } = Entry(
-        Area.Names,
-        "signature-missing",
-        Severity.Error,
-        "`{0}` is {1} with no processor-state signature: nt65 cannot see its body, so declare what it expects and "
-            + "leaves, or `?` if that is unknown",
-        "On the 65816, register widths and other processor state matter at every call. A routine with no body, an "
-            + "extern proc or an imported routine, is all the analysis has to go on at its callers, so its "
-            + "signature has to declare what state it expects and what it leaves, for example `.proc TOOLBOX = "
-            + "$E10000: a16, i16`. `?` states that nothing is known.");
-
     internal static DiagnosticDescriptor ExportNarrowsAddressSize { get; } = Entry(
         Area.Names,
         "export-narrows-address-size",
@@ -3175,6 +3164,18 @@ public static class Catalogue
             + "signature declares `a*` or `i*`, or no path reaches the line at all. Put `.ensure a8`, `a16`, `i8` or "
             + "`i16` before the line to set the width, add a `.state` after a label to declare it, or give the "
             + "width in the routine's signature.");
+
+    internal static DiagnosticDescriptor CallersDisagree { get; } = Entry(
+        Area.ProcessorState,
+        "callers-disagree",
+        Severity.Error,
+        "`{0}` is called with {1} by some callers and {2} by others, and `{3} #` depends on the width of {4}",
+        "A routine that declares nothing about a width is entered with the width its callers agree on. Here they "
+            + "disagree, and the routine has an immediate whose size depends on that width before anything sets "
+            + "it, so its bytes cannot be right for every caller. Declare the width the routine expects in its "
+            + "signature, and each caller in the other state is then reported where it calls, with an `.ensure` "
+            + "to set the width there. Or set the width in the routine with `rep`, `sep` or `.ensure` before the "
+            + "immediate.");
 
     internal static DiagnosticDescriptor ImmediateInEmulation { get; } = Entry(
         Area.ProcessorState,

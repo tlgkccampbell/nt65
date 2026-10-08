@@ -29,7 +29,7 @@ main__top:
     rts
 ; end of top
 
-; .proc inner  main.nt65:27
+; .proc inner  main.nt65:28
 outer__inner:
     lda z:z
     lda z:f
@@ -38,7 +38,7 @@ outer__inner:
     rts
 ; end of inner
 
-; .proc draw  main.nt65:36
+; .proc draw  main.nt65:37
 draw:
     ldx #0
 draw__loop:

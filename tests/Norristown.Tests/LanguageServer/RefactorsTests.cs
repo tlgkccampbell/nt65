@@ -196,6 +196,25 @@ public sealed class RefactorsTests
         Assert.Equal(Main, Editing.Apply(edited, stopped.Edit!.Changes[Uri]));
     }
 
+    /// <summary>
+    /// The state inferred for a routine is declared in one step, added to the items the routine
+    /// already declares, with what its callers agree on at entry and what its returns leave after
+    /// the arrow.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc draw {", "a8, i16, dp = $0000 -> a16", ".proc draw: a8, i16, dp = $0000 -> a16 {")]
+    [InlineData(".proc draw: dp = 0 {", "a8, i16 -> a16", ".proc draw: dp = 0, a8, i16 -> a16 {")]
+    [InlineData(".proc draw: dp = 0 -> dp = 0 {", "a8, i16 -> a16", ".proc draw: dp = 0, a8, i16 -> dp = 0, a16 {")]
+    public void TheStateInferredForARoutineIsDeclared(string head, string shown, string declared)
+    {
+        const string Start = ".module main\n.cpu 65816\n.segment CODE\n";
+        const string Rest = "\n    lda #$12\n    rep #$20\n    rts\n}\n.export .proc main: a8, i16, dp = 0 -> a16 {\n    jsr draw\n    rts\n}\n";
+
+        var action = Single(Start + head + Rest, ".proc draw", $"Declare the state `draw` is inferred with: `{shown}`");
+
+        Assert.Equal(Start + declared + Rest, Editing.Apply(Start + head + Rest, action.Edit!.Changes[Uri]));
+    }
+
     /// <summary>What a routine leaves is declared from what the analysis finds at its returns.</summary>
     [Fact]
     public void WhatARoutineLeavesIsDeclared()

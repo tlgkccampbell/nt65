@@ -44,7 +44,7 @@ public sealed class CatalogueAreaTests
             "name-is-a-module-path", "not-a-macro", "not-a-scope", "not-declared", "not-declared-in",
             "not-exported", "place-misplaced", "place-not-placeable", "placed-nowhere", "placed-twice",
             "placement-cycle", "reexport-module", "reexport-needed", "reexport-star", "register-name",
-            "segment-region-misplaced", "signature-item-needs-65816", "signature-missing",
+            "segment-region-misplaced", "signature-item-needs-65816",
             "signature-set-name-is-an-item", "unused-symbol", "unused-use-item", "use-brings-in-twice",
             "use-collides-with-declaration", "use-misplaced", "use-star-not-a-module",
         ]),
@@ -132,7 +132,7 @@ public sealed class CatalogueAreaTests
         ("Processor state",
         [
             "args-not-pushed", "asserted-item-not-restored", "bank-mismatch", "branch-to-far-routine", "call-distance-mismatch",
-            "call-state-mismatch", "call-target-not-a-routine", "call-target-unknown", "direct-page-mismatch",
+            "call-state-mismatch", "call-target-not-a-routine", "call-target-unknown", "callers-disagree", "direct-page-mismatch",
             "direct-page-out-of-reach", "direct-page-unknown", "ensure-item-not-a-width", "ensure-needs-native",
             "frame-depth-unknown", "frame-gone", "frame-member-not-stack-relative", "frame-not-a-record",
             "frame-past-the-stack", "immediate-in-emulation", "jump-across-banks", "jump-distance-mismatch",

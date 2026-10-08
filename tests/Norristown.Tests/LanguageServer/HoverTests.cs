@@ -4,10 +4,28 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Tests what hover shows about the processor state. It shows which registers a routine or scope
-/// preserves, what each register holds at a line, and what the routine has pushed.
+/// preserves, the state inferred for a routine, what each register holds at a line, and what the
+/// routine has pushed.
 /// </summary>
 public sealed class HoverTests
 {
+    /// <summary>
+    /// An editor can be set to hide lenses, so which registers a routine or an inline
+    /// <c>.scope</c> block preserves is shown on hover as well as in the lens above the line.
+    /// </summary>
+    [Fact]
+    public async Task HoverOnARoutineShowsTheStateInferredForIt()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = ".module main\n.cpu 65816\n.segment CODE\n.proc draw {\n    lda #$12\n    rep #$20\n    rts\n}\n"
+            + ".export .proc main: a8, i16 -> a16 {\n    jsr draw\n    rts\n}\n";
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source));
+
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, ".proc dr|aw"), timeout);
+
+        Assert.Matches(@"inferred +a8, i16 -> a16", hover?.Contents.Value);
+    }
+
     /// <summary>
     /// An editor can be set to hide lenses, so which registers a routine or an inline
     /// <c>.scope</c> block preserves is shown on hover as well as in the lens above the line.

@@ -1238,15 +1238,53 @@ items are:
 | `?` | every part above unknown (below) | none |
 | a signature set's name | the items the set declares (below) | none |
 
-**The widths default to `*`.** A proc that writes no width assumes nothing about one: it is
-callable whatever the caller's widths are, and must hand them back as it found them. That is
-what a routine which never touches a width-dependent immediate — a wait loop, zero-page
-bookkeeping, a poll of a hardware register — actually promises, and it is now what such a
-routine says by writing nothing. A body that does depend on a width gets `A's width is not
-known here` and says which it means. The old default of `a8, i8` was a known value, so it
-answered a question the author had not asked: `.proc f { lda #$12 }`, meant as 16-bit, assembled
-silently as an 8-bit immediate, which is the ca65 failure §2 exists to remove. This is also why
-a macro's items default to `*` (§11.5); procs now agree with them.
+**A part a routine does not declare is inferred.** The state has five parts: A's width, the
+index width, the mode, `dp` and `dbr`. Writing any item for a part, at entry or at exit,
+directly or through a signature set, makes that part a contract: the routine is checked
+against it at every return, and every caller at its call, as before. A part nothing writes is
+inferred from the program, across files:
+
+- The exit comes from the routine's body. A part every return hands back as the routine was
+  entered with is unchanged; a part every return gives one value has it; a part the returns
+  disagree on is unknown after a call, an error only where a caller then needs it. A tail call
+  returns with what the routine it calls leaves.
+- The entry comes from the routine's callers: every call, tail call, `.fallthrough` and `.next`
+  that hands control to its start. Where they agree on a part, the routine is entered with it.
+  A routine whose callers cannot all be seen keeps the default entry, `a*, i*, native, dp*,
+  dbr*`: an exported routine, which another module or the linker may call; one whose address
+  is taken, by any use of its name other than as where control goes; and one nothing calls.
+
+This is sound where an assumed width was not. nt65 sizes every immediate from the state the
+processor will be in, so an inferred width describes what the CPU does, and the bytes follow
+it. The old default of `a8, i8` was a known value that answered a question the author had not
+asked: `.proc f { lda #$12 }`, meant as 16-bit, assembled silently as an 8-bit immediate, which
+is the ca65 failure §2 exists to remove. An inferred `a8` comes from the callers that put the
+processor in 8-bit mode, so `lda #$12` there is an 8-bit load. What the author meant, where it
+differs from what the program does, is what a declaration states, and then it is checked.
+
+The parts fall into two classes, treated differently where callers disagree:
+
+- **The widths and the mode decide how the routine's bytes are read.** Callers that disagree
+  on a width the body depends on, through an immediate before anything sets it, are an error
+  at the routine, `callers-disagree`, listing the callers, with fixes that declare either
+  width. Where the body does not depend on it, the part stays `*`: the routine runs with
+  either and hands it back. Where callers disagree on the mode, it stays `native`, the default,
+  which the callers in emulation mode are then reported against.
+- **`dp` and `dbr` decide only which memory an operand reaches**, and a routine may be meant
+  to run with several. Callers that disagree combine as two paths do where they meet: `dbr`
+  becomes one of the callers' banks, and `dp` becomes unknown, an error only where an operand
+  needs one value, with the cause naming the callers.
+
+The signatures are solved once every file has been analyzed, when the analysis settles (§14, what a keystroke publishes).
+Each file's processor-state analysis records the state at each call and each return, and the
+signatures are learned from them, running the analysis again on the files' existing layouts
+until no file took a signature that has since changed. Every answer starts at nothing known and
+only moves one way. An entry's part goes from no caller seen, to the value the callers agree
+on, to disagreeing or unknown. An exit goes from no return seen, to a value, to unknown. A call
+to a routine none of whose returns has been seen yet ends its path for that round, as a call
+to a routine that never returns does. Each part of each routine changes at most twice, so the
+solving ends without a bound on the rounds. A file whose signatures changed is then laid out
+again, once. A macro's items still default to `*` (§11.5), since a macro is not called.
 
 `?` means unknown, for entry points reached from outside nt65. Written on its own, as an item,
 `?` is every one of those parts unknown at once — `a?, i?, e?, dp?, dbr?` — which is what a
@@ -1285,8 +1323,10 @@ After `->`, and in a macro's signature, a set gives only its state: `near`, `far
 left out there. There are no defaults per file or per segment: the built-in defaults above stay
 what a signature that says nothing means.
 
-**Routines that never return.** `noreturn` says a routine never returns: a reset handler, a
-main loop, a routine that jumps away for good. It is written with `near`, `far` and
+**Routines that never return.** A routine that no path returns from is inferred never to
+return, on every CPU, from the program's stack effects; a routine that jumps into an interrupt
+handler is not, since the handler's `rti` goes somewhere. `noreturn` declares it: a reset
+handler, a main loop, a routine that jumps away for good. It is written with `near`, `far` and
 `interrupt`, before the arrow, because it describes how a routine relates to its caller rather
 than what its state becomes, and a routine that never returns declares nothing after `->`. An
 `rts` or `rtl` in it is an error, a call to it ends the path, so nothing after the call needs
@@ -1314,13 +1354,12 @@ Three kinds of routine carry a signature: a proc with a body, an extern proc
 (`.import _printf: proc(a8, i16)`, §12). On the 65816 anything called must be one of
 these.
 
-**A routine with no body declares its state.** On the 65816 an extern proc at a constant
-address and an imported routine must write at least one item, because the declaration is all
-there is: no body will ever contradict it, so a default there is a guess nothing checks. `?` is
-what to write where nothing is known, which is the usual answer for a ROM or toolbox entry:
-`.proc CHROUT = $FFD2: ?, near`. An extern proc that names another routine and writes nothing
-takes that routine's signature, which is a declaration too. A proc with a body is not held to
-this: its body is checked against whatever it declares, defaults included.
+**A routine with no body has nothing to infer from.** An extern proc at a constant address
+or an imported routine that writes nothing about its state is called in any state and returns
+with every part unknown, since no body says what it does. The code after a call to it then sets
+what it needs. A routine with no body that writes some items takes the defaults for the rest,
+as before, and is trusted. An extern proc that names another routine and writes nothing takes
+that routine's signature.
 
 **Transfer functions.** Every instruction has a fixed effect on the state:
 
@@ -4568,8 +4607,10 @@ Recorded so the reasoning survives. None is open.
   position cannot answer.
 - **Merge disagreement is not an error.** The lattice already has unknown; reporting at
   the use is precise, reporting at the label is not.
-- **Signatures are declared, never inferred**, for procs, extern procs and imports
-  alike. It is what keeps the analysis local and the interface stable.
+- **What a signature does not declare is inferred**, and what it declares is a contract.
+  The exit comes from the body and the entry from the callers, except where callers cannot
+  all be seen. The cost is a program-wide solve, which runs once typing stops rather than on
+  each keystroke.
 - **`*` for unchanged state, and no project-wide `assume`.** A routine that does not
   touch part of the state should not erase what its caller knows, and the values of D
   and B belong on the routines that set them.

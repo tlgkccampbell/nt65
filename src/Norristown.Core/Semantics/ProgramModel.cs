@@ -435,10 +435,6 @@ public sealed class ProgramModel
             CheckExportSizes(result.Symbols, byFile);
         }
 
-        // This check runs after the alias check, because by then an alias that declares no
-        // signature has taken the routine's.
-        foreach (var result in bound)
-            CheckDeclaredSignatures(result.Symbols, byFile, cpu);
         return new Reading(symbols, bound, byFile, tables, forwarding, resolved, declared, reads);
     }
 
@@ -673,32 +669,6 @@ public sealed class ProgramModel
             .OfType<Symbol>();
         foreach (var other in linked)
             yield return resolved.Current(other);
-    }
-
-    /// <summary>
-    /// Reports a diagnostic, on the 65816, for each routine with no body whose signature declares
-    /// no state. Every call through such a routine is checked against its declaration, and there
-    /// is no body to check the declaration itself. An extern proc at a constant address and an
-    /// imported routine must therefore declare their state rather than take a default that is only
-    /// a guess. An extern proc that names another routine and declares nothing takes that
-    /// routine's signature, which counts as a declaration too.
-    /// </summary>
-    private static void CheckDeclaredSignatures(
-        IEnumerable<Symbol> symbols, Dictionary<string, List<Diagnostic>> byFile, Cpu cpu)
-    {
-        if (cpu != Cpu.Wdc65816)
-            return;
-        foreach (var symbol in symbols)
-        {
-            if (symbol.Kind is not (SymbolKind.ExternProc or SymbolKind.ImportedAddress)
-                || symbol.Signature is not { DeclaresState: false })
-            {
-                continue;
-            }
-            var kind = symbol.Kind == SymbolKind.ExternProc ? "an extern proc" : "an imported routine";
-            byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.DeclarationSpan,
-                Catalogue.SignatureMissing.Message(symbol.Name, kind)));
-        }
     }
 
     /// <summary>

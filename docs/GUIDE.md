@@ -1220,9 +1220,10 @@ An instruction with several forms names one with the words `.mode` uses, such as
 `.opcode(lda, absx)`, with `zp`, `zpx` and `zpy` for the direct page and `far` and `farx` for an
 `f:` address. A form the CPU lacks is an error.
 
-**Routines that never return.** `noreturn` in a signature says the routine never returns: a
-reset handler, a main loop, a routine that jumps away for good. An `rts` in it is an error,
-and a call to it ends the path, so nothing after the call needs an annotation. `interrupt`
+**Routines that never return.** A routine that no path returns from never returns, and a call
+to it ends the path, so nothing after the call needs an annotation. nt65 works this out on
+every processor. `noreturn` in a signature makes it a contract: an `rts` in such a routine is
+an error. `interrupt`
 says the routine is an interrupt handler: it must end with `rti`, and calling it with `jsr`
 is an error.
 
@@ -1430,14 +1431,56 @@ The signature items are:
 | `args n` | the caller pushes n bytes before the call |
 | `interrupt`, `noreturn` | an interrupt handler; a routine that never returns |
 
-**Widths default to "unchanged".** A routine that writes no width assumes nothing about it,
-so it can be called in any state, and it must hand the widths back as it found them. That is
-exactly right for code that never uses a width-dependent immediate. Code that does gets an
-error, and you add `a8` or `a16` to the signature:
+**What a routine leaves out is inferred.** The state has five parts: A's width, the index
+width, the mode, `dp` and `dbr`. A routine that writes an item for a part is held to it, at its
+calls and at its returns. A part it writes nothing for is inferred:
+
+- **The exit comes from the body.** A part every return hands back as it was entered with is
+  unchanged. A part every return gives one value has that value. A part the returns disagree
+  on is unknown after a call, which is an error only where a caller then needs it.
+- **The entry comes from the callers.** Where every call, tail call and `.fallthrough` into a
+  routine agrees on a part, the routine is entered with it, so its immediates are sized from
+  it. Callers in other files count too.
+
+```nt65
+.proc draw {                ; declares nothing
+    lda #$1234              ; 16-bit, because every caller is in a16
+    sep #$20
+    rts                     ; inferred exit: a8
+}
+
+.export .proc main: a16 -> a8 {
+    jsr draw
+    rts
+}
+```
+
+Some routines have callers nt65 cannot see, and keep the default entry, `a*, i*, native, dp*,
+dbr*`. These are exported routines, which other modules or the linker may call, and routines
+whose address is taken, as `.addr`, `pea` and `#<` take it. A routine nothing calls, such as a
+reset handler, keeps it too. A width-dependent immediate in such a routine needs a width the
+signature writes:
 
 ```text
-main.nt65:4:5: error: `lda #` needs the width of A, and `f` says `a*`, which assumes nothing about it [width-unknown]
+main.nt65:4:5: error: `lda #` needs the width of A, and `f` declares `a*`, which assumes nothing about it [width-unknown]
 ```
+
+**Callers that disagree.** The widths and the mode decide how the routine's bytes are read.
+Callers that enter a routine with two widths, where its body has an immediate that depends on
+the width, are an error at the routine, `callers-disagree`. It lists each caller, and its fixes
+declare either width. Callers then get the usual error where they call in the other state.
+Where the body does not depend on the width, the callers may disagree, and the routine hands
+the width back as it found it.
+
+The direct page and the data bank decide only which memory an operand reaches, and a routine
+may be meant to run with several. Callers that disagree combine as two paths do where they
+meet. `dbr` becomes one of the callers' banks, and every check of a bank is made for each.
+`dp` becomes unknown, which is an error only where an operand needs it, such as a `d:` operand
+or a symbol in a segment that declares `dp`. The error names the callers.
+
+Hover over a routine's name to see what is inferred for it, on the `inferred` row. The
+refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
+a contract.
 
 **Signature sets.** Most routines of a program share a state, so name it once:
 
@@ -1479,8 +1522,9 @@ ROM entry or a routine from hand-written ca65 is declared with one:
 .import _memset: proc(a16, i16)
 ```
 
-A routine with no body must write at least one item on the 65816, because nothing else can
-tell nt65 what it expects. `?` says nothing is known.
+A routine with no body has nothing to infer from. One that writes nothing about its state is
+called in any state, and returns with every part unknown, so the code after a call to it has to
+set what it needs. `?` says the same in the signature.
 
 ### Flags in signatures
 

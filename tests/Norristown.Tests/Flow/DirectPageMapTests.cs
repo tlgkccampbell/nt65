@@ -66,7 +66,7 @@ public sealed class DirectPageMapTests
             stx tmp
         @next:
             ldx tmp
-            lda #1
+            lda map
             beq @done
             jsr plot
             ldx tmp

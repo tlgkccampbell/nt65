@@ -362,7 +362,7 @@ internal static class Hovers
         var kind = symbol.Kind switch
         {
             SymbolKind.Member => new[] { "offset" },
-            SymbolKind.Proc or SymbolKind.ExternProc => ["cost", "excluding", "reads", "preserves"],
+            SymbolKind.Proc or SymbolKind.ExternProc => ["cost", "excluding", "reads", "preserves", "inferred"],
 
             // At a call, a reader hovers a function to see the value of the call.
             SymbolKind.Func => ["value"],
@@ -506,6 +506,15 @@ internal static class Hovers
             card.Row(i == 0 ? "excluding" : "", $"{excluded[i].What}: {excluded[i].Why}");
         Rows(card, "reads", found.Select(region => (region.Name, (string?)region.Read)));
         Rows(card, "preserves", found.Select(region => (region.Name, region.Kept)));
+
+        // The parts of the state a routine leaves to be inferred are what it is entered with
+        // and leaves without saying so, which the signature on its line does not show.
+        if (analysis.Cpu == Cpu.Wdc65816 && symbol.Signature is { IsInterrupt: false } declared
+            && flow.Signatures.Of(symbol) is { } inferred)
+        {
+            var (entry, exit) = InferredState.Items(declared, inferred);
+            card.Row("inferred", InferredState.Format(entry, exit));
+        }
     }
 
     /// <summary>

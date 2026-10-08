@@ -228,7 +228,7 @@ public static class Compiler
 
         // An analysis of the changed files that finds a diagnostic in text an edit replaced
         // cannot tell where that diagnostic belongs now.
-        return AnalyzeAll(files, project, binaryLength, cancellation) with
+        return AnalyzeAll(files, project, binaryLength, previous is { Files: [var first, ..] } ? first.Flow.Signatures : null, cancellation) with
         {
             WholeProgram = reason ?? WholeProgramReason.DiagnosticInEditedText,
         };
@@ -279,9 +279,14 @@ public static class Compiler
         return Emitter.Emit(members, analysis.Placements, diagnostics, project.Out);
     }
 
+    /// <summary>
+    /// Analyzes every file of the program. Each file's analysis starts from
+    /// <paramref name="signatures"/>, the signatures an earlier analysis inferred, where there is
+    /// one, so that a file whose routines' signatures are the same is not analyzed twice.
+    /// </summary>
     private static ProgramAnalysis AnalyzeAll(
         IReadOnlyCollection<SyntaxTree> files, ProjectSettings project, Func<string, long?> binaryLength,
-        CancellationToken cancellation)
+        Flow.InferredSignatures? signatures, CancellationToken cancellation)
     {
         // The modules that come with nt65 are added to a program that could name them. A caller
         // that passes back the files of an earlier analysis passes those modules too, so they are
@@ -316,7 +321,7 @@ public static class Compiler
         var program = ProgramModel.Create(trees, segments, configuration, Length, target);
         cancellation.ThrowIfCancellationRequested();
         var analyzed = new Dictionary<string, IReadOnlyList<Diagnostic>>(StringComparer.Ordinal);
-        var analyses = AnalyzeFiles(program, target, project, analyzed, previous: null, dirty: null, cancellation);
+        var analyses = AnalyzeFiles(program, target, project, analyzed, previous: null, dirty: null, signatures, cancellation);
         var reuse = new ProgramAnalysis.Reuse(
             project, trees, ByFile(trees, conditions), analyzed, segmentTable, lengths);
         return Composed(
@@ -457,7 +462,7 @@ public static class Compiler
         if (EditMap.Moved(reuse.SegmentTable, moved) is not { } segmentTable)
             return null;
 
-        var analyses = AnalyzeFiles(program, previous.Cpu, project, analyzed, previous, dirty, cancellation);
+        var analyses = AnalyzeFiles(program, previous.Cpu, project, analyzed, previous, dirty, null, cancellation);
         return Composed(
             new ProgramAnalysis(program, previous.Cpu, analyses, configuration, [])
             {
@@ -493,12 +498,15 @@ public static class Compiler
     /// analysis found, in the program's order. When <paramref name="previous"/> is given, only the
     /// files at <paramref name="dirty"/> are analyzed, and every other file keeps what
     /// <paramref name="previous"/> found for it. <paramref name="analyzed"/> receives the
-    /// diagnostics of each file analyzed. <paramref name="cancellation"/> is checked before each
-    /// file, and after the last, so that a cancelled analysis stops before the program is composed.
+    /// diagnostics of each file analyzed. Each file analyzed takes <paramref name="signatures"/>
+    /// for the routines it reaches, or else what <paramref name="previous"/> inferred.
+    /// <paramref name="cancellation"/> is checked before each file, and after the last, so that a
+    /// cancelled analysis stops before the program is composed.
     /// </summary>
     private static List<FileAnalysis> AnalyzeFiles(
         ProgramModel program, Cpu target, ProjectSettings project, Dictionary<string, IReadOnlyList<Diagnostic>> analyzed,
-        ProgramAnalysis? previous, IReadOnlySet<string>? dirty, CancellationToken cancellation)
+        ProgramAnalysis? previous, IReadOnlySet<string>? dirty, Flow.InferredSignatures? signatures,
+        CancellationToken cancellation)
     {
         var files = new List<FileAnalysis>();
         foreach (var model in program.Files)
@@ -517,7 +525,8 @@ public static class Compiler
             var (layout, flow, state, found) = AnalyzeFile(
                 model, target, project,
                 previous is { Files: [var any, ..] } ? any.Flow.Effects : Flow.StackEffects.None,
-                previous is { Files: [var some, ..] } ? some.Flow.FlagExits : Flow.FlagExits.None);
+                previous is { Files: [var some, ..] } ? some.Flow.FlagExits : Flow.FlagExits.None,
+                signatures ?? (previous is { Files: [var first, ..] } ? first.Flow.Signatures : Flow.InferredSignatures.None));
             files.Add(new FileAnalysis(model, layout, flow, state));
             analyzed[model.Tree.Path] = found;
         }
@@ -566,6 +575,12 @@ public static class Compiler
         // The flag analysis of each file likewise takes what each routine it calls returns with in
         // the flags. Those answers are worked out once every routine's registers are settled, and
         // a file whose decisions or checks took an answer the program differs on is analyzed again.
+        //
+        // So does each file's control flow take which routines never return, and its
+        // processor-state analysis the signature of each routine, inferred where the routine does
+        // not declare it. The states are solved over the files' existing layouts before any file
+        // is laid out again, so a file is laid out again once for them, however long the chains
+        // of calls they pass along.
         IReadOnlyList<Diagnostic> registers;
         IReadOnlySet<Flow.RoutineKey> readers;
         for (var round = 0; ; round++)
@@ -573,11 +588,17 @@ public static class Compiler
             Flow.CallCosts.Compose(analysis.Files.Select(file => file.Flow));
             (registers, readers, var effects) = Flow.RegisterKeeps.Compose(analysis.Files);
             var exits = Flow.FlagExits.Solve(analysis.Files);
+            var signatures = Flow.InferredSignatures.Solve(analysis.Files, effects, project.Ranges, cancellation);
             foreach (var file in analysis.Files)
+            {
                 file.Flow.FlagExits = exits;
+                file.Flow.Signatures = signatures;
+            }
             var stale = analysis.Files
                 .Where(file => file.State?.Consumed.Any(taken => effects.Of(taken.Key) != taken.Value) == true
-                    || file.Flow.Flags?.Consumed.Any(taken => taken.IsStale(exits)) == true)
+                    || file.Flow.Flags?.Consumed.Any(taken => taken.IsStale(exits)) == true
+                    || file.State?.TookStale(signatures) == true
+                    || file.Flow.NeverReturnsTaken.Any(taken => signatures.Of(taken.Key)?.NeverReturns != taken.Value))
                 .ToHashSet();
             if (stale.Count == 0 || round == StaleRounds)
                 break;
@@ -591,7 +612,7 @@ public static class Compiler
                     files.Add(file);
                     continue;
                 }
-                var (layout, flow, state, found) = AnalyzeFile(file.Model, analysis.Cpu, project, effects, exits);
+                var (layout, flow, state, found) = AnalyzeFile(file.Model, analysis.Cpu, project, effects, exits, signatures);
                 files.Add(new FileAnalysis(file.Model, layout, flow, state));
                 analyzed[file.Path] = found;
             }
@@ -648,12 +669,14 @@ public static class Compiler
     /// and, on the 65816, its processor state, together with the diagnostics they found.
     /// </summary>
     private static (CodeLayout Layout, Flow.ControlFlow Flow, Flow.StateAnalysis? State, IReadOnlyList<Diagnostic> Found)
-        AnalyzeFile(SemanticModel model, Cpu target, ProjectSettings project, Flow.StackEffects effects, Flow.FlagExits exits)
+        AnalyzeFile(
+            SemanticModel model, Cpu target, ProjectSettings project, Flow.StackEffects effects, Flow.FlagExits exits,
+            Flow.InferredSignatures signatures)
     {
         // Control flow is read from the order in which layout lays out the bytes, so the macros
         // are expanded and the repetitions unrolled before anything is asked about the path.
         var layout = CodeLayout.Create(model, target);
-        var flow = Flow.ControlFlow.Of(model, layout, exits);
+        var flow = Flow.ControlFlow.Of(model, layout, exits, signatures);
         var found = new List<Diagnostic>();
 
         // On the 65816 an immediate is as wide as the register it goes to, and the
@@ -662,10 +685,10 @@ public static class Compiler
         Flow.StateAnalysis? state = null;
         if (target == Cpu.Wdc65816)
         {
-            state = Flow.StateAnalysis.Of(model, layout, flow, project.Ranges, effects);
+            state = Flow.StateAnalysis.Of(model, layout, flow, project.Ranges, effects, signatures);
             found.AddRange(state.Diagnostics);
             layout = CodeLayout.Create(model, target, state);
-            flow = Flow.ControlFlow.Of(model, layout, exits);
+            flow = Flow.ControlFlow.Of(model, layout, exits, signatures);
         }
 
         // An `.ensure` that names a flag emits nothing where the flags already hold, which the
@@ -675,7 +698,7 @@ public static class Compiler
             && StateItem.Read(ensure).Any(item => item.Part == StatePart.Flag)))
         {
             layout = CodeLayout.Create(model, target, state, flow.Flags!.Known);
-            flow = Flow.ControlFlow.Of(model, layout, exits);
+            flow = Flow.ControlFlow.Of(model, layout, exits, signatures);
         }
         found.AddRange(layout.Diagnostics);
         found.AddRange(flow.Diagnostics);

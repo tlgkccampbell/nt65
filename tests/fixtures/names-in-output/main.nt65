@@ -20,6 +20,7 @@
 .segment CODE
 .proc top {
     jsr draw
+    .allow "code-unreachable", "draw never returns, but a return keeps the name test simple"
     rts
 }
 

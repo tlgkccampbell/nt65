@@ -24,13 +24,24 @@ internal sealed class StateChecks
     // The banks an absolute constant address in each range may be reached from.
     private readonly IReadOnlyList<Project.AccessRange> ranges;
 
+    // Returns the signature each routine is analyzed with, and records that the analysis took it.
+    private readonly Func<Symbol, Signature?> signatureOf;
+    private readonly InferredSignatures signatures;
+
     private readonly List<Diagnostic> diagnostics = [];
 
-    public StateChecks(SemanticModel model, CodeLayout layout, IReadOnlyList<Project.AccessRange> ranges)
+    // The routines and registers whose callers disagree that have been reported, once each.
+    private readonly HashSet<(Symbol, WidthRegister)> disagreed = [];
+
+    public StateChecks(
+        SemanticModel model, CodeLayout layout, IReadOnlyList<Project.AccessRange> ranges,
+        Func<Symbol, Signature?> signatureOf, InferredSignatures signatures)
     {
         this.model = model;
         this.layout = layout;
         this.ranges = ranges;
+        this.signatureOf = signatureOf;
+        this.signatures = signatures;
     }
 
     /// <summary>Gets what the checks have found, in the order they were reported.</summary>
@@ -96,7 +107,12 @@ internal sealed class StateChecks
         var width = state.Of(register);
         var text = SyntaxFacts.TextOf(mnemonic);
         var item = StateRegister.Of(register).Item;
-        if (width == Width.Unchanged)
+        if (width == Width.Unchanged && Owner(step, routine) == routine.DisplayName
+            && signatures.DisagreementOn(routine, register == WidthRegister.A ? StateParts.A : StateParts.Index) is { } callers)
+        {
+            ReportDisagreement(step, text, register, routine, callers);
+        }
+        else if (width == Width.Unchanged)
         {
             Report(step, Catalogue.WidthUnknown.Message(
                 text,
@@ -120,15 +136,45 @@ internal sealed class StateChecks
     }
 
     /// <summary>
+    /// Reports, once for each routine and register, that the routine's callers disagree on a
+    /// width its body depends on. It is reported at the routine's name, with each caller and the
+    /// immediate that depends on the width beside it. The fixes declare either width.
+    /// </summary>
+    private void ReportDisagreement(
+        Step step, string mnemonic, WidthRegister register, Symbol routine, IReadOnlyList<(string State, Span At)> callers)
+    {
+        if (!disagreed.Add((routine, register)))
+            return;
+        var states = callers.Select(caller => caller.State).Distinct().Order(StringComparer.Ordinal).ToList();
+        var related = new List<RelatedSpan>
+        {
+            new(step.Statement.Tree.GetSpan(step.Statement.Span), "the width is needed here"),
+        };
+        related.AddRange(callers.Select(caller => new RelatedSpan(caller.At, $"called with `{caller.State}`")));
+        var own = routine.Tree == model.Tree;
+        diagnostics.Add(new Diagnostic(
+            routine.DeclarationSpan,
+            Catalogue.CallersDisagree.Message(
+                routine.DisplayName, $"`{states[0]}`", $"`{states[^1]}`", mnemonic, Format(register)),
+            related)
+        {
+            Fix = own ? new DiagnosticFix(FixKind.Signature, states[0], routine.DeclarationSpan) : null,
+            Also = own ? new DiagnosticFix(FixKind.Signature, states[^1], routine.DeclarationSpan) : null,
+        });
+    }
+
+    /// <summary>
     /// Reports a diagnostic where the memory an operand reaches through the direct page or the
-    /// data bank disagrees with what the segments and the project's <c>ranges</c> declare. Where
+    /// data bank disagrees with what the segments and the project's <c>ranges</c> declare.
+    /// <paramref name="whyD"/> says why D is unknown, where it is and the analysis can tell. Where
     /// the segment or range declares nothing, nothing is reported, because the checks are opt-in
     /// by declaration. A direct operand on a symbol whose segment declares <c>dp</c> also needs D
     /// to be known, because the operand reaches the symbol only when D holds that value. Where B is
     /// not known, nothing is reported. A near transfer to a segment in another bank is a matter of
     /// reach, which layout checks.
     /// </summary>
-    public void CheckMemory(Step step, MnemonicKind mnemonic, AddressingMode? mode, ProcessorState state, Symbol routine)
+    public void CheckMemory(
+        Step step, MnemonicKind mnemonic, AddressingMode? mode, ProcessorState state, Cause? whyD, Symbol routine)
     {
         if (mode is not { } chosen || StepOperands.Of(model, step) is not { } operand
             || CodeLayout.Expression(operand) is not { } expression)
@@ -140,7 +186,7 @@ internal sealed class StateChecks
         {
             if (CodeLayout.ThroughDirectPage(operand))
             {
-                CheckThroughDirectPage(step, expression, state, routine);
+                CheckThroughDirectPage(step, expression, state, whyD, routine);
                 return;
             }
             foreach (var symbol in AddressSymbols.In(model, expression, step.On))
@@ -156,7 +202,7 @@ internal sealed class StateChecks
                 else if (!state.D.IsKnown)
                 {
                     Report(step, Catalogue.DirectPageUnknown.Message(
-                        what, "D is not known here: a `.state dp = ...` declares what it is"));
+                        what, Unknown(whyD)));
                 }
                 else if (page != state.D.Value)
                 {
@@ -246,17 +292,26 @@ internal sealed class StateChecks
     /// </summary>
     /// <remarks>
     /// <paramref name="where"/> says where <paramref name="state"/> holds, as the message puts it.
+    /// Only the parts of <paramref name="held"/> are checked, which for a routine are the parts its
+    /// signature declares, since the others are inferred from what its returns leave.
     /// Where <paramref name="returning"/> is given, the step is that routine's return, and each
     /// mismatch offers two fixes. One sets the width the routine declares with an <c>.ensure</c>,
     /// and the other declares what the analysis finds here.
     /// </remarks>
     public void CheckExit(
-        Step step, string what, string where, ProcessorState exit, ProcessorState state, string name, Symbol? returning = null)
+        Step step, string what, string where, ProcessorState exit, ProcessorState state, string name, Symbol? returning = null,
+        StateParts held = StateParts.All)
     {
         var lead = what.Length == 0 ? "" : what + " ";
-        Part(StateRegister.A, exit.A, state.A);
-        Part(StateRegister.Index, exit.Index, state.Index);
-        if (exit.E == ProcessorMode.Unchanged && state.E != ProcessorMode.Unchanged)
+        if ((held & StateParts.A) != 0)
+            Part(StateRegister.A, exit.A, state.A);
+        if ((held & StateParts.Index) != 0)
+            Part(StateRegister.Index, exit.Index, state.Index);
+        if ((held & StateParts.Mode) == 0)
+        {
+            // The mode is inferred from what the returns leave, so there is nothing to check.
+        }
+        else if (exit.E == ProcessorMode.Unchanged && state.E != ProcessorMode.Unchanged)
         {
             Report(step, Catalogue.AssertedItemNotRestored.Message(
                 lead, name, "e*", "the mode", "what it was on entry", where));
@@ -274,8 +329,10 @@ internal sealed class StateChecks
                 null);
         }
 
-        Value(StateRegister.DirectPage, exit.D, state.D);
-        Value(StateRegister.DataBank, exit.B, state.B);
+        if ((held & StateParts.DirectPage) != 0)
+            Value(StateRegister.DirectPage, exit.D, state.D);
+        if ((held & StateParts.DataBank) != 0)
+            Value(StateRegister.DataBank, exit.B, state.B);
 
         void Value(StateRegister register, StateValue declared, StateValue here)
         {
@@ -344,12 +401,13 @@ internal sealed class StateChecks
     /// </summary>
     public void CheckReturn(Step step, MnemonicKind mnemonic, ProcessorState state, Symbol routine)
     {
-        var signature = routine.Signature ?? Signature.Default;
+        var signature = signatureOf(routine) ?? Signature.Default;
         if (mnemonic == MnemonicKind.Rts && signature.IsFar)
             Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"), Own(step, FixKind.Return, "rtl"));
         else if (mnemonic == MnemonicKind.Rtl && !signature.IsFar)
             Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"), Own(step, FixKind.Return, "rts"));
-        CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName, routine);
+        CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName, routine,
+            signature.Declared);
     }
 
     /// <summary>
@@ -380,10 +438,9 @@ internal sealed class StateChecks
     /// Reports a diagnostic where a call made with <c>per</c> and a branch does not suit the routine
     /// it calls. The call is checked as <c>jsr</c> or, with a <c>phk</c> before it, as <c>jsl</c>.
     /// </summary>
-    public void CheckRelativeCall(Step step, MnemonicKind mnemonic, RelativeCall call, ProcessorState state)
+    public void CheckRelativeCall(Step step, MnemonicKind mnemonic, RelativeCall call, Signature callee, ProcessorState state)
     {
         var target = call.Routine;
-        var callee = target.Signature!;
         if (callee.IsFar && !call.IsFar)
             Report(step, Catalogue.RelativeCallNeedsPhk.Message(target.DisplayName), BankPush(step, call.Push, "phk"));
         else if (!callee.IsFar && call.IsFar && call.Bank is { } bank)
@@ -404,9 +461,9 @@ internal sealed class StateChecks
     public void CheckTailCall(
         Step step, string via, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state, Symbol routine)
     {
-        var own = routine.Signature ?? Signature.Default;
+        var own = signatureOf(routine) ?? Signature.Default;
         var what = $"`{via} {target.DisplayName}`";
-        var returns = !own.HasNoCaller && !callee.NeverReturns;
+        var returns = !own.HasNoCaller && !callee.NeverReturns && signatures.IsExitKnown(target);
 
         // A long jump to a near routine is how code enters another bank. The routine's own `rts`
         // then returns within that bank, so the jump is only valid when nothing returns.
@@ -444,7 +501,7 @@ internal sealed class StateChecks
                 what, target.DisplayName, callee.Distance, routine.DisplayName, own.Distance));
         }
         CheckExit(step, $"{what} is a tail call:", $"when `{target.DisplayName}` returns",
-            own.Exit, Exited(callee, state), routine.DisplayName);
+            own.Exit, Exited(callee, state), routine.DisplayName, held: own.Declared);
     }
 
     /// <summary>
@@ -456,9 +513,9 @@ internal sealed class StateChecks
     public void CheckJumpInto(
         Step step, string via, Symbol label, Symbol owner, ProcessorState state, Symbol routine)
     {
-        var callee = owner.Signature ?? Signature.Default;
-        var own = routine.Signature ?? Signature.Default;
-        if (own.HasNoCaller || callee.NeverReturns)
+        var callee = signatureOf(owner) ?? Signature.Default;
+        var own = signatureOf(routine) ?? Signature.Default;
+        if (own.HasNoCaller || callee.NeverReturns || !signatures.IsExitKnown(owner))
             return;
         var what = $"`{via} {label.DisplayName}`";
         if (callee.IsInterrupt)
@@ -472,7 +529,7 @@ internal sealed class StateChecks
                 what, owner.DisplayName, callee.Distance, routine.DisplayName, own.Distance));
         }
         CheckExit(step, $"{what} leaves `{routine.DisplayName}`:", $"when `{owner.DisplayName}` returns",
-            own.Exit, Exited(callee, state), routine.DisplayName);
+            own.Exit, Exited(callee, state), routine.DisplayName, held: own.Declared);
     }
 
     /// <summary>
@@ -645,7 +702,7 @@ internal sealed class StateChecks
     /// Reports a diagnostic for <c>d:</c> on a constant address, which reaches it through the
     /// direct page, unless D is known here and the address lies in the 256 bytes starting at D.
     /// </summary>
-    private void CheckThroughDirectPage(Step step, SyntaxNode expression, ProcessorState state, Symbol routine)
+    private void CheckThroughDirectPage(Step step, SyntaxNode expression, ProcessorState state, Cause? whyD, Symbol routine)
     {
         if (model.ValueOf(expression, step.On).AsNumber() is not { } address)
             return;
@@ -658,7 +715,7 @@ internal sealed class StateChecks
         else if (!state.D.IsKnown)
         {
             Report(step, Catalogue.DirectPageUnknown.Message(
-                what, "D is not known here: a `.state dp = ...` declares what it is"));
+                what, Unknown(whyD)));
         }
         else if (address < state.D.Value || address > state.D.Value + 0xff)
         {
@@ -669,6 +726,13 @@ internal sealed class StateChecks
                 StateValue.Hex(state.D.Value + 0xff, 4)));
         }
     }
+
+    /// <summary>
+    /// Returns why D is not known, in the words a message ends with, from the cause the analysis
+    /// found, if any.
+    /// </summary>
+    private static string Unknown(Cause? whyD) =>
+        "D is not known here" + (whyD is null ? ": a `.state dp = ...` declares what it is" : Cause.Because(whyD));
 
     /// <summary>
     /// Returns whether a long jump lands in a bank other than the one the code making it is taken

@@ -257,10 +257,11 @@ public sealed class RegisterKeepsTests
         Assert.Equal(
             ["main.nt65:3: `@entry` is never reached: no code falls into it and nothing refers to it"],
             Wide(".proc p: a8, i8 {\n    rts\n@entry:\n    .state keeps x\n    rts\n}\n"));
-        Assert.Equal(
-            ["main.nt65:1: `rom` is an extern proc with no processor-state signature: nt65 cannot see its body, "
-                + "so declare what it expects and leaves, or `?` if that is unknown"],
-            Wide(".proc rom = $FFD2: keeps x\n"));
+
+        // A routine with no body that declares nothing about its state returns with it unknown.
+        Assert.Contains(
+            Wide(".proc rom = $FFD2: keeps x\n.proc p: a8, i8 {\n    jsr rom\n    lda #1\n    rts\n}\n"),
+            problem => problem.Contains("`jsr rom` returns with it unknown", StringComparison.Ordinal));
     }
 
     /// <summary>

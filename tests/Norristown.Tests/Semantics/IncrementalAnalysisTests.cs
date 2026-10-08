@@ -59,8 +59,11 @@ public sealed class IncrementalAnalysisTests
             ("defs.nt65", "; Calls a macro", "; It calls a macro", null, 1),                         // a comment only; gfx's `relay` keeps the `ping` from before the edit
             ("defs.nt65", "; It calls", "; Here.\n; It calls", null, 3),                             // `ping` moves down, and its callers' output gives the lines of its calls
             ("gfx.nt65", "    ping!()\n", "    nop\n", null, 3),
-            ("defs.nt65", "std = a8, i8", "std = a16, i8", null, 3),                                 // gfx's `clear` takes the signature `std`, and errors calls `clear`
-            ("defs.nt65", "std = a16, i8", "std = a8, i8", null, 3),
+            // gfx's `clear` takes the signature `std`, and errors calls `clear`. The width it is
+            // called with reaches the exits inferred for the routines that call it, and theirs
+            // the routines that call them.
+            ("defs.nt65", "std = a8, i8", "std = a16, i8", null, 5),
+            ("defs.nt65", "std = a16, i8", "std = a8, i8", null, 5),
             // Two names that collide under one linker name are reported on the file that sorts
             // later, which is not the file that changed. That file is analyzed again all the same.
             ("app.nt65", ".const ENTRY = BASE", ".const ENTRY = BASE\n.export ENTRY as \"segs__hud_value\"", null, 2),

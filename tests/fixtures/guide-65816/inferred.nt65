@@ -1,0 +1,15 @@
+.module inferred
+
+; A routine that declares nothing is entered with the width its callers agree on, and returns
+; with what its body leaves.
+.segment CODE
+.proc draw {                ; declares nothing
+    lda #$1234              ; 16-bit, because every caller is in a16
+    sep #$20
+    rts                     ; inferred exit: a8
+}
+
+.export .proc main: a16 -> a8 {
+    jsr draw
+    rts
+}

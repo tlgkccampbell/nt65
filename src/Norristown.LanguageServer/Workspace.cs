@@ -328,11 +328,16 @@ internal sealed class Workspace
     /// <param name="cancellation">
     /// Stops this request waiting. The analysis stops too when no other request is waiting for it.
     /// </param>
-    public Task<ProgramAnalysis> AnalysisForAsync(string path, CancellationToken cancellation)
+    /// <param name="settled">
+    /// Whether to wait for the program-wide answers. See <see cref="ProgramAnalysis.IsSettled"/>.
+    /// </param>
+    public Task<ProgramAnalysis> AnalysisForAsync(string path, CancellationToken cancellation, bool settled = false)
     {
         lock (gate)
         {
-            return Owner(path) is { } project ? project.AnalysisAsync(open.Values, cancellation) : LooseAsync(cancellation);
+            return Owner(path) is { } project
+                ? project.AnalysisAsync(open.Values, cancellation, settled)
+                : LooseAsync(cancellation, settled);
         }
     }
 

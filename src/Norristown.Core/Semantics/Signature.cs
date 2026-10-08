@@ -4,8 +4,9 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// Represents the processor state a routine declares at entry and, after <c>-&gt;</c>, at exit,
-/// and whether it is called near or far. Signatures are declared, never inferred. This keeps
-/// the analysis within one routine and keeps a file's interface independent of its bodies.
+/// and whether it is called near or far. A signature holds what is declared. The parts of the
+/// state it leaves out, which <see cref="Declared"/> tells, are inferred across the program by
+/// the flow analysis.
 /// </summary>
 /// <param name="Entry">The state the routine assumes when it is called.</param>
 /// <param name="Exit">
@@ -40,7 +41,18 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     public static Signature Unchanged { get; } = new(
         new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unchanged),
         new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unchanged),
-        false);
+        false)
+    {
+        Declared = StateParts.All,
+    };
+
+    /// <summary>
+    /// Gets the parts of the state the signature declares at entry or at exit, directly or through
+    /// a signature set. A routine is held to these parts. Every other part is inferred, and its
+    /// value in <see cref="Entry"/> and <see cref="Exit"/> is only the default that applies until
+    /// it is. An interrupt handler and a macro declare every part.
+    /// </summary>
+    public StateParts Declared { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether the routine is an interrupt handler. A handler is entered
@@ -209,13 +221,13 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         && Inline?.Text == other.Inline?.Text && IsInterrupt == other.IsInterrupt
         && NeverReturns == other.NeverReturns && Arguments == other.Arguments && Keeps == other.Keeps
         && Reads == other.Reads && EntryFlags == other.EntryFlags && ExitFlags == other.ExitFlags
-        && Results == other.Results;
+        && Results == other.Results && Declared == other.Declared;
 
     /// <summary>Returns a hash code over the same parts that <see cref="Equals(Signature?)"/> compares.</summary>
     public override int GetHashCode() =>
         HashCode.Combine(
             HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps),
-            Reads, EntryFlags, ExitFlags, Results);
+            Reads, EntryFlags, ExitFlags, Results, Declared);
 
     /// <summary>
     /// Returns the signature read again with the signature sets it names and the values of its
@@ -381,6 +393,14 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return Made(entryState, Pinned(exitState));
         }
 
+        // The parts of the state that the entry or the exit gives an item for.
+        private StateParts DeclaredParts() =>
+            ((entry.A ?? exit.A) is null ? StateParts.None : StateParts.A)
+            | ((entry.Index ?? exit.Index) is null ? StateParts.None : StateParts.Index)
+            | ((entry.E ?? exit.E) is null ? StateParts.None : StateParts.Mode)
+            | ((entry.D ?? exit.D) is null ? StateParts.None : StateParts.DirectPage)
+            | ((entry.B ?? exit.B) is null ? StateParts.None : StateParts.DataBank);
+
         // The registers the list promises. A list that contains its own `keeps` states which
         // they are. A list that contains none takes what the signature set it names gives.
         private static Processor.Registers Promised(Parts parts) => Named(parts.Keeps);
@@ -432,6 +452,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             }
             return new(entered, exited, entry.Far?.IsFar ?? false, entry.Inline)
             {
+                Declared = forMacro ? StateParts.All : DeclaredParts(),
                 Arguments = arguments,
                 Keeps = keeps,
                 Reads = Declared(entry),
@@ -505,6 +526,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return new Signature(state, state, false)
             {
                 IsInterrupt = true,
+                Declared = StateParts.All,
                 Keeps = Promised(entry),
                 Reads = Declared(entry),
                 syntax = syntax,

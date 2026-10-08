@@ -436,7 +436,7 @@ internal sealed class Server : IDisposable
     /// </summary>
     [JsonRpcMethod("nt65/sources")]
     public async Task<SourcesResult?> SourcesAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
-        await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
+        await AtAsync(request, cancellation, settled: true).ConfigureAwait(false) is { } asked
             ? CaretSources.At(asked.Analysis, asked.Model, asked.Position)
             : null;
 
@@ -1028,14 +1028,15 @@ internal sealed class Server : IDisposable
     /// the offset in that file. Returns null when the client never opened the document or when
     /// the program does not hold it. The document and the files the analysis is of are taken
     /// before the method first waits, so that a later edit does not change what the request is
-    /// about.
+    /// about. A request whose answer needs the program-wide answers passes
+    /// <paramref name="settled"/>, and waits for them.
     /// </summary>
-    private async Task<Asked?> AtAsync(TextDocumentPositionParams request, CancellationToken cancellation)
+    private async Task<Asked?> AtAsync(TextDocumentPositionParams request, CancellationToken cancellation, bool settled = false)
     {
         cancellation.ThrowIfCancellationRequested();
         if (workspace.Find(request.TextDocument.Uri) is not { } document)
             return null;
-        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, cancellation).ConfigureAwait(false);
+        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, cancellation, settled).ConfigureAwait(false);
         cancellation.ThrowIfCancellationRequested();
         if (analysis.ModelFor(document.Tree.Path) is not { } model)
             return null;

@@ -160,7 +160,7 @@
     rts                     ;! error[return-state-mismatch]: `rts`: `returns` declares it returns with `dbr = $7e`, but B is not known here
 }
 
-.proc changes: a8, i8 {
+.proc changes: a8, i8, dp* {
     pea $2100
     pld
     rts                     ;! error[asserted-item-not-restored]: `rts`: `changes` declares `dp*`, so D must be what it was on entry, but here it may not be

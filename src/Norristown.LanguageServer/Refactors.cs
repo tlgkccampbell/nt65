@@ -51,6 +51,7 @@ internal static class Refactors
             .. UseItems.Organized(model, line),
             .. Exported(model, line),
             .. Leaves(analysis, model, line),
+            .. Inferred(analysis, model, line),
             .. Registers(analysis, model, line),
             .. Widths(analysis, model, line),
             .. Named(model, caret, line),
@@ -249,6 +250,47 @@ internal static class Refactors
         var clause = declared is null ? $": {Edits.FormatState(signature.Entry)} -> {items}" : $" -> {items}";
         yield return new Change($"Declare what `{routine.Name}` leaves: `-> {items}`", CodeActionKinds.Rewrite,
             [new Edit(tree, new TextSpan(beforeBrace, 0), clause)]);
+    }
+
+    /// <summary>
+    /// Offers to declare the parts of a routine's state that it leaves to be inferred, as they
+    /// are inferred: what its callers agree it is entered with, and what its returns leave. Once
+    /// declared, they are a contract that the routine and its callers are held to. A part
+    /// inferred to be as the routine was entered with, or not known, is left out, since there is
+    /// nothing to say about it.
+    /// </summary>
+    private static IEnumerable<Change> Inferred(ProgramAnalysis analysis, SemanticModel model, int line)
+    {
+        var tree = model.Tree;
+        if (analysis.Cpu != Cpu.Wdc65816 || Edits.DeclaredOn(model, line) is not { Kind: SymbolKind.Proc } routine
+            || routine.Signature is not { IsInterrupt: false } declared
+            || analysis.FlowFor(tree.Path)?.Signatures.Of(routine) is not { } inferred)
+        {
+            yield break;
+        }
+        var (entry, exit) = InferredState.Items(declared, inferred);
+        if (InferredState.Format(entry, exit) is not { } shown || Edits.RoutineHead(tree, line) is not var (signature, beforeBrace))
+            yield break;
+
+        var taken = string.Join(", ", entry);
+        var left = string.Join(", ", exit);
+        var arrow = exit.Count == 0 ? "" : $" -> {left}";
+        Edit edit;
+        if (signature is null)
+        {
+            edit = new Edit(tree, new TextSpan(beforeBrace, 0), $": {(entry.Count == 0 ? "native" : taken)}{arrow}");
+        }
+        else
+        {
+            // An item the entry gains goes after the entry's last item, and one the exit gains
+            // after the exit's last. Both are made as one edit of the text between them.
+            var end = signature.Entry.Span.End;
+            var gained = entry.Count == 0 ? "" : $"{(signature.Entry.Span.Length == 0 ? "" : ", ")}{taken}";
+            edit = signature.Exit is { } written && exit.Count > 0
+                ? new Edit(tree, new TextSpan(end, written.Span.End - end), $"{gained}{tree.Text[end..written.Span.End]}, {left}")
+                : new Edit(tree, new TextSpan(end, 0), signature.Exit is null ? gained + arrow : gained);
+        }
+        yield return new Change($"Declare the state `{routine.Name}` is inferred with: `{shown}`", CodeActionKinds.Rewrite, [edit]);
     }
 
     /// <summary>

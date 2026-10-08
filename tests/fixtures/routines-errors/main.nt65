@@ -9,10 +9,10 @@
 
 .const LIMIT = 3
 
-; A routine with no body declares what calls through it are checked against, and has nothing
-; else to say it.
-.proc TOOLBOX = $E10000         ;! error[signature-missing]: `TOOLBOX` is an extern proc with no processor-state signature: nt65 cannot see its body, so declare what it expects and leaves, or `?` if that is unknown
-.import blind: proc()           ;! error[signature-missing]: `blind` is an imported routine with no processor-state signature: nt65 cannot see its body, so declare what it expects and leaves, or `?` if that is unknown
+; A routine with no body need not declare its state. One that declares nothing returns with
+; every part of the state unknown, since nothing says what it does.
+.proc TOOLBOX = $E10000
+.import blind: proc()
 
 ; One that names another routine and writes nothing takes that routine's, which is a declaration.
 .proc also_stop = stop

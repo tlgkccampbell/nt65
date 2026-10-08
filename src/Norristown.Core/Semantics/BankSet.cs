@@ -77,6 +77,10 @@ public readonly record struct BankSet(ulong Low, ulong LowMiddle, ulong HighMidd
     public BankSet Intersect(BankSet other) =>
         new(Low & other.Low, LowMiddle & other.LowMiddle, HighMiddle & other.HighMiddle, High & other.High);
 
+    /// <summary>Returns the banks that this set or <paramref name="other"/> holds.</summary>
+    public BankSet Union(BankSet other) =>
+        new(Low | other.Low, LowMiddle | other.LowMiddle, HighMiddle | other.HighMiddle, High | other.High);
+
     /// <summary>Determines whether every bank in this set is also in <paramref name="other"/>.</summary>
     public bool IsSubsetOf(BankSet other) =>
         (Low & ~other.Low) == 0 && (LowMiddle & ~other.LowMiddle) == 0

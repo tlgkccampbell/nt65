@@ -25,6 +25,9 @@ public sealed class ControlFlow
     private readonly Dictionary<StepKey, RelativeCall> relativeCalls;
     private readonly HashSet<StepKey> returnAddresses;
 
+    // Whether each routine a call in the file reaches was taken never to return.
+    private readonly Dictionary<Symbol, bool> neverReturns = [];
+
     // The instructions whose operands the program rewrites, found the first time any is asked
     // about. Two threads that ask at once find the same set.
     private HashSet<StepKey>? patched;
@@ -96,6 +99,19 @@ public sealed class ControlFlow
     public FlagExits FlagExits { get; internal set; } = FlagExits.None;
 
     /// <summary>
+    /// Gets the signature each routine is analyzed with, as <see cref="InferredSignatures"/>
+    /// worked it out across the program. Before then, every routine has what it declares.
+    /// </summary>
+    public InferredSignatures Signatures { get; internal set; } = InferredSignatures.None;
+
+    /// <summary>
+    /// Gets whether each routine a call in the file reaches was taken never to return. The answers
+    /// are worked out across the program after each file is analyzed, so a file whose answers
+    /// turn out different is analyzed again with them.
+    /// </summary>
+    internal IReadOnlyDictionary<Symbol, bool> NeverReturnsTaken => neverReturns;
+
+    /// <summary>
     /// Gets what is known about the flags at each statement, and which conditional branches go
     /// one way only.
     /// </summary>
@@ -145,11 +161,13 @@ public sealed class ControlFlow
     /// <summary>
     /// Works out where control goes in <paramref name="layout"/>'s file. A call to a routine
     /// returns with the flags <paramref name="exits"/> says it does, or, without it, with what the
-    /// routine's signature says.
+    /// routine's signature says. A call to a routine that <paramref name="signatures"/> says never
+    /// returns ends its path.
     /// </summary>
-    public static ControlFlow Of(SemanticModel model, CodeLayout layout, FlagExits? exits = null)
+    public static ControlFlow Of(
+        SemanticModel model, CodeLayout layout, FlagExits? exits = null, InferredSignatures? signatures = null)
     {
-        var flow = new ControlFlow(model, layout);
+        var flow = new ControlFlow(model, layout) { Signatures = signatures ?? InferredSignatures.None };
         var checks = new FlowChecks(model, layout, flow);
         var inline = Inline(model.Tree);
 
@@ -297,8 +315,11 @@ public sealed class ControlFlow
             ReadsOf = ReadsOf,
             Effects = Effects,
             FlagExits = FlagExits,
+            Signatures = Signatures,
             Flags = Flags,
         };
+        foreach (var (routine, never) in neverReturns)
+            copy.neverReturns[routine] = never;
         copy.regions.AddRange(regions.Select(region => region.ForComposing()));
         return copy;
     }
@@ -365,7 +386,7 @@ public sealed class ControlFlow
         // calls, unless it calls a routine that never returns.
         if (IsCall(step.Statement) || relative is not null)
         {
-            return CalledAt(step, relative) is { Signature.NeverReturns: true }
+            return CalledAt(step, relative) is { Signature: not null } callee && NeverReturns(callee)
                 ? BlockEnd.CallNeverReturns
                 : BlockEnd.Call;
         }
@@ -650,6 +671,13 @@ public sealed class ControlFlow
         }
         return costs;
     }
+
+    /// <summary>
+    /// Returns whether <paramref name="routine"/> never returns, declared or inferred, and
+    /// records the answer the flow took.
+    /// </summary>
+    private bool NeverReturns(Symbol routine) =>
+        neverReturns[routine] = Signatures.Of(routine)?.NeverReturns == true;
 
     /// <summary>
     /// Returns what one pass through the part of a routine inside <paramref name="whole"/> costs.

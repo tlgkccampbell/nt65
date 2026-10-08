@@ -11,6 +11,12 @@ namespace Norristown.Flow;
 /// <param name="Stack">What the routine has pushed, or null when that is not known.</param>
 public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
 {
+    /// <summary>
+    /// Gets the state past a call to a routine none of whose returns has been seen yet, while the
+    /// program's signatures are being inferred. No path goes on from it until one is.
+    /// </summary>
+    public static FlowState Dead { get; } = new(ProcessorState.Unknown, null) { IsDead = true };
+
     /// <summary>Gets why A's width is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyA { get; init; }
 
@@ -20,6 +26,12 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
     /// <summary>Gets why the stack is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyStack { get; init; }
 
+    /// <summary>Gets why D is unknown, when it is unknown and the analysis can tell why.</summary>
+    public Cause? WhyD { get; init; }
+
+    /// <summary>Gets a value indicating whether this is <see cref="Dead"/>, which no path goes on from.</summary>
+    public bool IsDead { get; private init; }
+
     /// <summary>
     /// Returns what two paths arriving at one place agree on. Where they disagree, that part is
     /// unknown and nothing is reported, because an unknown value is an error only where it is
@@ -27,8 +39,10 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
     /// </summary>
     public static FlowState Merge(FlowState? known, FlowState arriving)
     {
-        if (known is null)
+        if (known is null || known.IsDead)
             return arriving;
+        if (arriving.IsDead)
+            return known;
         var a = known.Processor;
         var b = arriving.Processor;
         var stack = AnalysisStack.Merge(known.Stack, arriving.Stack);
@@ -44,6 +58,7 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
         {
             WhyA = Why(a.A, b.A, known.WhyA, arriving.WhyA, StateRegister.A),
             WhyIndex = Why(a.Index, b.Index, known.WhyIndex, arriving.WhyIndex, StateRegister.Index),
+            WhyD = merged.Processor.D.Kind == StateValueKind.Unknown ? known.WhyD ?? arriving.WhyD : null,
             WhyStack = stack is not null ? null
                 : known.Stack is null || arriving.Stack is null ? known.WhyStack ?? arriving.WhyStack
                 : Cause.StacksDiffer(known.Stack.Depth != arriving.Stack.Depth),

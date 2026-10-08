@@ -1,0 +1,159 @@
+using Norristown.Semantics;
+using Norristown.Tests.Semantics;
+
+namespace Norristown.Tests.Flow;
+
+/// <summary>
+/// Tests the parts of a routine's signature that are inferred where it declares nothing about
+/// them. A routine's exit comes from its body and its entry from what its callers agree on. Where
+/// callers disagree on a width the body depends on, that is an error at the routine. Where they
+/// disagree on the direct page or the data bank, the two combine as two paths do where they meet.
+/// A routine that never returns is inferred to, on every processor.
+/// </summary>
+public sealed class InferredSignaturesTests
+{
+    /// <summary>
+    /// A routine that sets a width and returns hands that width back, so its caller's immediate
+    /// is sized from it, and the routine is not held to returning the width it was entered with.
+    /// </summary>
+    [Fact]
+    public void AnExitComesFromTheBody()
+    {
+        const string Text = ".proc narrow {\n    sep #$20\n    rts\n}\n.export .proc main: a16 -> a8 {\n    jsr narrow\n    lda #1\n    rts\n}\n";
+
+        var analysis = FlowFragment.Analyze("65816", Text);
+
+        Assert.Empty(analysis.Problems());
+        Assert.Equal(Width.Eight, FlowFragment.StateAt(analysis, "lda #1").Processor.A);
+    }
+
+    /// <summary>
+    /// A routine whose callers all reach it with one width is entered with that width, so the
+    /// immediates in its body are sized from it.
+    /// </summary>
+    [Fact]
+    public void AnEntryComesFromCallersThatAgree()
+    {
+        const string Text = ".proc draw {\n    lda #$12\n    ldx #$34\n    rts\n}\n"
+            + ".export .proc main: a8, i16 {\n    jsr draw\n    jsr draw\n    rts\n}\n";
+
+        var analysis = FlowFragment.Analyze("65816", Text);
+
+        Assert.Empty(analysis.Problems());
+        var state = FlowFragment.StateAt(analysis, "lda #$12").Processor;
+        Assert.Equal((Width.Eight, Width.Sixteen), (state.A, state.Index));
+    }
+
+    /// <summary>
+    /// The entry passes along a chain of calls and through routines that call each other, so a
+    /// routine reached only through others still takes the width its callers' callers set.
+    /// </summary>
+    [Fact]
+    public void AnEntryPassesAlongCallsAndCycles()
+    {
+        const string Text = ".proc even {\n    lda $10\n    beq @done\n    dec $10\n    jsr odd\n@done:\n    rts\n}\n"
+            + ".proc odd {\n    lda #1\n    jsr even\n    rts\n}\n"
+            + ".export .proc main: a16 {\n    jsr even\n    rts\n}\n";
+
+        var analysis = FlowFragment.Analyze("65816", Text);
+
+        Assert.Empty(analysis.Problems());
+        Assert.Equal(Width.Sixteen, FlowFragment.StateAt(analysis, "lda #1").Processor.A);
+    }
+
+    /// <summary>
+    /// Callers that reach a routine with two widths, where its body has an immediate that depends
+    /// on the width, are reported once at the routine, with a fix that declares either width.
+    /// </summary>
+    [Fact]
+    public void CallersThatDisagreeOnAWidthTheBodyNeedsAreAnError()
+    {
+        const string Text = ".proc draw {\n    lda #$12\n    lda #$34\n    rts\n}\n"
+            + ".export .proc main: a8 {\n    jsr draw\n    rep #$20\n    jsr draw\n    sep #$20\n    rts\n}\n";
+
+        var problem = Assert.Single(FlowFragment.Analyze("65816", Text).Diagnostics);
+
+        Assert.Equal("callers-disagree", problem.Id);
+        Assert.Equal(1, problem.Span.Line - FlowFragment.HeaderLines);
+        Assert.Contains("`draw` is called with `a16` by some callers and `a8` by others", problem.Message, StringComparison.Ordinal);
+        Assert.Equal(["a16", "a8"], new[] { problem.Fix?.Text, problem.Also?.Text });
+        Assert.Equal(3, problem.Related.Count);
+    }
+
+    /// <summary>
+    /// Callers that disagree on a width the body does not depend on are no mistake. The routine
+    /// runs with either, and hands the width back as it found it.
+    /// </summary>
+    [Fact]
+    public void CallersThatDisagreeOnAWidthTheBodyDoesNotNeedAreFine()
+    {
+        const string Text = ".proc bump {\n    inc $10\n    rts\n}\n"
+            + ".export .proc main: a8 {\n    jsr bump\n    rep #$20\n    jsr bump\n    lda #$1234\n    sep #$20\n    rts\n}\n";
+
+        Assert.Empty(FlowFragment.Problems("65816", Text));
+    }
+
+    /// <summary>
+    /// A routine whose callers cannot all be seen keeps the default entry, and an immediate in it
+    /// needs a width it declares. That is a routine other modules or the linker may call, and one
+    /// whose address is taken.
+    /// </summary>
+    [Theory]
+    [InlineData(".export .proc draw {\n    lda #$12\n    rts\n}\n.export .proc main: a8 {\n    jsr draw\n    rts\n}\n")]
+    [InlineData(".proc draw {\n    lda #$12\n    rts\n}\n.export .proc main: a8 {\n    jsr draw\n    rts\n}\n.segment RODATA\n.data table: .addr draw\n")]
+    public void ARoutineWithCallersUnseenKeepsTheDefaultEntry(string text)
+    {
+        Assert.Contains(FlowFragment.Problems("65816", text),
+            problem => problem.Contains("`draw` declares `a*`, which assumes nothing about it", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Callers that agree on the direct page give it to the routine, so a <c>d:</c> operand in it
+    /// can be laid out. Callers that disagree leave it unknown, and the operand is reported, naming
+    /// them. That is not reported at the routine, since a routine may well be meant to run with
+    /// several.
+    /// </summary>
+    [Theory]
+    [InlineData("$0000", false)]
+    [InlineData("$0100", true)]
+    public void TheDirectPageComesFromCallersThatAgree(string other, bool reported)
+    {
+        var text = ".proc poke {\n    lda d:$0010\n    rts\n}\n"
+            + ".export .proc first: a8, dp = $0000 {\n    jsr poke\n    rts\n}\n"
+            + $".export .proc second: a8, dp = {other} {{\n    jsr poke\n    rts\n}}\n";
+
+        var problems = FlowFragment.Problems("65816", text);
+
+        Assert.Equal(reported, problems.Any(problem => problem.Contains(
+            "D is not known here, because `poke` is called with `dp = $0000` and `dp = $0100`", StringComparison.Ordinal)));
+        Assert.DoesNotContain(problems, problem => problem.Contains("callers-disagree", StringComparison.Ordinal));
+    }
+
+    /// <summary>Callers in different data banks enter the routine in one of their banks.</summary>
+    [Fact]
+    public void TheDataBankIsOneOfTheCallers()
+    {
+        const string Text = ".proc peek {\n    lda $10\n    rts\n}\n"
+            + ".export .proc first: a8, dbr = $7e {\n    jsr peek\n    rts\n}\n"
+            + ".export .proc second: a8, dbr = $7f {\n    jsr peek\n    rts\n}\n";
+
+        var analysis = FlowFragment.Analyze("65816", Text);
+
+        Assert.Empty(analysis.Problems());
+        Assert.Equal([0x7e, 0x7f], FlowFragment.StateAt(analysis, "lda $10").Processor.B.Values);
+    }
+
+    /// <summary>
+    /// A routine no path returns from never returns, on every processor, so nothing after a call
+    /// to it is run into and no <c>.next</c> is needed there.
+    /// </summary>
+    [Theory]
+    [InlineData("6502")]
+    [InlineData("65816")]
+    public void ARoutineThatNeverReturnsIsInferred(string cpu)
+    {
+        const string Text = ".proc fatal {\n@spin:\n    jmp @spin\n}\n.export .proc main {\n    jsr fatal\n    .byte 1\n}\n";
+
+        Assert.Empty(FlowFragment.Problems(cpu, Text));
+    }
+}
