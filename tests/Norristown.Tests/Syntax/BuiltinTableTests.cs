@@ -41,7 +41,7 @@ public sealed class BuiltinTableTests
             [
                 ".lobyte", ".hibyte", ".bankbyte", ".loword", ".hiword", ".sizeof", ".countof", ".endof", ".spanof",
                 ".loadof", ".runof", ".bankof", ".strlen", ".strat", ".strsub", ".strcat", ".min", ".max", ".addrsize",
-                ".target", ".has", ".select", ".switch", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles",
+                ".target", ".has", ".opcode", ".select", ".switch", ".sqrt", ".muldiv", ".sin", ".cos", ".mincycles",
                 ".maxcycles", ".mode", ".byteof", ".exprof", ".empty",
             ],
             SyntaxFacts.Builtins.Select(builtin => builtin.Name));
@@ -73,7 +73,7 @@ public sealed class BuiltinTableTests
                 Assert.False(builtin.Accepts(most + 1));
         });
         Assert.Equal(
-            [".target", ".has", ".select", ".switch"],
+            [".target", ".has", ".opcode", ".select", ".switch"],
             SyntaxFacts.Builtins.Where(builtin => builtin.Takes is null).Select(builtin => builtin.Name));
         Assert.Equal(
             [".strcat", ".switch"],

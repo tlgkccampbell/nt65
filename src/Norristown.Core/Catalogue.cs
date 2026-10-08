@@ -1672,6 +1672,25 @@ public static class Catalogue
             + "instruction, rather than listing the processors that have it, keeps code that targets several "
             + "processors correct.");
 
+    internal static DiagnosticDescriptor OpcodeArgument { get; } = Entry(
+        Area.Values,
+        "opcode-argument",
+        Severity.Error,
+        "`.opcode` takes a mnemonic and, where it has several forms, a mode, such as `.opcode(dex)` or `.opcode(lda, absx)`",
+        "`.opcode(mnemonic, mode)` is the byte an instruction is written as on the processor the program is built for. "
+            + "The mode is one of `imm`, `acc`, `zp`, `zpx`, `zpy`, `abs`, `absx`, `absy`, `ind`, `indx`, `indy`, `sr`, "
+            + "`sry`, `long`, `longy`, `far` and `farx`. `long` is the `[ptr]` form, as `.mode` names it, and `far` the "
+            + "`f:` address. The mode may be left out where the instruction has one form, or a form with no operand "
+            + "or with `a`, which is then the form it names.");
+
+    internal static DiagnosticDescriptor OpcodeForm { get; } = Entry(
+        Area.Values,
+        "opcode-form",
+        Severity.Error,
+        "`.opcode({0})` names no instruction the {1} has: {2}",
+        "`.opcode` gives the byte of an instruction form the processor has. A form the processor lacks has no byte, "
+            + "and an instruction with several forms needs the mode that picks one.");
+
     // Macros
 
     internal static DiagnosticDescriptor DeclarationInAMacroBody { get; } = Entry(

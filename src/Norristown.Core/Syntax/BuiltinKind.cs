@@ -77,6 +77,12 @@ public enum BuiltinKind
     /// <summary><c>.has(mnemonic)</c>: whether the build's CPU has an instruction.</summary>
     Has,
 
+    /// <summary>
+    /// <c>.opcode(mnemonic, mode)</c>: the byte an instruction form is written as on the build's
+    /// CPU.
+    /// </summary>
+    Opcode,
+
     /// <summary><c>.select(c, a, b)</c>: one of two values, chosen by a constant.</summary>
     Select,
 

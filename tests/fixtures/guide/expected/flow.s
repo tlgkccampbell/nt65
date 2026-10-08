@@ -10,6 +10,7 @@
 
 .export flow__dispatch
 .export flow__set_value
+.export flow__step_down
 .export flow__always_taken
 .export flow__push_sign
 .export flow__clear_screen
@@ -57,7 +58,16 @@ set_value__store:
     rts
 ; end of set_value
 
-; .proc always_taken  flow.nt65:50
+; .proc step_down  flow.nt65:50
+flow__step_down:
+    ldy #$ca
+    sty a:step_down__step
+step_down__step:
+    inx
+    rts
+; end of step_down
+
+; .proc always_taken  flow.nt65:59
 flow__always_taken:
     jsr CHROUT
     bcc always_taken__over
@@ -66,7 +76,7 @@ always_taken__over:
     rts
 ; end of always_taken
 
-; .proc push_sign  flow.nt65:58
+; .proc push_sign  flow.nt65:67
 flow__push_sign:
     pla
     sta z:ret
@@ -78,12 +88,12 @@ flow__push_sign:
     jmp (ret)
 ; end of push_sign
 
-; .proc clear_screen  flow.nt65:70
+; .proc clear_screen  flow.nt65:79
 flow__clear_screen:
     lda #$20                        ; ' '
 ; end of clear_screen
 
-; .proc fill_screen  flow.nt65:75
+; .proc fill_screen  flow.nt65:84
 fill_screen:
     ldx #0
 fill_screen__loop:
@@ -93,13 +103,13 @@ fill_screen__loop:
     rts
 ; end of fill_screen
 
-; .proc print: inline .strz  flow.nt65:84
+; .proc print: inline .strz  flow.nt65:93
 print:
 
     rts
 ; end of print
 
-; .proc greet  flow.nt65:89
+; .proc greet  flow.nt65:98
 flow__greet:
     jsr print
     .byte $48, $45, $4c, $4c, $4f, $00  ; "HELLO"

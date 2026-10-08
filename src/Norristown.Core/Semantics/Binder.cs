@@ -1675,6 +1675,10 @@ internal sealed partial class Binder
             }
         }
 
+        // `.opcode` takes a mnemonic and a mode word, and neither names anything.
+        if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Opcode })
+            return;
+
         // `.select` and `.switch` evaluate only the value they choose, so only that value's names
         // have to resolve, and evaluation is what reports them.
         if (Evaluator.ChoiceArguments(node) is { Count: > 0 } selected)

@@ -390,6 +390,8 @@
         "number-separator",
         "number-too-wide",
         "omitted-branch",
+        "opcode-argument",
+        "opcode-form",
         "operand-argument-mode",
         "operand-argument-parenthesized",
         "operand-has-no-next-byte",

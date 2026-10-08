@@ -1638,7 +1638,13 @@ label:
   own target, or more than it, is an error (next-not-the-branch-target); where code runs into
   data after a conditional branch, the fix writes this `.next`.
 - `.patch @op` acknowledges that the store above it writes into the instruction at
-  `@op`.
+  `@op`. What it writes is often an opcode, and `.opcode(dex)` is the byte `dex` is written as
+  on the program's CPU. An instruction with several forms names one with the words `.mode`
+  returns, plus `zp`, `zpx` and `zpy` for the direct page and `far` and `farx` for an `f:`
+  address: `.opcode(lda, absx)`. The mode may be left out where the instruction has one form,
+  or a form with no operand or with `a`, which it then names. A mnemonic or a form the CPU
+  lacks is an error, and so is a long branch, which is one instruction or two. Being a
+  constant, `.opcode` may stand in a build's condition.
 
 The third directive is about the end of a routine rather than a statement:
 
@@ -2586,6 +2592,7 @@ is an expression like any other.
 `.cos(angle, turn, scale)` (below), `.addrsize(x)`, the address size in bytes (1, 2 or 3) that
 §7.2 gives a symbol or expression, `.target(cpu)`, true when the program's CPU is the one named
 (§5.1), `.has(mnemonic)`, true when the program's CPU has that instruction,
+`.opcode(mnemonic, mode)`, the byte that form is written as on the program's CPU (§7.4),
 and `.select(c, a, b)`. Macro bodies add `.mode`, `.byteof`, `.exprof` and `.empty` (§11).
 
 **Numbers worked out at build time.** Four built-ins work a number out rather than ask about the
@@ -5421,7 +5428,7 @@ builtin     := '.lobyte' | '.hibyte' | '.bankbyte' | '.loword' | '.hiword' | '.s
              | '.countof' | '.endof' | '.spanof' | '.strlen' | '.strat' | '.strsub' | '.strcat'
              | '.min' | '.max'
              | '.sqrt' | '.muldiv' | '.sin' | '.cos' | '.mincycles' | '.maxcycles'
-             | '.addrsize' | '.target' | '.has' | '.select' | '.switch'
+             | '.addrsize' | '.target' | '.has' | '.opcode' | '.select' | '.switch'
              | '.loadof' | '.runof'                     ; of a segment
              | '.mode' | '.byteof' | '.exprof' | '.empty' ; the last four in macro bodies
 ```

@@ -72,6 +72,7 @@ public static class SyntaxFacts
         new(BuiltinKind.Addrsize, 1, 1, "one expression"),
         new(BuiltinKind.Target, 1, 1, null),
         new(BuiltinKind.Has, 1, 1, null),
+        new(BuiltinKind.Opcode, 1, 2, null),
         new(BuiltinKind.Select, 3, 3, null),
         new(BuiltinKind.Switch, 3, null, null),
         new(BuiltinKind.Sqrt, 1, 1, "one number", Arithmetic: true),

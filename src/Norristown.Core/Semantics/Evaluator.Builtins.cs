@@ -104,6 +104,10 @@ internal sealed partial class Evaluator
             // conditions do.
             case BuiltinKind.Target or BuiltinKind.Has when configuration is not null:
                 return AboutTheCpu(kind, function, given, configuration.Cpu);
+            case BuiltinKind.Opcode:
+                return configuration is null
+                    ? Value.Unknown
+                    : OpcodeCall.Evaluate(given, configuration.Cpu, message => Report(function, message));
 
             // `.target`, `.has`, `.defined` and the three built-ins only a macro body uses
             // (`.mode`, `.empty`, `.exprof`) are handled before this point, each by the pass that
@@ -142,6 +146,7 @@ internal sealed partial class Evaluator
             BuiltinKind.Switch => Catalogue.SwitchArguments,
             BuiltinKind.Target => Catalogue.TargetArgument.Message(CpuNames.Listed),
             BuiltinKind.Has => Catalogue.HasArgument,
+            BuiltinKind.Opcode => Catalogue.OpcodeArgument,
             _ => Catalogue.BuiltinArguments.Message(builtin.Name, builtin.Takes!),
         });
         return false;
@@ -486,6 +491,12 @@ internal sealed partial class Evaluator
         {
             return Fits(kind, function, given)
                 ? Configuration.AboutTheCpu(kind, function, given, asked.Cpu, (_, message) => Report(function, message))
+                : Value.Unknown;
+        }
+        if (kind == BuiltinKind.Opcode)
+        {
+            return Fits(kind, function, given)
+                ? OpcodeCall.Evaluate(given, asked.Cpu, message => Report(function, message))
                 : Value.Unknown;
         }
 

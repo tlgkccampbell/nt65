@@ -778,8 +778,8 @@ come from a script can sit beside the code that reads it:
 
 The other built-in functions are `.lobyte`, `.hibyte`, `.bankbyte`, `.loword`, `.hiword`,
 `.min`, `.max`, `.addrsize` (1, 2 or 3 for an address's size), `.bankof` (in
-[Segments](#segments)), `.has`,
-`.target`, `.select`, `.switch`, the size functions of [Data has a type](#data-has-a-type), the text
+[Segments](#segments)), `.has`, `.opcode` (in [What nt65 follows through your
+code](#what-nt65-follows-through-your-code)), `.target`, `.select`, `.switch`, the size functions of [Data has a type](#data-has-a-type), the text
 functions of [Text](#text), and `.mincycles` and `.maxcycles`, which are in [Cycle counts and
 branch range](#cycle-counts-and-branch-range).
 
@@ -1182,7 +1182,18 @@ string. The data after every call is then checked, and flow continues after it:
 ```
 
 **Self-modifying code.** `.patch @op` after a store says that the store writes into the
-instruction at `@op`.
+instruction at `@op`. `.opcode(dex)` is the byte `dex` is written as on the program's CPU, so a
+store that turns one instruction into another can say which it writes:
+
+```nt65
+    ldy #.opcode(dex)
+    sty @step
+    .patch @step
+```
+
+An instruction with several forms names one with the words `.mode` uses, such as
+`.opcode(lda, absx)`, with `zp`, `zpx` and `zpy` for the direct page and `far` and `farx` for an
+`f:` address. A form the CPU lacks is an error.
 
 **Routines that never return.** `noreturn` in a signature says the routine never returns: a
 reset handler, a main loop, a routine that jumps away for good. An `rts` in it is an error,

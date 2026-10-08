@@ -2,7 +2,7 @@
 
 .cpu 6502
 
-.export dispatch, set_value, always_taken, push_sign, clear_screen, greet
+.export dispatch, set_value, always_taken, push_sign, clear_screen, greet, step_down
 
 .segment ZEROPAGE
 .data command: .byte
@@ -44,6 +44,15 @@
     lda #2
 @store:
     sta value
+    rts
+}
+
+.proc step_down {
+    ldy #.opcode(dex)
+    sty @step
+    .patch @step
+@step:
+    inx                             ; runs as `dex` once the store has run
     rts
 }
 
