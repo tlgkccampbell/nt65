@@ -34,8 +34,8 @@ build tasks and a schema for the project file.
   **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
 - **Where control goes.** Rest the caret in a routine and its branches and jumps are drawn as
   arrows in front of its lines, from each one to the label it goes to, with shorter arrows
-  nearer the code. The arrow on the caret's line is brightened, one a `.next` declares has a
-  colour of its own, and a branch the flags prove always or never taken is faded. A jump to
+  nearer the code. The arrow on the caret's line is drawn thicker and in its own colour, one a
+  `.next` declares has another colour, and a branch the flags prove always or never taken is faded. A jump to
   another routine, or a `.next` that names one, gets an arrow pointing left out of the margin.
   Calls and lines that run on into the next are not drawn. The arrows take at most four columns,
   and the hover names any that had no room.

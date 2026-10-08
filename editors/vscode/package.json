@@ -399,12 +399,12 @@
       },
       {
         "id": "nt65.flowArrows.caret",
-        "description": "An arrow in the margin that starts or ends on the caret's line.",
+        "description": "An arrow in the margin that starts or ends on the caret's line, which is also drawn thicker than the others.",
         "defaults": {
-          "dark": "#B5F5E6",
-          "light": "#0B4A36",
-          "highContrast": "#FFFFFF",
-          "highContrastLight": "#000000"
+          "dark": "#FFC66D",
+          "light": "#C25E00",
+          "highContrast": "#FFD700",
+          "highContrastLight": "#A04A00"
         }
       },
       {

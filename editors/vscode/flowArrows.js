@@ -17,15 +17,18 @@ const EDIT_DELAY = 300;
 // first is drawn on top.
 const STYLES = ['caret', 'arrow', 'declared', 'faded'];
 
-// How thick an arrow's lines are, in pixels.
-const THICKNESS = 1;
+// Returns how thick an arrow's lines are in a style, in pixels. The caret's arrow is drawn twice
+// as thick, so that it stands out from the others by more than its colour.
+function thicknessOf(style) {
+  return style === 'caret' ? 2 : 1;
+}
 
 // Returns the CSS colour of a style, which is the theme colour that VS Code exposes as a variable.
 function colour(style) {
   return `var(--vscode-nt65-flowArrows-${style})`;
 }
 
-// Returns the style of an arrow. The arrow that starts or ends on the caret's line is brightened,
+// Returns the style of an arrow. The arrow that starts or ends on the caret's line is highlighted,
 // like a matched bracket. One the flags prove always or never taken, or that starts on a line
 // nothing reaches, is faded, and one a `.next` declared has a colour of its own.
 function styleOf(arrow, caret) {
@@ -84,7 +87,7 @@ function cellsOf(result, caret) {
 // draws, so the uprights of one line meet those of the next with no gap.
 function backgroundOf(row, height) {
   const middle = Math.floor(height / 2);
-  const centre = middle + THICKNESS / 2;
+  const centre = middle + 0.5;
   const head = Math.max(3, Math.round(height * 0.22));
   const layers = [];
   const add = (style, image, x, y, width, tall) =>
@@ -94,12 +97,15 @@ function backgroundOf(row, height) {
   // A half of a triangular head fills the half of its box on one side of the box's diagonal.
   const half = (style, towards) => `linear-gradient(to ${towards}, ${colour(style)} 50%, transparent 50%)`;
   row.forEach((cell, index) => {
-    const upright = `calc(${index}ch + 0.5ch - ${THICKNESS / 2}px)`;
-    const reach = `calc(0.5ch + ${THICKNESS / 2}px)`;
-    if (cell.up) add(cell.up, solid(cell.up), upright, '0px', `${THICKNESS}px`, `${middle + THICKNESS}px`);
-    if (cell.down) add(cell.down, solid(cell.down), upright, `${middle}px`, `${THICKNESS}px`, `${height - middle}px`);
-    if (cell.left) add(cell.left, solid(cell.left), `${index}ch`, `${middle}px`, reach, `${THICKNESS}px`);
-    if (cell.right) add(cell.right, solid(cell.right), upright, `${middle}px`, reach, `${THICKNESS}px`);
+    const upright = style => `calc(${index}ch + 0.5ch - ${thicknessOf(style) / 2}px)`;
+    if (cell.up) {
+      const thick = thicknessOf(cell.up);
+      add(cell.up, solid(cell.up), upright(cell.up), '0px', `${thick}px`, `${middle + thick}px`);
+    }
+    if (cell.down) {
+      const thick = thicknessOf(cell.down);
+      add(cell.down, solid(cell.down), upright(cell.down), `${middle}px`, `${thick}px`, `${height - middle}px`);
+    }
     const box = `calc(${index}ch + 0.1ch)`;
     if (cell.into) {
       add(cell.into, half(cell.into, 'top right'), box, `${centre - head}px`, '0.8ch', `${head}px`);
@@ -110,6 +116,20 @@ function backgroundOf(row, height) {
       add(cell.out, half(cell.out, 'bottom left'), box, `${centre}px`, '0.8ch', `${head}px`);
     }
   });
+
+  // A straight run of half lines in one style is one layer. Drawn as a layer per half, the halves'
+  // edges round to different pixels at some font sizes and leave hairline gaps between them.
+  const halves = row.flatMap(cell => [cell.left, cell.right]);
+  for (let start = 0; start < halves.length;) {
+    let end = start + 1;
+    while (end < halves.length && halves[end] === halves[start]) end++;
+    if (halves[start]) {
+      const thick = thicknessOf(halves[start]);
+      add(halves[start], solid(halves[start]), `calc(${start * 0.5}ch - ${thick / 2}px)`, `${middle}px`,
+        `calc(${(end - start) * 0.5}ch + ${thick}px)`, `${thick}px`);
+    }
+    start = end;
+  }
 
   // The first layer is drawn on top, so the parts in the style that comes first go first.
   layers.sort((a, b) => STYLES.indexOf(a.style) - STYLES.indexOf(b.style));
@@ -130,14 +150,38 @@ function lineHeightOf(document) {
 // Returns how one line's prefix is drawn: a box one line tall and as wide as the row's cells,
 // whose background draws the arrows. An attachment has no option for the box's display or its
 // background, so they go in through `textDecoration`, which is written into the style as it is.
-function prefixOf(row, height) {
-  const background = backgroundOf(row, height);
+// <p>
+// The prefix comes before the line's indentation. Where an arrow ends on the line, its
+// horizontal goes on across the `indent` columns of indentation, so that the head touches the
+// label and the tail touches the branch. The box is widened by that much and a negative margin
+// draws it under the indentation, so the code stays where it would be.
+function prefixOf(row, height, indent) {
+  const last = row[row.length - 1];
+  const across = last.left ? indent : 0;
+  const cells = across === 0 ? row : [
+    ...row.slice(0, -1),
+    ...Array.from({ length: across }, () => ({ left: last.left, right: last.left })),
+    last,
+  ];
+  const background = backgroundOf(cells, height);
+  const margin = across === 0 ? '' : `; margin-right: -${across}ch`;
   return {
     contentText: '\u00a0',
     color: 'transparent',
-    textDecoration: `none; display: inline-block; vertical-align: top; width: ${row.length}ch; height: ${height}px`
+    textDecoration: `none; display: inline-block; vertical-align: top; width: ${cells.length}ch; height: ${height}px${margin}`
       + (background ? `; background: ${background}` : ''),
   };
+}
+
+// Returns how many columns the indentation of a line takes, with each tab reaching the next stop.
+function indentOf(text, tabSize) {
+  let columns = 0;
+  for (const character of text) {
+    if (character === ' ') columns++;
+    else if (character === '\t') columns += tabSize - (columns % tabSize);
+    else break;
+  }
+  return columns;
 }
 
 // Returns the hover for an arrow that had no room in the margin.
@@ -223,7 +267,7 @@ class FlowArrows {
     this.render();
   }
 
-  // Draws what is shown, with the arrows on the caret's line brightened. Each line gets one
+  // Draws what is shown, with the arrows on the caret's line highlighted. Each line gets one
   // decoration, since VS Code does not keep several at one place in the order they are given.
   render() {
     if (!this.shown) return;
@@ -231,11 +275,12 @@ class FlowArrows {
     const document = editor.document;
     const height = lineHeightOf(document);
     const rows = cellsOf(result, editor.selection.active.line);
+    const tabSize = Number(editor.options.tabSize) || 4;
     const prefixes = [];
     for (let line = result.first; line <= result.last && line < document.lineCount; line++) {
       prefixes.push({
         range: new vscode.Range(line, 0, line, 0),
-        renderOptions: { before: prefixOf(rows[line - result.first], height) },
+        renderOptions: { before: prefixOf(rows[line - result.first], height, indentOf(document.lineAt(line).text, tabSize)) },
       });
     }
     editor.setDecorations(this.prefix, prefixes);
