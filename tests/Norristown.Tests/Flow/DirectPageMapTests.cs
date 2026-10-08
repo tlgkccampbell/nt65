@@ -358,14 +358,16 @@ public sealed class DirectPageMapTests
     {
         Assert.Equal(
             [
-                "page $0000 [ZEROPAGE] Own hazard=False used=9 direct=8",
+                "page $0000 [ZEROPAGE] Own hazard=False used=11 direct=11",
                 "  buf +0 x4 .byte[4] Own",
                 "    main InOut 2",
                 "  wide +4 x2 .word Own",
                 "    main Temp 2",
                 "  half +6 x2 .word Own",
                 "    main InOut 2",
-                "  one +8 x1 .byte Own",
+                "  pair +8 x2 .word Own",
+                "    main Temp 3",
+                "  one +10 x1 .byte Own",
                 "    main Temp 2",
             ],
             Render("65816", """
@@ -373,6 +375,7 @@ public sealed class DirectPageMapTests
                 .data buf:  .byte[4]
                 .data wide: .word
                 .data half: .word
+                .data pair: .word
                 .data one:  .byte
                 .segment CODE
                 .export .proc main: a16, i16, dp = 0 {
@@ -383,10 +386,87 @@ public sealed class DirectPageMapTests
                     lda wide
                     sep #$20
                     sta half
-                    lda half
+                    sta pair
+                    sta pair + 1
                     sta one
                     lda one
                     rep #$20
+                    lda half
+                    lda pair
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// The 6502 sets a pointer one byte at a time. A routine that stores both bytes before it reads
+    /// through the pointer uses it as a temporary, and one that stores only the low byte reads the
+    /// high byte it was given.
+    /// </summary>
+    [Fact]
+    public void APointerSetOneByteAtATimeIsSet()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Own hazard=False used=4 direct=5",
+                "  ptr +0 x2 .addr Own",
+                "    main Temp 3",
+                "  low +2 x2 .addr Own",
+                "    main InOut 2",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data ptr: .addr
+                .data low: .addr
+                .segment CODE
+                .export .proc main {
+                    lda #<main
+                    sta ptr
+                    lda #>main
+                    sta ptr + 1
+                    ldy #0
+                    lda (ptr),y
+                    lda #0
+                    sta low
+                    lda (low),y
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A location set one byte at a time is relied on across a call as surely as one set by a
+    /// single store, so a call that uses it as a temporary is still a hazard.
+    /// </summary>
+    [Fact]
+    public void AWordSetOneByteAtATimeIsReliedOnAcrossACall()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Nested hazard=True used=2 direct=6",
+                "  tmp +0 x2 .word Nested",
+                "    main Temp 3",
+                "      ⚠ live across `jsr inner` @ jsr inner",
+                "      ⚠ `inner` uses it as a temporary @ stx tmp",
+                "      ◦ read again @ lda tmp",
+                "    inner Temp 3",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data tmp: .word
+                .segment CODE
+                .export .proc main {
+                    lda #0
+                    sta tmp
+                    sta tmp + 1
+                    jsr inner
+                    lda tmp
+                    rts
+                }
+                .proc inner {
+                    stx tmp
+                    stx tmp + 1
+                    lda tmp
                     rts
                 }
                 """));

@@ -311,15 +311,6 @@ public sealed class DirectPageMap
                     }
                 }
             }
-
-            // A location named by its address grows with the widest access to it, so whether an
-            // access covers it is only known once every access is found.
-            for (var i = 0; i < found.Count; i++)
-            {
-                var access = found[i];
-                var size = homes[access.Location].Size;
-                found[i] = access with { Whole = access.Direct && access.Offset == 0 && (size is null || access.Width >= size) };
-            }
         }
 
         /// <summary>
@@ -367,9 +358,14 @@ public sealed class DirectPageMap
 
             var throughPage = Instructions.Width(mode) == AddressSize.ZeroPage;
             var indexed = mode is AddressingMode.DirectX or AddressingMode.DirectY or AddressingMode.AbsoluteX
-                or AddressingMode.AbsoluteY or AddressingMode.LongX;
+                or AddressingMode.AbsoluteY or AddressingMode.LongX or AddressingMode.DirectIndirectX or AddressingMode.AbsoluteIndirectX;
+
+            // An indirect access reaches its pointer, which is 3 bytes for the long forms and 2 for
+            // the others. Any other access reaches as many bytes as its register holds.
             var state = file.Layout.Cpu == Cpu.Wdc65816 ? file.State?.Before(step.Statement, step.On)?.Processor : null;
-            var width = state is { } processor && RegisterOf(mnemonic) is { } register && processor.Of(register) == Width.Sixteen ? 2 : 1;
+            var width = indirect
+                ? mode is AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY or AddressingMode.AbsoluteIndirectLong ? 3 : 2
+                : state is { } processor && RegisterOf(mnemonic) is { } register && processor.Of(register) == Width.Sixteen ? 2 : 1;
             var page = (long?)null;
             var unknown = false;
             if (throughPage && state?.D is { } d)
@@ -403,8 +399,7 @@ public sealed class DirectPageMap
                     homes[key] = new Home(at, address - at, target.Symbol.Size, true, TypeOf(declaration), IsMmio(declaration));
                 }
             }
-            else if (Anonymous(file.Model, operand, expression, step.On, page, !indirect ? width
-                : mode is AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY ? 3 : 2) is { } anonymous)
+            else if (Anonymous(file.Model, operand, expression, step.On, page, width) is { } anonymous)
             {
                 key = anonymous;
                 offset = 0;
@@ -416,7 +411,7 @@ public sealed class DirectPageMap
             if (throughPage && page is { } reached)
                 direct[reached] = direct.GetValueOrDefault(reached) + 1;
 
-            return new Found(key, page, unknown, Shown(step, file.Model.Tree), step, reads, writes, !indirect && !indexed, offset, width);
+            return new Found(key, page, unknown, Shown(step, file.Model.Tree), step, reads, writes, indexed, offset, width);
         }
 
         /// <summary>
@@ -643,21 +638,29 @@ public sealed class DirectPageMap
                         var location = access.Location;
                         if (access.Reads)
                         {
-                            if (collect && !held.Must.Contains(location))
+                            // An indexed read may reach any byte, so it reads what the routine was
+                            // given unless every byte is set.
+                            var set = access.Indexed ? Covered(held.Must, location) : Covers(held.Must, access);
+                            if (collect && !set)
                                 readsFirst.Add(location);
                             if (collect && held.Clobbered.TryGetValue(location, out var call))
                                 Hazard(location, call, access.Line);
                         }
-                        if (access.Writes && access.Whole)
-                            held = new Held(held.Must.Add(location), held.May.Add(location), held.Clobbered.Remove(location));
+                        if (access.Writes && !access.Indexed)
+                        {
+                            var must = held.Must.Union(Bytes(location, access.Offset, access.Width));
+                            held = new Held(must, held.May.Add(location), Covered(must, location) ? held.Clobbered.Remove(location) : held.Clobbered);
+                        }
                         else if (access.Writes)
+                        {
                             held = held with { May = held.May.Add(location) };
+                        }
                     }
                 }
                 if (!RegisterWalk.CallsAtEnd(block) || block.Steps.Count == 0)
                     return held;
                 var at = Shown(block.Steps[^1], region.Routine.Tree);
-                var always = (ImmutableHashSet<LocationKey>?)null;
+                var always = (ImmutableHashSet<(LocationKey, long)>?)null;
                 var clobbered = held.Clobbered;
                 foreach (var target in block.Calls)
                 {
@@ -675,7 +678,11 @@ public sealed class DirectPageMap
                             }
                         }
                     }
-                    var stored = memory.AlwaysWrittenBy(target).Select(location => location.Root).OfType<Symbol>().Select(Key).ToImmutableHashSet();
+                    // The inference keeps one location for each store, at its operand's offset and
+                    // without its width. Only that first byte counts as set, so a read of the high
+                    // byte of a 16-bit store counts as a read of what the routine was given.
+                    var stored = memory.AlwaysWrittenBy(target).Where(location => location.Root is not null)
+                        .Select(location => (Key(location.Root!), location.Offset)).ToImmutableHashSet();
                     always = always is null ? stored : always.Intersect(stored);
                 }
                 return new Held(block.CallsUnknown || always is null ? held.Must : held.Must.Union(always), held.May, clobbered);
@@ -693,6 +700,27 @@ public sealed class DirectPageMap
                 notes.Add(new PageNote("◦", "read again", read));
             }
         }
+
+        /// <summary>
+        /// Returns the bytes of <paramref name="location"/> from <paramref name="offset"/> on, for
+        /// <paramref name="width"/> bytes, as <see cref="Held.Must"/> holds them.
+        /// </summary>
+        private static IEnumerable<(LocationKey, long)> Bytes(LocationKey location, long offset, long width)
+        {
+            for (var i = 0L; i < width; i++)
+                yield return (location, offset + i);
+        }
+
+        /// <summary>Returns whether <paramref name="must"/> holds every byte that <paramref name="access"/> reaches.</summary>
+        private static bool Covers(ImmutableHashSet<(LocationKey, long)> must, Found access) =>
+            Bytes(access.Location, access.Offset, access.Width).All(must.Contains);
+
+        /// <summary>
+        /// Returns whether <paramref name="must"/> holds every byte of <paramref name="location"/>.
+        /// A location whose size is not known is taken as one byte.
+        /// </summary>
+        private bool Covered(ImmutableHashSet<(LocationKey, long)> must, LocationKey location) =>
+            Bytes(location, 0, Math.Max(1, homes[location].Size ?? 1)).All(must.Contains);
 
         /// <summary>
         /// Returns the first instruction in <paramref name="routine"/> that writes
@@ -898,19 +926,18 @@ public sealed class DirectPageMap
         /// <param name="Step">The step of the instruction.</param>
         /// <param name="Reads">Whether it reads the location.</param>
         /// <param name="Writes">Whether it writes the location.</param>
-        /// <param name="Direct">Whether it names the location directly, rather than through an index or a pointer.</param>
+        /// <param name="Indexed">
+        /// Whether it adds an index register to the operand, as <c>lda table,x</c> and
+        /// <c>lda (ptr,x)</c> do, so that which bytes it reaches is not known.
+        /// </param>
         /// <param name="Offset">The offset from the location's first byte to the first byte it reaches.</param>
-        /// <param name="Width">The number of bytes it reaches, which is 2 for a 16-bit register on the 65816 and 1 otherwise.</param>
+        /// <param name="Width">
+        /// The number of bytes it reaches from <paramref name="Offset"/>. That is the pointer for an
+        /// indirect access, and otherwise 2 for a 16-bit register on the 65816 and 1 for the rest.
+        /// </param>
         private sealed record Found(
-            LocationKey Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Direct, long Offset, long Width)
+            LocationKey Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Indexed, long Offset, long Width)
         {
-            /// <summary>
-            /// Gets a value indicating whether the access reaches every byte of the location, so that
-            /// a write leaves the whole of it set. A write of only some of its bytes leaves the rest
-            /// as they were.
-            /// </summary>
-            public bool Whole { get; init; }
-
             public Symbol? Routine { get; init; }
 
             public BasicBlock? Block { get; init; }
@@ -923,12 +950,20 @@ public sealed class DirectPageMap
         }
 
         /// <summary>
-        /// Represents what a point in a routine has stored: the locations every path has written,
-        /// those some path has written, and those a call has since overwritten, with the call and
-        /// the routine below it that uses the location as a temporary.
+        /// Represents what a point in a routine has stored: the bytes every path has written, the
+        /// locations some path has written, and those a call has since overwritten, with the call
+        /// and the routine below it that uses the location as a temporary.
         /// </summary>
+        /// <remarks>
+        /// Written bytes are kept one by one, each as its location and its offset in it, because
+        /// the 6502 sets a pointer one byte at a time. A location is set only once each of its
+        /// bytes is.
+        /// </remarks>
+        /// <param name="Must">The bytes every path has written, each as its location and its offset in it.</param>
+        /// <param name="May">The locations some path has written, in whole or in part.</param>
+        /// <param name="Clobbered">The locations a call has since overwritten, with the call.</param>
         private sealed record Held(
-            ImmutableHashSet<LocationKey> Must, ImmutableHashSet<LocationKey> May,
+            ImmutableHashSet<(LocationKey Location, long Byte)> Must, ImmutableHashSet<LocationKey> May,
             ImmutableDictionary<LocationKey, (Symbol Callee, Symbol Temp, SyntaxNode At)> Clobbered)
         {
             public static Held Nothing { get; } = new([], [], ImmutableDictionary<LocationKey, (Symbol, Symbol, SyntaxNode)>.Empty);
