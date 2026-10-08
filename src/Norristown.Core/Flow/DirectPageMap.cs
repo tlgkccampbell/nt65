@@ -1101,7 +1101,7 @@ public sealed class DirectPageMap
                     var span = first == last
                         ? StateValue.Hex(page.Key + first, 4)
                         : $"{StateValue.Hex(page.Key + first, 4)}-{StateValue.Hex(page.Key + last, 4)}";
-                    pageNotes.Add(new PageNote("⧉", $"`{here.Name}` and `{there.Name}` share {span}", null));
+                    pageNotes.Add(new PageNote("⧉", $"`{here.Name}` and `{there.Name}` share {span} unintentionally", null));
                 }
                 pages.Add(new DirectPage(page.Key, named, hardware, locations, [], direct.GetValueOrDefault(page.Key), pageNotes));
             }

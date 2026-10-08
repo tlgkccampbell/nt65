@@ -958,8 +958,8 @@ public sealed class DirectPageMapTests
         Assert.Equal(
             [
                 "page $0000 [ZEROPAGE] Own hazard=False used=3 direct=3",
-                "  ⧉ `count` and `ptr` share $0080",
-                "  ⧉ `ptr` and `total` share $0081",
+                "  ⧉ `count` and `ptr` share $0080 unintentionally",
+                "  ⧉ `ptr` and `total` share $0081 unintentionally",
                 "  count +128 x1 .byte Own Configured",
                 "    ⧉ Collision ptr $0080-$0080",
                 "    main Out 1",
@@ -1056,7 +1056,7 @@ public sealed class DirectPageMapTests
         Assert.Equal(
             [
                 "page $0000 [ZEROPAGE,ZP2,ZP3,ZP4] Own hazard=False used=5 direct=4",
-                "  ⧉ `head` and `pinned` share $0002",
+                "  ⧉ `head` and `pinned` share $0002 unintentionally",
                 "  head +0 x3 .byte[3] Own Configured",
                 "    ⧉ Collision pinned $0002-$0002",
                 "    main Out 1",

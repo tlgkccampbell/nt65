@@ -388,9 +388,11 @@ function locationTip(result, page, location, hazards) {
     // Two locations on this page that take one byte collide unless the source fixes both or the
     // linked config places both so.
     const here = bytes.kind === 'deliberate' || bytes.kind === 'authored' || bytes.kind === 'collision';
-    const where = here ? `on this page${bytes.kind === 'authored' ? ' · by config' : ''}` : markdown(pageName(result, bytes.page));
-    tip.row('⧉', bytes.kind === 'collision' || !here ? COLOUR.nested : COLOUR.dim,
-      here ? `${at}= \`${bytes.there}\` ${where}` : `${at}= ${where} \`${bytes.there}\``,
+    const phrase = bytes.kind === 'collision' ? `shared unintentionally with \`${bytes.there}\``
+      : bytes.kind === 'authored' ? `placed with \`${bytes.there}\`, by the config`
+        : bytes.kind === 'deliberate' ? `an alias of \`${bytes.there}\``
+          : `shared between pages with \`${bytes.there}\` on ${markdown(pageName(result, bytes.page))}`;
+    tip.row('⧉', bytes.kind === 'collision' || !here ? COLOUR.nested : COLOUR.dim, `${at}${phrase}`,
       coloured(COLOUR.dim, addresses(bytes.first, bytes.last)));
   }
   return tip.build();

@@ -363,14 +363,15 @@
             rows.push(['#', 'var(--dim)', heatText(location)]);
           } else {
             rows.push(['=', same[at] === 'collision' ? 'var(--nested)' : 'var(--dim)',
-            same[at] === 'collision' ? `${name} collides here` : same[at] === 'authored' ? `${name} is placed here too, by the config` : `${name} is an alias of this byte`]);
+            same[at] === 'collision' ? `shared unintentionally with ${name}` : same[at] === 'authored' ? `${name} is placed here too, by the config` : `${name} is an alias of this byte`]);
           }
         });
         if (theirs && theirs.location) {
           const into = address - theirs.location.address;
-          rows.push(['⧉', mine ? 'var(--nested)' : 'var(--dim)', `\`${theirs.location.name}\`${into > 0 ? ` +${into}` : ''} on the ${pageName(theirs.page)} page${mine ? ' takes this byte too' : ''}`]);
+          rows.push(['⧉', mine ? 'var(--nested)' : 'var(--dim)',
+            `${mine ? 'shared between pages with' : 'used by another page:'} \`${theirs.location.name}\`${into > 0 ? ` +${into}` : ''} on ${pageName(theirs.page)}`]);
         } else if (theirs) {
-          rows.push(['⧉', 'var(--dim)', `the ${pageName(theirs.page)} page covers this byte, with nothing placed there`]);
+          rows.push(['⧉', 'var(--dim)', `overlaps another page, ${pageName(theirs.page)}, with nothing placed there`]);
         }
         if (!mine && !(theirs && theirs.location)) rows.push(['·', 'var(--dim)', 'free']);
         cell.addEventListener('mouseenter', () => {
@@ -464,12 +465,12 @@
         ? `${pageName(entry.page)} · ${range}`
         : `${range} · ${sizeOf(location)} B${location.type ? ` · ${location.type}` : ''}`;
       const rows = entry.foreign
-        ? [['⧉', 'var(--dim)', `a location on the ${pageName(entry.page)} page that reaches into this one`]]
+        ? [['⧉', 'var(--dim)', `used by another page, ${pageName(entry.page)}`]]
         : [[glyphOf(location), 'var(--dim)', taken(location) ? 'address taken' : declared(location) ? 'hardware · declared, not reached' : RELATIONS[location.relation] || location.relation],
           ['#', 'var(--dim)', heatText(location)],
           ...(location.shared || []).filter(bytes => bytes.kind === 'collision' || bytes.kind === 'deliberate' || bytes.kind === 'authored')
             .map(bytes => ['=', bytes.kind === 'collision' ? 'var(--nested)' : 'var(--dim)',
-              `${bytes.kind === 'collision' ? 'collides with' : bytes.kind === 'authored' ? 'placed with' : 'aliases'} \`${bytes.there}\` at ${offsets(bytes.first - page.base, bytes.last - page.base)}${bytes.kind === 'authored' ? ', by the config' : ''}`])];
+              `${bytes.kind === 'collision' ? 'shared unintentionally with' : bytes.kind === 'authored' ? 'placed with' : 'an alias of'} \`${bytes.there}\` at ${offsets(bytes.first - page.base, bytes.last - page.base)}${bytes.kind === 'authored' ? ', by the config' : ''}`])];
       row.addEventListener('mouseenter', () => {
         peek(row.dataset.key);
         showTip(row, location.name, meta, rows);
@@ -513,8 +514,8 @@
       ['address taken', referenced],
       ['never accessed', unreached],
       ...(unreachedRegisters > 0 ? [['declared', unreachedRegisters]] : []),
-      ['shared with another page', shared],
-      ['another page\'s only', foreign],
+      ['shared between pages', shared],
+      ['used by another page', foreign],
       ['free', free],
       ['largest free run', best[0] > 0 ? `${best[0]} · ${hex4(page.base + best[1])}` : '0'],
     ];
@@ -542,9 +543,9 @@
         const count = overlap.shared.reduce((sum, bytes) => sum + bytes.last - bytes.first + 1, 0);
         const first = Math.min(...overlap.shared.map(bytes => bytes.first));
         const last = Math.max(...overlap.shared.map(bytes => bytes.last));
-        items.push(['⧉', 'var(--nested)', `${count} byte${count === 1 ? '' : 's'} shared with ${name}`, addresses(first, last)]);
+        items.push(['⧉', 'var(--nested)', `${count} byte${count === 1 ? '' : 's'} shared between pages with ${name}`, addresses(first, last)]);
       } else {
-        items.push(['⧉', 'var(--dim)', `overlaps the ${name} page, no bytes shared`, addresses(overlap.first, overlap.last)]);
+        items.push(['⧉', 'var(--dim)', `overlaps another page, ${name}, with no bytes shared`, addresses(overlap.first, overlap.last)]);
       }
     }
     // The header's badge already says the layout is guessed.
@@ -595,12 +596,12 @@
     key('never accessed', 'declared, but nothing reaches it or takes its address', classes('neverkey'));
     group('bytes two locations take');
     key('alias', 'two names for one byte, on purpose: the source fixes both addresses, or the config places both', classes('cell', 'alias'));
-    key('collision', 'two of this page’s locations take the byte, and the layout did not place them there on purpose', classes('cell', 'twin'));
-    key('this page and another', 'a location on this page and one on another page both take the byte', classes('cell', 'clash'));
-    key("another page's location", 'a location on another page takes these bytes, and none of this page’s does', classes('cell', 'otherused'));
+    key('shared unintentionally', 'two of this page’s locations take the byte, and the layout did not place them there on purpose', classes('cell', 'twin'));
+    key('shared between pages', 'a location on this page and one on another page both take the byte', classes('cell', 'clash'));
+    key('used by another page', 'a location on another page takes the byte, and none of this page’s does', classes('cell', 'otherused'));
     group('the rest of the page');
     key('free', 'nothing is placed here', fill('var(--free)'));
-    key('another page', 'another page covers these bytes, with nothing placed here on either', classes('cell', 'other'));
+    key('overlaps another page', 'another page covers the byte too, and neither page has placed anything here', classes('cell', 'other'));
     key('colder → hotter', 'a location is brighter the more often its instructions run in one pass', classes('heat'));
     key('one location', 'one outline is one location', classes('shape'));
     return strip;
