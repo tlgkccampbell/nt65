@@ -54,7 +54,7 @@ const LAYOUTS = {
 
 const RELATIONS = {
   shared: 'shared',
-  nested: 'nested temps',
+  nested: 'temp clobbered by a call',
   irq: 'interrupt',
   own: 'one owner',
   unused: 'unused',
@@ -850,13 +850,13 @@ const LEGEND_ITEMS = [
   {
     label: 'Sharing',
     children: [
-      { label: 'shared', icon: icon('circle-filled', COLOUR.shared) },
-      { label: 'nested temps', icon: icon('circle-filled', COLOUR.nested) },
-      { label: 'interrupt', icon: icon('circle-filled', COLOUR.irq) },
-      { label: 'one owner', icon: icon('circle-filled', COLOUR.own) },
-      { label: 'unused', icon: icon('circle-outline', COLOUR.unused) },
-      { label: 'address taken', icon: icon('target', COLOUR.referenced) },
-      { label: 'hardware', icon: icon('circuit-board', COLOUR.hw) },
+      { label: 'shared', description: 'several routines use it', icon: icon('circle-filled', COLOUR.shared) },
+      { label: 'temp clobbered by a call', description: 'relied on across a call that uses it as a temp', icon: icon('circle-filled', COLOUR.nested) },
+      { label: 'interrupt', description: 'a handler and the code it interrupts both use it', icon: icon('circle-filled', COLOUR.irq) },
+      { label: 'one owner', description: 'one routine uses it', icon: icon('circle-filled', COLOUR.own) },
+      { label: 'unused', description: 'nothing reaches it', icon: icon('circle-outline', COLOUR.unused) },
+      { label: 'address taken', description: 'used through a pointer or an index', icon: icon('target', COLOUR.referenced) },
+      { label: 'hardware', description: 'a register, declared with .mmio', icon: icon('circuit-board', COLOUR.hw) },
     ],
   },
   {

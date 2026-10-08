@@ -123,31 +123,34 @@ body.vscode-high-contrast-light {
 .cell.taken { background: color-mix(in srgb, var(--referenced) 35%, transparent); }
 /* A hardware register the page covers but no instruction reaches is only a faint mark. */
 .cell.declared { background: color-mix(in srgb, var(--hw) 16%, transparent); }
-.cell.other { background: repeating-linear-gradient(135deg, var(--hatch) 0 2px, var(--free) 2px 5px); }
-.cell.otherused { background: repeating-linear-gradient(135deg, var(--hatch-used) 0 2px, var(--free) 2px 5px); }
-.cell.clash { background: var(--nested) !important; }
-.cell.clash::after { content: "⧉"; position: absolute; right: 2px; bottom: 1px; font-size: 9px; line-height: 1; color: var(--on-amber); }
+.cell.other { background-image: repeating-linear-gradient(135deg, var(--hatch) 0 2px, var(--free) 2px 5px); }
+.cell.otherused { background-image: repeating-linear-gradient(135deg, var(--hatch-used) 0 2px, var(--free) 2px 5px); }
+.cell.clash { background: var(--nested); }
 /* A byte that two of the page's own locations take is striped amber where they collide. Where the
    source aliases the byte on purpose, or the linked config places both there, it only carries a mark. */
-.cell.twin { background: repeating-linear-gradient(135deg, var(--nested) 0 3px, color-mix(in srgb, var(--nested) 45%, transparent) 3px 6px) !important; }
-.cell.twin::after, .cell.alias::after { content: "="; position: absolute; right: 2px; bottom: 1px; font-size: 9px; line-height: 1; }
-.cell.twin::after { color: var(--on-amber); }
-.cell.alias::after { color: var(--fg); opacity: 0.7; }
-/* A byte that another page's location takes as well keeps its own mark. */
-.cell.clash::after { content: "⧉"; }
+.cell.twin { background-color: transparent;
+  background-image: repeating-linear-gradient(135deg, var(--nested) 0 3px, color-mix(in srgb, var(--nested) 45%, transparent) 3px 6px); }
+/* A striped cell shows its window onto one pattern laid over the whole grid, which is 16 columns
+   of 24px by 16 rows of 22px, so the stripes run on from cell to cell. */
+.cell.other, .cell.otherused, .cell.twin { background-size: 384px 352px; background-position: calc(-1 * var(--x, 0px)) calc(-1 * var(--y, 0px)); }
+/* The marks are set large in the middle of the cell, so they read over any colour or stripes. */
+.cell.clash::after, .cell.twin::after, .cell.alias::after {
+  position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none;
+}
+.cell.clash::after { content: "⧉"; color: var(--on-amber); }
+.cell.twin::after { content: "="; color: var(--on-amber); }
+.cell.alias::after { content: "="; color: var(--fg); opacity: 0.8; text-shadow: 0 0 2px var(--cut); }
 .cell.hot, .cell.peek { --edge: var(--edge-hot) !important; }
 .cell.peek:not(.hot) { filter: brightness(1.2); }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px; color: var(--dim); margin-top: 12px; max-width: 432px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend i { width: 14px; height: 12px; border-radius: 2px; display: inline-block; font-style: normal; }
-.legend .heat { width: 30px; background: linear-gradient(90deg, color-mix(in srgb, var(--shared) 30%, transparent), var(--shared)); }
-.legend .shape { width: 30px; background: color-mix(in srgb, var(--shared) 60%, transparent); box-shadow: inset 0 0 0 1px var(--edge-sym); }
-.legend .clashkey { background: var(--nested); color: var(--on-amber); font-size: 9px; text-align: right; line-height: 12px; }
+/* A swatch is the size of a cell, and the marked ones are cells, so they look as they do in the grid. */
+.legend i { width: 24px; height: 18px; border-radius: 2px; display: inline-block; font-style: normal; flex: none; }
+.legend span { cursor: help; }
+.legend .heat { width: 36px; background: linear-gradient(90deg, color-mix(in srgb, var(--shared) 30%, transparent), var(--shared)); }
+.legend .shape { width: 36px; background: color-mix(in srgb, var(--shared) 60%, transparent); box-shadow: inset 0 0 0 1px var(--edge-sym); }
 .legend .neverkey { box-shadow: inset 0 0 0 1px var(--edge-unused); }
-.legend .twinkey { background: repeating-linear-gradient(135deg, var(--nested) 0 3px, color-mix(in srgb, var(--nested) 45%, transparent) 3px 6px);
-  color: var(--on-amber); font-size: 9px; text-align: right; line-height: 12px; }
-.legend .aliaskey { background: var(--free); color: var(--fg); font-size: 9px; text-align: right; line-height: 12px; }
 
 .side { display: grid; gap: 18px; min-width: 0; font-size: 12.5px; }
 .side h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); font-weight: 600; }

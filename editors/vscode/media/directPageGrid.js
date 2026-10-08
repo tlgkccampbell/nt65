@@ -19,7 +19,7 @@
   const tip = document.getElementById('tip');
 
   const RELATIONS = {
-    shared: 'shared', nested: 'nested temps', irq: 'interrupt', own: 'one owner', unused: 'unused', hw: 'hardware',
+    shared: 'shared', nested: 'temp clobbered by a call', irq: 'interrupt', own: 'one owner', unused: 'unused', hw: 'hardware',
   };
 
   // Returns an address as `$` and four hexadecimal digits.
@@ -325,9 +325,12 @@
         cell.style.boxShadow = sides(at, c, 1);
         // The locations the caret marks get wider edges, the one under it the widest.
         cell.edges = { plain: cell.style.boxShadow, used: sides(at, c, 2), direct: sides(at, c, 3) };
+        // A byte another page's location or a colliding one of this page's also takes is drawn
+        // for that, not for how hot it is.
+        const clash = !!(mine && theirs && theirs.location);
         if (mine && declared(mine)) {
           cell.classList.add('declared');
-        } else if (mine && mine.relation !== 'unused') {
+        } else if (mine && mine.relation !== 'unused' && !clash && same[at] !== 'collision') {
           const share = Math.round(30 + 70 * heatOf(mine) / maxHeat);
           cell.style.background = `color-mix(in srgb, ${colourOf(mine)} ${share}%, transparent)`;
         }
@@ -335,9 +338,13 @@
         else if (mine && taken(mine)) cell.classList.add('taken');
         if (same[at] === 'collision') cell.classList.add('twin');
         else if (same[at] === 'deliberate' || same[at] === 'authored') cell.classList.add('alias');
-        if (mine && theirs && theirs.location) cell.classList.add('clash');
+        if (clash) cell.classList.add('clash');
         else if (!mine && theirs && theirs.location) cell.classList.add('otherused');
         else if (!mine && theirs) cell.classList.add('other');
+        // A striped cell shows its window onto one pattern laid over the whole grid, so the
+        // stripes run on from cell to cell.
+        cell.style.setProperty('--x', `${c * 24}px`);
+        cell.style.setProperty('--y', `${r * 22}px`);
         const target = mine ? { page, location: mine } : theirs && theirs.location ? { page: theirs.page, location: theirs.location } : null;
         if (target) {
           cell.classList.add('sym');
@@ -565,34 +572,31 @@
   // Returns the strip under the grid that says what its colours and shapes mean.
   function legend() {
     const strip = h('div', 'legend');
-    const key = (text, setup) => {
+    // Each key is a swatch drawn the way the cells are, a few words, and a sentence on hover.
+    const key = (text, title, setup) => {
       const span = h('span');
+      span.title = title;
       const swatch = h('i');
       setup(swatch);
       span.append(swatch, document.createTextNode(text));
       strip.append(span);
     };
-    for (const relation of ['shared', 'nested', 'irq', 'own']) {
-      key(RELATIONS[relation], swatch => { swatch.style.background = `var(--${relation})`; });
-    }
-    key('address taken', swatch => { swatch.style.background = 'var(--referenced)'; });
-    key('never accessed', swatch => swatch.classList.add('neverkey'));
-    key('free', swatch => { swatch.style.background = 'var(--free)'; });
-    key('another page', swatch => swatch.classList.add('cell', 'other'));
-    key('both', swatch => {
-      swatch.classList.add('clashkey');
-      swatch.textContent = '⧉';
-    });
-    key('collide', swatch => {
-      swatch.classList.add('twinkey');
-      swatch.textContent = '=';
-    });
-    key('alias', swatch => {
-      swatch.classList.add('aliaskey');
-      swatch.textContent = '=';
-    });
-    key('colder → hotter', swatch => swatch.classList.add('heat'));
-    key('one location', swatch => swatch.classList.add('shape'));
+    const fill = colour => swatch => { swatch.style.background = colour; };
+    const classes = (...names) => swatch => swatch.classList.add(...names);
+    key(RELATIONS.shared, 'more than one routine uses it', fill('var(--shared)'));
+    key(RELATIONS.nested, 'a routine relies on it across a call to a routine that uses it as a temporary of its own', fill('var(--nested)'));
+    key(RELATIONS.irq, 'an interrupt and the code it interrupts both use it', fill('var(--irq)'));
+    key(RELATIONS.own, 'one routine uses it', fill('var(--own)'));
+    key('address taken', 'no instruction reaches it directly, but its address is taken, so it is used through a pointer or an index', fill('var(--referenced)'));
+    key('never accessed', 'declared, but nothing reaches it or takes its address', classes('neverkey'));
+    key('free', 'nothing is placed here', fill('var(--free)'));
+    key('another page', 'another page covers these bytes, with nothing of its own placed here', classes('cell', 'other'));
+    key("another page's location", 'a location on another page takes these bytes', classes('cell', 'otherused'));
+    key('this page and another', 'a location on this page and one on another page both take the byte', classes('cell', 'clash'));
+    key('collision', 'two of this page’s locations take the byte, and the layout did not place them there on purpose', classes('cell', 'twin'));
+    key('alias', 'two names for one byte, on purpose: the source fixes both addresses, or the config places both', classes('cell', 'alias'));
+    key('colder → hotter', 'a location is brighter the more often its instructions run in one pass', classes('heat'));
+    key('one location', 'one outline is one location', classes('shape'));
     return strip;
   }
 
