@@ -1,8 +1,8 @@
 // Draws the branches and jumps of the routine at the caret as arrows in the margin. The server
 // works out the arrows and the column each one's upright goes in (`nt65/flowArrows`), and this
-// file only draws them. VS Code cannot put text in its own gutter, so the arrows are a prefix
-// before the first character of every line of the routine, the same width on each line so that
-// the code does not jog.
+// file only draws them. VS Code cannot draw in its own gutter, so the arrows are a prefix before
+// the first character of every line of the routine, the same width on each line so that the code
+// does not jog.
 const vscode = require('vscode');
 
 // How long the caret has to rest on a line before the server is asked about it.
@@ -13,44 +13,16 @@ const DELAY = 100;
 // keystroke would shift the code left and right while it is typed.
 const EDIT_DELAY = 300;
 
-// The directions a cell's lines go in, combined into the key of the glyph that draws them.
-const UP = 1;
-const DOWN = 2;
-const LEFT = 4;
-const RIGHT = 8;
-
-// The glyph for each combination of directions. These are box-drawing characters that Consolas,
-// Cascadia and Menlo all have, so that each cell is one column wide in the editor's own font.
-const GLYPHS = {
-  [UP]: '│',
-  [DOWN]: '│',
-  [UP | DOWN]: '│',
-  [LEFT]: '─',
-  [RIGHT]: '─',
-  [LEFT | RIGHT]: '─',
-  [DOWN | RIGHT]: '┌',
-  [UP | RIGHT]: '└',
-  [DOWN | LEFT]: '┐',
-  [UP | LEFT]: '┘',
-  [UP | DOWN | RIGHT]: '├',
-  [UP | DOWN | LEFT]: '┤',
-  [LEFT | RIGHT | DOWN]: '┬',
-  [LEFT | RIGHT | UP]: '┴',
-  [UP | DOWN | LEFT | RIGHT]: '┼',
-};
-
-// The heads, drawn where an arrow lands and where one leaves the routine.
-const INTO = '►';
-const OUT = '◄';
-
-// A space that the editor does not collapse.
-const SPACE = ' ';
-
-// The styles an arrow is drawn in. Where arrows cross, the cell takes the style that comes first.
+// The styles an arrow is drawn in. Where arrows meet, the part drawn in the style that comes
+// first is drawn on top.
 const STYLES = ['caret', 'arrow', 'declared', 'faded'];
 
+// How thick an arrow's lines are, in pixels.
+const THICKNESS = 1;
+
+// Returns the CSS colour of a style, which is the theme colour that VS Code exposes as a variable.
 function colour(style) {
-  return new vscode.ThemeColor(`nt65.flowArrows.${style}`);
+  return `var(--vscode-nt65-flowArrows-${style})`;
 }
 
 // Returns the style of an arrow. The arrow that starts or ends on the caret's line is brightened,
@@ -65,22 +37,19 @@ function styleOf(arrow, caret) {
 // Returns the cells of the prefix, one row per line of the routine. Each row holds a lead cell,
 // where an arrow that leaves the routine has its head, a cell per column, and two cells that
 // join the columns to the code. A column's cell index counts from the left, and column 0 is the
-// one nearest the code.
+// one nearest the code. A cell names the style of each part drawn in it: the half lines `up`,
+// `down`, `left` and `right` from its centre, and the heads `into` and `out`.
 function cellsOf(result, caret) {
   const width = 1 + result.columns + 2;
   const rows = [];
   for (let line = result.first; line <= result.last; line++) {
-    rows.push(Array.from({ length: width }, () => ({ mask: 0, head: undefined, style: undefined })));
+    rows.push(Array.from({ length: width }, () => ({})));
   }
-  const cell = (line, index) => rows[line - result.first][index];
-  const mark = (line, index, mask, style) => {
-    const target = cell(line, index);
-    target.mask |= mask;
-    if (target.style === undefined || STYLES.indexOf(style) < STYLES.indexOf(target.style)) target.style = style;
-  };
-  const head = (line, index, glyph, style) => {
-    mark(line, index, 0, style);
-    cell(line, index).head = glyph;
+  const mark = (line, index, parts, style) => {
+    const cell = rows[line - result.first][index];
+    for (const part of parts) {
+      if (cell[part] === undefined || STYLES.indexOf(style) < STYLES.indexOf(cell[part])) cell[part] = style;
+    }
   };
 
   // The server leaves out a field whose value is null, so an arrow that leaves the routine has
@@ -91,35 +60,84 @@ function cellsOf(result, caret) {
   for (const arrow of drawn) {
     const style = styleOf(arrow, caret);
     if (arrow.to == null) {
-      head(arrow.from, 0, OUT, style);
-      for (let index = 1; index < width; index++) mark(arrow.from, index, LEFT | RIGHT, style);
+      mark(arrow.from, 0, ['out', 'right'], style);
+      for (let index = 1; index < width; index++) mark(arrow.from, index, ['left', 'right'], style);
       continue;
     }
     const upright = 1 + (result.columns - 1 - arrow.column);
     const low = Math.min(arrow.from, arrow.to);
     const high = Math.max(arrow.from, arrow.to);
-    mark(low, upright, DOWN | RIGHT, style);
-    mark(high, upright, UP | RIGHT, style);
-    for (let line = low + 1; line < high; line++) mark(line, upright, UP | DOWN, style);
+    mark(low, upright, ['down', 'right'], style);
+    mark(high, upright, ['up', 'right'], style);
+    for (let line = low + 1; line < high; line++) mark(line, upright, ['up', 'down'], style);
     for (const line of [arrow.from, arrow.to]) {
-      for (let index = upright + 1; index < width; index++) mark(line, index, LEFT | RIGHT, style);
+      for (let index = upright + 1; index < width - 1; index++) mark(line, index, ['left', 'right'], style);
     }
-    head(arrow.to, width - 1, INTO, style);
+    mark(arrow.from, width - 1, ['left', 'right'], style);
+    mark(arrow.to, width - 1, ['left', 'into'], style);
   }
   return rows;
 }
 
-// Returns a row of cells as runs of text that share a style. A blank cell joins the run before
-// it, since a space has no colour to keep.
-function runsOf(row) {
-  const runs = [];
-  for (const cell of row) {
-    const text = cell.head || GLYPHS[cell.mask] || SPACE;
-    const style = cell.style || (runs.length > 0 ? runs[runs.length - 1].style : 'arrow');
-    if (runs.length > 0 && runs[runs.length - 1].style === style) runs[runs.length - 1].text += text;
-    else runs.push({ style, text });
-  }
-  return runs;
+// Returns the CSS background that draws a row of cells, in a box `height` pixels tall. Every part
+// is a layer of its own, a gradient of one colour sized to the line or the half of a head it
+// draws, so the uprights of one line meet those of the next with no gap.
+function backgroundOf(row, height) {
+  const middle = Math.floor(height / 2);
+  const centre = middle + THICKNESS / 2;
+  const head = Math.max(3, Math.round(height * 0.22));
+  const layers = [];
+  const add = (style, image, x, y, width, tall) =>
+    layers.push({ style, css: `${image} ${x} ${y} / ${width} ${tall} no-repeat` });
+  const solid = style => `linear-gradient(${colour(style)}, ${colour(style)})`;
+
+  // A half of a triangular head fills the half of its box on one side of the box's diagonal.
+  const half = (style, towards) => `linear-gradient(to ${towards}, ${colour(style)} 50%, transparent 50%)`;
+  row.forEach((cell, index) => {
+    const upright = `calc(${index}ch + 0.5ch - ${THICKNESS / 2}px)`;
+    const reach = `calc(0.5ch + ${THICKNESS / 2}px)`;
+    if (cell.up) add(cell.up, solid(cell.up), upright, '0px', `${THICKNESS}px`, `${middle + THICKNESS}px`);
+    if (cell.down) add(cell.down, solid(cell.down), upright, `${middle}px`, `${THICKNESS}px`, `${height - middle}px`);
+    if (cell.left) add(cell.left, solid(cell.left), `${index}ch`, `${middle}px`, reach, `${THICKNESS}px`);
+    if (cell.right) add(cell.right, solid(cell.right), upright, `${middle}px`, reach, `${THICKNESS}px`);
+    const box = `calc(${index}ch + 0.1ch)`;
+    if (cell.into) {
+      add(cell.into, half(cell.into, 'top right'), box, `${centre - head}px`, '0.8ch', `${head}px`);
+      add(cell.into, half(cell.into, 'bottom right'), box, `${centre}px`, '0.8ch', `${head}px`);
+    }
+    if (cell.out) {
+      add(cell.out, half(cell.out, 'top left'), box, `${centre - head}px`, '0.8ch', `${head}px`);
+      add(cell.out, half(cell.out, 'bottom left'), box, `${centre}px`, '0.8ch', `${head}px`);
+    }
+  });
+
+  // The first layer is drawn on top, so the parts in the style that comes first go first.
+  layers.sort((a, b) => STYLES.indexOf(a.style) - STYLES.indexOf(b.style));
+  return layers.map(layer => layer.css).join(', ');
+}
+
+// Returns the height of a line in the editor, in pixels, worked out from the settings the way
+// VS Code works it out. A line height under 8 is a multiple of the font size, and 0 means the
+// default ratio for the platform.
+function lineHeightOf(document) {
+  const settings = vscode.workspace.getConfiguration('editor', { uri: document.uri, languageId: document.languageId });
+  const size = settings.get('fontSize') || 14;
+  const height = settings.get('lineHeight') || 0;
+  if (height === 0) return Math.round(size * (process.platform === 'darwin' ? 1.5 : 1.35));
+  return Math.round(height < 8 ? size * height : height);
+}
+
+// Returns how one line's prefix is drawn: a box one line tall and as wide as the row's cells,
+// whose background draws the arrows. An attachment has no option for the box's display or its
+// background, so they go in through `textDecoration`, which is written into the style as it is.
+function prefixOf(row, height) {
+  const background = backgroundOf(row, height);
+  return {
+    contentText: '\u00a0',
+    color: 'transparent',
+    textDecoration: `none; display: inline-block; vertical-align: top; width: ${row.length}ch; height: ${height}px`
+      + (background ? `; background: ${background}` : ''),
+  };
 }
 
 // Returns the hover for an arrow that had no room in the margin.
@@ -131,8 +149,7 @@ class FlowArrows {
   constructor(client) {
     this.client = client;
 
-    // Every run is drawn by this one type, each with its own text and colour. Decorations of one
-    // type at one place are drawn in the order they are given, which keeps a row's runs in order.
+    // Every line's prefix is drawn by this one type, each with a background of its own.
     this.prefix = vscode.window.createTextEditorDecorationType({});
 
     // The hover on the line of an arrow that had no room. It draws nothing.
@@ -206,23 +223,25 @@ class FlowArrows {
     this.render();
   }
 
-  // Draws what is shown, with the arrows on the caret's line brightened.
+  // Draws what is shown, with the arrows on the caret's line brightened. Each line gets one
+  // decoration, since VS Code does not keep several at one place in the order they are given.
   render() {
     if (!this.shown) return;
     const { editor, result } = this.shown;
-    const caret = editor.selection.active.line;
+    const document = editor.document;
+    const height = lineHeightOf(document);
+    const rows = cellsOf(result, editor.selection.active.line);
     const prefixes = [];
-    const rows = cellsOf(result, caret);
-    for (let line = result.first; line <= result.last && line < editor.document.lineCount; line++) {
-      const at = new vscode.Range(line, 0, line, 0);
-      for (const run of runsOf(rows[line - result.first])) {
-        prefixes.push({ range: at, renderOptions: { before: { contentText: run.text, color: colour(run.style) } } });
-      }
+    for (let line = result.first; line <= result.last && line < document.lineCount; line++) {
+      prefixes.push({
+        range: new vscode.Range(line, 0, line, 0),
+        renderOptions: { before: prefixOf(rows[line - result.first], height) },
+      });
     }
     editor.setDecorations(this.prefix, prefixes);
     editor.setDecorations(this.hover, result.arrows
-      .filter(arrow => arrow.to != null && arrow.column == null && arrow.from < editor.document.lineCount)
-      .map(arrow => ({ range: editor.document.lineAt(arrow.from).range, hoverMessage: unshownOf(arrow) })));
+      .filter(arrow => arrow.to != null && arrow.column == null && arrow.from < document.lineCount)
+      .map(arrow => ({ range: document.lineAt(arrow.from).range, hoverMessage: unshownOf(arrow) })));
   }
 
   clear() {
@@ -256,6 +275,9 @@ function register(context, client) {
       }
     }),
     vscode.workspace.onDidChangeConfiguration(event => {
+      if (event.affectsConfiguration('editor.fontSize') || event.affectsConfiguration('editor.lineHeight')) {
+        arrows.render();
+      }
       if (!event.affectsConfiguration('nt65.flowArrows.enabled')) return;
       if (arrows.enabled && vscode.window.activeTextEditor) arrows.schedule(vscode.window.activeTextEditor);
       else arrows.clear();
