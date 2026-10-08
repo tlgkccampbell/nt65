@@ -205,19 +205,19 @@ public static class SyntaxFacts
 
     // The processor-state items, grouped by the suffix that follows the name. A point item
     // stands alone. The suffix `*` keeps a part of the state unchanged, `?` forgets it, and `=`
-    // gives it a value.
+    // gives it a value. A flag stands alone after `->`, where it says the routine sets it.
     private static readonly FrozenSet<string> pointStateItems =
         new[]
         {
             "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "args", "interrupt",
-            "noreturn", "keeps", "reads", "saves",
+            "noreturn", "keeps", "reads", "saves", "c", "z", "n", "v",
         }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> trackedStateParts =
         new[] { "a", "i", "e", "dp", "dbr" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> valuedStateParts =
-        new[] { "dp", "dbr" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        new[] { "dp", "dbr", "c", "z", "n", "v", "d", "i" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The kinds of argument a macro parameter may take, as they appear in source.</summary>
     private static readonly FrozenSet<string> parameterKinds =
@@ -269,7 +269,8 @@ public static class SyntaxFacts
     /// Checks whether <paramref name="text"/> is a word that begins a state item, with any
     /// suffix. Such a word cannot name a signature set.
     /// </summary>
-    public static bool IsStateWord(string text) => pointStateItems.Contains(text) || trackedStateParts.Contains(text);
+    public static bool IsStateWord(string text) =>
+        pointStateItems.Contains(text) || trackedStateParts.Contains(text) || valuedStateParts.Contains(text);
 
     /// <summary>Checks whether <paramref name="text"/> names a kind of macro parameter.</summary>
     public static bool IsParameterKind(string text) => parameterKinds.Contains(text);

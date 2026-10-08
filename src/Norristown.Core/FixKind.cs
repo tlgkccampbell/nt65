@@ -195,8 +195,8 @@ public enum FixKind
     FarBranch,
 
     /// <summary>
-    /// An <c>.ensure</c> of the width the fix's <see cref="DiagnosticFix.Text"/> names, inserted
-    /// before the statement reported.
+    /// An <c>.ensure</c> of the width or flag item the fix's <see cref="DiagnosticFix.Text"/> names,
+    /// such as <c>a16</c> or <c>c = 0</c>, inserted before the statement reported.
     /// </summary>
     Ensure,
 

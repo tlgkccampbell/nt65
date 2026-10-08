@@ -1221,6 +1221,8 @@ items are:
 | `args n` | the caller pushes n bytes before the call (below) | none |
 | `interrupt` | an interrupt handler (below) | none |
 | `noreturn` | the routine never returns (below) | none |
+| `c = 0` `c = 1`, and the same for `z` `n` `v` `d` `i` | before `->`, the flag's value at every call; after it, its value at every return (below) | none |
+| `c` `z` `n` `v` alone, after `->` | a flag the routine sets for its caller on every path (below) | none |
 | `keeps a, x, y, c, z, n, v` | the registers and flags it hands back as it was entered with them (§7.7) | none |
 | `reads a, x, y, c, z, n, v`, `reads none` | the registers and flags whose values from its caller it uses (§7.7) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
@@ -1392,7 +1394,8 @@ entered with the stack of a call to it, which is what makes each of them callabl
 
 **Setting widths.** `.ensure` takes width items, `a8`, `a16`, `i8` and `i16`, and makes
 them hold, emitting only what the analysis says is needed: nothing where the widths
-already hold, otherwise the `sep` or `rep` that sets them. Its effect on the state does
+already hold, otherwise the `sep` or `rep` that sets them. It takes flag items too, on every
+CPU, which the flag analysis decides the same way (§16). Its effect on the state does
 not depend on what it emits, so the choice is made once the analysis has converged and
 the analysis never waits on its own output. A 16-bit width needs native mode known at
 that point; in emulation mode the widths stay 8. An `.ensure` no path reaches writes
@@ -1664,7 +1667,7 @@ The third directive is about the end of a routine rather than a statement:
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | code nothing reaches: an instruction with no label after an `rts`, a `jmp`, a call that never returns, or a branch the flags show is always taken | no fall-through and no label, so nothing can name it; in a macro body, no call of the macro reaches it | a warning at its first instruction, faded as unneeded; `.allow "code-unreachable"` where it is reached in a way nt65 cannot see |
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next. A routine that ends in such data is reported once, as running into it |
-| a conditional branch that is always taken: `bcs` over inline text after a routine that returns with carry set | the flags are known where the branch stands from something the flag analysis does not follow, such as what a routine returns with; a flag the routine's own instructions set is followed, and needs nothing | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
+| a conditional branch that is always taken: `bcs` over inline text after a routine that returns with carry set | the flags are known where the branch stands from something the flag analysis does not follow, such as what a routine returns with where its signature does not say; a flag the routine's own instructions set, or a signature gives, is followed, and needs nothing | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7). On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
 | falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; the fix writes the `.fallthrough` where the routine written next is known. Where the last statement is a conditional branch, the message offers first the `.next` naming the branch's own target, for a branch that is always taken, and no `.next ?`, which cannot follow a branch. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
@@ -4589,14 +4592,29 @@ Recorded so the reasoning survives. None is open.
   is warned whatever the depth, naming the routine that declined, and the fix goes there. This
   is one case of a wider rule: anything left undeclared is inferred and used, and anything
   declared in a category is a contract.
-- **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C and V as 0, 1 or
+- **Flags join the signature.** A flag takes a value with `=`, as `dp = e` does: before `->`
+  it is what every call must give it, after `->` what every return gives it, and a flag named
+  alone after `->` is a result the routine sets on every path. They are checked as widths are,
+  on every CPU: an entry flag at each call, an exit flag at each return and against what a tail
+  call's target returns with, and a result through the register walk, which shows where the
+  caller's flag can still come back. A routine with no body is trusted. `.state c = 1` declares a
+  flag and is checked where the flags prove the other value, and `.ensure c = 0` emits `clc` only
+  where the flags do not already prove it. `.ensure` takes only `c`, `d` and `i`, and `v = 0`,
+  because Z and N follow every result and nothing sets V alone; the rule is the same on every
+  CPU, though the 65816 folds the flag into a `rep` or `sep` it emits for the widths. What it
+  emits changes no edge and no flag, so a file with such an `.ensure` is laid out once more with
+  the flag analysis's answers. `keeps c` beside `-> c = 0` is an error. On the 65816 m, x and e
+  are spelled as the widths and the mode, so `m = 0` is an error that names `a16`.
+- **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C, V, D and I as 0, 1 or
   unknown through each routine, before any other analysis reads its blocks. An immediate load,
-  `clc`, `sec`, `clv`, and a `rep` or `sep` with a constant mask set a flag; a branch's taken
-  edge knows its flag and its fall-through the opposite; an instruction that sets N and Z from
-  one result ties them, so N known to be 1 means Z is 0. Paths meet keeping only what every one
-  agrees on. A call makes every flag unknown, because a signature does not say what a routine
-  does to them yet, and so does a label anything but the routine's own transfers names, a
-  `.state` label, or an instruction the program patches. A branch whose flag is known is then
+  `clc`, `sec`, `clv`, `cld`, `sed`, `cli`, `sei`, and a `rep` or `sep` with a constant mask set a
+  flag; a branch's taken edge knows its flag and its fall-through the opposite; an instruction
+  that sets N and Z from one result ties them, so N known to be 1 means Z is 0. Paths meet
+  keeping only what every one agrees on. A routine's entry knows the flags its signature gives
+  before `->`. A call returns with the flags the callee's signature gives after `->`, and with
+  those its `keeps` names as they were; every other flag is unknown, and so is every flag at a
+  label anything but the routine's own transfers names, a `.state` label, or an instruction the
+  program patches. A branch whose flag is known is then
   a jump or nothing, and the edge it never takes is removed. Only what the CPU defines is used, so
   nothing about memory is assumed. The same facts give the editor's flag hints: a `.next` the
   flags prove, a branch never taken, a `jmp` that can be a branch, a branch over a `jmp`, and

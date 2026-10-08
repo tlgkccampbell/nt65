@@ -48,6 +48,11 @@ public sealed class CodeActionsTests
             ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    phy\n    jsr print_digit\n    ply\n    tya\n    sta $11\n    rts\n}\n"
         },
         {
+            "Add `.ensure c = 0`",
+            ".export .proc main: -> c = 0 {\n    lda $10\n    rts\n}\n",
+            ".export .proc main: -> c = 0 {\n    lda $10\n    .ensure c = 0\n    rts\n}\n"
+        },
+        {
             "Add `.next @over`: the branch is always taken",
             ".export .proc main {\n    bcs @over\n    .byte 1\n@over:\n    rts\n}\n",
             ".export .proc main {\n    bcs @over\n    .next @over\n    .byte 1\n@over:\n    rts\n}\n"

@@ -13,7 +13,7 @@
 .segment CODE
 .proc pinned: emu -> emu {
     .ensure a16             ;! error[ensure-needs-native]: `.ensure a16` needs native mode, and the processor is in emulation mode here, where both widths are 8 bits
-    .ensure native          ;! error[ensure-item-not-a-width]: `.ensure` takes only `a8`, `a16`, `i8` and `i16`, not `native`
+    .ensure native          ;! error[ensure-item-not-a-width]: `.ensure` takes only `a8`, `a16`, `i8`, `i16`, `c`, `d` or `i` = 0 or 1, and `v = 0`, not `native`
     rts
 }
 

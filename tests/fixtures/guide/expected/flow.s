@@ -66,7 +66,7 @@ always_taken__over:
     rts
 ; end of always_taken
 
-; .proc push_sign  flow.nt65:59
+; .proc push_sign  flow.nt65:58
 flow__push_sign:
     pla
     sta z:ret
@@ -78,12 +78,12 @@ flow__push_sign:
     jmp (ret)
 ; end of push_sign
 
-; .proc clear_screen  flow.nt65:71
+; .proc clear_screen  flow.nt65:70
 flow__clear_screen:
     lda #$20                        ; ' '
 ; end of clear_screen
 
-; .proc fill_screen  flow.nt65:76
+; .proc fill_screen  flow.nt65:75
 fill_screen:
     ldx #0
 fill_screen__loop:
@@ -93,13 +93,13 @@ fill_screen__loop:
     rts
 ; end of fill_screen
 
-; .proc print: inline .strz  flow.nt65:85
+; .proc print: inline .strz  flow.nt65:84
 print:
 
     rts
 ; end of print
 
-; .proc greet  flow.nt65:90
+; .proc greet  flow.nt65:89
 flow__greet:
     jsr print
     .byte $48, $45, $4c, $4c, $4f, $00  ; "HELLO"

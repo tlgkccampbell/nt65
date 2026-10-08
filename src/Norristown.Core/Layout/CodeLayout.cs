@@ -90,9 +90,12 @@ public sealed partial class CodeLayout
     /// <paramref name="states"/> gives the state reaching each statement, which sizes the file's
     /// immediates, its <c>.ensure</c> directives and its frame slots. Without it, the immediates
     /// are laid out a byte wide and every <c>.ensure</c> emits every instruction it could. That
-    /// is enough to find where control goes, since no edge depends on a length.
+    /// is enough to find where control goes, since no edge depends on a length. On any CPU,
+    /// <paramref name="flags"/> gives the flags known before each statement, so that an
+    /// <c>.ensure</c> emits nothing for a flag already so.
     /// </summary>
-    public static CodeLayout Create(SemanticModel model, Cpu cpu, IProcessorStates? states = null)
+    public static CodeLayout Create(
+        SemanticModel model, Cpu cpu, IProcessorStates? states = null, Func<SyntaxNode, Expansion?, FlagValues?>? flags = null)
     {
         // Every long branch starts short, and those found out of reach are lengthened until none
         // changes. This terminates because a branch only ever grows. Only the last walk is kept,
@@ -104,7 +107,7 @@ public sealed partial class CodeLayout
         bool again;
         do
         {
-            walker = new Walker(new CodeLayout(model, cpu, spans), states, lengthened, measured);
+            walker = new Walker(new CodeLayout(model, cpu, spans), states, flags, lengthened, measured);
             walker.Walk();
 
             // The spans are recorded even when a branch grew, so that the next walk starts from
@@ -120,7 +123,7 @@ public sealed partial class CodeLayout
         // laid out again, so no other file pays for it.
         if (walker.WantsCycles)
         {
-            walker = new Walker(new CodeLayout(model, cpu, spans, walker.Layout.steps), states, lengthened, measured);
+            walker = new Walker(new CodeLayout(model, cpu, spans, walker.Layout.steps), states, flags, lengthened, measured);
             walker.Walk();
         }
         return walker.Finish();

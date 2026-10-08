@@ -77,6 +77,31 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// </summary>
     public Processor.Registers? Reads { get; init; }
 
+    /// <summary>
+    /// Gets the values the routine needs some flags to have when it is called, such as the
+    /// <c>c = 0</c> of <c>: c = 0 -&gt; c = 0</c>. Each call is checked against them.
+    /// </summary>
+    public FlagValues EntryFlags { get; init; }
+
+    /// <summary>
+    /// Gets the values the routine returns some flags with, such as the <c>z = 1</c> of
+    /// <c>-&gt; z = 1</c>. A routine with a body is checked at each return, and one without is
+    /// trusted.
+    /// </summary>
+    public FlagValues ExitFlags { get; init; }
+
+    /// <summary>
+    /// Gets the flags the routine sets for its caller on every path, which <c>-&gt; c</c> names. A
+    /// routine with a body is checked at each return, and one without is trusted.
+    /// </summary>
+    public Processor.StatusFlags Results { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the signature names any flag after <c>-&gt;</c>. A routine
+    /// that does promises only the flags it names.
+    /// </summary>
+    public bool DeclaresExitFlags => ExitFlags.Known != Processor.StatusFlags.None || Results != Processor.StatusFlags.None;
+
     /// <summary>Gets how the routine is called and left, as the signature item that declares it.</summary>
     public string Distance => IsInterrupt ? "interrupt" : IsFar ? "far" : "near";
 
@@ -94,7 +119,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// nothing about the widths, and neither does one of only <c>reads</c>.
     /// </summary>
     public bool DeclaresState =>
-        syntax is not null && StateItem.Read(syntax).Any(item => !item.IsAboutRegisters);
+        syntax is not null && StateItem.Read(syntax).Any(item => !item.IsAboutRegisters && item.Part != StatePart.Flag);
 
     /// <summary>
     /// Gets a value indicating whether no caller waits for the routine to return, because it never
@@ -159,7 +184,17 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             entry += $", reads {(reads == Processor.Registers.None ? "none" : Processor.RegisterEffects.Format(reads).ToLowerInvariant())}";
         if (Keeps != Processor.Registers.None)
             entry += $", keeps {Processor.RegisterEffects.Format(Keeps).ToLowerInvariant()}";
-        return entry + (NeverReturns || IsInterrupt || Exit == Entry ? "" : $" -> {Exit}");
+        if (EntryFlags.Known != Processor.StatusFlags.None)
+            entry += $", {EntryFlags}";
+        if (NeverReturns || IsInterrupt)
+            return entry;
+        var exit = new List<string>();
+        if (Exit != Entry)
+            exit.Add(Exit.ToString());
+        if (ExitFlags.Known != Processor.StatusFlags.None)
+            exit.Add(ExitFlags.ToString());
+        exit.AddRange(FlagValues.Named.Where(flag => (Results & flag) != 0).Select(FlagValues.NameOf));
+        return exit.Count == 0 ? entry : $"{entry} -> {string.Join(", ", exit)}";
     }
 
     /// <summary>
@@ -173,11 +208,14 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         && Entry == other.Entry && Exit == other.Exit && IsFar == other.IsFar
         && Inline?.Text == other.Inline?.Text && IsInterrupt == other.IsInterrupt
         && NeverReturns == other.NeverReturns && Arguments == other.Arguments && Keeps == other.Keeps
-        && Reads == other.Reads;
+        && Reads == other.Reads && EntryFlags == other.EntryFlags && ExitFlags == other.ExitFlags
+        && Results == other.Results;
 
     /// <summary>Returns a hash code over the same parts that <see cref="Equals(Signature?)"/> compares.</summary>
     public override int GetHashCode() =>
-        HashCode.Combine(HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps), Reads);
+        HashCode.Combine(
+            HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps),
+            Reads, EntryFlags, ExitFlags, Results);
 
     /// <summary>
     /// Returns the signature read again with the signature sets it names and the values of its
@@ -234,6 +272,10 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
         // Every `reads` the list gives, and whether a signature set gave it, in the same way.
         public readonly List<(StateItem Item, bool FromSet)> Reads = [];
+
+        // Every flag item the list gives, in order. A later item for the same flag replaces an
+        // earlier one, as an item after a set replaces what the set gives.
+        public readonly List<(StateItem Item, bool FromSet)> Flags = [];
 
         // The parts the list gives itself, rather than taking from the set.
         public readonly HashSet<StatePart> Given = [];
@@ -371,21 +413,68 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         private static ProcessorState Pinned(ProcessorState state) =>
             state.E == ProcessorMode.Emulation ? state with { A = Width.Eight, Index = Width.Eight } : state;
 
-        private Signature Made(ProcessorState entered, ProcessorState exited) =>
-            new(entered, exited, entry.Far?.IsFar ?? false, entry.Inline)
+        private Signature Made(ProcessorState entered, ProcessorState exited)
+        {
+            var keeps = Promised(entry);
+            var (entryFlags, _) = FlagsOf(entry);
+            var (exitFlags, results) = FlagsOf(exit);
+            foreach (var (item, _) in exit.Flags)
+            {
+                if ((Processor.RegisterEffects.Of(item.Flag) & keeps) != Processor.Registers.None && Here(item))
+                {
+                    var flag = item.Flag;
+                    Report(item.Node.Span, Catalogue.KeepsAndExitFlag.Message(
+                        FlagValues.NameOf(flag), Processor.RegisterEffects.Format(Processor.RegisterEffects.Of(flag)), item.Text));
+                }
+            }
+            return new(entered, exited, entry.Far?.IsFar ?? false, entry.Inline)
             {
                 Arguments = arguments,
-                Keeps = Promised(entry),
+                Keeps = keeps,
                 Reads = Declared(entry),
+                EntryFlags = entryFlags,
+                ExitFlags = exitFlags,
+                Results = results,
                 syntax = syntax,
                 forMacro = forMacro,
             };
+        }
+
+        // Returns the values a list's flag items give and the flags it names on their own. A
+        // value that is not 0 or 1 is reported once, here or where the set that gives it is
+        // declared, and the item is left out. Before the program's constants are known, an item's
+        // value is not either, and the item is left out too.
+        private (FlagValues Values, Processor.StatusFlags Results) FlagsOf(Parts parts)
+        {
+            var values = FlagValues.None;
+            var results = Processor.StatusFlags.None;
+            foreach (var (item, _) in parts.Flags)
+            {
+                var flag = item.Flag;
+                if (item.IsResult)
+                {
+                    results |= flag;
+                    continue;
+                }
+                if (item.Expression is not { } expression || valueOf is null)
+                    continue;
+                var value = valueOf(expression);
+                if (value is not (0 or 1))
+                {
+                    if (Here(item))
+                        Report(expression.Span, Catalogue.FlagValueNotABit.Message(item.Text));
+                    continue;
+                }
+                values = values.With(flag, value == 1);
+            }
+            return (values, results & ~values.Known);
+        }
 
         // An interrupt handler is entered from anywhere, so it may only declare which mode the
         // processor is in. It leaves by `rti`, so it declares nothing after `->`.
         private Signature Interrupt()
         {
-            foreach (var other in new[] { entry.A, entry.Index, entry.D, entry.B })
+            foreach (var other in new[] { entry.A, entry.Index, entry.D, entry.B }.Concat(entry.Flags.Select(flag => (StateItem?)flag.Item)))
             {
                 if (other is { } given)
                 {
@@ -513,7 +602,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     // An exit, and a macro, take a set's state and not how a routine is called or entered.
                     if ((isExit || forMacro) && setItem.Part is StatePart.Distance or StatePart.Inline
                         or StatePart.Arguments or StatePart.Interrupt or StatePart.NoReturn or StatePart.Keeps
-                        or StatePart.Reads)
+                        or StatePart.Reads || forMacro && setItem.Part == StatePart.Flag)
                     {
                         continue;
                     }
@@ -573,8 +662,16 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     parts.B = Once(parts, parts.B, item, fromSet);
                     break;
 
-                case StatePart.Keeps or StatePart.Reads when forMacro:
+                case StatePart.Keeps or StatePart.Reads or StatePart.Flag when forMacro:
                     Report(item.Node.Span, Catalogue.MacroKeeps.Message(item.Text));
+                    break;
+                case StatePart.Flag when item.IsResult && !isExit:
+                    Report(At(parts, item), Catalogue.FlagResultAtEntry.Message(
+                        item.Text, Processor.RegisterEffects.Format(Processor.RegisterEffects.Of(item.Flag))));
+                    break;
+                case StatePart.Flag:
+                    parts.Flags.RemoveAll(earlier => earlier.Item.Flag == item.Flag);
+                    parts.Flags.Add((item, fromSet));
                     break;
                 case StatePart.Keeps or StatePart.Reads when isExit:
                     Report(item.Node.Span,

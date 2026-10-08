@@ -6,14 +6,28 @@ namespace Norristown.Syntax.InternalSyntax;
 // import and the `.state` and `.ensure` directives all take.
 internal sealed partial class Parser
 {
+    // The 65816's m, x and e flags are written as the widths and modes they set, so a value given
+    // to one names the item that says the same.
+    private static string? WidthFlag(string text) => text.ToLowerInvariant() switch
+    {
+        "m" => "the accumulator's width is written `a8` or `a16`",
+        "x" => "the index registers' width is written `i8` or `i16`",
+        "e" => "the mode is written `emu` or `native`",
+        _ => null,
+    };
+
     private static bool LooksLikeAWidth(string text) =>
         text.Length > 1 && char.ToLowerInvariant(text[0]) is 'a' or 'i' && text[1..].All(char.IsAsciiDigit);
 
-    /// <summary>Parses the <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro.</summary>
+    /// <summary>
+    /// Parses the <c>: entry -&gt; exit</c> of a proc, an extern proc or a macro. The entry may be
+    /// empty, as in <c>: -&gt; z = 1</c>, for a routine that assumes nothing and declares only what
+    /// it returns with.
+    /// </summary>
     private ProcSignatureSyntax ParseSignature()
     {
         var colon = Advance();
-        var entry = ParseStateList();
+        var entry = Kind == SyntaxKind.Arrow ? new StateListSyntax(null) : ParseStateList();
         GreenToken? arrow = null;
         StateListSyntax? exit = null;
         if (Kind == SyntaxKind.Arrow)
@@ -29,9 +43,11 @@ internal sealed partial class Parser
     private GreenNode? ParseStateItem()
     {
         // A name that is not an item word names a signature set, which stands for its items. A
-        // name shaped like a width, such as `a9`, is treated as a misspelled width instead.
+        // name shaped like a width, such as `a9`, is treated as a misspelled width instead, and a
+        // name followed by `=` as a misspelled item that takes a value.
         if (Kind == SyntaxKind.ColonColon
-            || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsStateWord(Current.Text) && !LooksLikeAWidth(Current.Text)))
+            || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsStateWord(Current.Text) && !LooksLikeAWidth(Current.Text)
+                && (index + 1 >= tokens.Length || tokens[index + 1].Kind != SyntaxKind.Equals)))
         {
             return new StateSetItemSyntax(ParseName());
         }
@@ -68,7 +84,9 @@ internal sealed partial class Parser
                 return Own(new StateBanksItemSyntax(name, equals, openBracket, ranges, closeBracket));
             }
             var given = ParseExpression();
-            if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
+            if (WidthFlag(name.Text) is { } spelled)
+                Report(nameIndex, Catalogue.StateItemIsAWidth.Message(name.Text, spelled));
+            else if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
                 Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
 
             // The misspelled-name diagnostic is about the item, so the item takes it.
@@ -136,9 +154,11 @@ internal sealed partial class Parser
 
     /// <summary>
     /// Returns a value indicating whether the token at <paramref name="at"/> names a register that
-    /// a <c>keeps</c>, <c>reads</c> or <c>saves</c> may take.
+    /// a <c>keeps</c>, <c>reads</c> or <c>saves</c> may take. A flag's name followed by <c>=</c>
+    /// begins an item of its own, such as the <c>c = 0</c> of <c>keeps x, c = 0</c>.
     /// </summary>
     private bool AtKeptRegister(int at) =>
         at < tokens.Length && tokens[at].Kind is SyntaxKind.Identifier or SyntaxKind.Register
-        && SyntaxFacts.IsKeptRegister(tokens[at].Text);
+        && SyntaxFacts.IsKeptRegister(tokens[at].Text)
+        && (at + 1 >= tokens.Length || tokens[at + 1].Kind != SyntaxKind.Equals);
 }

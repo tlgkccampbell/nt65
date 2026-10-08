@@ -319,6 +319,9 @@ public sealed class StateAnalysis : IProcessorStates
         var processor = state.Processor;
         foreach (var item in StateItem.Read(step.Statement))
         {
+            // The flag analysis checks the flags an `.ensure` names, on every CPU.
+            if (item.Part == StatePart.Flag)
+                continue;
             if (item.Part is not (StatePart.A or StatePart.Index) || !StateChecks.IsKnown(item.Width))
             {
                 report?.ReportAt(item.Node, step, Catalogue.EnsureItemNotAWidth.Message(item.Text));

@@ -1239,8 +1239,9 @@ public sealed class Emitter
     }
 
     /// <summary>
-    /// Writes an <c>.ensure</c> as the <c>rep</c> and <c>sep</c> the analysis found it needs,
-    /// which is nothing where the widths already hold.
+    /// Writes an <c>.ensure</c> as the <c>rep</c> and <c>sep</c> the analysis found it needs, and
+    /// the instructions that set the flags it names, which is nothing where all of them already
+    /// hold.
     /// </summary>
     private void Ensure(LineSyntax line, EnsureDirectiveSyntax directive)
     {
@@ -1250,6 +1251,8 @@ public sealed class Emitter
             Code(line, $"{Body}rep #{Hex((long)ensured.Reset, 2)}", 2);
         if (ensured.Set != StatusFlags.None)
             Code(line, $"{Body}sep #{Hex((long)ensured.Set, 2)}", 2);
+        foreach (var instruction in ensured.Instructions)
+            Code(line, $"{Body}{SyntaxFacts.TextOf(instruction)}", 1);
     }
 
     /// <summary>

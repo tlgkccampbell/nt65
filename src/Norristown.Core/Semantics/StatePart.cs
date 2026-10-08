@@ -37,6 +37,12 @@ public enum StatePart
     NoReturn,
 
     /// <summary>
+    /// A flag's value, such as <c>c = 0</c> or <c>d = 1</c>, or, after <c>-&gt;</c>, a flag the routine
+    /// sets for its caller, written on its own as <c>c</c>.
+    /// </summary>
+    Flag,
+
+    /// <summary>
     /// The registers a routine returns with the values they had at entry: <c>keeps a, x</c>.
     /// </summary>
     Keeps,

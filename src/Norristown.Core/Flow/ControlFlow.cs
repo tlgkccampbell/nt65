@@ -135,8 +135,8 @@ public sealed class ControlFlow
         // the blocks. Which instructions the program rewrites is known only once every routine's
         // annotations have been gathered.
         flow.Flags = new FlagAnalysis(model, layout, flow.Patched);
-        foreach (var (_, units, blocks, _) in built)
-            flow.Decide(units, blocks);
+        foreach (var (routine, units, blocks, _) in built)
+            flow.Decide(routine, units, blocks);
 
         var bodies = built.ToDictionary(each => each.Routine, each => (IReadOnlyList<BasicBlock>)each.Blocks);
         foreach (var (routine, units, blocks, inlineData) in built)
@@ -161,6 +161,8 @@ public sealed class ControlFlow
         // The analysis of what each routine reads and keeps depends on flow it cannot see for
         // itself, so each construct that hides some flow has to declare what it hides.
         var diagnostics = new List<Diagnostic>(checks.Found);
+        foreach (var region in flow.regions)
+            flow.Flags.Check(region, diagnostics);
         Requirements.Check(model, layout, flow, diagnostics);
 
         flow.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
@@ -529,7 +531,7 @@ public sealed class ControlFlow
     /// the blocks reach is worked out again. A branch with a <c>.next</c> under it keeps the edges
     /// the <c>.next</c> names, and one whose target nt65 cannot read keeps both.
     /// </summary>
-    private void Decide(IReadOnlyList<Unit> units, List<BasicBlock> blocks)
+    private void Decide(Symbol routine, IReadOnlyList<Unit> units, List<BasicBlock> blocks)
     {
         var edges = units.Where(EndsBlock).Select(unit => (SyntaxNode)unit.Step.Statement)
             .Concat(units.Select(unit => unit.Next).OfType<NextDirectiveSyntax>())
@@ -537,7 +539,7 @@ public sealed class ControlFlow
             .SelectMany(node => node.DescendantTokens())
             .Select(token => token.Span)
             .ToHashSet();
-        var proved = Flags!.Prove(blocks, edges);
+        var proved = Flags!.Prove(routine, blocks, edges);
         if (proved.Count == 0)
             return;
         foreach (var (index, branch) in proved)

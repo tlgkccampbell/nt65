@@ -299,6 +299,15 @@ internal sealed class SourceWalk
     {
         if (step.Statement is StateDirectiveSyntax)
             return Asserted(step, state);
+
+        // An `.ensure` may emit an instruction that sets each flag it names.
+        if (step.Statement is EnsureDirectiveSyntax)
+        {
+            var set = Wrote(step, RegisterValue.Written);
+            foreach (var flag in RegisterEffects.Each(RegisterWalk.Ensured(step.Statement)))
+                state = state.With(flag, set);
+            return state;
+        }
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
 

@@ -43,6 +43,25 @@ public readonly record struct StateItem(
     public bool IsAboutRegisters => Part is StatePart.Keeps or StatePart.Reads or StatePart.Saves;
 
     /// <summary>
+    /// Gets the flag a <see cref="StatePart.Flag"/> item is about, or
+    /// <see cref="Processor.StatusFlags.None"/> for every other item.
+    /// </summary>
+    public Processor.StatusFlags Flag => Part != StatePart.Flag
+        ? Processor.StatusFlags.None
+        : FlagValues.Of(Node switch
+        {
+            StateValueItemSyntax valued => valued.Name.Text,
+            StateFlagItemSyntax flag => flag.Name.Text,
+            _ => "",
+        });
+
+    /// <summary>
+    /// Gets a value indicating whether a <see cref="StatePart.Flag"/> item names its flag on its
+    /// own, as the <c>c</c> of <c>-&gt; c</c> does, rather than giving it a value.
+    /// </summary>
+    public bool IsResult => Part == StatePart.Flag && Node is StateFlagItemSyntax;
+
+    /// <summary>
     /// Gets the registers a <see cref="StatePart.Keeps"/>, <see cref="StatePart.Reads"/> or
     /// <see cref="StatePart.Saves"/> item names, or none for every other item and for
     /// <c>reads none</c>.
@@ -86,14 +105,15 @@ public readonly record struct StateItem(
 
     /// <summary>
     /// Returns a value indicating whether a list has items and every item names registers, as
-    /// <c>keeps</c>, <c>reads</c> and <c>saves</c> do. Such a list says something about the
-    /// registers and nothing about the processor state. It therefore neither declares a label's
-    /// state nor counts as the declaration a routine with no body needs.
+    /// <c>keeps</c>, <c>reads</c> and <c>saves</c> do, or gives a flag a value. Such a list says
+    /// something about the registers and flags and nothing about the widths, the mode, D or B. It
+    /// therefore neither declares a label's state nor counts as the declaration a routine with no
+    /// body needs.
     /// </summary>
     public static bool OnlyRegisters(SyntaxNode? list)
     {
         var items = Read(list).ToList();
-        return items.Count > 0 && items.TrueForAll(item => item.IsAboutRegisters);
+        return items.Count > 0 && items.TrueForAll(item => item.IsAboutRegisters || item.Part == StatePart.Flag);
     }
 
 
@@ -148,6 +168,14 @@ public readonly record struct StateItem(
     private static StateItem? Worded(StateItemSyntax node, SyntaxToken word, SyntaxKind suffix)
     {
         var name = word.Text.ToLowerInvariant();
+
+        // A flag takes a value with `=`, and C, Z, N and V also stand alone after `->`. `i` is the
+        // index width when `*` or `?` follows it, and the interrupt flag when `=` does.
+        if (suffix == SyntaxKind.Equals && FlagValues.Of(name) != Processor.StatusFlags.None
+            || suffix == SyntaxKind.None && name is "c" or "z" or "n" or "v")
+        {
+            return new StateItem(node, StatePart.Flag, Width.Unknown, ProcessorMode.Unknown, false, false);
+        }
         var width = suffix switch
         {
             SyntaxKind.Star => Width.Unchanged,

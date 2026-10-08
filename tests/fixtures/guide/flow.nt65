@@ -12,7 +12,7 @@
 .data sign:    .byte
 
 ; The KERNAL routine that prints the character in A.
-.proc CHROUT = $ffd2: reads a
+.proc CHROUT = $FFD2: reads a -> c = 0  ; the ROM routine returns with carry clear
 
 .segment CODE
 .proc dispatch {
@@ -48,9 +48,8 @@
 }
 
 .proc always_taken {
-    jsr CHROUT                      ; the ROM routine returns with carry clear
+    jsr CHROUT
     bcc @over                       ; so this is always taken
-    .next @over
     .byte "INLINE TEXT", 0
 @over:
     rts

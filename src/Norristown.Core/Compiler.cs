@@ -563,6 +563,16 @@ public static class Compiler
             layout = CodeLayout.Create(model, target, state);
             flow = Flow.ControlFlow.Of(model, layout);
         }
+
+        // An `.ensure` that names a flag emits nothing where the flags already hold, which the
+        // flag analysis of the layout so far tells. What it emits changes no edge and no flag, so
+        // one more layout settles it. Only a file with such an `.ensure` pays for it.
+        if (layout.Steps.Any(step => step.Statement is EnsureDirectiveSyntax ensure
+            && StateItem.Read(ensure).Any(item => item.Part == StatePart.Flag)))
+        {
+            layout = CodeLayout.Create(model, target, state, flow.Flags!.Known);
+            flow = Flow.ControlFlow.Of(model, layout);
+        }
         found.AddRange(layout.Diagnostics);
         found.AddRange(flow.Diagnostics);
 

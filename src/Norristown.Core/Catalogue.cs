@@ -557,9 +557,18 @@ public static class Catalogue
         "state-item-unknown",
         Severity.Error,
         "`{0}` is not a processor-state item",
-        "The items a signature, a `.state` or an `.ensure` may hold are a fixed set, such as `a8`, `i16`, `dp = 0` "
-            + "or `keeps x`. This word looks like an item, or has an item's form, but is not one; check "
+        "The items a signature, a `.state` or an `.ensure` may hold are a fixed set, such as `a8`, `i16`, `dp = 0`, "
+            + "`c = 0` or `keeps x`. This word looks like an item, or has an item's form, but is not one; check "
             + "its spelling. A plain word that is not an item is read as the name of a signature set.");
+
+    internal static DiagnosticDescriptor StateItemIsAWidth { get; } = Entry(
+        Area.ReadingALine,
+        "state-item-is-a-width",
+        Severity.Error,
+        "`{0}` is not an item: {1}",
+        "The 65816's m, x and e flags are part of the state nt65 follows, but they are written as what they "
+            + "mean: `a8` or `a16` for m, `i8` or `i16` for x, and `emu` or `native` for e. The other flags are "
+            + "written by name, as in `c = 0`.");
 
     internal static DiagnosticDescriptor OperatorsNeedParentheses { get; } = Entry(
         Area.ReadingALine,
@@ -2994,6 +3003,47 @@ public static class Catalogue
             + "where the reliance is deliberate, say so with `.allow \"unpromised-keep\"`. A routine with no body "
             + "keeps only what it declares, so it never draws this warning.");
 
+    internal static DiagnosticDescriptor CallFlagMismatch { get; } = Entry(
+        Area.ControlFlow,
+        "call-flag-mismatch",
+        Severity.Error,
+        "`{0}` needs `{1}`, but {2}",
+        "A routine whose signature gives a flag a value before `->`, as `c = 0` does, may only be called with the "
+            + "flag at that value, and every call is checked against the signature. nt65 follows the flags only "
+            + "through what the CPU defines, so a flag set from memory, or by a routine that does not declare it, "
+            + "is not known. Set the flag before the call, for example with `.ensure c = 0`, which emits `clc` only "
+            + "where the flag is not already 0.");
+
+    internal static DiagnosticDescriptor ReturnFlagMismatch { get; } = Entry(
+        Area.ControlFlow,
+        "return-flag-mismatch",
+        Severity.Error,
+        "`{0}` declares it returns with `{1}`, but {2}",
+        "A flag given a value after `->`, as in `-> c = 0`, is a promise to every caller, which may branch on it "
+            + "without testing anything. nt65 checks it at every return, and at every tail call against what the "
+            + "routine jumped to returns with. On this path the flag is not known to have that value. Set it before "
+            + "returning, for example with `.ensure c = 0`, or correct the signature.");
+
+    internal static DiagnosticDescriptor ReturnFlagNotSet { get; } = Entry(
+        Area.ControlFlow,
+        "return-flag-not-set",
+        Severity.Error,
+        "`{0}` gives {1} as a result (`-> {2}`), but on a path to this return nothing after its entry sets {1}, so "
+            + "its caller's {1} comes back",
+        "A flag named on its own after `->`, as in `-> c`, is a result the routine computes, such as a carry that "
+            + "says whether a search found anything. Its caller branches on it, so every path through the routine "
+            + "has to set it. On this path the flag still holds what the caller left in it. Set the flag on that "
+            + "path, for example with `clc` or `sec`.");
+
+    internal static DiagnosticDescriptor StateFlagMismatch { get; } = Entry(
+        Area.ControlFlow,
+        "state-flag-mismatch",
+        Severity.Error,
+        "`.state {0}` does not match: {1} is {2} here",
+        "A `.state` that gives a flag a value declares it where nt65 cannot know it, such as after a call to a ROM "
+            + "routine with no signature, and asserts it where nt65 can. Here the flags prove the other value on at "
+            + "least one path. Fix the code on that path, or correct the `.state`.");
+
     internal static DiagnosticDescriptor KeepsRedundant { get; } = Entry(
         Area.ControlFlow,
         "keeps-redundant",
@@ -3068,10 +3118,12 @@ public static class Catalogue
         Area.ProcessorState,
         "ensure-item-not-a-width",
         Severity.Error,
-        "`.ensure` takes only `a8`, `a16`, `i8` and `i16`, not `{0}`",
-        "`.ensure` emits the `rep` or `sep` that makes a register width true, and widths are the only part of the "
-            + "processor state it can set that way. To declare anything else at a point, such as the mode, D or B, "
-            + "use `.state`.");
+        "`.ensure` takes only `a8`, `a16`, `i8`, `i16`, `c`, `d` or `i` = 0 or 1, and `v = 0`, not `{0}`",
+        "`.ensure` emits the `rep` or `sep` that makes a register width true, and the `clc`, `sec`, `cld`, `sed`, "
+            + "`cli`, `sei` or `clv` that sets a flag, each only where the analysis does not find it already so. "
+            + "Those are the only parts of the processor state it can set without changing a register: Z and N "
+            + "follow every result, and nothing sets V on its own. To declare anything else at a point, such as "
+            + "the mode, D or B, use `.state`.");
 
     internal static DiagnosticDescriptor StateItemNotAPoint { get; } = Entry(
         Area.ProcessorState,
@@ -3717,6 +3769,33 @@ public static class Catalogue
             + "call. A `noreturn` routine never returns, so there is nothing to declare. Remove the `->` and what "
             + "follows it.");
 
+    internal static DiagnosticDescriptor FlagResultAtEntry { get; } = Entry(
+        Area.Signatures,
+        "flag-result-at-entry",
+        Severity.Error,
+        "`{0}` on its own belongs after `->`, where it says the routine sets {1}: to say the routine uses its "
+            + "caller's {1}, write `reads {0}`",
+        "A flag named on its own after `->` is a result the routine sets for its caller. Before `->` it would "
+            + "say nothing a signature can check. A routine that uses the flag as its caller left it declares "
+            + "that with `reads`, and one that needs the flag at a value gives it, as in `c = 0`.");
+
+    internal static DiagnosticDescriptor FlagValueNotABit { get; } = Entry(
+        Area.Signatures,
+        "flag-value-not-a-bit",
+        Severity.Error,
+        "`{0}` gives a flag a value, which must be the constant 0 or 1",
+        "A flag is one bit, so the value after its `=` is 0 or 1, and nt65 needs it while it builds to check "
+            + "calls and returns against it.");
+
+    internal static DiagnosticDescriptor KeepsAndExitFlag { get; } = Entry(
+        Area.Signatures,
+        "keeps-and-exit-flag",
+        Severity.Error,
+        "`keeps {0}` says {1} comes back as the caller left it, and `{2}` after `->` says otherwise: declare one "
+            + "or the other",
+        "`keeps` promises that a flag comes back unchanged, and an exit flag promises a value or a result the "
+            + "routine sets. A flag cannot be both. Keep the item that describes what the routine does.");
+
     internal static DiagnosticDescriptor HandlerAssumesState { get; } = Entry(
         Area.Signatures,
         "handler-assumes-state",
@@ -3821,10 +3900,10 @@ public static class Catalogue
         "macro-keeps",
         Severity.Error,
         "`{0}` does not apply to a macro: its body becomes part of the routine it is expanded into, whose "
-            + "signature declares what it keeps and reads",
-        "A macro's body is expanded into a routine, so what it saves, restores and uses is part of what that "
-            + "routine keeps and reads, and `keeps` and `reads` belong in the routine's signature. Remove it from the "
-            + "macro's.");
+            + "signature declares what it keeps, reads and does to the flags",
+        "A macro's body is expanded into a routine, so what it saves, restores, uses and sets is part of what that "
+            + "routine keeps, reads and returns with, and `keeps`, `reads` and the flags belong in the routine's "
+            + "signature. Remove it from the macro's.");
 
     internal static DiagnosticDescriptor MacroNoreturn { get; } = Entry(
         Area.Signatures,

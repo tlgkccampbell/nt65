@@ -101,6 +101,7 @@ internal static class KeepsAnalysis
         FlowRegion region, BasicBlock block, RegisterState state, Symbol? into, Registers kept,
         List<Diagnostic> report)
     {
+        Results(region, block, state, report);
         if (region.Routine.Signature?.Keeps is not { } promised || promised == Registers.None)
             return;
         var broken = promised & ~state.Kept;
@@ -135,6 +136,26 @@ internal static class KeepsAnalysis
         report.Add(new Diagnostic(at,
             Catalogue.KeepsBroken.Message(
                 region.Routine.DisplayName, items, names, one ? "is" : "are", fix)));
+    }
+
+    /// <summary>
+    /// Reports each flag a routine's signature names as a result, as <c>-&gt; c</c> does, that a path
+    /// leaves the routine with while it may still hold what the caller left in it.
+    /// </summary>
+    private static void Results(FlowRegion region, BasicBlock block, RegisterState state, List<Diagnostic> report)
+    {
+        if (region.Routine.Signature is not { Results: not StatusFlags.None and var results } || block.Steps.Count == 0)
+            return;
+        var end = block.Steps[^1].Statement;
+        foreach (var flag in FlagValues.Named)
+        {
+            var register = RegisterEffects.Of(flag & results);
+            if (register == Registers.None || (state.Of(register).Entry & register) == Registers.None)
+                continue;
+            report.Add(new Diagnostic(
+                end.Tree.GetSpan(end.Span),
+                Catalogue.ReturnFlagNotSet.Message(region.Routine.DisplayName, RegisterEffects.Format(register), FlagValues.NameOf(flag))));
+        }
     }
 
     /// <summary>

@@ -1,0 +1,49 @@
+.module flags
+
+.cpu 6502
+
+.export find_slot, next_row, scrolled
+
+.const EMPTY = 0
+
+.segment ZEROPAGE {
+    .data ptr: .addr
+}
+
+.segment RODATA {
+    .data table: .byte 0, 1, 2, 3
+}
+
+.segment CODE
+
+.proc SCROLL_UP = $E8EA: -> z = 1   ; the KERNAL's scroll returns with Z set
+
+; A carry status. A path that returns without setting C is an error.
+.proc find_slot: reads x -> c {
+    lda table,x
+    cmp #EMPTY
+    rts                             ; C comes from the cmp
+}
+
+; An entry requirement, checked at each call
+.proc next_row: d = 0, c = 0 -> c = 0 {
+    lda ptr
+    adc #40
+    sta ptr
+    bcc @done                       ; C is 1 on the fall-through path
+    inc ptr+1
+    clc
+@done:
+    rts                             ; checked: C is 0 on both paths
+}
+
+; The scroll's Z decides the branch, so the text after it is never run into.
+.proc scrolled {
+    jsr SCROLL_UP
+    beq @done
+    .byte "NEVER RUN", 0
+@done:
+    cld
+    .ensure c = 0
+    jmp next_row
+}

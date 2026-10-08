@@ -1,11 +1,12 @@
 using Norristown.Processor;
+using Norristown.Semantics;
 
 namespace Norristown.Flow;
 
 /// <summary>
-/// Represents what is known about the N, Z, C and V flags at one point in a routine. A flag is
-/// either known to be 0, known to be 1, or unknown. Only what the CPU defines is used, so nothing
-/// about memory is assumed.
+/// Represents what is known about the N, Z, C, V, D and I flags at one point in a routine. A flag
+/// is either known to be 0, known to be 1, or unknown. Only what the CPU defines is used, so
+/// nothing about memory is assumed.
 /// <para>
 /// The state also records whether N and Z were last set from one result. A result with bit 7 set
 /// is never zero, so where that holds, N known to be 1 means Z is 0, and Z known to be 1 means N
@@ -15,7 +16,8 @@ namespace Norristown.Flow;
 internal sealed class FlagState : IEquatable<FlagState>
 {
     /// <summary>The flags the analysis follows.</summary>
-    public const StatusFlags Followed = StatusFlags.Negative | StatusFlags.Zero | StatusFlags.Carry | StatusFlags.Overflow;
+    public const StatusFlags Followed = StatusFlags.Negative | StatusFlags.Zero | StatusFlags.Carry | StatusFlags.Overflow
+        | StatusFlags.Decimal | StatusFlags.InterruptDisable;
 
     private FlagState(StatusFlags known, StatusFlags set, bool shared)
     {
@@ -49,8 +51,30 @@ internal sealed class FlagState : IEquatable<FlagState>
         StatusFlags.Zero => "Z",
         StatusFlags.Carry => "C",
         StatusFlags.Overflow => "V",
+        StatusFlags.Decimal => "D",
+        StatusFlags.InterruptDisable => "I",
         _ => flag.ToString(),
     };
+
+    /// <summary>
+    /// Returns the state in which the flags <paramref name="values"/> gives have those values and
+    /// nothing else is known, as at the entry of a routine whose signature gives them.
+    /// </summary>
+    public static FlagState Given(FlagValues values) =>
+        values.Known == StatusFlags.None ? Unknown : new(values.Known, values.Set, false);
+
+    /// <summary>
+    /// Returns the state after a call to a routine that returns <paramref name="kept"/> as it
+    /// found them and gives the flags <paramref name="values"/> names their values. Every other
+    /// flag is unknown. N and Z stay related only where both are kept.
+    /// </summary>
+    public FlagState Returned(StatusFlags kept, FlagValues values)
+    {
+        var known = (Known & kept & ~values.Known) | values.Known;
+        var set = (Set & kept & ~values.Known) | values.Set;
+        var nz = StatusFlags.Negative | StatusFlags.Zero;
+        return new(known, set, Shared && (kept & nz) == nz && (values.Known & nz) == 0);
+    }
 
     /// <summary>
     /// Returns the value of <paramref name="flag"/>, or null where it is not known.

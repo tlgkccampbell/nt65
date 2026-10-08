@@ -230,6 +230,10 @@ internal sealed class RegisterWalk
     {
         if (step.Statement is StateDirectiveSyntax)
             return Asserted(step, state, report);
+
+        // An `.ensure` may emit an instruction that sets each flag it names.
+        if (step.Statement is EnsureDirectiveSyntax)
+            return state.WithEach(Ensured(step.Statement), RegisterValue.Written);
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
 
@@ -302,6 +306,15 @@ internal sealed class RegisterWalk
             MnemonicKind.Tdc or MnemonicKind.Tsc => after.With(Registers.A, RegisterValue.Written),
             _ => Accumulator(step, after, RegisterValue.Written),
         };
+    }
+
+    /// <summary>Returns the flags an <c>.ensure</c> names, as registers.</summary>
+    internal static Registers Ensured(SyntaxNode ensure)
+    {
+        var flags = Registers.None;
+        foreach (var item in StateItem.Read(ensure))
+            flags |= RegisterEffects.Of(item.Flag);
+        return flags;
     }
 
     /// <summary>

@@ -1111,21 +1111,26 @@ next instruction:
 nt65 follows the N, Z, C and V flags through each routine, from what the instructions
 themselves set: a load of a constant, `clc` and `sec`, and the branches already taken on the
 way. Where the flag a branch tests is known on every path to it, the branch goes one way only,
-so `lda #1` then `bne @over` needs nothing more. A call leaves every flag unknown, because a
-signature does not say what a routine does to them. Where the flags are known from something
-nt65 cannot see, such as the way a ROM routine returns, `.next` naming the branch's own target
-says the branch is always taken:
+so `lda #1` then `bne @over` needs nothing more. A call returns with the flags its routine's
+signature gives after `->`, and with the flags its `keeps` names as they were (see
+[Flags in signatures](#flags-in-signatures)); every other flag is unknown after it. So the way a
+ROM routine returns is written once, on the routine:
 
 ```nt65
+.proc CHROUT = $FFD2: reads a -> c = 0  ; the ROM routine returns with carry clear
+
 .proc always_taken {
-    jsr CHROUT                      ; the ROM routine returns with carry clear
+    jsr CHROUT
     bcc @over                       ; so this is always taken
-    .next @over
     .byte "INLINE TEXT", 0
 @over:
     rts
 }
 ```
+
+Where the flags are known from something nt65 cannot see and no signature can say, `.next`
+naming the branch's own target says the branch is always taken, and `.state c = 0` before the
+branch says why.
 
 `.next` is only for what nt65 cannot see. After an ordinary instruction or a direct `jsr`,
 where nt65 already knows where flow goes, it is an error. After a branch nt65 proves is always
@@ -1380,6 +1385,8 @@ The signature items are:
 | `a*`, `i*`, `dp*`, `dbr*` | unchanged: the routine assumes nothing and hands the value back as it found it |
 | `a?`, `i?`, `e?`, `dp?`, `dbr?` | unknown |
 | `?` | everything unknown, for code entered from outside nt65 |
+| `c = 0`, `c = 1`, and the same for `z`, `n`, `v`, `d` and `i` | before `->`, the value each call must give the flag; after it, the value the routine returns with (see [Flags in signatures](#flags-in-signatures)) |
+| `c`, `z`, `n` or `v` alone, after `->` | a flag the routine sets for its caller on every path, such as a found-or-not carry |
 | `keeps a, x, y, c, z, n, v` | registers and flags handed back unchanged (see [What a routine preserves](#what-a-routine-preserves)) |
 | `reads a, x, y, c, z, n, v`, `reads none` | registers and flags whose values from the caller it uses (see [What a routine preserves](#what-a-routine-preserves)) |
 | `inline n`, `inline .strz` | returns past data after each call |
@@ -1438,11 +1445,66 @@ ROM entry or a routine from hand-written ca65 is declared with one:
 A routine with no body must write at least one item on the 65816, because nothing else can
 tell nt65 what it expects. `?` says nothing is known.
 
+### Flags in signatures
+
+A signature can say what a routine needs of the flags and what it returns with. A flag takes a
+value with `=`, as `dp = e` does. Before `->` it is the value every call must give it; after
+`->` it is the value the routine returns with. A flag named alone after `->` is a result the
+routine sets on every path, such as a carry that says whether a search found anything. The
+entry may be empty:
+
+```nt65
+.proc SCROLL_UP = $E8EA: -> z = 1   ; the KERNAL's scroll returns with Z set
+
+; A carry status. A path that returns without setting C is an error.
+.proc find_slot: reads x -> c {
+    lda table,x
+    cmp #EMPTY
+    rts                             ; C comes from the cmp
+}
+
+; An entry requirement, checked at each call
+.proc next_row: d = 0, c = 0 -> c = 0 {
+    lda ptr
+    adc #40
+    sta ptr
+    bcc @done                       ; C is 1 on the fall-through path
+    inc ptr+1
+    clc
+@done:
+    rts                             ; checked: C is 0 on both paths
+}
+```
+
+nt65 checks these where it can:
+
+- **At each call**, the flags the callee needs on entry must be proved, and the error's fix
+  inserts `.ensure c = 0` before the call. A routine that asks for nothing is unaffected.
+- **At each return**, every flag the routine promises a value for must be proved, as a width
+  must. A tail call hands on the flags of the routine it jumps to, so those must keep the
+  promise. A result named alone must be set on every path after entry; a path that leaves the
+  caller's flag in place is an error.
+- **A routine with no body** is trusted, as its `keeps` is.
+
+`keeps c` together with `-> c = 0` is an error, since the carry cannot both come back unchanged
+and come back 0. The 65816's m, x and e flags are not written this way: they are the widths and
+the mode, `a8`, `i16` and `native`.
+
 ### Setting and asserting state
 
 **`.ensure a16, i8`** makes widths hold, writing only the `rep` or `sep` the analysis says is
 needed there, or nothing. It is the checked replacement for macros that switch widths and
 track them in a stack that follows the text rather than the code.
+
+**`.ensure c = 0`** does the same for a flag on every CPU: it writes `clc` only where the flags
+do not already prove the carry clear. It takes `c`, `d` and `i` with either value, and `v = 0`,
+which are the flags one instruction sets without changing a register. On the 65816 a flag rides
+along with a `rep` or `sep` the widths need anyway, so `.ensure a16, c = 0` writes `rep #$21`.
+Writing `.ensure c = 0` before an `adc` says once what the add needs, and makes a hint about a
+redundant `clc` unnecessary.
+
+**`.state c = 1`** declares a flag where nt65 cannot know it, such as after a call to a ROM
+routine with no signature yet, and is checked where the flags prove the other value.
 
 **`.state a16, dbr = $7e`** asserts what the state is at a point, and sets it where nt65 does
 not know. After a label that is entered from somewhere nt65 cannot see, a `.state` is that

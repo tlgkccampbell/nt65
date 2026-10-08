@@ -35,6 +35,10 @@ public sealed partial class CodeLayout
         // immediate and times its instructions. It is null on the first walk, before any analysis
         // has run.
         private readonly IProcessorStates? states;
+
+        // What the flag analysis found known about the flags before each statement, or null
+        // before it has run. An `.ensure` that names a flag emits nothing where it is known.
+        private readonly Func<SyntaxNode, Expansion?, FlagValues?>? flags;
         private readonly List<Diagnostic> diagnostics = [];
 
         // These record how far each run of bytes is filled, and the branches whose reach depends
@@ -103,10 +107,11 @@ public sealed partial class CodeLayout
         /// </summary>
         /// <param name="layout">The layout to fill in.</param>
         /// <param name="states">The processor state reaching each statement, or null before any analysis.</param>
+        /// <param name="flags">The flags known before each statement, or null before the flag analysis.</param>
         /// <param name="lengthened">The long branches earlier walks found out of reach.</param>
         /// <param name="measured">The routines and data declarations the file measures.</param>
         public Walker(
-            CodeLayout layout, IProcessorStates? states,
+            CodeLayout layout, IProcessorStates? states, Func<SyntaxNode, Expansion?, FlagValues?>? flags,
             HashSet<StepKey> lengthened, IReadOnlySet<Symbol> measured)
         {
             this.layout = layout;
@@ -114,6 +119,7 @@ public sealed partial class CodeLayout
             model = layout.model;
             cpu = layout.cpu;
             this.states = states;
+            this.flags = flags;
             this.lengthened = lengthened;
             this.measured = measured;
         }
@@ -567,20 +573,25 @@ public sealed partial class CodeLayout
 
         /// <summary>
         /// Lays out an <c>.ensure</c>, which emits the <c>rep</c> and <c>sep</c> the analysis found
-        /// it needs. Before the analysis has run, it is laid out as emitting every instruction it
-        /// could.
+        /// it needs, and the instructions that set the flags it names. Before the analysis has run,
+        /// it is laid out as emitting every instruction it could.
         /// </summary>
         private void Ensure(EnsureDirectiveSyntax directive)
         {
             var state = states?.Before(directive, expansion);
 
-            // On the 6502 and its CMOS variants there is no processor state to set, and no `rep` or
-            // `sep` to set it with, so an `.ensure` is accepted and emits nothing. This lets one
-            // routine be written for both CPUs.
-            var ensured = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
+            // On the 6502 and its CMOS variants there are no widths to set, and no `rep` or `sep`
+            // to set them with, so an `.ensure` of a width is accepted and emits nothing. This lets
+            // one routine be written for both CPUs. A flag is set the same way on every CPU, except
+            // that the 65816 folds it into a `rep` or a `sep` the widths need anyway.
+            var widths = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
+            var ensured = widths.WithFlags(
+                directive, flags?.Invoke(directive, expansion), item => model.ValueOf(item, expansion).AsNumber());
             var cycles = new CycleCount(0);
-            foreach (var flags in new[] { ensured.Reset, ensured.Set }.Where(flags => flags != StatusFlags.None))
+            foreach (var mask in new[] { ensured.Reset, ensured.Set }.Where(mask => mask != StatusFlags.None))
                 cycles += Cycles.Of(cpu, MnemonicKind.Rep, AddressingMode.Immediate, state)?.Count ?? new CycleCount(3);
+            foreach (var _ in ensured.Instructions)
+                cycles += new CycleCount(2);
             Laid(directive, new LineLayout(ensured.Length, null, null, Cycles: cycles, Ensured: ensured));
             Place(directive, ensured.Length);
             layout.steps.Add(new Step(directive, expansion, routine, Stream, segment, null));
