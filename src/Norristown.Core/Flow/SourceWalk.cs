@@ -201,6 +201,21 @@ internal sealed class SourceWalk
     /// </summary>
     private SourceState Step(Step step, SourceState state, Step? next)
     {
+        // The bytes from a position inside an instruction run as the instructions they decode as,
+        // and each value they write was set there.
+        if (layout.HiddenPathAt(step) is { } hidden)
+        {
+            var wrote = Wrote(step, RegisterValue.Written);
+            foreach (var decoded in hidden.Instructions)
+            {
+                var written = RegisterEffects.Written(decoded.Mnemonic, decoded.Mode, RegisterWalk.Immediate(decoded));
+                foreach (var register in RegisterEffects.Each(written & ~Registers.A))
+                    state = state.With(register, wrote);
+                if (written.HasFlag(Registers.A))
+                    state = Accumulator(step, state, wrote);
+            }
+            return states is null ? state : Widened(step, state);
+        }
         var after = Flagged(step, Registered(step, state, next, null), null);
 
         // A store may turn the instruction into another, and then values may have been set by

@@ -169,6 +169,9 @@ public enum DirectiveKind
     /// <summary><c>.encoded</c>: states the opcode byte the instruction below is written as.</summary>
     Encoded,
 
+    /// <summary><c>.label</c>: names a position inside an instruction.</summary>
+    Label,
+
     /// <summary><c>.state</c>: states what the processor state is here.</summary>
     State,
 

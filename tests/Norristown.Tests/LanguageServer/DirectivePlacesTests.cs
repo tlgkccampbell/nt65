@@ -74,14 +74,15 @@ public sealed class DirectivePlacesTests
     /// The directives that cannot be tested as a line of their own, and so are not checked here.
     /// <c>.else</c> and <c>.elseif</c> continue a block that must be open above them.
     /// <c>.next</c> and <c>.patch</c> describe the statement above them, and <c>.allow</c> and
-    /// <c>.encoded</c> the statement below them. <c>.fallthrough</c> may only be the last line of a routine's body.
+    /// <c>.encoded</c> the statement below them. <c>.label</c> names a position inside an
+    /// instruction that must be there. <c>.fallthrough</c> may only be the last line of a routine's body.
     /// <c>.frame</c> describes where the stack has been left. <c>.module</c> names the module and may only be a file's first line.
     /// <c>.place</c> emits a module that must declare that it may be placed. <c>.incbin</c>
     /// names a file on disk. <c>.error</c> fails the build on purpose.
     /// </summary>
     private static readonly string[] Partial =
     [
-        ".allow", ".else", ".elseif", ".encoded", ".error", ".fallthrough", ".frame", ".incbin", ".module", ".next", ".patch", ".place",
+        ".allow", ".else", ".elseif", ".encoded", ".error", ".fallthrough", ".frame", ".incbin", ".label", ".module", ".next", ".patch", ".place",
     ];
 
     /// <summary>

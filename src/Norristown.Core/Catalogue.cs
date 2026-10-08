@@ -2691,6 +2691,26 @@ public static class Catalogue
             + "Elsewhere, `.next ?` says control goes somewhere nt65 is not told about, and the analysis then "
             + "assumes it may change anything.");
 
+    internal static DiagnosticDescriptor LabelPositionInvalid { get; } = Entry(
+        Area.ControlFlow,
+        "label-position-invalid",
+        Severity.Error,
+        "`.label {0}` has to name a byte inside an instruction of this routine, as `@op + 1` does: {1}",
+        "`.label name = @op + 1` names the position one byte into the instruction at `@op`, where a branch or "
+            + "an entry from outside runs the instruction's bytes as other instructions. The position is a label "
+            + "at an instruction plus a constant number of bytes, more than 0 and less than the instruction's "
+            + "length.");
+
+    internal static DiagnosticDescriptor HiddenPathUnfollowed { get; } = Entry(
+        Area.ControlFlow,
+        "hidden-path-unfollowed",
+        Severity.Error,
+        "nt65 cannot follow the bytes from `{0}`: {1}",
+        "From a position inside an instruction, nt65 decodes the bytes as the processor runs them, until they "
+            + "reach the start of an instruction as written, and the analyses follow those instructions. Every "
+            + "byte has to be known before linking, each instruction has to be one the processor has, and none may "
+            + "change where control goes or move the stack, or nt65 could not tell where they lead.");
+
     internal static DiagnosticDescriptor PatchVariantRejected { get; } = Entry(
         Area.ControlFlow,
         "patch-variant-rejected",

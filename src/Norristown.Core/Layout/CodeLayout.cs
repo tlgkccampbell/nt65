@@ -29,6 +29,11 @@ public sealed partial class CodeLayout
     // because the layout walk is the one that expands the macros and unrolls the repetitions.
     private readonly List<Step> steps = [];
 
+    // What runs from each position a `.label` names inside an instruction, by the step of the
+    // `.label`, and the steps of the instructions those paths reach the start of.
+    private readonly Dictionary<StepKey, HiddenPath> hidden = [];
+    private readonly HashSet<StepKey> landings = [];
+
     // The position of each `.place` among the steps; another module's bytes go at that point.
     private readonly List<PlacePoint> placePoints = [];
 
@@ -71,6 +76,13 @@ public sealed partial class CodeLayout
 
     /// <summary>Gets every statement of the file, in the order its bytes are emitted.</summary>
     public IReadOnlyList<Step> Steps => steps;
+
+    /// <summary>
+    /// Gets the steps of the instructions that the bytes from a <c>.label</c> inside an
+    /// instruction reach the start of. Control enters each there from the hidden path as well as
+    /// from the statement before it.
+    /// </summary>
+    internal IReadOnlySet<StepKey> Landings => landings;
 
     /// <summary>
     /// Gets every <c>.place</c> of the file that places a module, in the order they appear, with
@@ -218,6 +230,21 @@ public sealed partial class CodeLayout
         }
         return new CycleSpan(upperBound ? total.Maximum : total.Minimum, null);
     }
+
+    /// <summary>
+    /// Returns what runs from the position the <c>.label</c> at <paramref name="step"/> names inside
+    /// an instruction, or null for any other step, and for a <c>.label</c> whose bytes nt65 could
+    /// not follow.
+    /// </summary>
+    internal HiddenPath? HiddenPathAt(Step step) => hidden.GetValueOrDefault(step.Key);
+
+    /// <summary>
+    /// Returns the instructions the bytes from the position <paramref name="label"/> names inside
+    /// an instruction run as, or null where it names no such position, or nt65 could not follow
+    /// the bytes.
+    /// </summary>
+    public IReadOnlyList<HiddenInstruction>? HiddenInstructionsOf(Symbol label) =>
+        hidden.Values.FirstOrDefault(path => path.Label == label)?.Instructions;
 
     /// <summary>
     /// Returns what a statement assembles to in the <see cref="Expansion"/> <paramref name="on"/>,

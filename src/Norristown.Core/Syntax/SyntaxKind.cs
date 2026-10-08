@@ -434,6 +434,11 @@ public enum SyntaxKind : byte
     /// </summary>
     EncodedDirective,
 
+    /// <summary>
+    /// <c>.label name = @op + 1</c>, which names a position inside an instruction.
+    /// </summary>
+    LabelDirective,
+
     /// <summary><c>.state a16, i8</c>, which asserts and sets the processor state at this point.</summary>
     StateDirective,
 

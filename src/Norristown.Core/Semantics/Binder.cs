@@ -2124,6 +2124,17 @@ internal sealed partial class Binder
                 binder.CollectUses(target);
         }
 
+        /// <summary>
+        /// Declares the name a <c>.label</c> gives a position inside an instruction. The position is
+        /// a code label like any other, and layout works out where it is.
+        /// </summary>
+        public override void VisitLabelDirective(LabelDirectiveSyntax node)
+        {
+            binder.CheckLabelPlacement(node.Name);
+            binder.Declare(node.Name, SymbolKind.Label);
+            binder.CollectUses(node.Value);
+        }
+
         /// <summary>Collects the names the opcode byte of an <c>.encoded</c> uses.</summary>
         public override void VisitEncodedDirective(EncodedDirectiveSyntax node) => binder.CollectUses(node.Value);
 

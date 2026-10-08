@@ -1196,6 +1196,26 @@ store that turns one instruction into another can say which it writes:
 still known. A variant keeps the instruction's addressing mode and operand, and may not touch
 the stack or the widths; a branch may become another branch.
 
+**Code inside an instruction.** Size-coded programs branch into the middle of an instruction, so
+its operand runs as other instructions. `.label` names such a position, a label at an
+instruction plus a number of bytes into it:
+
+```nt65
+.proc hidden_entry {
+    lda $E8                         ; $A5 $E8, and $E8 runs as `inx`
+    .label hidden_inx = hidden_entry + 1
+    lsr a
+    bcc hidden_inx
+    rts
+}
+```
+
+From that position nt65 decodes the bytes as the CPU runs them, until they reach the start of an
+instruction as written, here the `lsr`, and follows those instructions like any others. Hover
+shows them. A branch, a `.next` and an `.assert` may name the position. Every byte has to be one
+nt65 knows, so an operand only the linker knows is an error, and so is a byte the CPU has no
+instruction for, or an instruction that jumps, returns or touches the stack.
+
 An instruction with several forms names one with the words `.mode` uses, such as
 `.opcode(lda, absx)`, with `zp`, `zpx` and `zpy` for the direct page and `far` and `farx` for an
 `f:` address. A form the CPU lacks is an error.

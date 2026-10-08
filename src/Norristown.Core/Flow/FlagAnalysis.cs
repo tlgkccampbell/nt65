@@ -670,6 +670,14 @@ internal sealed class FlagAnalysis
                 state = state.With(item.Flags, value);
             return state;
         }
+        if (layout.HiddenPathAt(step) is { } hidden)
+        {
+            // The bytes from a position inside an instruction run as the instructions they
+            // decode as, one after another.
+            foreach (var decoded in hidden.Instructions)
+                state = After(decoded.Mnemonic, decoded.Mode, 8, RegisterWalk.Immediate(decoded), state);
+            return state;
+        }
         if (step.Statement is not InstructionStatementSyntax instruction)
         {
             // Bytes that are not an instruction nt65 knows, such as data that is run, may do
@@ -678,27 +686,28 @@ internal sealed class FlagAnalysis
         }
         if (ControlFlow.IsCall(instruction))
             return FlagState.Unknown;
+        var line = layout.Of(instruction, step.On);
+        var immediate = StepOperands.Immediate(model, layout, step);
         if (!patched.Contains(step.Key))
-            return After(step, instruction, instruction.MnemonicKind, state);
+            return After(instruction.MnemonicKind, line?.Mode, line?.Bits ?? 8, immediate, state);
 
         // A store may turn the instruction into another, and then the flags are what either
         // leaves. Where nothing says what the store writes, nothing is known.
         if (!variants.TryGetValue(step.Key, out var listed))
             return FlagState.Unknown;
-        var after = After(step, instruction, instruction.MnemonicKind, state);
+        var after = After(instruction.MnemonicKind, line?.Mode, line?.Bits ?? 8, immediate, state);
         foreach (var variant in listed)
-            after = after.Merge(After(step, instruction, variant, state));
+            after = after.Merge(After(variant, line?.Mode, line?.Bits ?? 8, immediate, state));
         return after;
     }
 
     /// <summary>
-    /// Returns the flags after <paramref name="instruction"/> runs as <paramref name="mnemonic"/>,
-    /// from those before it.
+    /// Returns the flags after an instruction runs as <paramref name="mnemonic"/> in
+    /// <paramref name="mode"/>, from those before it. <paramref name="bits"/> is how wide its
+    /// immediate is, and <paramref name="immediate"/> the immediate's value where it has one.
     /// </summary>
-    private FlagState After(Step step, InstructionStatementSyntax instruction, MnemonicKind mnemonic, FlagState state)
+    private static FlagState After(MnemonicKind mnemonic, AddressingMode? mode, int bits, long? immediate, FlagState state)
     {
-        var line = layout.Of(instruction, step.On);
-        var immediate = StepOperands.Immediate(model, layout, step);
         switch (mnemonic)
         {
             case MnemonicKind.Clc:
@@ -712,7 +721,7 @@ internal sealed class FlagAnalysis
             case MnemonicKind.Cli or MnemonicKind.Sei:
                 return state.With(StatusFlags.InterruptDisable, mnemonic == MnemonicKind.Sei);
             case MnemonicKind.Lda or MnemonicKind.Ldx or MnemonicKind.Ldy when immediate is { } value:
-                return state.Loaded(value, line?.Bits ?? 8);
+                return state.Loaded(value, bits);
             case MnemonicKind.Rep or MnemonicKind.Sep when immediate is { } mask:
                 foreach (var flag in FlagValues.Named)
                 {
@@ -724,7 +733,7 @@ internal sealed class FlagAnalysis
 
         // An add or a subtract in decimal mode sets N and Z on the NMOS 6502 from different
         // stages of the sum, and `bit` sets them from different values, so neither is one result.
-        var written = FlagEffects.Written(mnemonic, line?.Mode, immediate);
+        var written = FlagEffects.Written(mnemonic, mode, immediate);
         var group = SyntaxFacts.BitOf(mnemonic)?.Group ?? mnemonic;
         var shared = group is not (MnemonicKind.Adc or MnemonicKind.Sbc or MnemonicKind.Isc or MnemonicKind.Rra
             or MnemonicKind.Arr or MnemonicKind.Bit or MnemonicKind.Plp or MnemonicKind.Rti);

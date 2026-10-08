@@ -2,7 +2,7 @@
 
 .cpu 6502
 
-.export dispatch, set_value, always_taken, push_sign, clear_screen, greet, step_down
+.export dispatch, set_value, always_taken, push_sign, clear_screen, greet, step_down, hidden_entry
 
 .segment ZEROPAGE
 .data command: .byte
@@ -53,6 +53,14 @@
     .patch @step as dex
 @step:
     inx                             ; runs as `dex` once the store has run
+    rts
+}
+
+.proc hidden_entry {
+    lda $E8                         ; $A5 $E8, and $E8 runs as `inx`
+    .label hidden_inx = hidden_entry + 1
+    lsr a
+    bcc hidden_inx
     rts
 }
 

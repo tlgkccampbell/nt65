@@ -1223,6 +1223,16 @@ public sealed class Emitter
     }
 
     /// <summary>
+    /// Writes the name a <c>.label</c> gives a position inside an instruction, as a label ca65
+    /// places where the expression says.
+    /// </summary>
+    private void InsideLabel(LineSyntax line, LabelDirectiveSyntax directive)
+    {
+        if (model.DeclaredBy(directive, context.Expansion) is { } symbol && directive.Value is { } value)
+            Declare(line, $"{NameOf(symbol)} := {expressions.Rendered(value)}");
+    }
+
+    /// <summary>
     /// Writes an instruction an <c>.encoded</c> gives an opcode byte as that byte and its operand's
     /// bytes, low first, since ca65 would choose another byte for it. The instruction as written
     /// goes in the comment.
@@ -1597,6 +1607,9 @@ public sealed class Emitter
                 emitter.Source(Line, node, emitter.layout.Of(node, emitter.context.Expansion)?.Length ?? 0);
             }
         }
+
+        /// <inheritdoc/>
+        public override void VisitLabelDirective(LabelDirectiveSyntax node) => emitter.InsideLabel(Line, node);
 
         /// <inheritdoc/>
         public override void VisitExternProcDeclaration(ExternProcDeclarationSyntax node) =>

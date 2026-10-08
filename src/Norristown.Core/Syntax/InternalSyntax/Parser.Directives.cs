@@ -80,6 +80,7 @@ internal sealed partial class Parser
         SyntaxKind.FrameDirective => ParseFrame(),
         SyntaxKind.PatchDirective => ParsePatch(),
         SyntaxKind.EncodedDirective => ParseEncoded(),
+        SyntaxKind.LabelDirective => ParseLabel(),
         SyntaxKind.AllowDirective => ParseAllow(),
         _ => null,
     };
@@ -295,6 +296,21 @@ internal sealed partial class Parser
         var variants = ParseSeparatedList(
             () => ParseTarget(Catalogue.ExpectedLabel.Message("an instruction the store can write, such as `dex`")));
         return new PatchDirectiveSyntax(keyword, target, asKeyword, variants);
+    }
+
+    /// <summary>
+    /// Parses <c>.label name = @op + 1</c>, which names a position inside an instruction. Whether
+    /// the position is one is for layout to check.
+    /// </summary>
+    private GreenNode ParseLabel()
+    {
+        var keyword = Advance();
+        var name = Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
+            ? Advance()
+            : Expect(SyntaxKind.Identifier, Catalogue.ExpectedName.Message("a name for the position"));
+        var equals = Expect(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
+            "`=` and a position inside an instruction, such as `@op + 1`"));
+        return new LabelDirectiveSyntax(keyword, name, equals, equals.IsMissing ? null : ParseExpression());
     }
 
     /// <summary>

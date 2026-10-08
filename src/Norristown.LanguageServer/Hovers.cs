@@ -303,6 +303,14 @@ internal static class Hovers
         // before where the routine lives. What a macro call expands to is the same question
         // asked of a macro, so its row goes here too.
         Routine(card, analysis, symbol);
+
+        // A position inside an instruction runs the bytes there as other instructions, which the
+        // source does not show.
+        if (symbol.Kind == SymbolKind.Label
+            && analysis.LayoutFor(symbol.Tree.Path)?.HiddenInstructionsOf(symbol) is { Count: > 0 } hidden)
+        {
+            card.Row("runs", string.Join("; ", hidden));
+        }
         var expansion = MacroCallHover.At(analysis, model, reference);
         card.Row("expands to", expansion?.Becomes());
 
@@ -364,8 +372,9 @@ internal static class Hovers
             // A family's binding is where its routines' costs are shown, since they get no lens.
             SymbolKind.Binding => ["declares", "cost", "excluding", "reads", "preserves"],
             SymbolKind.MacroParameter => ["mode", "takes"],
+            SymbolKind.Label => ["runs", "address", "size"],
             SymbolKind.Data or SymbolKind.List or SymbolKind.Charmap or SymbolKind.Frame
-                or SymbolKind.Label or SymbolKind.ImportedAddress => ["address", "size"],
+                or SymbolKind.ImportedAddress => ["address", "size"],
             SymbolKind.AddressAlias => ["address", "element", "size"],
             SymbolKind.Struct or SymbolKind.Union or SymbolKind.Enum => ["size"],
 

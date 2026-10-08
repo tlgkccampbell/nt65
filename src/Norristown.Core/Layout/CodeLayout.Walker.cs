@@ -135,7 +135,11 @@ public sealed partial class CodeLayout
         public bool WantsCycles { get; private set; }
 
         /// <summary>Lays out the whole file.</summary>
-        public void Walk() => Walk(model.Tree.Root.Members, from: 0);
+        public void Walk()
+        {
+            Walk(model.Tree.Root.Members, from: 0);
+            PlaceInsideLabels();
+        }
 
         /// <summary>
         /// Lays out a run of sibling lines and blocks, starting at index <paramref name="from"/>.
@@ -161,6 +165,7 @@ public sealed partial class CodeLayout
         public CodeLayout Finish()
         {
             CheckBranchRange();
+            DecodeInsideLabels();
             layout.Diagnostics = Norristown.Diagnostics.Ordered(diagnostics);
             layout.ExpansionsExceeded = expanded > MaximumStatements;
             return layout;
@@ -830,6 +835,14 @@ public sealed partial class CodeLayout
 
             /// <inheritdoc cref="VisitNextDirective"/>
             public override void VisitPatchDirective(PatchDirectiveSyntax node) => NoBytes(node);
+
+            /// <summary>
+            /// Records a <c>.label</c>, which names a position inside an instruction. It generates no
+            /// bytes where it stands, and what runs from the position it names is worked out once
+            /// the walk is over.
+            /// </summary>
+            /// <param name="node">The directive.</param>
+            public override void VisitLabelDirective(LabelDirectiveSyntax node) => walker.Inside(node);
 
             /// <summary>
             /// Records the end of a routine's body, where the routine a <c>.fallthrough</c> names has

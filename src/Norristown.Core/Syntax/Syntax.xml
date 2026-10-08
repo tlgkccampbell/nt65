@@ -2218,6 +2218,43 @@
     </Field>
   </Node>
 
+  <Node Name="LabelDirectiveSyntax" Base="StatementSyntax">
+    <Kind Name="LabelDirective"/>
+    <TypeComment>
+      <summary>
+        Represents a <c>.label name = @op + 1</c> line, which names a position a number of bytes
+        into an instruction, where control can enter the instruction's bytes.
+      </summary>
+    </TypeComment>
+    <Field Name="Keyword" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>Gets the <c>.label</c> keyword that starts the line.</summary>
+      </PropertyComment>
+      <Kind Name="Directive"/>
+    </Field>
+    <Field Name="Name" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>Gets the name the position is given.</summary>
+      </PropertyComment>
+      <Kind Name="Identifier"/>
+      <Kind Name="CheapLocal"/>
+    </Field>
+    <Field Name="EqualsToken" Type="SyntaxToken">
+      <PropertyComment>
+        <summary>Gets the <c>=</c> token.</summary>
+      </PropertyComment>
+      <Kind Name="Equals"/>
+    </Field>
+    <Field Name="Value" Type="ExpressionSyntax" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the position, a label at an instruction plus the number of bytes into it, or null
+          if the source omits it.
+        </summary>
+      </PropertyComment>
+    </Field>
+  </Node>
+
   <Node Name="EncodedDirectiveSyntax" Base="StatementSyntax">
     <Kind Name="EncodedDirective"/>
     <TypeComment>

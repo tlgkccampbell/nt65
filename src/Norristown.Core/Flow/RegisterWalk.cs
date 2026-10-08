@@ -234,16 +234,31 @@ internal sealed class RegisterWalk
         // An `.ensure` may emit an instruction that sets each flag it names.
         if (step.Statement is EnsureDirectiveSyntax)
             return state.WithEach(Ensured(step.Statement), RegisterValue.Written);
+
+        // The bytes from a position inside an instruction run as the instructions they decode
+        // as, one after another.
+        if (layout.HiddenPathAt(step) is { } hidden)
+        {
+            foreach (var instruction in hidden.Instructions)
+                state = Instruction(step, instruction.Mnemonic, instruction.Mode, Immediate(instruction), state, use, saved, null);
+            return state;
+        }
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
 
         // A store may turn the instruction into another, and then the registers hold what either
         // leaves, and either may use them.
-        var after = Instruction(step, statement.MnemonicKind, state, use, saved, next);
+        var mode = layout.Of(statement, step.On)?.Mode;
+        var immediate = StepOperands.Immediate(model, layout, step);
+        var after = Instruction(step, statement.MnemonicKind, mode, immediate, state, use, saved, next);
         foreach (var variant in VariantsOf(step))
-            after = RegisterState.Merge(after, Instruction(step, variant, state, use, saved, next));
+            after = RegisterState.Merge(after, Instruction(step, variant, mode, immediate, state, use, saved, next));
         return after;
     }
+
+    /// <summary>Returns the value of an instruction's immediate, or null where it has none.</summary>
+    internal static long? Immediate(HiddenInstruction instruction) =>
+        instruction.Mode == AddressingMode.Immediate ? instruction.Operand : null;
 
     /// <summary>
     /// Returns the instructions a store can turn <paramref name="step"/>'s instruction into, from
@@ -254,13 +269,13 @@ internal sealed class RegisterWalk
 
     /// <summary>
     /// Returns what the registers hold after <paramref name="step"/>'s instruction runs as
-    /// <paramref name="mnemonic"/>, from what they held before it.
+    /// <paramref name="mnemonic"/> in <paramref name="mode"/>, with <paramref name="immediate"/> as
+    /// its immediate where it has one, from what they held before it.
     /// </summary>
     private RegisterState Instruction(
-        Step step, MnemonicKind mnemonic, RegisterState state, Action<Registers>? use, Registers saved, Step? next)
+        Step step, MnemonicKind mnemonic, AddressingMode? mode, long? immediate, RegisterState state,
+        Action<Registers>? use, Registers saved, Step? next)
     {
-        var statement = (InstructionStatementSyntax)step.Statement;
-        var mode = layout.Of(statement, step.On)?.Mode;
         var facts = Instructions.Facts(mnemonic);
         if (use is not null)
             Used(step, mnemonic, mode, state, use, saved);
@@ -296,7 +311,7 @@ internal sealed class RegisterWalk
         // them. A `plp` gives the flags back what it pulls instead.
         var written = mnemonic == MnemonicKind.Plp
             ? Registers.None
-            : RegisterEffects.Written(mnemonic, mode, StepOperands.Immediate(model, layout, step));
+            : RegisterEffects.Written(mnemonic, mode, immediate);
         const Registers OtherFlags = Registers.Z | Registers.N | Registers.V;
         if (facts.Pulls is { } pull)
             return Restored(step, state.WithEach(written & OtherFlags, RegisterValue.Written), facts, pull, use);

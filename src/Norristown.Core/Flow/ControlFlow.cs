@@ -358,6 +358,8 @@ public sealed class ControlFlow
         var step = unit.Step;
         if (step.Statement is FallthroughDirectiveSyntax)
             return BlockEnd.Fallthrough;
+        if (layout.HiddenPathAt(step) is not null)
+            return BlockEnd.Jump;
 
         // A call returns to the statement after it, even where a `.next` lists the routines it
         // calls, unless it calls a routine that never returns.
@@ -783,6 +785,7 @@ public sealed class ControlFlow
         var tails = new List<Unit?>();
         var fallenInto = new List<bool>();
         var found = new Dictionary<(Symbol Symbol, Expansion? At), int>();
+        var landed = new Dictionary<StepKey, int>();
 
         // Whether the block being built can still take statements, and whether the one
         // before it ran off its end into whatever comes next.
@@ -805,8 +808,23 @@ public sealed class ControlFlow
                 found.TryAdd((label, Expansion.Owning(unit.Step.On, label)), blocks.Count - 1);
                 continue;
             }
-            if (!open)
+
+            // The bytes from a position inside an instruction are a block of their own, in a
+            // stream of their own, entered only at the name the `.label` gives the position.
+            if (layout.HiddenPathAt(unit.Step) is { } hidden)
+            {
+                Open(hidden.Label, unit.Step.On);
+                found.TryAdd((hidden.Label, Expansion.Owning(unit.Step.On, hidden.Label)), blocks.Count - 1);
+            }
+
+            // Where such bytes reach the start of an instruction, control enters it from them as
+            // well as from the statement before it, so a block starts there.
+            else if (!open || (layout.Landings.Contains(unit.Step.Key) && blocks[^1].Steps.Count > 0))
+            {
                 Open(null, unit.Step.On);
+            }
+            if (layout.Landings.Contains(unit.Step.Key))
+                landed.TryAdd(unit.Step.Key, blocks.Count - 1);
 
             blocks[^1].Add(unit.Step);
             tails[^1] = unit;
@@ -816,7 +834,7 @@ public sealed class ControlFlow
             runsOn = BasicBlock.Continues(EndOf(unit, RelativeCallIn(calls, unit.Step)));
         }
 
-        Link(blocks, tails, fallenInto, found, calls);
+        Link(blocks, tails, fallenInto, found, landed, calls);
         Reach(blocks);
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -845,7 +863,8 @@ public sealed class ControlFlow
     /// </summary>
     private void Link(
         List<BasicBlock> blocks, List<Unit?> tails, List<bool> fallenInto,
-        Dictionary<(Symbol Symbol, Expansion? At), int> found, IReadOnlyDictionary<StepKey, RelativeCall> calls)
+        Dictionary<(Symbol Symbol, Expansion? At), int> found, Dictionary<StepKey, int> landed,
+        IReadOnlyDictionary<StepKey, RelativeCall> calls)
     {
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -853,6 +872,16 @@ public sealed class ControlFlow
                 Edge(i, i + 1, EdgeKind.FallThrough);
             if (tails[i] is not { } tail)
                 continue;
+
+            // The bytes from a position inside an instruction go on at the instruction whose start
+            // they reach, as a jump there would.
+            if (layout.HiddenPathAt(tail.Step) is { } hidden)
+            {
+                blocks[i].End = BlockEnd.Jump;
+                if (landed.TryGetValue(hidden.Landing, out var at))
+                    Edge(i, at, EdgeKind.Taken);
+                continue;
+            }
 
             var mode = layout.Of(tail.Step.Statement, tail.Step.On)?.Mode;
             var transfer = Transfers.Of(tail.Step.Statement, mode);
@@ -961,7 +990,7 @@ public sealed class ControlFlow
     /// edge leaves a block at its end.
     /// </summary>
     private bool EndsBlock(Unit unit) =>
-        unit.Next is not null || unit.Step.Statement is FallthroughDirectiveSyntax
+        unit.Next is not null || unit.Step.Statement is FallthroughDirectiveSyntax or LabelDirectiveSyntax
         || Transfers.Of(unit.Step.Statement, layout.Of(unit.Step.Statement, unit.Step.On)?.Mode)
             != Transfer.Through;
 

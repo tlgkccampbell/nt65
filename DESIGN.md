@@ -1654,6 +1654,18 @@ label:
   or a form with no operand or with `a`, which it then names. A mnemonic or a form the CPU
   lacks is an error, and so is a long branch, which is one instruction or two. Being a
   constant, `.opcode` may stand in a build's condition.
+- `.label name = @op + 2` names the position 2 bytes into the instruction at `@op`, where a
+  branch, a `.next` or an entry from outside runs the instruction's bytes as other
+  instructions. The position is a label at an instruction of the same routine plus a constant
+  from 1 to the instruction's length less 1 (label-position-invalid). nt65 decodes the bytes
+  from there as the CPU runs them, through the next instructions if need be, until they reach
+  the start of an instruction as written, and the flow analysis gives the decoded instructions
+  a block of their own that goes on there. No code runs into that block. Every byte has to be
+  known before linking: an opcode, a constant operand, or a branch's distance within the same
+  run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
+  control goes, move the stack or change the widths; a run of more than 32 bytes, or one that
+  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). The
+  output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there.
 - `.patch @op as dex, iny` also lists the instructions the store can turn the one at `@op`
   into. The store writes only the opcode, so each variant keeps the instruction's addressing
   mode and operand, and the CPU must have it in that form. The register, reads and flag analyses
@@ -5376,6 +5388,7 @@ annotation  := '.next' (target (',' target)* | items(target) | '?'
                                                       ; own target only: always taken
              | '.patch' target ('as' mnemonic (',' mnemonic)*)?
              | '.encoded' expr                          ; before an instruction
+             | '.label' name '=' name '+' expr          ; a position inside an instruction
 fallthrough := '.fallthrough' path                    ; the last line of a proc's body, or of
                                                       ; a branch of an if-block ending it
 target      := path                                   ; or an ident parameter, in macros;
