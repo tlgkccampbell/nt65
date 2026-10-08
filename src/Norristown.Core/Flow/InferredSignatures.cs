@@ -184,9 +184,10 @@ public sealed class InferredSignatures
                 signatures = solver.Signatures();
                 continue;
             }
-            cancellation.ThrowIfCancellationRequested();
-            foreach (var file in stale)
-                states[file] = StateOf(file, ranges, effects, signatures);
+            var analyzed = new StateAnalysis[stale.Count];
+            ParallelWork.For(stale.Count, i => analyzed[i] = StateOf(stale[i], ranges, effects, signatures), cancellation);
+            for (var i = 0; i < stale.Count; i++)
+                states[stale[i]] = analyzed[i];
             solver.Learn(states.Values);
             signatures = solver.Signatures();
         }

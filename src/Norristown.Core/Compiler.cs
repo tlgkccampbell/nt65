@@ -516,34 +516,44 @@ public static class Compiler
         ProgramAnalysis? previous, IReadOnlySet<string>? dirty, Flow.InferredSignatures? signatures,
         CancellationToken cancellation)
     {
-        var files = new List<FileAnalysis>();
-        foreach (var model in program.Files)
+        // Each file is analyzed on its own, so the files are analyzed at once, and what they
+        // found is gathered in the program's order.
+        var models = program.Files;
+        var files = new FileAnalysis[models.Count];
+        var found = new IReadOnlyList<Diagnostic>?[models.Count];
+        ParallelWork.For(models.Count, i =>
         {
-            cancellation.ThrowIfCancellationRequested();
             // A file kept from before keeps what was found for it then, under the program's
             // current model of the file. Its flow is copied, because composing this analysis sets
             // program-wide answers on the routines, and the earlier analysis keeps its own.
+            var model = models[i];
             if (dirty?.Contains(model.Tree.Path) != true && previous?.FileFor(model.Tree.Path) is { } kept)
             {
-                files.Add(kept with { Model = model, Flow = kept.Flow.ForComposing() });
-                continue;
+                files[i] = kept with { Model = model, Flow = kept.Flow.ForComposing() };
+                return;
             }
+
             // A file analyzed again starts from the stack effects the earlier analysis found, which
             // are what an edit to one file usually leaves them.
-            var (layout, flow, state, found) = AnalyzeFile(
+            var (layout, flow, state, diagnostics) = AnalyzeFile(
                 model, target, project,
                 previous is { Files: [var any, ..] } ? any.Flow.Effects : Flow.StackEffects.None,
                 previous is { Files: [var some, ..] } ? some.Flow.FlagExits : Flow.FlagExits.None,
                 signatures ?? (previous is { Files: [var first, ..] } ? first.Flow.Signatures : Flow.InferredSignatures.None));
-            files.Add(new FileAnalysis(model, layout, flow, state));
-            analyzed[model.Tree.Path] = found;
+            files[i] = new FileAnalysis(model, layout, flow, state);
+            found[i] = diagnostics;
+        }, cancellation);
+        for (var i = 0; i < models.Count; i++)
+        {
+            if (found[i] is { } diagnostics)
+                analyzed[models[i].Tree.Path] = diagnostics;
         }
 
         // Composing the program sets its answers on this analysis's regions, which for a file kept
         // from before are the copies made above, so the previous analysis keeps its own answers.
         // Composing cannot be cancelled once it starts, so a cancelled analysis stops here.
         cancellation.ThrowIfCancellationRequested();
-        return files;
+        return [.. files];
     }
 
     /// <summary>
@@ -612,17 +622,20 @@ public static class Compiler
                 break;
             cancellation.ThrowIfCancellationRequested();
             var analyzed = reuse.Analyzed.ToDictionary(StringComparer.Ordinal);
-            var files = new List<FileAnalysis>();
-            foreach (var file in analysis.Files)
+            var files = analysis.Files.ToArray();
+            var found = new IReadOnlyList<Diagnostic>?[files.Length];
+            ParallelWork.For(files.Length, i =>
             {
-                if (!stale.Contains(file))
-                {
-                    files.Add(file);
-                    continue;
-                }
-                var (layout, flow, state, found) = AnalyzeFile(file.Model, analysis.Cpu, project, effects, exits, signatures);
-                files.Add(new FileAnalysis(file.Model, layout, flow, state));
-                analyzed[file.Path] = found;
+                if (!stale.Contains(files[i]))
+                    return;
+                var (layout, flow, state, diagnostics) = AnalyzeFile(files[i].Model, analysis.Cpu, project, effects, exits, signatures);
+                files[i] = new FileAnalysis(files[i].Model, layout, flow, state);
+                found[i] = diagnostics;
+            }, cancellation);
+            for (var i = 0; i < files.Length; i++)
+            {
+                if (found[i] is { } diagnostics)
+                    analyzed[files[i].Path] = diagnostics;
             }
             analysis = new ProgramAnalysis(program, analysis.Cpu, files, analysis.Configuration, [])
             {

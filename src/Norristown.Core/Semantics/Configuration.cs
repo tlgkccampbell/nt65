@@ -383,6 +383,11 @@ public sealed class Configuration
         private readonly HashSet<Symbol> evaluating = [];
         private readonly Dictionary<SyntaxTree, Reach> reached = [];
 
+        // Held while a value is decided. Values are decided the first time they are asked for, and
+        // a model may be asked from several threads at once, so the collections that fill up as
+        // values are decided are kept consistent by this lock.
+        private readonly Lock gate = new();
+
         // Receives what is wrong with a setting, which nothing reads before the binder does.
         private readonly List<Diagnostic> problems;
 
@@ -451,24 +456,44 @@ public sealed class Configuration
             scopes.TryGetValue(tree, out var scope) && scope.FindMember(name) is { } symbol && given.ContainsKey(symbol);
 
         /// <summary>Determines whether a value <paramref name="tree"/> declares has been decided.</summary>
-        public bool Decides(SyntaxTree tree) => decided.Keys.Any(symbol => symbol.Tree == tree);
+        public bool Decides(SyntaxTree tree)
+        {
+            lock (gate)
+            {
+                return decided.Keys.Any(symbol => symbol.Tree == tree);
+            }
+        }
 
         /// <summary>Returns the value of the setting <paramref name="name"/> in <paramref name="tree"/>, or null.</summary>
-        public long? SettingOf(SyntaxTree tree, string name) =>
-            scopes.TryGetValue(tree, out var scope) && scope.FindMember(name) is { } symbol
-                && entries.GetValueOrDefault(symbol) is Entry.Setting
-                ? Decide(symbol).Value.AsNumber()
-                : null;
+        public long? SettingOf(SyntaxTree tree, string name)
+        {
+            if (!scopes.TryGetValue(tree, out var scope) || scope.FindMember(name) is not { } symbol
+                || entries.GetValueOrDefault(symbol) is not Entry.Setting)
+            {
+                return null;
+            }
+            lock (gate)
+            {
+                return Decide(symbol).Value.AsNumber();
+            }
+        }
 
         /// <summary>
         /// Returns what the configuration makes of the constant, setting or enum member
         /// <paramref name="name"/> that <paramref name="tree"/> declares at file level, or null.
         /// </summary>
-        public Decision? DecisionOf(SyntaxTree tree, string name) =>
-            scopes.TryGetValue(tree, out var scope) && scope.FindMember(name) is { } symbol
-                && entries.GetValueOrDefault(symbol) is Entry.Setting or Entry.Constant or Entry.Member
-                ? Decide(symbol)
-                : null;
+        public Decision? DecisionOf(SyntaxTree tree, string name)
+        {
+            if (!scopes.TryGetValue(tree, out var scope) || scope.FindMember(name) is not { } symbol
+                || entries.GetValueOrDefault(symbol) is not (Entry.Setting or Entry.Constant or Entry.Member))
+            {
+                return null;
+            }
+            lock (gate)
+            {
+                return Decide(symbol);
+            }
+        }
 
         /// <summary>
         /// Returns the diagnostic for a value a condition uses that the configuration does not
