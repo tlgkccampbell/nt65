@@ -277,30 +277,9 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
         }
 
         /// <summary>
-        /// Returns the span a step is shown at in the caret's file, and whether that is a macro call
-        /// standing for a line of the macro's body, or null where the step is in no line of this file.
-        /// A line a call gave as a block argument is the caller's own, and is shown where it is.
+        /// Returns the span a step is shown at in the caret's file, as <see cref="StepLines.Of"/> finds it.
         /// </summary>
-        private (TextSpan Span, bool InMacro)? Span(Step step)
-        {
-            var node = step.Statement;
-            var inBody = node.Tree != tree;
-            MacroCallSyntax? call = null;
-            for (var level = step.On; level is not null; level = level.Outer)
-            {
-                if (level.Call is null)
-                    continue;
-                call = level.Call;
-                if (level.Body is { } body && body.Tree == node.Tree
-                    && node.Position >= body.Position && node.Position < body.FullSpan.End)
-                {
-                    inBody = true;
-                }
-            }
-            if (!inBody || call is null)
-                return node.Tree == tree ? (node.Span, false) : null;
-            return call.Tree == tree ? (call.Span, true) : null;
-        }
+        private (TextSpan Span, bool InMacro)? Span(Step step) => StepLines.Of(tree, step);
 
         /// <summary>Returns a short phrase saying why the analysis lost track of a value at <paramref name="step"/>.</summary>
         private string Why(Step step, BasicBlock block)

@@ -17,7 +17,7 @@ public sealed class ExtensionTests : IDisposable
 {
     /// <summary>The client's own code, which the manifest has to agree with.</summary>
     private static readonly string[] ClientFiles =
-        ["extension.js", "views.js", "sources.js", "directPages.js", "directPagesGrid.js", "directPagesCaret.js", "media/directPageGrid.js"];
+        ["extension.js", "views.js", "sources.js", "flowArrows.js", "directPages.js", "directPagesGrid.js", "directPagesCaret.js", "media/directPageGrid.js"];
 
     private static readonly JsonDocument Package = Read("package.json");
     private static readonly JsonDocument Schema = Read("nt65.schema.json");

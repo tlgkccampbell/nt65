@@ -441,6 +441,17 @@ internal sealed class Server : IDisposable
             : null;
 
     /// <summary>
+    /// Returns the branches, jumps and declared edges inside the routine that holds a position, for
+    /// the client to draw as arrows in the margin. The answer is for showing and feeds no
+    /// diagnostic.
+    /// </summary>
+    [JsonRpcMethod("nt65/flowArrows")]
+    public async Task<FlowArrowsResult?> FlowArrowsAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
+        await AtAsync(request, cancellation, settled: true).ConfigureAwait(false) is { } asked
+            ? CaretFlow.At(asked.Analysis, asked.Model, asked.Position)
+            : null;
+
+    /// <summary>
     /// Returns how the routines of the program that holds a document share the zero page, or on
     /// the 65816 each direct page. The answer is for showing and feeds no diagnostic. For a
     /// document that no program holds, the result is null.

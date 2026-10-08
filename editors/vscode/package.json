@@ -63,6 +63,11 @@
         "category": "nt65"
       },
       {
+        "command": "nt65.toggleFlowArrows",
+        "title": "Toggle Flow Arrows",
+        "category": "nt65"
+      },
+      {
         "command": "nt65.directPages.refresh",
         "title": "Refresh Direct Pages",
         "category": "nt65",
@@ -363,6 +368,46 @@
         }
       },
       {
+        "id": "nt65.flowArrows.arrow",
+        "description": "An arrow in the margin from a branch or jump to the line it goes to, in the routine at the caret.",
+        "defaults": {
+          "dark": "#4EC9B0",
+          "light": "#16825D",
+          "highContrast": "#4EC9B0",
+          "highContrastLight": "#0F5C42"
+        }
+      },
+      {
+        "id": "nt65.flowArrows.declared",
+        "description": "An arrow in the margin that a `.next` declares, in the routine at the caret.",
+        "defaults": {
+          "dark": "#C586C0",
+          "light": "#AF00DB",
+          "highContrast": "#D7A6D3",
+          "highContrastLight": "#7A0099"
+        }
+      },
+      {
+        "id": "nt65.flowArrows.faded",
+        "description": "An arrow in the margin for a branch the flags prove always or never taken, or from a line nothing reaches.",
+        "defaults": {
+          "dark": "#5A5F66",
+          "light": "#A8A8A8",
+          "highContrast": "#8B949E",
+          "highContrastLight": "#6E7681"
+        }
+      },
+      {
+        "id": "nt65.flowArrows.caret",
+        "description": "An arrow in the margin that starts or ends on the caret's line.",
+        "defaults": {
+          "dark": "#B5F5E6",
+          "light": "#0B4A36",
+          "highContrast": "#FFFFFF",
+          "highContrastLight": "#000000"
+        }
+      },
+      {
         "id": "nt65.directPages.shared",
         "description": "A direct page location that several routines use at different times, in the direct page map.",
         "defaults": {
@@ -642,6 +687,11 @@
           },
           "default": [],
           "markdownDescription": "Globs, relative to the workspace folder and in the form of `files` in nt65.json, naming files whose problems are shown only while they are open, such as `tests/fixtures/**/*`. Every other file of every project is reported whether or not it is open. The files are still analyzed with their projects."
+        },
+        "nt65.flowArrows.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the branches and jumps of the routine at the caret as arrows in front of its lines. An arrow a `.next` declares has its own colour, a branch the flags prove one way is faded, and an arrow that leaves the routine points left. `nt65: Toggle Flow Arrows` turns this on and off."
         },
         "nt65.sources.chipLength": {
           "type": "integer",

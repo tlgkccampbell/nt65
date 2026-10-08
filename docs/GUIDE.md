@@ -1965,6 +1965,19 @@ everything below works across modules.
   leaving the highlights in place, and *Peek Input Sources* lists them all. The setting
   `nt65.sources.enabled`, or *Toggle Input Sources*, turns the feature off. It only shows what
   the analysis found and never reports a problem.
+- **Flow arrows** draw where control goes in the routine at the caret. Each branch, jump and
+  edge a `.next` declares is an arrow in front of the routine's lines, from the line that
+  transfers to the label it goes to. A shorter arrow goes nearer the code, so an arrow inside
+  another is drawn inside it. Every line of the routine gets the same width, so the code does
+  not jog, and only the caret's routine is drawn, so a long file stays quiet.
+
+  The arrow that starts or ends on the caret's line is brightened. One a `.next` declares has a
+  colour of its own. A branch the flags prove always or never taken is faded, and so is an
+  arrow from a line nothing reaches. A tail call, a branch to another routine and a `.next`
+  that names a routine or `?` leave the routine, and their arrows point left out of the margin.
+  A call returns to the line after it, so it is not drawn. The arrows take at most four columns,
+  and hovering the line of one that had no room says where it goes. The setting
+  `nt65.flowArrows.enabled`, or *Toggle Flow Arrows*, turns them off.
 - **The direct page map**, in the nt65 view of the activity bar, shows how routines share the
   zero page, or on the 65816 each direct page. Each page is a value of D, with the segments
   reached through it, the locations on it and, under each location, the calls that lead to the
@@ -2043,8 +2056,9 @@ everything below works across modules.
 - **Commands:** *Show Output Beside* shows the ca65 the current file becomes, and moving in
   either text highlights the matching lines in the other. *Show Macro Expansion* writes a macro
   call out. *Select Configuration* chooses which configuration the editor analyzes, *Toggle
-  Cycle Counts* switches the cycle hints on, and *Toggle Input Sources* switches the
-  highlights of where an instruction's inputs come from.
+  Cycle Counts* switches the cycle hints on, *Toggle Input Sources* switches the
+  highlights of where an instruction's inputs come from, and *Toggle Flow Arrows* switches the
+  arrows for the caret's routine.
 - **Formatting:** the same layout `nt65 fmt` writes.
 
 ## The command line
