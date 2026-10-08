@@ -16,9 +16,12 @@ namespace Norristown.LanguageServer;
 internal sealed class DiagnosticsPublisher : IDisposable
 {
     /// <summary>
-    /// The time to wait after the last edit before publishing the rest of the program's diagnostics.
+    /// The time to wait after the last edit before working out the program-wide answers and
+    /// publishing the rest of the program's diagnostics. A shorter wait starts that work in the
+    /// pauses between words, only for the next keystroke to discard it, and moves the lenses while
+    /// the user is still typing. It sits in the range that language servers for other languages use.
     /// </summary>
-    private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(500);
 
     private readonly ServerLog log;
     private readonly Workspace workspace;

@@ -4326,7 +4326,7 @@ that is gone. Four rules keep that:
   and the program-wide problems from before stay where they were, moved to follow the edit. A
   problem in text the edit replaced is dropped. So nothing about the file is briefly missing,
   but a program-wide problem the edit fixes or causes shows once typing stops;
-- the rest of the program's go out after 200 ms with no further edit, from the analysis with
+- the rest of the program's go out after 500 ms with no further edit, from the analysis with
   the program-wide answers worked out again, and so does the edited file's where those answers
   change it. An edit in one file can change what is wrong with another, and a squiggle in a
   file nobody is looking at is worth arriving a moment late rather than coming and going on
