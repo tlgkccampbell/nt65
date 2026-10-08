@@ -552,12 +552,13 @@ public sealed class DirectPageMapTests
                 ZP2:      load = ZP, type = zp, offset = $20;
                 ZP3:      load = ZP, type = zp, start = $0080;
                 ZP4:      load = ZP, type = zp;
+                ZP5:      load = ZP, type = zp, align = $10;
                 CODE:     load = ROM, type = ro;
             }
             """);
         Assert.Equal(
             [
-                "page $0000 [ZEROPAGE,ZP2,ZP3,ZP4] Own hazard=False used=5 direct=5",
+                "page $0000 [ZEROPAGE,ZP2,ZP3,ZP4,ZP5] Own hazard=False used=6 direct=6",
                 "  one +16 x1 .byte Own Configured",
                 "    main Out 1",
                 "  two +17 x1 .byte Own Configured",
@@ -567,6 +568,8 @@ public sealed class DirectPageMapTests
                 "  four +128 x1 .byte Own Configured",
                 "    main Out 1",
                 "  five +129 x1 .byte Own Configured",
+                "    main Out 1",
+                "  six +144 x1 .byte Own Configured",
                 "    main Out 1",
             ],
             Render(FlowFragment.Analyze(project, "6502", (Analysis.Path, """
@@ -579,6 +582,8 @@ public sealed class DirectPageMapTests
                 .data four: .byte
                 .segment ZP4
                 .data five: .byte
+                .segment ZP5
+                .data six: .byte
                 .segment CODE
                 .export .proc main {
                     sta one
@@ -586,6 +591,7 @@ public sealed class DirectPageMapTests
                     sta three
                     sta four
                     sta five
+                    sta six
                     rts
                 }
                 """))));

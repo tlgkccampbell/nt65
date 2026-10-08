@@ -129,6 +129,7 @@ public static class SegmentLinks
                 : [],
             Start = placed.Start?.Value,
             Offset = placed.Offset?.Value,
+            Align = placed.Align?.Value,
             IsDefined = placed.Defines,
             Unwritten = Unwritten(placed, config),
         };

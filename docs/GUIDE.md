@@ -1989,7 +1989,7 @@ everything below works across modules.
   address comes from. It is *fixed* by the source, *built* from the last build (the newest
   `.dbg` under `out`, when the build runs ld65 with `--dbgfile`; the grid says when a source
   has changed since), *predicted* from the linked config (a segment starts at its `start`, at
-  its `offset` into its memory area, or after the segment before it), or *guessed* from the
+  its `offset` into its memory area, or after the segment before it, rounded up to its `align`), or *guessed* from the
   page's base without one. Files' bytes
   follow in the order the project lists them, which a page notes when several files share a
   segment. Overlaps and shared bytes between pages are reported only for addresses the map

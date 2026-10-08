@@ -65,6 +65,7 @@ public sealed class LinkerConfig
                 Type = Word(attributes, "type")?.ToLowerInvariant(),
                 Start = attributes.TryGetValue("start", out var start) ? new Given(Value(start)) : null,
                 Offset = attributes.TryGetValue("offset", out var offset) ? new Given(Value(offset)) : null,
+                Align = attributes.TryGetValue("align", out var align) ? new Given(Value(align)) : null,
                 Defines = Word(attributes, "define")?.Equals("yes", StringComparison.OrdinalIgnoreCase) == true,
             });
         }
@@ -189,6 +190,9 @@ public sealed class LinkerConfig
 
         /// <summary>Gets the segment's <c>offset</c> into its memory area, or null when it gives none.</summary>
         public Given? Offset { get; init; }
+
+        /// <summary>Gets the alignment of the segment's start that <c>align</c> asks for, or null when it gives none.</summary>
+        public Given? Align { get; init; }
 
         /// <summary>
         /// Gets a value indicating whether the segment has <c>define = yes</c>, so that ld65

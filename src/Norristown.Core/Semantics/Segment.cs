@@ -62,6 +62,12 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     public long? Offset { get; init; }
 
     /// <summary>
+    /// Gets the alignment of the segment's start that the first linked configuration placing the
+    /// segment asks for with <c>align</c>, or null when it asks for none or nt65 cannot work it out.
+    /// </summary>
+    public long? Align { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether a linked configuration gives the segment
     /// <c>define = yes</c>, so that ld65 defines the symbols <c>.loadof</c>, <c>.runof</c> and
     /// <c>.spanof</c> stand for.
@@ -120,7 +126,7 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
         other is not null && Name == other.Name && Size == other.Size && Declaration == other.Declaration
         && DirectPage == other.DirectPage && Bank == other.Bank && Mirrors.SequenceEqual(other.Mirrors)
         && Space == other.Space && Placements.SequenceEqual(other.Placements) && Runs.SequenceEqual(other.Runs)
-        && Start == other.Start && Offset == other.Offset && IsDefined == other.IsDefined
+        && Start == other.Start && Offset == other.Offset && Align == other.Align && IsDefined == other.IsDefined
         && Addition == other.Addition;
 
     /// <inheritdoc/>

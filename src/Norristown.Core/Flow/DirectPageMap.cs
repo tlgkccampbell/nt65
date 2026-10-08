@@ -278,10 +278,9 @@ public sealed class DirectPageMap
         /// With linked configurations, the segments that run in one memory area follow one another
         /// in the order the first configuration places them, from where the area starts, as ld65
         /// lays them out. A segment with <c>start</c> begins at that address, and one with
-        /// <c>offset</c> that far into its area, and the segments after it follow on from there.
-        /// ld65 also honours <c>align</c>, which nt65 does not read, so an aligned segment may
-        /// start later than predicted. Without a configuration, the segments of one page follow one
-        /// another from the page's base, <c>ZEROPAGE</c> first.
+        /// <c>offset</c> that far into its area, and one with <c>align</c> at the next multiple of
+        /// it, and the segments after it follow on from there. Without a configuration, the
+        /// segments of one page follow one another from the page's base, <c>ZEROPAGE</c> first.
         /// </remarks>
         private Dictionary<string, (long Address, PageLayout Layout)> SegmentStarts(Dictionary<string, long> lengths)
         {
@@ -296,6 +295,8 @@ public sealed class DirectPageMap
                 foreach (var segment in area.OrderBy(segment => segment.Placements.Count > 0 ? segment.Placements[0].Line : int.MaxValue))
                 {
                     at = segment.Start ?? (segment.Offset is { } offset ? first + offset : at);
+                    if (segment.Align is { } align and > 0 && at % align != 0)
+                        at += align - (at % align);
                     starts[segment.Name] = (at, PageLayout.Configured);
                     at += lengths.GetValueOrDefault(segment.Name);
                 }
