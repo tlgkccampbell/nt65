@@ -27,7 +27,7 @@ public sealed class UnpromisedKeepsTests
         Assert.Equal(Severity.Warning, diagnostic.Severity);
         Assert.Equal(11, diagnostic.Span.Line);
         Assert.Equal(
-            "this call relies on `print_digit` keeping Y, which it does but does not promise (it declares `keeps x`)",
+            "this call relies on `print_digit` keeping Y, which its `keeps x` does not promise",
             diagnostic.Message);
         Assert.Equal(12, Assert.Single(diagnostic.Related).Span.Line);
         Assert.Equal(new DiagnosticFix(FixKind.Keeps, "y", diagnostic.Fix?.At), diagnostic.Fix);
@@ -59,7 +59,7 @@ public sealed class UnpromisedKeepsTests
 
         var diagnostic = Assert.Single(Diagnostics(Routines + ".export .proc main {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n"));
         Assert.Equal(
-            "this call relies on `b` keeping Y, which it does only because `c` keeps it without promising to (it declares `keeps x`)",
+            "this call relies on `b` keeping Y, which depends on `c`, whose `keeps x` does not promise it",
             diagnostic.Message);
         Assert.Equal(new DiagnosticFix(FixKind.Keeps, "y", diagnostic.Fix?.At), diagnostic.Fix);
         Assert.Equal(4, diagnostic.Fix?.At?.Line);
@@ -80,7 +80,7 @@ public sealed class UnpromisedKeepsTests
         var diagnostic = Assert.Single(Diagnostics(PrintDigit + main));
 
         Assert.Equal(
-            $"this {how} relies on `print_digit` keeping Y, which it does but does not promise (it declares `keeps x`)",
+            $"this {how} relies on `print_digit` keeping Y, which its `keeps x` does not promise",
             diagnostic.Message);
     }
 
@@ -96,7 +96,7 @@ public sealed class UnpromisedKeepsTests
 
         var diagnostic = Assert.Single(Diagnostics(".proc store: keeps x {\n    sta $10\n    rts\n}\n" + Main));
         Assert.Equal(
-            "this call relies on `store` keeping Z, which it does but does not promise (it declares `keeps x`)",
+            "this call relies on `store` keeping Z, which its `keeps x` does not promise",
             diagnostic.Message);
         Assert.Equal(new DiagnosticFix(FixKind.Keeps, "z", diagnostic.Fix?.At), diagnostic.Fix);
         Assert.Null(diagnostic.Also);
@@ -115,7 +115,7 @@ public sealed class UnpromisedKeepsTests
             + ".export .proc main {\n    lda #1\n    jsr bump\n    asl $12\n    sta $11\n    rts\n}\n"));
 
         Assert.Equal(
-            "this call relies on `bump` keeping A, which it does but does not promise (it declares `keeps x`)",
+            "this call relies on `bump` keeping A, which its `keeps x` does not promise",
             diagnostic.Message);
     }
 

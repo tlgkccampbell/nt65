@@ -4,6 +4,6 @@
   "links": { "prg": { "config": "link.cfg" } },
   "segments": {
     "EXTRA": { "size": "abs" },   // ;! error[segment-not-linked]: segment `EXTRA` is not in any linked config, so ld65 has nowhere to put it
-    "CODE":  { "size": "zp" }     // ;! error[project-segment-from-link]: segment `CODE` is linked, so its `size` comes from `type` in `link.cfg`, and only an absolute segment may be made `far`
+    "CODE":  { "size": "zp" }     // ;! error[project-segment-from-link]: segment `CODE` is linked, so `segments` cannot set its `size`: `link.cfg` gives it; only an absolute segment can be made `far`
   }
 }

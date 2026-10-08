@@ -138,8 +138,8 @@ internal static class UnpromisedKeeps
                 var decliner = declining(callee, register);
                 var listed = $"`keeps {RegisterEffects.Format(decliner.Signature?.Keeps ?? Registers.None).ToLowerInvariant()}`";
                 var why = decliner == callee
-                    ? $"which it does but does not promise (it declares {listed})"
-                    : $"which it does only because `{decliner.DisplayName}` keeps it without promising to (it declares {listed})";
+                    ? $"which its {listed} does not promise"
+                    : $"which depends on `{decliner.DisplayName}`, whose {listed} does not promise it";
                 report.Add(new Diagnostic(
                     call.Statement.Tree.GetSpan(call.Statement.Span),
                     Catalogue.UnpromisedKeep.Message(how, callee.DisplayName, name, why),

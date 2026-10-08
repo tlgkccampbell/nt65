@@ -177,12 +177,12 @@ public sealed class LinkTests
         Assert.NotNull(Find(project, "HUGE").Addition);
         Assert.Equal(
             [
-                ("project-segment-from-link", "segment `CODE` is linked, so its `size` comes from `type` in `rom.cfg`, "
-                    + "and only an absolute segment may be made `far`"),
-                ("project-segment-from-link", "segment `CODE` is linked, so its `mirrors` is given on the memory area it "
-                    + "runs in, under `links`"),
-                ("project-segment-from-link", "segment `CODE` is linked, so its `bank` comes from `rom.cfg`, which runs it "
-                    + "in bank $80"),
+                ("project-segment-from-link", "segment `CODE` is linked, so `segments` cannot set its `size`: "
+                    + "`rom.cfg` gives it; only an absolute segment can be made `far`"),
+                ("project-segment-from-link", "segment `CODE` is linked, so `segments` cannot set its `mirrors`: "
+                    + "set `mirrors` on its memory area under `links`"),
+                ("project-segment-from-link", "segment `CODE` is linked, so `segments` cannot set its `bank`: "
+                    + "`rom.cfg` runs it in bank $80"),
                 ("segment-not-linked", "segment `MISSING` is not in any linked config, so ld65 has nowhere to put it"),
             ],
             project.Diagnostics.Select(diagnostic => (diagnostic.Id, diagnostic.Message)));

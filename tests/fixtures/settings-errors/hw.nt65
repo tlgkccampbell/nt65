@@ -7,7 +7,7 @@
 .const WORDS    ?= "text"           ;! error[setting-is-text]: a setting must be a number, not text
 .const SIZE     ?= LIMIT
 .const LIMIT     = 4
-.const MEASURED ?= .sizeof(here)    ;! error[setting-default-undecided]: the default of `MEASURED` uses a value the configuration does not decide
+.const MEASURED ?= .sizeof(here)    ;! error[setting-default-undecided]: the default of `MEASURED` must be known before any declaration is read
 
 .if HIDDEN {
     .const NESTED ?= 1              ;! error[setting-misplaced]: a setting must be at file level, outside every block

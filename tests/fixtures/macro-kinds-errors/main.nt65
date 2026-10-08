@@ -21,6 +21,10 @@
     lda src
 }
 
+.macro high(p: operand) {
+    lda p + 1
+}
+
 .macro direct(at: operand(zp)) {
     lda at
 }
@@ -83,5 +87,7 @@
     load!({(ptr),y})        ;! error[operand-argument-mode]: `src` takes one of `imm`, `zp`, `abs`, `absx`, and this is `indy`
     direct!(buffer)         ;! error[operand-argument-mode]: `at` takes `zp`, and this is `abs`
     direct!({ptr,x})        ;! error[operand-argument-mode]: `at` takes `zp`, and this is `zpx`
+    high!({(ptr),y})        ;! error[operand-has-no-next-byte]: `p + 1` in the macro needs a plain address, and this call gives `p` an indirect operand
+    high!({#5})             ;! error[operand-has-no-next-byte]: `p + 1` in the macro needs a plain address, and this call gives `p` an immediate operand
     rts
 }

@@ -182,8 +182,8 @@ public static class RegisterKeeps
                 var name = RegisterEffects.Format(register).ToLowerInvariant();
                 var via = through is null ? "" : $" through `{through.DisplayName}`";
                 var fix = register == Registers.C
-                    ? $": add `{name}` to `reads`, or set the carry with `clc` or `sec` before it is used"
-                    : $": add `{name}` to `reads`, or give {RegisterEffects.Format(register)} a value before it is used";
+                    ? $": add `{name}` to `reads`, or set the carry with `clc` or `sec` first"
+                    : $": add `{name}` to `reads`, or give {RegisterEffects.Format(register)} a value first";
                 report.Add(new Diagnostic(
                     step.Statement.Tree.GetSpan(step.Statement.Span),
                     Catalogue.ReadsUndeclared.Message(routine.DisplayName, written, RegisterEffects.Format(register), via + fix))

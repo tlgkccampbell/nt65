@@ -231,14 +231,14 @@ public static class SegmentLinks
             if (size == AddressSize.Far && segment.Size == AddressSize.Absolute)
                 segment = segment with { Size = AddressSize.Far };
             else
-                FromConfig("size", $"comes from `type` in `{config}`, and only an absolute segment may be made `far`");
+                FromConfig("size", $"`{config}` gives it; only an absolute segment can be made `far`");
         }
         if (entry.Mirrors is not null)
-            FromConfig("mirrors", "is given on the memory area it runs in, under `links`");
+            FromConfig("mirrors", "set `mirrors` on its memory area under `links`");
         if (entry.Space is not null)
-            FromConfig("space", "is given on its link or the memory area it runs in, under `links`");
+            FromConfig("space", "set `space` on its link or memory area under `links`");
         if (entry.Bank is not null && segment.Bank is { } bank)
-            FromConfig("bank", $"comes from `{config}`, which runs it in bank {StateValue.Hex(bank, 2)}");
+            FromConfig("bank", $"`{config}` runs it in bank {StateValue.Hex(bank, 2)}");
         return Registers(segment, entry, bank: segment.Bank is null, diagnostics);
     }
 

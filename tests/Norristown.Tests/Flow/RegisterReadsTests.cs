@@ -182,12 +182,12 @@ public sealed class RegisterReadsTests
     {
         Assert.Equal(
             ["main.nt65:2: `add` declares `reads a`, but uses the value its caller left in C: add `c` to `reads`, "
-                + "or set the carry with `clc` or `sec` before it is used"],
+                + "or set the carry with `clc` or `sec` first"],
             Problems(".proc add: reads a {\n    adc #1\n    sta $10\n    rts\n}\n"));
         Assert.Empty(Problems(".proc add: reads a {\n    clc\n    adc #1\n    sta $10\n    rts\n}\n"));
         Assert.Equal(
             ["main.nt65:6: `p` declares `reads none`, but uses the value its caller left in A through `store`: "
-                + "add `a` to `reads`, or give A a value before it is used"],
+                + "add `a` to `reads`, or give A a value first"],
             Problems(".proc store {\n    sta $10\n    rts\n}\n.proc p: reads none {\n    jsr store\n    rts\n}\n"));
     }
 

@@ -785,10 +785,10 @@ internal sealed partial class Evaluator
         if (left >= taken)
             return;
         var name = landing.Storage.DisplayName;
-        var why = left <= 0
-            ? $"its address is past the end of `{name}`"
-            : $"only {Bytes(left)} of `{name}` {(left == 1 ? "is" : "are")} left at its address";
-        Add(new Diagnostic(symbol.DeclarationSpan, Catalogue.DataElsewhereOverruns.Message(symbol.Name, Bytes(taken), why)));
+        var what = left <= 0
+            ? $"starts past the end of `{name}`"
+            : $"reads {Bytes(taken)}, but only {Bytes(left)} of `{name}` {(left == 1 ? "is" : "are")} left at its address";
+        Add(new Diagnostic(symbol.DeclarationSpan, Catalogue.DataElsewhereOverruns.Message(symbol.Name, what)));
 
         static string Bytes(long count) => $"{count} byte{(count == 1 ? "" : "s")}";
     }

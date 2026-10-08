@@ -1344,7 +1344,7 @@ public static class Catalogue
         Area.Values,
         "data-elsewhere-overruns",
         Severity.Warning,
-        "`{0}` is {1}, but {2}",
+        "`{0}` {1}",
         "Data found elsewhere may state an element type different from the one at its address, to read the same "
             + "bytes another way. When the data at the address has fewer bytes left than that element type takes, "
             + "the name reaches into whatever follows it. State an element type that fits, or leave it out if the "
@@ -1503,7 +1503,7 @@ public static class Catalogue
         Area.Values,
         "setting-default-undecided",
         Severity.Error,
-        "the default of `{0}` uses a value the configuration does not decide",
+        "the default of `{0}` must be known before any declaration is read",
         "Any condition may test a setting, and conditions are answered before any declaration is read. So a "
             + "setting's default may use only literals, built-ins, other settings, and the constants and functions "
             + "declared at file level from those. The notes lead to the value the configuration does not decide.");
@@ -2444,7 +2444,7 @@ public static class Catalogue
         Area.Instructions,
         "operand-has-no-next-byte",
         Severity.Error,
-        "{0} needs a later byte of `{1}`, and `{1}` is a `{2}` operand here, which has none",
+        "{0} in the macro needs a plain address, and this call gives `{1}` {2} operand",
         "In a macro body, `p + n` or `.byteof` on an operand parameter addresses a byte after the one the argument "
             + "names, which works only when the argument is a plain address, indexed or not. An immediate, the "
             + "accumulator, an indirect operand or a stack-relative one has no later byte to address. Pass a plain "
@@ -3653,7 +3653,7 @@ public static class Catalogue
         Area.TheProjectFile,
         "project-segment-from-link",
         Severity.Error,
-        "segment `{0}` is linked, so its `{1}` {2}",
+        "segment `{0}` is linked, so `segments` cannot set its `{1}`: {2}",
         "With `links`, a segment is declared by the ld65 configs that place it. Its size comes from its `type`, "
             + "and its bank from where it runs. Mirrors and spaces are facts about memory, so they are given on the "
             + "memory area under the link. An entry under `segments` adds only what no config can say: `far`, a "

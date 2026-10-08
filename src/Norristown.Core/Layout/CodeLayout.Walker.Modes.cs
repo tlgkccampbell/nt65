@@ -365,8 +365,15 @@ public sealed partial class CodeLayout
 
             // The problem lies in pairing this body line with this argument, so it is reported at
             // the call, which is the side that can change it, and the body line is named.
-            var what = given.ByteOf ? "`.byteof`" : $"`{given.Parameter.Name} + n`";
-            ReportPaired(given.At, Catalogue.OperandHasNoNextByte.Message(what, given.Parameter.Name, given.Mode));
+            var what = given.ByteOf ? "`.byteof`" : $"`{given.Parameter.Name} + {given.Offset}`";
+            var kind = given.Mode switch
+            {
+                "imm" => "an immediate",
+                "acc" => "an accumulator",
+                "sr" or "sry" => "a stack-relative",
+                _ => "an indirect",
+            };
+            ReportPaired(given.At, Catalogue.OperandHasNoNextByte.Message(what, given.Parameter.Name, kind));
         }
 
         /// <summary>

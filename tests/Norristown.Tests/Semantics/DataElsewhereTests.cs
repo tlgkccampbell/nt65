@@ -94,8 +94,8 @@ public sealed class DataElsewhereTests
             """);
 
         Assert.Equal([
-            "18: `WIDE` is 4 bytes, but only 2 bytes of `STRNG1` are left at its address",
-            "19: `PAST` is 1 byte, but its address is past the end of `STRNG1`",
+            "18: `WIDE` reads 4 bytes, but only 2 bytes of `STRNG1` are left at its address",
+            "19: `PAST` starts past the end of `STRNG1`",
         ], model.Problems());
         Assert.Equal(Severity.Warning, Assert.Single(model.Diagnostics, d => d.Message.StartsWith("`WIDE`", StringComparison.Ordinal)).Severity);
     }

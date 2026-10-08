@@ -69,7 +69,7 @@ public sealed class InferredFlagsTests
         Assert.Equal("unpromised-flag", diagnostic.Id);
         Assert.Equal(Severity.Warning, diagnostic.Severity);
         Assert.Equal(
-            "this call relies on `next_row` returning with `d = 0`, which it does but does not promise (it declares `-> c = 0`)",
+            "this call relies on `next_row` returning with `d = 0`, which its `-> c = 0` does not promise",
             diagnostic.Message);
         Assert.Equal(new DiagnosticFix(FixKind.Exit, "d = 0", diagnostic.Fix?.At), diagnostic.Fix);
 
@@ -88,7 +88,7 @@ public sealed class InferredFlagsTests
 
         var diagnostic = Assert.Single(Diagnostics(Routines + ".export .proc main {\n    jsr b\n    bcc @x\n    .byte 1\n@x:\n    rts\n}\n"));
         Assert.Equal(
-            "this branch relies on `clear` returning with `c = 0`, which it does but does not promise (it declares `-> z = 1`)",
+            "this branch relies on `clear` returning with `c = 0`, which its `-> z = 1` does not promise",
             diagnostic.Message);
         Assert.Equal(new DiagnosticFix(FixKind.Exit, "c = 0", diagnostic.Fix?.At), diagnostic.Fix);
 

@@ -417,7 +417,7 @@ public sealed class ConfigurationTests
             """);
 
         Assert.Equal(
-            ["main.nt65:6: the default of `BAD` uses a value the configuration does not decide"],
+            ["main.nt65:6: the default of `BAD` must be known before any declaration is read"],
             program.Problems());
         Assert.Equal(8, program.File("main.nt65").Symbol("GOOD").Value.Number);
     }

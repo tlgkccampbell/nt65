@@ -434,8 +434,8 @@ internal sealed class FlagAnalysis
                 .Concat(FlagValues.Named.Where(each => (signature.Results & each) != 0).Select(FlagValues.NameOf)))
             : "";
         var why = declared.Length > 0
-            ? $"which it does but does not promise (it declares `-> {declared}`)"
-            : "which it does but does not promise";
+            ? $"which its `-> {declared}` does not promise"
+            : $"which `{origin.DisplayName}` does not promise";
         var at = step.Statement;
         report.Add(new Diagnostic(at.Tree.GetSpan(at.Span), Catalogue.UnpromisedFlag.Message(what, origin.DisplayName, item, why))
         {
