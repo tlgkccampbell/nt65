@@ -48,7 +48,9 @@ build tasks and a schema for the project file.
   the width of A on the left and of X and Y on the right, bright for 16 bits and dim for 8.
   Both stripes are purple in emulation mode, and a width nt65 does not know has no stripe. A
   line shows the widths its own instruction runs with, so a `rep` or `sep` shows the widths
-  before it, and the inlay hint at its end says what they become.
+  before it, and the inlay hint at its end says what they become. The status bar, beside the
+  caret's position, shows the caret line's stripes with the register each stands for, such as
+  `A 8  XY 16`, and its tooltip is the key to the colors.
 - **Where the direct page goes.** The nt65 view in the activity bar lists every direct page the
   program reaches memory through: each `D` with its segments, the locations in it and the
   routines that use each one, down the calls that reach them. Colour says how a location is

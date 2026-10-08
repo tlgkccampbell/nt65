@@ -731,7 +731,7 @@
         "nt65.widths.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "On the 65816, draw an icon beside each line number with two stripes, for the width of A on the left and of X and Y on the right. A stripe is bright where the register is 16 bits and dim where it is 8, and both stripes are purple in emulation mode. A line's stripes are the widths its own instruction runs with, so a `rep` or `sep` shows the widths before it. A width nt65 does not know has no stripe. The icons share the column where breakpoints would go, which `editor.glyphMargin` turns on. `nt65: Toggle Width Stripes` turns this on and off."
+          "description": "On the 65816, draw an icon beside each line number with two stripes, for the width of A on the left and of X and Y on the right. A stripe is bright where the register is 16 bits and dim where it is 8, and both stripes are purple in emulation mode. A line's stripes are the widths its own instruction runs with, so a `rep` or `sep` shows the widths before it. A width nt65 does not know has no stripe. The icons share the column where breakpoints would go, which `editor.glyphMargin` turns on. The status bar shows the caret line's stripes beside the registers they stand for, and its tooltip is the key to the colors. `nt65: Toggle Width Stripes` turns this on and off."
         },
         "nt65.sources.chipLength": {
           "type": "integer",

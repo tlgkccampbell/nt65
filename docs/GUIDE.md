@@ -2000,8 +2000,10 @@ everything below works across modules.
   before it and the inlay hint at its end says what they become. A comment or a blank line
   takes the widths of the code below it. A width that is not known, a line nothing reaches and
   a line after a routine's last instruction have no stripe. A macro's call shows the widths its
-  body is entered with. The setting `nt65.widths.enabled`, or *Toggle Width Stripes*, turns
-  them off.
+  body is entered with. VS Code shows no hover on the icons, so the status bar, beside the
+  caret's position, shows the caret line's stripes next to the registers they stand for, such
+  as `A 8  XY 16` or `emulation`. Its tooltip is the key to the colors. The setting
+  `nt65.widths.enabled`, or *Toggle Width Stripes*, turns them off.
 - **The direct page map**, in the nt65 view of the activity bar, shows how routines share the
   zero page, or on the 65816 each direct page. Each page is a value of D, with the segments
   reached through it, the locations on it and, under each location, the calls that lead to the

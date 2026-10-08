@@ -2,7 +2,9 @@
 // whose widths are known: the left stripe for A and the right for X and Y, bright for 16 bits and
 // dim for 8. Emulation mode draws both stripes in a color of its own. A line whose widths are not
 // known gets no icon. The server works out the runs of lines (`nt65/widths`), and this file only
-// draws them. The icons go in the glyph margin, so the code never moves.
+// draws them. The icons go in the glyph margin, so the code never moves. VS Code shows no hover
+// for an icon there, so the status bar says in words what the caret line's stripes mean, with
+// each stripe beside the register it stands for, and its tooltip gives the whole key.
 const vscode = require('vscode');
 
 // How long the text has to rest after an edit before the widths are asked for again. Until then
@@ -34,6 +36,33 @@ function iconOf(run, colors) {
   return vscode.Uri.parse(`data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
 }
 
+// Returns the colors of the theme in use.
+function themeColors() {
+  const kind = vscode.window.activeColorTheme.kind;
+  return kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight
+    ? COLORS.light
+    : COLORS.dark;
+}
+
+// Returns a color at the strength its stripe is drawn with for a width, as a CSS hex color.
+function strengthOf(color, bits) {
+  return bits === 16 ? color : color + Math.round(DIM * 255).toString(16).padStart(2, '0');
+}
+
+// Returns the tooltip of the status bar items, which is the key to the stripes.
+function keyTooltip() {
+  return new vscode.MarkdownString([
+    '**Width stripes** beside the line numbers show the 65816 register widths on each line.',
+    '',
+    '- The left stripe is A, and the right stripe is X and Y.',
+    '- A bright stripe is 16 bits, and a dim one is 8 bits.',
+    '- Two purple stripes are emulation mode, where every register is 8 bits.',
+    '- A register with no stripe has a width nt65 does not know.',
+    '',
+    'A line shows the widths its own instruction runs with, so a `rep` or `sep` shows the widths before it.',
+  ].join('\n'));
+}
+
 // Returns the key that names a run's state, which says which decoration type draws it.
 function keyOf(run) {
   return run.emulation ? 'emulation' : `a${run.a ?? '?'}i${run.index ?? '?'}`;
@@ -50,8 +79,19 @@ class Widths {
     this.timer = undefined;
     this.cancel = undefined;
 
-    // The editor shown and the document version its icons are for.
+    // The editor shown, the document version its icons are for, and the runs drawn.
     this.shown = undefined;
+
+    // The caret line's state in the status bar, as a stripe and a label for A and then for X and
+    // Y. Each stripe is an item of its own, since an item has one color and a dim 8-bit color
+    // would make the label hard to read. The items sit just left of the caret's position.
+    const tooltip = keyTooltip();
+    this.status = [104, 103, 102, 101].map(priority => {
+      const item = vscode.window.createStatusBarItem('nt65.widths.' + priority, vscode.StatusBarAlignment.Right, priority);
+      item.name = 'nt65 Register Widths';
+      item.tooltip = tooltip;
+      return item;
+    });
   }
 
   get enabled() {
@@ -111,8 +151,9 @@ class Widths {
       || vscode.window.activeTextEditor !== editor) {
       return;
     }
-    this.shown = { editor, version };
-    this.render(editor, result ? result.runs : []);
+    this.shown = { editor, version, runs: result ? result.runs : [] };
+    this.render(editor, this.shown.runs);
+    this.showCaret(editor);
   }
 
   // Draws each run with the decoration type of its state, and takes the icons of every other state
@@ -129,6 +170,36 @@ class Widths {
     for (const type of this.types.values()) editor.setDecorations(type, ranges.get(type) || []);
   }
 
+  // Shows the caret line's widths in the status bar, or hides them where the line has none.
+  showCaret(editor) {
+    const run = this.shown && this.shown.editor === editor
+      ? this.shown.runs.find(each => each.first <= editor.selection.active.line && editor.selection.active.line <= each.last)
+      : undefined;
+    if (!run) {
+      for (const item of this.status) item.hide();
+      return;
+    }
+    const colors = themeColors();
+    const [aStripe, aLabel, indexStripe, indexLabel] = this.status;
+    const show = (stripe, label, color, text) => {
+      stripe.text = '▌';
+      stripe.color = color;
+      label.text = text;
+      stripe.show();
+      label.show();
+    };
+    if (run.emulation) {
+      show(aStripe, aLabel, colors.emulation, 'emulation');
+      indexStripe.hide();
+      indexLabel.hide();
+      return;
+    }
+
+    // A register with no stripe is shown with none, so that the bar reads like the gutter.
+    show(aStripe, aLabel, run.a == null ? 'transparent' : strengthOf(colors.a, run.a), `A ${run.a ?? '?'}`);
+    show(indexStripe, indexLabel, run.index == null ? 'transparent' : strengthOf(colors.index, run.index), `XY ${run.index ?? '?'}`);
+  }
+
   clear() {
     clearTimeout(this.timer);
     if (this.cancel) this.cancel.cancel();
@@ -137,12 +208,14 @@ class Widths {
       for (const type of this.types.values()) this.shown.editor.setDecorations(type, []);
     }
     this.shown = undefined;
+    for (const item of this.status) item.hide();
   }
 
   dispose() {
     this.clear();
     for (const type of this.types.values()) type.dispose();
     this.types.clear();
+    for (const item of this.status) item.dispose();
   }
 }
 
@@ -153,6 +226,10 @@ function register(context, client) {
     vscode.window.onDidChangeActiveTextEditor(editor => {
       widths.clear();
       if (editor) widths.schedule(editor);
+    }),
+    vscode.window.onDidChangeTextEditorSelection(event => widths.showCaret(event.textEditor)),
+    vscode.window.onDidChangeActiveColorTheme(() => {
+      if (vscode.window.activeTextEditor) widths.showCaret(vscode.window.activeTextEditor);
     }),
     vscode.workspace.onDidChangeTextDocument(event => {
       const editor = vscode.window.activeTextEditor;
