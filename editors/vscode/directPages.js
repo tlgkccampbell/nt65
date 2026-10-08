@@ -119,14 +119,42 @@ function addressTaken(location) {
   return location.relation === 'unused' && (location.references || []).length > 0;
 }
 
+// Checks whether a location is a hardware register that its page covers but no instruction
+// reaches. The grid shows every such register, and the tree only those a note names.
+function declaredOnly(location) {
+  return location.relation === 'hw' && location.reached === false;
+}
+
+// Returns the names of the locations that the notes on where an access lands name, such as
+// `OAMDATA` in "D = $2100 here reaches $2104, `OAMDATA`".
+function landed(result) {
+  const names = new Set();
+  const take = notes => {
+    for (const note of notes || []) {
+      const match = /reaches \$[0-9A-Fa-f]+, `([^`]+)`/.exec(note.text);
+      if (match) names.add(match[1]);
+    }
+  };
+  for (const page of result ? result.pages : []) {
+    for (const location of page.locations) flatten(location.routines).forEach(node => take(node.hazards));
+    for (const group of page.groups || []) {
+      for (const routine of group.routines) routine.uses.forEach(use => take(use.hazards));
+    }
+  }
+  return names;
+}
+
 // Returns the page with an id from a map.
 function pageOf(result, id) {
   return result.pages.find(page => page.id === id);
 }
 
 // Builds the tree's elements from the map. Every element records its parent, for `reveal`, and
-// has an id that stays the same across refreshes, so that VS Code keeps what is expanded.
+// has an id that stays the same across refreshes, so that VS Code keeps what is expanded. The
+// tree leaves out the hardware registers no instruction reaches, unless a note names one, to
+// keep it short; the grid shows them all.
 function build(result) {
+  const named = landed(result);
   const byId = new Map();
   const make = (kind, id, parent, fields) => {
     let unique = id;
@@ -145,6 +173,7 @@ function build(result) {
     const top = make('page', `p:${page.id}`, null, { page });
     roots.push(top);
     for (const location of page.locations) {
+      if (declaredOnly(location) && !named.has(location.name)) continue;
       const row = make('location', `${top.id}/l:${location.name}`, top, { page, location });
       for (const node of location.routines) routine(page, location, node, row);
     }
@@ -279,8 +308,9 @@ function pageTip(result, page, hazards) {
     }
     return tip.build();
   }
+  const reached = page.locations.filter(location => !declaredOnly(location)).length;
   const meta = page.hardware
-    ? `hardware · ${page.locations.length} register${page.locations.length === 1 ? '' : 's'}`
+    ? `hardware · ${reached} of ${count(page.locations.length, 'register')} reached`
     : `${pageKind(page) || 'no segment'} · ${page.used} / 256`;
   const tip = new Tip(pageLabel(page), meta);
   if (page.overlaps.length > 0) tip.block(pageBar(page));
@@ -331,6 +361,8 @@ function locationTip(result, page, location, hazards) {
   const users = new Set(nodes.filter(node => node.role).map(node => node.name));
   if (addressTaken(location)) {
     tip.row('◎', COLOUR.referenced, 'address taken', lineLinks(location.references));
+  } else if (declaredOnly(location)) {
+    tip.row('○', COLOUR.hw, 'hardware · declared, not reached', '');
   } else {
     const [glyph, colour] = relationMark(location.relation);
     const relation = RELATIONS[location.relation] || location.relation;
@@ -353,10 +385,11 @@ function locationTip(result, page, location, hazards) {
   }
   for (const bytes of location.shared) {
     const at = location.address === null ? '' : `+${hex2(bytes.first - page.base)} `;
-    // Two locations on this page that take one byte collide unless the source fixes both.
-    const here = bytes.kind === 'deliberate' || bytes.kind === 'collision';
-    const where = here ? 'on this page' : markdown(pageName(result, bytes.page));
-    tip.row('⧉', bytes.kind === 'deliberate' ? COLOUR.dim : COLOUR.nested,
+    // Two locations on this page that take one byte collide unless the source fixes both or the
+    // linked config places both so.
+    const here = bytes.kind === 'deliberate' || bytes.kind === 'authored' || bytes.kind === 'collision';
+    const where = here ? `on this page${bytes.kind === 'authored' ? ' · by config' : ''}` : markdown(pageName(result, bytes.page));
+    tip.row('⧉', bytes.kind === 'collision' || !here ? COLOUR.nested : COLOUR.dim,
       here ? `${at}= \`${bytes.there}\` ${where}` : `${at}= ${where} \`${bytes.there}\``,
       coloured(COLOUR.dim, addresses(bytes.first, bytes.last)));
   }
@@ -469,6 +502,7 @@ function itemOf(result, element, hazards) {
       item = new vscode.TreeItem(location.name, state(page.locations.length <= OPEN_LOCATIONS));
       item.description = joined(offsets(location), marks(location.shared.length > 0, location.hazard, hazards));
       item.iconPath = addressTaken(location) ? icon('target', COLOUR.referenced)
+        : declaredOnly(location) ? icon('circle-outline', COLOUR.hw)
         : location.relation === 'unused' ? icon('circle-outline', COLOUR.unused)
           : icon('symbol-variable', COLOUR[location.relation]);
       item.tooltip = locationTip(result, page, location, hazards);
@@ -625,7 +659,9 @@ class Marks {
           ? `${location.name} · ${count(location.accesses, 'access', 'accesses')} in ${count(routines.size, 'routine')}`
           : addressTaken(location)
             ? `${location.name} · address taken · ${count(location.references.length, 'line')}`
-            : `${location.name} · never accessed`;
+            : declaredOnly(location)
+              ? `${location.name} · declared, not reached`
+              : `${location.name} · never accessed`;
         break;
       }
       case 'routine': {
@@ -1020,10 +1056,16 @@ class DirectPages {
     return undefined;
   }
 
-  // Selects a location's row from the grid, which does what clicking the row does.
+  // Selects a location's row from the grid, which does what clicking the row does. A hardware
+  // register that the tree leaves out has no row, so its declaration is marked and shown alone.
   async selectLocation(pageId, name) {
     const element = this.tree.byId.get(`p:${pageId}/l:${name}`);
-    if (!element) return;
+    if (!element) {
+      const top = this.tree.byId.get(`p:${pageId}`);
+      const location = top && top.page.locations.find(item => item.name === name);
+      if (location) await this.select({ kind: 'location', id: `${top.id}/l:${name}`, parent: top, children: [], page: top.page, location });
+      return;
+    }
     try {
       await this.view.reveal(element, { select: true, focus: false, expand: false });
     } catch {

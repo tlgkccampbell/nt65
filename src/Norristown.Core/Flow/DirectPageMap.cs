@@ -90,6 +90,7 @@ public sealed class DirectPageMap
             var (interrupt, main) = Contexts();
             CollectHomes();
             CollectAccesses();
+            CollectRegisters();
 
             var uses = Uses(interrupt, main);
             var pages = Pages(uses);
@@ -394,6 +395,42 @@ public sealed class DirectPageMap
                             shown = declaration;
                         if (!list.Contains(shown))
                             list.Add(shown);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Collects the hardware registers, which <c>.mmio</c> declares, that lie on a page with a
+        /// base but that no instruction reaches through it. The page then names every register it
+        /// covers, so a note about where an access through an unknown D lands names a register
+        /// that the page it points at shows.
+        /// </summary>
+        /// <remarks>
+        /// Only the pages that already hold a location are looked at, so a declared register never
+        /// makes a page of its own. A register on two overlapping pages goes on the one with the
+        /// lower base.
+        /// </remarks>
+        private void CollectRegisters()
+        {
+            var bases = homes.Values.Select(home => home.Page).Distinct().Order().ToList();
+            foreach (var file in analysis.Files)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                foreach (var symbol in file.Model.Symbols)
+                {
+                    if (symbol is not { Kind: SymbolKind.AddressAlias, ValueExpression.Parent: DataDeclarationSyntax declaration }
+                        || !IsMmio(declaration) || symbol.Value.AsNumber() is not { } address || homes.ContainsKey(Key(symbol)))
+                    {
+                        continue;
+                    }
+                    foreach (var page in bases)
+                    {
+                        if (address - page is >= 0 and <= 0xff)
+                        {
+                            homes[Key(symbol)] = new Home(page, address - page, symbol.Size, PageLayout.Fixed, TypeOf(declaration), true);
+                            break;
+                        }
                     }
                 }
             }
@@ -812,9 +849,8 @@ public sealed class DirectPageMap
 
         /// <summary>
         /// Returns the name and first address of the location that takes <paramref name="address"/>,
-        /// or null when none does. A location on the page at <paramref name="page"/> is preferred,
-        /// and a fixed address the source declares but no instruction reaches, such as a hardware
-        /// register, is looked for last.
+        /// or null when none does. A location on the page at <paramref name="page"/> is preferred.
+        /// An address alias that lies on no page, which no instruction reaches, is looked for last.
         /// </summary>
         private (string Name, long Start)? LocationAt(long address, long page)
         {
@@ -1107,7 +1143,7 @@ public sealed class DirectPageMap
         /// so a guessed location takes part in none, and neither does a page whose locations are
         /// all guessed.
         /// </summary>
-        private static void Overlap(List<DirectPage> pages)
+        private void Overlap(List<DirectPage> pages)
         {
             var based = pages.Where(page => page.Base is not null && page.Locations.Any(Trusted)).ToList();
             var overlaps = pages.Where(page => page.Base is not null).ToDictionary(page => page, _ => new List<PageOverlap>());
@@ -1196,10 +1232,38 @@ public sealed class DirectPageMap
         /// <summary>
         /// Returns how two locations on one page come to take the same bytes. Two addresses the
         /// source fixes alias the bytes on purpose, as a program that names one byte two ways does.
-        /// An address from the layout was not chosen to land there, so it collides.
+        /// A fixed address inside a segment's bytes is nearly always a mistake, so it collides. Two
+        /// laid-out locations share bytes because the configuration says so when it places both, as
+        /// <see cref="SharedBytesKind.Authored"/> describes. Otherwise one segment's predicted
+        /// bytes run on into the other's, and the two collide.
         /// </summary>
-        private static SharedBytesKind KindOf(PageLocation here, PageLocation there) =>
-            here.Layout == PageLayout.Fixed && there.Layout == PageLayout.Fixed ? SharedBytesKind.Deliberate : SharedBytesKind.Collision;
+        private SharedBytesKind KindOf(PageLocation here, PageLocation there)
+        {
+            if (here.Layout == PageLayout.Fixed && there.Layout == PageLayout.Fixed)
+                return SharedBytesKind.Deliberate;
+            if (here.Layout == PageLayout.Fixed || there.Layout == PageLayout.Fixed)
+                return SharedBytesKind.Collision;
+
+            // ld65 put both where the last build says, which is where the configuration told it to.
+            if (here.Layout == PageLayout.Built && there.Layout == PageLayout.Built)
+                return SharedBytesKind.Authored;
+            if (SegmentOf(here) is not { } a || SegmentOf(there) is not { } b || a.Name == b.Name)
+                return SharedBytesKind.Collision;
+            return (Pinned(a) && Pinned(b)) || Apart(a, b) ? SharedBytesKind.Authored : SharedBytesKind.Collision;
+
+            // A segment with `start` or `offset` begins where the configuration says, wherever the
+            // segments before it end.
+            static bool Pinned(Segment segment) => segment.Start is not null || segment.Offset is not null;
+
+            // Two memory areas of one configuration that cover some of the same addresses are
+            // overlapped on purpose, as a program that gives several machines' zero-page blocks does.
+            static bool Apart(Segment a, Segment b) => a.Runs.Any(here => b.Runs.Any(there =>
+                here.Config == there.Config && here.Area != there.Area && here.First <= there.Last && there.First <= here.Last));
+        }
+
+        /// <summary>Returns the segment <paramref name="location"/> is declared in, or null when it is in none.</summary>
+        private Segment? SegmentOf(PageLocation location) =>
+            location.Symbol?.Segment is { } name ? analysis.Program.Segments.Find(name) : null;
 
         /// <summary>Returns the element a data declaration names, such as <c>.word</c>, without any values it gives.</summary>
         private static string TypeOf(DataDeclarationSyntax? declaration)

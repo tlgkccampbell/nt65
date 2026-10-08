@@ -14,6 +14,10 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Type">The element it is declared with, such as <c>.word</c>, or an empty string.</param>
 /// <param name="Relation">How the routines that use it share it.</param>
 /// <param name="Hazard">Whether a routine's use of it is a hazard.</param>
+/// <param name="Reached">
+/// Whether an instruction reaches it. A hardware register that lies on the page is sent even when
+/// none does, and the tree leaves it out unless a note names it.
+/// </param>
 /// <param name="Shared">The bytes it shares with other locations, on other pages or on its own.</param>
 /// <param name="References">
 /// The lines that take its address without reaching it, such as <c>ldx #tmp</c> or <c>.addr tmp</c>.
@@ -30,5 +34,5 @@ namespace Norristown.LanguageServer.Protocol;
 /// </param>
 /// <param name="Routines">The call trees from the outermost callers down to each routine that reaches it.</param>
 internal sealed record DirectPageLocation(
-    string Name, Location? Declaration, long? Offset, long? Size, long? Address, string Layout, string Type, string Relation, bool Hazard,
+    string Name, Location? Declaration, long? Offset, long? Size, long? Address, string Layout, string Type, string Relation, bool Hazard, bool Reached,
     IReadOnlyList<DirectPageShared> Shared, IReadOnlyList<Location> References, int Accesses, long PerPass, int Uncounted, IReadOnlyList<DirectPageRoutine> Routines);

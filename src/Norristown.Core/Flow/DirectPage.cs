@@ -8,7 +8,10 @@ namespace Norristown.Flow;
 /// </summary>
 /// <param name="Base">The value of D, or null for the page that stands for D not being known.</param>
 /// <param name="Segments">The segments whose symbols are reached through this page, by name.</param>
-/// <param name="IsHardware">Whether every location on the page is a hardware register.</param>
+/// <param name="IsHardware">
+/// Whether every location on the page is a hardware register, which <c>.mmio</c> declares, whether
+/// or not an instruction reaches it.
+/// </param>
 /// <param name="Locations">The locations on the page, by offset, with those whose offset is not known last.</param>
 /// <param name="Unknown">The routines that reach memory through D while it is not known, for the page without a base.</param>
 /// <param name="Direct">The number of instructions that reach a location through this page with direct addressing.</param>

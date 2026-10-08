@@ -52,4 +52,11 @@ public sealed record PageLocation(
 
     /// <summary>Gets a value indicating whether the location is a hardware register, which <c>.mmio</c> declares.</summary>
     public bool IsHardware => Relation == PageRelation.Hardware;
+
+    /// <summary>
+    /// Gets a value indicating whether an instruction reaches the location. A hardware register
+    /// that lies on a page is shown there even when no instruction reaches it, so that the page
+    /// names every register it covers.
+    /// </summary>
+    public bool IsReached => Uses.Count > 0;
 }

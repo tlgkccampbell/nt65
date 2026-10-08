@@ -96,6 +96,7 @@ internal static class DirectPages
             location.Type,
             Name(location.Relation),
             location.IsHazard,
+            location.IsReached,
             [.. location.Shared.Select(Shared)],
             [.. location.References.Select(reference => Line(reference, uriOf))],
             location.Uses.Sum(use => use.Accesses.Count),
@@ -129,6 +130,7 @@ internal static class DirectPages
     private static string Name(SharedBytesKind kind) => kind switch
     {
         SharedBytesKind.Deliberate => "deliberate",
+        SharedBytesKind.Authored => "authored",
         SharedBytesKind.Collision => "collision",
         _ => "page",
     };

@@ -7,8 +7,9 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="First">The first address both take.</param>
 /// <param name="Last">The last address both take.</param>
 /// <param name="Kind">
-/// How the two come to take the same bytes. It is <c>page</c> for locations on two pages,
-/// <c>deliberate</c> for two addresses on one page that the source fixes, and <c>collision</c>
-/// for two on one page where the layout gives at least one of them its address.
+/// How the two come to take the same bytes. It is <c>page</c> for locations on two pages, and
+/// <c>deliberate</c> for two addresses on one page that the source fixes. It is <c>authored</c>
+/// for two on one page that the linked configuration places so, and <c>collision</c> for two on
+/// one page where one lands there by accident of the layout.
 /// </param>
 internal sealed record DirectPageShared(string Here, string There, string Page, long First, long Last, string Kind);

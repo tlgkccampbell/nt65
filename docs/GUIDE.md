@@ -1974,10 +1974,15 @@ everything below works across modules.
   routine does with it: `↓` reads it first, `↑` only writes it, `↕` both, `◦` uses it as a
   temporary. `⧉` marks pages that overlap, and locations that take the same bytes. On one page,
   two addresses the source fixes are an alias, and a byte the layout also gives to another
-  location is a collision, which the page notes and the grid stripes. A location that no
+  location is a collision, which the page notes and the grid stripes. Two segments that the
+  linked config places over the same bytes, by pinning both with `start` or `offset` or by
+  running them in memory areas that overlap, share them *by config*, which is marked like an
+  alias. A location that no
   instruction reaches but whose address the program takes, as `ldx #tmp`, `lda #<ptr` or
   `.addr tmp` does, is marked `◎` *address taken* rather than unused. Hardware registers reached through D, such as the
-  SNES's at $2100, are a page of their own, and code that reaches memory while D is not known,
+  SNES's at $2100, are a page of their own. The tree lists the registers an instruction reaches
+  there, and the grid also shows, dimmed, every other `.mmio` register in the page's 256 bytes.
+  Code that reaches memory while D is not known,
   such as a handler after it gives D back, is listed under `D = ?`, with where each access
   lands on every page the interrupted code holds D at. A handler that uses a location as a
   temporary, or only writes one that the code it interrupts writes and reads back, is marked

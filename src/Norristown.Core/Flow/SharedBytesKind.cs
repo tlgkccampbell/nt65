@@ -13,8 +13,17 @@ public enum SharedBytesKind
     Deliberate,
 
     /// <summary>
-    /// The locations are on one page, and the layout gives at least one of them its address, as
-    /// the last build or a linked configuration does, so the two collide.
+    /// The locations are on one page, and the linked configuration places both, so its author
+    /// wrote the overlap. That is so when the configuration pins where both segments start, when
+    /// it runs the two segments in different memory areas that cover some of the same addresses,
+    /// or when the last build gives both addresses.
+    /// </summary>
+    Authored,
+
+    /// <summary>
+    /// The locations are on one page, and one of them lands there by accident of the layout. That
+    /// is a segment whose predicted bytes run on into another segment's, or an address the source
+    /// fixes inside a segment's bytes.
     /// </summary>
     Collision,
 }

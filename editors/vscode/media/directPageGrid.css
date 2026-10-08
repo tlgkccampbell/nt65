@@ -121,12 +121,14 @@ body.vscode-high-contrast-light {
 .cell.sym { cursor: pointer; }
 .cell.unused { background: transparent; }
 .cell.taken { background: color-mix(in srgb, var(--referenced) 35%, transparent); }
+/* A hardware register the page covers but no instruction reaches is only a faint mark. */
+.cell.declared { background: color-mix(in srgb, var(--hw) 16%, transparent); }
 .cell.other { background: repeating-linear-gradient(135deg, var(--hatch) 0 2px, var(--free) 2px 5px); }
 .cell.otherused { background: repeating-linear-gradient(135deg, var(--hatch-used) 0 2px, var(--free) 2px 5px); }
 .cell.clash { background: var(--nested) !important; }
 .cell.clash::after { content: "⧉"; position: absolute; right: 2px; bottom: 1px; font-size: 9px; line-height: 1; color: var(--on-amber); }
 /* A byte that two of the page's own locations take is striped amber where they collide. Where the
-   source aliases the byte on purpose, it only carries a mark. */
+   source aliases the byte on purpose, or the linked config places both there, it only carries a mark. */
 .cell.twin { background: repeating-linear-gradient(135deg, var(--nested) 0 3px, color-mix(in srgb, var(--nested) 45%, transparent) 3px 6px) !important; }
 .cell.twin::after, .cell.alias::after { content: "="; position: absolute; right: 2px; bottom: 1px; font-size: 9px; line-height: 1; }
 .cell.twin::after { color: var(--on-amber); }
@@ -156,6 +158,8 @@ body.vscode-high-contrast-light {
 .syms .s:focus-visible { outline: 1px solid var(--vscode-focusBorder); }
 .syms .sw { width: 12px; height: 10px; border-radius: 2px; }
 .syms .sw.never { box-shadow: inset 0 0 0 1px var(--edge-unused); }
+.syms .sw.declared { background: color-mix(in srgb, var(--hw) 30%, transparent); box-shadow: inset 0 0 0 1px var(--edge-unused); }
+.syms .s.declared .nm, .syms .s.declared .rg { color: var(--faint); }
 .syms .sw.foreign { background: repeating-linear-gradient(135deg, var(--hatch-used) 0 2px, var(--free) 2px 5px); }
 .syms .nm { font-family: var(--mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .syms .s.foreign .nm { color: var(--dim); }
@@ -184,6 +188,7 @@ body.vscode-high-contrast-light {
 .meter span { display: block; height: 100%; }
 .meter .own { background: var(--own); }
 .meter .never { background: var(--unused); }
+.meter .declared { background: color-mix(in srgb, var(--hw) 40%, transparent); }
 .meter .taken { background: var(--referenced); }
 .meter .shared { background: var(--nested); }
 .meter .foreign { background: var(--hatch-used); }

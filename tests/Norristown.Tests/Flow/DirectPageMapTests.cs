@@ -131,7 +131,9 @@ public sealed class DirectPageMapTests
 
     /// <summary>
     /// The design's sample has a page for each value of D it sets, and the hardware registers it
-    /// reaches with D at $2100. It shows each kind of sharing: a pointer passed between routines,
+    /// reaches with D at $2100. That page also names each register declared in its range that no
+    /// instruction reaches, such as <c>OAMDATA</c>, but not <c>NMITIMEN</c> at $4200, which lies
+    /// outside it. The sample shows each kind of sharing: a pointer passed between routines,
     /// a temporary relied on across a call to a routine that uses it too, and a counter that an
     /// interrupt handler bumps. Without a linked configuration its layout is guessed, so it shows
     /// no bytes shared between pages; <see cref="TheConfiguredSampleSharesBytesBetweenPages"/>
@@ -172,9 +174,10 @@ public sealed class DirectPageMapTests
                 "  ◦ covers $0100-$01FF, the stack page in emulation mode",
                 "  scroll +0 x2 .word Own Guessed",
                 "    nmi InOut 1 handler",
-                "page $2100 [] Hardware hazard=False used=2 direct=2",
+                "page $2100 [] Hardware hazard=False used=3 direct=2",
                 "  INIDISP +0 x1 .byte Hardware Fixed",
                 "    screen_on Write 1",
+                "  OAMDATA +4 x1 .byte Hardware Fixed declared",
                 "  TM +44 x1 .byte Hardware Fixed",
                 "    screen_on Write 1",
                 "page ? [] Unused hazard=True used=0 direct=0",
@@ -982,6 +985,136 @@ public sealed class DirectPageMapTests
     }
 
     /// <summary>
+    /// Two zero-page segments that a configuration runs in different memory areas whose ranges
+    /// overlap share bytes because the configuration says so. Each block of msbasic's zero page is
+    /// laid out this way, so the overlap is authored, and the page does not note it.
+    /// </summary>
+    [Fact]
+    public void SegmentsInOverlappingAreasShareBytesByConfig()
+    {
+        var project = Linked("""
+            MEMORY {
+                ZP1: start = $0000, size = $0100;
+                ZP2: start = $0002, size = $00FE;
+                ROM: start = $8000, size = $1000;
+            }
+            SEGMENTS {
+                ZP1:  load = ZP1, type = zp;
+                ZP2:  load = ZP2, type = zp;
+                CODE: load = ROM, type = ro;
+            }
+            """);
+        Assert.Equal(
+            [
+                "page $0000 [ZP1,ZP2] Own hazard=False used=4 direct=2",
+                "  vector +0 x4 .byte[4] Own Configured",
+                "    ⧉ Authored count $0002-$0003",
+                "    main Out 1",
+                "  count +2 x2 .word Own Configured",
+                "    ⧉ Authored vector $0002-$0003",
+                "    main Out 1",
+            ],
+            Render(FlowFragment.Analyze(project, "6502", (Analysis.Path, """
+                .segment ZP1
+                .data vector: .byte[4]
+                .segment ZP2
+                .data count: .word
+                .segment CODE
+                .export .proc main {
+                    sta vector
+                    sta count
+                    rts
+                }
+                """))));
+    }
+
+    /// <summary>
+    /// Two segments whose starts the configuration pins to overlapping addresses share bytes as the
+    /// configuration says, even in one memory area. A segment that the configuration places only
+    /// after the ones before it has bytes that run on into the next one by accident, so the two
+    /// collide, and the page notes it.
+    /// </summary>
+    [Fact]
+    public void PinnedSegmentsShareBytesByConfigAndAFollowingOneCollides()
+    {
+        var project = Linked("""
+            MEMORY {
+                ZP:  start = $0000, size = $0100;
+                ROM: start = $8000, size = $1000;
+            }
+            SEGMENTS {
+                ZEROPAGE: load = ZP, type = zp;
+                ZP2:      load = ZP, type = zp, start = $0002;
+                ZP3:      load = ZP, type = zp, start = $0040;
+                ZP4:      load = ZP, type = zp, start = $0041;
+                CODE:     load = ROM, type = ro;
+            }
+            """);
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE,ZP2,ZP3,ZP4] Own hazard=False used=5 direct=4",
+                "  ⧉ `head` and `pinned` share $0002",
+                "  head +0 x3 .byte[3] Own Configured",
+                "    ⧉ Collision pinned $0002-$0002",
+                "    main Out 1",
+                "  pinned +2 x1 .byte Own Configured",
+                "    ⧉ Collision head $0002-$0002",
+                "    main Out 1",
+                "  first +64 x2 .word Own Configured",
+                "    ⧉ Authored second $0041-$0041",
+                "    main Out 1",
+                "  second +65 x1 .byte Own Configured",
+                "    ⧉ Authored first $0041-$0041",
+                "    main Out 1",
+            ],
+            Render(FlowFragment.Analyze(project, "6502", (Analysis.Path, """
+                .segment ZEROPAGE
+                .data head: .byte[3]
+                .segment ZP2
+                .data pinned: .byte
+                .segment ZP3
+                .data first: .word
+                .segment ZP4
+                .data second: .byte
+                .segment CODE
+                .export .proc main {
+                    sta head
+                    sta pinned
+                    sta first
+                    sta second
+                    rts
+                }
+                """))));
+    }
+
+    /// <summary>
+    /// msbasic's zero page is four blocks whose memory areas overlap on purpose, and its CBM BASIC 2
+    /// configuration overlaps the first block with the second and third. Every run of bytes that
+    /// two of its segments' locations share is authored by the configuration, so the page notes
+    /// none of them. Only that configuration is analyzed, to keep the test quick.
+    /// </summary>
+    [Fact]
+    public void MsbasicsZeroPageOverlapsByConfig()
+    {
+        var directory = Repo.Path("examples", "msbasic");
+        var root = Repo.ReadProject(directory);
+        var configuration = root.Configurations.Single(item => item.Name == "cbmbasic2");
+        var project = root.Configured(configuration.Name, configuration.Declaration);
+        var sources = project.Files.SelectMany(glob => SourceGlobs.Matching(directory, glob))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .Select(path => new SourceFile(path, Repo.ReadText(Path.GetFullPath(path, directory))))
+            .ToList();
+        var map = DirectPageMap.Of(Compiler.Analyze(sources, project, _ => null), null, TestContext.Current.CancellationToken);
+        var zero = Assert.Single(map.Pages, page => page.Base == 0);
+        var laid = zero.Locations.Where(location => location.Layout != PageLayout.Fixed).ToDictionary(location => location.Name);
+        var shared = laid.Values.SelectMany(location => location.Shared).Where(bytes => laid.ContainsKey(bytes.There)).ToList();
+        Assert.NotEmpty(shared);
+        Assert.All(shared, bytes => Assert.Equal(SharedBytesKind.Authored, bytes.Kind));
+        Assert.DoesNotContain(zero.Notes, note => note.Glyph == "⧉" && laid.Keys.Count(name => note.Text.Contains($"`{name}`", StringComparison.Ordinal)) == 2);
+    }
+
+    /// <summary>
     /// Two address aliases on one byte name it two ways on purpose, as msbasic's zero page does, so
     /// they share the byte without a note.
     /// </summary>
@@ -1083,7 +1216,8 @@ public sealed class DirectPageMapTests
             }
             foreach (var location in page.Locations)
             {
-                lines.Add($"  {location.Name} +{location.Offset} x{location.Size} {location.Type} {location.Relation} {location.Layout}");
+                lines.Add($"  {location.Name} +{location.Offset} x{location.Size} {location.Type} {location.Relation} {location.Layout}"
+                    + (location.IsHardware && !location.IsReached ? " declared" : ""));
                 foreach (var shared in location.Shared)
                     lines.Add($"    ⧉ {shared.Kind} {shared.There} {StateValue.Hex(shared.First, 4)}-{StateValue.Hex(shared.Last, 4)}");
                 foreach (var reference in location.References)

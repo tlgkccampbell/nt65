@@ -161,6 +161,43 @@ public sealed class DirectPagesRequestsTests
     }
 
     /// <summary>
+    /// A hardware page carries every register declared in its range, each saying whether an
+    /// instruction reaches it, so that the client can list only the reached ones in the tree and
+    /// draw them all in the grid.
+    /// </summary>
+    [Fact]
+    public async Task AHardwarePageSendsEveryDeclaredRegister()
+    {
+        var timeout = TestTimeout.Token();
+        const string Text = """
+            .module main
+            .cpu 65816
+            .mmio INIDISP: .byte = $2100
+            .mmio OAMDATA: .byte = $2104
+            .mmio NMITIMEN: .byte = $4200
+            .segment CODE
+            .export .proc main: a8, dp = 0 {
+                pea $2100
+                pld
+                lda #$0F
+                sta d:INIDISP
+                pea 0
+                pld
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
+
+        var result = await DirectPagesAsync(client, timeout);
+        Assert.NotNull(result);
+        var page = Assert.Single(result.Pages);
+        Assert.Equal(("$2100", true), (page.Id, page.Hardware));
+        Assert.Equal(
+            [("INIDISP", "hw", true, 1), ("OAMDATA", "hw", false, 0)],
+            page.Locations.Select(location => (location.Name, location.Relation, location.Reached, location.Accesses)));
+    }
+
+    /// <summary>
     /// How often a location is used counts each instruction as many times as the loops whose
     /// counts are known run it, and as many times as calls in such loops run its routine. An
     /// instruction in a loop whose count is not known is counted once and also counted apart.
@@ -236,7 +273,7 @@ public sealed class DirectPagesRequestsTests
         Assert.NotNull(result);
         var page = Assert.Single(result.Pages);
         var tmp = page.Locations.Single(location => location.Name == "tmp");
-        Assert.Equal(("unused", 0), (tmp.Relation, tmp.Accesses));
+        Assert.Equal(("unused", 0, false), (tmp.Relation, tmp.Accesses, tmp.Reached));
         Assert.Equal([10], tmp.References.Select(place => place.Range.Start.Line));
         Assert.Equal((0, 12), (tmp.References[0].Range.Start.Character, tmp.References[0].Range.End.Character));
 
