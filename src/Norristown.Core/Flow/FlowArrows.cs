@@ -7,12 +7,12 @@ namespace Norristown.Flow;
 
 /// <summary>
 /// Represents the transfers of control inside the routine that holds the caret, for an editor to
-/// draw as arrows. A transfer is a branch, a jump, or an edge a <c>.next</c> declares. A call
-/// returns to the line after it and a fall-through runs on into the next line, so neither is a
-/// transfer here.
+/// draw as arrows. A transfer is a branch, a jump, or an edge a <c>.next</c> declares, that lands
+/// on a line of the routine. A call returns to the line after it and a fall-through runs on into
+/// the next line, so neither is a transfer here, and nor is a transfer to another routine.
 /// <para>
 /// The answer is only for showing, and nothing warns or errors because of it. Every arrow in it is
-/// an edge the flow analysis already follows, so no transfer the analysis knows about is left out.
+/// an edge the flow analysis already follows, so no transfer inside the routine is left out.
 /// </para>
 /// </summary>
 /// <param name="Routine">The span of the routine's text in the caret's file, from the line that opens it to the line that closes it.</param>
@@ -45,7 +45,7 @@ public sealed record FlowArrows(TextSpan Routine, IReadOnlyList<FlowArrow> Arrow
         // A line a macro expands or a repetition unrolls is in the routine once per copy, and each
         // copy makes the same arrow. An arrow is proved only where every copy is, and reached where
         // any copy is.
-        var arrows = new Dictionary<(TextSpan From, TextSpan? To, bool Declared), (bool Proved, bool Reached)>();
+        var arrows = new Dictionary<(TextSpan From, TextSpan To, bool Declared), (bool Proved, bool Reached)>();
         foreach (var block in found.Blocks)
         {
             if (block.Steps.Count == 0 || StepLines.Of(tree, block.Steps[^1]) is not var (from, _))
@@ -60,16 +60,10 @@ public sealed record FlowArrows(TextSpan Routine, IReadOnlyList<FlowArrow> Arrow
 
             // A branch proved never taken has lost the edge to its target. The arrow is still
             // drawn, faded, so that the reader sees where the branch would have gone.
-            if (flags.ProvedAt(end) is { Taken: false } && Target(model, file, found, end) is var (target, inside))
-                Add(from, inside ? target : null, false);
+            if (flags.ProvedAt(end) is { Taken: false } && Target(model, file, found, end) is { } target)
+                Add(from, target, false);
 
-            if (block.End is BlockEnd.TailCall or BlockEnd.Elsewhere || block.BranchesOut
-                || (block.End == BlockEnd.Declared && NamesOutside(file.Flow, found, block)))
-            {
-                Add(from, null, block.Next is not null);
-            }
-
-            void Add(TextSpan at, TextSpan? to, bool declared)
+            void Add(TextSpan at, TextSpan to, bool declared)
             {
                 if (to == at)
                     return;
@@ -85,20 +79,11 @@ public sealed record FlowArrows(TextSpan Routine, IReadOnlyList<FlowArrow> Arrow
             [
                 .. arrows
                     .OrderBy(arrow => arrow.Key.From.Start)
-                    .ThenBy(arrow => arrow.Key.To?.Start ?? int.MaxValue)
+                    .ThenBy(arrow => arrow.Key.To.Start)
                     .Select(arrow => new FlowArrow(
                         arrow.Key.From, arrow.Key.To, arrow.Key.Declared, arrow.Value.Proved, arrow.Value.Reached)),
             ]);
     }
-
-    /// <summary>
-    /// Returns whether the <c>.next</c> under <paramref name="block"/>'s last statement names a
-    /// place outside the routine, such as another routine, or says <c>?</c>.
-    /// </summary>
-    private static bool NamesOutside(ControlFlow flow, FlowRegion region, BasicBlock block) =>
-        block.CallsUnknown || block.Calls.Count > 0
-        || (block.Next is { } next && flow.Named(next, block.Steps[^1].On)
-            .Any(named => !region.Blocks.Any(each => each.Label == named.Symbol)));
 
     /// <summary>
     /// Returns the span of a routine's text in <paramref name="tree"/>, or null where the routine
@@ -137,11 +122,11 @@ public sealed record FlowArrows(TextSpan Routine, IReadOnlyList<FlowArrow> Arrow
     }
 
     /// <summary>
-    /// Returns the line the branch at <paramref name="end"/> would go to and whether that line is in
-    /// the routine, or null where nt65 cannot read the branch's target. It is asked about a branch
+    /// Returns the line of the routine the branch at <paramref name="end"/> would go to, or null
+    /// where its target is outside the routine or nt65 cannot read it. It is asked about a branch
     /// proved never taken, whose block no longer has the edge.
     /// </summary>
-    private static (TextSpan? Line, bool Inside)? Target(SemanticModel model, FileAnalysis file, FlowRegion region, Step end)
+    private static TextSpan? Target(SemanticModel model, FileAnalysis file, FlowRegion region, Step end)
     {
         if (end.Statement is not InstructionStatementSyntax statement)
             return null;
@@ -149,7 +134,7 @@ public sealed record FlowArrows(TextSpan Routine, IReadOnlyList<FlowArrow> Arrow
         if (Targets.Of(model, Transfers.TargetOf(statement, mode), end.On) is not { } target)
             return null;
         return region.Blocks.FirstOrDefault(block => block.Label == target.Symbol) is { } landing
-            ? (LineOf(model.Tree, landing), true)
-            : (null, false);
+            ? LineOf(model.Tree, landing)
+            : null;
     }
 }

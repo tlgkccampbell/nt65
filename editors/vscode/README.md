@@ -35,10 +35,9 @@ build tasks and a schema for the project file.
 - **Where control goes.** Rest the caret in a routine and its branches and jumps are drawn as
   arrows in front of its lines, from each one to the label it goes to, with shorter arrows
   nearer the code. The arrow on the caret's line is drawn thicker and in its own colour, one a
-  `.next` declares has another colour, and a branch the flags prove always or never taken is faded. A jump to
-  another routine, or a `.next` that names one, gets an arrow pointing left out of the margin.
-  Calls and lines that run on into the next are not drawn. The arrows take at most four columns,
-  and the hover names any that had no room.
+  `.next` declares has another colour, and a branch the flags prove always or never taken is
+  faded. Calls, lines that run on into the next, and transfers to other routines are not drawn.
+  The arrows take at most four columns, and the hover names any that had no room.
 - **Where the direct page goes.** The nt65 view in the activity bar lists every direct page the
   program reaches memory through: each `D` with its segments, the locations in it and the
   routines that use each one, down the calls that reach them. Colour says how a location is

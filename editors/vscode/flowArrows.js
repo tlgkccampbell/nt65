@@ -37,13 +37,12 @@ function styleOf(arrow, caret) {
   return arrow.declared ? 'declared' : 'arrow';
 }
 
-// Returns the cells of the prefix, one row per line of the routine. Each row holds a lead cell,
-// where an arrow that leaves the routine has its head, a cell per column, and two cells that
-// join the columns to the code. A column's cell index counts from the left, and column 0 is the
-// one nearest the code. A cell names the style of each part drawn in it: the half lines `up`,
-// `down`, `left` and `right` from its centre, and the heads `into` and `out`.
+// Returns the cells of the prefix, one row per line of the routine. Each row holds a cell per
+// column and two cells that join the columns to the code. A column's cell index counts from the
+// left, and column 0 is the one nearest the code. A cell names the style of each part drawn in
+// it: the half lines `up`, `down`, `left` and `right` from its centre, and the head `into`.
 function cellsOf(result, caret) {
-  const width = 1 + result.columns + 2;
+  const width = result.columns + 2;
   const rows = [];
   for (let line = result.first; line <= result.last; line++) {
     rows.push(Array.from({ length: width }, () => ({})));
@@ -55,19 +54,12 @@ function cellsOf(result, caret) {
     }
   };
 
-  // The server leaves out a field whose value is null, so an arrow that leaves the routine has
-  // no `to`, and one without room has no `column`.
+  // The server leaves out a field whose value is null, so an arrow without room has no `column`.
   const drawn = result.arrows
-    .filter(arrow => arrow.from >= result.first && arrow.from <= result.last)
-    .filter(arrow => arrow.to == null || arrow.column != null);
+    .filter(arrow => arrow.from >= result.first && arrow.from <= result.last && arrow.column != null);
   for (const arrow of drawn) {
     const style = styleOf(arrow, caret);
-    if (arrow.to == null) {
-      mark(arrow.from, 0, ['out', 'right'], style);
-      for (let index = 1; index < width; index++) mark(arrow.from, index, ['left', 'right'], style);
-      continue;
-    }
-    const upright = 1 + (result.columns - 1 - arrow.column);
+    const upright = result.columns - 1 - arrow.column;
     const low = Math.min(arrow.from, arrow.to);
     const high = Math.max(arrow.from, arrow.to);
     mark(low, upright, ['down', 'right'], style);
@@ -110,10 +102,6 @@ function backgroundOf(row, height) {
     if (cell.into) {
       add(cell.into, half(cell.into, 'top right'), box, `${centre - head}px`, '0.8ch', `${head}px`);
       add(cell.into, half(cell.into, 'bottom right'), box, `${centre}px`, '0.8ch', `${head}px`);
-    }
-    if (cell.out) {
-      add(cell.out, half(cell.out, 'top left'), box, `${centre - head}px`, '0.8ch', `${head}px`);
-      add(cell.out, half(cell.out, 'bottom left'), box, `${centre}px`, '0.8ch', `${head}px`);
     }
   });
 
@@ -285,7 +273,7 @@ class FlowArrows {
     }
     editor.setDecorations(this.prefix, prefixes);
     editor.setDecorations(this.hover, result.arrows
-      .filter(arrow => arrow.to != null && arrow.column == null && arrow.from < document.lineCount)
+      .filter(arrow => arrow.column == null && arrow.from < document.lineCount)
       .map(arrow => ({ range: document.lineAt(arrow.from).range, hoverMessage: unshownOf(arrow) })));
   }
 

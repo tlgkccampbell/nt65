@@ -691,7 +691,7 @@
         "nt65.flowArrows.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show the branches and jumps of the routine at the caret as arrows in front of its lines. An arrow a `.next` declares has its own colour, a branch the flags prove one way is faded, and an arrow that leaves the routine points left. `nt65: Toggle Flow Arrows` turns this on and off."
+          "description": "Show the branches and jumps of the routine at the caret as arrows in front of its lines. An arrow a `.next` declares has its own colour, and a branch the flags prove one way is faded. Transfers to other routines are not drawn. `nt65: Toggle Flow Arrows` turns this on and off."
         },
         "nt65.sources.chipLength": {
           "type": "integer",

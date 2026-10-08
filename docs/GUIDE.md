@@ -1972,12 +1972,12 @@ everything below works across modules.
   not jog, and only the caret's routine is drawn, so a long file stays quiet.
 
   The arrow that starts or ends on the caret's line is drawn thicker, in a colour of its own.
-  One a `.next` declares has another colour. A branch the flags prove always or never taken is faded, and so is an
-  arrow from a line nothing reaches. A tail call, a branch to another routine and a `.next`
-  that names a routine or `?` leave the routine, and their arrows point left out of the margin.
-  A call returns to the line after it, so it is not drawn. The arrows take at most four columns,
-  and hovering the line of one that had no room says where it goes. The setting
-  `nt65.flowArrows.enabled`, or *Toggle Flow Arrows*, turns them off.
+  One a `.next` declares has another colour. A branch the flags prove always or never taken is
+  faded, and so is an arrow from a line nothing reaches. Only transfers that land in the
+  routine are drawn: a call returns to the line after it, and a tail call or a branch to
+  another routine leaves it. The arrows take at most four columns, and hovering the line of one
+  that had no room says where it goes. The setting `nt65.flowArrows.enabled`, or *Toggle Flow
+  Arrows*, turns them off.
 - **The direct page map**, in the nt65 view of the activity bar, shows how routines share the
   zero page, or on the 65816 each direct page. Each page is a value of D, with the segments
   reached through it, the locations on it and, under each location, the calls that lead to the

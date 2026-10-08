@@ -6,8 +6,7 @@ namespace Norristown.Tests.Flow;
 
 /// <summary>
 /// Checks the transfers of control that an editor draws as arrows inside the routine holding the
-/// caret. Each arrow is written as the line it starts on and the line it ends on, or <c>out</c>
-/// where control leaves the routine.
+/// caret. Each arrow is written as the line it starts on and the line it ends on.
 /// </summary>
 public sealed class FlowArrowsTests
 {
@@ -123,13 +122,13 @@ public sealed class FlowArrowsTests
 
     /// <summary>
     /// A tail call, a branch to another routine, and a <c>.next</c> that names routines or
-    /// <c>?</c> each make an arrow that leaves the routine.
+    /// <c>?</c> leave the routine, and none of them is an arrow.
     /// </summary>
     [Fact]
-    public void TransfersToOtherRoutinesLeave()
+    public void TransfersToOtherRoutinesAreNotArrows()
     {
         Assert.Equal(
-            ["bcs other -> out", "beq @second -> @second:", "jmp (vector) -> out next", "jmp (vector) -> out next", "jmp other -> out unreached"],
+            ["beq @second -> @second:"],
             Arrows("""
                 .proc other {
                     rts
@@ -218,8 +217,8 @@ public sealed class FlowArrowsTests
     }
 
     /// <summary>
-    /// Returns each arrow as the text of the line it starts on, the text of the line it ends on or
-    /// <c>out</c>, and a word for each mark it carries.
+    /// Returns each arrow as the text of the line it starts on, the text of the line it ends on,
+    /// and a word for each mark it carries.
     /// </summary>
     private static IReadOnlyList<string>? Described(SyntaxTree tree, FlowArrows? found)
     {
@@ -227,7 +226,7 @@ public sealed class FlowArrowsTests
             return null;
         return [.. found.Arrows.Select(arrow =>
         {
-            var to = arrow.To is { } span ? LineText(tree, span) : "out";
+            var to = LineText(tree, arrow.To);
             var marks = string.Concat(
                 arrow.IsDeclared ? " next" : "",
                 arrow.IsProved ? " proved" : "",

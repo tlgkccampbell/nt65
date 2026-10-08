@@ -25,7 +25,7 @@ internal static class CaretFlow
             return null;
         var tree = model.Tree;
         var lines = found.Arrows
-            .Select(arrow => (From: tree.GetLineIndex(arrow.From.Start), To: arrow.To is { } to ? tree.GetLineIndex(to.Start) : (int?)null))
+            .Select(arrow => (From: tree.GetLineIndex(arrow.From.Start), To: tree.GetLineIndex(arrow.To.Start)))
             .ToList();
         var (columns, count) = Columns(lines);
         return new Protocol.FlowArrowsResult(
@@ -41,14 +41,13 @@ internal static class CaretFlow
     /// arrows go nearer the code, so that an arrow inside another is drawn inside it. Two arrows
     /// share a column only where their lines do not overlap, counting the lines at their ends.
     /// </summary>
-    /// <param name="arrows">The line each arrow starts on, and the line it ends on or null where it leaves the routine.</param>
-    private static (int?[] Columns, int Count) Columns(IReadOnlyList<(int From, int? To)> arrows)
+    /// <param name="arrows">The line each arrow starts on and the line it ends on.</param>
+    private static (int?[] Columns, int Count) Columns(IReadOnlyList<(int From, int To)> arrows)
     {
         var columns = new int?[arrows.Count];
         var used = new List<List<(int Low, int High)>>();
         var order = Enumerable.Range(0, arrows.Count)
-            .Where(index => arrows[index].To is not null)
-            .Select(index => (Index: index, Low: Math.Min(arrows[index].From, arrows[index].To!.Value), High: Math.Max(arrows[index].From, arrows[index].To!.Value)))
+            .Select(index => (Index: index, Low: Math.Min(arrows[index].From, arrows[index].To), High: Math.Max(arrows[index].From, arrows[index].To)))
             .OrderBy(arrow => arrow.High - arrow.Low)
             .ThenBy(arrow => arrow.Low);
         foreach (var (index, low, high) in order)
