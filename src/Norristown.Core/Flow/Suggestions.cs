@@ -37,6 +37,9 @@ public static class Suggestions
             found.AddRange(ProvedBranches(file, regions, flags));
             found.AddRange(JumpsAsBranches(file, regions, flags));
             found.AddRange(CarrySetups(file, regions, flags));
+            var liveness = FlagLiveness.Of(file.Model, file.Layout, file.Flow, regions);
+            found.AddRange(ZeroCompares(file, regions, flags, liveness));
+            found.AddRange(Loads(file, regions, flags, liveness));
         }
         found.AddRange(BranchesOverJumps(file, regions));
         return Norristown.Diagnostics.Ordered(found);
@@ -432,6 +435,158 @@ public static class Suggestions
     }
 
     /// <summary>
+    /// Returns a suggestion for each <c>cmp #0</c>, <c>cpx #0</c> or <c>cpy #0</c> whose register N
+    /// and Z were already set from. The compare then changes only C, which it sets to 1, so it can
+    /// go where C is already 1 or nothing reads C before it changes.
+    /// </summary>
+    private static IEnumerable<Diagnostic> ZeroCompares(
+        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags, FlagLiveness liveness)
+    {
+        var model = file.Model;
+        var seen = new HashSet<SyntaxNode>();
+        foreach (var step in regions.SelectMany(region => region.Blocks).SelectMany(block => block.Steps))
+        {
+            if (step.Statement is not InstructionStatementSyntax compare
+                || FlagAnalysis.Compared(compare.MnemonicKind) is not { } register
+                || !Removable(file, step) || !seen.Add(compare)
+                || StepOperands.Immediate(model, file.Layout, step) != 0
+                || flags.Before(step) is not { } before || (before.Held.NzFrom & register) == 0)
+            {
+                continue;
+            }
+            string why;
+            if (before.ValueOf(StatusFlags.Carry) == true && before.IsFirm(StatusFlags.Carry))
+                why = "C is already 1";
+            else if ((liveness.After(step) & StatusFlags.Carry) == 0)
+                why = "nothing reads the C it sets";
+            else
+                continue;
+            yield return new Diagnostic(compare.Tree.GetSpan(compare.Span),
+                Catalogue.ZeroCompare.Message(compare.GetText().Trim(), RegisterEffects.Format(register), why))
+            {
+                Fix = new DiagnosticFix(FixKind.Redundant),
+                IsUnnecessary = true,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Returns a suggestion for each immediate load of a constant that a register already holds.
+    /// A load into a register that holds it changes nothing where N and Z already say what it
+    /// would, or nothing reads them before they change. A load of a constant another register
+    /// holds, or one more or less than the register holds, can be a transfer, an increment or a
+    /// decrement, which is a byte shorter and sets N and Z the same way.
+    /// </summary>
+    private static IEnumerable<Diagnostic> Loads(
+        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags, FlagLiveness liveness)
+    {
+        var model = file.Model;
+        var layout = file.Layout;
+        var seen = new HashSet<SyntaxNode>();
+        foreach (var step in regions.SelectMany(region => region.Blocks).SelectMany(block => block.Steps))
+        {
+            if (step.Statement is not InstructionStatementSyntax load
+                || Loaded(load.MnemonicKind) is not { } register
+                || !Removable(file, step) || !seen.Add(load)
+                || StepOperands.Immediate(model, layout, step) is not { } immediate
+                || flags.Before(step) is not { } before)
+            {
+                continue;
+            }
+            var bits = layout.Of(load, step.On)?.Bits ?? 8;
+            var value = immediate & ((1L << bits) - 1);
+            var text = load.GetText().Trim();
+            var name = RegisterEffects.Format(register);
+            var hex = StateValue.Hex(value, bits / 4);
+            if (before.Held.ValueOf(register) == value)
+            {
+                var nz = StatusFlags.Negative | StatusFlags.Zero;
+                var after = before.Loaded(value, bits);
+                string why;
+                if (before.ValueOf(StatusFlags.Negative) == after.ValueOf(StatusFlags.Negative)
+                    && before.ValueOf(StatusFlags.Zero) == after.ValueOf(StatusFlags.Zero)
+                    && before.IsFirm(StatusFlags.Negative) && before.IsFirm(StatusFlags.Zero))
+                {
+                    why = "N and Z already say what it would";
+                }
+                else if ((liveness.After(step) & nz) == 0)
+                    why = "nothing reads the N and Z it sets";
+                else
+                    continue;
+                yield return new Diagnostic(load.Tree.GetSpan(load.Span), Catalogue.LoadAlreadyHeld.Message(text, name, hex, why))
+                {
+                    Fix = new DiagnosticFix(FixKind.Redundant),
+                    IsUnnecessary = true,
+                };
+                continue;
+            }
+            if (layout.Cpu == Cpu.Wdc65816 || Shorter(layout.Cpu, register, value, before.Held) is not { } shorter)
+                continue;
+            yield return new Diagnostic(load.Tree.GetSpan(load.Span),
+                Catalogue.LoadFromRegister.Message(text, shorter.Instruction, shorter.Why))
+            {
+                Fix = new DiagnosticFix(FixKind.Instruction, shorter.Instruction),
+            };
+        }
+
+        static Registers? Loaded(MnemonicKind mnemonic) => mnemonic switch
+        {
+            MnemonicKind.Lda => Registers.A,
+            MnemonicKind.Ldx => Registers.X,
+            MnemonicKind.Ldy => Registers.Y,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Returns the one-byte instruction that leaves <paramref name="value"/> in
+    /// <paramref name="register"/> from what <paramref name="held"/> says the registers hold, with
+    /// the words that say why, or null where none does. A transfer from another register comes
+    /// first, then an increment or a decrement of the register itself.
+    /// </summary>
+    private static (string Instruction, string Why)? Shorter(Cpu cpu, Registers register, long value, KnownRegisters held)
+    {
+        var hex = StateValue.Hex(value, 2);
+        foreach (var source in (Registers[])[Registers.A, Registers.X, Registers.Y])
+        {
+            if (source != register && held.ValueOf(source) == value && Transfer(source, register) is { } transfer)
+                return (transfer, $"{RegisterEffects.Format(source)} holds {hex} here");
+        }
+        var name = RegisterEffects.Format(register);
+        var stepped = register switch
+        {
+            Registers.X => ("inx", "dex"),
+            Registers.Y => ("iny", "dey"),
+            _ => Instructions.Modes(cpu, MnemonicKind.Inc).Contains(AddressingMode.Accumulator) ? ("inc a", "dec a") : default,
+        };
+        if (stepped == default || held.ValueOf(register) is not { } now)
+            return null;
+        if (((now + 1) & 0xff) == value)
+            return (stepped.Item1, $"{name} holds {StateValue.Hex(now, 2)} here");
+        if (((now - 1) & 0xff) == value)
+            return (stepped.Item2, $"{name} holds {StateValue.Hex(now, 2)} here");
+        return null;
+
+        // Only the 6502's own transfers count: X and Y swap only on the 65816.
+        static string? Transfer(Registers from, Registers to) => (from, to) switch
+        {
+            (Registers.A, Registers.X) => "tax",
+            (Registers.A, Registers.Y) => "tay",
+            (Registers.X, Registers.A) => "txa",
+            (Registers.Y, Registers.A) => "tya",
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether a suggestion may remove or shorten the instruction at
+    /// <paramref name="step"/>. It has to be a line of the file itself, one no store rewrites,
+    /// and one no <c>.label</c> names a position inside.
+    /// </summary>
+    private static bool Removable(FileAnalysis file, Step step) =>
+        Own(file.Model, step) && !file.Flow.Patched.Contains(step.Key) && !file.Layout.IsEnteredInside(step);
+
+    /// <summary>
     /// Returns a suggestion for each conditional branch over a <c>jmp</c>, where the opposite
     /// branch to the jump's target can do both in one instruction. The <c>jmp</c> has to stand
     /// alone between the branch and the label the branch goes to, with nothing else reaching it.
@@ -466,6 +621,10 @@ public static class Suggestions
                     || layout.PositionOf(jump) is not { } skipped
                     || blocks[i + 2].Label is not { } skip
                     || Targets.Of(model, Transfers.TargetOf(branch, AddressingMode.Relative), null)?.Symbol != skip
+
+                    // The label has to stand right after the jump. One a `.label` names inside an
+                    // instruction comes next among the blocks without following the jump's bytes.
+                    || layout.PositionOf(skip) is not { } landed || landed.Stream != skipped.Stream || landed.Offset != skipped.End
                     || target.Symbol == skip
                     || !Adjacent(branch, jump))
                 {

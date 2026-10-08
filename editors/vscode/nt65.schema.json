@@ -333,6 +333,8 @@
         "linked-config-unreadable",
         "linked-segments-disagree",
         "linker-name-is-an-instruction",
+        "load-already-held",
+        "load-from-register",
         "long-line",
         "macro-distance",
         "macro-keeps",
@@ -557,7 +559,8 @@
         "width-in-emulation",
         "width-unknown",
         "word-argument-ambiguous",
-        "word-argument-not-listed"
+        "word-argument-not-listed",
+        "zero-compare"
         ]
       }
     },

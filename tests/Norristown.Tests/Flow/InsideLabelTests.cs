@@ -65,6 +65,20 @@ public sealed class InsideLabelTests
         Assert.Contains("asl $91; cmp ($38),y", hover.Contents.Value, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A branch to a position inside an earlier instruction does not hop over the <c>jmp</c> after
+    /// it, so it is not offered as one branch to the jump's target.
+    /// </summary>
+    [Fact]
+    public void ABranchIntoAnInstructionIsNotABranchOverTheJump()
+    {
+        const string Text = Header + ".export .proc main {\n@top:\n    lda $E8\n    .label in = @top + 1\n    lsr a\n"
+            + "    bcc in\n    jmp main\n}\n";
+        var analysis = Analysis.Program(Analysis.Fragment with { Cpu = Cpu.Mos6502 }, ("main.nt65", Text));
+
+        Assert.DoesNotContain(analysis.SuggestionsFor("main.nt65"), suggestion => suggestion.Id == "branch-over-jump");
+    }
+
     /// <summary>A position that is not inside an instruction, and bytes nt65 cannot follow, are errors.</summary>
     [Theory]
     [InlineData("lda $10", "@top", "`.label in` has to name a byte inside an instruction of this routine, as `@op + 1` does: its value is not a label plus a number of bytes")]

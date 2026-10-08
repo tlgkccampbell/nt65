@@ -247,6 +247,18 @@ public sealed partial class CodeLayout
         hidden.Values.FirstOrDefault(path => path.Label == label)?.Instructions;
 
     /// <summary>
+    /// Returns a value indicating whether a <c>.label</c> names a position inside the bytes of
+    /// <paramref name="step"/>, so that the bytes run as more than the statement says.
+    /// </summary>
+    internal bool IsEnteredInside(Step step)
+    {
+        if (hidden.Count == 0 || PositionOf(step.Statement, step.On) is not { } at)
+            return false;
+        return hidden.Values.Any(path => PositionOf(path.Label) is { } label
+            && label.Stream == at.Stream && label.Offset > at.Offset && label.Offset < at.End);
+    }
+
+    /// <summary>
     /// Returns what a statement assembles to in the <see cref="Expansion"/> <paramref name="on"/>,
     /// or null when it generates no bytes.
     /// </summary>

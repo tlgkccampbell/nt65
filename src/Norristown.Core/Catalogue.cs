@@ -4190,6 +4190,38 @@ public static class Catalogue
             + "and C come out the same, and so does V unless n is 0 or $80, where n-1 has the other sign. Decimal "
             + "mode agrees unless n's low digit is 0. The suggestion is not made in those cases.");
 
+    internal static DiagnosticDescriptor ZeroCompare { get; } = Entry(
+        Area.Suggestions,
+        "zero-compare",
+        Severity.Info,
+        "`{0}` changes nothing that is read: N and Z already reflect {1} here, and {2}",
+        "A compare with zero sets N and Z from the register itself, and sets C to 1. Where the instruction before "
+            + "already set N and Z from that register, as `lda`, `dex` or `and` do, the compare changes only C. It can "
+            + "go where C is already 1, or where nothing reads C before it is written again, which saves 2 bytes and 2 "
+            + "cycles. nt65 follows the registers and flags from what the instructions themselves do, so the "
+            + "suggestion holds on any system.");
+
+    internal static DiagnosticDescriptor LoadAlreadyHeld { get; } = Entry(
+        Area.Suggestions,
+        "load-already-held",
+        Severity.Info,
+        "`{0}` changes nothing that is read: {1} already holds {2} here, and {3}",
+        "nt65 follows the constants A, X and Y hold through each routine, from immediate loads, transfers, "
+            + "increments and the like, and from a branch that found Z set after a register was loaded or counted. "
+            + "Here the register already holds the constant the load gives it on every path. The load can go where N "
+            + "and Z already say what it would set them to, or where nothing reads them before they change, which "
+            + "saves 2 bytes and 2 cycles. Memory is never assumed to hold anything.");
+
+    internal static DiagnosticDescriptor LoadFromRegister { get; } = Entry(
+        Area.Suggestions,
+        "load-from-register",
+        Severity.Info,
+        "`{0}` can be `{1}`, because {2}, which saves a byte",
+        "An immediate load takes 2 bytes. Where another register already holds the constant, a transfer such as "
+            + "`tax` gives the same value in 1 byte, and where the register holds one more or one less, `dex` or `inx` "
+            + "does. Each sets N and Z from the result as the load does, takes the same 2 cycles, and leaves C and V "
+            + "alone. The 65816 is left out, because there the registers' widths decide what a transfer copies.");
+
     // The list is found by reflecting over the class rather than listed by hand, so that a new
     // entry above is included automatically. It is built on first use rather than alongside the
     // entries, because reflecting on a type while its own static initializer is still running can

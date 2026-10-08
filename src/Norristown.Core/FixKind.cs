@@ -212,4 +212,10 @@ public enum FixKind
     /// which states what the analysis finds there.
     /// </summary>
     StateItem,
+
+    /// <summary>
+    /// The instruction reported, replaced with the one the fix's <see cref="DiagnosticFix.Text"/>
+    /// spells, such as <c>tax</c> in place of <c>ldx #0</c>.
+    /// </summary>
+    Instruction,
 }

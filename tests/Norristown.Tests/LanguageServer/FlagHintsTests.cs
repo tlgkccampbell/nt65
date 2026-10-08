@@ -134,6 +134,125 @@ public sealed class FlagHintsTests
     }
 
     /// <summary>
+    /// A compare with zero straight after an instruction that set N and Z from the same register
+    /// changes only C. It can go where nothing reads C before it changes, or where C is already 1.
+    /// </summary>
+    [Theory]
+    [InlineData("    lda $10\n    cmp #0\n    beq @x\n    sta $11\n@x:\n    sec\n    rts\n",
+        "`cmp #0` changes nothing that is read: N and Z already reflect A here, and nothing reads the C it sets")]
+    [InlineData("    sec\n    lda $10\n    cmp #0\n    beq @x\n    sta $11\n@x:\n    rts\n",
+        "`cmp #0` changes nothing that is read: N and Z already reflect A here, and C is already 1")]
+    [InlineData("    ldx $10\n@loop:\n    dex\n    cpx #0\n    bne @loop\n    clc\n    rts\n",
+        "`cpx #0` changes nothing that is read: N and Z already reflect X here, and nothing reads the C it sets")]
+    [InlineData("    lda $10\n    tay\n    cpy #0\n    beq @x\n    sta $11\n@x:\n    clc\n    rts\n",
+        "`cpy #0` changes nothing that is read: N and Z already reflect Y here, and nothing reads the C it sets")]
+    public void ACompareWithZeroCanGo(string lines, string message)
+    {
+        var body = ".export .proc main {\n" + lines + "}\n";
+
+        var text = Applied(body, "zero-compare", "Remove it", out var suggestion);
+
+        Assert.Equal(message, suggestion.Message);
+        Assert.DoesNotContain("#0", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The compare stays where something reads the C it sets, where N and Z come from another
+    /// register, and where a routine that promises no flags still returns with the C it sets.
+    /// </summary>
+    [Theory]
+    [InlineData("    lda $10\n    cmp #0\n    adc #1\n    sta $11\n    rts\n")]
+    [InlineData("    lda $10\n    ldx $11\n    cmp #0\n    beq @x\n    sta $11\n@x:\n    sec\n    rts\n")]
+    [InlineData("    lda $10\n    cmp #0\n    beq @x\n    sta $11\n@x:\n    rts\n")]
+    public void ACompareWhoseCarryIsReadStays(string lines)
+    {
+        var (analysis, path) = Analyzed(".export .proc main {\n" + lines + "}\n");
+
+        Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "zero-compare");
+    }
+
+    /// <summary>
+    /// A routine that declares the flags it returns with promises nothing about the rest, so a
+    /// return reads only those.
+    /// </summary>
+    [Fact]
+    public void AReturnReadsOnlyTheFlagsItPromises()
+    {
+        var (analysis, path) = Analyzed(".export .proc main: -> z {\n    lda $10\n    cmp #0\n    rts\n}\n");
+
+        Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "zero-compare");
+    }
+
+    /// <summary>
+    /// A load of a constant a register already holds can go, where the flags already say what it
+    /// would set them to, or nothing reads them. A branch that found Z set after a count shows
+    /// the count is 0.
+    /// </summary>
+    [Theory]
+    [InlineData("    ldx #0\n    stx $10\n    ldx #0\n    stx $11\n    rts\n",
+        "`ldx #0` changes nothing that is read: X already holds $00 here, and N and Z already say what it would")]
+    [InlineData("    ldx #8\n@loop:\n    dex\n    bne @loop\n    ldx #0\n    stx $10\n    rts\n",
+        "`ldx #0` changes nothing that is read: X already holds $00 here, and N and Z already say what it would")]
+    [InlineData("    lda #$40\n    asl a\n    sta $10\n    ldx $11\n    lda #$80\n    sta $12,x\n    lda #1\n    rts\n",
+        "`lda #$80` changes nothing that is read: A already holds $80 here, and nothing reads the N and Z it sets")]
+    public void ALoadOfAHeldConstantCanGo(string lines, string message)
+    {
+        var body = ".export .proc main {\n" + lines + "}\n";
+
+        var text = Applied(body, "load-already-held", "Remove it", out var suggestion);
+
+        Assert.Equal(message, suggestion.Message);
+        var expected = body.Split('\n').ToList();
+        expected.RemoveAt(suggestion.Span.LineIndex - 3);
+        Assert.Equal(string.Join('\n', expected), text);
+    }
+
+    /// <summary>
+    /// A load of a constant another register holds can be a transfer, and one of a constant one
+    /// more or less than the register holds an increment or a decrement. Each is a byte shorter.
+    /// </summary>
+    [Theory]
+    [InlineData("6502", "    lda #0\n    sta $10\n    ldx #0\n    stx $11\n    rts\n", "ldx #0", "tax", "A holds $00 here")]
+    [InlineData("6502", "    ldy #7\n    sty $10\n    lda #7\n    sta $11\n    rts\n", "lda #7", "tya", "Y holds $07 here")]
+    [InlineData("6502", "    ldx #4\n    stx $10\n    ldx #5\n    stx $11\n    rts\n", "ldx #5", "inx", "X holds $04 here")]
+    [InlineData("6502", "    ldy #0\n    sty $10\n    ldy #$FF\n    sty $11\n    rts\n", "ldy #$FF", "dey", "Y holds $00 here")]
+    [InlineData("65C02", "    lda #9\n    sta $10\n    lda #10\n    sta $11\n    rts\n", "lda #10", "inc a", "A holds $09 here")]
+    public void ALoadCanComeFromARegister(string cpu, string lines, string load, string shorter, string why)
+    {
+        var body = ".export .proc main {\n" + lines + "}\n";
+
+        var text = Applied(body, "load-from-register", $"Change it to `{shorter}`", out var suggestion, cpu);
+
+        Assert.Equal($"`{load}` can be `{shorter}`, because {why}, which saves a byte", suggestion.Message);
+        Assert.Equal(body.Replace(load, shorter, StringComparison.Ordinal), text);
+    }
+
+    /// <summary>
+    /// A load stays where a store may rewrite it, where the register's value came through a call
+    /// that does not promise to keep it, and where it comes from memory.
+    /// </summary>
+    [Theory]
+    [InlineData("    ldx #0\n    stx $10\n@load:\n    ldx #0\n    stx $11\n    inc @load+1\n    .patch @load\n    rts\n")]
+    [InlineData("    ldx #0\n    jsr other\n    ldx #0\n    stx $10\n    lda #1\n    rts\n")]
+    [InlineData("    ldx $12\n    stx $10\n    ldx $12\n    stx $11\n    rts\n")]
+    public void ALoadTheAnalysisCannotVouchForStays(string lines)
+    {
+        var (analysis, path) = Analyzed(".export .proc main {\n" + lines + "}\n.proc other {\n    rts\n}\n");
+
+        Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id is "load-already-held" or "load-from-register");
+    }
+
+    /// <summary>A call to a routine that promises to keep a register keeps its constant.</summary>
+    [Fact]
+    public void ACallThatPromisesToKeepARegisterKeepsItsConstant()
+    {
+        var (analysis, path) = Analyzed(
+            ".export .proc main {\n    ldx #0\n    jsr other\n    ldx #0\n    stx $10\n    lda #1\n    rts\n}\n.proc other: keeps x {\n    rts\n}\n");
+
+        Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "load-already-held");
+    }
+
+    /// <summary>
     /// Returns the text after the fix titled <paramref name="title"/> is applied to the one
     /// suggestion named <paramref name="id"/>.
     /// </summary>

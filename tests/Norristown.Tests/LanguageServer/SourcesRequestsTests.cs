@@ -71,7 +71,7 @@ public sealed class SourcesRequestsTests
             }
             .export .proc main {
                 ldx #1
-                lda #1
+                lda #2
                 jsr keep
                 stx $10
                 jsr CHROUT

@@ -42,7 +42,7 @@ internal sealed class FlagState : IEquatable<FlagState>
         StatusFlags known, StatusFlags set, bool shared, StatusFlags kept = StatusFlags.None,
         StatusFlags unbacked = StatusFlags.None, StatusFlags quiet = StatusFlags.None,
         ImmutableDictionary<StatusFlags, ImmutableHashSet<Symbol>>? sources = null,
-        ImmutableDictionary<StatusFlags, Symbol>? origins = null)
+        ImmutableDictionary<StatusFlags, Symbol>? origins = null, KnownRegisters held = default)
     {
         Known = known & Followed;
         Set = set & Known;
@@ -52,6 +52,7 @@ internal sealed class FlagState : IEquatable<FlagState>
         Quiet = quiet & Followed & ~Unbacked;
         this.sources = sources ?? NoSources;
         this.origins = origins ?? NoOrigins;
+        Held = held;
     }
 
     /// <summary>Gets the state in which nothing is known about any flag.</summary>
@@ -81,6 +82,9 @@ internal sealed class FlagState : IEquatable<FlagState>
     /// does not, but a routine whose exit value comes from one does not promise it either.
     /// </summary>
     public StatusFlags Quiet { get; }
+
+    /// <summary>Gets what is known about the values of A, X and Y.</summary>
+    public KnownRegisters Held { get; }
 
     /// <summary>
     /// Returns the words a message uses to say that <paramref name="flag"/> is
@@ -164,7 +168,10 @@ internal sealed class FlagState : IEquatable<FlagState>
             }
             sources = builder.ToImmutable();
         }
-        return new(known, set, Shared && (through & nz) == nz, Kept & through, unbacked, quiet, sources, origins);
+        // A register keeps its constant only where the callee declares that it keeps it.
+        var kept = callee.Signature?.Keeps ?? Registers.None;
+        var held = (Held with { NzFrom = Registers.None }).Forget(Registers.All & ~kept);
+        return new(known, set, Shared && (through & nz) == nz, Kept & through, unbacked, quiet, sources, origins, held);
     }
 
     /// <summary>
@@ -192,7 +199,8 @@ internal sealed class FlagState : IEquatable<FlagState>
     /// </summary>
     public FlagState With(StatusFlags flag, bool value) =>
         new(Known | flag, value ? Set | flag : Set & ~flag, Shared && (flag & (StatusFlags.Negative | StatusFlags.Zero)) == 0,
-            Kept & ~flag, Unbacked & ~flag, Quiet & ~flag, Without(sources, flag), Without(origins, flag));
+            Kept & ~flag, Unbacked & ~flag, Quiet & ~flag, Without(sources, flag), Without(origins, flag),
+            (flag & (StatusFlags.Negative | StatusFlags.Zero)) == 0 ? Held : Held with { NzFrom = Registers.None });
 
     /// <summary>
     /// Returns the state after an instruction sets N and Z from one result whose value is
@@ -210,7 +218,8 @@ internal sealed class FlagState : IEquatable<FlagState>
             set |= StatusFlags.Negative;
         if (zero)
             set |= StatusFlags.Zero;
-        return new(Known | nz, set, true, Kept & ~nz, Unbacked & ~nz, Quiet & ~nz, Without(sources, nz), Without(origins, nz));
+        return new(Known | nz, set, true, Kept & ~nz, Unbacked & ~nz, Quiet & ~nz, Without(sources, nz), Without(origins, nz),
+            Held with { NzFrom = Registers.None });
     }
 
     /// <summary>
@@ -225,7 +234,8 @@ internal sealed class FlagState : IEquatable<FlagState>
         return written == StatusFlags.None
             ? this
             : new(Known & ~written, Set, keepsShared, Kept & ~written, Unbacked & ~written, Quiet & ~written,
-                Without(sources, written), Without(origins, written));
+                Without(sources, written), Without(origins, written),
+                (written & nz) == 0 ? Held : Held with { NzFrom = Registers.None });
     }
 
     /// <summary>
@@ -244,7 +254,8 @@ internal sealed class FlagState : IEquatable<FlagState>
             set &= ~other;
         }
         return new(Known | learned, set, Shared, Kept, Unbacked & ~learned, Quiet & ~learned,
-            Without(sources, learned), Without(origins, learned));
+            Without(sources, learned), Without(origins, learned),
+            flag == StatusFlags.Zero && value ? Held.LearnZero() : Held);
     }
 
     /// <summary>
@@ -266,19 +277,23 @@ internal sealed class FlagState : IEquatable<FlagState>
                 origins = origins.Add(flag, origin);
         }
         return new(known, Set & known, Related() && other.Related(), Kept & other.Kept,
-            Unbacked | other.Unbacked, Quiet | other.Quiet, sources, origins);
+            Unbacked | other.Unbacked, Quiet | other.Quiet, sources, origins, Held.Merge(other.Held));
     }
+
+    /// <summary>Returns this state with what is known about A, X and Y replaced by <paramref name="held"/>.</summary>
+    public FlagState WithHeld(KnownRegisters held) =>
+        held == Held ? this : new(Known, Set, Shared, Kept, Unbacked, Quiet, sources, origins, held);
 
     /// <inheritdoc/>
     public bool Equals(FlagState? other) =>
         other is not null && Known == other.Known && Set == other.Set && Shared == other.Shared && Kept == other.Kept
-        && Unbacked == other.Unbacked && Quiet == other.Quiet && SameSources(other);
+        && Unbacked == other.Unbacked && Quiet == other.Quiet && Held == other.Held && SameSources(other);
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as FlagState);
 
     /// <inheritdoc/>
-    public override int GetHashCode() => HashCode.Combine(Known, Set, Shared, Kept, Unbacked, Quiet, sources.Count);
+    public override int GetHashCode() => HashCode.Combine(Known, Set, Shared, Kept, Unbacked, Quiet, sources.Count, Held);
 
     /// <summary>Returns <paramref name="map"/> without the entries for <paramref name="flags"/>.</summary>
     private static ImmutableDictionary<StatusFlags, T> Without<T>(ImmutableDictionary<StatusFlags, T> map, StatusFlags flags)

@@ -585,9 +585,9 @@ public sealed class CodeLensTests
                 // Stepping by two from five skips zero, so `bne` never sees it and the loop is not counted.
                 "19+ cycles, loops",
 
-                // `bpl` tests the sign bit, and 200 has it set before the loop starts, so the
-                // loop is not counted.
-                "17+ cycles, loops",
+                // `bpl` tests the sign bit, and 199 has it set after the first `dex`, so the flag
+                // analysis proves the branch is never taken and the body runs once.
+                "17-19 cycles",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
     }

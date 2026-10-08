@@ -107,9 +107,9 @@ internal sealed class FlagAnalysis
 
     /// <summary>
     /// Returns what is known about the flags just before <paramref name="step"/>, or null where
-    /// no path the analysis follows reaches it. Only a <c>clc</c>, a <c>sec</c>, a <c>.state</c>,
-    /// an <c>.ensure</c> and the last statement of each block are kept, since those are what the
-    /// suggestions and the checks ask about.
+    /// no path the analysis follows reaches it. Only a <c>clc</c>, a <c>sec</c>, a <c>jmp</c>, a
+    /// load, a compare, a <c>.state</c>, an <c>.ensure</c> and the last statement of each block
+    /// are kept, since those are what the suggestions and the checks ask about.
     /// </summary>
     public FlagState? Before(Step step) => before.GetValueOrDefault(step.Key);
 
@@ -650,13 +650,17 @@ internal sealed class FlagAnalysis
             last = state;
             if (record && (i == block.Steps.Count - 1
                 || step.Statement is StateDirectiveSyntax or EnsureDirectiveSyntax
-                    or InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc or MnemonicKind.Sec or MnemonicKind.Jmp }))
+                || step.Statement is InstructionStatementSyntax { MnemonicKind: var mnemonic } && Asked(mnemonic)))
             {
                 Keep(before, step.Key, state);
             }
             state = After(step, state);
         }
         return (last, state);
+
+        // The suggestions ask about the flags before these instructions.
+        static bool Asked(MnemonicKind mnemonic) => mnemonic is MnemonicKind.Clc or MnemonicKind.Sec or MnemonicKind.Jmp
+            or MnemonicKind.Lda or MnemonicKind.Ldx or MnemonicKind.Ldy or MnemonicKind.Cmp or MnemonicKind.Cpx or MnemonicKind.Cpy;
     }
 
     /// <summary>Returns the flags after <paramref name="step"/> runs, from those before it.</summary>
@@ -668,14 +672,19 @@ internal sealed class FlagAnalysis
             // none of which change any other flag followed here.
             foreach (var (item, value) in Items(step))
                 state = state.With(item.Flags, value);
-            return state;
+
+            // On the 65816 an `.ensure` may emit a `rep` or a `sep`, which changes what a later
+            // load of the same constant would load.
+            return layout.Cpu == Cpu.Wdc65816 && step.Statement is EnsureDirectiveSyntax
+                ? state.WithHeld(KnownRegisters.Unknown)
+                : state;
         }
         if (layout.HiddenPathAt(step) is { } hidden)
         {
             // The bytes from a position inside an instruction run as the instructions they
             // decode as, one after another.
             foreach (var decoded in hidden.Instructions)
-                state = After(decoded.Mnemonic, decoded.Mode, 8, RegisterWalk.Immediate(decoded), state);
+                state = After(layout.Cpu, decoded.Mnemonic, decoded.Mode, 8, RegisterWalk.Immediate(decoded), state);
             return state;
         }
         if (step.Statement is not InstructionStatementSyntax instruction)
@@ -689,16 +698,39 @@ internal sealed class FlagAnalysis
         var line = layout.Of(instruction, step.On);
         var immediate = StepOperands.Immediate(model, layout, step);
         if (!patched.Contains(step.Key))
-            return After(instruction.MnemonicKind, line?.Mode, line?.Bits ?? 8, immediate, state);
+            return After(layout.Cpu, instruction.MnemonicKind, line?.Mode, line?.Bits ?? 8, immediate, state);
 
         // A store may turn the instruction into another, and then the flags are what either
         // leaves. Where nothing says what the store writes, nothing is known.
         if (!variants.TryGetValue(step.Key, out var listed))
             return FlagState.Unknown;
-        var after = After(instruction.MnemonicKind, line?.Mode, line?.Bits ?? 8, immediate, state);
+        var after = After(layout.Cpu, instruction.MnemonicKind, line?.Mode, line?.Bits ?? 8, immediate, state);
         foreach (var variant in listed)
-            after = after.Merge(After(variant, line?.Mode, line?.Bits ?? 8, immediate, state));
+            after = after.Merge(After(layout.Cpu, variant, line?.Mode, line?.Bits ?? 8, immediate, state));
         return after;
+    }
+
+    /// <summary>
+    /// Returns the flags, and what is known about A, X and Y, after an instruction runs as
+    /// <paramref name="mnemonic"/> in <paramref name="mode"/> on <paramref name="cpu"/>, from
+    /// those before it. <paramref name="bits"/> is how wide its immediate is, and
+    /// <paramref name="immediate"/> the immediate's value where it has one. Where the result that
+    /// N and Z are set from is a known constant, N and Z are known too.
+    /// </summary>
+    private static FlagState After(
+        Cpu cpu, MnemonicKind mnemonic, AddressingMode? mode, int bits, long? immediate, FlagState state)
+    {
+        var flags = FlagsAfter(mnemonic, mode, bits, immediate, state);
+        var (held, carry) = Held(cpu, mnemonic, mode, bits, immediate, state);
+        if (carry is { } carried)
+            flags = flags.With(StatusFlags.Carry, carried);
+        var nz = StatusFlags.Negative | StatusFlags.Zero;
+        if ((flags.Known & nz) != nz
+            && RegisterEffects.Each(held.NzFrom).Select(held.ValueOf).FirstOrDefault(value => value is not null) is { } result)
+        {
+            flags = flags.Loaded(result, bits);
+        }
+        return flags.WithHeld(held);
     }
 
     /// <summary>
@@ -706,7 +738,7 @@ internal sealed class FlagAnalysis
     /// <paramref name="mode"/>, from those before it. <paramref name="bits"/> is how wide its
     /// immediate is, and <paramref name="immediate"/> the immediate's value where it has one.
     /// </summary>
-    private static FlagState After(MnemonicKind mnemonic, AddressingMode? mode, int bits, long? immediate, FlagState state)
+    private static FlagState FlagsAfter(MnemonicKind mnemonic, AddressingMode? mode, int bits, long? immediate, FlagState state)
     {
         switch (mnemonic)
         {
@@ -739,4 +771,110 @@ internal sealed class FlagAnalysis
             or MnemonicKind.Arr or MnemonicKind.Bit or MnemonicKind.Plp or MnemonicKind.Rti);
         return state.Forget(written, shared);
     }
+
+    /// <summary>
+    /// Returns what is known about A, X and Y after an instruction runs as
+    /// <paramref name="mnemonic"/> on <paramref name="cpu"/>, and the carry it leaves where a
+    /// shift of a known accumulator makes that known. On the 65816 only an immediate load gives a
+    /// register a constant, since the arithmetic depends on widths this analysis does not follow,
+    /// and a change of width forgets every constant.
+    /// </summary>
+    private static (KnownRegisters Held, bool? Carry) Held(
+        Cpu cpu, MnemonicKind mnemonic, AddressingMode? mode, int bits, long? immediate, FlagState state)
+    {
+        var before = state.Held;
+        var wide = cpu == Cpu.Wdc65816;
+        if (wide && mnemonic is MnemonicKind.Rep or MnemonicKind.Sep or MnemonicKind.Xce or MnemonicKind.Plp)
+            return (KnownRegisters.Unknown, null);
+
+        var written = RegisterEffects.Written(mnemonic, mode, immediate);
+        var held = before.Forget(written & (Registers.A | Registers.X | Registers.Y));
+        if ((FlagEffects.Written(mnemonic, mode, immediate) & (StatusFlags.Negative | StatusFlags.Zero)) != 0)
+            held = held with { NzFrom = Registers.None };
+
+        var from = SetFrom(cpu, mnemonic, mode, state);
+        if (from == Registers.None)
+        {
+            // A compare with zero sets N and Z from the register itself.
+            if (immediate == 0 && Compared(mnemonic) is { } compared)
+                held = held with { NzFrom = compared | ((before.NzFrom & compared) != 0 ? before.NzFrom : Registers.None) };
+            return (held, null);
+        }
+
+        var mask = (1L << bits) - 1;
+        var a = before.A;
+        var carry = state.ValueOf(StatusFlags.Carry);
+        var shift = mode == AddressingMode.Accumulator;
+        long? value = mnemonic switch
+        {
+            MnemonicKind.Lda or MnemonicKind.Ldx or MnemonicKind.Ldy when mode == AddressingMode.Immediate => immediate & mask,
+            _ when wide => null,
+            MnemonicKind.Inx => (before.X + 1) & 0xff,
+            MnemonicKind.Dex => (before.X - 1) & 0xff,
+            MnemonicKind.Iny => (before.Y + 1) & 0xff,
+            MnemonicKind.Dey => (before.Y - 1) & 0xff,
+            MnemonicKind.Inc when shift => (a + 1) & 0xff,
+            MnemonicKind.Dec when shift => (a - 1) & 0xff,
+            MnemonicKind.And when mode == AddressingMode.Immediate => immediate == 0 ? 0 : a & immediate,
+            MnemonicKind.Ora when mode == AddressingMode.Immediate => (immediate & 0xff) == 0xff ? 0xff : a | (immediate & 0xff),
+            MnemonicKind.Eor when mode == AddressingMode.Immediate => a ^ (immediate & 0xff),
+            MnemonicKind.Asl when shift => (a << 1) & 0xff,
+            MnemonicKind.Lsr when shift => a >> 1,
+            MnemonicKind.Rol when shift && carry is { } c => ((a << 1) | (c ? 1L : 0L)) & 0xff,
+            MnemonicKind.Ror when shift && carry is { } c => (a >> 1) | (c ? 0x80L : 0L),
+            _ => RegisterEffects.Moved(mnemonic) is (var source, _) ? before.ValueOf(source) : null,
+        };
+
+        // A shift of a known accumulator also says what it shifts into the carry.
+        bool? shiftedOut = null;
+        if (!wide && shift && a is { } old)
+        {
+            shiftedOut = mnemonic switch
+            {
+                MnemonicKind.Asl => (old & 0x80) != 0,
+                MnemonicKind.Rol when carry is not null => (old & 0x80) != 0,
+                MnemonicKind.Lsr => (old & 1) != 0,
+                MnemonicKind.Ror when carry is not null => (old & 1) != 0,
+                _ => null,
+            };
+        }
+        foreach (var register in RegisterEffects.Each(from))
+            held = held.With(register, value);
+
+        // After a transfer both registers hold the result, except on the 65816, where their
+        // widths may differ.
+        if (!wide && RegisterEffects.Moved(mnemonic) is (var copied, _))
+            from |= copied;
+        return (held with { NzFrom = from }, shiftedOut);
+    }
+
+    /// <summary>
+    /// Returns the registers whose new value an instruction sets N and Z from, or none where it
+    /// sets them from anything else. An add or a subtract on the NMOS 6502 sets them from another
+    /// stage of the sum in decimal mode, so it counts only where D is known to be 0.
+    /// </summary>
+    private static Registers SetFrom(Cpu cpu, MnemonicKind mnemonic, AddressingMode? mode, FlagState state) => mnemonic switch
+    {
+        MnemonicKind.Lda or MnemonicKind.Pla or MnemonicKind.And or MnemonicKind.Ora or MnemonicKind.Eor
+            or MnemonicKind.Txa or MnemonicKind.Tya or MnemonicKind.Tdc or MnemonicKind.Tsc => Registers.A,
+        MnemonicKind.Asl or MnemonicKind.Lsr or MnemonicKind.Rol or MnemonicKind.Ror or MnemonicKind.Inc or MnemonicKind.Dec
+            when mode == AddressingMode.Accumulator => Registers.A,
+        MnemonicKind.Adc or MnemonicKind.Sbc
+            when cpu is not (Cpu.Mos6502 or Cpu.Mos6502X) || state.ValueOf(StatusFlags.Decimal) == false => Registers.A,
+        MnemonicKind.Ldx or MnemonicKind.Plx or MnemonicKind.Inx or MnemonicKind.Dex or MnemonicKind.Tax
+            or MnemonicKind.Tsx or MnemonicKind.Tyx => Registers.X,
+        MnemonicKind.Ldy or MnemonicKind.Ply or MnemonicKind.Iny or MnemonicKind.Dey or MnemonicKind.Tay
+            or MnemonicKind.Txy => Registers.Y,
+        MnemonicKind.Lax => Registers.A | Registers.X,
+        _ => Registers.None,
+    };
+
+    /// <summary>Returns the register a compare compares, or null for any other instruction.</summary>
+    internal static Registers? Compared(MnemonicKind mnemonic) => mnemonic switch
+    {
+        MnemonicKind.Cmp => Registers.A,
+        MnemonicKind.Cpx => Registers.X,
+        MnemonicKind.Cpy => Registers.Y,
+        _ => null,
+    };
 }

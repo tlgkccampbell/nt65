@@ -4678,6 +4678,23 @@ Recorded so the reasoning survives. None is open.
   line of a macro body serves every call, so code there is reported as never reached only
   where no call reaches it: a constant argument often decides a branch in one call and not in
   another.
+- **Register constants extend the flag analysis.** The same walk follows the constant each of
+  A, X and Y holds, from immediate loads, transfers, increments, decrements, shifts and `and`,
+  `ora` and `eor` with a constant, and which registers N and Z were last set from. Where that
+  register's value is known, so are N and Z, and a branch that finds Z set shows the register is
+  0, so `ldx #8` then a `dex` and `bne` loop leaves X known to be 0. A call keeps a constant only
+  in a register the callee declares it keeps: inferred keeps are worked out across the program
+  after each file's flags, so they come too late. On the 65816 only an immediate load gives a
+  constant, and a `rep`, `sep`, `xce`, `plp` or `.ensure` forgets them all, since the
+  arithmetic and the transfers depend on widths. It gives three more hints: a `cmp #0`, `cpx #0`
+  or `cpy #0` whose register N and Z already reflect, where C is already 1 or nothing reads the C
+  it sets; an immediate load of a constant the register already holds, where N and Z already say
+  what it would or nothing reads them; and an immediate load of a constant another register
+  holds, or one more or less than the register holds, which `tax`, `inx` and the like give in a
+  byte less. Whether a flag is read comes from a backward pass over the routine, in which a
+  return reads every flag unless the routine declares the flags it returns with, a call reads
+  what its callee reads, and `php` reads them all. The memory-based tricks size-coding relies
+  on, such as a value the ROM leaves at $D5, stay out of reach, as they should.
 - **An always-taken branch is a `.next` naming its own target.** 6502 code often branches on
   flags it knows, `bne` after loading a nonzero value or `bcs` after a routine that always sets
   carry, as a two-byte jump or to hop over text. Once `.next` stopped naming the successors of

@@ -96,6 +96,13 @@ internal static class Fixes
                     [new Edit(tree, constant, $".mmio {asData}")], preferred: false);
                 break;
 
+            case FixKind.Instruction when fix.Text is { } replacement:
+                var replaced = Edits.SpanOf(tree, diagnostic.Span);
+                var shouted = tree.Text[replaced.Start..replaced.End].TakeWhile(char.IsLetter).All(char.IsUpper);
+                yield return Fix(diagnostic, $"Change it to `{replacement}`",
+                    [new Edit(tree, replaced, shouted ? replacement.ToUpperInvariant() : replacement)]);
+                break;
+
             case FixKind.Flags when fix.Text is { } flags:
                 yield return Fix(diagnostic, $"Change it to `#{flags}`",
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), flags)]);
