@@ -55,7 +55,7 @@ public sealed class DirectPagesRequestsTests
         Assert.Empty(main.Via);
         Assert.Equal([6, 8], main.Accesses.Select(access => access.Place.Range.Start.Line));
         Assert.Equal((0, 11), (main.Accesses[0].Place.Range.Start.Character, main.Accesses[0].Place.Range.End.Character));
-        Assert.Equal(["live across `jsr inner`", "`inner` uses it as a temporary", "read again"], main.Hazards.Select(note => note.Text));
+        Assert.Equal(["`jsr inner` runs between a write and a read of it", "`inner` uses it as a temporary", "read again here, after the call"], main.Hazards.Select(note => note.Text));
         Assert.Equal([7, 12, 8], main.Hazards.Select(note => note.Place!.Range.Start.Line));
 
         var inner = Assert.Single(main.Children);
@@ -155,7 +155,7 @@ public sealed class DirectPagesRequestsTests
         var use = Assert.Single(nmi.Uses);
         Assert.Equal(("frames", "$0000", "inout", true), (use.Name, use.Home, use.Role, use.Hazard));
         Assert.Equal(
-            ["D is the interrupted code's", "D = $0000 here reaches $0082, `frames`", "D = $0080 here reaches $0102, free"],
+            ["D is left as the interrupted code had it", "with D = $0000 it reaches $0082, `frames`", "with D = $0080 it reaches $0102, free"],
             use.Hazards.Select(note => note.Text));
         Assert.Equal([null, 26, 26], use.Hazards.Select(note => note.Place?.Range.Start.Line));
     }

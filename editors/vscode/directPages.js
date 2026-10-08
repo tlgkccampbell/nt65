@@ -320,21 +320,21 @@ function pageTip(result, page, hazards) {
   for (const note of page.notes) tip.row(note.glyph, note.glyph === '⧉' ? COLOUR.nested : COLOUR.dim, markdown(note.text), '');
   for (const overlap of page.overlaps) {
     if (overlap.shared.length === 0) {
-      tip.row('⧉', COLOUR.dim, `${markdown(pageName(result, overlap.page))} page, no bytes shared`,
+      tip.row('⧉', COLOUR.dim, `overlaps the ${markdown(pageName(result, overlap.page))} page, no bytes shared`,
         coloured(COLOUR.dim, addresses(overlap.first, overlap.last)));
     }
     for (const bytes of overlap.shared) {
-      tip.row('⧉', COLOUR.nested, `${markdown(pageName(result, bytes.page))} \`${bytes.there}\``,
+      tip.row('⧉', COLOUR.nested, `\`${bytes.there}\` on the ${markdown(pageName(result, bytes.page))} page takes these bytes too`,
         coloured(COLOUR.dim, addresses(bytes.first, bytes.last)));
     }
   }
   for (const location of page.locations) {
     if (hazards && location.hazard) {
-      tip.row('⚠', COLOUR.nested, `\`${location.name}\` ${RELATIONS[location.relation] || ''}`, '');
+      tip.row('⚠', COLOUR.nested, `\`${location.name}\` · ${RELATIONS[location.relation] || ''}`, '');
     } else if (location.relation === 'irq') {
-      tip.row('⚡', COLOUR.irq, `\`${location.name}\` interrupt`, '');
+      tip.row('⚡', COLOUR.irq, `\`${location.name}\` · shared with an interrupt`, '');
     } else if (location.relation === 'nested') {
-      tip.row('●', COLOUR.nested, `\`${location.name}\` nested temps`, '');
+      tip.row('●', COLOUR.nested, `\`${location.name}\` · ${RELATIONS.nested}`, '');
     }
   }
   return tip.build();
@@ -401,7 +401,7 @@ function routineTip(location, node, hazards) {
   const role = node.role ? ROLES[node.role] : null;
   if (node.unknown) {
     const tip = new Tip(node.name, `${location.name} · D unknown`);
-    tip.row('?', COLOUR.dim, 'see `D = ?`', lineLinks(node.accesses.map(access => access.place)));
+    tip.row('?', COLOUR.dim, 'names it while D is not known · see `D = ?`', lineLinks(node.accesses.map(access => access.place)));
     if (hazards) {
       for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOUR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
     }
@@ -433,7 +433,7 @@ function routineTip(location, node, hazards) {
 
 // Builds the tooltip of a routine's row on the page whose D is not known.
 function unknownRoutineTip(group, routine, hazards) {
-  const tip = new Tip(routine.name, `D ${REASONS[group.reason] || group.reason}`);
+  const tip = new Tip(routine.name, group.reason === 'interrupted' ? 'D left as the interrupted code had it' : 'D not known');
   if (routine.handler) tip.row('⚡', COLOUR.irq, 'interrupt handler', '');
   else if (routine.interrupt) tip.row('⚡', COLOUR.irq, routine.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
   for (const use of routine.uses) {
@@ -451,7 +451,7 @@ function useTip(result, routine, use, hazards) {
   const tip = new Tip(routine.name, `${use.name}${at}`);
   const role = ROLES[use.role];
   tip.row(role ? role.glyph : '?', role ? role.colour : COLOUR.dim, role ? role.word : '', lineLinks(use.accesses.map(access => access.place)));
-  if (use.home) tip.row('●', COLOUR.dim, `home ${markdown(pageName(result, use.home))}`, coloured(COLOUR.dim, use.home));
+  if (use.home) tip.row('●', COLOUR.dim, `declared on the ${markdown(pageName(result, use.home))} page`, coloured(COLOUR.dim, use.home));
   if (hazards) noteRows(tip, use.hazards || []);
   return tip.build();
 }

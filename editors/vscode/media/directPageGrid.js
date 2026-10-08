@@ -362,14 +362,15 @@
             rows.push([glyphOf(location), never(location) || declared(location) ? 'var(--dim)' : colourOf(location), name]);
             rows.push(['#', 'var(--dim)', heatText(location)]);
           } else {
-            rows.push(['=', same[at] === 'collision' ? 'var(--nested)' : 'var(--dim)', `${name}${same[at] === 'authored' ? ' · by config' : ''}`]);
+            rows.push(['=', same[at] === 'collision' ? 'var(--nested)' : 'var(--dim)',
+            same[at] === 'collision' ? `${name} collides here` : same[at] === 'authored' ? `${name} is placed here too, by the config` : `${name} is an alias of this byte`]);
           }
         });
         if (theirs && theirs.location) {
           const into = address - theirs.location.address;
-          rows.push(['⧉', mine ? 'var(--nested)' : 'var(--dim)', `${pageName(theirs.page)} \`${theirs.location.name}\`${into > 0 ? ` +${into}` : ''}`]);
+          rows.push(['⧉', mine ? 'var(--nested)' : 'var(--dim)', `\`${theirs.location.name}\`${into > 0 ? ` +${into}` : ''} on the ${pageName(theirs.page)} page${mine ? ' takes this byte too' : ''}`]);
         } else if (theirs) {
-          rows.push(['⧉', 'var(--dim)', `${pageName(theirs.page)}'s page, unused here`]);
+          rows.push(['⧉', 'var(--dim)', `the ${pageName(theirs.page)} page covers this byte, with nothing placed there`]);
         }
         if (!mine && !(theirs && theirs.location)) rows.push(['·', 'var(--dim)', 'free']);
         cell.addEventListener('mouseenter', () => {
@@ -463,12 +464,12 @@
         ? `${pageName(entry.page)} · ${range}`
         : `${range} · ${sizeOf(location)} B${location.type ? ` · ${location.type}` : ''}`;
       const rows = entry.foreign
-        ? [['⧉', 'var(--dim)', 'another page\'s bytes']]
-        : [[glyphOf(location), 'var(--dim)', taken(location) ? 'address taken' : declared(location) ? 'hardware · declared' : RELATIONS[location.relation] || location.relation],
+        ? [['⧉', 'var(--dim)', `a location on the ${pageName(entry.page)} page that reaches into this one`]]
+        : [[glyphOf(location), 'var(--dim)', taken(location) ? 'address taken' : declared(location) ? 'hardware · declared, not reached' : RELATIONS[location.relation] || location.relation],
           ['#', 'var(--dim)', heatText(location)],
           ...(location.shared || []).filter(bytes => bytes.kind === 'collision' || bytes.kind === 'deliberate' || bytes.kind === 'authored')
             .map(bytes => ['=', bytes.kind === 'collision' ? 'var(--nested)' : 'var(--dim)',
-              `\`${bytes.there}\` ${offsets(bytes.first - page.base, bytes.last - page.base)}${bytes.kind === 'authored' ? ' · by config' : ''}`])];
+              `${bytes.kind === 'collision' ? 'collides with' : bytes.kind === 'authored' ? 'placed with' : 'aliases'} \`${bytes.there}\` at ${offsets(bytes.first - page.base, bytes.last - page.base)}${bytes.kind === 'authored' ? ', by the config' : ''}`])];
       row.addEventListener('mouseenter', () => {
         peek(row.dataset.key);
         showTip(row, location.name, meta, rows);
@@ -543,7 +544,7 @@
         const last = Math.max(...overlap.shared.map(bytes => bytes.last));
         items.push(['⧉', 'var(--nested)', `${count} byte${count === 1 ? '' : 's'} shared with ${name}`, addresses(first, last)]);
       } else {
-        items.push(['⧉', 'var(--dim)', `${name} overlaps, no bytes shared`, addresses(overlap.first, overlap.last)]);
+        items.push(['⧉', 'var(--dim)', `overlaps the ${name} page, no bytes shared`, addresses(overlap.first, overlap.last)]);
       }
     }
     // The header's badge already says the layout is guessed.

@@ -254,13 +254,13 @@ public sealed class DirectPageMap
                 if (outside.First <= outside.Last)
                 {
                     Note(page, new PageNote(
-                        "?", $"`{name}` lies outside the page, at {StateValue.Hex(outside.First, 4)}-{StateValue.Hex(outside.Last, 4)}", null));
+                        "?", $"`{name}` is placed at {StateValue.Hex(outside.First, 4)}-{StateValue.Hex(outside.Last, 4)}, outside this page", null));
                 }
 
                 // The order of the object files on ld65's command line decides the order of their
                 // bytes in a segment, and nt65 does not run ld65.
                 if (predicted && files.GetValueOrDefault(name) > 1)
-                    Note(page, new PageNote("◦", $"`{name}` order between files is a guess", null));
+                    Note(page, new PageNote("◦", $"`{name}` has data in several files, whose order is a guess", null));
             }
 
             static void Grow(Dictionary<string, List<(int Stream, long Length)>> runs, string name, int stream, long end)
@@ -773,8 +773,10 @@ public sealed class DirectPageMap
                     if (mains.FirstOrDefault(other => Clobbers(use.Role, other.Role)) is not { } victim)
                         continue;
                     var name = use.Routine.DisplayName;
-                    var what = use.Role == PageRole.Temp ? $"`{name}` uses it as a temporary" : $"`{name}` writes it";
-                    var whom = victim == use ? "interrupts itself part-way through" : $"interrupts `{victim.Routine.DisplayName}`, which relies on it";
+                    var what = use.Role == PageRole.Temp ? $"`{name}` uses it as a temporary" : $"`{name}` writes it without reading it first";
+                    var whom = victim == use
+                        ? "and can interrupt itself between its own write and read"
+                        : $"and can interrupt `{victim.Routine.DisplayName}` between its write and its read";
                     uses[key] = use with
                     {
                         Hazards =
@@ -825,13 +827,13 @@ public sealed class DirectPageMap
         {
             if (!inInterrupt)
                 return [];
-            List<PageNote> notes = [new PageNote("⚠", "D is the interrupted code's", null)];
+            List<PageNote> notes = [new PageNote("⚠", "D is left as the interrupted code had it", null)];
             if (homes[location] is not { Offset: { } offset } home)
                 return notes;
             foreach (var page in held)
             {
                 var address = page + offset;
-                var reaches = $"D = {StateValue.Hex(page, 4)} here reaches {StateValue.Hex(address, 4)}";
+                var reaches = $"with D = {StateValue.Hex(page, 4)} it reaches {StateValue.Hex(address, 4)}";
                 if (page == home.Page)
                 {
                     notes.Add(new PageNote("◦", $"{reaches}, `{location.Name}`", at));
@@ -890,7 +892,8 @@ public sealed class DirectPageMap
             {
                 if (access.Page is not { } page || homes[access.Location] is not { } home || home.Page == page || home.Offset is not { } offset)
                     continue;
-                yield return new PageNote("⚠", $"D = {StateValue.Hex(page, 4)} here, so it reaches {StateValue.Hex(page + offset, 4)}", access.Line);
+                yield return new PageNote(
+                    "⚠", $"D is {StateValue.Hex(page, 4)} here, so this reaches {StateValue.Hex(page + offset, 4)} instead of `{access.Location.Name}`", access.Line);
             }
         }
 
@@ -993,9 +996,9 @@ public sealed class DirectPageMap
                 var callText = call.At.GetText().Trim();
                 if (notes.Any(note => note.At == call.At))
                     return;
-                notes.Add(new PageNote("⚠", $"live across `{callText}`", call.At));
+                notes.Add(new PageNote("⚠", $"`{callText}` runs between a write and a read of it", call.At));
                 notes.Add(new PageNote("⚠", $"`{call.Temp.DisplayName}` uses it as a temporary", WriteIn(call.Temp, location)));
-                notes.Add(new PageNote("◦", "read again", read));
+                notes.Add(new PageNote("◦", "read again here, after the call", read));
             }
         }
 
@@ -1130,7 +1133,7 @@ public sealed class DirectPageMap
             var uses = location.Uses;
             if (uses.Count == 0)
                 return PageRelation.Unused;
-            if (uses.Any(use => use.Hazards.Any(note => note.Text.StartsWith("live across", StringComparison.Ordinal))))
+            if (uses.Any(use => use.Hazards.Any(note => note.Text.EndsWith("runs between a write and a read of it", StringComparison.Ordinal))))
                 return PageRelation.Nested;
             // One routine reached from both is enough, because the interrupt can stop the
             // routine part-way through its use and run it again.
