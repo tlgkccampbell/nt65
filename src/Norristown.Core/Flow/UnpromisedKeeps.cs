@@ -21,7 +21,9 @@ internal static class UnpromisedKeeps
     /// Reports each call and tail call in <paramref name="region"/>'s routine that relies on more
     /// than the called routine promises. A call relies on a register where what follows it uses
     /// the value the register held before the call, or returns it as this routine's own
-    /// <c>keeps</c> promises. A tail call relies on one where this routine promises to keep it.
+    /// <c>keeps</c> promises. A tail call relies on one where this routine promises to keep it, and
+    /// so does a branch, a <c>.next</c> or a run into another routine. A call or a tail call with
+    /// several targets relies on each of them.
     /// </summary>
     /// <param name="walk">The walk through the routine's file.</param>
     /// <param name="region">The routine.</param>
@@ -38,21 +40,28 @@ internal static class UnpromisedKeeps
         IReadOnlySet<RoutineKey> readers, Func<Symbol, Registers, Symbol> declining, List<Diagnostic> report)
     {
         var blocks = region.Blocks;
+        var routine = region.Routine;
         if (!region.IsEntered || blocks.Count == 0
-            || !blocks.Any(block => block.Calls is [var called] && of(called).Unbacked != Registers.None))
+            || !blocks.Any(block => Targets(walk, block, routine).Any(called => of(called).Unbacked != Registers.None)))
         {
             return;
         }
         var reached = walk.Solved(region, of, 0);
-        var routine = region.Routine;
         var promised = routine.Signature?.Keeps ?? Registers.None;
         Registers[]? live = null;
         Registers? restored = null;
         foreach (var block in blocks)
         {
-            if (reached[block.Index] is not { } state || block.CallsUnknown || block.Calls is not [var callee])
+            if (reached[block.Index] is not { } state || block.CallsUnknown)
                 continue;
-            var unpromised = of(callee).Unbacked;
+
+            // A call or a hand-off with several targets, such as one through a table, may reach
+            // any of them, so it relies on each one keeping what it uses, and each that declines
+            // is warned about.
+            var targets = Targets(walk, block, routine);
+            var unpromised = Registers.None;
+            foreach (var called in targets)
+                unpromised |= of(called).Unbacked;
             if (unpromised == Registers.None)
                 continue;
             var call = block.Steps[^1];
@@ -89,7 +98,7 @@ internal static class UnpromisedKeeps
                     if ((unpromised & register) != Registers.None)
                     {
                         Report("call", register, step, $"{RegisterEffects.Format(register)} is used here",
-                            SaveAround(walk, register, call, callee, blocks[start], readers));
+                            callee => SaveAround(walk, register, call, callee, blocks[start], readers));
                     }
                 }
 
@@ -105,52 +114,66 @@ internal static class UnpromisedKeeps
                         if ((left.Whole(register).Entry & register) != Registers.None)
                         {
                             Report("call", register, end.Steps[^1], $"`{routine.DisplayName}` returns it here, promising `keeps`",
-                                SaveAround(walk, register, call, callee, blocks[start], readers));
+                                callee => SaveAround(walk, register, call, callee, blocks[start], readers));
                         }
                     }
                 }
                 continue;
             }
 
-            if (block.End != BlockEnd.TailCall)
-                continue;
-            Registers held = Registers.None;
-            walk.Through(block, state, of, null, calling: before =>
+            // A block that hands control to other routines, by a jump, a branch, a `.next` or
+            // running into one, makes a tail call to each of them. Only a tail call's walk takes
+            // the call at its end, so for the others the state after the block is the one handed.
+            RegisterState? handed = null;
+            var through = walk.Through(block, state, of, null, calling: before => handed = before);
+            handed ??= through;
+            var held = Registers.None;
+            foreach (var register in RegisterEffects.Each(Registers.All))
             {
-                foreach (var register in RegisterEffects.Each(Registers.All))
-                {
-                    if ((before.Whole(register).Entry & register) != Registers.None)
-                        held |= register;
-                }
-            });
+                if ((handed.Whole(register).Entry & register) != Registers.None)
+                    held |= register;
+            }
             foreach (var register in RegisterEffects.Each(unpromised & promised & held))
                 Report("tail call", register, null, null, null);
 
-            void Report(string how, Registers register, Layout.Step? used, string? where, DiagnosticFix? also)
+            // Each routine the call may reach that declines to promise the register is warned about.
+            void Report(string how, Registers register, Layout.Step? used, string? where, Func<Symbol, DiagnosticFix?>? also)
             {
                 var name = RegisterEffects.Format(register);
                 var related = used is { } step && where is not null
                     ? [new RelatedSpan(step.Statement.Tree.GetSpan(step.Statement.Span), where)]
                     : Array.Empty<RelatedSpan>();
-
-                // The promise was declined by the routine called, or, where that routine declares
-                // no `keeps`, by one it calls in turn.
-                var decliner = declining(callee, register);
-                var listed = $"`keeps {RegisterEffects.Format(decliner.Signature?.Keeps ?? Registers.None).ToLowerInvariant()}`";
-                var why = decliner == callee
-                    ? $"which its {listed} does not promise"
-                    : $"which depends on `{decliner.DisplayName}`, whose {listed} does not promise it";
-                report.Add(new Diagnostic(
-                    call.Statement.Tree.GetSpan(call.Statement.Span),
-                    Catalogue.UnpromisedKeep.Message(how, callee.DisplayName, name, why),
-                    related)
+                foreach (var callee in targets)
                 {
-                    Fix = new DiagnosticFix(FixKind.Keeps, name.ToLowerInvariant(), decliner.DeclarationSpan),
-                    Also = also,
-                });
+                    if ((of(callee).Unbacked & register) == Registers.None)
+                        continue;
+
+                    // The promise was declined by the routine called, or, where that routine
+                    // declares no `keeps`, by one it calls in turn.
+                    var decliner = declining(callee, register);
+                    var listed = $"`keeps {RegisterEffects.Format(decliner.Signature?.Keeps ?? Registers.None).ToLowerInvariant()}`";
+                    var why = decliner == callee
+                        ? $"which its {listed} does not promise"
+                        : $"which depends on `{decliner.DisplayName}`, whose {listed} does not promise it";
+                    report.Add(new Diagnostic(
+                        call.Statement.Tree.GetSpan(call.Statement.Span),
+                        Catalogue.UnpromisedKeep.Message(how, callee.DisplayName, name, why),
+                        related)
+                    {
+                        Fix = new DiagnosticFix(FixKind.Keeps, name.ToLowerInvariant(), decliner.DeclarationSpan),
+                        Also = also?.Invoke(callee),
+                    });
+                }
             }
         }
     }
+
+    /// <summary>
+    /// Returns the routines <paramref name="block"/> calls at its end, or, where it does not end in
+    /// a call, the routines outside <paramref name="routine"/> it hands control to.
+    /// </summary>
+    private static IReadOnlyList<Symbol> Targets(RegisterWalk walk, BasicBlock block, Symbol routine) =>
+        block.EndsInCall ? block.Calls : [.. block.Calls.Concat(walk.Leaves(block, routine)).Distinct()];
 
     /// <summary>
     /// Returns, for each block, the registers whose values on entry to it some path may use

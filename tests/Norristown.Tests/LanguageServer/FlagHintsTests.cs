@@ -44,6 +44,96 @@ public sealed class FlagHintsTests
     }
 
     /// <summary>
+    /// A hint may go by what a called routine's body leaves in a flag, where that routine declares
+    /// no flags. The message and the fix's title then say that the routine does not promise it.
+    /// </summary>
+    [Fact]
+    public void AHintFromAnUnpromisedBodySaysSo()
+    {
+        const string Body = ".export .proc main {\n    jsr g\n    bne @x\n    nop\n@x:\n    rts\n}\n"
+            + ".proc g {\n    lda #0\n    rts\n}\n";
+
+        var text = Applied(Body, "branch-never-taken", "Remove it, though `g` does not promise Z", out var suggestion);
+
+        Assert.Equal("`bne @x` is never taken, because Z is 1 here; `g` leaves Z this way but does not promise it", suggestion.Message);
+        Assert.Equal(Body.Replace("    bne @x\n", "", StringComparison.Ordinal), text);
+    }
+
+    /// <summary>
+    /// A carry that a called routine's body sets without promising it makes a <c>sec</c> after the
+    /// call unneeded, and the hint says that the routine does not promise it.
+    /// </summary>
+    [Fact]
+    public void ACarryFromAnUnpromisedBodyIsQualified()
+    {
+        const string Body = ".export .proc main {\n    jsr g\n    sec\n    sbc #1\n    sta $10\n    rts\n}\n"
+            + ".proc g {\n    sec\n    rts\n}\n";
+
+        var text = Applied(Body, "carry-already-set", "Remove it, though `g` does not promise C", out var suggestion);
+
+        Assert.Equal("`sec` changes nothing: C is already 1 here; `g` leaves C this way but does not promise it", suggestion.Message);
+        Assert.Equal(Body.Replace("    jsr g\n    sec\n", "    jsr g\n", StringComparison.Ordinal), text);
+    }
+
+    /// <summary>
+    /// A load whose flags a called routine's body leaves as the load would set them can go, and the
+    /// hint names both flags the routine does not promise.
+    /// </summary>
+    [Fact]
+    public void ALoadFromAnUnpromisedBodyNamesBothFlags()
+    {
+        const string Body = ".export .proc main {\n    ldx #0\n    jsr g\n    ldx #0\n    stx $10\n    rts\n}\n"
+            + ".proc g: keeps x {\n    lda #0\n    rts\n}\n";
+
+        var (analysis, path) = Analyzed(Body);
+
+        var suggestion = Assert.Single(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "load-already-held");
+        Assert.EndsWith("; `g` leaves N and Z this way but does not promise them", suggestion.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A hint that relies on another file's routine body goes when an edit to that body changes
+    /// the flag, because the hint's file is analyzed again.
+    /// </summary>
+    [Fact]
+    public void AHintFromAnotherFilesBodyFollowsAnEditToIt()
+    {
+        const string OtherUri = "file:///c:/work/other.nt65";
+        const string Other = ".module other\n.cpu 6502\n.segment CODE\n.export .proc g {\n    sec\n    rts\n}\n";
+        const string Main = ".module main\n.cpu 6502\n.use other::g\n.segment CODE\n"
+            + ".export .proc main {\n    jsr g\n    sec\n    sbc #1\n    sta $10\n    rts\n}\n";
+        var workspace = new Workspace();
+        workspace.Open(new TextDocumentItem(OtherUri, "nt65", 1, Other));
+        var main = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Main));
+        var path = main.Tree.Path;
+        Assert.Contains(Suggested(), found => found.Id == "carry-already-set");
+
+        // `sec` becomes `clc`, so g no longer leaves C set.
+        workspace.Change(new VersionedTextDocumentIdentifier(OtherUri, 2), [new TextDocumentContentChangeEvent(
+            new Range(new Position(4, 4), new Position(4, 7)), "clc")]);
+        Assert.DoesNotContain(Suggested(), found => found.Id == "carry-already-set");
+
+        IReadOnlyList<Diagnostic> Suggested()
+        {
+            var analysis = workspace.AnalysisForAsync(path, TestTimeout.Token(), settled: true).GetAwaiter().GetResult();
+            Assert.Empty(analysis.Diagnostics);
+            return analysis.SuggestionsFor(path);
+        }
+    }
+
+    /// <summary>A flag a called routine promises after <c>-&gt;</c> needs no qualification.</summary>
+    [Fact]
+    public void AHintFromAPromisedFlagIsPlain()
+    {
+        const string Body = ".export .proc main {\n    jsr g\n    sec\n    sbc #1\n    sta $10\n    rts\n}\n"
+            + ".proc g: -> c = 1 {\n    sec\n    rts\n}\n";
+
+        Applied(Body, "carry-already-set", "Remove it", out var suggestion);
+
+        Assert.Equal("`sec` changes nothing: C is already 1 here", suggestion.Message);
+    }
+
+    /// <summary>
     /// A <c>jmp</c> where a flag is known can be the branch on that flag, which is a byte shorter.
     /// On the 65C02 it can be <c>bra</c>, which needs no flag.
     /// </summary>
@@ -172,6 +262,23 @@ public sealed class FlagHintsTests
     }
 
     /// <summary>
+    /// <c>tdc</c> and <c>tsc</c> set N and Z from all 16 bits they copy, whatever A's width. With
+    /// an 8-bit A a compare with zero tests only the low byte, so it stays.
+    /// </summary>
+    [Theory]
+    [InlineData("tdc")]
+    [InlineData("tsc")]
+    public void ACompareAfterASixteenBitTransferStays(string transfer)
+    {
+        var (analysis, path) = Analyzed(
+            $".export .proc main: a8, i16, native {{\n    {transfer}\n    cmp #0\n    beq @x\n    sta $11\n@x:\n    sec\n    rts\n}}\n",
+            "65816");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "zero-compare");
+    }
+
+    /// <summary>
     /// A routine that declares the flags it returns with promises nothing about the rest, so a
     /// return reads only those.
     /// </summary>
@@ -241,6 +348,33 @@ public sealed class FlagHintsTests
         var (analysis, path) = Analyzed(".export .proc main {\n" + lines + "}\n.proc other {\n    rts\n}\n");
 
         Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id is "load-already-held" or "load-from-register");
+    }
+
+    /// <summary>
+    /// An instruction whose bytes code reads, as <c>lda @op+1</c> reads the operand of the
+    /// instruction at <c>@op</c>, keeps its bytes, so no suggestion changes it.
+    /// </summary>
+    [Theory]
+    [InlineData("    lda #5\n    sta $10\n@op:\n    ldx #5\n    stx $11\n    lda @op+1\n    sta $12\n    rts\n", "load-from-register")]
+    [InlineData("    ldx #0\n    stx $10\n@op:\n    ldx #0\n    stx $11\n    lda @op\n    sta $12\n    rts\n", "load-already-held")]
+    [InlineData("    lda $10\n    bcc @x\n@op:\n    sec\n    sbc #1\n    sta $11\n@x:\n    lda @op\n    sta $12\n    rts\n", "carry-already-set")]
+    [InlineData("    lda $10\n    cmp #0\n    beq @x\n    sta $11\n@x:\n    sec\n    lda @x-5\n    sta $12\n    rts\n", "zero-compare")]
+    [InlineData("    lda $10\n    bne @x\n    sec\n@op:\n    jmp main\n@x:\n    lda @op+2\n    sta $12\n    rts\n", "jump-as-branch")]
+    [InlineData("    lda $10\n    bcc @skip\n    jmp done\n@skip:\n    lda @skip-2\n    sta $12\n    rts\n", "branch-over-jump")]
+    [InlineData("    lda @op\n    sta $12\n    jsr done\n@op:\n    rts\n", "tail-call")]
+    public void AnInstructionReadAsDataKeepsItsBytes(string lines, string id)
+    {
+        var (analysis, path) = Analyzed(".export .proc main {\n" + lines + "}\n.export .proc done {\n    rts\n}\n");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id == id);
+
+        // Read from elsewhere, the same instruction is suggested.
+        var elsewhere = lines.Replace("lda @op+2", "lda $13", StringComparison.Ordinal)
+            .Replace("lda @op+1", "lda $13", StringComparison.Ordinal).Replace("lda @op", "lda $13", StringComparison.Ordinal)
+            .Replace("lda @x-5", "lda $13", StringComparison.Ordinal).Replace("lda @skip-2", "lda $13", StringComparison.Ordinal);
+        (analysis, path) = Analyzed(".export .proc main {\n" + elsewhere + "}\n.export .proc done {\n    rts\n}\n");
+        Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == id);
     }
 
     /// <summary>A call to a routine that promises to keep a register keeps its constant.</summary>

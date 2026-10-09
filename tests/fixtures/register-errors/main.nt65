@@ -139,3 +139,28 @@
     ldy #0
     rts
 }
+
+; A `.next` naming several routines hands control to each of them, so each must promise what
+; this routine's own `keeps` relies on. `keeps_only_x` keeps A without promising to.
+.proc next_hands_off_to_both: keeps a {
+    jmp (vector)            ;! warning[unpromised-keep]: this tail call relies on `keeps_only_x` keeping A, which its `keeps x` does not promise
+    .next holds_it, keeps_only_x
+}
+
+.proc keeps_only_x: keeps x {
+    inc $10
+    rts
+}
+
+; A handler that edits the flags the interrupt pushed, as `tsx` then a store indexed by X does,
+; changes what `rti` pulls. nt65 does not follow which stacked byte the store changes, so neither
+; the flags `rti` restores nor the A that `pla` pulls are known.
+.proc sets_stacked_carry: interrupt, keeps a, c {
+    pha
+    tsx
+    lda $0102,x
+    ora #1
+    sta $0102,x
+    pla
+    rti                     ;! error[keeps-broken]: `sets_stacked_carry` promises `keeps a, c`, but A, C are not the same as on entry here, because `sta $0102,x` writes into the bytes on the stack: nt65 does not follow which byte it changes, so what a pull or an `rti` restores after it is not known
+}

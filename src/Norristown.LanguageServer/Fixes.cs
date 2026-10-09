@@ -27,12 +27,16 @@ internal static class Fixes
             if (diagnostic.Span.LineIndex < range.Start.Line || diagnostic.Span.LineIndex > range.End.Line)
                 continue;
 
-            // A diagnostic with a second fix has two readings, and neither is preferred.
+            // A diagnostic with a second fix has two readings, and neither is preferred. A fix
+            // that relies on something nothing promises says so in its title.
             var readings = diagnostic.Also is null;
             foreach (var fix in new[] { diagnostic.Fix, diagnostic.Also }.OfType<DiagnosticFix>())
             {
-                foreach (var change in For(analysis, model, diagnostic, fix))
+                foreach (var found in For(analysis, model, diagnostic, fix))
+                {
+                    var change = fix.Caveat is { } caveat ? found with { Title = found.Title + caveat } : found;
                     yield return readings ? change : change with { Preferred = false };
+                }
             }
 
             // Any warning that `.allow` may hide can be allowed where it is reported. That

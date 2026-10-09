@@ -4767,7 +4767,11 @@ Recorded so the reasoning survives. None is open.
   touch part of the state should not erase what its caller knows, and the values of D
   and B belong on the routines that set them.
 - **A stack of saved state, not push and pull pairing.** Tracking saved P, D and B as
-  the analysis runs lets a save and restore span calls and labels.
+  the analysis runs lets a save and restore span calls and labels. A store into the stacked
+  bytes, relative to S, indexed by a register `tsx` or `tsc` filled, or to a fixed address from
+  $0100 to $01FF, leaves what a later pull or `rti` restores unknown, because which byte it
+  changed is not followed. So a handler that edits the pushed P to return a status, or any
+  routine that overwrites a saved register, cannot promise to keep it.
 - **A declared label anyone may jump into starts on the stack a call to the routine leaves.**
   Once such a label stopped assuming the widths its own routine's paths left, the analysis
   stack was the part still taken from them, and a `pla`, a `plp`, a `.frame` slot or a `keeps`
@@ -4819,7 +4823,8 @@ Recorded so the reasoning survives. None is open.
 - **A declared `keeps` is a contract.** Where a routine with a body writes no `keeps`, what it
   keeps is inferred and callers use all of it. Where it writes one, the list is the whole
   promise: the body is checked against it, and a caller that relies on a register the list
-  leaves out is warned at its call or tail call, as `unpromised-keep`. The analysis still uses
+  leaves out is warned at its call or tail call, as `unpromised-keep`, once for each routine it
+  may reach that leaves the register out. The analysis still uses
   what the body keeps, so it stays accurate; the warning marks where a change to the routine's
   body would break its caller. A caller relies on a register when code after the call uses the
   value it held before, or when the caller's own `keeps` hands that value back. The 65816's high
@@ -4861,8 +4866,13 @@ Recorded so the reasoning survives. None is open.
   are worked out, a file whose recorded answers differ is analyzed again, as one that took a stale
   stack effect is. The answers themselves are worked out after every file's analysis, from the
   blocks as they stand, so a change that touches no decision analyzes nothing again. An
-  `.ensure`, and the editor's hints, go only by values a routine promised, so neither relies on
-  another routine's body.
+  `.ensure`, and the editor's hints, go by the same answers the branches do: by what a routine
+  promises, and by what the body of a routine that declares no flags leaves, but never by a flag
+  a routine leaves out of what it names. An `.ensure` is worked out again on every build, so its
+  bytes follow the body. A hint, and the title of its fix, name a routine whose body it relies on
+  without a promise, as in "`g` leaves Z this way but does not promise it", because a line the
+  fix deletes stays deleted when that body changes. The flags a hint reads count as answers its
+  file depended on.
 - **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C, V, D and I as 0, 1 or
   unknown through each routine, before any other analysis reads its blocks. An immediate load,
   `clc`, `sec`, `clv`, `cld`, `sed`, `cli`, `sei`, and a `rep` or `sep` with a constant mask set a
@@ -4879,8 +4889,10 @@ Recorded so the reasoning survives. None is open.
   a jump or nothing, and the edge it never takes is removed. Only what the CPU defines is used, so
   nothing about memory is assumed. The same facts give the editor's flag hints: a `.next` the
   flags prove, a branch never taken, a `jmp` that can be a branch, a branch over a `jmp`, and
-  a `clc` or `sec` that is not needed or can be folded into an `adc #n-1` or `sbc #n-1`. A
-  line of a macro body serves every call, so code there is reported as never reached only
+  a `clc` or `sec` that is not needed or can be folded into an `adc #n-1` or `sbc #n-1`. No
+  hint that changes bytes touches an instruction a store rewrites, a `.label` enters, or an
+  operand or data value anywhere in the program names, as `lda @op+1` does, since code reads
+  those bytes. A line of a macro body serves every call, so code there is reported as never reached only
   where no call reaches it: a constant argument often decides a branch in one call and not in
   another.
 - **Register constants extend the flag analysis.** The same walk follows the constant each of

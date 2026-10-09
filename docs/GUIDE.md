@@ -2162,7 +2162,9 @@ everything below works across modules.
   `adc #n-1`. The flag analysis also follows the constants A, X and Y hold, which brings a
   `cmp #0` straight after a `lda` or `dex` that already set N and Z, an `ldx #0` where X is
   already 0, as after a `dex` and `bne` loop, and an `ldx #0` where A is 0, which can be `tax`, a
-  byte shorter. A tail call is not suggested to a
+  byte shorter. A hint that relies on a flag a called routine's body leaves, where the routine
+  declares no flags, says so, as in "`g` leaves C this way but does not promise it", and so
+  does its fix. A tail call is not suggested to a
   routine that depends on how deep the stack is, such as one that pops its caller's return
   address, and a routine with a branch this configuration leaves out gets no suggestions.
 - **Refactorings** on a selection: bring a path in with `.use` or write it out in full; export

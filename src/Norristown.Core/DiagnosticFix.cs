@@ -13,4 +13,8 @@ namespace Norristown;
 /// The declaration the change applies to, when that is not where the diagnostic is reported. For
 /// example, it is the label a <c>.state</c> goes after, or the declaration whose module exports it.
 /// </param>
-public sealed record DiagnosticFix(FixKind Kind, string? Text = null, Span? At = null);
+/// <param name="Caveat">
+/// The words the change's title ends with to say what the change relies on that nothing promises,
+/// such as ", though `g` does not promise Z", or null where it relies on nothing of the kind.
+/// </param>
+public sealed record DiagnosticFix(FixKind Kind, string? Text = null, Span? At = null, string? Caveat = null);
