@@ -1,5 +1,6 @@
 ; A return goes through the top bytes of the stack. nt65 counts what each routine pushes and
-; pulls, so a return through bytes the routine pushed, or through its caller's, is an error.
+; pulls, so a return with the routine's own pushes above a return address nothing has pulled is
+; an error. Once a pull has gone beneath the return address, nothing is reported.
 .module main
 
 .cpu 6502
@@ -33,25 +34,25 @@
     jmp @again
 }
 
-; Whoever jumps to `inside` has pushed nothing, so the `pla` below it takes a byte of the return
-; address and the return goes through a byte of the caller's stack.
+; Whoever jumps to `inside` may have pushed a byte for the `pla` below it to take, as
+; msbasic's operator stack does, so the return is not reported.
 .proc entered {
     pha
     inside:
     .state ?
     pla
-    rts                     ;! error[return-through-caller]: `rts` returns through 1 byte of its caller's stack, because this routine has pulled more than it pushed
+    rts
 }
 
 .proc enters {
     jmp entered::inside
 }
 
-; Discarding the return address returns to the caller's caller.
+; Discarding the return address returns to the caller's caller, which is not reported either.
 .proc discards {
     pla
     pla
-    rts                     ;! error[return-through-caller]: `rts` returns through 2 bytes of its caller's stack, because this routine has pulled more than it pushed
+    rts
 }
 
 ; A routine that pulls its return address and pushes it back above a byte it leaves for its

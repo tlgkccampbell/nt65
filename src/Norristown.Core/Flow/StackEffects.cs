@@ -344,34 +344,23 @@ public sealed class StackEffects
     }
 
     /// <summary>
-    /// Reports a diagnostic for a return through bytes other than the routine's return address,
-    /// where the stack shows it. Every byte above the lowest the stack has been since entry was
-    /// pushed by the routine, and every byte at or below it is as the call left it.
+    /// Reports a diagnostic for a return through bytes the routine pushed rather than through its
+    /// return address. While the stack has never been lower than the return address, the address
+    /// is still where the call put it, so a return with pushes above it pulls those pushes instead.
     /// <para>
-    /// While the stack has never been lower than the return address, the address is still where
-    /// the call put it, so a return with pushes above it pulls those pushes instead. Once it has
-    /// been lower, the routine may have pushed an address back, so only a return that pulls bytes
-    /// beneath both the lowest point and the caller's stack is known to be wrong. That return goes
-    /// through bytes its caller pushed, as <c>pla</c>, <c>pla</c>, <c>rts</c> returns to the
-    /// caller's caller.
+    /// Once the stack has been lower, the routine may have pushed an address back, and a routine
+    /// entered by a jump may have been handed bytes above its return address to pull, so nothing
+    /// is reported.
     /// </para>
     /// </summary>
     private static void CheckReturn(InstructionStatementSyntax statement, Height height, List<Diagnostic> report)
     {
-        if (height is not { Least: { } least, Lowest: { } lowest, Return: var returnSize })
+        if (height is not { Least: { } least, KeepsTheReturn: true, Return: var returnSize } || least <= returnSize)
             return;
-        var mnemonic = SyntaxFacts.TextOf(statement.MnemonicKind);
-        if (height.KeepsTheReturn && least > returnSize)
-        {
-            var pushed = Bytes(least - returnSize);
-            report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
-                Catalogue.ReturnPastPushes.Message(mnemonic, height.AtLeast ? "at least " + pushed : pushed)));
-        }
-        else if (height.Bytes is { } bytes && Math.Min(0, lowest) - bytes + returnSize is var callers && callers > 0)
-        {
-            report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
-                Catalogue.ReturnThroughCaller.Message(mnemonic, Bytes(callers))));
-        }
+        var pushed = Bytes(least - returnSize);
+        report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
+            Catalogue.ReturnPastPushes.Message(
+                SyntaxFacts.TextOf(statement.MnemonicKind), height.AtLeast ? "at least " + pushed : pushed)));
     }
 
     /// <summary>

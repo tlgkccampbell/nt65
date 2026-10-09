@@ -118,7 +118,7 @@
     plp
     lda #$12                ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `resumed` can be entered from outside `saved_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `resumed` to the same side of it as the code that reads them; `args n` on `saved_across` declares what the caller of a second entry point pushed
     sep #$30
-    rts                     ;! error[return-through-caller]: `rts` returns through 1 byte of its caller's stack, because this routine has pulled more than it pushed
+    rts
 }
 
 ; A jump in leaves this routine for good, so it returns the way `saved_across` does.
@@ -138,7 +138,7 @@
     .state a16, i16, native
     lda local::count,s      ;! error[frame-depth-unknown]: `local::count` is an offset from the stack pointer, but how many bytes are pushed here is not known, because `laid_out` can be entered from outside `framed`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `laid_out` to the same side of it as the code that reads them; `args n` on `framed` declares what the caller of a second entry point pushed
     pla
-    rts                     ;! error[return-through-caller]: `rts` returns through 2 bytes of its caller's stack, because this routine has pulled more than it pushed
+    rts
 }
 
 .proc into_framed: a16, i16, native {

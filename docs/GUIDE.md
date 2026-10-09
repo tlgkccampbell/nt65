@@ -1091,8 +1091,7 @@ promise nt65 checks, and `.next .return ?` says it cannot be known. Labels may f
 others.
 
 A plain `rts` or `rtl` is checked against the same count. One that would pull bytes the
-routine pushed in place of its return address is an error, and so is one that pulls bytes
-beneath its caller's stack, as `pla`, `pla`, `rts` does to return to the caller's caller.
+routine pushed in place of its return address, which nothing has pulled, is an error.
 
 The same annotation covers the `bit` skip trick, where one instruction's operand hides the
 next instruction:

@@ -467,7 +467,6 @@
         "return-flag-not-set",
         "return-past-pushes",
         "return-state-mismatch",
-        "return-through-caller",
         "routine-runs-off-the-end",
         "rti-outside-handler",
         "runs-into-data",

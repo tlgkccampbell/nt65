@@ -124,7 +124,7 @@
     plp
     lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `plp` pulls a status that no `php` in this routine pushed: an `.ensure` after it sets it
     sep #$30
-    rts                     ;! error[return-through-caller]: `rts` returns through 1 byte of its caller's stack, because this routine has pulled more than it pushed
+    rts
 }
 
 .proc swapped: a8, i8 {

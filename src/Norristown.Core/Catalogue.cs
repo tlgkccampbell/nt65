@@ -2971,17 +2971,6 @@ public static class Catalogue
             + "them as the address to go to. A routine that pushes an address to jump through its return names where "
             + "it goes with a `.next`.");
 
-    internal static DiagnosticDescriptor ReturnThroughCaller { get; } = Entry(
-        Area.ControlFlow,
-        "return-through-caller",
-        Severity.Error,
-        "`{0}` returns through {1} of its caller's stack, because this routine has pulled more than it pushed",
-        "nt65 counts what a routine pushes and pulls from where it was called, or from the label it was entered at. "
-            + "This return comes after the routine pulled its return address and more, and pushed too little back, "
-            + "so it goes to an address made of bytes its caller pushed for something else, such as the caller's own "
-            + "return address. A label another routine jumps into is entered with nothing pushed, so a pull below it "
-            + "takes the caller's bytes too.");
-
     internal static DiagnosticDescriptor JumpTargetNotALabel { get; } = Entry(
         Area.ControlFlow,
         "jump-target-not-a-label",
