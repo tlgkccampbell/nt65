@@ -55,6 +55,14 @@ internal sealed partial class Evaluator
     // reported.
     private HashSet<object>? wide;
 
+    // The parts of a `.func` body that ld65 cannot work out, while the output writes a call
+    // whose value depends on an address as the function's body. A part either uses a parameter
+    // given an address in something other than an operator, or names an address declared in
+    // another file than the call, which the calling file's output cannot name. `linkedFrom` is
+    // the file of the call.
+    private List<(SyntaxNode Node, bool Elsewhere)>? unlinked;
+    private SyntaxTree? linkedFrom;
+
     // Whether a chain of definitions deeper than MaximumDepth has been reported.
     private bool tooDeep;
 
@@ -234,8 +242,21 @@ internal sealed partial class Evaluator
     /// the symbols or the conditions of a build, evaluates through this method. A caller that
     /// only queries goes through <see cref="ValueOf"/>.
     /// </summary>
-    public Value Evaluate(SyntaxNode node) =>
-        context.Written is null ? Evaluated(node) : CheckedForCa65(node, Evaluated(node));
+    public Value Evaluate(SyntaxNode node)
+    {
+        if (context.Written is null)
+            return Evaluated(node);
+        var value = CheckedForCa65(node, Evaluated(node));
+        if (unlinked is not null && value.Kind == ValueKind.Unknown)
+        {
+            if (!IsLinkTime(node) && UsesParameter(node))
+                unlinked.Add((node, false));
+            else if (node is NameExpressionSyntax name && node.Tree != linkedFrom
+                && node.FirstAncestorOrSelf<FuncDeclarationSyntax>() is not null && SymbolOf(name) is { IsAddress: true })
+                unlinked.Add((node, true));
+        }
+        return value;
+    }
 
     /// <summary>
     /// Determines whether ca65 can hold a value. ca65's own arithmetic is 32-bit signed, and it
@@ -314,6 +335,45 @@ internal sealed partial class Evaluator
         }
         return value;
     }
+
+    /// <summary>
+    /// Returns whether the output can leave a part of a <c>.func</c> body to ld65 when an
+    /// address flows into it. ld65 works out every operator but <c>.in</c>, so an operation, a
+    /// name, a number and a call to another function can be written for it to finish.
+    /// </summary>
+    private bool IsLinkTime(SyntaxNode node) => node switch
+    {
+        ParenthesizedExpressionSyntax or UnaryExpressionSyntax or NameExpressionSyntax => true,
+        NumberExpressionSyntax or CharacterExpressionSyntax => true,
+        BinaryExpressionSyntax binary => !IsIn(binary.OperatorToken),
+        CallExpressionSyntax { Callee: { } callee } => SymbolOf(callee)?.Kind == SymbolKind.Func,
+        _ => false,
+    };
+
+    /// <summary>
+    /// Returns whether a <c>.func</c> body names an address, directly or through the functions
+    /// it calls, so that a call to it may have a value only the linker knows.
+    /// </summary>
+    /// <param name="function">The function whose body is searched.</param>
+    /// <param name="visited">The functions searched already, which are not searched again.</param>
+    private bool BodyNamesAnAddress(Symbol function, HashSet<Symbol> visited) =>
+        visited.Add(function) && function.Items is [var body, ..]
+        && body.DescendantNodes().Prepend(body).Any(node => node switch
+        {
+            NameExpressionSyntax name => SymbolOf(name) is { IsAddress: true },
+            CallExpressionSyntax { Callee: { } callee } => SymbolOf(callee) is { Kind: SymbolKind.Func } called
+                && BodyNamesAnAddress(called, visited),
+            _ => false,
+        });
+
+    /// <summary>
+    /// Returns whether a part of an expression names a parameter of a <c>.func</c> whose body is
+    /// being evaluated.
+    /// </summary>
+    private bool UsesParameter(SyntaxNode node) =>
+        node.DescendantNodes().Prepend(node).OfType<NameExpressionSyntax>().Any(name =>
+            SymbolOf(name) is { Kind: SymbolKind.Constant } symbol
+            && evaluating.Any(function => function.Kind == SymbolKind.Func && function.ParameterSymbols.Contains(symbol)));
 
     /// <summary>
     /// Reports a literal that contains a character above <c>$7f</c>, unless a charmap or layout

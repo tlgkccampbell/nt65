@@ -632,8 +632,16 @@ internal sealed partial class Evaluator
                 values[i] = Evaluate(given[i]);
         }
 
+        // A call the output writes, given an address, is written as the function's body for ld65
+        // to finish. The outermost such call collects what in the body ld65 cannot work out,
+        // through any functions the body calls, and reports the first. Every such call reads its
+        // body again, because a result kept from before says nothing about what the body holds.
+        var linking = context.Written is not null && !context.ReadingBody
+            && (unlinked is not null || values.Any(value => value.Kind == ValueKind.Unknown) || BodyNamesAnAddress(symbol, []));
+        var outermost = linking && unlinked is null;
+
         // A closed function called again with the same arguments gives the result it gave before.
-        var kept = KeepsResults ? FunctionResults.For(resolved) : null;
+        var kept = KeepsResults && !linking ? FunctionResults.For(resolved) : null;
         if (kept is not null && !kept.IsClosed(symbol, static (function, evaluator) => evaluator.IsClosed(function), this))
             kept = null;
         if (kept?.Find(symbol, values) is { } known)
@@ -650,9 +658,31 @@ internal sealed partial class Evaluator
                 shadowed.Add((parameter, bound.GetValueOrDefault(parameter), bound.ContainsKey(parameter)));
                 bound[parameter] = values[i];
             }
+            if (outermost)
+            {
+                unlinked = [];
+                linkedFrom = call.Tree;
+            }
             Value result;
-            using (Evaluating(symbol))
-                result = Evaluate(symbol.Items[0]);
+            try
+            {
+                using (Evaluating(symbol))
+                    result = Evaluate(symbol.Items[0]);
+                if (outermost && result.Kind == ValueKind.Unknown && unlinked is [var (first, elsewhere), ..])
+                {
+                    Report(call, Catalogue.FuncNotLinkable.Message(symbol.Name, first.GetText().Trim(), elsewhere
+                        ? "that address is declared in another file, which this file's output cannot name"
+                        : "ld65 works out only operators on an address, so that part of the body needs a constant"));
+                }
+            }
+            finally
+            {
+                if (outermost)
+                {
+                    unlinked = null;
+                    linkedFrom = null;
+                }
+            }
             if (kept is not null && problems == before)
                 kept.Keep(symbol, values, result);
             return result;

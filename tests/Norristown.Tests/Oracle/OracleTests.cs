@@ -392,6 +392,42 @@ public sealed partial class OracleTests
         LinksLikeByHand(output, ByHand);
     }
 
+    /// <summary>
+    /// A <c>.func</c> given a routine's address has no value nt65 knows, so its body is written
+    /// with the address in place of the parameter, and ld65 works it out. The decimal digits of
+    /// the address, as a C64 BASIC <c>SYS</c> line spells them, are the digits of where ld65
+    /// put the routine, and so is a call nested inside another call's argument.
+    /// </summary>
+    [Fact]
+    public void AFunctionGivenAnAddressIsWorkedOutByLd65()
+    {
+        const string Nt65 = """
+            .module main
+            .func digit(n, place) = '0' + (n / place) .mod 10
+            .func after(n) = n + 1
+            .segment CODE
+            .data basic {
+                .byte digit(main, 1000), digit(main, 100), digit(main, 10), digit(main, 1)
+                .word after(main)
+            }
+            .export .proc main {
+                lda #digit(after(main), 1)
+                rts
+            }
+            """;
+
+        var generated = Compiler.Compile(
+            [new SourceFile("main.nt65", Nt65)], ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
+        Assert.Empty(generated.Diagnostics);
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var linked = Ca65Oracle.Pinned.Link(config, [.. generated.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))]);
+        Assert.True(linked.Succeeded, linked.Messages);
+
+        // CODE starts at $0200, and the six bytes of `basic` put `main` at $0206, which is 518.
+        byte[] expected = [.. "0518"u8, 0x07, 0x02, 0xa9, (byte)'9', 0x60];
+        Assert.Equal(expected, linked.Binary);
+    }
+
     [Fact]
     public void RefusesABuildThatIsNotThePinnedCommit()
     {

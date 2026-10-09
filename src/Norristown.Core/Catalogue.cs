@@ -1180,6 +1180,21 @@ public static class Catalogue
         "nt65 evaluates constant expressions while it builds, and a division by zero has no value to write to the "
             + "output. Check the divisor.");
 
+    internal static DiagnosticDescriptor FuncNotLinkable { get; } = Entry(
+        Area.Values,
+        "func-not-linkable",
+        Severity.Error,
+        "`{0}` is written for ld65 to work out, because its value depends on an address, and its body uses "
+            + "`{1}`: {2}",
+        "A `.func` called with an address, such as a label or a routine, has no value nt65 knows, so the output "
+            + "writes the function's body with the argument in place of the parameter and leaves ld65 to work it "
+            + "out once the address is known. ld65 works out the arithmetic, bitwise, shift, comparison and "
+            + "logical operators and `<`, `>` and `^`, so `.func digit(n, place) = '0' + (n / place) .mod 10` can "
+            + "be given a routine's address. A built-in function, `.in`, a charmap or text in the body is worked out "
+            + "by nt65 before the output is written, and so needs every parameter it uses to be given a constant. "
+            + "The body is written into the output of the file that calls it, so an address it names has to be "
+            + "declared in that file.");
+
     internal static DiagnosticDescriptor OperatorOnText { get; } = Entry(
         Area.Values,
         "operator-on-text",
@@ -2069,6 +2084,17 @@ public static class Catalogue
         "The address is wider than the place it is written into, and ca65 would stop with a range error. Use the "
             + "part of the address that fits, as the message suggests.");
 
+    internal static DiagnosticDescriptor LinkedValueMayNotFit { get; } = Entry(
+        Area.Data,
+        "linked-value-may-not-fit",
+        Severity.Error,
+        "`{0}` is worked out by the linker from an address, and {1}, which nt65 cannot show it fits: use `<({0})` "
+            + "for its low byte",
+        "A `.func` given an address is written for ld65 to work out, and ca65 refuses an address in a one-byte slot "
+            + "whatever the value comes to. Where nt65 can show the value always fits a byte, as it can for "
+            + "`'0' + (n / 10) .mod 10`, the output keeps only the low byte, which loses nothing. Where it cannot, "
+            + "`<` says that the low byte is what is meant.");
+
     internal static DiagnosticDescriptor AddressNegative { get; } = Entry(
         Area.Data,
         "address-negative",
@@ -2640,11 +2666,26 @@ public static class Catalogue
         Area.ControlFlow,
         "runs-into-data",
         Severity.Error,
-        "the instruction above falls into this data: add a `.next` after the data saying where flow goes",
+        "the instruction above falls into this {0}: {1}",
         "Execution falls from the instruction above into these bytes, so the processor would run them as code, as "
             + "in the `.byte $2c` skip trick or an opcode given as bytes. nt65 cannot follow flow through "
             + "data, so add a `.next` after the data naming where flow really goes. If the instruction above is "
-            + "a conditional branch that is always taken, put a `.next` naming its target under the branch instead.");
+            + "a conditional branch that is always taken, put a `.next` naming its target under the branch instead. "
+            + "A `.res` or `.align` with no fill byte is filled by the linker with zero, which runs as `brk`, so "
+            + "flow cannot go through it. Give it a fill byte such as `$ea`, which is `nop`, and add the `.next`, "
+            + "or `jmp` over it.");
+
+    internal static DiagnosticDescriptor NextAfterPadding { get; } = Entry(
+        Area.ControlFlow,
+        "next-after-padding",
+        Severity.Error,
+        "`.next` cannot follow `{0}`, which has no fill byte: the linker fills it with zero, which runs as `brk`; "
+            + "give it a fill byte such as `$ea` (`nop`), or `jmp` over it",
+        "A `.next` after data says that execution runs through the data's bytes and on to the labels it names. "
+            + "A `.res` or `.align` with no fill byte leaves its bytes to the linker, which fills them with its "
+            + "memory area's fill value, zero by default, and zero is the `brk` opcode. Running into that padding "
+            + "breaks the program, so the claimed edge is false. Name a fill byte that runs on, such as `$ea`, "
+            + "which is `nop` on every CPU, or put a `jmp` before the padding to step over it.");
 
     internal static DiagnosticDescriptor RoutineRunsOffTheEnd { get; } = Entry(
         Area.ControlFlow,

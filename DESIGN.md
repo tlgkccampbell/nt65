@@ -1766,7 +1766,7 @@ The third directive is about the end of a routine rather than a statement:
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the memory operand of an instruction that reads it, the argument of `.sizeof`, `.countof`, `.endof`, `.spanof`, `.addrsize`, `.mincycles`, `.maxcycles` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | code nothing reaches: an instruction with no label after an `rts`, a `jmp`, a call that never returns, or a branch the flags show is always taken | no fall-through and no label, so nothing can name it; in a macro body, no call of the macro reaches it | a warning at its first instruction, faded as unneeded; `.allow "code-unreachable"` where it is reached in a way nt65 cannot see |
-| data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next. A routine that ends in such data is reported once, as running into it |
+| data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next. A routine that ends in such data is reported once, as running into it. A `.res` or `.align` with no fill byte cannot take the `.next`: the linker fills it with zero, which is `brk`, so the edge would be false, and the message asks for a fill byte that runs on, such as `$ea` (`nop`), or a `jmp` over the padding. Padding with a fill byte still needs the `.next`, since nt65 does not run flow through data |
 | a conditional branch that is always taken: `bcs` over inline text after a routine that returns with carry set | the flags are known where the branch stands from something the flag analysis does not follow, such as what a routine returns with where its signature does not say; a flag the routine's own instructions set, or a signature gives, is followed, and needs nothing | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
 | jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7). On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
@@ -2802,6 +2802,23 @@ configuration decides the function and the arguments (§10). Functions may call 
 not anything calls them. A function
 is exported and used across modules like a constant, and the output writes each call as
 its parenthesized body, or as its value where nt65 has one.
+
+A call given an address, such as the decimal digits of a routine's address that a C64 BASIC
+`SYS` line spells, has no value nt65 knows, and its body is written for ld65 to work out:
+
+```nt65
+.func digit(n, place) = '0' + (n / place) .mod 10
+
+.data basic {
+    .byte digit(main, 1000), digit(main, 100), digit(main, 10), digit(main, 1)
+}
+```
+
+ld65 works out the operators, so a part of the body that uses such a parameter in anything
+else, such as a built-in function or `.in`, is an error. ca65 refuses an absolute address in a
+one-byte slot whatever the value comes to. A call that nt65 can show always fits a byte is
+therefore written as its `.lobyte`, which loses nothing, and one in a byte that nt65 cannot show
+fits is an error that asks for `<`.
 
 **Defaults and named arguments** work as a macro's do (§11.2). A parameter may have a default,
 whose names resolve where the function is declared, so a caller in another module gets the
@@ -4029,7 +4046,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | `.type T { ... }`, `.type T[] { ... }` | a data directive per member of each record, each with a comment naming it |
 | `.data name { }` | `name:` and its contents; a member `name::sub` is `name__sub`, and an `@` position gets a generated name |
 | `.list` | nothing by itself; its items where it is used |
-| a `.func` call | its value where nt65 has one, else its body, with each parameter replaced by its parenthesized argument |
+| a `.func` call | its value where nt65 has one, else its body, with each parameter replaced by its parenthesized argument, inside `.lobyte()` where nt65 can show the value always fits a byte |
 | a `.func` call, `.strsub`, `.strcat` or `.select` that is text | its bytes, with the source expression in a comment, as a literal's are |
 | `Player::pos::y`, `player::hp` | `2`, `player+4`, each with a comment naming the path |
 | `'c'`, `"text"`, `screen("HELLO")` | byte values, with the source text in a comment |

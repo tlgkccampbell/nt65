@@ -1,0 +1,32 @@
+; A `.func` given an address has no value nt65 knows, so the output writes its body with the
+; argument in place of the parameter, and ld65 works it out once the address is known. A call
+; whose value always fits a byte is written as its low byte, because ca65 refuses an absolute
+; address in a one-byte slot whatever the value comes to.
+.module main
+
+.export main, basic, more
+
+.func digit(n, place) = '0' + (n / place) .mod 10
+.func after(n) = n + 1
+.func triple(n) = n * 3
+.func entry(n) = after(n) - 1
+
+.segment CODE
+
+; The digits of the entry point, as a C64 BASIC `SYS` line spells them.
+.data basic {
+    .byte digit(main, 1000), digit(main, 100), digit(main, 10), digit(main, 1)
+}
+
+; A call nested in another, a call in a word, and a call narrowed with `<`.
+.data more {
+    .word after(main), entry(main)
+    .byte <triple(main), digit(main, 1) - '0'
+}
+
+.proc main {
+    lda #digit(after(main), 1)
+    ldx #<triple(main)
+    lda #<entry(main)
+    rts
+}

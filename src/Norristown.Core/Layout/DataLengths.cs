@@ -95,7 +95,20 @@ public static class DataLengths
     public static DiagnosticMessage? TooWide(
         SyntaxNode operand, int bytes, string slot, SemanticModel model, Expansion? on)
     {
-        if (model.ValueOf(operand, on).AsNumber() is not null || AddressIn(operand, model, on) is not { } address
+        if (model.ValueOf(operand, on).AsNumber() is not null)
+            return null;
+
+        // A call to a `.func` given an address is written as the function's body for ld65 to
+        // finish, narrowed to its low byte where its value always fits one. ca65 refuses an
+        // address in a byte otherwise, so a call nt65 cannot show fits is refused here.
+        if (bytes == 1 && LinkRange.HasLinkedCall(model, operand, on))
+        {
+            if (LinkRange.Of(model, operand, on) is { Low: >= -0x80, High: <= 0xff })
+                return null;
+            return Catalogue.LinkedValueMayNotFit.Message(operand.GetText().Trim(), slot);
+        }
+
+        if (AddressIn(operand, model, on) is not { } address
             || model.AddressSizeOf(address, null, on) is not { } size || (int)size <= bytes)
         {
             return null;
