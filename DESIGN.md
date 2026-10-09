@@ -1391,6 +1391,7 @@ that routine's signature.
 | `plp` that pulls a P saved by `php`, in native mode | the widths saved at the `php` |
 | `plp` that pulls a P saved by `php`, in emulation mode | both widths 8 |
 | `plp` that pulls a P saved by `php`, with E unknown or `*` | a saved 8 is restored, and so is a saved `*` where E is `*`; any other saved width becomes unknown, as after `rep` |
+| a store into the bytes on the stack: relative to S, indexed by a register `tsx` or `tsc` filled, or to a fixed address from $0100 to $01FF | the analysis stack becomes unknown, so a `plp`, `pld` or `plb` after it restores nothing known; the register walk forgets what a pull or `rti` restores the same way (§16) |
 | any other `plp` | both widths unknown; E unchanged |
 | `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `noreturn` ends the path |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |

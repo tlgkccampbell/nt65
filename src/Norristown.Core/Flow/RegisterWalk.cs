@@ -263,11 +263,11 @@ internal sealed class RegisterWalk
         var mode = layout.Of(statement, step.On)?.Mode;
         var immediate = StepOperands.Immediate(model, layout, step);
         var after = Instruction(step, statement.MnemonicKind, mode, immediate, state, use, saved, next);
-        var pointing = Pointing(statement.MnemonicKind, mode, immediate, state.FromStackPointer);
+        var pointing = StackWrites.Pointing(statement.MnemonicKind, mode, immediate, state.FromStackPointer);
         foreach (var variant in VariantsOf(step))
         {
             after = RegisterState.Merge(after, Instruction(step, variant, mode, immediate, state, use, saved, next));
-            pointing &= Pointing(variant, mode, immediate, state.FromStackPointer);
+            pointing &= StackWrites.Pointing(variant, mode, immediate, state.FromStackPointer);
         }
         return after with { FromStackPointer = pointing };
     }
@@ -313,7 +313,7 @@ internal sealed class RegisterWalk
         // A store into the bytes on the stack may change a saved register or the flags an
         // interrupt pushed, and nt65 does not follow which byte it changes. What a pull or an
         // `rti` restores after it is then not known.
-        if (facts.Stores && WritesStacked(step, mode, state))
+        if (facts.Stores && StackWrites.Into(model, step, mode, state.FromStackPointer))
             state = state with { Stack = null, WhyStack = Cause.StackWritten($"`{step.Statement.GetText().Trim()}`") };
 
         // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
@@ -364,45 +364,6 @@ internal sealed class RegisterWalk
             },
             MnemonicKind.Tdc or MnemonicKind.Tsc => after.With(Registers.A, RegisterValue.Written),
             _ => Accumulator(step, after, RegisterValue.Written),
-        };
-    }
-
-    /// <summary>
-    /// Returns the registers among A, X and Y that hold the stack pointer after an instruction
-    /// runs as <paramref name="mnemonic"/>, where <paramref name="before"/> held it before. A
-    /// <c>tsx</c> or a <c>tsc</c> copies it, a transfer passes it on, and anything else that
-    /// writes a register, or a call, leaves that register holding something else.
-    /// </summary>
-    private static Registers Pointing(MnemonicKind mnemonic, AddressingMode? mode, long? immediate, Registers before)
-    {
-        if (Instructions.IsCall(mnemonic) || mnemonic is MnemonicKind.Brk or MnemonicKind.Cop)
-            return Registers.None;
-        if (mnemonic == MnemonicKind.Tsx)
-            return before | Registers.X;
-        if (mnemonic == MnemonicKind.Tsc)
-            return before | Registers.A;
-        if (RegisterEffects.Moved(mnemonic) is { } moved)
-            return (before & moved.From) != Registers.None ? before | moved.To : before & ~moved.To;
-        return before & ~RegisterEffects.Written(mnemonic, mode, immediate);
-    }
-
-    /// <summary>
-    /// Returns whether a store at <paramref name="step"/> in <paramref name="mode"/> writes into
-    /// the bytes on the stack, where the registers are <paramref name="state"/>. That is a store
-    /// relative to S, one indexed by a register that holds S from a base on the stack's page or
-    /// one nt65 does not know, and one to a fixed address from $0100 to $01FF. A store through a
-    /// pointer on the stack writes elsewhere, so it is not one.
-    /// </summary>
-    private bool WritesStacked(Step step, AddressingMode? mode, RegisterState state)
-    {
-        var onPage = StepOperands.Constant(model, step) is not { } address ? (bool?)null : (address & ~0xffL) == 0x100;
-        return mode switch
-        {
-            AddressingMode.StackRelative => true,
-            AddressingMode.AbsoluteX => (state.FromStackPointer & Registers.X) != Registers.None && onPage != false,
-            AddressingMode.AbsoluteY => (state.FromStackPointer & Registers.Y) != Registers.None && onPage != false,
-            AddressingMode.Absolute => onPage == true,
-            _ => false,
         };
     }
 

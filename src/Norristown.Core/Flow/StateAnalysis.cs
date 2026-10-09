@@ -644,6 +644,14 @@ public sealed class StateAnalysis : IProcessorStates
         var mnemonic = statement.MnemonicKind;
         var mode = layout.Of(statement, step.On)?.Mode;
         var processor = state.Processor;
+
+        // A store into the bytes on the stack may change a P, D or B saved there, and nt65 does
+        // not follow which byte it changes, so nothing saved on the stack is known afterwards.
+        // The register walk forgets the flags and registers such a store may change the same way.
+        var pointing = StackWrites.Pointing(mnemonic, mode, StepOperands.Immediate(model, layout, step), state.Pointing);
+        state = Instructions.Facts(mnemonic).Stores && StackWrites.Into(model, step, mode, state.Pointing)
+            ? state with { Stack = null, WhyStack = Cause.StackWritten($"`{statement.GetText().Trim()}`"), Pointing = pointing }
+            : state with { Pointing = pointing };
         var stack = state.Stack;
         if (mode == AddressingMode.Immediate && Instructions.SizedBy(mnemonic) is { } register)
         {
