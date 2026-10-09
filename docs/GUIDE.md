@@ -2088,7 +2088,10 @@ everything below works across modules.
   such as a handler after it gives D back, is listed under `D = ?`, with where each access
   lands on every page the interrupted code holds D at. A handler that uses a location as a
   temporary, or only writes one that the code it interrupts writes and reads back, is marked
-  `⚠`; one that counts or flags something for that code is not. A constant address that an
+  `⚠`, even where one routine of that code writes it and another reads it, or where that code
+  reaches it while D is not known; one that counts or flags something for that code is not. A
+  routine that reads a location before a call and again after it relies on it just as one that
+  wrote it does, so a call that uses it as a temporary is marked there too. A constant address that an
   instruction reaches through the page, such as `lda $FB`, is shown as a location named by its
   address, `$00FB`; a constant with an index register added, such as `lda 1,x`, is an offset from
   wherever the register points and is not. Selecting a row marks the

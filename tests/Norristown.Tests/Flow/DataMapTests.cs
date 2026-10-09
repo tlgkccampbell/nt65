@@ -408,6 +408,114 @@ public sealed class DataMapTests
     }
 
     /// <summary>
+    /// The program's write of a location and its read of it may be in two routines. A handler that
+    /// writes the location in between changes what the reader reads, which is the same hazard as
+    /// when one routine does both, so the program's uses are pooled before they are graded.
+    /// </summary>
+    [Fact]
+    public void AWriteAndAReadInTwoRoutinesCanBeInterrupted()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=True used=1 direct=3",
+                "  ◦ no config · layout guessed",
+                "  flag +0 x1 .byte Interrupt Guessed",
+                "    setter Out 1",
+                "    getter In 1",
+                "    irq Out 1 handler",
+                "      ⚠ `irq` writes it without reading it first @ sta flag",
+                "      ⚠ and can interrupt the program between `setter`'s write and `getter`'s read @ lda flag",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data flag: .byte
+                .segment CODE
+                .export .proc main {
+                    jsr setter
+                    jsr getter
+                    rts
+                }
+                .proc setter {
+                    sta flag
+                    rts
+                }
+                .proc getter {
+                    lda flag
+                    rts
+                }
+                .export .proc irq: interrupt {
+                    sta flag
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
+    /// The program's use of a location while D is not known still names the location, so a handler
+    /// that uses it as a temporary can change it under that use as under any other.
+    /// </summary>
+    [Fact]
+    public void AUseWhileDIsNotKnownCanBeInterrupted()
+    {
+        var lines = Render("65816", """
+            .segment ZEROPAGE
+            .data tmp: .byte
+            .segment CODE
+            .export .proc main: a8, i8, dp? {
+                sta tmp
+                lda tmp
+                rts
+            }
+            .export .proc nmi: interrupt, native {
+                sep #$30
+                pea 0
+                pld
+                stx tmp
+                ldx tmp
+                rti
+            }
+            """);
+        Assert.Contains("      ⚠ and can interrupt `main` between its write and its read @ lda tmp", lines);
+    }
+
+    /// <summary>
+    /// A routine that reads a location before a call and again after it relies on the call
+    /// leaving it alone, as much as one that wrote it first does. A call that uses the location as
+    /// a temporary is a hazard to it.
+    /// </summary>
+    [Fact]
+    public void AValueReadAcrossACallThatUsesItAsATemporaryIsAHazard()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Nested hazard=True used=1 direct=4",
+                "  ◦ no config · layout guessed",
+                "  count +0 x1 .byte Nested Guessed",
+                "    main In 2",
+                "      ⚠ `jsr helper` runs between two reads of it @ jsr helper",
+                "      ⚠ `helper` uses it as a temporary @ stx count",
+                "      ◦ read again here, after the call @ lda count",
+                "    helper Temp 2",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data count: .byte
+                .segment CODE
+                .export .proc main {
+                    lda count
+                    jsr helper
+                    lda count
+                    rts
+                }
+                .proc helper {
+                    stx count
+                    ldx count
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
     /// A routine that only a vector table names and that returns with <c>rti</c> is a handler
     /// even without the <c>interrupt</c> mark, so its use of a location as a temporary is the
     /// same hazard a marked handler's is.
