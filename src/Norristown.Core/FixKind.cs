@@ -230,4 +230,16 @@ public enum FixKind
     /// <see cref="DiagnosticFix.Text"/> names.
     /// </summary>
     Variant,
+
+    /// <summary>
+    /// The name of the <c>.patch</c> target at <see cref="DiagnosticFix.At"/>, replaced with the
+    /// label the fix's <see cref="DiagnosticFix.Text"/> names.
+    /// </summary>
+    PatchTarget,
+
+    /// <summary>
+    /// A <c>.patch</c> naming the label the fix's <see cref="DiagnosticFix.Text"/> names, added
+    /// after the <c>.patch</c> reported.
+    /// </summary>
+    PatchTargetAdded,
 }

@@ -274,6 +274,16 @@ public sealed class FixesTests
             ".export .proc main: a8, i8 {\n    lda #.opcode(ora, imm)\n    sta @op\n    .patch @op\n@op:\n    and #1\n    rts\n}\n",
             ".export .proc main: a8, i8 {\n    lda #.opcode(ora, imm)\n    sta @op\n    .patch @op as ora\n@op:\n    and #1\n    rts\n}\n"
         },
+        {
+            "Name `@next` in the `.patch` instead",
+            ".export .proc main: a16, i8 {\n    sta @op+3\n    .patch @op\n@op:\n    ldx #0\n@next:\n    lda #0\n    rts\n}\n",
+            ".export .proc main: a16, i8 {\n    sta @op+3\n    .patch @next\n@op:\n    ldx #0\n@next:\n    lda #0\n    rts\n}\n"
+        },
+        {
+            "Remove it",
+            ".export .proc main: a16, i8 {\n    sta @op+3\n    .patch @op\n    .patch @next\n@op:\n    ldx #0\n@next:\n    lda #0\n    rts\n}\n",
+            ".export .proc main: a16, i8 {\n    sta @op+3\n    .patch @next\n@op:\n    ldx #0\n@next:\n    lda #0\n    rts\n}\n"
+        },
     };
 
     [Theory]
@@ -370,6 +380,24 @@ public sealed class FixesTests
 
         Assert.Contains(analysis.Diagnostics, diagnostic => diagnostic.Id == "patch-variants-required");
         Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.StartsWith("List the variant", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A store that writes the operand of one instruction and the opcode of the labeled one after
+    /// it writes both, so the fix adds a <c>.patch</c> for the second rather than renaming the first.
+    /// </summary>
+    [Fact]
+    public void AStoreIntoTwoInstructionsIsOfferedASecondPatch()
+    {
+        const string Body = ".export .proc main: a16, i8 {\n    sta @op+1\n    .patch @op\n@op:\n    ldx #0\n@next:\n    inx\n    rts\n}\n";
+        var (analysis, model) = Analyzed(Header + Body);
+
+        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Add `.patch @next`");
+
+        Assert.Equal(
+            Header + ".export .proc main: a16, i8 {\n    sta @op+1\n    .patch @op\n    .patch @next\n@op:\n    ldx #0\n@next:\n    inx\n    rts\n}\n",
+            Editing.Apply(Header + Body, action.Edit!.Changes[Uri]));
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.Contains("instead", StringComparison.Ordinal));
     }
 
     /// <summary>

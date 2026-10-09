@@ -6,7 +6,8 @@
 
 .export variant_in_operand, opcode_unknown, operand_only, reads_opcode, calls_out
 .export jumps_out, calls_out_cleanly, listed_variant, calls_declared, indexed_listed
-.export through_name, through_name_listed, two_stores
+.export through_name, through_name_listed, two_stores, past_into_next, past_into_data
+.export before_into_previous, patches_next, patches_nothing
 
 .proc EXT = $FFD2
 .proc DECLARED = $FFE4: reads a
@@ -124,6 +125,67 @@
     .patch @op              ;! error[patch-variants-required]: `sta @op,y` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`
 @op:
     lda #5
+    rts
+}
+
+; A store's bytes must lie inside the instruction its `.patch` names. Two bytes past a two-byte
+; instruction is the opcode of the one after it, which the fix names in the `.patch` instead.
+.proc past_into_next {
+    sta @op+2
+    .patch @op              ;! error[patch-misses-store]: `sta @op+2` writes past `@op`, which is 2 bytes, into `inx` at `@next` after it: name `@next` with a `.patch`
+@op:
+    lda #0
+@next:
+    inx
+    rts
+}
+
+; Bytes past the instruction may land in data, which needs no `.patch`. Naming the branch makes
+; its flags unknown, so the `.next` says where it goes.
+.proc past_into_data {
+    sec
+    sta @op+2
+    .patch @op              ;! error[patch-misses-store]: `sta @op+2` writes past `@op`, which is 2 bytes, into the data `.byte 1` after it; a `.patch` names an instruction, and a store into data needs none
+@op:
+    bcs @skip
+    .next @skip
+    .byte 1
+@skip:
+    rts
+}
+
+; Bytes before the instruction land in the one before it, here in its operand.
+.proc before_into_previous {
+    sta @op-1
+    .patch @op              ;! error[patch-misses-store]: `sta @op-1` writes before `@op`, which is 1 byte, into `ldx #0` before it: label that instruction and name it with a `.patch`
+    ldx #0
+@op:
+    inx
+    rts
+}
+
+; The bytes are placed from where the label the store names stands. This store writes the
+; operand of `@next`, which its `.patch` names, so it needs no variants and no `.patch @op`.
+.proc patches_next {
+    sta @op+3
+    .patch @next
+@op:
+    lda #0
+@next:
+    lda #0
+    rts
+}
+
+; Every `.patch` under a store names an instruction the store writes. This store misses `@op`
+; entirely, so `.patch @op` names nothing and the fix removes it.
+.proc patches_nothing {
+    sta @op+3
+    .patch @op              ;! error[patch-misses-store]: `sta @op+3` writes past `@op`, which is 2 bytes, into `lda #0` at `@next` after it, which `.patch @next` already names: remove this `.patch`
+    .patch @next
+@op:
+    lda #0
+@next:
+    lda #0
     rts
 }
 

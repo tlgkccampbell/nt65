@@ -108,6 +108,16 @@ internal static class Fixes
                     [new Edit(tree, new TextSpan(Edits.SpanOf(tree, diagnostic.Span).End, 0), $" as {variant}")]);
                 break;
 
+            case FixKind.PatchTarget when fix is { Text: { } label, At: { } target }:
+                yield return Fix(diagnostic, $"Name `{label}` in the `.patch` instead",
+                    [new Edit(tree, Edits.SpanOf(tree, target), label)]);
+                break;
+
+            case FixKind.PatchTargetAdded when fix.Text is { } label:
+                yield return Fix(diagnostic, $"Add `.patch {label}`",
+                    [Edits.InsertAfter(tree, line, $"{Edits.IndentOf(tree, line)}.patch {label}")]);
+                break;
+
             case FixKind.Flags when fix.Text is { } flags:
                 yield return Fix(diagnostic, $"Change it to `#{flags}`",
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), flags)]);

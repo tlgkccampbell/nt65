@@ -36,6 +36,8 @@ public sealed class ControlFlow
     private HashSet<StepKey>? rewrittenOpcodes;
     private HashSet<StepKey>? rewrittenOperands;
     private List<UnlistedPatch>? unlisted;
+    private List<MissedPatch>? missedPatches;
+    private HashSet<StepKey>? coveredStores;
 
     private ControlFlow(SemanticModel model, CodeLayout layout)
         : this(model, layout, [], [], [])
@@ -194,6 +196,36 @@ public sealed class ControlFlow
             if (unlisted is null)
                 FindPatched();
             return unlisted!;
+        }
+    }
+
+    /// <summary>
+    /// Gets each store whose bytes reach outside the instruction its <c>.patch</c> names, into
+    /// something that no other <c>.patch</c> under the store names. Each is listed once for each
+    /// <c>.patch</c>.
+    /// </summary>
+    internal IReadOnlyList<MissedPatch> MissedPatches
+    {
+        get
+        {
+            if (missedPatches is null)
+                FindPatched();
+            return missedPatches!;
+        }
+    }
+
+    /// <summary>
+    /// Gets each store whose bytes are known to lie inside instructions that the <c>.patch</c>
+    /// directives under it name. Such a store is acknowledged whatever label its operand names,
+    /// so <c>sta @op+3</c> may be followed by <c>.patch @next</c> alone.
+    /// </summary>
+    internal IReadOnlySet<StepKey> CoveredStores
+    {
+        get
+        {
+            if (coveredStores is null)
+                FindPatched();
+            return coveredStores!;
         }
     }
 
@@ -1148,15 +1180,9 @@ public sealed class ControlFlow
             }
         }
 
-        // The sets are built in full before any is published, so a thread that finds one set
-        // never sees it half built.
-        var found = new HashSet<StepKey>();
-        var foundVariants = new Dictionary<StepKey, IReadOnlyList<MnemonicKind>>();
-        var listed = new List<PatchVariant>();
-        var opcodes = new HashSet<StepKey>();
-        var operands = new HashSet<StepKey>();
-        var missing = new List<UnlistedPatch>();
-        var reported = new HashSet<(PatchDirectiveSyntax, SyntaxNode, Symbol)>();
+        // Each entry pairs a store with one instruction its `.patch` names, and the bytes the
+        // store may write as offsets from that instruction's first byte.
+        var entries = new List<PatchEntry>();
         List<(PatchDirectiveSyntax Patch, Step Store, int At, Symbol Label)>? naming = null;
         foreach (var step in layout.Steps)
         {
@@ -1166,45 +1192,87 @@ public sealed class ControlFlow
                     (naming ??= []).AddRange(patches.Select(patch => (patch.Patch, patch.Store, patch.At, label)));
                 continue;
             }
-            if (naming is not null && step.Statement is InstructionStatementSyntax written)
+            if (naming is not null && step.Statement is InstructionStatementSyntax)
             {
-                found.Add(step.Key);
-                var line = layout.Of(written, step.On);
-                var kept = new List<MnemonicKind>();
-                var opcode = false;
-                var operand = false;
                 foreach (var (patch, store, at, named) in naming)
-                {
-                    // A store that may write the opcode must list what the instruction can
-                    // become, and only such a store may. One known to write only the operand has
-                    // no variant to list. Where a store's offset is not known, it may write the
-                    // opcode.
-                    var bytes = WrittenBytes(store, named);
-                    var writesOpcode = bytes is not { } reached || (reached.First <= 0 && reached.Last >= 0);
-                    if (writesOpcode && patch.AsKeyword is null && reported.Add((patch, store.Statement, named)))
-                        missing.Add(new UnlistedPatch(patch, store, step, named, Inferred(at, line?.Mode)));
-                    var variant = false;
-                    foreach (var name in patch.Variants)
-                    {
-                        var listing = new PatchVariant(name, store.On, step, written.MnemonicKind, line?.Mode, layout.Cpu, writesOpcode);
-                        listed.Add(listing);
-                        if (listing.Problem is not null)
-                            continue;
-                        variant = true;
-                        if (!kept.Contains(listing.Mnemonic))
-                            kept.Add(listing.Mnemonic);
-                    }
-                    opcode |= !variant && writesOpcode;
-                    operand |= bytes is not { } into || line is null || (into.Last >= 1 && into.First < line.Length);
-                }
-                if (opcode)
-                    opcodes.Add(step.Key);
-                else if (kept.Count > 0)
-                    foundVariants[step.Key] = kept;
-                if (operand)
-                    operands.Add(step.Key);
+                    entries.Add(new PatchEntry(patch, store, at, named, step, WrittenBytes(store, named, step)));
             }
             naming = null;
+        }
+
+        // A store's bytes may run from one instruction a `.patch` under it names into another
+        // that a second `.patch` under it names. Each instruction is checked on its own entry, so
+        // the bytes are not reported as missing the first.
+        var namedBy = entries.ToLookup(entry => entry.Store.Key, entry => (entry.Written.Key, entry.Label));
+
+        // The sets are built in full before any is published, so a thread that finds one set
+        // never sees it half built.
+        var found = new HashSet<StepKey>();
+        var foundVariants = new Dictionary<StepKey, IReadOnlyList<MnemonicKind>>();
+        var listed = new List<PatchVariant>();
+        var opcodes = new HashSet<StepKey>();
+        var operands = new HashSet<StepKey>();
+        var missing = new List<UnlistedPatch>();
+        var misses = new List<MissedPatch>();
+        var reported = new HashSet<(PatchDirectiveSyntax, SyntaxNode, Symbol)>();
+        var missReported = new HashSet<(PatchDirectiveSyntax, SyntaxNode, Symbol)>();
+        var covered = new HashSet<StepKey>();
+        foreach (var group in entries.GroupBy(entry => entry.Written.Key))
+        {
+            var step = group.First().Written;
+            var written = (InstructionStatementSyntax)step.Statement;
+            found.Add(step.Key);
+            var line = layout.Of(written, step.On);
+            var kept = new List<MnemonicKind>();
+            var opcode = false;
+            var operand = false;
+            foreach (var (patch, store, at, named, _, bytes) in group)
+            {
+                // A store that may write the opcode must list what the instruction can
+                // become, and only such a store may. One known to write only the operand has
+                // no variant to list. Where a store's offset is not known, it may write the
+                // opcode.
+                var writesOpcode = WritesOpcode(bytes);
+                if (writesOpcode && patch.AsKeyword is null && reported.Add((patch, store.Statement, named)))
+                    missing.Add(new UnlistedPatch(patch, store, step, named, Inferred(at, line?.Mode)));
+                var missed = bytes is { Positional: true } range && line is not null
+                    ? Missed(patch, store, step, named, range, line.Length, namedBy[store.Key])
+                    : null;
+                if (missed is not null && missReported.Add((patch, store.Statement, named)))
+                    misses.Add(missed);
+                var inside = bytes is not { } reach || line is null || (reach.Last >= 0 && reach.First < line.Length);
+
+                // Bytes that miss nothing lie inside this instruction or inside others that a
+                // `.patch` under the store names, so every byte the store writes is accounted for.
+                if (bytes is { Positional: true } && line is not null && missed is null)
+                    covered.Add(store.Key);
+
+                // A store whose bytes stray outside this instruction, or never reach it, is
+                // reported for that alone. Its variants are checked once its `.patch` names what
+                // it writes.
+                var lists = writesOpcode || (inside && missed is null);
+                var variant = false;
+                foreach (var name in patch.Variants)
+                {
+                    if (!lists)
+                        break;
+                    var listing = new PatchVariant(name, store.On, step, written.MnemonicKind, line?.Mode, layout.Cpu, writesOpcode);
+                    listed.Add(listing);
+                    if (listing.Problem is not null)
+                        continue;
+                    variant = true;
+                    if (!kept.Contains(listing.Mnemonic))
+                        kept.Add(listing.Mnemonic);
+                }
+                opcode |= !variant && writesOpcode;
+                operand |= bytes is not { } into || line is null || (into.Last >= 1 && into.First < line.Length);
+            }
+            if (opcode)
+                opcodes.Add(step.Key);
+            else if (kept.Count > 0)
+                foundVariants[step.Key] = kept;
+            if (operand)
+                operands.Add(step.Key);
         }
         patched = found;
         variants = foundVariants;
@@ -1212,6 +1280,111 @@ public sealed class ControlFlow
         rewrittenOpcodes = opcodes;
         rewrittenOperands = operands;
         unlisted = missing;
+        missedPatches = misses;
+        coveredStores = covered;
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether a store that may write <paramref name="bytes"/>, as
+    /// offsets from a patched instruction's first byte, may write that instruction's opcode. A
+    /// store whose bytes are not known may.
+    /// </summary>
+    private static bool WritesOpcode(WrittenRange? bytes) =>
+        bytes is not { } reached || (reached.First <= 0 && reached.Last >= 0);
+
+    /// <summary>
+    /// Returns what the bytes of <paramref name="store"/> outside the patched instruction at
+    /// <paramref name="written"/> land in, or null where there is nothing to report. A store that
+    /// writes part of the instruction may write the rest of its bytes into instructions that other
+    /// <c>.patch</c> directives under it name. A store that misses the instruction entirely is
+    /// always reported, because every <c>.patch</c> under a store names an instruction it writes.
+    /// The first byte that is not accounted for is the one reported.
+    /// </summary>
+    /// <param name="patch">The <c>.patch</c> that follows the store.</param>
+    /// <param name="store">The step of the store.</param>
+    /// <param name="written">The step of the instruction the <c>.patch</c> names.</param>
+    /// <param name="label">The label the <c>.patch</c> names the instruction by.</param>
+    /// <param name="bytes">The bytes the store may write, as offsets from the instruction's first byte.</param>
+    /// <param name="length">The number of bytes the instruction takes.</param>
+    /// <param name="named">
+    /// The step of every instruction a <c>.patch</c> under the store names, with the label it is
+    /// named by.
+    /// </param>
+    private MissedPatch? Missed(
+        PatchDirectiveSyntax patch, Step store, Step written, Symbol label, WrittenRange bytes, int length,
+        IEnumerable<(StepKey Key, Symbol Label)> named)
+    {
+        if (layout.PositionOf(written.Statement, written.On) is not { } position)
+            return null;
+        var outside = bytes.Last < 0 || bytes.First >= length;
+        for (var offset = bytes.First; offset <= bytes.Last; offset++)
+        {
+            if (offset >= 0 && offset < length)
+                continue;
+            var index = layout.StepCovering(position.Stream, position.Offset + offset);
+            var landing = index is { } at ? layout.Steps[at] : (Step?)null;
+            Symbol? namedAs = null;
+            if (landing is { Statement: InstructionStatementSyntax } instruction)
+            {
+                foreach (var (key, by) in named)
+                {
+                    if (key == instruction.Key)
+                        namedAs = by;
+                }
+            }
+            if (namedAs is not null && !outside)
+                continue;
+
+            // The `.patch` names nothing the store writes where the bytes land only in an
+            // instruction another `.patch` already names, so the fix removes it rather than
+            // naming that instruction twice.
+            var landingLabel = namedAs ?? (index is { } found ? LabelOf(found) : null);
+            var fix = namedAs is not null
+                ? new DiagnosticFix(FixKind.Redundant)
+                : landingLabel is not null && landing is { Statement: InstructionStatementSyntax } labelled
+                    && labelled.Routine == store.Routine
+                    ? TargetFix(patch, landingLabel, outside)
+                    : null;
+            return new MissedPatch(
+                patch, store, written, label, length, offset < 0, landing, landingLabel, namedAs is not null, fix);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the label that names the step at <paramref name="index"/> among the layout's
+    /// steps, or null where none does. That is the nearest label before it with no bytes between
+    /// them, in the same routine.
+    /// </summary>
+    private Symbol? LabelOf(int index)
+    {
+        for (var back = index - 1; back >= 0; back--)
+        {
+            var step = layout.Steps[back];
+            if (step.Label is { } label)
+                return label;
+            if (step.Routine != layout.Steps[index].Routine
+                || layout.PositionOf(step.Statement, step.On) is { Length: > 0 })
+            {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the fix that names <paramref name="landing"/> with a <c>.patch</c>. Where the store
+    /// misses the instruction <paramref name="patch"/> names entirely, the fix names
+    /// <paramref name="landing"/> there instead. Otherwise the store writes both, and the fix adds
+    /// a <c>.patch</c> for <paramref name="landing"/> after <paramref name="patch"/>.
+    /// </summary>
+    private static DiagnosticFix? TargetFix(PatchDirectiveSyntax patch, Symbol landing, bool replace)
+    {
+        if (!replace)
+            return new DiagnosticFix(FixKind.PatchTargetAdded, landing.DisplayName);
+        return patch.Target is { } target
+            ? new DiagnosticFix(FixKind.PatchTarget, landing.DisplayName, target.Tree.GetSpan(target.Span))
+            : null;
     }
 
     /// <summary>
@@ -1260,23 +1433,38 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Returns the bytes the store at <paramref name="store"/> may write, as offsets from
-    /// <paramref name="label"/>, or null where they are not known. They are known only where the
-    /// store addresses the label directly, as <c>sta @op+1</c> does. On the 65816 a store sized by
-    /// a register is taken to be two bytes wide, because the width is not known yet.
+    /// Returns the bytes the store at <paramref name="store"/> may write, as offsets from the
+    /// first byte of the instruction at <paramref name="written"/>, or null where they are not
+    /// known. They are known only where the store addresses a label plus a constant, as
+    /// <c>sta @op+1</c> does. On the 65816 a store sized by a register is taken to be two bytes
+    /// wide, unless the processor state the layout was made with shows the register 8 bits wide.
+    /// The first layout is made before that state is known.
     /// </summary>
-    private (long First, long Last)? WrittenBytes(Step store, Symbol label)
+    /// <remarks>
+    /// Where the label the store addresses and the instruction stand in one run of bytes, the
+    /// offsets come from their positions there, whatever label the store names. Otherwise they
+    /// are known only where the store names <paramref name="label"/>, the label the instruction
+    /// is patched by, and then they are offsets from that label.
+    /// </remarks>
+    private WrittenRange? WrittenBytes(Step store, Symbol label, Step written)
     {
         if (store.Statement is not InstructionStatementSyntax instruction
             || layout.Of(instruction, store.On)?.Mode is not (AddressingMode.Direct or AddressingMode.Absolute or AddressingMode.Long)
             || StepOperands.Of(model, store) is not { } operand
-            || Location.Of(model, CodeLayout.Expression(operand), store.On) is not { Root: { } root } location
-            || root != label)
+            || Location.Of(model, CodeLayout.Expression(operand), store.On) is not { Root: { } root } location)
         {
             return null;
         }
-        var width = layout.Cpu == Cpu.Wdc65816 && Instructions.MemorySizedBy(instruction.MnemonicKind) is not null ? 2 : 1;
-        return (location.Offset, location.Offset + width - 1);
+        var width = layout.Cpu == Cpu.Wdc65816 && Instructions.MemorySizedBy(instruction.MnemonicKind) is not null
+            && !layout.ReachesOneByte(store) ? 2 : 1;
+        if (layout.PositionOf(root, store.On) is { } from
+            && layout.PositionOf(written.Statement, written.On) is { } to
+            && from.Stream == to.Stream)
+        {
+            var first = from.Offset + location.Offset - to.Offset;
+            return new WrittenRange(first, first + width - 1, true);
+        }
+        return root == label ? new WrittenRange(location.Offset, location.Offset + width - 1, false) : null;
     }
 
     /// <summary>
@@ -1435,4 +1623,28 @@ public sealed class ControlFlow
         /// <summary>Gets the <c>.next</c> among them, or null when there is none.</summary>
         public NextDirectiveSyntax? Next => Annotations.OfType<NextDirectiveSyntax>().FirstOrDefault();
     }
+
+    /// <summary>
+    /// Represents the bytes a store may write, as offsets from the first byte of an instruction a
+    /// <c>.patch</c> names.
+    /// </summary>
+    /// <param name="First">The offset of the first byte.</param>
+    /// <param name="Last">The offset of the last byte.</param>
+    /// <param name="Positional">
+    /// Whether the offsets come from where the store's label and the instruction stand in one run
+    /// of bytes, so that bytes outside the instruction can be matched to what stands there.
+    /// </param>
+    private readonly record struct WrittenRange(long First, long Last, bool Positional);
+
+    /// <summary>
+    /// Represents a store paired with one instruction its <c>.patch</c> names.
+    /// </summary>
+    /// <param name="Patch">The <c>.patch</c> that follows the store.</param>
+    /// <param name="Store">The step of the store.</param>
+    /// <param name="At">The position of the store among the layout's steps.</param>
+    /// <param name="Label">The label the <c>.patch</c> names the instruction by.</param>
+    /// <param name="Written">The step of the instruction.</param>
+    /// <param name="Bytes">The bytes the store may write, or null where they are not known.</param>
+    private sealed record PatchEntry(
+        PatchDirectiveSyntax Patch, Step Store, int At, Symbol Label, Step Written, WrittenRange? Bytes);
 }

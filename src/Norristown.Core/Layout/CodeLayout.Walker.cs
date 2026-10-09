@@ -508,6 +508,11 @@ public sealed partial class CodeLayout
             // analysis found reaching it. Where it found no width it has already reported that,
             // and the immediate is laid out a byte wide so the rest of the file can be laid out.
             var state = states?.Before(statement, expansion);
+            if (cpu == Cpu.Wdc65816 && Instructions.MemorySizedBy(statement.MnemonicKind) is { } reaches
+                && state?.Of(reaches) == Width.Eight)
+            {
+                layout.narrow.Add(StepKey.Of(statement, expansion));
+            }
             int? bits = cpu == Cpu.Wdc65816 && Instructions.SizedBy(statement.MnemonicKind) is { } register
                 ? state?.Of(register) == Width.Sixteen ? 16 : 8
                 : null;

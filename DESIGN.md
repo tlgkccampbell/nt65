@@ -1724,8 +1724,14 @@ label:
   (patch-variant-rejected). The cycle counts are still those of the instruction as written.
 
   Which bytes a store may write decides whether `as` is required. nt65 knows them where the
-  store addresses the label itself, as `sta @op` or `sta @op+1` does. It does not know them for
-  an indexed store such as `sta @op,x`, or for one through another name or a pointer. A store
+  store addresses a label plus a constant, as `sta @op` or `sta @op+1` does, and works them out
+  as positions: where that label stands, plus the constant, over the store's width. Where the
+  label and the patched instruction stand in one run of a segment's bytes, the bytes are placed
+  against the instruction from those positions, so `sta @op+3` under `.patch @next` is known to
+  write `@next`'s second byte. Where the two stand in different runs, as across an `.align`, the
+  bytes are known only for a store that names the patched instruction's own label. nt65 does
+  not know them for an indexed store such as `sta @op,x`, or for one through another name or a
+  pointer. A store
   known to write only the operand, from the instruction's second byte to its last, needs no
   `as` and may not have one, since there is no variant to list (patch-variant-rejected). A
   store that may write the opcode, because it starts there or because its bytes are not known,
@@ -1735,6 +1741,24 @@ label:
   stack and flow analyses go on taking the instruction's shape as written. Without them nothing
   could be assumed after it.
 
+  A store's bytes must lie inside the instruction the `.patch` names, and every `.patch` under a
+  store names an instruction the store writes. Where they are known, a
+  byte outside it is an error (patch-misses-store), reported at the `.patch` and naming what the
+  byte lands in. `sta @op+2` on a two-byte `@op` rewrites the opcode of the instruction after
+  it, which the analyses would otherwise trust as written. A store that reaches into data needs
+  no `.patch` for those bytes, and the error says so; one that reaches past every byte laid out
+  in the run says it writes past the end of the code. Where the bytes land in a labeled
+  instruction, the fix names that label: in place of the first, where the store misses the
+  named instruction entirely, or with a second `.patch` under the store, where it writes both.
+  A `.patch` whose instruction the store misses entirely is an error even where another `.patch`
+  under the store names the instruction the bytes land in, and the fix removes it.
+  A store may straddle two instructions, as a 16-bit `sta @op+1` on a two-byte `@op` does. Its
+  bytes inside `@op` are an operand write as above, and its byte in the instruction after is
+  accepted only where another `.patch` under the store names that instruction. That `.patch` is
+  checked on its own, so it needs `as` where the store reaches its opcode. A store whose bytes
+  all lie inside instructions that `.patch` directives under it name needs no `.patch` for the
+  label its operand names, so `sta @op+3` may be followed by `.patch @next` alone.
+
   The register, reads and flag analyses take the union of what the written instruction and each
   variant do: a register any of them writes is written, any of them may read one, and a flag
   none of them writes stays known. Where a store may write the operand, because it reaches past
@@ -1742,9 +1766,11 @@ label:
   the constants are unknown after the instruction, whatever stands there. In a program that
   already has a patch-variants-required error, the register and reads analyses take the
   instruction to use every register and leave each unknown. On the 65816 a store sized by a
-  register is taken to reach two bytes, since its width is not known when the stores are
-  matched to the instructions they write. So `sta @op` there may write the first operand byte
-  as well as the opcode, and `sta @op-1` reaches the opcode. Naming a label as a `.patch`
+  register reaches one byte where the processor state the file is laid out with shows that
+  register 8 bits wide, as after `sep #$20`. Anywhere else it is taken to reach two, including
+  in the first layout, which is made before that state is known. So with a 16-bit A, `sta @op`
+  there may write the first operand byte as well as the opcode, and `sta @op-1` reaches the
+  opcode. Naming a label as a `.patch`
   target, or as the address an instruction reads or writes, does not make it a place control
   enters from elsewhere.
 
@@ -1783,7 +1809,7 @@ The third directive is about the end of a routine rather than a statement:
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
 | other external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |
-| self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`, with `as` and the variants where the store may write the opcode; widths of `@op` are analyzed as written |
+| self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`, or a `.patch` for each instruction the store's known bytes land in, with `as` and the variants where the store may write the opcode; widths of `@op` are analyzed as written |
 
 Examples. A jump table inside a proc: the targets need no declarations because the
 `.next` edges carry the state at the jump.

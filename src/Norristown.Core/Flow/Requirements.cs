@@ -436,7 +436,7 @@ internal sealed class Requirements
                         .Where(a => a is PatchDirectiveSyntax)
                         .SelectMany(Annotations.TargetsOf)
                         .Any(target => Targets.Of(model, target, step.On)?.Symbol == symbol);
-                    if (!patched)
+                    if (!patched && !flow.CoveredStores.Contains(step.Key))
                     {
                         Report(statement, Catalogue.SelfModifyingUnchecked.Message(
                             Quoted(statement), symbol.DisplayName, symbol.DisplayName));
