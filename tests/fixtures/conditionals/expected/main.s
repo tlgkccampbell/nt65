@@ -16,6 +16,7 @@
 .export main__indented
 .export main__slow
 .export main__run_all
+.export main__shapes
 
 LINES = 312
 
@@ -141,3 +142,10 @@ main__run_all:
     jsr actions__wait
     rts
 ; end of run_all
+
+SHAPED = 1
+FRAME_BYTES = 7
+COMMANDS = 4
+
+.segment "RODATA": absolute
+main__shapes: .byte SHAPED, FRAME_BYTES, COMMANDS

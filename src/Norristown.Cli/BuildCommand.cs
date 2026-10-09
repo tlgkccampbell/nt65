@@ -56,12 +56,24 @@ public static class BuildCommand
     private static BuildResult Built(
         CommandLine command, string directory, TextWriter output, TextWriter error, bool colour)
     {
-        // The project file is the one named, or the nearest one at or above where nt65 runs;
-        // with none, the directory nt65 runs in is the root.
+        // The project file is the one named, or the nearest one at or above where nt65 runs.
         var projectFile = ProjectRoot.Chosen(command.Project, directory);
         if (command.Project is not null && !File.Exists(projectFile))
         {
             error.WriteLine($"nt65: {ProjectRoot.Shown(directory, projectFile!)} does not exist");
+            return new BuildResult(ExitCode.UsageError, directory, [], []);
+        }
+
+        // With no project, nothing says where output belongs, and a build that wrote into
+        // whatever directory it ran from would scatter files where nobody asked for them. So a
+        // build that writes needs a project. `--stdout` and `--check` write nothing, so they still
+        // build the named files as a program of their own, rooted where nt65 runs.
+        if (projectFile is null && !command.Stdout && !command.Check)
+        {
+            error.WriteLine($"nt65: error: no {ProjectFile.Name} was found in {directory} or any directory above it, so "
+                + "nothing says where to write the output");
+            error.WriteLine($"nt65: note: run `nt65 init` to create a project, or name one with `--project`; `--check` and "
+                + "`--stdout` build without one and write nothing");
             return new BuildResult(ExitCode.UsageError, directory, [], []);
         }
         var run = new Context(

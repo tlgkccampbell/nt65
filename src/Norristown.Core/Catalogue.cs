@@ -1380,9 +1380,12 @@ public static class Catalogue
         "an `.if` cannot test {0}, which measures a declaration; check it with `.assert`",
         "An `.if` decides which declarations exist, so nt65 answers it before it reads any declaration. It can test "
             + "only what the configuration decides: literals, settings, built-ins such as `.target`, and the constants, "
-            + "functions and enum members declared at file level from those. A size, an offset, a count or a distance "
-            + "inside data is known only once the declarations are read. The notes lead from the value tested to the "
-            + "measurement. Check such a value with `.assert`, or choose with it using `.select` or `.switch`.");
+            + "functions and enum members declared at file level from those. It can also take `.sizeof` and `.countof` "
+            + "of a struct, union or enum declared at file level, outside every block, whose members are sized from "
+            + "those. A size, an offset, a count or a distance inside data, the extent of a routine, and a type declared "
+            + "under an `.if` or with a member sized by such a measurement are known only once the declarations are "
+            + "read. The notes lead from the value tested to the measurement. Check such a value with `.assert`, or "
+            + "choose with it using `.select` or `.switch`.");
 
     internal static DiagnosticDescriptor ConditionUsesAConditionalDeclaration { get; } = Entry(
         Area.Values,

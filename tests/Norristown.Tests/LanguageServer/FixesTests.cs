@@ -392,6 +392,32 @@ public sealed class FixesTests
     }
 
     /// <summary>
+    /// A call into a label inside a routine that runs in native mode is offered a <c>.state</c>
+    /// that declares the mode as well as the widths, whether the state comes from the path above
+    /// the label or, where nothing reaches it from above, from the routine's entry. Declaring it
+    /// leaves the code after the label knowing the mode, so nothing there is reported.
+    /// </summary>
+    [Theory]
+    [InlineData("    rts\n", "its routine's entry state")]
+    [InlineData("    sep #$30\n", "the state the visible paths bring")]
+    public void ACallIntoALabelOffersAStateWithTheMode(string above, string source)
+    {
+        var body = ".proc owner: a8, i8, native {\n" + above + "inner:\n    rep #$20\n    lda #$1234\n    sep #$20\n    rts\n}\n"
+            + ".export .proc main: a8, i8, native {\n    jsr owner::inner\n    rts\n}\n";
+        var (analysis, model) = Analyzed(Header + body);
+
+        var actions = CodeActions.In(analysis, model, Whole)
+            .Where(action => action.Title.StartsWith("Declare `inner`", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Equal(
+            [$"Declare `inner` with {source} (`.state a8, i8, native`)", "Declare `inner` with `.state ?`"],
+            actions.Select(action => action.Title));
+        var (fixedAnalysis, _) = Analyzed(Editing.Apply(Header + body, actions[0].Edit!.Changes[Uri]));
+        Assert.DoesNotContain(fixedAnalysis.Diagnostics, diagnostic => diagnostic.Severity == Severity.Error);
+    }
+
+    /// <summary>
     /// A return that leaves a width other than the one its routine declares has two readings. The
     /// routine may need to set the width it declares, or it may declare the wrong one. Both fixes
     /// are offered, and neither is preferred.

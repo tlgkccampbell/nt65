@@ -477,7 +477,9 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Returns the value of a call in a build's condition. The built-ins that the configuration
     /// alone can evaluate have a value there, and so does a function the configuration decides,
-    /// called with arguments it decides. A built-in that measures the program has no answer yet.
+    /// called with arguments it decides. A <c>.sizeof</c> or <c>.countof</c> has one when the
+    /// configuration decides the shape it measures. Any other built-in that measures the program
+    /// has no answer yet.
     /// </summary>
     private Value InCondition(CallExpressionSyntax call, IReadOnlyList<SyntaxNode> given, Conditions asked)
     {
@@ -518,8 +520,19 @@ internal sealed partial class Evaluator
         if (kind == BuiltinKind.Switch)
             return Fits(kind, function, given) ? Switch(given) : Value.Unknown;
 
+        // A struct, union or enum declared at file level has a shape that the configuration
+        // alone may decide, so its size or count is worked out as a constant's value would be.
+        if (kind is BuiltinKind.Sizeof or BuiltinKind.Countof)
+        {
+            if (!Fits(kind, function, given) || asked.Measure(call, kind) is not { } measured)
+                return Value.Unknown;
+            if (measured.Why is { } why)
+                asked.Undecided(call, null, why);
+            return measured.Value;
+        }
+
         // What the function asks about is checked before its arguments are read, so a
-        // `.sizeof(Point)` is one reason, not that and a `Point` the configuration does not decide.
+        // `.endof(table)` is one reason, not that and a `table` the configuration does not decide.
         if (!Answerable(kind))
         {
             asked.Undecided(call, null, Undecided.Measured);

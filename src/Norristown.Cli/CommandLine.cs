@@ -43,7 +43,8 @@ public sealed record CommandLine(
                nt65 --help | --version
 
         Builds the program nt65.json describes, found in this directory or the nearest one above it.
-        Naming files builds the whole program and writes output only for those files.
+        Naming files builds the whole program and writes output only for those files. With no
+        nt65.json, it writes nothing, though `--check` and `--stdout` still build the files named.
 
         `init` writes an nt65.json and a src/main.nt65 that builds, in this directory or the one
         named, and refuses to overwrite either. The project links the ld65 configs it finds

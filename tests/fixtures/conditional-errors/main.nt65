@@ -15,6 +15,33 @@
     .const NOPE = 2
 }
 
+; A type has a shape the configuration decides only when every member is sized from what the
+; configuration decides, and only when it is declared at file level, outside every `.if`. An
+; enum has members but no size.
+.struct Counted {
+    items: .byte[.countof(table)]
+}
+.if .sizeof(Counted) == 4 {     ;! error[condition-uses-a-measurement]: an `.if` cannot test `.sizeof(Counted)`, which measures a declaration; check it with `.assert`
+    .const NOPE = 6
+}
+
+.if 1 {
+    .struct Maybe {
+        x: .byte
+    }
+}
+.if .countof(Maybe) == 1 {      ;! error[condition-uses-a-measurement]: an `.if` cannot test `.countof(Maybe)`, which measures a declaration; check it with `.assert`
+    .const NOPE = 7
+}
+
+.enum Mode {
+    off
+    on
+}
+.if .sizeof(Mode) == 1 {        ;! error[condition-uses-a-measurement]: an `.if` cannot test `.sizeof(Mode)`, which measures a declaration; check it with `.assert`
+    .const NOPE = 8
+}
+
 .if table {                     ;! error[condition-names-the-program]: an `.if` cannot test `table`, which is part of the program; check it with `.assert`
     .const NOPE = 4
 }

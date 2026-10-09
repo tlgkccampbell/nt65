@@ -149,7 +149,7 @@ internal sealed class RegisterWalk
         // the routine's other entry points are not part of the answer unless the path from
         // that label reaches them.
         solver.EnterEntries(
-            outside, declaredOnly: false, start == 0 && fromOutside ? RegisterState.Outside with { Stack = called } : null,
+            outside, declaredOnly: false, start == 0 && fromOutside ? _ => RegisterState.Outside with { Stack = called } : null,
             (block, state) => Entered(state, called, block, region.Routine));
         return solver.Reached;
     }
