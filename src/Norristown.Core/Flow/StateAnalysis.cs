@@ -338,6 +338,28 @@ public sealed class StateAnalysis : IProcessorStates
             + $"declare the width of {register.Name}",
         $"the `.state` after `{label.DisplayName}` can declare `{register.Item}8` or `{register.Item}16`");
 
+    /// <summary>
+    /// Returns the cause for the mode at a declared label being unknown, which is that the
+    /// declaration does not say. Where the paths nt65 can see agree on <paramref name="known"/>,
+    /// the fix names that mode, and otherwise it names both.
+    /// </summary>
+    private static Cause UndeclaredMode(Symbol label, Symbol routine, ProcessorMode known) => new(
+        $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and its `.state` does not "
+            + "declare the mode",
+        StateChecks.IsKnown(known)
+            ? $"the `.state` after `{label.DisplayName}` can declare `{ProcessorState.Format(known)}`"
+            : $"the `.state` after `{label.DisplayName}` can declare `native` or `emulation`");
+
+    /// <summary>
+    /// Returns the cause for a width that <paramref name="reason"/> leaves unknown because the
+    /// mode is not known. Where <paramref name="whyMode"/> says why the mode is not known, the
+    /// cause names it and its fix, and otherwise the fix is a <c>.state</c> that declares the mode.
+    /// </summary>
+    private static Cause ModeUnknown(string reason, Cause? whyMode) =>
+        whyMode is null
+            ? new($"{reason}, and the mode is not known", "a `.state` before it declares which mode it is")
+            : new($"{reason}, and the mode is not known, as {whyMode.Reason}", whyMode.Fix);
+
     private static AnalysisStack? Push(AnalysisStack? stack, int? bytes) =>
         bytes is { } count ? stack?.Push(StackEntry.Opaque, count) : null;
 
@@ -381,6 +403,7 @@ public sealed class StateAnalysis : IProcessorStates
         var label = block.Label!;
         var a = given.Contains(StatePart.A) ? here.A : Met(here.A, outside.A);
         var index = given.Contains(StatePart.Index) ? here.Index : Met(here.Index, outside.Index);
+        var e = given.Contains(StatePart.E) ? here.E : here.E == outside.E ? here.E : ProcessorMode.Unknown;
         // A jump in never laid out the frames the path above named, so none of them is kept.
         var stack = AnalysisStack.Merge(reached.Stack?.Unframed(), EntryStack(signature));
         return reached with
@@ -388,7 +411,7 @@ public sealed class StateAnalysis : IProcessorStates
             Processor = new ProcessorState(
                 a,
                 index,
-                given.Contains(StatePart.E) ? here.E : here.E == outside.E ? here.E : ProcessorMode.Unknown,
+                e,
                 given.Contains(StatePart.DirectPage) ? here.D : StateValue.Merge(here.D, outside.D),
                 given.Contains(StatePart.DataBank) ? here.B : StateValue.Merge(here.B, outside.B)),
             Stack = stack,
@@ -399,9 +422,42 @@ public sealed class StateAnalysis : IProcessorStates
                 ? Undeclared(label, routine, StateRegister.Index)
                 : reached.WhyIndex,
             WhyStack = stack is null ? OutsideEntries.UnknownStack(label, routine) : reached.WhyStack,
+
+            // The mode the path above the label brings, or else the one the routine is entered
+            // in, is the one the fix suggests.
+            WhyE = e == ProcessorMode.Unknown && !given.Contains(StatePart.E)
+                ? UndeclaredMode(label, routine, StateChecks.IsKnown(here.E) ? here.E : signature.Entry.E)
+                : reached.WhyE,
         };
 
         static Width Met(Width here, Width outside) => here == outside ? here : Width.Unknown;
+    }
+
+    /// <summary>
+    /// Returns the state a declared label starts from where no path in the routine reaches it,
+    /// which is what is known where control arrives from outside the routine, and the stack a
+    /// call to the routine leaves. A width or the mode that is unknown there, and that the label's
+    /// <c>.state</c> leaves out, is unknown because the declaration does not say.
+    /// </summary>
+    private static FlowState Unreached(BasicBlock block, Signature signature, Symbol routine)
+    {
+        var outside = Outside(signature);
+        var state = new FlowState(outside, EntryStack(signature));
+        if (block.Label is not { } label)
+            return state;
+        var given = Given(block);
+        return state with
+        {
+            WhyA = outside.A == Width.Unknown && !given.Contains(StatePart.A)
+                ? Undeclared(label, routine, StateRegister.A)
+                : null,
+            WhyIndex = outside.Index == Width.Unknown && !given.Contains(StatePart.Index)
+                ? Undeclared(label, routine, StateRegister.Index)
+                : null,
+            WhyE = outside.E == ProcessorMode.Unknown && !given.Contains(StatePart.E)
+                ? UndeclaredMode(label, routine, signature.Entry.E)
+                : null,
+        };
     }
 
     /// <summary>
@@ -421,14 +477,15 @@ public sealed class StateAnalysis : IProcessorStates
     /// <c>jsr</c> or, with a <c>phk</c> before it, as <c>jsl</c>.
     /// </summary>
     private ProcessorState? RelativelyCalled(
-        Step step, MnemonicKind mnemonic, RelativeCall call, ProcessorState state, Symbol routine, StateChecks? report)
+        Step step, MnemonicKind mnemonic, RelativeCall call, FlowState flowing, Symbol routine, StateChecks? report)
     {
+        var state = flowing.Processor;
         var callee = SignatureOf(call.Routine)!;
         if (callee.IsInterrupt)
             return state;
         if (report is not null)
         {
-            report.CheckRelativeCall(step, mnemonic, call, callee, state);
+            report.CheckRelativeCall(step, mnemonic, call, callee, state, flowing.WhyE);
             Entering(step, routine, call.Routine, state, report);
         }
         return signatures.IsExitKnown(call.Routine) ? StateChecks.Exited(callee, state) : null;
@@ -523,7 +580,7 @@ public sealed class StateAnalysis : IProcessorStates
         solver.EnterEntries(
             outside,
             declaredOnly: true,
-            new FlowState(Outside(signature), EntryStack(signature)),
+            block => Unreached(block, signature, region.Routine),
             (block, state) => Entered(block, state, signature, region.Routine));
 
         // A block reached only past a call that does not return is not walked, and nothing in it
@@ -553,7 +610,7 @@ public sealed class StateAnalysis : IProcessorStates
         solver.EnterEntries(
             outside,
             declaredOnly: true,
-            new FlowState(Outside(signature), EntryStack(signature)),
+            block => Unreached(block, signature, region.Routine),
             (block, state) => Entered(block, state, signature, region.Routine));
 
         var states = new Dictionary<StepKey, ProcessorState>();
@@ -612,6 +669,9 @@ public sealed class StateAnalysis : IProcessorStates
         WhyD = after.Processor.D.Kind == StateValueKind.Unknown && before.Processor.D.Kind == StateValueKind.Unknown
             ? before.WhyD
             : null,
+        WhyE = after.Processor.E == ProcessorMode.Unknown && before.Processor.E == ProcessorMode.Unknown
+            ? before.WhyE
+            : null,
     };
 
     private Cause? Why(
@@ -638,15 +698,17 @@ public sealed class StateAnalysis : IProcessorStates
             // lost the stack, which is nearer the mistake than the `php` above it.
             MnemonicKind.Plp when state.Stack is null && state.WhyStack is { } lost => lost,
             MnemonicKind.Plp when state.Stack?.Top is { IsStatus: true } && mode != ProcessorMode.Native
-                => new($"{quoted} restores a 16-bit width only in native mode, and the mode is not known", "a `.state` before it declares which mode it is"),
+                => ModeUnknown($"{quoted} restores a 16-bit width only in native mode", state.WhyE),
             MnemonicKind.Plp when state.Stack?.Top is { IsStatus: true }
                 => new($"{quoted} restores a width that is not known here", "an `.ensure` after it sets it"),
             MnemonicKind.Plp => new($"{quoted} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
+            MnemonicKind.Xce when FollowsClc(previous) && state.WhyE is { } whyMode
+                => new($"{quoted} enters native mode from a mode that is not known, as {whyMode.Reason}, and a 16-bit width is 8 bits if that was emulation mode", whyMode.Fix),
             MnemonicKind.Xce when FollowsClc(previous)
                 => new($"{quoted} enters native mode from a mode that is not known, and a 16-bit width is 8 bits if that was emulation mode", "a `.state` before it declares which mode it is"),
             MnemonicKind.Xce => new($"{quoted} follows neither `clc` nor `sec`", "a `.state` after it declares what it is"),
             MnemonicKind.Rep when mode != ProcessorMode.Native && StepOperands.Constant(model, step) is not null
-                => new($"{quoted} widens nothing in emulation mode, and the mode is not known", "a `.state` before it declares which mode it is"),
+                => ModeUnknown($"{quoted} widens nothing in emulation mode", state.WhyE),
             MnemonicKind.Rep or MnemonicKind.Sep => new($"{quoted} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
             MnemonicKind.Jsr or MnemonicKind.Jsl when next is not null && statement.Operand is not AbsoluteOperandSyntax
                 => new($"{quoted} calls through a pointer, and its `.next` names no routine", "a `.next` that names them lets their exit state flow here"),
@@ -678,7 +740,7 @@ public sealed class StateAnalysis : IProcessorStates
             && SignatureOf(runsInto) is { } signature)
         {
             if (report is not null)
-                TailCalled(step, ".fallthrough", MnemonicKind.None, runsInto, signature, state.Processor, routine, report);
+                TailCalled(step, ".fallthrough", MnemonicKind.None, runsInto, signature, state, routine, report);
             return state;
         }
 
@@ -833,13 +895,13 @@ public sealed class StateAnalysis : IProcessorStates
                     foreach (var named in Routines(next, step.On))
                     {
                         if (report is not null && SignatureOf(named) is { } callee)
-                            TailCalled(step, ".next", MnemonicKind.None, named, callee, processor, routine, report);
+                            TailCalled(step, ".next", MnemonicKind.None, named, callee, state, routine, report);
                     }
                     return state with { Stack = Pull(stack, mnemonic == MnemonicKind.Rts ? 2 : 3) };
                 }
                 if (report is not null && SignatureOf(routine) is not { HasNoCaller: true })
                 {
-                    report.CheckReturn(step, mnemonic, processor, routine);
+                    report.CheckReturn(step, mnemonic, processor, routine, state.WhyE);
                     Leaving(routine, processor);
                 }
                 return state;
@@ -877,7 +939,7 @@ public sealed class StateAnalysis : IProcessorStates
         {
             report?.CheckMirror(step, mode);
             if (report is not null)
-                TailCalled(step, SyntaxFacts.TextOf(mnemonic), mnemonic, target, callee, state.Processor, routine, report);
+                TailCalled(step, SyntaxFacts.TextOf(mnemonic), mnemonic, target, callee, state, routine, report);
         }
         else if (transfer is Transfer.Jump or Transfer.Branch && target is not null && Interior(target, routine) is { } owner)
         {
@@ -887,7 +949,7 @@ public sealed class StateAnalysis : IProcessorStates
                     new DiagnosticFix(FixKind.State, At: target.DeclarationSpan));
             }
             if (DeclaredElsewhere(target) is { } declared)
-                report?.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor);
+                report?.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor, whyMode: state.WhyE);
             if (report is not null)
                 JumpedInto(step, SyntaxFacts.TextOf(mnemonic), target, owner, state.Processor, routine, report);
         }
@@ -905,7 +967,7 @@ public sealed class StateAnalysis : IProcessorStates
         if (report is not null && next?.ReturnToken is not null && end == BlockEnd.Return
             && (SignatureOf(routine) ?? Signature.Default) is { HasNoCaller: false } own)
         {
-            report.CheckExit(step, "`.next .return`:", "here", own.Exit, state.Processor, routine.DisplayName, routine, own.Declared);
+            report.CheckExit(step, "`.next .return`:", "here", own.Exit, state.Processor, routine.DisplayName, routine, own.Declared, state.WhyE);
             Leaving(routine, state.Processor);
         }
         return state;
@@ -934,7 +996,7 @@ public sealed class StateAnalysis : IProcessorStates
             report?.CheckMirror(step, mode);
             // A call to a name that is no routine has already been reported, and leaves the stack
             // alone so that the one mistake is not reported again.
-            if (Called(step, mnemonic, target, state.Processor, routine, report) is not { } called)
+            if (Called(step, mnemonic, target, state, routine, report) is not { } called)
                 return FlowState.Dead;
             return Returned(step, state with { Processor = called }, target is null ? StackEffect.Balanced : EffectOf(target));
         }
@@ -943,7 +1005,7 @@ public sealed class StateAnalysis : IProcessorStates
         // any `phk` pushed.
         if (flow.RelativeCallAt(step) is { } relative)
         {
-            if (RelativelyCalled(step, mnemonic, relative, state.Processor, routine, report) is not { } called)
+            if (RelativelyCalled(step, mnemonic, relative, state, routine, report) is not { } called)
                 return FlowState.Dead;
             return Returned(step, new FlowState(called, Pull(state.Stack, relative.Pushed)), EffectOf(relative.Routine));
         }
@@ -960,7 +1022,7 @@ public sealed class StateAnalysis : IProcessorStates
         FlowState? merged = null;
         foreach (var each in named)
         {
-            if (Called(step, mnemonic, each, state.Processor, routine, report) is { } called)
+            if (Called(step, mnemonic, each, state, routine, report) is { } called)
                 merged = FlowState.Merge(merged, Returned(step, state with { Processor = called }, EffectOf(each)));
         }
         return merged ?? FlowState.Dead;
@@ -993,7 +1055,7 @@ public sealed class StateAnalysis : IProcessorStates
         foreach (var named in flow.Named(next, step.On).Select(named => named.Symbol))
         {
             if (named.Signature is not null && SignatureOf(named) is { } signature)
-                TailCalled(step, ".next", MnemonicKind.None, named, signature, state.Processor, routine, report);
+                TailCalled(step, ".next", MnemonicKind.None, named, signature, state, routine, report);
             else if (Interior(named, routine) is { } inside)
                 JumpedInto(step, ".next", named, inside, state.Processor, routine, report);
         }
@@ -1013,14 +1075,15 @@ public sealed class StateAnalysis : IProcessorStates
     /// keep what they were.
     /// </summary>
     private ProcessorState? Called(
-        Step step, MnemonicKind mnemonic, Symbol? target, ProcessorState state, Symbol routine, StateChecks? report)
+        Step step, MnemonicKind mnemonic, Symbol? target, FlowState flowing, Symbol routine, StateChecks? report)
     {
+        var state = flowing.Processor;
         // A call into another address space has been reported where it is laid out, and what
         // another processor's routine expects has no bearing on this processor's state.
         if (checks.InAnotherSpace(step, target))
             return state;
         if (target is { Signature: null, Kind: SymbolKind.Label, Routine: { } owner } && SignatureOf(owner) is { } ownerSignature)
-            return CalledInto(step, mnemonic, target, owner, ownerSignature, state, report);
+            return CalledInto(step, mnemonic, target, owner, ownerSignature, flowing, report);
         if (target?.Signature is null || SignatureOf(target) is not { } callee)
         {
             report?.CheckCallTarget(step, mnemonic, target);
@@ -1034,7 +1097,7 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         if (report is not null)
         {
-            report.CheckCall(step, mnemonic, target, callee, state);
+            report.CheckCall(step, mnemonic, target, callee, state, flowing.WhyE);
             Entering(step, routine, target, state, report);
         }
         return signatures.IsExitKnown(target) ? StateChecks.Exited(callee, state) : null;
@@ -1048,8 +1111,9 @@ public sealed class StateAnalysis : IProcessorStates
     /// <paramref name="owner"/> returns with, as a jump into the label hands back.
     /// </summary>
     private ProcessorState? CalledInto(
-        Step step, MnemonicKind mnemonic, Symbol label, Symbol owner, Signature callee, ProcessorState state, StateChecks? report)
+        Step step, MnemonicKind mnemonic, Symbol label, Symbol owner, Signature callee, FlowState flowing, StateChecks? report)
     {
+        var state = flowing.Processor;
         if (report is not null)
         {
             if (label.StateDeclaration is null)
@@ -1059,7 +1123,7 @@ public sealed class StateAnalysis : IProcessorStates
             }
             var declared = DeclaredElsewhere(label) ?? ProcessorState.Unknown;
             var entry = new Signature(declared, declared, callee.IsFar) { Declared = StateParts.All, Written = StateParts.All };
-            report.CheckCall(step, mnemonic, label, entry, state);
+            report.CheckCall(step, mnemonic, label, entry, state, flowing.WhyE);
         }
         if (callee.IsInterrupt)
             return state;
@@ -1133,10 +1197,11 @@ public sealed class StateAnalysis : IProcessorStates
     /// the state it is made in and, where the target returns, what it returns with.
     /// </summary>
     private void TailCalled(
-        Step step, string via, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state, Symbol routine,
+        Step step, string via, MnemonicKind mnemonic, Symbol target, Signature callee, FlowState flowing, Symbol routine,
         StateChecks report)
     {
-        report.CheckTailCall(step, via, mnemonic, target, callee, state, routine);
+        var state = flowing.Processor;
+        report.CheckTailCall(step, via, mnemonic, target, callee, state, routine, flowing.WhyE);
         if (callee.IsInterrupt)
             return;
         Entering(step, routine, target, state, report);

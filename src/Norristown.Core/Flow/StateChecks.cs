@@ -98,11 +98,14 @@ internal sealed class StateChecks
 
     /// <summary>
     /// Returns the words a message uses for a mode that is not known at <paramref name="step"/>.
-    /// Where the mode is the one the routine was entered with and its callers disagree on it,
+    /// Where <paramref name="why"/> says why it is not known, the words give that cause and its
+    /// fix. Where the mode is the one the routine was entered with and its callers disagree on it,
     /// the words name what they call it with.
     /// </summary>
-    public string ModeUnknown(Step step, ProcessorState state)
+    public string ModeUnknown(Step step, ProcessorState state, Cause? why = null)
     {
+        if (why is not null)
+            return "the mode is not known here" + Cause.Because(why);
         if (state.E != ProcessorMode.Unchanged || step.Routine is not { } routine || Owner(step, routine) != routine.DisplayName
             || signatures.DisagreementOn(routine, StateParts.Mode) is not { } callers)
         {
@@ -261,9 +264,11 @@ internal sealed class StateChecks
     /// <summary>
     /// Reports a diagnostic for each part of the state here that does not match what a routine's
     /// entry needs. Where <paramref name="target"/> is given and its signature does not write a
-    /// part, the message says that the routine takes that part by default.
+    /// part, the message says that the routine takes that part by default. Where
+    /// <paramref name="whyMode"/> is given, a mode that is not known is reported with that cause.
     /// </summary>
-    public void CheckEntry(Step step, string what, Signature callee, ProcessorState state, Symbol? target = null)
+    public void CheckEntry(
+        Step step, string what, Signature callee, ProcessorState state, Symbol? target = null, Cause? whyMode = null)
     {
         Width(StateRegister.A, StateParts.A, callee.Entry.A, state.A);
         Width(StateRegister.Index, StateParts.Index, callee.Entry.Index, state.Index);
@@ -272,7 +277,7 @@ internal sealed class StateChecks
             Report(step, Catalogue.CallStateMismatch.Message(
                 what,
                 Needs(StateParts.Mode, ProcessorState.Format(callee.Entry.E)),
-                IsKnown(state.E) ? $"the processor is in {Mode(state.E)} here" : ModeUnknown(step, state)));
+                IsKnown(state.E) ? $"the processor is in {Mode(state.E)} here" : ModeUnknown(step, state, whyMode)));
         }
         Value(StateRegister.DirectPage, StateParts.DirectPage, callee.Entry.D, state.D);
         Value(StateRegister.DataBank, StateParts.DataBank, callee.Entry.B, state.B);
@@ -320,11 +325,12 @@ internal sealed class StateChecks
     /// signature declares, since the others are inferred from what its returns leave.
     /// Where <paramref name="returning"/> is given, the step is that routine's return, and each
     /// mismatch offers two fixes. One sets the width the routine declares with an <c>.ensure</c>,
-    /// and the other declares what the analysis finds here.
+    /// and the other declares what the analysis finds here. Where <paramref name="whyMode"/> is
+    /// given, a mode that is not known is reported with that cause.
     /// </remarks>
     public void CheckExit(
         Step step, string what, string where, ProcessorState exit, ProcessorState state, string name, Symbol? returning = null,
-        StateParts held = StateParts.All)
+        StateParts held = StateParts.All, Cause? whyMode = null)
     {
         var lead = what.Length == 0 ? "" : what + " ";
         if ((held & StateParts.A) != 0)
@@ -348,7 +354,7 @@ internal sealed class StateChecks
                 $"in {Mode(exit.E)} mode",
                 IsKnown(state.E)
                     ? $"the processor is in {Mode(state.E)} mode {where}"
-                    : $"the mode is not known {where}"),
+                    : $"the mode is not known {where}{Cause.Because(whyMode)}"),
                 Declared(IsKnown(state.E) ? ProcessorState.Format(state.E) : null),
                 null);
         }
@@ -421,9 +427,10 @@ internal sealed class StateChecks
 
     /// <summary>
     /// Reports a diagnostic where a return does not leave the way the routine is called, or leaves
-    /// in a state other than the one the routine declares.
+    /// in a state other than the one the routine declares. <paramref name="whyMode"/> says why the
+    /// mode is not known here, where the analysis can tell.
     /// </summary>
-    public void CheckReturn(Step step, MnemonicKind mnemonic, ProcessorState state, Symbol routine)
+    public void CheckReturn(Step step, MnemonicKind mnemonic, ProcessorState state, Symbol routine, Cause? whyMode = null)
     {
         var signature = signatureOf(routine) ?? Signature.Default;
         if (mnemonic == MnemonicKind.Rts && signature.IsFar)
@@ -431,7 +438,7 @@ internal sealed class StateChecks
         else if (mnemonic == MnemonicKind.Rtl && !signature.IsFar)
             Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"), Own(step, FixKind.Return, "rts"));
         CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName, routine,
-            signature.Declared);
+            signature.Declared, whyMode);
     }
 
     /// <summary>
@@ -451,9 +458,11 @@ internal sealed class StateChecks
 
     /// <summary>
     /// Reports a diagnostic where a call is not made the way the routine is reached, or not in the
-    /// state the routine expects.
+    /// state the routine expects. <paramref name="whyMode"/> says why the mode is not known here,
+    /// where the analysis can tell.
     /// </summary>
-    public void CheckCall(Step step, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state)
+    public void CheckCall(
+        Step step, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state, Cause? whyMode = null)
     {
         if (mnemonic == MnemonicKind.Jsr && callee.IsFar)
             Report(step, Catalogue.CallDistanceMismatch.Message(
@@ -461,21 +470,23 @@ internal sealed class StateChecks
         else if (mnemonic == MnemonicKind.Jsl && !callee.IsFar)
             Report(step, Catalogue.CallDistanceMismatch.Message(
                 target.DisplayName, "near", "jsr"), Mnemonic(step, "jsr"));
-        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state, target);
+        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state, target, whyMode);
     }
 
     /// <summary>
     /// Reports a diagnostic where a call made with <c>per</c> and a branch does not suit the routine
     /// it calls. The call is checked as <c>jsr</c> or, with a <c>phk</c> before it, as <c>jsl</c>.
+    /// <paramref name="whyMode"/> says why the mode is not known here, where the analysis can tell.
     /// </summary>
-    public void CheckRelativeCall(Step step, MnemonicKind mnemonic, RelativeCall call, Signature callee, ProcessorState state)
+    public void CheckRelativeCall(
+        Step step, MnemonicKind mnemonic, RelativeCall call, Signature callee, ProcessorState state, Cause? whyMode = null)
     {
         var target = call.Routine;
         if (callee.IsFar && !call.IsFar)
             Report(step, Catalogue.RelativeCallNeedsPhk.Message(target.DisplayName), BankPush(step, call.Push, "phk"));
         else if (!callee.IsFar && call.IsFar && call.Bank is { } bank)
             Report(step, Catalogue.RelativeCallExtraPhk.Message(target.DisplayName), BankPush(step, bank, null));
-        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state, target);
+        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state, target, whyMode);
     }
 
     /// <summary>
@@ -486,10 +497,12 @@ internal sealed class StateChecks
     /// <c>rti</c>, or when the target never returns.
     /// <paramref name="via"/> is the source text that makes the jump. It is the mnemonic, or the
     /// <c>.next</c> or <c>.fallthrough</c> that says where the path goes, in which case
-    /// <paramref name="mnemonic"/> is <see cref="MnemonicKind.None"/>.
+    /// <paramref name="mnemonic"/> is <see cref="MnemonicKind.None"/>. <paramref name="whyMode"/>
+    /// says why the mode is not known here, where the analysis can tell.
     /// </summary>
     public void CheckTailCall(
-        Step step, string via, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state, Symbol routine)
+        Step step, string via, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state, Symbol routine,
+        Cause? whyMode = null)
     {
         var own = signatureOf(routine) ?? Signature.Default;
         var what = $"`{via} {target.DisplayName}`";
@@ -516,7 +529,7 @@ internal sealed class StateChecks
             Report(step, Catalogue.JumpDistanceMismatch.Message(target.DisplayName, "far", "jml", target.DisplayName),
                 Mnemonic(step, "jml"));
         }
-        CheckEntry(step, what, callee, state, target);
+        CheckEntry(step, what, callee, state, target, whyMode);
         if (!returns)
             return;
 

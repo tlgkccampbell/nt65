@@ -133,6 +133,41 @@
     jmp partly::halfway
 }
 
+; A `.state` that gives the widths and no mode leaves the mode unknown below the label, and
+; the code there that needs it is told that the label's `.state` is the reason, with the mode
+; the routine is entered in as the one to declare.
+.proc widths_only: a8, i8, native {
+    rts
+    resumed:
+    .state a8, i8
+    rep #$20
+    lda #$1234              ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `rep #$20` widens nothing in emulation mode, and the mode is not known, as `resumed` can be entered from outside `widths_only`, and its `.state` does not declare the mode: the `.state` after `resumed` can declare `native`
+    sep #$20
+    rts                     ;! error[return-state-mismatch]: `rts`: `widths_only` declares it returns in native mode, but the mode is not known here, because `resumed` can be entered from outside `widths_only`, and its `.state` does not declare the mode: the `.state` after `resumed` can declare `native`
+}
+
+.proc calls_widths_only: a8, i8, native {
+    jsr widths_only::resumed
+    rts
+}
+
+.proc falls_from_widths: a8, i8, native {
+    rts
+    resumed:
+    .state a8, i8
+    lda #$12
+    .fallthrough needs_native   ;! error[call-state-mismatch]: `.fallthrough needs_native` needs `native`, but the mode is not known here, because `resumed` can be entered from outside `falls_from_widths`, and its `.state` does not declare the mode: the `.state` after `resumed` can declare `native`
+}
+
+.proc needs_native: a8, i8, native {
+    rts
+}
+
+.proc calls_falls_from_widths: a8, i8, native {
+    jsr falls_from_widths::resumed
+    rts
+}
+
 ; The stack is the part a declaration cannot give. What the path above such a label pushed is
 ; not on the stack a jump in arrives with, so a `plp` below it finds no saved status.
 .proc saved_across: a8, i8 {
