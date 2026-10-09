@@ -11,8 +11,10 @@ namespace Norristown.Flow;
 /// <para>
 /// Memory is the programmer's to vouch for, so this is a best guess and feeds no check. What might
 /// also have changed a value does not stop the search, but is kept as a doubt to name in the hover.
-/// A doubt is an indexed store from the same symbol, any indirect store, a call that may write the
-/// location, or a store to another symbol at the same address.
+/// A doubt is any indirect store, an indexed store that may land on the location, as
+/// <see cref="IndexedStore"/> works out, or a call that may write the location. A store to another
+/// name for the same address is one too, as <see cref="MemoryInference.Overlaps"/> finds it, and so
+/// is the byte after a store whose width is not known.
 /// </para>
 /// </summary>
 internal sealed class MemoryWalk
@@ -63,26 +65,19 @@ internal sealed class MemoryWalk
     /// new source, and that includes a 16-bit store to the byte before it. Any other store that might
     /// reach it is a doubt.
     /// </summary>
-    private static Value Stored(Location location, Value value, MemoryAccess access, StepKey step)
+    private Value Stored(Location location, Value value, MemoryAccess access, StepKey step)
     {
         if (access.Direct is not null)
         {
-            var bytes = access.DirectBytes;
-            if (bytes.Contains(location))
+            if (access.DirectBytes.Contains(location))
                 return Value.Set(step);
-            return bytes.Any(direct => Overlaps(direct, location)) ? value.Doubted(step) : value;
+            var reached = access.ReachedBytes;
+            return reached.Contains(location) || reached.Any(direct => inference.Overlaps(direct, location)) ? value.Doubted(step) : value;
         }
-        if (access.Indirect || (access.Indexed is { } start && start.Group == location.Group))
+        if (access.Indirect || access.IndexedStore?.Reaches(location, inference.Anchor) == true)
             return value.Doubted(step);
         return value;
     }
-
-    /// <summary>
-    /// Returns whether two different names may stand for the same byte. They do where the source
-    /// fixes both addresses and they are equal.
-    /// </summary>
-    private static bool Overlaps(Location a, Location b) =>
-        a != b && a.Address is { } at && at == b.Address;
 
     /// <summary>Returns where each location's value was set after one block, from the state that reaches it.</summary>
     private State Through(BasicBlock block, State state)
@@ -108,12 +103,15 @@ internal sealed class MemoryWalk
         {
             // A call that writes a location on every path is where its value came from. One that
             // only may write it, or that nt65 cannot follow, is a doubt.
-            var written = block.CallsUnknown ? null : block.Calls.SelectMany(inference.WritesOf).ToHashSet();
+            var anything = block.CallsUnknown || block.Calls.Any(inference.WritesAnything);
+            var written = anything ? null : block.Calls.SelectMany(inference.WritesOf).ToHashSet();
+            var indexed = anything ? [] : block.Calls.SelectMany(inference.IndexedStoresOf).ToHashSet();
             var always = block.CallsUnknown || block.Calls.Count == 0 ? null
                 : block.Calls.Select(inference.AlwaysWrittenBy).Aggregate((a, b) => a.Intersect(b));
             state = state.Each((location, value) =>
                 always is not null && always.Contains(location) ? Value.Called(step.Key)
-                : written is null || written.Contains(location) || written.Any(write => Overlaps(write, location))
+                : written is null || written.Contains(location) || written.Any(write => inference.Overlaps(write, location))
+                    || indexed.Any(store => store.Reaches(location, inference.Anchor))
                     ? value.Doubted(step.Key)
                     : value);
         }

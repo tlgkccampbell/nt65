@@ -9,4 +9,8 @@ namespace Norristown.LanguageServer.Protocol;
 /// <param name="Group">The root symbol a memory output is grouped under, or null.</param>
 /// <param name="Category">The output's kind: <c>register</c>, <c>flag</c>, <c>width</c> or <c>memory</c>.</param>
 /// <param name="Readers">Each place that reads the value, in the order the lines come in the document.</param>
-internal sealed record SourcesOutput(string Name, string? Group, string Category, IReadOnlyList<ReaderSpan> Readers);
+/// <param name="Possibly">
+/// Each line that might have changed a value in memory between the caret and a reader, in the
+/// order the lines come in the document. Only memory has such lines.
+/// </param>
+internal sealed record SourcesOutput(string Name, string? Group, string Category, IReadOnlyList<ReaderSpan> Readers, IReadOnlyList<Range> Possibly);

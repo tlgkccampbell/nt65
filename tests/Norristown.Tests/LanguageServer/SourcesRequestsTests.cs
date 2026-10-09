@@ -303,6 +303,41 @@ public sealed class SourcesRequestsTests
     }
 
     /// <summary>
+    /// A reader of a store to memory carries what might have changed the value since the store, as
+    /// a source does. The store through <c>ptr</c> on line 8 stands between the caret's store on
+    /// line 6 and the load on line 9, and between it and the return on line 10, so both readers
+    /// name it and it is sent as a line of its own.
+    /// </summary>
+    [Fact]
+    public async Task AReaderOfMemoryNamesWhatMightHaveChangedIt()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In("""
+            .module main
+            .segment ZEROPAGE
+            .data count: .byte
+            .data ptr: .word
+            .segment CODE
+            .export .proc main {
+                st|a count
+                ldy #0
+                sta (ptr),y
+                lda count
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        var count = Assert.Single(result.Outputs, output => output.Category == "memory");
+        Assert.Equal(
+            [(9, "instruction", "or possibly `sta (ptr),y` on line 9"), (10, "exit", "or possibly `sta (ptr),y` on line 9")],
+            count.Readers.Select(reader => (reader.Range.Start.Line, reader.Kind, reader.Reason)));
+        Assert.Equal([8], count.Possibly.Select(range => range.Start.Line));
+    }
+
+    /// <summary>
     /// On a store with a <c>.patch</c>, the answer links the store to the instruction it writes
     /// into, with the instructions the <c>.patch</c> lists. Only the caret's store is linked.
     /// </summary>

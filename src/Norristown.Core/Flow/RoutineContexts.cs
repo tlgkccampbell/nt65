@@ -9,6 +9,12 @@ namespace Norristown.Flow;
 /// every other routine that nothing hands control to, along calls, tail calls, branches out of a
 /// routine, <c>.next</c> targets and <c>.fallthrough</c>.
 /// <para>
+/// A routine marked <c>interrupt</c> is a handler. So is one that nothing in the program calls,
+/// jumps or runs into and that returns with <c>rti</c> on some path, as a routine whose address
+/// only a vector table holds does. The warning <c>rti-outside-handler</c> still asks for the mark
+/// on such a routine, but the walk treats it as the handler it is.
+/// </para>
+/// <para>
 /// A handler's walk does not go into another handler, since a handler runs by being interrupted
 /// into, not by being called. A transfer whose target nt65 cannot identify, such as a call through
 /// a pointer or one with <c>.next ?</c> under it, stops the walk. Each such transfer is listed
@@ -20,13 +26,16 @@ public sealed class RoutineContexts
     private readonly Dictionary<Symbol, RoutineContext> contexts;
     private readonly Dictionary<Symbol, List<Symbol>> handlers;
     private readonly Dictionary<Symbol, List<TextSpan>> unfollowed;
+    private readonly HashSet<Symbol> unmarked;
 
     private RoutineContexts(
-        Dictionary<Symbol, RoutineContext> contexts, Dictionary<Symbol, List<Symbol>> handlers, Dictionary<Symbol, List<TextSpan>> unfollowed)
+        Dictionary<Symbol, RoutineContext> contexts, Dictionary<Symbol, List<Symbol>> handlers, Dictionary<Symbol, List<TextSpan>> unfollowed,
+        HashSet<Symbol> unmarked)
     {
         this.contexts = contexts;
         this.handlers = handlers;
         this.unfollowed = unfollowed;
+        this.unmarked = unmarked;
     }
 
     /// <summary>Returns the contexts of <paramref name="analysis"/>'s program.</summary>
@@ -37,6 +46,7 @@ public sealed class RoutineContexts
         var routines = new List<Symbol>();
         var targets = new Dictionary<Symbol, List<Symbol>>();
         var hasCaller = new HashSet<Symbol>();
+        var returnsByRti = new HashSet<Symbol>();
         var unfollowed = new Dictionary<Symbol, List<TextSpan>>();
         foreach (var file in analysis.Files)
         {
@@ -50,6 +60,9 @@ public sealed class RoutineContexts
                 }
                 foreach (var block in region.Blocks)
                 {
+                    // An `rti` with a `.next` is a computed jump, not a handler's return.
+                    if (block is { End: BlockEnd.Return, Next: null, Steps: [.., { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rti } }] })
+                        returnsByRti.Add(routine);
                     if (block.CallsUnknown && block.Steps.Count > 0 && StepLines.Of(file.Model.Tree, block.Steps[^1]) is { } shown)
                     {
                         if (!unfollowed.TryGetValue(routine, out var spans))
@@ -71,9 +84,10 @@ public sealed class RoutineContexts
             }
         }
 
+        var unmarked = returnsByRti.Where(routine => !IsHandler(routine) && !hasCaller.Contains(routine)).ToHashSet();
         var contexts = new Dictionary<Symbol, RoutineContext>();
         var reachedBy = new Dictionary<Symbol, List<Symbol>>();
-        foreach (var handler in routines.Where(IsHandler))
+        foreach (var handler in routines.Where(Handled))
         {
             foreach (var routine in Reach([handler]))
             {
@@ -83,9 +97,11 @@ public sealed class RoutineContexts
                 by.Add(handler);
             }
         }
-        foreach (var routine in Reach(routines.Where(routine => !IsHandler(routine) && !hasCaller.Contains(routine))))
+        foreach (var routine in Reach(routines.Where(routine => !Handled(routine) && !hasCaller.Contains(routine))))
             contexts[routine] = contexts.GetValueOrDefault(routine) | RoutineContext.Main;
-        return new RoutineContexts(contexts, reachedBy, unfollowed);
+        return new RoutineContexts(contexts, reachedBy, unfollowed, unmarked);
+
+        bool Handled(Symbol routine) => IsHandler(routine) || unmarked.Contains(routine);
 
         HashSet<Symbol> Reach(IEnumerable<Symbol> from)
         {
@@ -97,7 +113,7 @@ public sealed class RoutineContexts
                     continue;
                 foreach (var callee in targets.GetValueOrDefault(routine) ?? [])
                 {
-                    if (!IsHandler(callee))
+                    if (!Handled(callee))
                         pending.Push(callee);
                 }
             }
@@ -105,9 +121,23 @@ public sealed class RoutineContexts
         }
     }
 
-    /// <summary>Returns whether <paramref name="routine"/> is an interrupt handler.</summary>
+    /// <summary>Returns whether <paramref name="routine"/> is marked <c>interrupt</c>.</summary>
     /// <param name="routine">The routine, as the program has it now.</param>
     public static bool IsHandler(Symbol routine) => routine.Signature?.IsInterrupt == true;
+
+    /// <summary>
+    /// Returns whether <paramref name="routine"/> is walked as an interrupt handler. It is where
+    /// the routine is marked <c>interrupt</c>, and where <see cref="IsUnmarkedHandler"/> says so.
+    /// </summary>
+    /// <param name="routine">The routine, as the program has it now.</param>
+    public bool Handles(Symbol routine) => IsHandler(routine) || unmarked.Contains(routine);
+
+    /// <summary>
+    /// Returns whether <paramref name="routine"/> is walked as an interrupt handler without being
+    /// marked <c>interrupt</c>, because nothing calls it and it returns with <c>rti</c>.
+    /// </summary>
+    /// <param name="routine">The routine, as the program has it now.</param>
+    public bool IsUnmarkedHandler(Symbol routine) => unmarked.Contains(routine);
 
     /// <summary>Returns where <paramref name="routine"/> runs from.</summary>
     /// <param name="routine">The routine, as the program has it now.</param>

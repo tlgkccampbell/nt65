@@ -1356,7 +1356,9 @@ another interrupt handler or a routine that never returns. On the 6502 and its C
 accepted with the same `rti` and call checks. An `rti` in a routine not marked `interrupt` is a
 warning, `rti-outside-handler`, whose fix adds the item: leaving the mark off would otherwise
 earn the routine more trust than writing it. An `rti` with a `.next` is a computed jump that
-says where it goes, and is not reported.
+says where it goes, and is not reported. A routine that nothing calls and that returns with `rti`
+is still shown as the handler it is, in where routines run from and in the Data view (§14),
+while the warning stands.
 
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near
@@ -4371,7 +4373,10 @@ alone and without an assembler:
   location when some path through it loads the location by name before storing to it; the
   source of the location's value is the last store to the same name on each path; and the
   hover names what else might have changed it since: a store through a pointer or an index, a
-  call that may write it, or a store to another name for the same address. A hardware register
+  call that may write it, or a store to another name for the same address. A call to a routine
+  whose body is not in the program, or one that stores through a pointer, may write anything; a
+  store indexed from one location may reach any other in its segment; and an alias that names
+  another location is another name for its address. A hardware register
   that `.mmio` declares (§8) is not followed at all, because the hardware sets what it holds.
   This does not go back on memory being the programmer's word (§7.7). Nothing warns, errors or checks a promise
   because of it, and it is wrong in exactly the cases a guess from names can be;

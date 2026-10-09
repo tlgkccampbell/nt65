@@ -1,3 +1,5 @@
+using Norristown.Syntax;
+
 namespace Norristown.Flow;
 
 /// <summary>
@@ -11,4 +13,10 @@ namespace Norristown.Flow;
 /// <param name="Group">The root symbol that memory outputs are grouped under, or null for every other output.</param>
 /// <param name="Category">What kind of thing the output is.</param>
 /// <param name="Readers">Each place that reads the value, in the order the lines come in the file.</param>
-public sealed record ReadOutput(string Name, string? Group, InputCategory Category, IReadOnlyList<OutputReader> Readers);
+/// <param name="Possibly">
+/// The span of each line that might have changed a value in memory between the caret and one of
+/// its readers, in the order the lines come in the file. Such a line is what
+/// <see cref="SourcedInput.Possibly"/> describes for an input. Only memory has such lines.
+/// </param>
+public sealed record ReadOutput(
+    string Name, string? Group, InputCategory Category, IReadOnlyList<OutputReader> Readers, IReadOnlyList<TextSpan> Possibly);

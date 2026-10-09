@@ -12,6 +12,25 @@ namespace Norristown.Tests.Flow;
 /// </summary>
 public sealed class DataMapTests
 {
+    /// <summary>
+    /// A program with an address alias at $0080, where a zero page that starts there lays out
+    /// its first data.
+    /// </summary>
+    private const string AliasInsideSegment = """
+        .data ptr: .addr = $80
+        .segment ZEROPAGE
+        .data count: .byte
+        .data total: .word
+        .segment CODE
+        .export .proc main {
+            sta count
+            sta total
+            ldy #0
+            lda (ptr),y
+            rts
+        }
+        """;
+
     /// <summary>The sample program of the design, on the 65816, with three direct pages and the PPU's registers.</summary>
     private const string Snes = """
         .mmio INIDISP: .byte = $2100
@@ -402,6 +421,151 @@ public sealed class DataMapTests
                 .export .proc nmi: interrupt {
                     stx tmp
                     ldx tmp
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
+    /// The program's write of a location and its read of it may be in two routines. A handler that
+    /// writes the location in between changes what the reader reads, which is the same hazard as
+    /// when one routine does both, so the program's uses are pooled before they are graded.
+    /// </summary>
+    [Fact]
+    public void AWriteAndAReadInTwoRoutinesCanBeInterrupted()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=True used=1 direct=3",
+                "  ◦ no config · layout guessed",
+                "  flag +0 x1 .byte Interrupt Guessed",
+                "    setter Out 1",
+                "    getter In 1",
+                "    irq Out 1 handler",
+                "      ⚠ `irq` writes it without reading it first @ sta flag",
+                "      ⚠ and can interrupt the program between `setter`'s write and `getter`'s read @ lda flag",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data flag: .byte
+                .segment CODE
+                .export .proc main {
+                    jsr setter
+                    jsr getter
+                    rts
+                }
+                .proc setter {
+                    sta flag
+                    rts
+                }
+                .proc getter {
+                    lda flag
+                    rts
+                }
+                .export .proc irq: interrupt {
+                    sta flag
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
+    /// The program's use of a location while D is not known still names the location, so a handler
+    /// that uses it as a temporary can change it under that use as under any other.
+    /// </summary>
+    [Fact]
+    public void AUseWhileDIsNotKnownCanBeInterrupted()
+    {
+        var lines = Render("65816", """
+            .segment ZEROPAGE
+            .data tmp: .byte
+            .segment CODE
+            .export .proc main: a8, i8, dp? {
+                sta tmp
+                lda tmp
+                rts
+            }
+            .export .proc nmi: interrupt, native {
+                sep #$30
+                pea 0
+                pld
+                stx tmp
+                ldx tmp
+                rti
+            }
+            """);
+        Assert.Contains("      ⚠ and can interrupt `main` between its write and its read @ lda tmp", lines);
+    }
+
+    /// <summary>
+    /// A routine that reads a location before a call and again after it relies on the call
+    /// leaving it alone, as much as one that wrote it first does. A call that uses the location as
+    /// a temporary is a hazard to it.
+    /// </summary>
+    [Fact]
+    public void AValueReadAcrossACallThatUsesItAsATemporaryIsAHazard()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Nested hazard=True used=1 direct=4",
+                "  ◦ no config · layout guessed",
+                "  count +0 x1 .byte Nested Guessed",
+                "    main In 2",
+                "      ⚠ `jsr helper` runs between two reads of it @ jsr helper",
+                "      ⚠ `helper` uses it as a temporary @ stx count",
+                "      ◦ read again here, after the call @ lda count",
+                "    helper Temp 2",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data count: .byte
+                .segment CODE
+                .export .proc main {
+                    lda count
+                    jsr helper
+                    lda count
+                    rts
+                }
+                .proc helper {
+                    stx count
+                    ldx count
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// A routine that only a vector table names and that returns with <c>rti</c> is a handler
+    /// even without the <c>interrupt</c> mark, so its use of a location as a temporary is the
+    /// same hazard a marked handler's is.
+    /// </summary>
+    [Fact]
+    public void AVectorOnlyRoutineIsGradedAsAHandler()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=True used=1 direct=4",
+                "  ◦ no config · layout guessed",
+                "  tmp +0 x1 .byte Interrupt Guessed",
+                "    main Temp 2",
+                "    nmi Temp 2 handler",
+                "      ⚠ `nmi` uses it as a temporary @ stx tmp",
+                "      ⚠ and can interrupt `main` between its write and its read @ lda tmp",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data tmp: .byte
+                .segment CODE
+                .export .proc main {
+                    sta tmp
+                    lda tmp
+                    rts
+                }
+                .export .data vectors: .addr = nmi
+                .proc nmi {
+                    stx tmp
+                    ldx tmp
+                    .allow "rti-outside-handler", "the vector table is the only way in"
                     rti
                 }
                 """));
@@ -946,53 +1110,60 @@ public sealed class DataMapTests
     }
 
     /// <summary>
-    /// An address alias that falls inside a segment's predicted bytes takes the same bytes as the
-    /// data laid out there. The layout chose those addresses, so the two collide, and the page
-    /// notes each collision.
+    /// An address alias that falls inside a segment's predicted bytes may take the same bytes as
+    /// the data laid out there. Only a build can say where ld65 put the segment, so the overlap is
+    /// unverified, and the page notes it without calling it a collision.
     /// </summary>
     [Fact]
-    public void AnAliasInsideASegmentCollidesWithItsData()
+    public void AnAliasInsideAPredictedSegmentMayOverlapItsData()
     {
-        var project = Linked("""
-            MEMORY {
-                ZP:  start = $0080, size = $0080;
-                ROM: start = $8000, size = $1000;
-            }
-            SEGMENTS {
-                ZEROPAGE: load = ZP, type = zp;
-                CODE:     load = ROM, type = ro;
-            }
-            """);
         Assert.Equal(
             [
                 "page $0000 [ZEROPAGE] Own hazard=False used=3 direct=3",
-                "  ⧉ `count` and `ptr` share $0080 unintentionally",
-                "  ⧉ `ptr` and `total` share $0081 unintentionally",
+                "  ◦ `count` and `ptr` may both take $0080 · predicted, not verified",
+                "  ◦ `ptr` and `total` may both take $0081 · predicted, not verified",
                 "  count +128 x1 .byte Own Configured",
+                "    ⧉ Unverified ptr $0080-$0080",
+                "    main Out 1",
+                "  ptr +128 x2 .addr Own Fixed",
+                "    ⧉ Unverified count $0080-$0080",
+                "    ⧉ Unverified total $0081-$0081",
+                "    main In 1",
+                "  total +129 x2 .word Own Configured",
+                "    ⧉ Unverified ptr $0081-$0081",
+                "    main Out 1",
+            ],
+            Render(FlowFragment.Analyze(LinkedAt80(), "6502", (Analysis.Path, AliasInsideSegment))));
+    }
+
+    /// <summary>
+    /// Once the last build gives the segment's data its addresses, an address alias among them is
+    /// seen to take the same bytes, and the page notes that the two collide. Here the build puts
+    /// <c>count</c> at $0080 and <c>total</c> at $0081, where the config predicts them too.
+    /// </summary>
+    [Fact]
+    public void AnAliasInsideABuiltSegmentCollidesWithItsData()
+    {
+        var analysis = FlowFragment.Analyze(LinkedAt80(), "6502", (Analysis.Path, AliasInsideSegment));
+        var model = analysis.File(Analysis.Path);
+        var built = new Dictionary<Symbol, long> { [model.Symbol("count")] = 0x80, [model.Symbol("total")] = 0x81 };
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Own hazard=False used=3 direct=3",
+                "  ⧉ `count` and `ptr` both take $0080",
+                "  ⧉ `ptr` and `total` both take $0081",
+                "  count +128 x1 .byte Own Built",
                 "    ⧉ Collision ptr $0080-$0080",
                 "    main Out 1",
                 "  ptr +128 x2 .addr Own Fixed",
                 "    ⧉ Collision count $0080-$0080",
                 "    ⧉ Collision total $0081-$0081",
                 "    main In 1",
-                "  total +129 x2 .word Own Configured",
+                "  total +129 x2 .word Own Built",
                 "    ⧉ Collision ptr $0081-$0081",
                 "    main Out 1",
             ],
-            Render(FlowFragment.Analyze(project, "6502", (Analysis.Path, """
-                .data ptr: .addr = $80
-                .segment ZEROPAGE
-                .data count: .byte
-                .data total: .word
-                .segment CODE
-                .export .proc main {
-                    sta count
-                    sta total
-                    ldy #0
-                    lda (ptr),y
-                    rts
-                }
-                """))));
+            Render(analysis, built));
     }
 
     /// <summary>
@@ -1064,7 +1235,7 @@ public sealed class DataMapTests
         Assert.Equal(
             [
                 "page $0000 [ZEROPAGE,ZP2,ZP3,ZP4] Own hazard=False used=5 direct=4",
-                "  ⧉ `head` and `pinned` share $0002 unintentionally",
+                "  ⧉ `head` and `pinned` both take $0002",
                 "  head +0 x3 .byte[3] Own Configured",
                 "    ⧉ Collision pinned $0002-$0002",
                 "    main Out 1",
@@ -1420,6 +1591,21 @@ public sealed class DataMapTests
                 lines.Add($"      {note.Glyph} {note.Text} @ {note.At?.GetText().Trim()}");
         }
     }
+
+    /// <summary>
+    /// Returns the settings of a project whose zero page starts at $0080, where
+    /// <see cref="AliasInsideSegment"/> puts an alias.
+    /// </summary>
+    private static ProjectSettings LinkedAt80() => Linked("""
+        MEMORY {
+            ZP:  start = $0080, size = $0080;
+            ROM: start = $8000, size = $1000;
+        }
+        SEGMENTS {
+            ZEROPAGE: load = ZP, type = zp;
+            CODE:     load = ROM, type = ro;
+        }
+        """);
 
     /// <summary>
     /// Returns the settings of a project that links <paramref name="config"/>, with the project

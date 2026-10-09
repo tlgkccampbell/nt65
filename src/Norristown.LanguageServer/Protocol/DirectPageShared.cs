@@ -10,6 +10,8 @@ namespace Norristown.LanguageServer.Protocol;
 /// How the two come to take the same bytes. It is <c>page</c> for locations on two pages, and
 /// <c>deliberate</c> for two addresses on one page that the source fixes. It is <c>authored</c>
 /// for two on one page that the linked configuration places so, and <c>collision</c> for two on
-/// one page where one lands there by accident of the layout.
+/// one page that neither the source nor the configuration places both there. It is
+/// <c>unverified</c> for an address the source fixes among a segment's bytes whose addresses are
+/// only predicted, so that the two may or may not take the same bytes.
 /// </param>
 internal sealed record DirectPageShared(string Here, string There, string Page, long First, long Last, string Kind);
