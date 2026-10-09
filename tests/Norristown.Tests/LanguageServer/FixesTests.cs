@@ -322,6 +322,27 @@ public sealed class FixesTests
     }
 
     /// <summary>
+    /// A declaration in a repetition's body is a different one on every iteration and no path
+    /// reaches it, so the message does not mention exporting it, and the fix that removes it is
+    /// the only one offered for it.
+    /// </summary>
+    [Fact]
+    public void WhatARepetitionDeclaresIsOfferedRemovalAndNotExport()
+    {
+        const string Body = ".segment BSS\n.repeat 2 {\n    .data spare: .byte\n}\n";
+        var (analysis, model) = Analyzed(Header + Body);
+
+        var unused = Assert.Single(analysis.Diagnostics, diagnostic => diagnostic.Id == "unused-symbol");
+        var titles = CodeActions.In(analysis, model, Whole).Select(action => action.Title).ToList();
+
+        Assert.Equal("`spare` is never used", unused.Message);
+        Assert.Contains("Remove `spare`", titles);
+        Assert.DoesNotContain(titles, title => title.StartsWith("Export", StringComparison.Ordinal));
+        Assert.Equal(Header + ".segment BSS\n.repeat 2 {\n}\n",
+            Editing.Apply(Header + Body, CodeActions.In(analysis, model, Whole).Single(action => action.Title == "Remove `spare`").Edit!.Changes[Uri]));
+    }
+
+    /// <summary>
     /// Where the analysis cannot work out a register width, only the programmer can say which it
     /// is, so both widths are offered and neither is marked preferred, since neither should be
     /// applied without asking.

@@ -50,6 +50,21 @@
     rts
 }
 
+; A label a macro body declares belongs to each expansion, so nothing outside the body can name it.
+.macro spin() {
+@wait:
+    dex
+    bne @wait
+    done:
+    nop
+}
+
+.proc outside {
+    spin!()
+    beq @wait               ;! error[not-declared]: `@wait` is not declared here: the body of `spin!` declares it, and a name a macro body declares can be named only inside that body, so declare it in the caller instead
+    jmp done                ;! error[not-declared]: `done` is not declared here: the body of `spin!` declares it, and a name a macro body declares can be named only inside that body, so declare it in the caller instead
+}
+
 .proc reach {
     lda ::@loop             ;! error[cheap-local-in-a-path]: `@loop` is a cheap local and cannot be reached with `::`
     lda ::nothing           ;! error[module-unknown]: no module `nothing` is in this build

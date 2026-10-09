@@ -97,8 +97,43 @@ internal sealed partial class Evaluator
         if (arguments.Count % 2 == 0)
             return arguments[^1];
         if (report)
-            Report(arguments[0], Catalogue.SwitchNoArm.Message(value.IsWord ? value.Text! : value.ToString()));
+            ReportNoArm(value, arguments[0]);
         return null;
+    }
+
+    /// <summary>
+    /// Reports that no arm of a <c>.switch</c> holds <paramref name="value"/>, the value of
+    /// <paramref name="tested"/>. In a function body the problem is with what the call gave, so it
+    /// is reported at the call, naming the argument as the caller wrote it, with the body's
+    /// <c>.switch</c> as a note.
+    /// </summary>
+    private void ReportNoArm(Value value, SyntaxNode tested)
+    {
+        var shown = value.IsWord ? value.Text! : value.ToString();
+        if (calls.Count == 0)
+        {
+            Report(tested, Catalogue.SwitchNoArm.Message("this `.switch`", Written(tested.GetText().Trim(), shown)));
+            return;
+        }
+
+        // A parameter tested in the body of the function the caller called directly is the
+        // argument the caller gave, which is what the caller can see and change.
+        var (outermost, _, _) = calls[0];
+        var (_, function, given) = calls[^1];
+        var written = tested.GetText().Trim();
+        if (calls.Count == 1 && tested is NameExpressionSyntax name
+            && function.ParameterSymbols.ToList().FindIndex(parameter => parameter.Name == name.GetText().Trim()) is var at and >= 0
+            && given[at] is { } argument && argument.Tree == outermost.Tree
+            && argument.Position >= outermost.Position && argument.Position < outermost.FullSpan.End)
+        {
+            written = argument.GetText().Trim();
+        }
+        Report(outermost.Tree.GetSpan(outermost.Span),
+            Catalogue.SwitchNoArm.Message($"the `.switch` in `{function.Name}`", Written(written, shown)),
+            [new RelatedSpan(tested.Tree.GetSpan(tested.Span), "in the function body")]);
+
+        static string Written(string written, string shown) =>
+            written == shown ? shown : $"`{written}`, which is {shown}";
     }
 
     /// <summary>

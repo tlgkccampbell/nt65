@@ -44,18 +44,21 @@ main__hook:
 .segment "RODATA": absolute
 table: .res 3
 
+spare:   .res 2
+spare_2: .res 2
+
 .segment "CODE": absolute
-; .proc left_behind: a8, i8  main.nt65:58
+; .proc left_behind: a8, i8  main.nt65:64
 left_behind:
     rts
 ; end of left_behind
 
-; .proc dispatched: a8, i8  main.nt65:63
+; .proc dispatched: a8, i8  main.nt65:69
 dispatched:
     rts
 ; end of dispatched
 
-; .proc nmi: interrupt  main.nt65:69
+; .proc nmi: interrupt  main.nt65:75
 nmi:
     rti
 ; end of nmi
@@ -64,7 +67,7 @@ nmi:
 main__vectors: .addr dispatched
 
 .segment "CODE": absolute
-; .proc detour: a8, i8  main.nt65:79
+; .proc detour: a8, i8  main.nt65:85
 main__detour:
 
 .pushseg

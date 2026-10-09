@@ -35,6 +35,14 @@ internal sealed partial class Binder
         return true;
     }
 
+    /// <summary>
+    /// Returns the end of the message for a name that only the body of <paramref name="macro"/>
+    /// declares, which says why the name cannot be reached and what to do instead.
+    /// </summary>
+    private static string InTheBody(string macro) =>
+        $" here: the body of `{macro}!` declares it, and a name a macro body declares can be named only inside "
+            + "that body, so declare it in the caller instead";
+
     private void ResolveUses(IReadOnlyList<Use> list)
     {
         Resolution? previous = null;
@@ -149,7 +157,11 @@ internal sealed partial class Binder
                 return null;
             }
             var local = at.LookupCheapLocal(token.Text[1..]);
-            if (local is null)
+            if (local is null && InACalledBody(token.Text[1..], cheap: true) is { } macro)
+            {
+                Report(token.Span, Catalogue.NotDeclared.Message(token.Text, InTheBody(macro)));
+            }
+            else if (local is null)
             {
                 var near = NearestName(at, token.Text[1..], cheap: true);
                 Report(token.Span, Catalogue.NotDeclared.Message(token.Text, Lookup.Suggesting(near is null ? null : "@" + near)));
@@ -253,6 +265,11 @@ internal sealed partial class Binder
     {
         lookedUp.Add(new LookedUpName(null, token.Text));
         var exporting = program.ModulesExporting(token.Text).ToList();
+        if (exporting.Count == 0 && last && InACalledBody(token.Text, cheap: false) is { } macro)
+        {
+            Report(token.Span, Catalogue.NotDeclared.Message(token.Text, InTheBody(macro)));
+            return;
+        }
         var nearest = exporting.Count == 0 && last ? NearestName(at, token.Text, cheap: false) : null;
         Report(token.Span, exporting.Count > 0
             ? Catalogue.DeclaredInAnotherModule.Message(
@@ -264,6 +281,24 @@ internal sealed partial class Binder
             Fixed(new DiagnosticFix(FixKind.Use, $"{exporting[0]}::{token.Text}"));
         else if (nearest is not null)
             Fixed(new DiagnosticFix(FixKind.NearestName, nearest));
+    }
+
+    /// <summary>
+    /// Returns the name of a macro this file calls whose body declares <paramref name="name"/>, a
+    /// cheap local where <paramref name="cheap"/> is set, or null where no such body declares it.
+    /// Each expansion has its own copy of such a name, so nothing outside the body can name it.
+    /// </summary>
+    private string? InACalledBody(string name, bool cheap)
+    {
+        foreach (var (call, at, _) in calls)
+        {
+            if (at.Lookup(call.Name.Text) is { Kind: SymbolKind.Macro, Body: { } body }
+                && (cheap ? body.FindCheapLocal(name) : body.FindMember(name)) is { Kind: not SymbolKind.MacroParameter })
+            {
+                return call.Name.Text;
+            }
+        }
+        return null;
     }
 
     /// <summary>

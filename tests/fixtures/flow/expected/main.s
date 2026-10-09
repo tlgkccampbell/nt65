@@ -13,6 +13,9 @@
 .export main__patching
 .export main__clear_screen
 .export main__clear_twice
+.export main__to_rom
+.export main__to_reset
+.export main__to_kernal
 
 .segment "CODE": absolute
 ; .proc dispatch  main.nt65:16
@@ -73,6 +76,24 @@ clear_twice__tail:
     ldx #0
     jmp clear_screen__again
 ; end of clear_twice
+
+KERNAL = $ff00
+; .proc to_rom  main.nt65:84
+main__to_rom:
+    jsr $ffd2
+    jsr KERNAL + $e4
+    jmp KERNAL + $d2
+; end of to_rom
+
+; .proc to_reset  main.nt65:90
+main__to_reset:
+    jmp $fffc
+; end of to_reset
+
+; .proc to_kernal  main.nt65:94
+main__to_kernal:
+    jmp KERNAL
+; end of to_kernal
 
 .segment "BSS": absolute
 cmd:   .res 1

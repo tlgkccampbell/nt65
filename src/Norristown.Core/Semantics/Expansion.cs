@@ -203,6 +203,50 @@ public sealed class Expansion : IEquatable<Expansion>
         return new Diagnostic(tree.GetSpan(span), severity ?? message.Descriptor.Severity, message);
     }
 
+    /// <summary>
+    /// Returns where a problem with a line of a macro body is reported, or null where
+    /// <paramref name="node"/> is the text of <paramref name="file"/> itself. A block argument a
+    /// call gives is the caller's own text, so a line in one is not a body line.
+    /// </summary>
+    /// <param name="node">The line, or a part of it, that has the problem.</param>
+    /// <param name="on">The expansion the line was found in.</param>
+    /// <param name="file">The file whose analysis found the problem.</param>
+    /// <returns>
+    /// The nearest call written in the file's own text, outside every macro body, which is the
+    /// side that can change and so the place the problem is reported. <c>Holder</c> is the call
+    /// of the macro whose body holds the line, which is the same call where it is not nested.
+    /// <c>Level</c> is the expansion of the reported call, so that a caller can tell which lines
+    /// that call expanded.
+    /// </returns>
+    public static (MacroCallSyntax Call, MacroCallSyntax Holder, Expansion Level)? BodyLine(
+        SyntaxNode node, Expansion? on, SyntaxTree file)
+    {
+        MacroCallSyntax? holder = null;
+        for (var level = on; level is not null && holder is null; level = level.Outer)
+        {
+            if (level.Call is { } call && level.Holds(node))
+                holder = call;
+        }
+        if (holder is null && node.Tree == file)
+            return null;
+        for (var level = on; level is not null; level = level.Outer)
+        {
+            if (level.Call is { } call && call.Tree == file && !InAnyBody(call, level.Outer))
+                return (call, holder ?? call, level);
+        }
+        return null;
+
+        static bool InAnyBody(SyntaxNode node, Expansion? from)
+        {
+            for (var level = from; level is not null; level = level.Outer)
+            {
+                if (level.Call is not null && level.Holds(node))
+                    return true;
+            }
+            return false;
+        }
+    }
+
     /// <summary>Determines whether two expansions are the same expansion of the same lines.</summary>
     public static bool operator ==(Expansion? a, Expansion? b) => Equals(a, b);
 
@@ -232,6 +276,20 @@ public sealed class Expansion : IEquatable<Expansion>
         Call is not null ? $"expansion of {Call.GetText()}" : $"iteration {Index}";
 
     /// <summary>
+    /// Returns whether this expansion is inside <paramref name="level"/>, or is that expansion, so
+    /// that what it emits is part of what <paramref name="level"/> emits.
+    /// </summary>
+    public bool IsWithin(Expansion level)
+    {
+        for (var at = this; at is not null; at = at.Outer)
+        {
+            if (at == level)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Returns the expansion enclosing <paramref name="splice"/> that belongs to the macro whose
     /// body contains <paramref name="line"/>.
     /// </summary>
@@ -239,14 +297,15 @@ public sealed class Expansion : IEquatable<Expansion>
     {
         for (var level = splice.Outer; level is not null; level = level.Outer)
         {
-            if (level.Call is not null && level.Body is { } body && body.Tree == line.Tree
-                && line.Position >= body.Position && line.Position < body.FullSpan.End)
-            {
+            if (level.Call is not null && level.Holds(line))
                 return level;
-            }
         }
         return null;
     }
+
+    /// <summary>Returns whether the block this expansion emits contains <paramref name="node"/>.</summary>
+    private bool Holds(SyntaxNode node) =>
+        Body is { } body && body.Tree == node.Tree && node.Position >= body.Position && node.Position < body.FullSpan.End;
 
     /// <summary>
     /// Represents what one name is bound to in one expansion. An item is kept as the expression

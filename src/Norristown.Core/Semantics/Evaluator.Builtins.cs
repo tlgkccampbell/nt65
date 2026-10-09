@@ -209,7 +209,15 @@ internal sealed partial class Evaluator
         var what = named is { IsIndexed: false } && banked is not null
             ? $"`{text}` is {banked.KindPhrase}{(banked.IsAddress ? " at a constant address" : "")}"
             : $"`{text}` is not the name of a routine, a label or data";
-        Report(arguments[0], Catalogue.BankHasNoSegment.Message(what));
+
+        // A constant has no segment, but it has a bank byte, which `^` gives. That is nearly
+        // always what `.bankof` of a constant was meant to ask.
+        var constant = named is { IsIndexed: false }
+            ? banked?.Kind is SymbolKind.Constant or SymbolKind.ImportedConstant or SymbolKind.ExternProc or SymbolKind.AddressAlias
+            : named is null && Evaluate(arguments[0]).AsNumber() is not null;
+        var operand = arguments[0] is NameExpressionSyntax or LiteralExpressionSyntax ? text : $"({text})";
+        Report(arguments[0], Catalogue.BankHasNoSegment.Message(what,
+            constant ? $": for the bank byte of a constant, write `^{operand}`" : ""));
         return Value.Unknown;
     }
 
@@ -666,8 +674,16 @@ internal sealed partial class Evaluator
             Value result;
             try
             {
-                using (Evaluating(symbol))
-                    result = Evaluate(symbol.Items[0]);
+                calls.Add((call, symbol, given));
+                try
+                {
+                    using (Evaluating(symbol))
+                        result = Evaluate(symbol.Items[0]);
+                }
+                finally
+                {
+                    calls.RemoveAt(calls.Count - 1);
+                }
                 if (outermost && result.Kind == ValueKind.Unknown && unlinked is [var (first, elsewhere), ..])
                 {
                     Report(call, Catalogue.FuncNotLinkable.Message(symbol.Name, first.GetText().Trim(), elsewhere

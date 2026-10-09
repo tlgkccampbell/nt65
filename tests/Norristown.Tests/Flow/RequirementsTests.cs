@@ -161,6 +161,27 @@ public sealed class RequirementsTests
     }
 
     /// <summary>
+    /// Data in a macro body that code runs into is reported at the call, which is the side that
+    /// can add the <c>.next</c>, with the body line as a note. A routine that ends in the call is
+    /// still reported once, as running into data.
+    /// </summary>
+    [Fact]
+    public void DataInAMacroBodyIsReportedAtTheCall()
+    {
+        const string Text = ".module main\n.cpu 6502\n.segment CODE\n.macro skip2() {\n    .byte $2c\n}\n"
+            + ".proc p {\n    lda #1\n    skip2!()\n}\n";
+
+        var only = Assert.Single(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics);
+
+        Assert.Equal("runs-into-data", only.Id);
+        Assert.Equal(9, only.Span.Line);
+        Assert.Equal(
+            "execution falls into the data that the call to `skip2!` ends in: add a `.next` after the call saying where flow goes",
+            only.Message);
+        Assert.Equal(5, Assert.Single(only.Related).Span.Line);
+    }
+
+    /// <summary>
     /// A routine returns past its inline data on every processor, so the data is checked on every
     /// CPU.
     /// </summary>

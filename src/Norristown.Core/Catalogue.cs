@@ -530,9 +530,11 @@ public static class Catalogue
         Area.ReadingALine,
         "export-declares-nothing",
         Severity.Error,
-        "`{0}` declares nothing, so there is nothing to export",
+        "{0}, so there is nothing to export{1}",
         "`.export` before a declaration exports what that declaration declares, so the directive after it has to "
-            + "be one that declares something.");
+            + "be one that declares something. An `.each` declares nothing itself: a family is the declarations "
+            + "in its body named after the binding, and `.export` before one of them, or before `.multiproc`, "
+            + "exports every instance.");
 
     internal static DiagnosticDescriptor DataBodyHoldsValues { get; } = Entry(
         Area.ReadingALine,
@@ -605,9 +607,10 @@ public static class Catalogue
         Area.ReadingALine,
         "not-a-function",
         Severity.Error,
-        "`{0}` is not a function",
+        "`{0}` is not a function{1}",
         "The built-in functions are a fixed set. A function the program declares is a `.func`, and its name "
-            + "has no leading `.`.");
+            + "has no leading `.`. There is no `.defined`: a build sets the settings modules declare, with "
+            + "`.const NAME ?= default`, rather than names of its own, so a condition tests a setting's value.");
 
     internal static DiagnosticDescriptor BuiltinArgumentNamed { get; } = Entry(
         Area.ReadingALine,
@@ -625,7 +628,9 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is not declared{1}",
         "Nothing in scope here declares the name. Where a name one letter away is declared, or another module "
-            + "exports it, the message reports it, because that is nearly always what was meant.");
+            + "exports it, the message reports it, because that is nearly always what was meant. Where the body of "
+            + "a macro the file calls declares it, the message says so: each expansion has its own copy of such a "
+            + "name, so it can be named only inside the body.");
 
     internal static DiagnosticDescriptor NotDeclaredIn { get; } = Entry(
         Area.Names,
@@ -1051,8 +1056,10 @@ public static class Catalogue
         Area.Names,
         "unused-symbol",
         Severity.Warning,
-        "`{0}` is never used or exported",
-        "Nothing in the program names the declaration and the file does not export it, so nothing reads it. Data "
+        "`{0}` is never used{1}",
+        "Nothing in the program names the declaration and the file does not export it, so nothing reads it. A "
+            + "declaration no path can reach, such as a cheap local or one in a `.repeat` or `.each` body, cannot be "
+            + "exported, so the message and the editor's fixes offer only removing it. Data "
             + "that holds values may be there for where it lands, so only a declaration that reserves storage is "
             + "reported. A declaration that another module names although it is not exported is "
             + "reported there instead, as an error.");
@@ -1257,11 +1264,12 @@ public static class Catalogue
         Area.Values,
         "bank-has-no-segment",
         Severity.Error,
-        "{0}, so `.bankof` cannot find its bank",
+        "{0}, so `.bankof` cannot find its bank{1}",
         "`.bankof(name)` is the `bank` attribute that the linker configuration gives the memory area the name's "
             + "segment runs in, which is the area ca65's `.bank` reads, not the one it is loaded from. ld65 finds "
             + "the area from the segment, so the argument must be a routine, a label or data in a segment, not a "
-            + "constant, a declaration at a constant address, a scope, an element or an expression.");
+            + "constant, a declaration at a constant address, a scope, an element or an expression. The bank byte "
+            + "of a constant, which is bits 16 to 23 of its value, is `^`, as in `^$7E1234`.");
 
     internal static DiagnosticDescriptor CountofHasNoElements { get; } = Entry(
         Area.Values,
@@ -1445,9 +1453,11 @@ public static class Catalogue
         Area.Values,
         "switch-no-arm",
         Severity.Error,
-        "no arm of this `.switch` holds {0}, and it has no default result",
+        "no arm of {0} holds {1}, and it has no default result",
         "A `.switch` without a last result for otherwise must have an arm for every value it is given. Add the "
-            + "value to an arm's set, or end the `.switch` with a result for the values no arm holds.");
+            + "value to an arm's set, or end the `.switch` with a result for the values no arm holds. In a "
+            + "`.func` body the value usually comes from an argument, so the call is reported, naming the "
+            + "argument as it is written there, with the `.switch` as a note.");
 
     internal static DiagnosticDescriptor SetExpected { get; } = Entry(
         Area.Values,
@@ -2034,8 +2044,10 @@ public static class Catalogue
         Area.Data,
         "member-not-text",
         Severity.Error,
-        "`{0}` is one `{1}` and cannot hold text: reserve a text member with `.res`",
-        "A member of a plain type holds one value. Room for text is reserved with `.res`, which states how much.");
+        "{0} and cannot hold text: a member that holds text is reserved with `.res` and its length, as `{1}: .res {2}`",
+        "A member of a plain type holds one value, and each element of an array member holds one value too, so "
+            + "neither holds text longer than a byte. Room for text is reserved with `.res`, which states how "
+            + "many bytes, and `.res n, pad` pads the text with something other than zero.");
 
     internal static DiagnosticDescriptor StrzNotText { get; } = Entry(
         Area.Data,
@@ -2669,14 +2681,16 @@ public static class Catalogue
         Area.ControlFlow,
         "runs-into-data",
         Severity.Error,
-        "the instruction above falls into this {0}: {1}",
+        "{0} falls into {1}: {2}",
         "Execution falls from the instruction above into these bytes, so the processor would run them as code, as "
             + "in the `.byte $2c` skip trick or an opcode given as bytes. nt65 cannot follow flow through "
             + "data, so add a `.next` after the data naming where flow really goes. If the instruction above is "
             + "a conditional branch that is always taken, put a `.next` naming its target under the branch instead. "
             + "Padding from a `.res` or `.align` is data too, so falling into it needs the `.next` even where its "
             + "fill byte runs on. Where the fill does not run on, the `.next` is refused as `next-after-padding`, "
-            + "so give the padding a fill byte such as `$ea`, which is `nop`, or `jmp` over it.");
+            + "so give the padding a fill byte such as `$ea`, which is `nop`, or `jmp` over it. Data in a macro body "
+            + "is reported at the call, with the body line as a note. Where the data is the last thing the call "
+            + "expands to, the `.next` goes after the call; anywhere else in the body, it goes in the body.");
 
     internal static DiagnosticDescriptor NextAfterPadding { get; } = Entry(
         Area.ControlFlow,
@@ -2940,10 +2954,13 @@ public static class Catalogue
         Severity.Error,
         "{0} jumps to a computed address, which nt65 cannot follow: add a `.next` naming the labels it may reach, "
             + "or `.next ?` where they cannot be named",
-        "The target is an expression rather than a label, so the analysis has no label at which to continue. A "
-            + "`.next` after the jump names the labels it may reach. Where the target is not the start of an "
-            + "instruction, such as a jump into the middle of one, use `.next ?`. The analysis then assumes "
-            + "the code it reaches may change anything.");
+        "The target is an expression built on a label, a routine or data, such as `table + 3`, rather than a bare "
+            + "name, so the analysis has no label at which to continue. A `.next` after the jump names the labels "
+            + "it may reach. Where the target is not the start of an instruction, such as a jump into the middle "
+            + "of one, use `.next ?`. The analysis then assumes the code it reaches may change anything. A jump "
+            + "to a constant address, such as `jmp $FFD2`, is not computed and needs neither. It is a tail call "
+            + "to a routine nothing is known about, as `jsr $FFD2` is a call to one, and an extern proc, "
+            + "`.proc NAME = $FFD2`, can say what that routine expects and returns with.");
 
     internal static DiagnosticDescriptor ComputedBranchUnchecked { get; } = Entry(
         Area.ControlFlow,
@@ -2979,12 +2996,11 @@ public static class Catalogue
         "jump-target-not-a-label",
         Severity.Error,
         "{0} goes to `{1}`, which is {2}, not a label, so nt65 cannot follow it: {3}",
-        "A jump or branch normally names a label in code. This one names something else, such as a constant, so "
-            + "the analysis cannot tell where flow goes. Where it names a fixed address outside the program, such "
-            + "as a ROM entry point, declare that address as an extern proc, `.proc NAME = $address`, with the "
-            + "signature it has, and jump to that. Otherwise a `.next` after a jump names the labels it reaches, "
-            + "or `.next ?` says it goes somewhere nt65 is not told about. A branch can only reach code within its "
-            + "range, so write the label it goes to as its operand.");
+        "A jump or branch normally names a label in code. This one names something that is not an address and "
+            + "has no constant value, such as a scope, so the analysis cannot tell where flow goes. A `.next` after "
+            + "a jump names the labels it reaches, or `.next ?` says it goes somewhere nt65 is not told about. A "
+            + "jump to a constant is not reported: it is a tail call to a routine nothing is known about. A branch "
+            + "can only reach code within its range, so write the label it goes to as its operand.");
 
     internal static DiagnosticDescriptor JumpIntoData { get; } = Entry(
         Area.ControlFlow,

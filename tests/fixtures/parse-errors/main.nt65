@@ -5,6 +5,7 @@
 .segment RODATA
 .frobnicate 1           ;! error[directive-unknown]: unknown directive `.frobnicate`
 .data one: .word .frobnicate(1)     ;! error[not-a-function]: `.frobnicate` is not a function
+.data def: .word .defined(one)      ;! error[not-a-function]: `.defined` is not a function: every name nt65 tests is declared, so for a value the build may give, declare a setting with a default, `.const NAME ?= 0`, and test its value
 .data two: .word (1 + 2             ;! error[expected-parenthesis]: expected `)`
 .cpu 6510               ;! error[expected-cpu]: expected `6502`, `6502x`, `65sc02`, `r65c02`, `65c02` or `65816`
 .segment "X": zp      ;! error[segment-name-quoted]: a segment name takes no quotes: `.segment X`

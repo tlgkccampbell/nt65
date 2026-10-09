@@ -16,12 +16,13 @@
 .data table: .byte[4] { 1, 2, 3, 4 }
 
 .data banks {
-    .byte .bankof(LIMIT)            ;! error[bank-has-no-segment]: `LIMIT` is a constant, so `.bankof` cannot find its bank
-    .byte .bankof(CHROUT)           ;! error[bank-has-no-segment]: `CHROUT` is an extern routine at a constant address, so `.bankof` cannot find its bank
-    .byte .bankof(PORT)             ;! error[bank-has-no-segment]: `PORT` is an address alias at a constant address, so `.bankof` cannot find its bank
+    .byte .bankof(LIMIT)            ;! error[bank-has-no-segment]: `LIMIT` is a constant, so `.bankof` cannot find its bank: for the bank byte of a constant, write `^LIMIT`
+    .byte .bankof(CHROUT)           ;! error[bank-has-no-segment]: `CHROUT` is an extern routine at a constant address, so `.bankof` cannot find its bank: for the bank byte of a constant, write `^CHROUT`
+    .byte .bankof(PORT)             ;! error[bank-has-no-segment]: `PORT` is an address alias at a constant address, so `.bankof` cannot find its bank: for the bank byte of a constant, write `^PORT`
     .byte .bankof(tools)            ;! error[bank-has-no-segment]: `tools` is a scope, so `.bankof` cannot find its bank
     .byte .bankof(table[1])         ;! error[bank-has-no-segment]: `table[1]` is not the name of a routine, a label or data, so `.bankof` cannot find its bank
-    .byte .bankof($A000)            ;! error[bank-has-no-segment]: `$A000` is not the name of a routine, a label or data, so `.bankof` cannot find its bank
+    .byte .bankof($A000)            ;! error[bank-has-no-segment]: `$A000` is not the name of a routine, a label or data, so `.bankof` cannot find its bank: for the bank byte of a constant, write `^$A000`
+    .byte .bankof($7E1234 + 1)      ;! error[bank-has-no-segment]: `$7E1234 + 1` is not the name of a routine, a label or data, so `.bankof` cannot find its bank: for the bank byte of a constant, write `^($7E1234 + 1)`
     .byte .bankof()                 ;! error[builtin-arguments]: `.bankof` takes the name of a routine, a label or data that a segment holds
     .byte .bankof(table)
 }

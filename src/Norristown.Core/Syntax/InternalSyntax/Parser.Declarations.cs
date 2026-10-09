@@ -413,7 +413,12 @@ internal sealed partial class Parser
         }
         if (Kind == SyntaxKind.Directive)
         {
-            Report(Catalogue.ExportDeclaresNothing.Message(Current.Text));
+            Report(Current.DirectiveKind == DirectiveKind.Each
+                ? Catalogue.ExportDeclaresNothing.Message(
+                    $"`{Current.Text}` itself declares nothing",
+                    $": put `.export` on the declaration in its body that is named after the binding, as "
+                        + $"`.export .proc {EachBinding() ?? "name"}`, or write `.export .multiproc`")
+                : Catalogue.ExportDeclaresNothing.Message($"`{Current.Text}` declares nothing", ""));
             return new ExportDirectiveSyntax(export, null, null);
         }
         if (AtName && Next is SyntaxKind.Equals or SyntaxKind.QuestionEquals)
@@ -429,6 +434,20 @@ internal sealed partial class Parser
             return new ExportDirectiveSyntax(export, null, Advance());
         var items = ParseSeparatedList(ParseExportItem);
         return new ExportDirectiveSyntax(export, items, ParseItemsBrace(export, items is not null));
+    }
+
+    /// <summary>
+    /// Returns the name an <c>.each</c> at the current token binds, which follows the first comma
+    /// on its line, or null where the line has none yet.
+    /// </summary>
+    private string? EachBinding()
+    {
+        for (var at = index + 1; at + 1 < tokens.Length && tokens[at].Kind != SyntaxKind.EndOfLine; at++)
+        {
+            if (tokens[at].Kind == SyntaxKind.Comma)
+                return tokens[at + 1].Kind == SyntaxKind.Identifier ? tokens[at + 1].Text : null;
+        }
+        return null;
     }
 
     /// <summary>

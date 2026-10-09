@@ -77,6 +77,24 @@
     jmp clear_screen::again
 }
 
+; A jump to a constant address, such as a ROM entry point, is not computed. It is a tail call
+; to a routine nothing is known about, as a call to one is a call to such a routine, so neither
+; needs an annotation. An extern proc, `.proc CHROUT = $FFD2`, says more where more is known.
+.const KERNAL = $FF00
+.export .proc to_rom {
+    jsr $FFD2
+    jsr KERNAL + $E4
+    jmp KERNAL + $D2
+}
+
+.export .proc to_reset {
+    jmp $FFFC
+}
+
+.export .proc to_kernal {
+    jmp KERNAL
+}
+
 .segment BSS
 .data cmd:   .byte
 .data value: .byte
