@@ -10,6 +10,7 @@
 
 .export main__basic
 .export main__more
+.export main__shifted
 .export main__parts
 .export main__main
 
@@ -21,10 +22,12 @@ main__more:
     .word (main__main + $01), ((main__main + $01) - $01)  ; after(main), entry(main)
     .byte <(main__main * $03), .lobyte(($30 + ((main__main / $01) .mod $0a)) - $30)  ; triple(main), digit(main, 1), '0'
 
+main__shifted: .byte .lobyte((main__main << $0f) .mod $0a)  ; scaled(main)
+
 main__parts:
     .byte .lobyte(main__main / 256), .lobyte(main__main .mod 10), .lobyte((main__main >> 8) & $0f), (<main__main) + 1
 
-; .proc main  main.nt65:33
+; .proc main  main.nt65:38
 main__main:
     lda #.lobyte($30 + (((main__main + $01) / $01) .mod $0a))  ; digit(after(main), 1)
     ldx #<(main__main * $03)        ; triple(main)

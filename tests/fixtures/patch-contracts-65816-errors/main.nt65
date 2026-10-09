@@ -1,0 +1,52 @@
+; Stores into code on the 65816, where a store sized by a register may write two bytes. nt65 takes
+; every such store as writing two, because the width is not settled when the stores are read.
+; A store that starts at the opcode may list variants, which the analyses of registers follow.
+; The store may also write the operand, so nothing is concluded from the operand as written. The
+; flags then no longer show that `bpl` is always taken, and the data after it may be run into.
+; On the 6502 the same stores write one byte, and the flags show `bpl` always taken.
+.module main
+
+.cpu 65816
+
+.export wide_a, wide_x, narrow_a
+
+.segment CODE
+
+; A 16-bit A writes the opcode and the low byte of the operand. The variant is accepted, since
+; the store starts at the opcode, but `lda #1` and `and #1` no longer show that N is clear.
+.proc wide_a: a16, i8 {
+    lda #.opcode(and, imm)
+    sta @op
+    .patch @op as and
+@op:
+    lda #1
+    bpl @x
+    .byte 1                 ;! error[runs-into-data]: the instruction above falls into this data: add a `.next` after the data saying where flow goes
+@x:
+    rts
+}
+
+; A store of X is sized by X in the same way, and starts at the opcode too. So its variant still
+; counts for registers: `and` reads the A the caller left, which `reads x` does not declare.
+.proc wide_x: a8, i16, reads x {
+    stx @op
+    .patch @op as and
+@op:
+    lda #1                  ;! error[reads-undeclared]: `wide_x` declares `reads x`, but uses the value its caller left in A: add `a` to `reads`, or give A a value first
+    rts
+}
+
+; After `sep #$20` the store is known to write one byte, but nt65 still takes it as two. That is
+; the conservative rule, and it costs the flags here what a 16-bit store would.
+.proc narrow_a: a16, i8 -> a8, i8 {
+    sep #$20
+    lda #.opcode(and, imm)
+    sta @op
+    .patch @op as and
+@op:
+    lda #1
+    bpl @x
+    .byte 1                 ;! error[runs-into-data]: the instruction above falls into this data: add a `.next` after the data saying where flow goes
+@x:
+    rts
+}

@@ -1,7 +1,8 @@
 ; A pass from one position to another has a bound only when every path that arrives runs
-; straight through once. So a span has no bound where such a path makes a call or loops, or where
-; a pass can reach a jump nt65 cannot follow, and the error says which it found. Both ends must be
-; positions in one routine, and some path from the start must arrive at the end.
+; straight through code once. So a span has no bound where such a path makes a call, loops or runs
+; through data, or where a pass can reach a jump nt65 cannot follow, and the error says which it
+; found. Both ends must be positions in one routine, and some path from the start must arrive at
+; the end.
 .module main
 
 .cpu 6502
@@ -45,14 +46,86 @@
     rts
 }
 
+.export .proc padded {
+    from:
+    lda count
+    beq done
+    .res 4, $ea
+    .next done
+    done:
+    rts
+}
+
+.export .proc skipping {
+    from:
+    lda count
+    beq done
+    .byte $2c
+    .next done
+    done:
+    rts
+}
+
+.export .proc around {
+    from:
+    lda count
+    bne skip
+    .byte $2c
+    .next far
+    skip:
+    nop
+    nop
+    nop
+    nop
+    to:
+    rts
+    far:
+    jmp to
+}
+
+.export .proc withheld {
+    from:
+    lda count
+    beq done
+    .byte $2c
+    .next ?
+    done:
+    rts
+}
+
+.export .proc inside {
+    .label hidden = @op + 1
+    from:
+    lda count
+    bne hidden
+@op:
+    lda #$ea
+    done:
+    rts
+}
+
 ; A call takes as long as the routine it names, which is no part of this count.
 .assert .mincycles(calling::before, calling::after) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span contains a call, `jsr`, whose time depends on the routine it calls
 
 ; A loop runs its body once per iteration, and a pass would count the body only once.
 .assert .maxcycles(looping::start, looping::done) == 0     ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: `bne` loops back to `again`
 
-; A target nt65 cannot follow could be anywhere, this span included.
-.assert .mincycles(elsewhere::here, elsewhere::gone) == 0  ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span contains `jmp`, whose target nt65 cannot follow
+; A `.next ?` withholds where control goes, so it could go anywhere, this span included.
+.assert .mincycles(elsewhere::here, elsewhere::gone) == 0  ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span contains `jmp`, whose `.next ?` withholds where control goes
+
+; Flow does not run through data, so nt65 does not count what data would cost if it ran. Each of
+; these paths arrives through data, padding included, that its `.next` sends on to the end.
+.assert .maxcycles(padded::from, padded::done) == 0        ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: the span runs through data at `.res 4, $ea`, whose cost nt65 does not count
+.assert .maxcycles(skipping::from, skipping::done) == 0    ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: the span runs through data at `.byte $2c`, whose cost nt65 does not count
+.assert .mincycles(around::from, around::to) == 0          ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span runs through data at `.byte $2c`, whose cost nt65 does not count
+
+; A `.next ?` under data withholds where control goes from it, just as one under a jump does.
+.assert .mincycles(withheld::from, withheld::done) == 0    ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span contains `.byte $2c`, whose `.next ?` withholds where control goes
+
+; A position inside an instruction runs as instructions the span does not count, so a pass that
+; can branch there has no count, and the position is not an end either.
+.assert .maxcycles(inside::from, inside::done) == 0        ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: a pass can reach `hidden`, a position inside an instruction, whose instructions nt65 does not count here
+.assert .maxcycles(inside::from, inside::hidden) == 0      ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: `hidden` is a position inside an instruction, not a span end
 
 ; Two positions in different routines are not a span at all.
 .assert .mincycles(calling::before, other::far_off) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the two positions are in different routines

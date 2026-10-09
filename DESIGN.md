@@ -2164,6 +2164,15 @@ found: a call takes as long as the routine it names, and a loop takes its body a
 as it turns. A jump nt65 cannot follow could go anywhere, `to` included, so one that a pass from
 `from` can reach is an error too. The ends being in two routines is an error of the same kind.
 
+A `.next` says where control goes from the statement above it, in place of the operand, as it
+does for the flow analysis: `jmp (vector)` / `.next done` goes on to `done`, a `.next .return`
+ends the path, a `.next` naming a routine leaves, and a `.next ?` is a jump nt65 cannot follow.
+**Flow does not run through data**, so nt65 does not count what bytes would cost if they ran: a
+path that arrives through data, padding included, is an error naming the data. Control leaves
+data only where its `.next` says, and data with no `.next` has no way on. A position a `.label`
+names inside an instruction runs as instructions a span does not count, so a pass that can reach
+one is an error, and such a position is not an end.
+
 Like `.endof` and `.spanof`, a cycle span describes layout rather than a shape: it is usable in
 operands, data and `.assert`, and not where a constant is required (`.res`, `.repeat`, an
 element count), because what it is worth depends on how the file was laid out and how much room
@@ -2502,7 +2511,10 @@ or `'0' + main .mod 10`, has a value only ld65 knows. ca65 refuses it there what
 to, unless `<`, `>`, `^`, `.lobyte`, `.hibyte` or `.bankbyte` takes one byte of the address. nt65
 bounds the value from its operators and the sizes of the addresses in it. Where the value always
 fits a byte, the output writes it inside `.lobyte()`, which loses nothing. Where nt65 cannot show
-that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`.
+that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`. The bound
+respects ld65's arithmetic, which is C's `long`: 32 bits on Windows and 64 on Linux. So nt65
+bounds a value only where every step of it stays within 32 bits, signed, and `(main << 16) .mod 10`
+is an error, since the shift can leave 32 bits before the `.mod` brings it back.
 
 **Elements.** `name[i]` is the element at `i` of a declaration that has a count:
 `buffer[3]`, `handlers[2]`, `actors[1]`. It is `name` plus `i` times the size of one element

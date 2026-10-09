@@ -15,14 +15,18 @@
 .export main__guarded
 .export main__leaving
 .export main__whole
+.export main__vectored
+.export main__handing
+.export main__returning
 .export main__budget
 
 .segment "ZEROPAGE": zeropage
-color: .res 1
-next:  .res 1
+color:  .res 1
+next:   .res 1
+vector: .res 2
 
 .segment "CODE": absolute
-; .proc raster  main.nt65:17
+; .proc raster  main.nt65:18
 main__raster:
 raster__top:
     lda z:color
@@ -35,7 +39,7 @@ raster__bottom:
     rts
 ; end of raster
 
-; .proc either  main.nt65:36
+; .proc either  main.nt65:37
 main__either:
 either__start:
     lda z:color
@@ -45,7 +49,7 @@ either__done:
     rts
 ; end of either
 
-; .proc skipping  main.nt65:50
+; .proc skipping  main.nt65:51
 main__skipping:
 skipping__start:
     jmp skipping__over
@@ -56,7 +60,7 @@ skipping__over:
     rts
 ; end of skipping
 
-; .proc balanced  main.nt65:65
+; .proc balanced  main.nt65:66
 main__balanced:
 balanced__start:
     lda z:color
@@ -72,7 +76,7 @@ balanced__finish:
     rts
 ; end of balanced
 
-; .proc guarded  main.nt65:86
+; .proc guarded  main.nt65:87
 main__guarded:
 guarded__start:
     lda z:color
@@ -85,7 +89,7 @@ guarded__done:
     rts
 ; end of guarded
 
-; .proc leaving  main.nt65:103
+; .proc leaving  main.nt65:104
 main__leaving:
 leaving__start:
     lda z:color
@@ -97,13 +101,42 @@ leaving__past:
     rts
 ; end of leaving
 
-; .proc whole  main.nt65:118
+; .proc whole  main.nt65:119
 main__whole:
     nop
     nop
 whole__end:
     rts
 ; end of whole
+
+; .proc vectored  main.nt65:130
+main__vectored:
+vectored__start:
+    lda z:color
+    jmp (vector)
+vectored__done:
+    rts
+; end of vectored
+
+; .proc handing  main.nt65:144
+main__handing:
+handing__start:
+    lda z:color
+    bne handing__done
+    jmp (vector)
+handing__done:
+    rts
+; end of handing
+
+; .proc returning  main.nt65:160
+main__returning:
+returning__start:
+    lda z:color
+    bne returning__done
+    .byte $60
+returning__done:
+    rts
+; end of returning
 
 .segment "RODATA": absolute
 main__budget: .byte $11

@@ -7,8 +7,9 @@
 .cpu 6502
 
 .segment ZEROPAGE
-.data color: .byte
-.data next:  .byte
+.data color:  .byte
+.data next:   .byte
+.data vector: .word
 
 .segment CODE
 
@@ -123,6 +124,51 @@
 }
 
 .assert .mincycles(whole, whole::end) == 4, "the routine's top moved"
+
+; A `.next` under a jump says where it goes, in place of an operand nt65 cannot follow. The
+; pass runs 3 cycles of `lda` and 5 of `jmp (vector)` to arrive at 8.
+.export .proc vectored {
+    start:
+    lda color
+    jmp (vector)
+    .next done
+    done:
+    rts
+}
+
+.assert .mincycles(vectored::start, vectored::done) == 8, "the vectored jump changed"
+.assert .maxcycles(vectored::start, vectored::done) == 8, "the vectored jump changed"
+
+; A `.next .return` ends the path, as a return does, so the jump through the vector is not part
+; of any pass. Only the taken branch arrives, at 3 + 3 = 6 cycles, or 7 across a page.
+.export .proc handing {
+    start:
+    lda color
+    bne done
+    jmp (vector)
+    .next .return
+    done:
+    rts
+}
+
+.assert .mincycles(handing::start, handing::done) == 6, "the hand-off changed"
+.assert .maxcycles(handing::start, handing::done) == 7, "the hand-off changed"
+
+; Control leaves data only where its `.next` says. This byte runs as `rts`, and its `.next
+; .return` says so, so the path through it returns before it arrives and costs nothing here.
+; Only the taken branch arrives, at 3 + 3 = 6 cycles, or 7 across a page.
+.export .proc returning {
+    start:
+    lda color
+    bne done
+    .byte $60
+    .next .return
+    done:
+    rts
+}
+
+.assert .mincycles(returning::start, returning::done) == 6, "the early return changed"
+.assert .maxcycles(returning::start, returning::done) == 7, "the early return changed"
 
 ; A count is a number like any other, so it can be written into data the program reads.
 .segment RODATA
