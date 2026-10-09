@@ -139,7 +139,8 @@ public static class Suggestions
             .Where(step => step.On is null && step.Statement.Tree == tree)
             .Select(step => step.Statement.LineIndex)
             .ToList();
-        return own.Count > 0 && tree.LinesContainDiagnostics(own.Min(), own.Max());
+        return own.Count > 0
+            && Enumerable.Range(own.Min(), own.Max() - own.Min() + 1).Any(line => tree.GetLine(line).ContainsDiagnostics);
     }
 
     /// <summary>
