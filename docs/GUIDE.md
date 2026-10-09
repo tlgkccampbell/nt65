@@ -1705,7 +1705,10 @@ be a bank that cannot see it. Where B is unknown, nothing is reported. A routine
 them in its signature, `dp = 0, dbr = $7e`, makes them known. An interrupt handler starts with
 D unknown, because it runs with whatever D the code it interrupted held, so it sets D before
 it names a `HUD_DP` symbol. nt65 recognizes the usual idioms that set D and B: `pea $2100` then `pld`,
-`lda #$7e` / `pha` / `plb`, and `phk` / `plb`.
+`lda #$7e` / `pha` / `plb`, and `phk` / `plb`. `phk` pushes the bank the code runs in: its
+segment's home bank, unless every way in is a long jump or call through a mirror, as a FastROM
+reset stub's `jml ($80 << 16) | .loword(fast)` is. A routine can declare that bank with
+`pbr = $80`.
 
 A `jsr`, `jmp` or branch to a segment whose home bank is not the caller's is an error too: it
 is the same question as a switchable bank (see Segments), what the code can see, and here the

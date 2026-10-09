@@ -38,7 +38,7 @@ internal static class Completion
     /// The items only a routine's signature may give, which describe how the routine is called and
     /// how it returns.
     /// </summary>
-    private static readonly string[] RoutineItems = ["near", "far", "inline", "args", "interrupt", "noreturn"];
+    private static readonly string[] RoutineItems = ["near", "far", "inline", "args", "interrupt", "noreturn", "pbr = ", "pbr?"];
 
     /// <summary>
     /// The items of a signature that name registers, inserted so that the registers follow them:
@@ -963,7 +963,7 @@ internal static class Completion
     }
 
     /// <summary>
-    /// Checks whether the caret is where the value of a <c>dp =</c> or <c>dbr =</c> goes, which
+    /// Checks whether the caret is where the value of a <c>dp =</c>, <c>dbr =</c> or <c>pbr =</c> goes, which
     /// is an expression. The value after <c>inline</c> or <c>args</c> counts too.
     /// </summary>
     private static bool AfterValuedItem(IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before)
@@ -973,7 +973,7 @@ internal static class Completion
             if (before[i].Kind == SyntaxKind.Comma)
                 return false;
             if (before[i].Kind == SyntaxKind.Equals)
-                return before[i - 1].Text.ToLowerInvariant() is "dp" or "dbr" or "inline" or "args";
+                return before[i - 1].Text.ToLowerInvariant() is "dp" or "dbr" or "pbr" or "inline" or "args";
             if (i == before.Count - 1 && before[i].Text.ToLowerInvariant() is "inline" or "args")
                 return true;
         }

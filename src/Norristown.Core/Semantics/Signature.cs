@@ -55,6 +55,16 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     public StateParts Declared { get; init; }
 
     /// <summary>
+    /// Gets the program bank K the routine's code runs in, which <c>pbr = e</c> declares and the
+    /// analysis otherwise infers from how control reaches the routine. A near transfer keeps the
+    /// caller's bank, and a long one sets the bank of the address it names, which may be a mirror.
+    /// <see cref="StateValue.Unchanged"/> means the home bank of the code's segment, which is what
+    /// code is taken to run in where nothing shows otherwise. No routine hands K back, so the
+    /// signature has no program bank at exit.
+    /// </summary>
+    public StateValue ProgramBank { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether the routine is an interrupt handler. A handler is entered
     /// by the processor from anywhere, knowing nothing except perhaps its mode, and is left by
     /// <c>rti</c>. It is neither near nor far.
@@ -188,6 +198,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     public override string ToString()
     {
         var entry = IsInterrupt ? $"interrupt, {ProcessorState.Format(Entry.E)}" : $"{Entry}, {Distance}";
+        if (ProgramBank.Kind != StateValueKind.Unchanged)
+            entry += $", {ProgramBank.Format(StateRegister.ProgramBank)}";
         if (Arguments > 0)
             entry += $", args {Arguments}";
         if (NeverReturns)
@@ -221,13 +233,13 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         && Inline?.Text == other.Inline?.Text && IsInterrupt == other.IsInterrupt
         && NeverReturns == other.NeverReturns && Arguments == other.Arguments && Keeps == other.Keeps
         && Reads == other.Reads && EntryFlags == other.EntryFlags && ExitFlags == other.ExitFlags
-        && Results == other.Results && Declared == other.Declared;
+        && Results == other.Results && Declared == other.Declared && ProgramBank == other.ProgramBank;
 
     /// <summary>Returns a hash code over the same parts that <see cref="Equals(Signature?)"/> compares.</summary>
     public override int GetHashCode() =>
         HashCode.Combine(
             HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps),
-            Reads, EntryFlags, ExitFlags, Results, Declared);
+            Reads, EntryFlags, ExitFlags, Results, Declared, ProgramBank);
 
     /// <summary>
     /// Returns the signature read again with the signature sets it names and the values of its
@@ -271,6 +283,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         public StateItem? E;
         public StateItem? D;
         public StateItem? B;
+        public StateItem? K;
         public StateItem? Far;
         public StateItem? Inline;
         public StateItem? Arguments;
@@ -399,7 +412,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             | ((entry.Index ?? exit.Index) is null ? StateParts.None : StateParts.Index)
             | ((entry.E ?? exit.E) is null ? StateParts.None : StateParts.Mode)
             | ((entry.D ?? exit.D) is null ? StateParts.None : StateParts.DirectPage)
-            | ((entry.B ?? exit.B) is null ? StateParts.None : StateParts.DataBank);
+            | ((entry.B ?? exit.B) is null ? StateParts.None : StateParts.DataBank)
+            | (entry.K is null ? StateParts.None : StateParts.ProgramBank);
 
         // The registers the list promises. A list that contains its own `keeps` states which
         // they are. A list that contains none takes what the signature set it names gives.
@@ -453,6 +467,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return new(entered, exited, entry.Far?.IsFar ?? false, entry.Inline)
             {
                 Declared = forMacro ? StateParts.All : DeclaredParts(),
+                ProgramBank = ProgramBankOf(entry),
                 Arguments = arguments,
                 Keeps = keeps,
                 Reads = Declared(entry),
@@ -526,7 +541,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return new Signature(state, state, false)
             {
                 IsInterrupt = true,
-                Declared = StateParts.All,
+                Declared = StateParts.All | (entry.K is null ? StateParts.None : StateParts.ProgramBank),
+                ProgramBank = ProgramBankOf(entry),
                 Keeps = Promised(entry),
                 Reads = Declared(entry),
                 syntax = syntax,
@@ -581,6 +597,18 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return StateValue.Of(value);
         }
 
+        // `pbr = e` names the one bank the routine's code runs in, so it has no set form.
+        private StateValue ProgramBankOf(Parts parts)
+        {
+            if (parts.K is not { } given)
+                return StateValue.Unchanged;
+            if (!given.IsBankSet)
+                return ValueOf(given, 0xff) ?? StateValue.Unknown;
+            if (Here(given))
+                Report(given.Node.Span, Catalogue.StateBanksNotDbr.Message(given.Text, "`pbr` takes one bank"));
+            return StateValue.Unknown;
+        }
+
         // `dbr = [...]` means one of the banks it names. D is a single direct page and has no set
         // form.
         private StateValue BanksOf(StateItem given, long largest)
@@ -588,7 +616,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             if (largest != 0xff)
             {
                 if (Here(given))
-                    Report(given.Node.Span, Catalogue.StateBanksNotDbr.Message(given.Text));
+                    Report(given.Node.Span, Catalogue.StateBanksNotDbr.Message(given.Text, "`dp` takes one address"));
                 return StateValue.Unknown;
             }
             if (valueOf is null)
@@ -685,6 +713,18 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     break;
                 case StatePart.DataBank:
                     parts.B = Once(parts, parts.B, item, fromSet);
+                    break;
+
+                // The program bank describes where a routine is entered, as `far` does, so a macro
+                // and an exit take none.
+                case StatePart.ProgramBank when forMacro:
+                    Report(item.Node.Span, Catalogue.MacroDistance.Message(item.Text));
+                    break;
+                case StatePart.ProgramBank when isExit:
+                    Report(item.Node.Span, Catalogue.ItemBelongsAtEntry.Message(item.Text), ToEntry(fromSet));
+                    break;
+                case StatePart.ProgramBank:
+                    parts.K = Once(parts, parts.K, item, fromSet);
                     break;
 
                 case StatePart.Keeps or StatePart.Reads or StatePart.Flag when forMacro:

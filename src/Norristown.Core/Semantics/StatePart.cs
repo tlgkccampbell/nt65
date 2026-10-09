@@ -24,6 +24,9 @@ public enum StatePart
     /// <summary>The data bank: <c>dbr = e</c>, <c>dbr?</c>, <c>dbr*</c>.</summary>
     DataBank,
 
+    /// <summary>The program bank a routine runs in: <c>pbr = e</c>, <c>pbr?</c>.</summary>
+    ProgramBank,
+
     /// <summary>What the caller pushes before the call: <c>args n</c>.</summary>
     Arguments,
 

@@ -1235,6 +1235,7 @@ items are:
 | `keeps a, x, y, c, z, n, v` | the registers and flags it hands back as it was entered with them (§7.7) | none |
 | `reads a, x, y, c, z, n, v`, `reads none` | the registers and flags whose values from its caller it uses (§7.7) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
+| `pbr = e` `pbr?`, before `->` | the program bank the routine's code runs in (§7.5) | inferred, else the home bank |
 | `?` | every part above unknown (below) | none |
 | a signature set's name | the items the set declares (below) | none |
 
@@ -1952,8 +1953,18 @@ through and which bank it lives in, in the segment table (§5.2, §5.3):
 ```
 
 `bank` and `dbr` are different words for different things: `bank` is where a segment lives,
-its home bank, and `dbr` is the value of the data bank register at a point in a routine. Code
-is taken to run in the home bank of its segment, even where a mirror maps it elsewhere too.
+its home bank, and `dbr` is the value of the data bank register at a point in a routine.
+
+**The program bank.** Code runs in the bank control reaches it in, which is K. No instruction
+inside a routine changes K, so it belongs to the routine's entry. A near call, jump, branch,
+`.next` or `.fallthrough` keeps the caller's K. A `jsl` or `jml` sets the bank of the address it
+names: a mirror address such as `(bank << 16) | .loword(f)` gives that bank, and any other gives
+the home bank of `f`'s segment. A routine whose callers agree runs in their bank, and one
+reached in two banks runs in one not known. A routine nothing in the program calls, one whose
+address is taken and an interrupt handler run in their home bank. `pbr = e` declares the bank
+instead, and every way in is checked against it; `pbr?` declares it unknown. K is never handed
+back, since a call returns to its caller's bank, so `pbr` is written only before `->`, has no `*`
+form, and is not a `.state` item. `?` leaves it alone.
 
 A routine's signature may carry the D and B values it assumes at entry and, after
 `->`, at exit: `.proc hud: a8, i16, dp = $2100, dbr = $7e {`. `dp?` and `dbr?` mean
@@ -1993,7 +2004,7 @@ idioms that load D and B from constants and treats everything else as unknown:
 | `lda #const` then `tcd`, with A 16-bit | D = const |
 | `pea const` then `pld` | D = const |
 | `lda #const`, `pha`, `plb`, with A 8-bit | B = const |
-| `phk` then `plb` | B = the home bank of the enclosing segment |
+| `phk` then `plb` | B = K, the bank the routine runs in (above) |
 | `pld`, `plb` that pull a D or B saved by `phd`, `phb` (the analysis stack, §7.3) | the saved value |
 | `mvn #s, #d`, `mvp #s, #d` | B = d; for `#^sym`, the home bank of `sym`'s segment, when it declares one; unknown when the move stands on a label a `.patch` names, whose banks the program writes |
 | calls, returns, merges, `xce` | as for widths (§7.3); `xce` leaves D and B alone |
@@ -5546,7 +5557,7 @@ multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL bod
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
 state-item  := point-item | unchanged-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
-             | 'args' expr | 'interrupt' | 'noreturn' | keeps-item
+             | 'args' expr | 'interrupt' | 'noreturn' | keeps-item | 'pbr' '=' expr | 'pbr?'
              | path                                   ; a path names a signature set, first
 keeps-item  := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7.7)
 signature   := '.signature' ident '=' state

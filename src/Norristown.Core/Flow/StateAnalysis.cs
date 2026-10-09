@@ -376,7 +376,7 @@ public sealed class StateAnalysis : IProcessorStates
         if (report is not null)
         {
             report.CheckRelativeCall(step, mnemonic, call, callee, state);
-            Entering(step, routine, call.Routine, state);
+            Entering(step, routine, call.Routine, state, report);
         }
         return signatures.IsExitKnown(call.Routine) ? StateChecks.Exited(callee, state) : null;
     }
@@ -677,7 +677,7 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Phb:
                 return state with { Stack = stack?.PushValue(InRoutine(processor, step.On).B, 1) };
             case MnemonicKind.Phk:
-                return state with { Stack = stack?.PushValue(checks.BankOf(step.Segment), 1) };
+                return state with { Stack = stack?.PushValue(ProgramBankAt(step, routine), 1) };
             case MnemonicKind.Phd:
                 return state with { Stack = stack?.PushValue(InRoutine(processor, step.On).D, 2) };
             case MnemonicKind.Pea:
@@ -924,7 +924,7 @@ public sealed class StateAnalysis : IProcessorStates
         if (report is not null)
         {
             report.CheckCall(step, mnemonic, target, callee, state);
-            Entering(step, routine, target, state);
+            Entering(step, routine, target, state, report);
         }
         return signatures.IsExitKnown(target) ? StateChecks.Exited(callee, state) : null;
     }
@@ -941,9 +941,49 @@ public sealed class StateAnalysis : IProcessorStates
         return signature;
     }
 
-    /// <summary>Records the state where <paramref name="caller"/> hands control to <paramref name="target"/>'s entry.</summary>
-    private void Entering(Step step, Symbol caller, Symbol target, ProcessorState state) =>
-        calls.Add(new CallState(caller, target, state, step.Statement.Tree.GetSpan(step.Statement.Span)));
+    /// <summary>
+    /// Records the state where <paramref name="caller"/> hands control to <paramref name="target"/>'s
+    /// entry, with the program bank control arrives in, and reports where that bank is not the one
+    /// <paramref name="target"/> declares with <c>pbr</c>.
+    /// </summary>
+    private void Entering(Step step, Symbol caller, Symbol target, ProcessorState state, StateChecks report)
+    {
+        var bank = ArrivingBank(step, caller, target);
+        if (SignatureOf(target) is { Declared: var declared, ProgramBank: { IsBounded: true } needed }
+            && (declared & StateParts.ProgramBank) != 0 && !bank.Meets(needed))
+        {
+            var register = StateRegister.ProgramBank;
+            report.Report(step, Catalogue.CallStateMismatch.Message(
+                $"`{step.Statement.GetText().Trim()}`",
+                needed.Format(register),
+                bank.IsBounded ? $"control reaches it in bank {bank.Describe(register.Digits)}" : "the bank control reaches it in is not known"));
+        }
+        calls.Add(new CallState(caller, target, state, step.Statement.Tree.GetSpan(step.Statement.Span), bank));
+    }
+
+    /// <summary>
+    /// Returns the program bank that the code at <paramref name="step"/> in <paramref name="routine"/>
+    /// runs in. That is the bank the routine is declared or inferred to run in, or the home bank of
+    /// the step's segment where nothing says otherwise.
+    /// </summary>
+    private StateValue ProgramBankAt(Step step, Symbol routine) =>
+        SignatureOf(routine)?.ProgramBank is { Kind: not StateValueKind.Unchanged } bank ? bank : checks.BankOf(step.Segment);
+
+    /// <summary>
+    /// Returns the program bank in which control reaches <paramref name="target"/> from the step.
+    /// A long jump or call lands in the bank of the address it names, which is the bank a mirror
+    /// address such as <c>($80 &lt;&lt; 16) | .loword(f)</c> gives, or the home bank of the target's
+    /// segment. Every other transfer stays in the bank the caller runs in.
+    /// </summary>
+    private StateValue ArrivingBank(Step step, Symbol caller, Symbol target)
+    {
+        if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jsl or MnemonicKind.Jml or MnemonicKind.Rtl })
+            return ProgramBankAt(step, caller);
+        var mode = layout.Of(step.Statement, step.On)?.Mode;
+        return Targets.MirrorOf(model, Transfers.TargetOf(step.Statement, mode), step.On) is { } mirror && mirror.Routine == target
+            ? StateValue.Of(mirror.Bank)
+            : checks.BankOf(target.Segment);
+    }
 
     /// <summary>Records the state that one of <paramref name="routine"/>'s returns leaves.</summary>
     private void Leaving(Symbol routine, ProcessorState state) =>
@@ -962,7 +1002,7 @@ public sealed class StateAnalysis : IProcessorStates
         report.CheckTailCall(step, via, mnemonic, target, callee, state, routine);
         if (callee.IsInterrupt)
             return;
-        Entering(step, routine, target, state);
+        Entering(step, routine, target, state, report);
         if (SignatureOf(routine) is not { HasNoCaller: true } && !callee.NeverReturns && signatures.IsExitKnown(target))
             Leaving(routine, StateChecks.Exited(callee, state));
     }
@@ -1082,7 +1122,7 @@ public sealed class StateAnalysis : IProcessorStates
         foreach (var item in StateItem.Read(step.Statement))
         {
             if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Arguments
-                or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set)
+                or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set or StatePart.ProgramBank)
             {
                 report?.ReportAt(item.Node, step, Catalogue.StateItemNotAPoint.Message(item.Text));
                 continue;
@@ -1161,7 +1201,7 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (register == StateRegister.DirectPage)
             {
-                report?.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Message(item.Text));
+                report?.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Message(item.Text, "`dp` takes one address"));
                 return StateValue.Unknown;
             }
             if (item.BanksOf(expression => model.ValueOf(expression, step.On).AsNumber(), out var invalid) is not { } banks)

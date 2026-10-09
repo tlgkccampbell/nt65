@@ -4004,7 +4004,7 @@ public static class Catalogue
         Area.Signatures,
         "state-banks-not-dbr",
         Severity.Error,
-        "`{0}`: only `dbr` can be given a set of banks; `dp` takes one address",
+        "`{0}`: only `dbr` can be given a set of banks; {1}",
         "A routine that does not set B itself can run with any of several data banks that reach the same memory, "
             + "so `dbr = [...]` may list a set of banks. D decides where every direct-page operand lands, so `dp` "
             + "has to be a single value.");

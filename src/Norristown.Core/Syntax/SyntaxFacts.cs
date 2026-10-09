@@ -208,7 +208,8 @@ public static class SyntaxFacts
 
     // The processor-state items, grouped by the suffix that follows the name. A point item
     // stands alone. The suffix `*` keeps a part of the state unchanged, `?` forgets it, and `=`
-    // gives it a value. A flag stands alone after `->`, where it says the routine sets it.
+    // gives it a value. A flag stands alone after `->`, where it says the routine sets it. The
+    // program bank `pbr` takes `?` and `=` but not `*`, because no routine hands K back.
     private static readonly FrozenSet<string> pointStateItems =
         new[]
         {
@@ -220,7 +221,7 @@ public static class SyntaxFacts
         new[] { "a", "i", "e", "dp", "dbr" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> valuedStateParts =
-        new[] { "dp", "dbr", "c", "z", "n", "v", "d", "i" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        new[] { "dp", "dbr", "pbr", "c", "z", "n", "v", "d", "i" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The kinds of argument a macro parameter may take, as they appear in source.</summary>
     private static readonly FrozenSet<string> parameterKinds =
@@ -478,7 +479,8 @@ public static class SyntaxFacts
     /// </summary>
     public static bool IsStateItem(string name, SyntaxKind suffix) => suffix switch
     {
-        SyntaxKind.Star or SyntaxKind.Question => trackedStateParts.Contains(name),
+        SyntaxKind.Star => trackedStateParts.Contains(name),
+        SyntaxKind.Question => trackedStateParts.Contains(name) || name.Equals("pbr", StringComparison.OrdinalIgnoreCase),
         SyntaxKind.Equals => valuedStateParts.Contains(name) || IsFlagRun(name),
         _ => pointStateItems.Contains(name),
     };
