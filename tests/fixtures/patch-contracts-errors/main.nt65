@@ -7,7 +7,7 @@
 .export variant_in_operand, opcode_unknown, operand_only, reads_opcode, calls_out
 .export jumps_out, calls_out_cleanly, listed_variant, calls_declared, indexed_listed
 .export through_name, through_name_listed, two_stores, past_into_next, past_into_data
-.export before_into_previous, patches_next
+.export before_into_previous, patches_next, patches_nothing
 
 .proc EXT = $FFD2
 .proc DECLARED = $FFE4: reads a
@@ -164,11 +164,23 @@
     rts
 }
 
-; The bytes are placed from where the label the store names stands. This store misses `@op` and
-; writes the operand of `@next`, which a `.patch` of its own names, so it needs no variants.
+; The bytes are placed from where the label the store names stands. This store writes the
+; operand of `@next`, which its `.patch` names, so it needs no variants and no `.patch @op`.
 .proc patches_next {
     sta @op+3
-    .patch @op
+    .patch @next
+@op:
+    lda #0
+@next:
+    lda #0
+    rts
+}
+
+; Every `.patch` under a store names an instruction the store writes. This store misses `@op`
+; entirely, so `.patch @op` names nothing and the fix removes it.
+.proc patches_nothing {
+    sta @op+3
+    .patch @op              ;! error[patch-misses-store]: `sta @op+3` writes past `@op`, which is 2 bytes, into `lda #0` at `@next` after it, which `.patch @next` already names: remove this `.patch`
     .patch @next
 @op:
     lda #0

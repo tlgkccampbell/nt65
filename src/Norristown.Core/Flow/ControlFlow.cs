@@ -1203,7 +1203,7 @@ public sealed class ControlFlow
         // A store's bytes may run from one instruction a `.patch` under it names into another
         // that a second `.patch` under it names. Each instruction is checked on its own entry, so
         // the bytes are not reported as missing the first.
-        var namedBy = entries.ToLookup(entry => entry.Store.Key, entry => entry.Written.Key);
+        var namedBy = entries.ToLookup(entry => entry.Store.Key, entry => (entry.Written.Key, entry.Label));
 
         // The sets are built in full before any is published, so a thread that finds one set
         // never sees it half built.
@@ -1294,9 +1294,11 @@ public sealed class ControlFlow
 
     /// <summary>
     /// Returns what the bytes of <paramref name="store"/> outside the patched instruction at
-    /// <paramref name="written"/> land in, or null where every such byte lands in an instruction
-    /// that another <c>.patch</c> under the store names. The first byte that lands elsewhere is
-    /// the one reported.
+    /// <paramref name="written"/> land in, or null where there is nothing to report. A store that
+    /// writes part of the instruction may write the rest of its bytes into instructions that other
+    /// <c>.patch</c> directives under it name. A store that misses the instruction entirely is
+    /// always reported, because every <c>.patch</c> under a store names an instruction it writes.
+    /// The first byte that is not accounted for is the one reported.
     /// </summary>
     /// <param name="patch">The <c>.patch</c> that follows the store.</param>
     /// <param name="store">The step of the store.</param>
@@ -1304,28 +1306,47 @@ public sealed class ControlFlow
     /// <param name="label">The label the <c>.patch</c> names the instruction by.</param>
     /// <param name="bytes">The bytes the store may write, as offsets from the instruction's first byte.</param>
     /// <param name="length">The number of bytes the instruction takes.</param>
-    /// <param name="named">The steps of every instruction a <c>.patch</c> under the store names.</param>
+    /// <param name="named">
+    /// The step of every instruction a <c>.patch</c> under the store names, with the label it is
+    /// named by.
+    /// </param>
     private MissedPatch? Missed(
         PatchDirectiveSyntax patch, Step store, Step written, Symbol label, WrittenRange bytes, int length,
-        IEnumerable<StepKey> named)
+        IEnumerable<(StepKey Key, Symbol Label)> named)
     {
         if (layout.PositionOf(written.Statement, written.On) is not { } position)
             return null;
+        var outside = bytes.Last < 0 || bytes.First >= length;
         for (var offset = bytes.First; offset <= bytes.Last; offset++)
         {
             if (offset >= 0 && offset < length)
                 continue;
             var index = layout.StepCovering(position.Stream, position.Offset + offset);
             var landing = index is { } at ? layout.Steps[at] : (Step?)null;
-            if (landing is { Statement: InstructionStatementSyntax } instruction && named.Contains(instruction.Key))
+            Symbol? namedAs = null;
+            if (landing is { Statement: InstructionStatementSyntax } instruction)
+            {
+                foreach (var (key, by) in named)
+                {
+                    if (key == instruction.Key)
+                        namedAs = by;
+                }
+            }
+            if (namedAs is not null && !outside)
                 continue;
-            var landingLabel = index is { } found ? LabelOf(found) : null;
-            var outside = bytes.Last < 0 || bytes.First >= length;
-            var fix = landingLabel is not null && landing is { Statement: InstructionStatementSyntax } labelled
-                && labelled.Routine == store.Routine
-                ? TargetFix(patch, landingLabel, outside)
-                : null;
-            return new MissedPatch(patch, store, written, label, length, offset < 0, landing, landingLabel, fix);
+
+            // The `.patch` names nothing the store writes where the bytes land only in an
+            // instruction another `.patch` already names, so the fix removes it rather than
+            // naming that instruction twice.
+            var landingLabel = namedAs ?? (index is { } found ? LabelOf(found) : null);
+            var fix = namedAs is not null
+                ? new DiagnosticFix(FixKind.Redundant)
+                : landingLabel is not null && landing is { Statement: InstructionStatementSyntax } labelled
+                    && labelled.Routine == store.Routine
+                    ? TargetFix(patch, landingLabel, outside)
+                    : null;
+            return new MissedPatch(
+                patch, store, written, label, length, offset < 0, landing, landingLabel, namedAs is not null, fix);
         }
         return null;
     }

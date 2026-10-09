@@ -21,10 +21,15 @@ namespace Norristown.Flow;
 /// outside every statement nt65 laid out in that run of bytes.
 /// </param>
 /// <param name="LandingLabel">The label that names <paramref name="Landing"/>, or null where none does.</param>
+/// <param name="AlreadyNamed">
+/// Whether another <c>.patch</c> under the store already names <paramref name="Landing"/>, by
+/// <paramref name="LandingLabel"/>. The store then misses this <c>.patch</c>'s instruction
+/// entirely, so this <c>.patch</c> names nothing the store writes.
+/// </param>
 /// <param name="Fix">The change that names the landing instruction with a <c>.patch</c>, or null where none is offered.</param>
 internal sealed record MissedPatch(
     PatchDirectiveSyntax Patch, Step Store, Step Written, Symbol Label, int Length, bool Before, Step? Landing,
-    Symbol? LandingLabel, DiagnosticFix? Fix)
+    Symbol? LandingLabel, bool AlreadyNamed, DiagnosticFix? Fix)
 {
     /// <summary>
     /// Gets a value indicating whether <see cref="Landing"/> is code, an instruction or the
@@ -46,6 +51,11 @@ internal sealed record MissedPatch(
             var text = landing.Statement.GetTextOnOneLine();
             if (!LandsInCode)
                 return $"into the data `{text}` {side}; a `.patch` names an instruction, and a store into data needs none";
+            if (AlreadyNamed && LandingLabel is { } named)
+            {
+                return $"into `{text}` at `{named.DisplayName}` {side}, which `.patch {named.DisplayName}` already names: "
+                    + "remove this `.patch`";
+            }
             return LandingLabel is { } label
                 ? $"into `{text}` at `{label.DisplayName}` {side}: name `{label.DisplayName}` with a `.patch`"
                 : $"into `{text}` {side}: label that instruction and name it with a `.patch`";

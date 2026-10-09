@@ -279,6 +279,11 @@ public sealed class FixesTests
             ".export .proc main: a16, i8 {\n    sta @op+3\n    .patch @op\n@op:\n    ldx #0\n@next:\n    lda #0\n    rts\n}\n",
             ".export .proc main: a16, i8 {\n    sta @op+3\n    .patch @next\n@op:\n    ldx #0\n@next:\n    lda #0\n    rts\n}\n"
         },
+        {
+            "Remove it",
+            ".export .proc main: a16, i8 {\n    sta @op+3\n    .patch @op\n    .patch @next\n@op:\n    ldx #0\n@next:\n    lda #0\n    rts\n}\n",
+            ".export .proc main: a16, i8 {\n    sta @op+3\n    .patch @next\n@op:\n    ldx #0\n@next:\n    lda #0\n    rts\n}\n"
+        },
     };
 
     [Theory]

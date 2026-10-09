@@ -1741,7 +1741,8 @@ label:
   stack and flow analyses go on taking the instruction's shape as written. Without them nothing
   could be assumed after it.
 
-  A store's bytes must lie inside the instruction the `.patch` names. Where they are known, a
+  A store's bytes must lie inside the instruction the `.patch` names, and every `.patch` under a
+  store names an instruction the store writes. Where they are known, a
   byte outside it is an error (patch-misses-store), reported at the `.patch` and naming what the
   byte lands in. `sta @op+2` on a two-byte `@op` rewrites the opcode of the instruction after
   it, which the analyses would otherwise trust as written. A store that reaches into data needs
@@ -1749,6 +1750,8 @@ label:
   in the run says it writes past the end of the code. Where the bytes land in a labeled
   instruction, the fix names that label: in place of the first, where the store misses the
   named instruction entirely, or with a second `.patch` under the store, where it writes both.
+  A `.patch` whose instruction the store misses entirely is an error even where another `.patch`
+  under the store names the instruction the bytes land in, and the fix removes it.
   A store may straddle two instructions, as a 16-bit `sta @op+1` on a two-byte `@op` does. Its
   bytes inside `@op` are an operand write as above, and its byte in the instruction after is
   accepted only where another `.patch` under the store names that instruction. That `.patch` is
