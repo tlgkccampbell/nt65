@@ -2293,7 +2293,9 @@ form.
 | `.local` labels in a macro | nothing: every name in a body is local to its expansion |
 
 In the editor, paste ca65 in, select it and choose *Read the selection as nt65*: spellings,
-block words, segment directives and ca65's operator words are rewritten. What needs a decision
+block words, segment directives and ca65's operator words are rewritten. Each expression is read
+with ca65's precedence and given the parentheses nt65 needs to mean the same, so
+`.not N = 1` becomes `!(N == 1)` and `#<label+1` becomes `#(<label)+1`. What needs a decision
 rather than a new spelling, such as an unnamed label, a macro call or an `.include`, is left
 as it was for you and the diagnostics to work through.
 
