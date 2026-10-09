@@ -2159,7 +2159,8 @@ extra cycle is always paid and the count is exact); a branch costs 2 not taken a
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
 nonzero, which is known when D is known (§7.5). On the 65C02 `adc` and `sbc` cost one more in
-decimal mode, which is known where the flag analysis knows the decimal flag. Tooling shows the interval per
+decimal mode, which is known where the flag analysis knows the decimal flag. Cycles are processor
+cycles; memory speed is the board's. Tooling shows the interval per
 instruction and per basic block on hover, and beside an interval what its top would be paid
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
 cannot resolve tells them half of an answer, and above each routine, and each inline `.scope`

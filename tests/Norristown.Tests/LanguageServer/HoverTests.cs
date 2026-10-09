@@ -277,4 +277,24 @@ public sealed class HoverTests
             hover?.Contents.Value,
             StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// On the 65816 an instruction's hover says that its counts are processor cycles, because a
+    /// board such as the SNES stretches a cycle by the memory it reaches. Other CPUs need no such
+    /// line.
+    /// </summary>
+    [Theory]
+    [InlineData("65816", true)]
+    [InlineData("6502", false)]
+    public async Task HoverSaysCyclesAreTheProcessorsOnlyOnThe65816(string cpu, bool said)
+    {
+        var timeout = TestTimeout.Token();
+        var source = $".module main\n.cpu {cpu}\n.segment CODE\n.export .proc main {{\n    sta $10\n    rts\n}}\n";
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, source));
+
+        var hover = await client.HoverAsync(MainUri, Locate.At(source, "sta $10"), timeout);
+
+        Assert.Equal(said, hover?.Contents.Value.Contains(
+            "clock   cycles are processor cycles; memory speed is the board's\n", StringComparison.Ordinal));
+    }
 }

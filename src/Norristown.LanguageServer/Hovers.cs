@@ -617,7 +617,9 @@ internal static class Hovers
     /// the instruction takes and how long the block around it takes. Where the analysis followed
     /// control to it, it also gives the processor state that reaches it, what each register
     /// holds and what the routine has pushed. The count is an interval wherever it depends on
-    /// something the program does not say, such as whether an indexed read crosses a page.
+    /// something the program does not say, such as whether an indexed read crosses a page. On
+    /// the 65816 it also says that the counts are processor cycles, because the board decides
+    /// how fast its memory is.
     /// </summary>
     private static Protocol.Hover? ToTiming(
         ProgramAnalysis analysis, SemanticModel model, ControlFlow? flow, int position)
@@ -668,6 +670,11 @@ internal static class Hovers
             card.Row("flags", Mnemonics.Flags(
                 analysis.Cpu, flagged, laid.Mode ?? AddressingMode.Implied, Immediate(model, statement, laid)));
         }
+
+        // A 65816 board may stretch a cycle by the memory it reaches, as the SNES does, and nt65
+        // does not know the board.
+        if (layout.Cpu == Cpu.Wdc65816)
+            card.Row("clock", "cycles are processor cycles; memory speed is the board's");
 
         // A column a reader can scan beats a sentence they have to take apart, so wherever
         // anything is known about the registers every register and flag is listed, set apart by
