@@ -1377,7 +1377,9 @@ that routine's signature.
 | `sec` immediately before `xce`, in the same basic block | emulation mode, both widths 8 |
 | any other `xce` | E unknown, both widths unknown |
 | `php`, and every other push or pull | moves the analysis stack (below) |
-| `plp` that pulls a P saved by `php` | the widths saved at the `php` |
+| `plp` that pulls a P saved by `php`, in native mode | the widths saved at the `php` |
+| `plp` that pulls a P saved by `php`, in emulation mode | both widths 8 |
+| `plp` that pulls a P saved by `php`, with E unknown or `*` | a saved 8 is restored, and so is a saved `*` where E is `*`; any other saved width becomes unknown, as after `rep` |
 | any other `plp` | both widths unknown; E unchanged |
 | `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `noreturn` ends the path |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |
@@ -3447,7 +3449,12 @@ match the entry and becomes the exit. Each expansion is checked against the sign
 with errors reported at the body line and naming the call, so a caller in the wrong
 state gets "`add16!` needs `a8`" at the call rather than an unknown width inside the
 body. A block spliced into a macro with a signature must leave the state as it found it.
-Without a signature, an expansion is analyzed inline as the code it contains. On the
+In the body, and in a block spliced into it, a `*` item means the state at the call, not at
+the routine's entry. What a `php`, `phd` or `phb` there saves is kept in the routine's terms,
+the state at the call standing in for each `*`, so a pull after the body reads back the
+width or value that was pushed. A pull in the body gets back a `*` item only where what it
+pulls is what that item means; anything else known comes back as it is, and the rest is
+unknown. Without a signature, an expansion is analyzed inline as the code it contains. On the
 6502 and its CMOS variants, signatures on macros are accepted and have no effect.
 
 This is the checked replacement for macros that test ca65's `.asize` and `.isize`. A macro

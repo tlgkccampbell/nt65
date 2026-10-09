@@ -293,6 +293,25 @@ public sealed class StateAnalysis : IProcessorStates
         bytes is { } count ? stack?.Pull(count) : null;
 
     /// <summary>
+    /// Returns <paramref name="state"/> with the widths a <c>plp</c> restores from
+    /// <paramref name="saved"/>, outside emulation mode. A 16-bit width comes back only in native
+    /// mode. Where the mode is not known, the processor may be in emulation mode and keep the
+    /// width at 8 bits, so a saved 16 becomes unknown, as it does for <c>rep</c>. A saved
+    /// <c>*</c> comes back where the mode is still as it was at entry, since the width it means
+    /// was saved in that mode.
+    /// </summary>
+    private static ProcessorState Restored(ProcessorState state, ProcessorState saved)
+    {
+        return state with { A = Back(saved.A), Index = Back(saved.Index) };
+
+        Width Back(Width width) =>
+            state.E == ProcessorMode.Native || width == Width.Eight
+                || (state.E == ProcessorMode.Unchanged && width == Width.Unchanged)
+                ? width
+                : Width.Unknown;
+    }
+
+    /// <summary>
     /// Returns the state at a declared label that can be entered from outside the routine. The
     /// parts its <c>.state</c> gives keep what reaches the label, which the directive itself then
     /// checks. Every part it leaves out becomes unknown, because a jump from outside is checked
@@ -508,7 +527,11 @@ public sealed class StateAnalysis : IProcessorStates
     {
         if (after != Width.Unknown)
             return null;
-        if (before == Width.Unknown)
+        // A `plp` that finds a saved status replaces the width, so what it restores is the cause
+        // even where the width was already unknown.
+        var restores = step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Plp }
+            && state.Stack?.Top is { IsStatus: true };
+        if (before == Width.Unknown && !restores)
             return inherited;
 
         if (step.Statement is StateDirectiveSyntax)
@@ -522,6 +545,10 @@ public sealed class StateAnalysis : IProcessorStates
             // A `plp` that finds no saved P because the stack itself is not known reports what
             // lost the stack, which is nearer the mistake than the `php` above it.
             MnemonicKind.Plp when state.Stack is null && state.WhyStack is { } lost => lost,
+            MnemonicKind.Plp when state.Stack?.Top is { IsStatus: true } && mode != ProcessorMode.Native
+                => new($"{quoted} restores a 16-bit width only in native mode, and the mode is not known", "a `.state` before it declares which mode it is"),
+            MnemonicKind.Plp when state.Stack?.Top is { IsStatus: true }
+                => new($"{quoted} restores a width that is not known here", "an `.ensure` after it sets it"),
             MnemonicKind.Plp => new($"{quoted} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
             MnemonicKind.Xce => new($"{quoted} follows neither `clc` nor `sec`", "a `.state` after it declares what it is"),
             MnemonicKind.Rep when mode != ProcessorMode.Native && StepOperands.Constant(model, step) is not null
@@ -630,8 +657,11 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Mvp:
                 return state with { Processor = processor with { B = MovedTo(step) } };
 
+            // What a push saves is kept in the routine's terms, so a pull outside the macro body
+            // that pushed it reads the same state.
             case MnemonicKind.Php:
-                return state with { Stack = stack?.Push(new StackEntry(true, processor.A, processor.Index)) };
+                var status = InRoutine(processor, step.On);
+                return state with { Stack = stack?.Push(new StackEntry(true, status.A, status.Index)) };
             // A constant loaded into A just before it is pushed is a value a pull can get back,
             // so `lda #c`, `pha`, `plb` loads the data bank.
             case MnemonicKind.Pha:
@@ -645,11 +675,11 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Phy:
                 return state with { Stack = Push(stack, Bytes(processor.Index)) };
             case MnemonicKind.Phb:
-                return state with { Stack = stack?.PushValue(processor.B, 1) };
+                return state with { Stack = stack?.PushValue(InRoutine(processor, step.On).B, 1) };
             case MnemonicKind.Phk:
                 return state with { Stack = stack?.PushValue(checks.BankOf(step.Segment), 1) };
             case MnemonicKind.Phd:
-                return state with { Stack = stack?.PushValue(processor.D, 2) };
+                return state with { Stack = stack?.PushValue(InRoutine(processor, step.On).D, 2) };
             case MnemonicKind.Pea:
                 return state with
                 {
@@ -666,9 +696,11 @@ public sealed class StateAnalysis : IProcessorStates
             // A pull that finds a value the routine pushed gets it back. That value may be a saved D
             // or B, a constant, or the program bank. Any other pull leaves the register unknown.
             case MnemonicKind.Plb:
-                return new FlowState(processor with { B = stack?.PulledValue(1) ?? StateValue.Unknown }, Pull(stack, 1));
+                var dataBank = Pulled(ProcessorState.Unknown with { B = stack?.PulledValue(1) ?? StateValue.Unknown }, step.On);
+                return new FlowState(processor with { B = dataBank.B }, Pull(stack, 1));
             case MnemonicKind.Pld:
-                return new FlowState(processor with { D = stack?.PulledValue(2) ?? StateValue.Unknown }, Pull(stack, 2));
+                var directPage = Pulled(ProcessorState.Unknown with { D = stack?.PulledValue(2) ?? StateValue.Unknown }, step.On);
+                return new FlowState(processor with { D = directPage.D }, Pull(stack, 2));
 
             // A pull that finds the status register a `php` saved restores the widths saved
             // with it. Any other pull leaves them unknown. The emulation flag is not in it, and in
@@ -677,7 +709,7 @@ public sealed class StateAnalysis : IProcessorStates
                 var restored = processor.E == ProcessorMode.Emulation
                     ? processor with { A = Width.Eight, Index = Width.Eight }
                     : stack?.Top is { IsStatus: true } saved
-                        ? processor with { A = saved.A, Index = saved.Index }
+                        ? Restored(processor, Pulled(ProcessorState.Unknown with { A = saved.A, Index = saved.Index }, step.On))
                         : processor with { A = Width.Unknown, Index = Width.Unknown };
                 return new FlowState(restored, Pull(stack, 1));
 
@@ -1260,5 +1292,65 @@ public sealed class StateAnalysis : IProcessorStates
         {
             Processor = StateChecks.Exited(signature, started.TryGetValue(key, out var at) ? at : ProcessorState.Unknown),
         };
+    }
+
+    /// <summary>
+    /// Returns <paramref name="state"/>, which holds at a statement in the expansion
+    /// <paramref name="on"/>, in the routine's terms. Inside the body of a macro with a signature,
+    /// a <c>*</c> item means the state at the call rather than at the routine's entry. Each such
+    /// item becomes the state at the call, through every enclosing call in turn. The stack keeps
+    /// what is pushed in these terms, so a pull outside the body reads what the push saved.
+    /// </summary>
+    private ProcessorState InRoutine(ProcessorState state, Expansion? on)
+    {
+        for (var level = on; level is not null; level = level.Outer)
+        {
+            if (level.Call is not { } call || model.MacroAt(call) is not { MacroSignature: not null })
+                continue;
+            var at = started.TryGetValue(StepKey.Of(call, level.Outer), out var found) ? found : ProcessorState.Unknown;
+            state = new ProcessorState(
+                state.A == Width.Unchanged ? at.A : state.A,
+                state.Index == Width.Unchanged ? at.Index : state.Index,
+                state.E == ProcessorMode.Unchanged ? at.E : state.E,
+                state.D.IsEntered ? at.D : state.D,
+                state.B.IsEntered ? at.B : state.B);
+        }
+        return state;
+    }
+
+    /// <summary>
+    /// Returns what a pull at a statement in the expansion <paramref name="on"/> gets back from
+    /// <paramref name="saved"/>, which the stack holds in the routine's terms. Inside the body of
+    /// a macro with a signature, a value that is what the body's <c>*</c> item means comes back
+    /// as that item. Any other value comes back where it is known, and is unknown otherwise.
+    /// </summary>
+    private ProcessorState Pulled(ProcessorState saved, Expansion? on)
+    {
+        Signature? signature = null;
+        for (var level = on; level is not null && signature is null; level = level.Outer)
+        {
+            if (level.Call is { } call)
+                signature = model.MacroAt(call)?.MacroSignature;
+        }
+        if (signature is null)
+            return saved;
+        var entry = signature.Entry;
+        var meant = InRoutine(entry, on);
+        return new ProcessorState(
+            Back(saved.A, entry.A, meant.A),
+            Back(saved.Index, entry.Index, meant.Index),
+            ProcessorMode.Unknown,
+            Value(saved.D, entry.D, meant.D),
+            Value(saved.B, entry.B, meant.B));
+
+        static Width Back(Width saved, Width entry, Width meant) =>
+            entry == Width.Unchanged && saved == meant && saved != Width.Unknown ? Width.Unchanged
+            : saved is Width.Eight or Width.Sixteen ? saved
+            : Width.Unknown;
+
+        static StateValue Value(StateValue saved, StateValue entry, StateValue meant) =>
+            entry.IsEntered && saved == meant && saved.Kind != StateValueKind.Unknown ? entry
+            : saved.IsBounded ? saved
+            : StateValue.Unknown;
     }
 }
