@@ -2407,14 +2407,17 @@ editor can be told not to show.
 - **On hover over the line that declares a routine or opens a block**, the same lists, because
   the lenses above it may not be there.
 - **On hover over an instruction**, beside what the line costs, what each register holds there,
-  one to a line and always all four, and under them what the routine has pushed, top of the
-  stack first:
+  one to a line and always all seven, which are A, X and Y and then the carry, zero, negative
+  and overflow flags, and under them what the routine has pushed, top of the stack first:
 
   ```text
   A       X as entered
   X       as entered
   Y       new
   C       as entered, or new
+  Z       new
+  N       new
+  V       as entered
 
   stack   X as entered
           status a8, i8

@@ -2285,7 +2285,7 @@ form.
 | `.struct` … `.endstruct`, `.enum`, `.union` | the same words, with braces |
 | `.asciiz "text"` | `.strz "text"` |
 | `.dbyt` | `.beword` |
-| `.charmap $41, $01` | `.charmap screen { 'A'..'Z' = $01 }`, applied as `screen("TEXT")` |
+| `.charmap $41, $01` | a `.charmap screen { … }` block holding the line `'A'..'Z' = $01`, applied as `screen("TEXT")` |
 | `.include "hw.inc"` | a module that exports what the file declared, and `.use`; `nt65 import-inc` converts a file of constants |
 | `.include "part.s"` of code that must land where the line is | a module declared `placed`, and `.place` |
 | `.export` and `.import` between files | `.export` in one module, a path or `.use` in the other |
