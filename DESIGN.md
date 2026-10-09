@@ -2764,6 +2764,23 @@ not anything calls them. A function
 is exported and used across modules like a constant, and the output writes each call as
 its parenthesized body, or as its value where nt65 has one.
 
+A call given an address, such as the decimal digits of a routine's address that a C64 BASIC
+`SYS` line spells, has no value nt65 knows, and its body is written for ld65 to work out:
+
+```nt65
+.func digit(n, place) = '0' + (n / place) .mod 10
+
+.data basic {
+    .byte digit(main, 1000), digit(main, 100), digit(main, 10), digit(main, 1)
+}
+```
+
+ld65 works out the operators, so a part of the body that uses such a parameter in anything
+else, such as a built-in function or `.in`, is an error. ca65 refuses an absolute address in a
+one-byte slot whatever the value comes to. A call that nt65 can show always fits a byte is
+therefore written as its `.lobyte`, which loses nothing, and one in a byte that nt65 cannot show
+fits is an error that asks for `<`.
+
 **Defaults and named arguments** work as a macro's do (§11.2). A parameter may have a default,
 whose names resolve where the function is declared, so a caller in another module gets the
 declaring module's constant. After its positional arguments a call may name parameters, each at
@@ -3985,7 +4002,7 @@ generated ca65, which is what ld65 wrote and is still true.
 | `.type T { ... }`, `.type T[] { ... }` | a data directive per member of each record, each with a comment naming it |
 | `.data name { }` | `name:` and its contents; a member `name::sub` is `name__sub`, and an `@` position gets a generated name |
 | `.list` | nothing by itself; its items where it is used |
-| a `.func` call | its value where nt65 has one, else its body, with each parameter replaced by its parenthesized argument |
+| a `.func` call | its value where nt65 has one, else its body, with each parameter replaced by its parenthesized argument, inside `.lobyte()` where nt65 can show the value always fits a byte |
 | a `.func` call, `.strsub`, `.strcat` or `.select` that is text | its bytes, with the source expression in a comment, as a literal's are |
 | `Player::pos::y`, `player::hp` | `2`, `player+4`, each with a comment naming the path |
 | `'c'`, `"text"`, `screen("HELLO")` | byte values, with the source text in a comment |

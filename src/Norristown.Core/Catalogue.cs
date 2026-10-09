@@ -1180,6 +1180,21 @@ public static class Catalogue
         "nt65 evaluates constant expressions while it builds, and a division by zero has no value to write to the "
             + "output. Check the divisor.");
 
+    internal static DiagnosticDescriptor FuncNotLinkable { get; } = Entry(
+        Area.Values,
+        "func-not-linkable",
+        Severity.Error,
+        "`{0}` is written for ld65 to work out, because its value depends on an address, and its body uses "
+            + "`{1}`: {2}",
+        "A `.func` called with an address, such as a label or a routine, has no value nt65 knows, so the output "
+            + "writes the function's body with the argument in place of the parameter and leaves ld65 to work it "
+            + "out once the address is known. ld65 works out the arithmetic, bitwise, shift, comparison and "
+            + "logical operators and `<`, `>` and `^`, so `.func digit(n, place) = '0' + (n / place) .mod 10` can "
+            + "be given a routine's address. A built-in function, `.in`, a charmap or text in the body is worked out "
+            + "by nt65 before the output is written, and so needs every parameter it uses to be given a constant. "
+            + "The body is written into the output of the file that calls it, so an address it names has to be "
+            + "declared in that file.");
+
     internal static DiagnosticDescriptor OperatorOnText { get; } = Entry(
         Area.Values,
         "operator-on-text",
@@ -2068,6 +2083,17 @@ public static class Catalogue
         "`{0}` is {1} address, and {2}: {3}",
         "The address is wider than the place it is written into, and ca65 would stop with a range error. Use the "
             + "part of the address that fits, as the message suggests.");
+
+    internal static DiagnosticDescriptor LinkedValueMayNotFit { get; } = Entry(
+        Area.Data,
+        "linked-value-may-not-fit",
+        Severity.Error,
+        "`{0}` is worked out by the linker from an address, and {1}, which nt65 cannot show it fits: use `<({0})` "
+            + "for its low byte",
+        "A `.func` given an address is written for ld65 to work out, and ca65 refuses an address in a one-byte slot "
+            + "whatever the value comes to. Where nt65 can show the value always fits a byte, as it can for "
+            + "`'0' + (n / 10) .mod 10`, the output keeps only the low byte, which loses nothing. Where it cannot, "
+            + "`<` says that the low byte is what is meant.");
 
     internal static DiagnosticDescriptor AddressNegative { get; } = Entry(
         Area.Data,

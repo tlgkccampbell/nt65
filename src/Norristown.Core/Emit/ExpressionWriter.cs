@@ -185,6 +185,24 @@ internal sealed class ExpressionWriter(
         bytes.Count == 0 ? "\"\"" : string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
 
     /// <summary>
+    /// Returns whether <paramref name="text"/> is one parenthesized whole, whose first parenthesis
+    /// closes at its last character.
+    /// </summary>
+    private static bool IsWrapped(string text)
+    {
+        if (!text.StartsWith('('))
+            return false;
+        var depth = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            depth += text[i] switch { '(' => 1, ')' => -1, _ => 0 };
+            if (depth == 0)
+                return i == text.Length - 1;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Writes <paramref name="text"/>, an operation, in place of a node that stands for a single
     /// value. Where the node is an operand of another operation, the text is parenthesized, so
     /// that <c>#&gt;player::hp</c> is <c>#&gt;(player+255)</c> rather than the high byte of
@@ -678,6 +696,21 @@ internal sealed class ExpressionWriter(
             text = BytesText(bytes);
         else if (model.ValueOf(call, Expansion).AsNumber() is { } value)
             text = Constant(value);
+        // The call's own text goes in the comment below, so whatever its arguments would add to
+        // the comment only repeats part of it.
+        else if (LinkTime(call, null, [], []) is { } linked)
+        {
+            // ca65 refuses an absolute address in a one-byte slot whatever the value comes to, so
+            // a value that always fits a byte is written as its low byte, which loses nothing.
+            if (LinkRange.Of(model, call, Expansion) is { Low: >= 0, High: <= 0xff })
+                linked = IsWrapped(linked) ? $".lobyte{linked}" : $".lobyte({linked})";
+
+            // A parenthesis first in an operand would read as indirection, which a unary `+` prevents.
+            text = linked.StartsWith('(') && call.FirstAncestorOrSelf<AbsoluteOperandSyntax>() is { } operand
+                && TokenRewriter.Tokens(operand)[0].Position == tokens[0].Position
+                ? "+" + linked
+                : linked;
+        }
 
         if (text is null)
         {
@@ -687,6 +720,110 @@ internal sealed class ExpressionWriter(
         rewriter.Replace(call, text);
         rewriter.Comments.Add(call.GetText().Trim());
     }
+
+    /// <summary>
+    /// Returns a call to a <c>.func</c> whose value only the linker knows, written as the
+    /// function's body with each parameter replaced by the argument given for it. ld65 then works
+    /// the body out once the addresses in it are known. Each part of the body that does not depend
+    /// on an address is written as its value. Returns null where the body uses an address in
+    /// anything but an operator, which the analysis reports.
+    /// </summary>
+    /// <param name="call">The call to write.</param>
+    /// <param name="outer">
+    /// The parameters of the function whose body holds the call, with what each is given, or null
+    /// for a call outside any function's body.
+    /// </param>
+    /// <param name="writing">The functions whose bodies are being written, which a call must not reenter.</param>
+    /// <param name="comments">Receives any comment the arguments produce.</param>
+    private string? LinkTime(
+        CallExpressionSyntax call, IReadOnlyDictionary<Symbol, ParameterValue>? outer, HashSet<Symbol> writing, List<string> comments)
+    {
+        if (call.Callee is null || model.SymbolOf(call.Callee, Expansion) is not { Kind: SymbolKind.Func, Items: [var body, ..] } function
+            || FunctionArguments.Match(function, call) is not { } arguments || !writing.Add(function))
+        {
+            return null;
+        }
+        try
+        {
+            var given = new Dictionary<Symbol, ParameterValue>();
+            for (var i = 0; i < arguments.Count; i++)
+            {
+                var argument = arguments[i];
+                var value = ValueIn(argument, outer);
+                var text = value.AsNumber() is { } number ? Constant(number) : Linked(argument, outer, writing, comments);
+                if (text is null)
+                    return null;
+                given[function.ParameterSymbols[i]] = new ParameterValue(value, text);
+            }
+            return Linked(body, given, writing, comments);
+        }
+        finally
+        {
+            writing.Remove(function);
+        }
+    }
+
+    /// <summary>
+    /// Returns part of a <c>.func</c> body written for ld65 to work out, with each parameter in
+    /// <paramref name="parameters"/> replaced by what it is given, or null where ld65 cannot work
+    /// it out. A part with a value nt65 knows is written as that value. An operation is
+    /// parenthesized, so nothing depends on how ca65 reads precedence.
+    /// </summary>
+    /// <param name="node">The part of the body to write.</param>
+    /// <param name="parameters">
+    /// The parameters of the function whose body holds the part, with what each is given, or null
+    /// for an argument outside any function's body.
+    /// </param>
+    /// <param name="writing">The functions whose bodies are being written.</param>
+    /// <param name="comments">Receives any comment the part produces.</param>
+    private string? Linked(
+        SyntaxNode node, IReadOnlyDictionary<Symbol, ParameterValue>? parameters, HashSet<Symbol> writing, List<string> comments)
+    {
+        if (parameters is null)
+            return Rendered(node, comments);
+        if (ValueIn(node, parameters).AsNumber() is { } value)
+            return Constant(value);
+        switch (node)
+        {
+            // An operation is parenthesized where it is written, so the source's own parentheses
+            // would only double them.
+            case ParenthesizedExpressionSyntax parenthesized:
+                return Linked(parenthesized.Expression, parameters, writing, comments);
+            case BinaryExpressionSyntax binary when !Evaluator.IsIn(binary.OperatorToken):
+                return Linked(binary.Left, parameters, writing, comments) is { } left
+                    && Linked(binary.Right, parameters, writing, comments) is { } right
+                    ? $"({left} {TokenRewriter.Ca65Operator(binary.OperatorToken)} {right})"
+                    : null;
+            case UnaryExpressionSyntax unary:
+                return Linked(unary.Operand, parameters, writing, comments) is { } operand
+                    ? $"({unary.OperatorToken.Text}{operand})"
+                    : null;
+            case NameExpressionSyntax name when model.SymbolOf(name, Expansion) is { } named
+                && parameters.TryGetValue(named, out var given):
+                return given.Text;
+            case CallExpressionSyntax { Callee: { } callee } call
+                when model.SymbolOf(callee, Expansion) is { Kind: SymbolKind.Func }:
+                return LinkTime(call, parameters, writing, comments);
+            default:
+                break;
+        }
+
+        // Anything else is written as it would be outside the body, which it can be only when
+        // it names none of the parameters.
+        var usesParameter = node.DescendantNodes().Prepend(node).OfType<NameExpressionSyntax>()
+            .Any(name => model.SymbolOf(name, Expansion) is { } named && parameters.ContainsKey(named));
+        return usesParameter ? null : Rendered(node, comments);
+    }
+
+    /// <summary>
+    /// Returns the value of part of a <c>.func</c> body with each parameter in
+    /// <paramref name="parameters"/> taking the value it is given, or the value of an expression
+    /// outside any body when <paramref name="parameters"/> is null.
+    /// </summary>
+    private Value ValueIn(SyntaxNode node, IReadOnlyDictionary<Symbol, ParameterValue>? parameters) =>
+        parameters is null
+            ? Worth(node)
+            : model.ValueOf(node, parameters.ToDictionary(pair => pair.Key, pair => pair.Value.Value), Expansion);
 
     /// <summary>Replaces text with its byte values, keeping the source spelling in a comment.</summary>
     private void Text(LiteralExpressionSyntax literal, TokenRewriter rewriter)
@@ -792,4 +929,10 @@ internal sealed class ExpressionWriter(
         if (tokens.Count > 0)
             rewriter.Before[tokens[0].Position] = text + rewriter.Before.GetValueOrDefault(tokens[0].Position, "");
     }
+
+    /// <summary>
+    /// Represents what a <c>.func</c> parameter is given in a call that is written for ld65, as
+    /// the value nt65 knows for it and the text written in its place.
+    /// </summary>
+    private readonly record struct ParameterValue(Value Value, string Text);
 }

@@ -546,6 +546,25 @@ public sealed class SemanticModel
     }
 
     /// <summary>
+    /// Returns the value of an expression in a <c>.func</c> body, with each parameter in
+    /// <paramref name="parameters"/> taking the value given for it there. A parameter given an
+    /// address takes <see cref="Value.Unknown"/>, so only the parts of the body that do not use
+    /// it have a value. <paramref name="on"/> is the expansion the call is in.
+    /// </summary>
+    internal Value ValueOf(SyntaxNode expression, IReadOnlyDictionary<Symbol, Value> parameters, Expansion? on)
+    {
+        var bound = new Dictionary<Symbol, Expansion.Bound>();
+        if (BindingsOf(on) is { } outer)
+        {
+            foreach (var (symbol, value) in outer)
+                bound[symbol] = value;
+        }
+        foreach (var (parameter, value) in parameters)
+            bound[parameter] = new Expansion.Bound(value, null);
+        return Evaluator.ValueOf(expression, Segments, resolved, bound, null, null, Configuration, walks);
+    }
+
+    /// <summary>
     /// Returns the symbols a path ending in a repetition's name can reach. For example,
     /// <c>reset::b</c>, where <c>b</c> iterates over an enum, names a different member of
     /// <c>reset</c> in every iteration. The output must be able to reach each of them, and a

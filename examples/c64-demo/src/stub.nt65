@@ -4,8 +4,7 @@
 
 .cpu 6502
 
-.const LOAD  = $0801                ; where BASIC programs start
-.const ENTRY = LOAD + 12            ; where `main::start` is, after the 12 bytes of `basic`
+.const LOAD = $0801                 ; where BASIC programs start
 
 ; Returns the digit of n in the given place, in decimal.
 .func digit(n, place) = '0' + (n / place) .mod 10
@@ -13,16 +12,14 @@
 .segment LOADADDR
 .data load_address: .word LOAD
 
+; The SYS digits are those of `main::start`, worked out by the linker wherever it lands.
 .segment EXEHDR
 .data basic {
     .word @end                      ; the next line
     .word 10                        ; this line's number
     .byte $9E                       ; SYS
-    .byte digit(ENTRY, 1000), digit(ENTRY, 100), digit(ENTRY, 10), digit(ENTRY, 1)
+    .byte digit(main::start, 1000), digit(main::start, 100), digit(main::start, 10), digit(main::start, 1)
     .byte 0                         ; the end of the line
 @end:
     .word 0                         ; the end of the program
 }
-
-.assert .sizeof(basic) == ENTRY - LOAD, "`ENTRY` is out of step with the BASIC line"
-.assert main::start == ENTRY, "`main::start` must come straight after the BASIC line"
