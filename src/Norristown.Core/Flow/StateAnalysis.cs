@@ -1048,7 +1048,8 @@ public sealed class StateAnalysis : IProcessorStates
     /// <summary>
     /// Returns the state after <c>rep #c</c> or <c>sep #c</c>. In native mode the widths it names
     /// become known. In emulation mode the widths are pinned at 8 and nothing changes. Where the
-    /// mode is not known, a <c>sep</c> still makes them 8, which they are in either mode.
+    /// mode is not known, a <c>sep</c> still makes them 8, which they are in either mode. A mask
+    /// that nt65 cannot work out, or that a store into the code may write, leaves both unknown.
     /// </summary>
     private ProcessorState Flags(Step step, bool reset, ProcessorState state)
     {
@@ -1057,7 +1058,10 @@ public sealed class StateAnalysis : IProcessorStates
         // the widths and then finding the mode would throw away what the mode already said.
         if (state.E == ProcessorMode.Emulation)
             return state;
-        if (StepOperands.Constant(model, step) is not { } flags)
+
+        // A store a `.patch` acknowledges may write the mask, and the mask as written then says
+        // only what the program starts from, as an operand nt65 cannot work out says nothing.
+        if (flow.RewrittenOperands.Contains(step.Key) || StepOperands.Constant(model, step) is not { } flags)
             return state with { A = Width.Unknown, Index = Width.Unknown };
 
         var width = reset

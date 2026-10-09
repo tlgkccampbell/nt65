@@ -1379,7 +1379,7 @@ that routine's signature.
 | `rep`, `sep`, in emulation mode | no change; widths are pinned at 8 |
 | `sep #const` with E unknown | the named widths become 8, which they are in either mode |
 | `rep #const` with E unknown | the named widths become unknown |
-| `rep`, `sep` with a non-constant operand | both widths unknown |
+| `rep`, `sep` with a non-constant operand, or one a store under a `.patch` may write (§7.4) | both widths unknown |
 | `.ensure a16, i8` | the named widths become known (below) |
 | `clc` immediately before `xce`, in the same basic block | from emulation: native, both widths 8; from native: no change; with E unknown: native, both widths unknown |
 | `sec` immediately before `xce`, in the same basic block | emulation mode, both widths 8 |
@@ -1764,7 +1764,11 @@ label:
   variant do: a register any of them writes is written, any of them may read one, and a flag
   none of them writes stays known. Where a store may write the operand, because it reaches past
   the opcode or its bytes are not known, the operand as written says nothing, so the flags and
-  the constants are unknown after the instruction, whatever stands there. In a program that
+  the constants are unknown after the instruction, whatever stands there. On a `rep` or `sep`
+  that operand is the mask, so both widths are unknown after it, as after a mask that is not a
+  constant, and code that relies on them is reported there. A store into `xce`, which has no
+  operand, writes its opcode, and no variant of an instruction that changes the widths is
+  accepted. In a program that
   already has a patch-variants-required error, the register and reads analyses take the
   instruction to use every register and leave each unknown. On the 65816 a store sized by a
   register reaches one byte where the processor state the file is laid out with shows that
@@ -1810,7 +1814,7 @@ The third directive is about the end of a routine rather than a statement:
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
 | other external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |
-| self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`, or a `.patch` for each instruction the store's known bytes land in, with `as` and the variants where the store may write the opcode; widths of `@op` are analyzed as written |
+| self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`, or a `.patch` for each instruction the store's known bytes land in, with `as` and the variants where the store may write the opcode; widths of `@op` are analyzed as written, except that a `rep` or `sep` whose mask the store may write leaves both unknown |
 
 Examples. A jump table inside a proc: the targets need no declarations because the
 `.next` edges carry the state at the jump.
