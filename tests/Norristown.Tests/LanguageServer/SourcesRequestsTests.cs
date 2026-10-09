@@ -16,7 +16,8 @@ public sealed class SourcesRequestsTests
 
     /// <summary>
     /// A routine with two stores into the instruction at <c>@step</c>. The first store, on line 6,
-    /// lists what it writes, and the second, on line 11, does not. The instruction is on line 15.
+    /// writes the opcode and lists what it writes. The second, on line 11, writes only the operand
+    /// and lists nothing. The instruction is on line 15.
     /// </summary>
     private const string PatchedProgram = """
         .module main
@@ -24,17 +25,17 @@ public sealed class SourcesRequestsTests
         .data count: .byte[1]
         .segment CODE
         .export .proc main {
-            ldy #.opcode(inx)
+            ldy #.opcode(ldy, imm)
             sty @step
-            .patch @step as inx
+            .patch @step as ldy
             ldx count
             bne @go
-            ldy #.opcode(dex)
-            sty @step
+            ldy #5
+            sty @step+1
             .patch @step
         @go:
         @step:
-            dex
+            ldx #1
             stx count
             rts
         }
@@ -316,7 +317,7 @@ public sealed class SourcesRequestsTests
         Assert.NotNull(result);
         var link = Assert.Single(result.Patches);
         Assert.Equal((6, 15, "@step"), (link.Store.Start.Line, link.Target.Start.Line, link.Name));
-        Assert.Equal(["inx"], link.Variants);
+        Assert.Equal(["ldy"], link.Variants);
     }
 
     /// <summary>
@@ -344,7 +345,7 @@ public sealed class SourcesRequestsTests
     public async Task APatchedInstructionIsLinkedToEachStore()
     {
         var timeout = TestTimeout.Token();
-        var (text, position) = Caret.In(CaretAt(PatchedProgram.LastIndexOf("dex", StringComparison.Ordinal) + 2));
+        var (text, position) = Caret.In(CaretAt(PatchedProgram.LastIndexOf("ldx #1", StringComparison.Ordinal) + 2));
         await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
 
         var result = await SourcesAsync(client, position, timeout);

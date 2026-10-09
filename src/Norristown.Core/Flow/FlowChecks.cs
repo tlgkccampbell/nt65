@@ -137,6 +137,7 @@ internal sealed class FlowChecks
         CheckFallthrough(units);
         CheckReturnsAndCalls(region.Routine, units);
         CheckPatchVariants(units);
+        CheckUnlistedPatches(units);
     }
 
     /// <summary>
@@ -155,6 +156,31 @@ internal sealed class FlowChecks
                 diagnostics.Add(new Diagnostic(variant.Name.Tree.GetSpan(variant.Name.Span), Catalogue.PatchVariantRejected.Message(
                     variant.Name.GetText().Trim(), SyntaxFacts.TextOf(variant.WrittenMnemonic), problem)));
             }
+        }
+    }
+
+    /// <summary>
+    /// Reports each store that may write the opcode of a patched instruction under a
+    /// <c>.patch</c> that lists no variants. Where the store can be seen to write one instruction,
+    /// the fix lists it.
+    /// </summary>
+    private void CheckUnlistedPatches(IReadOnlyList<ControlFlow.Unit> units)
+    {
+        if (flow.UnlistedPatches.Count == 0)
+            return;
+        var keys = units.Select(unit => unit.Step.Key).ToHashSet();
+        foreach (var unlisted in flow.UnlistedPatches)
+        {
+            if (!keys.Contains(unlisted.Written.Key))
+                continue;
+            var patch = unlisted.Patch;
+            diagnostics.Add(new Diagnostic(patch.Tree.GetSpan(patch.Span), Catalogue.PatchVariantsRequired.Message(
+                unlisted.Store.Statement.GetTextOnOneLine(), unlisted.Label.DisplayName))
+            {
+                Fix = unlisted.Inferred == MnemonicKind.None
+                    ? null
+                    : new DiagnosticFix(FixKind.Variant, SyntaxFacts.TextOf(unlisted.Inferred)),
+            });
         }
     }
 

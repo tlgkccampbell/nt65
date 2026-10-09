@@ -13,7 +13,8 @@ public sealed class PatchVariantTests
 
     /// <summary>
     /// A flag that neither <c>inx</c> nor <c>dex</c> writes is still known after the patched
-    /// instruction, so the branch on it is decided. Without <c>as</c>, nothing is known after it.
+    /// instruction, so the branch on it is decided. Without <c>as</c>, the <c>.patch</c> is an
+    /// error and nothing is known after the instruction.
     /// </summary>
     [Fact]
     public void AFlagNoVariantWritesSurvives()
@@ -22,7 +23,9 @@ public sealed class PatchVariantTests
             + $"    {patch}\n    sec\n@step:\n    inx\n    bcs @x\n    .byte 1\n@x:\n    rts\n}}\n";
 
         Assert.Empty(Problems(Main(".patch @step as dex")));
-        Assert.Contains(Problems(Main(".patch @step")), problem => problem.Contains("falls into this data", StringComparison.Ordinal));
+        var problems = Problems(Main(".patch @step"));
+        Assert.Contains(problems, problem => problem.Contains("may write the opcode of `@step`", StringComparison.Ordinal));
+        Assert.Contains(problems, problem => problem.Contains("falls into this data", StringComparison.Ordinal));
     }
 
     /// <summary>A register only a variant writes is written, so a routine that keeps it breaks its promise.</summary>
@@ -62,39 +65,56 @@ public sealed class PatchVariantTests
     }
 
     /// <summary>
-    /// A variant replaces the opcode alone, so a store that is not known to start at the opcode
-    /// cannot list one. The operand it may write then says nothing about the flags.
+    /// A variant replaces the opcode, so a store known to write only the operand has none to list.
+    /// The operand it writes then says nothing about the flags.
     /// </summary>
-    [Theory]
-    [InlineData("sta @op+1")]
-    [InlineData("sta @op,x")]
-    [InlineData("sta $10")]
-    public void AStoreNotKnownToWriteTheOpcodeCannotListAVariant(string store)
+    [Fact]
+    public void AStoreIntoTheOperandCannotListAVariant()
     {
-        var diagnostics = Diagnostics(".export .proc main {\n    lda #0\n    ldx #0\n"
-            + $"    {store}\n    .patch @op as and\n@op:\n    lda #0\n    bne @x\n    .byte 1\n@x:\n    rts\n}}\n");
+        var diagnostics = Diagnostics(".export .proc main {\n    lda #0\n"
+            + "    sta @op+1\n    .patch @op as and\n@op:\n    lda #0\n    bne @x\n    .byte 1\n@x:\n    rts\n}\n");
         Assert.Contains(diagnostics, diagnostic => diagnostic is
         {
             Id: "patch-variant-rejected",
-            Message: "`.patch` cannot list `and` for `lda`: a variant replaces the opcode, and the store is not known to write it",
+            Message: "`.patch` cannot list `and` for `lda`: the store writes only the operand, so there is no variant to list",
         });
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "runs-into-data");
     }
 
     /// <summary>
-    /// A store into the opcode that lists nothing may make the instruction anything, which may use
-    /// and change every register. A store into the operand alone leaves the instruction as written.
+    /// A store whose offset is not known may write the opcode, so it may list variants. It may
+    /// write the operand too, which then says nothing about the flags.
+    /// </summary>
+    [Theory]
+    [InlineData("sta @op,x")]
+    [InlineData("sta $10")]
+    public void AStoreOfUnknownOffsetMayListAVariant(string store)
+    {
+        var diagnostics = Diagnostics(".export .proc main {\n    lda #0\n    ldx #0\n"
+            + $"    {store}\n    .patch @op as and\n@op:\n    lda #0\n    bne @x\n    .byte 1\n@x:\n    rts\n}}\n");
+        Assert.Equal(["runs-into-data"], diagnostics.Select(d => d.Id));
+    }
+
+    /// <summary>
+    /// A store that may write the opcode has to list what the instruction can become, and each
+    /// such store is reported once. Without the list the instruction may be anything, which may
+    /// use and change every register. A store into the operand alone leaves the instruction as
+    /// written.
     /// </summary>
     [Fact]
-    public void AnUnlistedOpcodeMayUseAndChangeEveryRegister()
+    public void AnUnlistedOpcodeIsAnErrorAndMayUseAndChangeEveryRegister()
     {
         static string Main(string store) => ".export .proc main: keeps x, reads a {\n    lda #.opcode(ldx, imm)\n"
             + $"    {store}\n    .patch @op\n@op:\n    lda #5\n    rts\n}}\n";
 
         Assert.Empty(Diagnostics(Main("sta @op+1")));
+        var diagnostics = Diagnostics(Main("sta @op"));
         Assert.Equal(
-            ["keeps-broken", "reads-undeclared", "reads-undeclared", "reads-undeclared", "reads-undeclared"],
-            Diagnostics(Main("sta @op")).Select(d => d.Id).Order());
+            ["keeps-broken", "patch-variants-required", "reads-undeclared", "reads-undeclared", "reads-undeclared", "reads-undeclared"],
+            diagnostics.Select(d => d.Id).Order());
+        Assert.Equal(
+            "`sta @op` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`",
+            Assert.Single(diagnostics, d => d.Id == "patch-variants-required").Message);
     }
 
     private static IReadOnlyList<string> Problems(string text) =>
