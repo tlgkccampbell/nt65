@@ -17,6 +17,12 @@ namespace Norristown.Cli;
 /// search, and the directory of each file the last build read. A glob may reach above the root,
 /// and so may an <c>.incbin</c>, so the root alone is not enough.
 /// </para>
+/// <para>
+/// A save raises several events, and one of them may arrive after the build the others started.
+/// An event about a file that the last build read as the file stands now starts no build, so one
+/// save is one build. A file the last build did not read, such as a source written since, and a
+/// lost event always start one.
+/// </para>
 /// </summary>
 internal static class WatchCommand
 {
@@ -46,6 +52,8 @@ internal static class WatchCommand
         // The root is watched before the first build, so a file saved while that build is running
         // still triggers a rebuild rather than being missed.
         var watched = new HashSet<string>(FilePaths.Comparer);
+        var touched = new HashSet<string>(FilePaths.Comparer);
+        var lost = false;
         using var changed = new SemaphoreSlim(0, 1);
         var last = Environment.TickCount64;
         void Signal()
@@ -60,19 +68,37 @@ internal static class WatchCommand
                 // A change is already pending, and one build covers any number of changes.
             }
         }
+        void Lost()
+        {
+            lock (touched)
+                lost = true;
+            Signal();
+        }
         void Touched(object? sender, FileSystemEventArgs change)
         {
-            if (Matters(change.FullPath, watched)
-                || (change is RenamedEventArgs renamed && Matters(renamed.OldFullPath, watched)))
+            string[] paths = change is RenamedEventArgs renamed ? [change.FullPath, renamed.OldFullPath] : [change.FullPath];
+            var matters = false;
+            foreach (var path in paths)
             {
-                Signal();
+                if (!Matters(path, watched))
+                    continue;
+                lock (touched)
+                    touched.Add(path);
+                matters = true;
             }
+            if (matters)
+                Signal();
         }
-        using var watchers = new Watchers(Touched, Signal);
+        using var watchers = new Watchers(Touched, Lost);
         watchers.Update([(root, true)]);
 
         while (true)
         {
+            // The files the last build read are stamped before this build reads them, so that a
+            // file written while the build runs differs from its stamp afterwards.
+            Dictionary<string, (long Length, DateTime Written)?> stamped;
+            lock (watched)
+                stamped = watched.ToDictionary(path => path, Stamp, FilePaths.Comparer);
             var built = BuildCommand.Run(command, directory, output, error, colour);
             if (built.Code == ExitCode.UsageError)
                 return ExitCode.UsageError;
@@ -84,25 +110,52 @@ internal static class WatchCommand
             watchers.Update(Directories(root, built));
             error.WriteLine($"nt65: watching {ProjectRoot.Shown(directory, root)}");
 
-            try
+            while (true)
             {
-                changed.Wait(cancellation);
-            }
-            catch (OperationCanceledException)
-            {
-                return ExitCode.Success;
-            }
-
-            // An editor may write a file in several steps, and saving many files at once raises
-            // many events. The build therefore waits until no event has arrived for a while, so
-            // that one build covers them all, then clears the signal they left.
-            while (Environment.TickCount64 - Interlocked.Read(ref last) is var quiet && quiet < QuietMilliseconds)
-            {
-                if (cancellation.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(QuietMilliseconds - quiet)))
+                try
+                {
+                    changed.Wait(cancellation);
+                }
+                catch (OperationCanceledException)
+                {
                     return ExitCode.Success;
+                }
+
+                // An editor may write a file in several steps, and saving many files at once raises
+                // many events. The build therefore waits until no event has arrived for a while, so
+                // that one build covers them all, then clears the signal they left.
+                while (Environment.TickCount64 - Interlocked.Read(ref last) is var quiet && quiet < QuietMilliseconds)
+                {
+                    if (cancellation.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(QuietMilliseconds - quiet)))
+                        return ExitCode.Success;
+                }
+                changed.Wait(0, CancellationToken.None);
+
+                // An event about a file the last build read, which still stands as that build saw
+                // it, is a late event of a save that build covered, and starts no build.
+                List<string> paths;
+                bool rebuild;
+                lock (touched)
+                {
+                    paths = [.. touched];
+                    touched.Clear();
+                    rebuild = lost;
+                    lost = false;
+                }
+                if (rebuild || paths.Any(path => !stamped.TryGetValue(path, out var stamp) || stamp != Stamp(path)))
+                    break;
             }
-            changed.Wait(0, CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    /// Returns how the file at <paramref name="path"/> stands, as its length and the time it was
+    /// last written, or null when there is no such file.
+    /// </summary>
+    private static (long Length, DateTime Written)? Stamp(string path)
+    {
+        var file = new FileInfo(path);
+        return file.Exists ? (file.Length, file.LastWriteTimeUtc) : null;
     }
 
     /// <summary>
