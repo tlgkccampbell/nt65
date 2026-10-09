@@ -27,6 +27,13 @@ public enum StateParts
     /// <summary>The data bank.</summary>
     DataBank = 16,
 
-    /// <summary>Every part.</summary>
+    /// <summary>Every part that changes along a routine's paths.</summary>
     All = A | Index | Mode | DirectPage | DataBank,
+
+    /// <summary>
+    /// The program bank the routine runs in. It is not one of <see cref="All"/>, because no
+    /// instruction inside a routine changes it, so it describes the routine's entry and never
+    /// its exit.
+    /// </summary>
+    ProgramBank = 32,
 }

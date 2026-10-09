@@ -38,8 +38,12 @@ public sealed class StateRegister
     public static StateRegister DataBank { get; } =
         new(StatePart.DataBank, "dbr", "bank", "B", isPlural: false, digits: 2, range: "a bank is one byte");
 
+    /// <summary>Gets the program bank register K, whose state is the bank a routine's code runs in.</summary>
+    public static StateRegister ProgramBank { get; } =
+        new(StatePart.ProgramBank, "pbr", attribute: null, "K", isPlural: false, digits: 2, range: "a bank is one byte");
+
     /// <summary>Gets every register, in the order a <c>.state</c> item lists them.</summary>
-    public static IReadOnlyList<StateRegister> All { get; } = [A, Index, DirectPage, DataBank];
+    public static IReadOnlyList<StateRegister> All { get; } = [A, Index, DirectPage, DataBank, ProgramBank];
 
     /// <summary>Gets the part of the state that the register's items declare.</summary>
     public StatePart Part { get; }

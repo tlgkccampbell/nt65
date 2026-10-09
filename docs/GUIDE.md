@@ -1445,6 +1445,7 @@ The signature items are:
 | `native`, `emu` | the emulation flag; `native` is the default |
 | `near`, `far` | called with `jsr` and left with `rts`, or with `jsl` and `rtl`; `near` is the default |
 | `dp = e`, `dbr = e` | the direct page and data bank values |
+| `pbr = e` | the bank the routine's code runs in, before `->` only; inferred where not written |
 | `a*`, `i*`, `dp*`, `dbr*` | unchanged: the routine assumes nothing and hands the value back as it found it |
 | `a?`, `i?`, `e?`, `dp?`, `dbr?` | unknown |
 | `?` | everything unknown, for code entered from outside nt65 |
@@ -1507,7 +1508,9 @@ or a symbol in a segment that declares `dp`. The error names the callers.
 
 Hover over a routine's name to see what is inferred for it, on the `inferred` row. The
 refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
-a contract.
+a contract. An exported routine whose bytes depend on an inferred width, mode or direct page,
+such as an immediate sized by an inferred `a8`, gets a hint, `export-state-inferred`, since a
+caller outside nt65 is not checked against it. Its fix declares those items.
 
 **Signature sets.** Most routines of a program share a state, so name it once:
 
@@ -1705,7 +1708,10 @@ be a bank that cannot see it. Where B is unknown, nothing is reported. A routine
 them in its signature, `dp = 0, dbr = $7e`, makes them known. An interrupt handler starts with
 D unknown, because it runs with whatever D the code it interrupted held, so it sets D before
 it names a `HUD_DP` symbol. nt65 recognizes the usual idioms that set D and B: `pea $2100` then `pld`,
-`lda #$7e` / `pha` / `plb`, and `phk` / `plb`.
+`lda #$7e` / `pha` / `plb`, and `phk` / `plb`. `phk` pushes the bank the code runs in: its
+segment's home bank, unless every way in is a long jump or call through a mirror, as a FastROM
+reset stub's `jml ($80 << 16) | .loword(fast)` is. A routine can declare that bank with
+`pbr = $80`.
 
 A `jsr`, `jmp` or branch to a segment whose home bank is not the caller's is an error too: it
 is the same question as a switchable bank (see Segments), what the code can see, and here the

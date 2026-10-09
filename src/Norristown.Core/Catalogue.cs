@@ -4004,7 +4004,7 @@ public static class Catalogue
         Area.Signatures,
         "state-banks-not-dbr",
         Severity.Error,
-        "`{0}`: only `dbr` can be given a set of banks; `dp` takes one address",
+        "`{0}`: only `dbr` can be given a set of banks; {1}",
         "A routine that does not set B itself can run with any of several data banks that reach the same memory, "
             + "so `dbr = [...]` may list a set of banks. D decides where every direct-page operand lands, so `dp` "
             + "has to be a single value.");
@@ -4258,6 +4258,18 @@ public static class Catalogue
             + "Here the register already holds the constant the load gives it on every path. The load can go where N "
             + "and Z already say what it would set them to, or where nothing reads them before they change, which "
             + "saves 2 bytes and 2 cycles. Memory is never assumed to hold anything.");
+
+    internal static DiagnosticDescriptor ExportStateInferred { get; } = Entry(
+        Area.Suggestions,
+        "export-state-inferred",
+        Severity.Info,
+        "`{0}` is exported, and its bytes depend on {1}, which is inferred from its callers here: a caller outside "
+            + "nt65 is not checked against it, so the signature can declare it",
+        "nt65 infers each part of a routine's entry that its signature leaves out from the routine's callers in the "
+            + "program, and sizes immediates and writes `d:` operands from what it infers. A caller outside nt65 is "
+            + "not checked, so for an exported routine whose bytes depend on an inferred width, mode or direct page, "
+            + "nothing states what such a caller must hold. Declaring the items makes that the contract, which every "
+            + "caller in the program is then checked against. This is offered only where a byte depends on the part.");
 
     internal static DiagnosticDescriptor LoadFromRegister { get; } = Entry(
         Area.Suggestions,

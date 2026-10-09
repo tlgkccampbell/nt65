@@ -1,0 +1,82 @@
+; Code runs in the bank control reaches it in. A routine entered only through a mirror runs
+; there, so `phk` pushes the mirror bank.
+.module main
+
+.cpu 65816
+
+.export reset
+
+.segment VARS
+.data v: .byte
+
+.segment STUBS
+.proc reset: emu, dp?, dbr?, noreturn {
+    sei
+    clc
+    xce
+    jml ($80 << 16) | .loword(fast)
+}
+
+.segment FAST
+.proc fast: noreturn {
+    sep #$20
+    phk
+    plb
+    sta v                   ;! error[bank-mismatch]: `v` is in segment `VARS`, which is in bank $00, but B is $80 here
+    jsr helper
+    jsr either
+    jsr fixed
+    jsr wrong
+@forever:
+    bra @forever
+}
+
+; A near call stays in the caller's bank, so `helper` runs in bank $80 too.
+.proc helper: a8 {
+    phk
+    plb
+    sta v                   ;! error[bank-mismatch]: `v` is in segment `VARS`, which is in bank $00, but B is $80 here
+    rts
+}
+
+; `either` is reached in bank $80 from `fast` and in bank $00 from `slow`, so the bank it runs
+; in is not known, and neither is B after `phk` and `plb`.
+.proc either: a8 {
+    phk
+    plb
+    sta v
+    rts
+}
+
+.proc slow: a8, native, noreturn {
+    jsr either
+    jsr wrong               ;! error[call-state-mismatch]: `jsr wrong` needs `pbr = $80`, but control reaches it in bank $00
+@forever:
+    bra @forever
+}
+
+; A routine may declare the bank it runs in, and every way in is checked against it.
+.proc fixed: a8, pbr = $80 {
+    phk
+    plb
+    sta v                   ;! error[bank-mismatch]: `v` is in segment `VARS`, which is in bank $00, but B is $80 here
+    rts
+}
+
+.proc wrong: a8, pbr = $80 {
+    rts
+}
+
+.export slow
+
+; `pbr` names one bank, at entry, in a signature.
+.proc set: pbr = [$00, $80] {   ;! error[state-banks-not-dbr]: `pbr = [$00, $80]`: only `dbr` can be given a set of banks; `pbr` takes one bank
+    rts
+}
+
+.proc after: a8 -> pbr = $80 {  ;! error[item-belongs-at-entry]: `pbr = $80` belongs before `->`
+    .state pbr = $80            ;! error[state-item-not-a-point]: `pbr = $80` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`
+    rts
+}
+
+.export set, after

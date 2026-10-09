@@ -1235,6 +1235,7 @@ items are:
 | `keeps a, x, y, c, z, n, v` | the registers and flags it hands back as it was entered with them (§7.7) | none |
 | `reads a, x, y, c, z, n, v`, `reads none` | the registers and flags whose values from its caller it uses (§7.7) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
+| `pbr = e` `pbr?`, before `->` | the program bank the routine's code runs in (§7.5) | inferred, else the home bank |
 | `?` | every part above unknown (below) | none |
 | a signature set's name | the items the set declares (below) | none |
 
@@ -1252,8 +1253,11 @@ inferred from the program, across files:
   call, `.fallthrough` and `.next` that hands control to its start. Where they agree on a part,
   the routine is entered with it. Code outside nt65 that calls an exported routine is not
   checked, as nothing outside nt65 is; a routine such code calls declares the entry it expects,
-  which is the contract between the two. A routine whose address is taken, by any use of its
-  name other than as where control goes, may be called through it from anywhere, in either
+  which is the contract between the two. Where an exported routine's bytes depend on an inferred
+  width, mode or `dp`, through an immediate's size or a `d:` operand, the editor hints so,
+  `export-state-inferred`, with a fix that declares those items. A routine whose address is
+  taken, by any use of its name other than as where control goes, may be called through it
+  from anywhere, in either
   mode, and is entered with `a*, i*, e*, dp*, dbr*`: it assumes nothing; so is one nothing
   calls. A `rep` in it widens nothing until it declares `native` or enters native mode with
   `clc` and `xce`, as a reset handler does, and a declared `native` restores the old default.
@@ -1378,7 +1382,7 @@ that routine's signature.
 | `rep`, `sep`, in emulation mode | no change; widths are pinned at 8 |
 | `sep #const` with E unknown | the named widths become 8, which they are in either mode |
 | `rep #const` with E unknown | the named widths become unknown |
-| `rep`, `sep` with a non-constant operand | both widths unknown |
+| `rep`, `sep` with a non-constant operand, or one a store under a `.patch` may write (§7.4) | both widths unknown |
 | `.ensure a16, i8` | the named widths become known (below) |
 | `clc` immediately before `xce`, in the same basic block | from emulation: native, both widths 8; from native: no change; with E unknown: native, both widths unknown |
 | `sec` immediately before `xce`, in the same basic block | emulation mode, both widths 8 |
@@ -1763,7 +1767,11 @@ label:
   variant do: a register any of them writes is written, any of them may read one, and a flag
   none of them writes stays known. Where a store may write the operand, because it reaches past
   the opcode or its bytes are not known, the operand as written says nothing, so the flags and
-  the constants are unknown after the instruction, whatever stands there. In a program that
+  the constants are unknown after the instruction, whatever stands there. On a `rep` or `sep`
+  that operand is the mask, so both widths are unknown after it, as after a mask that is not a
+  constant, and code that relies on them is reported there. A store into `xce`, which has no
+  operand, writes its opcode, and no variant of an instruction that changes the widths is
+  accepted. In a program that
   already has a patch-variants-required error, the register and reads analyses take the
   instruction to use every register and leave each unknown. On the 65816 a store sized by a
   register reaches one byte where the processor state the file is laid out with shows that
@@ -1809,7 +1817,7 @@ The third directive is about the end of a routine rather than a statement:
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
 | other external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |
-| self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`, or a `.patch` for each instruction the store's known bytes land in, with `as` and the variants where the store may write the opcode; widths of `@op` are analyzed as written |
+| self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`, or a `.patch` for each instruction the store's known bytes land in, with `as` and the variants where the store may write the opcode; widths of `@op` are analyzed as written, except that a `rep` or `sep` whose mask the store may write leaves both unknown |
 
 Examples. A jump table inside a proc: the targets need no declarations because the
 `.next` edges carry the state at the jump.
@@ -1952,8 +1960,18 @@ through and which bank it lives in, in the segment table (§5.2, §5.3):
 ```
 
 `bank` and `dbr` are different words for different things: `bank` is where a segment lives,
-its home bank, and `dbr` is the value of the data bank register at a point in a routine. Code
-is taken to run in the home bank of its segment, even where a mirror maps it elsewhere too.
+its home bank, and `dbr` is the value of the data bank register at a point in a routine.
+
+**The program bank.** Code runs in the bank control reaches it in, which is K. No instruction
+inside a routine changes K, so it belongs to the routine's entry. A near call, jump, branch,
+`.next` or `.fallthrough` keeps the caller's K. A `jsl` or `jml` sets the bank of the address it
+names: a mirror address such as `(bank << 16) | .loword(f)` gives that bank, and any other gives
+the home bank of `f`'s segment. A routine whose callers agree runs in their bank, and one
+reached in two banks runs in one not known. A routine nothing in the program calls, one whose
+address is taken and an interrupt handler run in their home bank. `pbr = e` declares the bank
+instead, and every way in is checked against it; `pbr?` declares it unknown. K is never handed
+back, since a call returns to its caller's bank, so `pbr` is written only before `->`, has no `*`
+form, and is not a `.state` item. `?` leaves it alone.
 
 A routine's signature may carry the D and B values it assumes at entry and, after
 `->`, at exit: `.proc hud: a8, i16, dp = $2100, dbr = $7e {`. `dp?` and `dbr?` mean
@@ -1993,7 +2011,7 @@ idioms that load D and B from constants and treats everything else as unknown:
 | `lda #const` then `tcd`, with A 16-bit | D = const |
 | `pea const` then `pld` | D = const |
 | `lda #const`, `pha`, `plb`, with A 8-bit | B = const |
-| `phk` then `plb` | B = the home bank of the enclosing segment |
+| `phk` then `plb` | B = K, the bank the routine runs in (above) |
 | `pld`, `plb` that pull a D or B saved by `phd`, `phb` (the analysis stack, §7.3) | the saved value |
 | `mvn #s, #d`, `mvp #s, #d` | B = d; for `#^sym`, the home bank of `sym`'s segment, when it declares one; unknown when the move stands on a label a `.patch` names, whose banks the program writes |
 | calls, returns, merges, `xce` | as for widths (§7.3); `xce` leaves D and B alone |
@@ -5553,7 +5571,7 @@ multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL bod
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
 state-item  := point-item | unchanged-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
-             | 'args' expr | 'interrupt' | 'noreturn' | keeps-item
+             | 'args' expr | 'interrupt' | 'noreturn' | keeps-item | 'pbr' '=' expr | 'pbr?'
              | path                                   ; a path names a signature set, first
 keeps-item  := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7.7)
 signature   := '.signature' ident '=' state

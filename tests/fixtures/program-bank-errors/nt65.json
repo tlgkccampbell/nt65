@@ -1,0 +1,9 @@
+{
+  "cpu": "65816",
+  "files": ["*.nt65"],
+  "segments": {
+    "STUBS": { "size": "abs", "bank": 0 },
+    "FAST":  { "size": "abs", "bank": 0, "mirrors": ["$80"] },
+    "VARS":  { "size": "abs", "bank": 0 }
+  }
+}

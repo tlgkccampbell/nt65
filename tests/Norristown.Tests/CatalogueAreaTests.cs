@@ -174,7 +174,8 @@ public sealed class CatalogueAreaTests
         ("Suggestions",
         [
             "branch-never-taken", "branch-over-jump", "carry-already-set", "carry-folded", "constant-used-as-address",
-            "jump-as-branch", "load-already-held", "load-from-register", "next-proved", "tail-call", "width-already-set",
+            "export-state-inferred", "jump-as-branch", "load-already-held", "load-from-register", "next-proved", "tail-call",
+            "width-already-set",
             "zero-compare",
         ]),
     ];
