@@ -16,6 +16,11 @@ namespace Norristown.Flow;
 /// The analysis sees only the branches this build takes. A routine with a branch this build
 /// leaves out gets no suggestions, because another build may take that branch and need the code.
 /// </para>
+/// <para>
+/// A routine with a line that does not parse gets no suggestions either. What the analysis knows
+/// at one line depends on every line before it, and a half-typed line may stand for code that
+/// would change it.
+/// </para>
 /// </summary>
 public static class Suggestions
 {
@@ -38,10 +43,9 @@ public static class Suggestions
         FileAnalysis file, IReadOnlyList<TextSpan> omitted, Func<Symbol, bool> readsCallerStack,
         IReadOnlyCollection<NamedByte> named)
     {
-        // Every routine of a file whose branches the build all takes is unconditional.
-        List<FlowRegion> regions = omitted.Count == 0
-            ? [.. file.Flow.Regions]
-            : [.. file.Flow.Regions.Where(region => Unconditional(region, omitted))];
+        // Only a routine whose branches the build all takes, and whose lines all parse, is asked.
+        List<FlowRegion> regions = [.. file.Flow.Regions.Where(region =>
+            (omitted.Count == 0 || Unconditional(region, omitted)) && !Broken(region))];
         var readAsData = ReadAsData(file, named);
         return Norristown.Diagnostics.Ordered(
             [.. TailCalls(file, readAsData, regions, readsCallerStack), .. OfTheFile(file, readAsData, regions, omitted)]);
@@ -120,6 +124,22 @@ public static class Suggestions
         var start = own.Min(span => span.Start);
         var end = own.Max(span => span.End);
         return !omitted.Any(span => span.Start < end && span.End > start);
+    }
+
+    /// <summary>
+    /// Returns whether a line of the routine's own, from its first statement to its last, has a
+    /// syntax error.
+    /// </summary>
+    private static bool Broken(FlowRegion region)
+    {
+        var tree = region.Routine.Tree;
+        if (!tree.Root.ContainsDiagnostics)
+            return false;
+        var own = region.Blocks.SelectMany(block => block.Steps)
+            .Where(step => step.On is null && step.Statement.Tree == tree)
+            .Select(step => step.Statement.LineIndex)
+            .ToList();
+        return own.Count > 0 && tree.LinesContainDiagnostics(own.Min(), own.Max());
     }
 
     /// <summary>

@@ -161,6 +161,26 @@ public sealed class FlagHintsTests
     }
 
     /// <summary>
+    /// A routine with a line that does not parse gets no suggestions, whether the broken line is
+    /// the one suggested or another line of the routine. Another routine of the file still gets
+    /// its own.
+    /// </summary>
+    [Theory]
+    [InlineData("    jmp main::\n", "")]
+    [InlineData("    jmp main\n", "    lda #\n")]
+    public void ARoutineWithASyntaxErrorGetsNoSuggestions(string jump, string broken)
+    {
+        var (analysis, path) = Analyzed(
+            ".export .proc main {\n    lda $10\n    bne @x\n" + broken + "    sec\n" + jump + "@x:\n    rts\n}\n"
+            + ".export .proc other {\n    lda $10\n    bne @x\n    jmp other\n@x:\n    rts\n}\n",
+            "65C02");
+
+        Assert.NotEmpty(analysis.Diagnostics);
+        var suggestion = Assert.Single(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "jump-as-branch");
+        Assert.Equal("`jmp other` can be `bra other`, which saves a byte", suggestion.Message);
+    }
+
+    /// <summary>
     /// A branch over a <c>jmp</c> can be the opposite branch to the jump's target, and the label it
     /// went to goes too where nothing else names it.
     /// </summary>

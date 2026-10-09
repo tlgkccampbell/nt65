@@ -2166,7 +2166,8 @@ everything below works across modules.
   declares no flags, says so, as in "`g` leaves C this way but does not promise it", and so
   does its fix. A tail call is not suggested to a
   routine that depends on how deep the stack is, such as one that pops its caller's return
-  address, and a routine with a branch this configuration leaves out gets no suggestions.
+  address. A routine with a branch this configuration leaves out gets no suggestions, and
+  neither does one with a line that does not parse.
 - **Refactorings** on a selection: bring a path in with `.use` or write it out in full; export
   or stop exporting a declaration; declare what a 65816 routine leaves; turn `rep #$20` into
   `.ensure a16` and back; give a number a name; turn a label into a cheap local or the other
