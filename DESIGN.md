@@ -1607,7 +1607,8 @@ analysis stack, so a frame reaches them:
   caller pushed since it was entered is known;
 - on every CPU, no `jsr` or `jsl` calls a routine that declares `pulls n`;
 - no interrupt handler, and no label inside one, is called, and no routine that says `noreturn`
-  or `interrupt` returns with `rts` or `rtl`, on every CPU;
+  or `interrupt` returns with `rts` or `rtl`, on every CPU. An indirect call is checked against
+  each routine or label its `.next` names, for this rule and the one above;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
   import) or a label inside a routine, which declares its state with a `.state` (§7.4). Anything
   else is `call-target-not-a-routine`, whose message names the declaration that makes the target a

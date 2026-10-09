@@ -412,7 +412,8 @@ internal sealed class FlowChecks
     /// handler, each call to an interrupt handler or to a label inside one, and each call to a
     /// routine that declares <c>pulls n</c>. Neither of the first two kinds of routine returns with
     /// <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by <c>rti</c>, is never
-    /// called. It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which the
+    /// called. A call through a pointer is checked against each target its <c>.next</c> names.
+    /// It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which the
     /// processor may enter in any state. These rules hold on every CPU.
     /// </summary>
     private void CheckReturnsAndCalls(Symbol routine, IReadOnlyList<ControlFlow.Unit> units)
@@ -439,27 +440,27 @@ internal sealed class FlowChecks
                     // no instruction to replace.
                     own.IsInterrupt && unit.Next is null ? new DiagnosticFix(FixKind.Return, "rti") : null);
             }
-            switch (flow.CalledAt(unit.Step))
+            foreach (var called in Callees(unit))
             {
-                case { Signature.IsInterrupt: true } handler:
-                    Report(statement, unit.Step.On,
-                        Catalogue.HandlerCalled.Message($"`{handler.DisplayName}` is an interrupt handler", "it returns"));
-                    break;
+                switch (called)
+                {
+                    case { Signature.IsInterrupt: true } handler:
+                        Report(statement, unit.Step.On,
+                            Catalogue.HandlerCalled.Message($"`{handler.DisplayName}` is an interrupt handler", "it returns"));
+                        break;
 
-                // The path from a label inside a handler leaves by the handler's `rti`, so a call
-                // to the label is as wrong as a call to the handler.
-                case { Kind: SymbolKind.Label, Signature: null, Routine: { Signature.IsInterrupt: true } owner } label:
-                    Report(statement, unit.Step.On, Catalogue.HandlerCalled.Message(
-                        $"`{label.DisplayName}` is inside interrupt handler `{owner.DisplayName}`", "the path from it returns"));
-                    break;
-            }
+                    // The path from a label inside a handler leaves by the handler's `rti`, so a
+                    // call to the label is as wrong as a call to the handler.
+                    case { Kind: SymbolKind.Label, Signature: null, Routine: { Signature.IsInterrupt: true } owner } label:
+                        Report(statement, unit.Step.On, Catalogue.HandlerCalled.Message(
+                            $"`{label.DisplayName}` is inside interrupt handler `{owner.DisplayName}`", "the path from it returns"));
+                        break;
+                }
 
-            // A call puts nothing above the return address, so it cannot hand a routine the bytes
-            // `pulls n` says it is entered with. A label is entered as its routine is.
-            if (flow.CalledAt(unit.Step) is { } called
-                && RegisterWalk.Owner(called) is { Signature.Pulls: > 0 and var pulls } pulling)
-            {
-                Report(statement, unit.Step.On, Catalogue.PullsRoutineCalled.Message(pulling.DisplayName, pulls));
+                // A call puts nothing above the return address, so it cannot hand a routine the
+                // bytes `pulls n` says it is entered with. A label is entered as its routine is.
+                if (RegisterWalk.Owner(called) is { Signature.Pulls: > 0 and var pulls } pulling)
+                    Report(statement, unit.Step.On, Catalogue.PullsRoutineCalled.Message(pulling.DisplayName, pulls));
             }
 
             // An `rti` with a `.next` is a computed jump that says where it goes, and is not a
@@ -471,6 +472,15 @@ internal sealed class FlowChecks
                     routine.Tree == model.Tree ? new DiagnosticFix(FixKind.Interrupt, At: routine.DeclarationSpan) : null);
             }
         }
+
+        // A direct call names its routine in its operand. A call nt65 cannot follow names the
+        // routines and labels it may reach in its `.next`, and each of them is checked as a direct
+        // call's would be.
+        IEnumerable<Symbol> Callees(ControlFlow.Unit unit) =>
+            flow.CalledAt(unit.Step) is { } direct ? [direct]
+                : unit.Next is { } next && ControlFlow.IsCall(unit.Step.Statement)
+                    ? flow.Named(next, unit.Step.On).Select(named => named.Symbol).Distinct()
+                    : [];
 
         // A line of a macro body is reported at the call that expanded it, with the line as a
         // note, and without a fix, which would change a line every call expands.

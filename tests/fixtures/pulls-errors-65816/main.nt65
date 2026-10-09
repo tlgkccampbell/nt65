@@ -3,7 +3,7 @@
 
 .cpu 65816
 
-.export restores_status, state_item, far_one_path
+.export restores_status, state_item, far_one_path, calls_through
 
 .segment CODE
 .proc restores_status: a8, i8, pulls 1 {
@@ -26,3 +26,13 @@
     done:
     rtl                     ;! error[return-past-handed-bytes]: `rtl` returns through up to 2 bytes of the bytes `pulls 2` declares above the return address: pull them first, or correct the count
 }
+
+; A call through a pointer puts nothing above the return address either, whichever target it reaches.
+.proc calls_through: a8, i8 {
+    ldx #0
+    jsr (vectors,x)         ;! error[pulls-routine-called]: `restores_status` declares `pulls 1`, bytes it is entered with above its return address, and a call puts nothing there: enter it with a jump or a branch
+    .next restores_status, state_item
+    rts
+}
+
+.data vectors: .word restores_status, state_item
