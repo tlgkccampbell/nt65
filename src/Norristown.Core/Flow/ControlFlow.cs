@@ -1104,10 +1104,6 @@ public sealed class ControlFlow
             != Transfer.Through;
 
     /// <summary>
-    /// Returns the labels a table or a list expands to. The result is empty when the target does
-    /// not expand to labels and so names only itself.
-    /// </summary>
-    /// <summary>
     /// Finds each instruction that stands on a label a <c>.patch</c> names, the variants each
     /// <c>.patch … as</c> lists for it, and which of its bytes the stores may write.
     /// </summary>
@@ -1210,6 +1206,10 @@ public sealed class ControlFlow
         return (location.Offset, location.Offset + width - 1);
     }
 
+    /// <summary>
+    /// Returns the labels a table or a list expands to. The result is empty when the target does
+    /// not expand to labels and so names only itself.
+    /// </summary>
     private IEnumerable<(Symbol Symbol, Expansion? At)> Spread(Symbol target, Expansion? on)
     {
         var items = target.Kind == SymbolKind.List
