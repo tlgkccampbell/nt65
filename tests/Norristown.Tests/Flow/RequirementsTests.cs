@@ -421,7 +421,8 @@ public sealed class RequirementsTests
     /// <summary>
     /// A label another routine jumps into is an entry where nothing about the registers is known,
     /// even with no <c>.state</c>. Code that jumps in has pushed nothing, so a save above the label
-    /// cannot be the one a pull below it takes back.
+    /// cannot be the one a pull below it takes back, and the return after that pull goes through a
+    /// byte of the caller's stack.
     /// </summary>
     [Fact]
     public void ASaveAcrossALabelAnotherRoutineEntersIsNotKept()
@@ -443,7 +444,7 @@ public sealed class RequirementsTests
 
         var problems = Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics;
 
-        Assert.Equal(["keeps-broken"], problems.Select(problem => problem.Id));
+        Assert.Equal(["keeps-broken", "return-through-caller"], problems.Select(problem => problem.Id));
     }
 
     /// <summary>

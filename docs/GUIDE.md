@@ -1090,6 +1090,10 @@ promise nt65 checks, and `.next .return ?` says it cannot be known. Labels may f
 `.next .return, step`, for a jump that goes back to the caller on some paths and to `step` on
 others.
 
+A plain `rts` or `rtl` is checked against the same count. One that would pull bytes the
+routine pushed in place of its return address is an error, and so is one that pulls bytes
+beneath its caller's stack, as `pla`, `pla`, `rts` does to return to the caller's caller.
+
 The same annotation covers the `bit` skip trick, where one instruction's operand hides the
 next instruction:
 

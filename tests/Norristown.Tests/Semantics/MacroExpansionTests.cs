@@ -193,6 +193,9 @@ public sealed class MacroExpansionTests
                 phx
                 phy
                 ; end of push!
+                ply
+                plx
+                pla
                 rts
             ; end of main
             """, Body("""
@@ -212,6 +215,9 @@ public sealed class MacroExpansionTests
 
             .proc main {
                 push!(a, x, y)
+                ply
+                plx
+                pla
                 rts
             }
             """));

@@ -140,6 +140,11 @@
             }
         }
     }
+
+    ; What `push!` saved comes off before the return.
+    ply
+    plx
+    pla
     rts
 }
 

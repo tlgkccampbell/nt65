@@ -1,0 +1,95 @@
+; A return goes through the top bytes of the stack. nt65 counts what each routine pushes and
+; pulls, so a return through bytes the routine pushed, or through its caller's, is an error.
+.module main
+
+.cpu 6502
+
+.export pushed, one_path, looped, entered, discards, leaves1, takes1, adjusts, enters
+
+; The return address is still beneath the pushed byte.
+.segment CODE
+.proc pushed {
+    pha
+    rts                     ;! error[return-past-pushes]: `rts` returns through 1 byte this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+}
+
+; A push on one path only.
+.proc one_path {
+    beq @skip
+    pha
+    rts                     ;! error[return-past-pushes]: `rts` returns through 1 byte this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+@skip:
+    rts
+}
+
+; A loop that pushes without pulling holds at least one more byte on each pass.
+.proc looped {
+@again:
+    pha
+    dex
+    beq @out
+    rts                     ;! error[return-past-pushes]: `rts` returns through at least 1 byte this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+@out:
+    jmp @again
+}
+
+; Whoever jumps to `inside` has pushed nothing, so the `pla` below it takes a byte of the return
+; address and the return goes through a byte of the caller's stack.
+.proc entered {
+    pha
+    inside:
+    .state ?
+    pla
+    rts                     ;! error[return-through-caller]: `rts` returns through 1 byte of its caller's stack, because this routine has pulled more than it pushed
+}
+
+.proc enters {
+    jmp entered::inside
+}
+
+; Discarding the return address returns to the caller's caller.
+.proc discards {
+    pla
+    pla
+    rts                     ;! error[return-through-caller]: `rts` returns through 2 bytes of its caller's stack, because this routine has pulled more than it pushed
+}
+
+; A routine that pulls its return address and pushes it back above a byte it leaves for its
+; caller returns through that address.
+.proc leaves1 {
+    pla
+    tax
+    pla
+    tay
+    lda #0
+    pha
+    tya
+    pha
+    txa
+    pha
+    rts
+}
+
+; A routine that takes one byte of its caller's stack and pushes its return address back
+; returns through that address too.
+.proc takes1 {
+    pla
+    tax
+    pla
+    tay
+    pla
+    tya
+    pha
+    txa
+    pha
+    rts
+}
+
+; Changing the low byte of the return address returns through the address it made.
+.proc adjusts {
+    pla
+    clc
+    adc #2
+    pha
+    rts
+}

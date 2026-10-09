@@ -91,6 +91,8 @@
     stz $4200
     sta f:$7e2100           ; a long operand is exempt
     pea $2100               ; and so is a push of the address
+    pla
+    pla
     rts
 }
 

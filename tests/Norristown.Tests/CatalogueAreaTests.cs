@@ -125,7 +125,7 @@ public sealed class CatalogueAreaTests
             "next-after-padding", "next-never-taken", "next-not-the-branch-target", "next-successors-known", "next-table-has-no-labels",
             "next-target-not-a-table", "next-target-not-code", "next-unknown-after-branch", "noreturn-returns", "patch-misses-store", "patch-variant-rejected", "patch-variants-required", "pushed-return-unchecked",
             "reads-undeclared", "return-after-call", "return-count-mismatch", "return-count-not-constant",
-            "return-flag-mismatch", "return-flag-not-set", "routine-runs-off-the-end", "rti-outside-handler", "runs-into-data",
+            "return-flag-mismatch", "return-flag-not-set", "return-past-pushes", "return-through-caller", "routine-runs-off-the-end", "rti-outside-handler", "runs-into-data",
             "saves-not-a-store",
             "self-modifying-unchecked",
             "state-flag-mismatch", "tail-call-distance-mismatch", "tail-call-to-handler", "unpromised-flag", "unpromised-keep",

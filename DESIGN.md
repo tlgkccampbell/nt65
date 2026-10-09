@@ -1524,6 +1524,13 @@ analysis stack, so a frame reaches them:
   emitted in emulation mode;
 - every `rts`/`rtl` reaches the declared exit state and matches the proc's
   `near`/`far` attribute;
+- on every CPU, every `rts`/`rtl` without a `.next` returns through its return address where
+  the byte count shows it cannot: while no pull has reached beneath the return address, bytes the
+  routine pushed and left above it are an error, `return-past-pushes`, even where paths that
+  pushed different amounts meet; once one has, a return that pulls bytes beneath both the lowest
+  point and the caller's stack, as `pla`, `pla`, `rts` does, is an error,
+  `return-through-caller`. A routine that pulls its return address may push one back, so a
+  return above that lowest point is not checked;
 - every `.ensure` of a 16-bit width is reached in native mode, and every frame slot where
   the stack depth is known;
 - every `jsr`/`jmp` targets a `near` routine and every `jsl`/`jml` a `far` one;
@@ -5035,7 +5042,9 @@ Recorded so the reasoning survives. None is open.
   leaves is unknown. Effects are read off each exit by counting bytes, solved over the whole
   program, and applied after every call by all three trackers, on every CPU. A byte a routine
   leaves holds nothing known and has no push of its own to match, so a pull of any size takes
-  it, and a save and its restore on either side of the call still pair up. The 65816's
+  it, and a save and its restore on either side of the call still pair up. A plain return that
+  the count shows goes through bytes other than a return address is an error rather than an
+  effect (§7.3), because the caller is not where it returns to. The 65816's
   processor-state analysis still runs on one file at a time, because layout depends on its
   widths; it takes each callee's effect as the program last worked it out, and a file that
   took one the program turns out to differ on is analyzed again. Moving the whole state

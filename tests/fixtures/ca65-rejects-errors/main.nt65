@@ -27,6 +27,7 @@
     lda (buffer),y          ;! error[addressing-mode-too-narrow]: `lda` has only a direct-page form of this operand, and `buffer` is absolute
     ldx #.sizeof(@table)    ;! error[not-measurable]: `.sizeof` cannot measure `@table`, a label: it measures data, routines and types
     ldx #.countof(@table)   ;! error[not-measurable]: `.countof` cannot measure `@table`, a label: it measures data, routines and types
+    plx
     rts
 @table: .byte 1, 2
 }
