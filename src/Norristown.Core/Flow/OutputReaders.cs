@@ -62,7 +62,7 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
             if (!region.Blocks.Any(block => reached[block.Index] is not null && block.Steps.Any(step => keys.Contains(step.Key))))
                 return null;
 
-            var found = new SortedDictionary<(int Order, string Name), (string? Group, InputCategory Category, List<OutputReader> Readers)>();
+            var found = new SortedDictionary<(int Order, string Name), (string? Group, InputCategory Category, List<OutputReader> Readers, List<TextSpan> Possibly)>();
             foreach (var block in region.Blocks)
             {
                 if (reached[block.Index] is not { } state)
@@ -89,10 +89,11 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
                     }
                 }
             }
-            foreach (var (location, readers) in Memory(analysis, file, region, caret, keys, tree))
+            foreach (var (location, readers, possibly) in Memory(analysis, file, region, caret, keys, tree))
             {
                 foreach (var reader in readers)
                     Add(found, (int.MaxValue, location.Name), location.Group, InputCategory.Memory, reader);
+                found[(int.MaxValue, location.Name)].Possibly.AddRange(possibly);
             }
             var routine = region.Routine.Tree == tree ? region.Routine.NameSpan
                 : caret.Select(step => StepLines.Of(tree, step)?.Span).FirstOrDefault(span => span is not null) ?? default;
@@ -101,7 +102,8 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
                     output.Key.Name,
                     output.Value.Group,
                     output.Value.Category,
-                    [.. output.Value.Readers.OrderBy(reader => reader.Line.Start).ThenBy(reader => reader.Kind)])),
+                    [.. output.Value.Readers.OrderBy(reader => reader.Line.Start).ThenBy(reader => reader.Kind)],
+                    [.. output.Value.Possibly.Distinct().OrderBy(span => span.Start)])),
             ]);
         }
         return null;
@@ -112,9 +114,11 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
     /// read. A reader is a later instruction that reads one of the location's bytes, or a call to a
     /// routine that <see cref="MemoryInference"/> finds reads it, wherever the value reaching it may
     /// be the caret's. Every place the routine hands control back from is a reader too, because
-    /// memory outlives the routine. All of these are best guesses.
+    /// memory outlives the routine. All of these are best guesses. Each reader says what else might
+    /// have changed the value on its way from the caret, and the lines that might are returned with
+    /// the readers, as an input's are.
     /// </summary>
-    private static IEnumerable<(Location Location, IReadOnlyList<OutputReader> Readers)> Memory(
+    private static IEnumerable<(Location Location, IReadOnlyList<OutputReader> Readers, IReadOnlyList<TextSpan> Possibly)> Memory(
         ProgramAnalysis analysis, FileAnalysis file, FlowRegion region, IReadOnlyList<Step> caret,
         IReadOnlySet<StepKey> keys, SyntaxTree tree)
     {
@@ -131,6 +135,8 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
         var walk = new MemoryWalk(file, inference, written);
         var reached = walk.Solve(region);
         var found = written.ToDictionary(location => location, _ => new List<OutputReader>());
+        var possibly = written.ToDictionary(location => location, _ => new List<TextSpan>());
+        var steps = region.Blocks.SelectMany(block => block.Steps).GroupBy(step => step.Key).ToDictionary(group => group.Key, group => group.First());
         foreach (var block in region.Blocks)
         {
             if (reached[block.Index] is not { } entered)
@@ -145,19 +151,35 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
                     continue;
                 var state = walk.Before(block, entered, index);
                 foreach (var location in wanted.Where(location => From(state.Values[location], keys)))
-                    found[location].Add(reader with { Confidence = SourceConfidence.BestEffort });
+                    found[location].Add(Guessed(reader, location, state.Values[location]));
             }
             if (IsExit(block) && Exit(tree, block) is { } exit)
             {
                 var left = walk.Before(block, entered, block.Steps.Count);
                 foreach (var location in written.Where(location => From(left.Values[location], keys)))
-                    found[location].Add(exit with { Confidence = SourceConfidence.BestEffort });
+                    found[location].Add(Guessed(exit, location, left.Values[location]));
             }
         }
         foreach (var (location, readers) in found.OrderBy(pair => pair.Key.Name, StringComparer.Ordinal))
         {
             if (readers.Count > 0)
-                yield return (location, readers);
+                yield return (location, readers, possibly[location]);
+        }
+
+        // A reader of memory is a guess, and where something might have changed the value since
+        // the caret, the reader says what, as a source does.
+        OutputReader Guessed(OutputReader reader, Location location, MemoryWalk.Value value)
+        {
+            var doubts = value.Doubts
+                .Select(key => steps.TryGetValue(key, out var step) ? StepLines.Of(tree, step)?.Span : null)
+                .OfType<TextSpan>()
+                .Distinct()
+                .OrderBy(span => span.Start)
+                .ToList();
+            possibly[location].AddRange(doubts);
+            var reason = doubts.Count == 0 ? null : "or possibly " + string.Join(", ", doubts.Select(span =>
+                $"`{tree.Text[span.Start..span.End].Trim()}` on line {tree.GetLineIndex(span.Start) + 1}"));
+            return reader with { Confidence = SourceConfidence.BestEffort, Reason = reason };
         }
     }
 
@@ -207,14 +229,14 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
 
     /// <summary>Adds a reader to an output, unless the output already has that kind of reader on that line.</summary>
     private static void Add(
-        SortedDictionary<(int Order, string Name), (string? Group, InputCategory Category, List<OutputReader> Readers)> found,
+        SortedDictionary<(int Order, string Name), (string? Group, InputCategory Category, List<OutputReader> Readers, List<TextSpan> Possibly)> found,
         (int Order, string Name) key,
         string? group,
         InputCategory category,
         OutputReader reader)
     {
         if (!found.TryGetValue(key, out var output))
-            found[key] = output = (group, category, []);
+            found[key] = output = (group, category, [], []);
         if (!output.Readers.Any(known => known.Line == reader.Line && known.Kind == reader.Kind))
             output.Readers.Add(reader);
     }

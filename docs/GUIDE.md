@@ -2009,9 +2009,10 @@ everything below works across modules.
   instruction writes, before anything writes it again, is tinted and barred in the value's
   colour like a source, and its tag starts with an arrow, as `→Y`. A call is such a line where
   the routine it calls reads the value, and a store to a named location is read by the lines that
-  load it, as a best guess drawn dashed. Where the value leaves the routine, by a return, a tail
-  call or a run into the next routine, the line gets a dotted bar and a hollow tag such as `Y↱`,
-  because the caller may read it. So nothing is ever shown as dead. The caret line's chip counts
+  load it, as a best guess drawn dashed. A line that might change the value before it is read,
+  such as `sta (ptr),y`, is drawn as the same doubt it is for a source. Where the value leaves
+  the routine, by a return, a tail call or a run into the next routine, the line gets a dotted
+  bar and a hollow tag such as `Y↱`, because the caller may read it. So nothing is ever shown as dead. The caret line's chip counts
   the readers, as `Y→3`, or is `Y↱` where the value only leaves. A value nothing reads gets no
   chip. The hover lists every reader.
 
