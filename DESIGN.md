@@ -1253,7 +1253,9 @@ inferred from the program, across files:
   call, `.fallthrough` and `.next` that hands control to its start. Where they agree on a part,
   the routine is entered with it. Code outside nt65 that calls an exported routine is not
   checked, as nothing outside nt65 is; a routine such code calls declares the entry it expects,
-  which is the contract between the two. A routine whose address is taken, by any use of its
+  which is the contract between the two. Where an exported routine's bytes depend on an inferred
+  width, mode or `dp`, through an immediate's size or a `d:` operand, the editor hints so,
+  `export-state-inferred`, with a fix that declares those items. A routine whose address is taken, by any use of its
   name other than as where control goes, may be called through it from anywhere, in either
   mode, and is entered with `a*, i*, e*, dp*, dbr*`: it assumes nothing; so is one nothing
   calls. A `rep` in it widens nothing until it declares `native` or enters native mode with

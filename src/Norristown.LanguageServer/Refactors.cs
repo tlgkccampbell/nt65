@@ -269,27 +269,8 @@ internal static class Refactors
             yield break;
         }
         var (entry, exit) = InferredState.Items(declared, inferred);
-        if (InferredState.Format(entry, exit) is not { } shown || Edits.RoutineHead(tree, line) is not var (signature, beforeBrace))
+        if (InferredState.Format(entry, exit) is not { } shown || Edits.DeclaredItems(tree, line, entry, exit) is not { } edit)
             yield break;
-
-        var taken = string.Join(", ", entry);
-        var left = string.Join(", ", exit);
-        var arrow = exit.Count == 0 ? "" : $" -> {left}";
-        Edit edit;
-        if (signature is null)
-        {
-            edit = new Edit(tree, new TextSpan(beforeBrace, 0), $": {(entry.Count == 0 ? "native" : taken)}{arrow}");
-        }
-        else
-        {
-            // An item the entry gains goes after the entry's last item, and one the exit gains
-            // after the exit's last. Both are made as one edit of the text between them.
-            var end = signature.Entry.Span.End;
-            var gained = entry.Count == 0 ? "" : $"{(signature.Entry.Span.Length == 0 ? "" : ", ")}{taken}";
-            edit = signature.Exit is { } written && exit.Count > 0
-                ? new Edit(tree, new TextSpan(end, written.Span.End - end), $"{gained}{tree.Text[end..written.Span.End]}, {left}")
-                : new Edit(tree, new TextSpan(end, 0), signature.Exit is null ? gained + arrow : gained);
-        }
         yield return new Change($"Declare the state `{routine.Name}` is inferred with: `{shown}`", CodeActionKinds.Rewrite, [edit]);
     }
 

@@ -259,6 +259,7 @@
         "export-declares-nothing",
         "export-name-taken",
         "export-narrows-address-size",
+        "export-state-inferred",
         "exported-entry-not-declared",
         "expression-argument-braced",
         "fallthrough-misplaced",

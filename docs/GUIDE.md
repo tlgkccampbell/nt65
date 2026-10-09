@@ -1445,6 +1445,7 @@ The signature items are:
 | `native`, `emu` | the emulation flag; `native` is the default |
 | `near`, `far` | called with `jsr` and left with `rts`, or with `jsl` and `rtl`; `near` is the default |
 | `dp = e`, `dbr = e` | the direct page and data bank values |
+| `pbr = e` | the bank the routine's code runs in, before `->` only; inferred where not written |
 | `a*`, `i*`, `dp*`, `dbr*` | unchanged: the routine assumes nothing and hands the value back as it found it |
 | `a?`, `i?`, `e?`, `dp?`, `dbr?` | unknown |
 | `?` | everything unknown, for code entered from outside nt65 |
@@ -1507,7 +1508,9 @@ or a symbol in a segment that declares `dp`. The error names the callers.
 
 Hover over a routine's name to see what is inferred for it, on the `inferred` row. The
 refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
-a contract.
+a contract. An exported routine whose bytes depend on an inferred width, mode or direct page,
+such as an immediate sized by an inferred `a8`, gets a hint, `export-state-inferred`, since a
+caller outside nt65 is not checked against it. Its fix declares those items.
 
 **Signature sets.** Most routines of a program share a state, so name it once:
 

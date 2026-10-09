@@ -101,15 +101,17 @@ public sealed record ProgramAnalysis(
         Asked().ByFile.Value.GetValueOrDefault(path) ?? [];
 
     /// <summary>
-    /// Returns the places in one file where the code could be smaller or faster, or where a constant
-    /// used as an address could be declared as data, for an editor to suggest. No build reports them.
-    /// Each file's are looked for once, the first time they are asked for.
+    /// Returns the places in one file where the code could be smaller or faster, where a constant
+    /// used as an address could be declared as data, or where an exported routine relies on an
+    /// inferred state, for an editor to suggest. No build reports them. Each file's are looked for
+    /// once, the first time they are asked for.
     /// </summary>
     public IReadOnlyList<Diagnostic> SuggestionsFor(string path) =>
         Asked().Suggestions.GetOrAdd(path, path => FileFor(path) is { } file
             ? Norristown.Diagnostics.Ordered([
                 .. Flow.Suggestions.For(file, Configuration.Omitted(file.Model.Tree), ReadsCallerStack),
-                .. Flow.AddressConstants.For(file, usedAsAddresses.Value)])
+                .. Flow.AddressConstants.For(file, usedAsAddresses.Value),
+                .. file.State?.Exports ?? []])
             : []);
 
     /// <summary>

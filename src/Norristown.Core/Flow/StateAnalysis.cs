@@ -73,6 +73,12 @@ public sealed class StateAnalysis : IProcessorStates
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
 
     /// <summary>
+    /// Gets a hint for each exported routine of the file whose bytes depend on a part of its
+    /// entry that is inferred rather than declared, as <see cref="InferredExports"/> finds them.
+    /// </summary>
+    internal IReadOnlyList<Diagnostic> Exports { get; private set; } = [];
+
+    /// <summary>
     /// Gets the stack effect the analysis took for each routine a call in the file reaches. The
     /// effects are worked out across the program after each file is analyzed, so a file whose
     /// effects turn out different is analyzed again with them.
@@ -110,6 +116,7 @@ public sealed class StateAnalysis : IProcessorStates
         foreach (var region in flow.Regions)
             analysis.Analyze(region);
         analysis.checks.CheckOutsideRoutines();
+        analysis.Exports = InferredExports.Of(layout, flow, analysis.signatures, analysis, analysis.EnteredWith);
         analysis.Diagnostics = Norristown.Diagnostics.Ordered(
             analysis.checks.Found.Concat(analysis.UndeclaredExports()).DistinctBy(d => (d.Span, d.Id, d.Message)));
         return analysis;
@@ -483,6 +490,42 @@ public sealed class StateAnalysis : IProcessorStates
                 checks.Unreached(block, region);
         }
         MaximumWalks = Math.Max(MaximumWalks, walks.DefaultIfEmpty().Max());
+    }
+
+    /// <summary>
+    /// Returns the processor state reaching each statement of <paramref name="region"/> where its
+    /// routine is entered with <paramref name="entry"/> in place of the entry its signature gives.
+    /// Nothing is reported or recorded, so the analysis's own answers stay as they were.
+    /// </summary>
+    private Dictionary<StepKey, ProcessorState> EnteredWith(FlowRegion region, ProcessorState entry)
+    {
+        var blocks = region.Blocks;
+        var signature = (SignatureOf(region.Routine) ?? Signature.Default) with { Entry = entry };
+        var solver = new Dataflow<FlowState>(
+            blocks, (block, state) => Walk(block, state, region, null), FlowState.Merge, block => ControlFlow.Onward(blocks, block));
+        solver.Enter(0, new FlowState(entry, EntryStack(signature)));
+        solver.EnterEntries(
+            outside,
+            declaredOnly: true,
+            new FlowState(Outside(signature), EntryStack(signature)),
+            (block, state) => Entered(block, state, signature, region.Routine));
+
+        var states = new Dictionary<StepKey, ProcessorState>();
+        foreach (var block in blocks)
+        {
+            if (solver.Reached[block.Index] is not { IsDead: false } state)
+                continue;
+            for (var i = 0; i < block.Steps.Count && !state.IsDead; i++)
+            {
+                var step = block.Steps[i];
+                states.TryAdd(step.Key, state.Processor);
+                var last = i == block.Steps.Count - 1;
+                state = Through(
+                    step, i > 0 ? block.Steps[i - 1] : null, last ? block.Next : null, last ? block.End : BlockEnd.Through, state,
+                    region.Routine, null);
+            }
+        }
+        return states;
     }
 
     /// <summary>

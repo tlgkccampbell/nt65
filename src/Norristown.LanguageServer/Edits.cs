@@ -236,6 +236,30 @@ internal static class Edits
     }
 
     /// <summary>
+    /// Returns an edit that declares <paramref name="entry"/> in the entry of the routine
+    /// <paramref name="line"/> opens and <paramref name="exit"/> in its exit. An item the entry
+    /// gains goes after the entry's last item, and one the exit gains after the exit's last. A
+    /// routine with no signature is given one. Returns null for a line that opens no routine.
+    /// </summary>
+    public static Edit? DeclaredItems(SyntaxTree tree, int line, IReadOnlyList<string> entry, IReadOnlyList<string> exit)
+    {
+        if (RoutineHead(tree, line) is not var (signature, beforeBrace))
+            return null;
+        var taken = string.Join(", ", entry);
+        var left = string.Join(", ", exit);
+        var arrow = exit.Count == 0 ? "" : $" -> {left}";
+        if (signature is null)
+            return new Edit(tree, new TextSpan(beforeBrace, 0), $": {(entry.Count == 0 ? "native" : taken)}{arrow}");
+
+        // Both are made as one edit of the text between the entry's end and the exit's.
+        var end = signature.Entry.Span.End;
+        var gained = entry.Count == 0 ? "" : $"{(signature.Entry.Span.Length == 0 ? "" : ", ")}{taken}";
+        return signature.Exit is { } written && exit.Count > 0
+            ? new Edit(tree, new TextSpan(end, written.Span.End - end), $"{gained}{tree.Text[end..written.Span.End]}, {left}")
+            : new Edit(tree, new TextSpan(end, 0), signature.Exit is null ? gained + arrow : gained);
+    }
+
+    /// <summary>
     /// Returns an edit that puts <paramref name="item"/> in the signature of the routine
     /// <paramref name="line"/> opens. It replaces the item there that starts with
     /// <paramref name="name"/>, such as <c>reads</c>, or is added where there is none. Returns

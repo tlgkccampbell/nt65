@@ -318,6 +318,12 @@ internal static class Fixes
                 yield return Fix(diagnostic, $"Declare that `{returning.Name}` returns with `{leaves}`", [exit]);
                 break;
 
+            case FixKind.Inferred when fix is { Text: { } items, At: { } routine }
+                && model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == routine) is { } declaring
+                && Edits.DeclaredItems(tree, routine.LineIndex, Items(items, before: true), Items(items, before: false)) is { } declared:
+                yield return Fix(diagnostic, $"Declare `{items}` in the signature of `{declaring.Name}`", [declared]);
+                break;
+
             case FixKind.StateItem when fix.Text is { } found:
                 yield return Fix(diagnostic, $"Change it to `{found}`",
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), found)]);
@@ -487,6 +493,17 @@ internal static class Fixes
 
     /// <summary>Returns the text of <paramref name="span"/> in <paramref name="tree"/>.</summary>
     private static string Text(SyntaxTree tree, TextSpan span) => tree.Text[span.Start..span.End];
+
+    /// <summary>
+    /// Returns the items that a signature written as <paramref name="items"/> gives before its
+    /// <c>-&gt;</c>, where <paramref name="before"/> is true, or after it otherwise.
+    /// </summary>
+    private static List<string> Items(string items, bool before)
+    {
+        var halves = items.Split(" -> ");
+        var half = before ? halves[0] : halves.Length > 1 ? halves[1] : "";
+        return [.. half.Split(", ", StringSplitOptions.RemoveEmptyEntries)];
+    }
 
     /// <summary>
     /// Creates a fix for <paramref name="diagnostic"/>, preferred unless it is one of several
