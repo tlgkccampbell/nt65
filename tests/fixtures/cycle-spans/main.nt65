@@ -170,6 +170,21 @@
 .assert .mincycles(returning::start, returning::done) == 6, "the early return changed"
 .assert .maxcycles(returning::start, returning::done) == 7, "the early return changed"
 
+; A `.next` under a conditional branch says the branch is always taken, so a pass costs the
+; taken edge alone. `sec` takes 2 cycles, and the taken `bcs` 3, or 4 across a page, so the pass
+; costs 2 + 3 = 5 cycles, or 6 across a page. The 2 cycles of a branch not taken are never paid.
+.export .proc always {
+    start:
+    sec
+    bcs done
+    .next done
+    done:
+    rts
+}
+
+.assert .mincycles(always::start, always::done) == 5, "the always-taken branch changed"
+.assert .maxcycles(always::start, always::done) == 6, "the always-taken branch changed"
+
 ; A count is a number like any other, so it can be written into data the program reads.
 .segment RODATA
 .export .data budget: .byte .maxcycles(raster::top, raster::bottom)

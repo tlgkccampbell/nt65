@@ -18,6 +18,7 @@
 .export main__vectored
 .export main__handing
 .export main__returning
+.export main__always
 .export main__budget
 
 .segment "ZEROPAGE": zeropage
@@ -137,6 +138,15 @@ returning__start:
 returning__done:
     rts
 ; end of returning
+
+; .proc always  main.nt65:176
+main__always:
+always__start:
+    sec
+    bcs always__done
+always__done:
+    rts
+; end of always
 
 .segment "RODATA": absolute
 main__budget: .byte $11
