@@ -457,9 +457,9 @@ internal sealed class FlowChecks
             // A call puts nothing above the return address, so it cannot hand a routine the bytes
             // `pulls n` says it is entered with. A label is entered as its routine is.
             if (flow.CalledAt(unit.Step) is { } called
-                && RegisterWalk.Owner(called) is { Signature.Pulls: > 0 and var pulls } owner)
+                && RegisterWalk.Owner(called) is { Signature.Pulls: > 0 and var pulls } pulling)
             {
-                Report(statement, unit.Step.On, Catalogue.PullsRoutineCalled.Message(owner.DisplayName, pulls));
+                Report(statement, unit.Step.On, Catalogue.PullsRoutineCalled.Message(pulling.DisplayName, pulls));
             }
 
             // An `rti` with a `.next` is a computed jump that says where it goes, and is not a
