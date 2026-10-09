@@ -11,12 +11,13 @@ const vscode = require('vscode');
 // the old icons stay, since VS Code moves them with the text.
 const EDIT_DELAY = 300;
 
-// The colors of the stripes. An icon is an image, which cannot take a theme color, so each one
-// is drawn once for dark themes and once for light ones. The 8-bit stripes are the 16-bit color
-// at a third of its strength.
+// The colors of the stripes, which are the default colors input sources gives A and X, so that a
+// register has one color everywhere and the two stripes differ in hue as well as place. An icon
+// is an image, which cannot take a theme color, so each one is drawn once for dark themes and
+// once for light ones. The 8-bit stripes are the 16-bit color at a third of its strength.
 const COLORS = {
-  dark: { a: '#4EC9B0', index: '#4FC1FF', emulation: '#C586C0' },
-  light: { a: '#16825D', index: '#0066B8', emulation: '#AF00DB' },
+  dark: { a: '#4FC1FF', index: '#89D185', emulation: '#C586C0' },
+  light: { a: '#0070C1', index: '#388A34', emulation: '#AF00DB' },
 };
 const DIM = 0.35;
 
