@@ -5054,7 +5054,8 @@ Recorded so the reasoning survives. None is open.
   and would bring back a kind of name that is neither a number nor what is at the address.
 - **Defines are gone.** A build sets the settings modules declare, not names of its own that
   every file sees. Such a name had no default, no module and no place to document it, and
-  `.defined` existed only to ask whether a build had given one.
+  `.defined` existed only to ask whether a build had given one. It is not a function in nt65,
+  and its message points at the setting, `.const NAME ?= default`, whose value a condition tests.
 - **The CMOS variants are CPUs of their own.** The 65SC02, the R65C02 and the WDC 65C02
   differ in whole instructions, and a program for one is wrong on another in exactly those,
   so each checks its own set and sets ca65's matching CPU. `.has` asks about an instruction,

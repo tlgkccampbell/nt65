@@ -110,7 +110,14 @@ internal sealed partial class Parser
     {
         if (!SyntaxFacts.IsBuiltinFunction(Current.Text))
         {
-            Report(Catalogue.NotAFunction.Message(Current.Text));
+            // ca65's `.defined` asks whether a build gave a name. A build sets a setting instead,
+            // which always has a value, so the message says how to declare one.
+            var defined = Current.Text.Equals(".defined", StringComparison.OrdinalIgnoreCase)
+                || Current.Text.Equals(".def", StringComparison.OrdinalIgnoreCase);
+            Report(Catalogue.NotAFunction.Message(Current.Text, defined
+                ? ": every name nt65 tests is declared, so for a value the build may give, declare a setting with a "
+                    + "default, `.const NAME ?= 0`, and test its value"
+                : ""));
             return new ErrorExpressionSyntax(Advance());
         }
         var name = Advance();

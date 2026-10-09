@@ -607,9 +607,10 @@ public static class Catalogue
         Area.ReadingALine,
         "not-a-function",
         Severity.Error,
-        "`{0}` is not a function",
+        "`{0}` is not a function{1}",
         "The built-in functions are a fixed set. A function the program declares is a `.func`, and its name "
-            + "has no leading `.`.");
+            + "has no leading `.`. There is no `.defined`: a build sets the settings modules declare, with "
+            + "`.const NAME ?= default`, rather than names of its own, so a condition tests a setting's value.");
 
     internal static DiagnosticDescriptor BuiltinArgumentNamed { get; } = Entry(
         Area.ReadingALine,
