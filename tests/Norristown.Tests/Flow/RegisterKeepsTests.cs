@@ -354,7 +354,8 @@ public sealed class RegisterKeepsTests
     /// A jump to a label inside another routine hands back what the path from that label keeps,
     /// not what the routine keeps from its top. The routine writes X before the label, but the
     /// path from the label leaves X alone. Where the path from the label writes X, the message
-    /// says the path has to restore it, since no promise on the routine covers that path.
+    /// offers to drop X from the jumper's promise first, since the jumper cannot restore anything
+    /// after the jump and the path from the label may be shared.
     /// </summary>
     [Fact]
     public void AJumpToALabelKeepsWhatThePathFromItKeeps()
@@ -363,7 +364,8 @@ public sealed class RegisterKeepsTests
             ".proc owner {\n    ldx #0\ntail:\n    lda #1\n    rts\n}\n.proc p: keeps x {\n    jmp owner::tail\n}\n"));
         Assert.Equal(
             ["main.nt65:8: `p` promises `keeps x`, but X is not the same as on entry here: control does not come "
-                + "back from `tail` in `owner`, and the path from there does not keep x: restore it there"],
+                + "back from `tail` in `owner`, and the path from there does not keep x: remove it from the `keeps` "
+                + "of `p`, or keep it on the path from `tail`"],
             Problems(".proc owner {\n    lda #1\ntail:\n    ldx #0\n    rts\n}\n.proc p: keeps x {\n    jmp owner::tail\n}\n"));
     }
 

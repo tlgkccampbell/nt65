@@ -125,7 +125,7 @@ internal static class KeepsAnalysis
         // A path that hands control to somewhere nt65 is not told about keeps nothing, and only
         // naming where it goes can show otherwise.
         var fix = missing != Registers.None
-            ? Handing(into!, missing)
+            ? Handing(region.Routine, into!, missing)
             : into is null && block.End == BlockEnd.TailCall && block.CallsUnknown
                 ? ": control goes somewhere nt65 cannot follow, which may change anything: name the places it goes "
                     + "with `.next`"
@@ -133,9 +133,20 @@ internal static class KeepsAnalysis
                 ? Cause.Because(lost)
                 : $": restore {(one ? "it" : "them")} before returning, or add `.state keeps {items}` "
                     + "at the point where the entry value is restored";
+
+        // Where the path jumps into another routine's interior, the message offers to drop the
+        // register from this routine's promise. The editor offers the same where one register is
+        // missing.
+        var unkeep = missing != Registers.None && RegisterWalk.Owner(into!) != into
+            && RegisterEffects.Each(missing).Count() == 1;
         report.Add(new Diagnostic(at,
             Catalogue.KeepsBroken.Message(
-                region.Routine.DisplayName, items, names, one ? "is" : "are", fix)));
+                region.Routine.DisplayName, items, names, one ? "is" : "are", fix))
+        {
+            Fix = unkeep
+                ? new DiagnosticFix(FixKind.Unkeep, RegisterEffects.Format(missing).ToLowerInvariant(), region.Routine.DeclarationSpan)
+                : null,
+        });
     }
 
     /// <summary>
@@ -162,10 +173,12 @@ internal static class KeepsAnalysis
     /// Returns the fix to suggest where handing control to another routine is what loses the
     /// registers. The promise goes on the routine handed to, since that is the code the
     /// register has to come back through. Control never comes back here to restore anything.
-    /// Where control goes to a label inside a routine, the path from that label has to restore
-    /// the registers, since a promise on the routine does not cover it.
+    /// Where control goes to a label inside a routine, a promise on that routine does not cover
+    /// the path from the label. The fix is then to drop the registers from the promise of
+    /// <paramref name="from"/>, the routine that jumps, or to keep them on the path from the
+    /// label. That path may be shared with the routine's own callers, so it is offered second.
     /// </summary>
-    private static string Handing(Symbol into, Registers missing)
+    private static string Handing(Symbol from, Symbol into, Registers missing)
     {
         var owner = RegisterWalk.Owner(into)!;
         var name = owner.DisplayName;
@@ -177,7 +190,8 @@ internal static class KeepsAnalysis
         if (owner != into)
         {
             return $": control does not come back from `{into.DisplayName}` in `{name}`, and the path from "
-                + $"there does not keep {items}: restore {(one ? "it" : "them")} there";
+                + $"there does not keep {items}: remove {(one ? "it" : "them")} from the `keeps` of `{from.DisplayName}`, "
+                + $"or keep {(one ? "it" : "them")} on the path from `{into.DisplayName}`";
         }
         var gone = $"control does not come back from `{name}`, which does not promise to keep {items}";
         return $": {gone}: add `keeps {items}` to `{name}` if it preserves {(one ? "it" : "them")}";

@@ -3115,7 +3115,9 @@ public static class Catalogue
         "The routine's signature declares that it keeps these registers: every path that leaves it returns them holding the "
             + "value they had on entry, and callers rely on that. On this path the analysis sees a register "
             + "changed and not restored. Save and restore it, for example with `pha` and `pla`, or, where it is "
-            + "restored in a way the analysis cannot see, add `.state keeps REG` at that point.");
+            + "restored in a way the analysis cannot see, add `.state keeps REG` at that point. Where the path "
+            + "jumps to a label inside another routine, nothing can be restored after the jump, so remove the "
+            + "register from this routine's `keeps`, or keep it on the path from that label.");
 
     internal static DiagnosticDescriptor UnpromisedKeep { get; } = Entry(
         Area.ControlFlow,
