@@ -422,6 +422,7 @@
         "parameter-range-invalid",
         "parameter-unknown",
         "patch-variant-rejected",
+        "patch-variants-required",
         "place-misplaced",
         "place-not-placeable",
         "placed-nowhere",

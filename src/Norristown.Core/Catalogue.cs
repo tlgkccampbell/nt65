@@ -2729,12 +2729,23 @@ public static class Catalogue
         "patch-variant-rejected",
         Severity.Error,
         "`.patch` cannot list `{0}` for `{1}`: {2}",
-        "`.patch @op as dex` says the store above it can turn the instruction at `@op` into `dex`. The store writes "
-            + "the opcode alone, so a variant keeps the instruction's addressing mode and operand, and the CPU must "
-            + "have it in that form. The store must address the label itself, as `sta @op` does, with no index or "
-            + "offset, or nothing shows that it writes the opcode. The analyses take the union of what the written instruction and each variant "
-            + "do, so a variant may not move the stack, change the processor's widths or run a handler, and it must "
-            + "run on where the written instruction runs on and branch where it branches.");
+        "`.patch @op as dex` says the store above it can turn the instruction at `@op` into `dex`. A variant "
+            + "replaces the opcode, so it keeps the instruction's addressing mode and operand, and the CPU must have it "
+            + "in that form. A store known to write only the operand, as `sta @op+1` is, has no variant to list. The "
+            + "analyses take the union of what the written instruction and each variant do, so a variant may not move "
+            + "the stack, change the processor's widths or run a handler, and it must run on where the written "
+            + "instruction runs on and branch where it branches.");
+
+    internal static DiagnosticDescriptor PatchVariantsRequired { get; } = Entry(
+        Area.ControlFlow,
+        "patch-variants-required",
+        Severity.Error,
+        "`{0}` may write the opcode of `{1}`, so the `.patch` must list what the instruction can become with `as`",
+        "A `.patch` without `as` is for a store known to write only the operand, as `sta @op+1` is. A store that "
+            + "starts at the opcode, as `sta @op` does, or whose offset is not known, as with `sta @op,x` or a store "
+            + "through another name, may write the opcode. The variants `as` lists bound what the instruction can "
+            + "become. That is what lets the width, stack and flow analyses go on trusting the shape of the written "
+            + "instruction. Without them nothing could be assumed after the instruction.");
 
     internal static DiagnosticDescriptor NextTargetNotCode { get; } = Entry(
         Area.ControlFlow,

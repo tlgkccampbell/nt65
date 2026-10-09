@@ -269,6 +269,11 @@ public sealed class FixesTests
             ".export helper\n.allow \"unused-symbol\"\n.proc helper {\n    rts\n}\n",
             ".export helper\n.proc helper {\n    rts\n}\n"
         },
+        {
+            "List the variant with `as ora`",
+            ".export .proc main: a8, i8 {\n    lda #.opcode(ora, imm)\n    sta @op\n    .patch @op\n@op:\n    and #1\n    rts\n}\n",
+            ".export .proc main: a8, i8 {\n    lda #.opcode(ora, imm)\n    sta @op\n    .patch @op as ora\n@op:\n    and #1\n    rts\n}\n"
+        },
     };
 
     [Theory]
@@ -346,6 +351,25 @@ public sealed class FixesTests
             ["Add `.ensure a8`", "Declare that `main` returns with `a16`"],
             actions.Select(action => action.Title));
         Assert.All(actions, action => Assert.False(action.IsPreferred));
+    }
+
+    /// <summary>
+    /// A store into an opcode is offered a variant only where the immediate load of the stored
+    /// register before it shows which instruction it writes. A value nt65 cannot see, a register
+    /// set by anything other than an immediate load, or an opcode in another addressing mode gives
+    /// no variant to list.
+    /// </summary>
+    [Theory]
+    [InlineData("    lda $10\n    sta @op\n")]
+    [InlineData("    lda #.opcode(ora, abs)\n    sta @op\n")]
+    [InlineData("    lda #.opcode(ora, imm)\n    tax\n    lda $10\n    stx @op\n")]
+    public void AStoreWhoseOpcodeIsNotSeenIsOfferedNoVariant(string store)
+    {
+        var (analysis, model) = Analyzed(Header
+            + $".export .proc main: a8, i8 {{\n{store}    .patch @op\n@op:\n    and #1\n    rts\n}}\n");
+
+        Assert.Contains(analysis.Diagnostics, diagnostic => diagnostic.Id == "patch-variants-required");
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.StartsWith("List the variant", StringComparison.Ordinal));
     }
 
     /// <summary>

@@ -103,6 +103,11 @@ internal static class Fixes
                     [new Edit(tree, replaced, shouted ? replacement.ToUpperInvariant() : replacement)]);
                 break;
 
+            case FixKind.Variant when fix.Text is { } variant:
+                yield return Fix(diagnostic, $"List the variant with `as {variant}`",
+                    [new Edit(tree, new TextSpan(Edits.SpanOf(tree, diagnostic.Span).End, 0), $" as {variant}")]);
+                break;
+
             case FixKind.Flags when fix.Text is { } flags:
                 yield return Fix(diagnostic, $"Change it to `#{flags}`",
                     [new Edit(tree, Edits.SpanOf(tree, diagnostic.Span), flags)]);

@@ -5,20 +5,24 @@
 .cpu 6502
 
 .export variant_in_operand, opcode_unknown, operand_only, reads_opcode, calls_out
-.export jumps_out, calls_out_cleanly, listed_variant, calls_declared
+.export jumps_out, calls_out_cleanly, listed_variant, calls_declared, indexed_listed
+.export through_name, through_name_listed, two_stores
 
 .proc EXT = $FFD2
 .proc DECLARED = $FFE4: reads a
+
+.segment ZEROPAGE
+.data pointer: .addr
 
 .segment BSS
 .data vector: .addr
 
 .segment CODE
 
-; A variant replaces the opcode alone, so a store into the operand cannot list one.
+; A variant replaces the opcode, so a store into the operand alone has none to list.
 .proc variant_in_operand {
     sta @op+1
-    .patch @op as and       ;! error[patch-variant-rejected]: `.patch` cannot list `and` for `lda`: a variant replaces the opcode, and the store is not known to write it
+    .patch @op as and       ;! error[patch-variant-rejected]: `.patch` cannot list `and` for `lda`: the store writes only the operand, so there is no variant to list
 @op:
     lda #0
     bne @skip
@@ -27,11 +31,12 @@
     rts
 }
 
-; A store into the opcode with no `as` may make the instruction anything.
+; A store into the opcode has to list what the instruction can become. Without `as` the
+; instruction may be anything, so the register analysis takes it to change every register.
 .proc opcode_unknown: keeps x {
     lda #.opcode(ldx, imm)
     sta @op
-    .patch @op
+    .patch @op              ;! error[patch-variants-required]: `sta @op` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`
 @op:
     lda #5
     rts                     ;! error[keeps-broken]: `opcode_unknown` promises `keeps x`, but X is not the same as on entry here: restore it before returning, or add `.state keeps x` at the point where the entry value is restored
@@ -50,7 +55,7 @@
 .proc reads_opcode: reads none {
     lda #.opcode(adc, imm)
     sta @op
-    .patch @op
+    .patch @op              ;! error[patch-variants-required]: `sta @op` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`
     ldx #0
     ldy #0
     clv
@@ -64,6 +69,59 @@
     lda #.opcode(ora, imm)
     sta @op
     .patch @op as ora
+@op:
+    lda #5
+    rts
+}
+
+; An indexed store may write any byte of the instruction, the opcode among them, so it lists
+; what the instruction can become. The registers follow the variant. The operand is unknown, so
+; the flags no longer show that `beq` is always taken.
+.proc indexed_listed: keeps x, y {
+    lda #.opcode(ora, imm)
+    sta @op,x
+    .patch @op as ora
+@op:
+    lda #0
+    beq @skip
+    .byte 1                 ;! error[runs-into-data]: the instruction above falls into this data: add a `.next` after the data saying where flow goes
+@skip:
+    rts
+}
+
+; A store through another name, here a pointer, may write any byte of the instruction too.
+.proc through_name {
+    ldy #0
+    lda #.opcode(ora, imm)
+    sta (pointer),y
+    .patch @op              ;! error[patch-variants-required]: `sta (pointer),y` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`
+@op:
+    lda #5
+    rts
+}
+
+; Listing the variant makes it as checkable as a store that names the label.
+.proc through_name_listed: keeps x {
+    lda #.opcode(ora, imm)
+    ldy #0
+    sta (pointer),y
+    .patch @op as ora
+@op:
+    lda #5
+    rts
+}
+
+; Each store into the opcode needs its variants, and a store into the operand alone does not.
+.proc two_stores {
+    lda #.opcode(ora, imm)
+    sta @op
+    .patch @op              ;! error[patch-variants-required]: `sta @op` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`
+    lda #7
+    sta @op+1
+    .patch @op
+    ldy #0
+    sta @op,y
+    .patch @op              ;! error[patch-variants-required]: `sta @op,y` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`
 @op:
     lda #5
     rts

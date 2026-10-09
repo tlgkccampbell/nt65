@@ -52,7 +52,7 @@ public sealed class OpcodeTests
             .export .proc main {
                 ldy #.opcode(dex)
                 sty @step
-                .patch @step
+                .patch @step as dex
             @step:
                 inx
                 rts

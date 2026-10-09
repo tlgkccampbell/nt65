@@ -35,6 +35,7 @@ public sealed class ControlFlow
     private List<PatchVariant>? listedVariants;
     private HashSet<StepKey>? rewrittenOpcodes;
     private HashSet<StepKey>? rewrittenOperands;
+    private List<UnlistedPatch>? unlisted;
 
     private ControlFlow(SemanticModel model, CodeLayout layout)
         : this(model, layout, [], [], [])
@@ -166,6 +167,12 @@ public sealed class ControlFlow
     /// <c>.patch … as</c> lists. Such an instruction may run as any instruction at all, so it may
     /// use and change every register.
     /// </summary>
+    /// <remarks>
+    /// A store that may write the opcode must list its variants, and <see cref="UnlistedPatches"/>
+    /// reports each that does not. So only a program that already has an error has an instruction
+    /// here. The set is the floor the register and reads analyses stand on for such a program.
+    /// The width, stack and flow analyses still take the instruction as written.
+    /// </remarks>
     internal IReadOnlySet<StepKey> RewrittenOpcodes
     {
         get
@@ -173,6 +180,20 @@ public sealed class ControlFlow
             if (rewrittenOpcodes is null)
                 FindPatched();
             return rewrittenOpcodes!;
+        }
+    }
+
+    /// <summary>
+    /// Gets each store that may write the opcode of a patched instruction under a <c>.patch</c>
+    /// that lists no variants. Each store is listed once, with the first instruction it may write.
+    /// </summary>
+    internal IReadOnlyList<UnlistedPatch> UnlistedPatches
+    {
+        get
+        {
+            if (unlisted is null)
+                FindPatched();
+            return unlisted!;
         }
     }
 
@@ -1109,9 +1130,10 @@ public sealed class ControlFlow
     /// </summary>
     private void FindPatched()
     {
-        var targets = new Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Step Store)>>();
-        foreach (var step in layout.Steps)
+        var targets = new Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Step Store, int At)>>();
+        for (var at = 0; at < layout.Steps.Count; at++)
         {
+            var step = layout.Steps[at];
             foreach (var patch in AnnotationsOf(step).OfType<PatchDirectiveSyntax>())
             {
                 foreach (var target in Annotations.TargetsOf(patch))
@@ -1120,7 +1142,7 @@ public sealed class ControlFlow
                     {
                         if (!targets.TryGetValue(symbol, out var patches))
                             targets[symbol] = patches = [];
-                        patches.Add((patch, step));
+                        patches.Add((patch, step, at));
                     }
                 }
             }
@@ -1133,13 +1155,15 @@ public sealed class ControlFlow
         var listed = new List<PatchVariant>();
         var opcodes = new HashSet<StepKey>();
         var operands = new HashSet<StepKey>();
-        List<(PatchDirectiveSyntax Patch, Step Store, Symbol Label)>? naming = null;
+        var missing = new List<UnlistedPatch>();
+        var reported = new HashSet<(PatchDirectiveSyntax, SyntaxNode, Symbol)>();
+        List<(PatchDirectiveSyntax Patch, Step Store, int At, Symbol Label)>? naming = null;
         foreach (var step in layout.Steps)
         {
             if (step.Label is { } label)
             {
                 if (targets.TryGetValue(label, out var patches))
-                    (naming ??= []).AddRange(patches.Select(patch => (patch.Patch, patch.Store, label)));
+                    (naming ??= []).AddRange(patches.Select(patch => (patch.Patch, patch.Store, patch.At, label)));
                 continue;
             }
             if (naming is not null && step.Statement is InstructionStatementSyntax written)
@@ -1149,17 +1173,20 @@ public sealed class ControlFlow
                 var kept = new List<MnemonicKind>();
                 var opcode = false;
                 var operand = false;
-                foreach (var (patch, store, named) in naming)
+                foreach (var (patch, store, at, named) in naming)
                 {
-                    // A variant replaces the opcode alone, so it is taken only from a store
-                    // known to start at the opcode. Any other store may write anything into the
-                    // bytes it reaches.
+                    // A store that may write the opcode must list what the instruction can
+                    // become, and only such a store may. One known to write only the operand has
+                    // no variant to list. Where a store's offset is not known, it may write the
+                    // opcode.
                     var bytes = WrittenBytes(store, named);
-                    var atOpcode = bytes?.First == 0;
+                    var writesOpcode = bytes is not { } reached || (reached.First <= 0 && reached.Last >= 0);
+                    if (writesOpcode && patch.AsKeyword is null && reported.Add((patch, store.Statement, named)))
+                        missing.Add(new UnlistedPatch(patch, store, step, named, Inferred(at, line?.Mode)));
                     var variant = false;
                     foreach (var name in patch.Variants)
                     {
-                        var listing = new PatchVariant(name, store.On, step, written.MnemonicKind, line?.Mode, layout.Cpu, atOpcode);
+                        var listing = new PatchVariant(name, store.On, step, written.MnemonicKind, line?.Mode, layout.Cpu, writesOpcode);
                         listed.Add(listing);
                         if (listing.Problem is not null)
                             continue;
@@ -1167,7 +1194,7 @@ public sealed class ControlFlow
                         if (!kept.Contains(listing.Mnemonic))
                             kept.Add(listing.Mnemonic);
                     }
-                    opcode |= !variant && (bytes is not { } reached || (reached.First <= 0 && reached.Last >= 0));
+                    opcode |= !variant && writesOpcode;
                     operand |= bytes is not { } into || line is null || (into.Last >= 1 && into.First < line.Length);
                 }
                 if (opcode)
@@ -1184,6 +1211,52 @@ public sealed class ControlFlow
         listedVariants = listed;
         rewrittenOpcodes = opcodes;
         rewrittenOperands = operands;
+        unlisted = missing;
+    }
+
+    /// <summary>
+    /// Returns the one instruction the store at <paramref name="at"/> among the layout's steps can
+    /// be seen to write as an opcode, or <see cref="MnemonicKind.None"/> where it cannot. The store
+    /// must be <c>sta</c>, <c>stx</c> or <c>sty</c>. The last instruction before it in its block
+    /// that changes the stored register must load it with an immediate constant. That constant's
+    /// low byte must decode on the CPU to an instruction in <paramref name="mode"/>, the patched
+    /// instruction's addressing mode.
+    /// </summary>
+    private MnemonicKind Inferred(int at, AddressingMode? mode)
+    {
+        var store = layout.Steps[at];
+        var (register, load) = store.Statement is InstructionStatementSyntax { MnemonicKind: var stores } ? stores switch
+        {
+            MnemonicKind.Sta => (Processor.Registers.A, MnemonicKind.Lda),
+            MnemonicKind.Stx => (Processor.Registers.X, MnemonicKind.Ldx),
+            MnemonicKind.Sty => (Processor.Registers.Y, MnemonicKind.Ldy),
+            _ => (Processor.Registers.None, MnemonicKind.None),
+        } : (Processor.Registers.None, MnemonicKind.None);
+        if (register == Processor.Registers.None || mode is null)
+            return MnemonicKind.None;
+        for (var back = at - 1; back >= 0; back--)
+        {
+            var step = layout.Steps[back];
+            if (step.Label is not null || step.Routine != store.Routine)
+                return MnemonicKind.None;
+            if (step.Statement is not InstructionStatementSyntax instruction)
+                continue;
+            var facts = Instructions.Facts(instruction.MnemonicKind);
+            if (facts.Control != Control.Through)
+                return MnemonicKind.None;
+            if ((facts.Writes & register) == Processor.Registers.None)
+                continue;
+            if (instruction.MnemonicKind != load
+                || StepOperands.Immediate(model, layout, step) is not long value
+                || value is < 0 or > 0xffff
+                || Opcodes.Decode(layout.Cpu, (byte)(value & 0xff)) is not { } decoded
+                || decoded.Mode != mode)
+            {
+                return MnemonicKind.None;
+            }
+            return decoded.Mnemonic;
+        }
+        return MnemonicKind.None;
     }
 
     /// <summary>

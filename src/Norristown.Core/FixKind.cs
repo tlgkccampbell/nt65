@@ -224,4 +224,10 @@ public enum FixKind
     /// spells, such as <c>tax</c> in place of <c>ldx #0</c>.
     /// </summary>
     Instruction,
+
+    /// <summary>
+    /// The <c>.patch</c> reported, given an <c>as</c> that lists the variant the fix's
+    /// <see cref="DiagnosticFix.Text"/> names.
+    /// </summary>
+    Variant,
 }
