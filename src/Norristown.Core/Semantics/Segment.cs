@@ -81,6 +81,13 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     public string? Unwritten { get; init; }
 
     /// <summary>
+    /// Gets the byte ld65 fills the segment's padding with, or null when no configuration nt65
+    /// reads places the segment. nt65 never writes a linker configuration, so without
+    /// <c>links</c> it cannot see the fill, and it does not guess one.
+    /// </summary>
+    public SegmentFill? Fill { get; init; }
+
+    /// <summary>
     /// Gets where the project file's <c>segments</c> adds to a segment that a linked configuration
     /// declares, or null when it adds nothing.
     /// </summary>
@@ -127,7 +134,7 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
         && DirectPage == other.DirectPage && Bank == other.Bank && Mirrors.SequenceEqual(other.Mirrors)
         && Space == other.Space && Placements.SequenceEqual(other.Placements) && Runs.SequenceEqual(other.Runs)
         && Start == other.Start && Offset == other.Offset && Align == other.Align && IsDefined == other.IsDefined
-        && Addition == other.Addition;
+        && Addition == other.Addition && Fill == other.Fill;
 
     /// <inheritdoc/>
     public override int GetHashCode() => HashCode.Combine(Name, Size, Declaration, DirectPage, Bank, Mirrors.Count);

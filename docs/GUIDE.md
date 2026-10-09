@@ -1108,6 +1108,12 @@ next instruction:
 }
 ```
 
+Padding that code runs into, such as an `.align` before a loop, takes a `.next` only when its
+fill runs on, which is when every byte is `nop`. The fill is the padding's own fill byte, as in
+`.align 256, $ea`, or else what ld65 fills it with: the segment's `fillval` in a linked config,
+else its memory area's, else zero. Zero is `brk`, and without `links` nt65 cannot see the fill,
+so give the padding `$ea` or `jmp` over it.
+
 nt65 follows the N, Z, C and V flags through each routine, from what the instructions
 themselves set: a load of a constant, `clc` and `sec`, and the branches already taken on the
 way. Where the flag a branch tests is known on every path to it, the branch goes one way only,

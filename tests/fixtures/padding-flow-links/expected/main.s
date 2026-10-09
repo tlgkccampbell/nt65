@@ -8,38 +8,39 @@
 .feature loose_char_term -, loose_string_term -, missing_char_term -, org_per_seg -
 .feature pc_assignment -, string_escapes -, ubiquitous_idents -, underline_in_numbers -
 
-.export main__filled_align
-.export main__filled_res
-.export main__jumped_over
+.export main__from_area
+.export main__from_segment
+.export main__from_own_byte
 
 .segment "CODE": absolute
-; .proc filled_align  main.nt65:10
-main__filled_align:
+; .proc from_area  main.nt65:10
+main__from_area:
     ldx #0
-    .align 256, $ea
-filled_align__loop:
+    .align 256
+from_area__loop:
     dex
-    bne filled_align__loop
+    bne from_area__loop
     rts
-; end of filled_align
+; end of from_area
 
-; .proc filled_res  main.nt65:20
-main__filled_res:
+.segment "BANKED": absolute
+; .proc from_segment  main.nt65:21
+main__from_segment:
+    ldx #0
+    .res 3
+from_segment__loop:
+    dex
+    bne from_segment__loop
+    rts
+; end of from_segment
+
+.segment "TABLES": absolute
+; .proc from_own_byte  main.nt65:32
+main__from_own_byte:
     ldx #0
     .res 3, $ea
-filled_res__loop:
+from_own_byte__loop:
     dex
-    bne filled_res__loop
+    bne from_own_byte__loop
     rts
-; end of filled_res
-
-; .proc jumped_over  main.nt65:30
-main__jumped_over:
-    ldx #0
-    jmp jumped_over__loop
-    .align 256
-jumped_over__loop:
-    dex
-    bne jumped_over__loop
-    rts
-; end of jumped_over
+; end of from_own_byte

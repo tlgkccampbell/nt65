@@ -132,6 +132,7 @@ public static class SegmentLinks
             Align = placed.Align?.Value,
             IsDefined = placed.Defines,
             Unwritten = Unwritten(placed, config),
+            Fill = Fill(placed, config),
         };
         return new Placed(segment, config.Path, note);
     }
@@ -149,6 +150,21 @@ public static class SegmentLinks
         return placed.Load is { } load && config.Area(load) is { IsWritten: false }
             ? $"loads into memory area `{load}`, whose `file` is empty"
             : null;
+    }
+
+    /// <summary>
+    /// Returns the byte ld65 fills a segment's padding with: the segment's own <c>fillval</c>, else
+    /// that of the memory area it loads into, else zero.
+    /// </summary>
+    private static SegmentFill Fill(LinkerConfig.PlacedSegment placed, LinkerConfig config)
+    {
+        if (placed.Fill is { } own)
+            return new SegmentFill(own.Value, $"segment `{placed.Name}` in `{config.Path}`");
+        if (placed.Load is not { } load || config.Area(load) is not { } area)
+            return new SegmentFill(null, $"the memory area segment `{placed.Name}` loads into in `{config.Path}`");
+        return area.Fill is { } fill
+            ? new SegmentFill(fill.Value, $"the memory area `{area.Name}` in `{config.Path}`")
+            : new SegmentFill(0, "ld65's default");
     }
 
     /// <summary>
@@ -214,6 +230,11 @@ public static class SegmentLinks
             Runs = [.. first.Runs, .. segment.Runs],
             IsDefined = first.IsDefined || segment.IsDefined,
             Unwritten = segment.Unwritten is null ? null : first.Unwritten,
+
+            // A segment that two links fill differently has padding nt65 cannot name one byte for.
+            Fill = first.Fill?.Value == segment.Fill?.Value
+                ? first.Fill
+                : new SegmentFill(null, $"the configs that place segment `{segment.Name}`"),
         };
     }
 

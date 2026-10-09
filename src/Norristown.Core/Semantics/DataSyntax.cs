@@ -22,13 +22,18 @@ public static class DataSyntax
         SyntaxFacts.IsElementType(directive.Directive.DirectiveKind);
 
     /// <summary>
-    /// Determines whether the directive is a <c>.res</c> or <c>.align</c> that names no fill byte.
-    /// The linker fills such padding with its memory area's fill value, which is zero unless the
-    /// linker configuration says otherwise, so the source does not say what the bytes are.
+    /// Returns a value indicating whether the directive is a <c>.res</c> or <c>.align</c>, which
+    /// pads with a fill byte rather than giving each byte.
     /// </summary>
-    public static bool IsUnfilledPadding(DataDirectiveSyntax directive) =>
-        directive.Directive.DirectiveKind is DirectiveKind.Res or DirectiveKind.Align
-        && directive.Tail is not InlineDataSyntax { Values.Count: > 1 };
+    public static bool IsPadding(DataDirectiveSyntax directive) =>
+        directive.Directive.DirectiveKind is DirectiveKind.Res or DirectiveKind.Align;
+
+    /// <summary>
+    /// Returns the fill byte a <c>.res</c> or <c>.align</c> names after its count, or null when it
+    /// names none. ld65 fills padding with no fill byte from its linker configuration.
+    /// </summary>
+    public static SyntaxNode? FillOf(DataDirectiveSyntax directive) =>
+        IsPadding(directive) && directive.Tail is InlineDataSyntax { Values.Count: > 1 } inline ? inline.Values[1] : null;
 
     /// <summary>
     /// Returns the block of values or <c>member = value</c> lines that the directive's line

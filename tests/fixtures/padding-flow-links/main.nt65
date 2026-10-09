@@ -1,0 +1,40 @@
+; Padding with no fill byte of its own holds the fill the linked config gives its segment, which
+; is the segment's `fillval`, else that of the memory area it loads into. Where that is `$ea`,
+; which is `nop`, a `.next` after the padding may say that flow runs on through it. A fill byte of
+; the padding's own wins over the config's.
+.module main
+
+.export from_area, from_segment, from_own_byte
+
+.segment CODE
+.proc from_area {
+    ldx #0
+    .align 256
+    .next @loop
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.segment BANKED
+.proc from_segment {
+    ldx #0
+    .res 3
+    .next @loop
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.segment TABLES
+.proc from_own_byte {
+    ldx #0
+    .res 3, $ea
+    .next @loop
+@loop:
+    dex
+    bne @loop
+    rts
+}

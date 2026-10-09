@@ -457,21 +457,21 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// Reports each <c>.next</c> that follows a <c>.res</c> or <c>.align</c> with no fill byte in a
-    /// routine. The linker fills such padding with zero, which is <c>brk</c>, so execution never
-    /// runs through it to the labels the <c>.next</c> names.
+    /// Reports each <c>.next</c> that follows a <c>.res</c> or <c>.align</c> in a routine whose
+    /// <see cref="PaddingFill"/> does not run on. Execution never runs through such padding to the
+    /// labels the <c>.next</c> names.
     /// </summary>
     private void CheckPadding()
     {
         foreach (var step in layout.Steps)
         {
             if (step is not { Routine: not null, Label: null, Statement: DataDirectiveSyntax padding }
-                || !DataSyntax.IsUnfilledPadding(padding))
+                || PaddingFill.Of(step, model) is not { } fill || fill.RunsOn(layout.Cpu))
             {
                 continue;
             }
             foreach (var next in flow.AnnotationsOf(step).OfType<NextDirectiveSyntax>())
-                Report(next, Catalogue.NextAfterPadding.Message(padding.GetText().Trim()));
+                Report(next, Catalogue.NextAfterPadding.Message(padding.GetText().Trim(), fill.WhyNot()));
         }
     }
 

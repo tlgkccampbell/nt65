@@ -1,14 +1,17 @@
-; Padding inside a routine that flow would run through with no fill byte. The linker fills it
-; with zero, which is `brk`, so a `.next` after it claims an edge that is not there, and code
-; that falls into it is told to give it a fill byte or jump over it.
+; Padding inside a routine whose fill does not run on. A `.res` or `.align` with no fill byte is
+; filled by ld65 from its config, which this project does not link, so nt65 cannot tell what the
+; bytes are. A fill byte of zero is `brk`, `clc` changes a flag, and `lda #` takes the next byte as
+; its operand, so none of them runs on, and a `.next` after them claims an edge that is not there.
+; Padding is data, so code that falls into it needs a `.next` even where its fill runs on.
 .module main
 
-.export falls_into_align, falls_into_res, next_after_align, next_after_res
+.export falls_into_align, falls_into_res, falls_into_nops, next_after_align, next_after_res
+.export next_after_zero, next_after_clc, next_after_operand
 
 .segment CODE
 .proc falls_into_align {
     ldx #0
-    .align 256  ;! error[runs-into-data]: the instruction above falls into this padding: the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`) and add a `.next` after it, or `jmp` over it
+    .align 256  ;! error[runs-into-data]: the instruction above falls into this padding: it is filled with a byte nt65 cannot work out, since no linked config places segment `CODE`; give it a fill byte that runs on, such as `$ea` (`nop`), and add a `.next` after it, or `jmp` over it
 @loop:
     dex
     bne @loop
@@ -17,7 +20,16 @@
 
 .proc falls_into_res {
     ldx #0
-    .res 3      ;! error[runs-into-data]: the instruction above falls into this padding: the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`) and add a `.next` after it, or `jmp` over it
+    .res 3, 0   ;! error[runs-into-data]: the instruction above falls into this padding: it is filled with $00, its fill byte, which does not run on; give it a fill byte that runs on, such as `$ea` (`nop`), and add a `.next` after it, or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.proc falls_into_nops {
+    ldx #0
+    .res 3, $ea ;! error[runs-into-data]: the instruction above falls into this padding: add a `.next` after it saying where flow goes
 @loop:
     dex
     bne @loop
@@ -27,7 +39,7 @@
 .proc next_after_align {
     ldx #0
     .align 256
-    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.align 256`, which has no fill byte: the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`), or `jmp` over it
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.align 256`: it is filled with a byte nt65 cannot work out, since no linked config places segment `CODE`; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
 @loop:
     dex
     bne @loop
@@ -37,7 +49,37 @@
 .proc next_after_res {
     ldx #0
     .res 3
-    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.res 3`, which has no fill byte: the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`), or `jmp` over it
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.res 3`: it is filled with a byte nt65 cannot work out, since no linked config places segment `CODE`; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.proc next_after_zero {
+    ldx #0
+    .align 256, $00
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.align 256, $00`: it is filled with $00, its fill byte, which does not run on; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.proc next_after_clc {
+    ldx #0
+    .res 2, $18
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.res 2, $18`: it is filled with $18, its fill byte, which does not run on; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.proc next_after_operand {
+    ldx #0
+    .res 2, $a9
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.res 2, $a9`: it is filled with $a9, its fill byte, which does not run on; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
 @loop:
     dex
     bne @loop
