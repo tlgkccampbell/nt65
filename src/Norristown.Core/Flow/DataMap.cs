@@ -570,11 +570,17 @@ public sealed class DataMap
                 or AddressingMode.AbsoluteY or AddressingMode.LongX or AddressingMode.DirectIndirectX or AddressingMode.AbsoluteIndirectX;
 
             // An indirect access reaches its pointer, which is 3 bytes for the long forms and 2 for
-            // the others. Any other access reaches as many bytes as its register holds.
+            // the others. Any other access reaches as many bytes as its register holds. While that
+            // width is not known, it is sure of one byte and may reach the next, as the memory guess
+            // takes it.
             var state = file.Layout.Cpu == Cpu.Wdc65816 ? file.State?.Before(step.Statement, step.On)?.Processor : null;
+            var sized = file.Layout.Cpu == Cpu.Wdc65816 && !indirect && Instructions.MemorySizedBy(mnemonic) is { } register
+                ? state?.Of(register) ?? Width.Unknown
+                : Width.Eight;
             var width = indirect
                 ? mode is AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY or AddressingMode.AbsoluteIndirectLong ? 3 : 2
-                : state is { } processor && Instructions.MemorySizedBy(mnemonic) is { } register && processor.Of(register) == Width.Sixteen ? 2 : 1;
+                : sized == Width.Sixteen ? 2 : 1;
+            var wider = sized is not (Width.Eight or Width.Sixteen);
             var page = (long?)null;
             var unknown = false;
             if (throughPage && state?.D is { } d)
@@ -627,7 +633,7 @@ public sealed class DataMap
             if (throughPage && page is { } reached)
                 direct[reached] = direct.GetValueOrDefault(reached) + 1;
 
-            return new Found(key, page, unknown, Shown(step, file.Model.Tree), step, reads, writes, indexed, offset, width);
+            return new Found(key, page, unknown, Shown(step, file.Model.Tree), step, reads, writes, indexed, offset, width, wider);
         }
 
         /// <summary>
@@ -1069,9 +1075,13 @@ public sealed class DataMap
                 yield return (location, offset + i);
         }
 
-        /// <summary>Returns whether <paramref name="must"/> holds every byte that <paramref name="access"/> reaches.</summary>
+        /// <summary>
+        /// Returns whether <paramref name="must"/> holds every byte that <paramref name="access"/>
+        /// reaches or may reach. A read whose width is not known may read a byte the routine never
+        /// wrote, so that byte counts as read.
+        /// </summary>
         private static bool Covers(ImmutableHashSet<(LocationKey, long)> must, Found access) =>
-            Bytes(access.Location, access.Offset, access.Width).All(must.Contains);
+            Bytes(access.Location, access.Offset, access.Width + (access.Wider ? 1 : 0)).All(must.Contains);
 
         /// <summary>
         /// Returns whether <paramref name="must"/> holds every byte of <paramref name="location"/>.
@@ -1438,11 +1448,17 @@ public sealed class DataMap
         /// </param>
         /// <param name="Offset">The offset from the location's first byte to the first byte it reaches.</param>
         /// <param name="Width">
-        /// The number of bytes it reaches from <paramref name="Offset"/>. That is the pointer for an
-        /// indirect access, and otherwise 2 for a 16-bit register on the 65816 and 1 for the rest.
+        /// The number of bytes it is sure to reach from <paramref name="Offset"/>. That is the
+        /// pointer for an indirect access, and otherwise 2 for a 16-bit register on the 65816 and 1
+        /// for the rest.
+        /// </param>
+        /// <param name="Wider">
+        /// Whether it may reach one byte more than <paramref name="Width"/>, because on the 65816 the
+        /// width of the register that sizes it is not known.
         /// </param>
         private sealed record Found(
-            LocationKey Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Indexed, long Offset, long Width)
+            LocationKey Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Indexed, long Offset, long Width,
+            bool Wider)
         {
             public Symbol? Routine { get; init; }
 

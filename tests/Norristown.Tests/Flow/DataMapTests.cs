@@ -842,6 +842,37 @@ public sealed class DataMapTests
     }
 
     /// <summary>
+    /// On the 65816 an access whose width is not known is sure of the byte it names and may reach
+    /// the next. A store of unknown width surely writes only the low byte, and a load of unknown
+    /// width may read the high byte too, so a routine that stores <c>tmp</c> and loads it back may
+    /// read a byte it never wrote: it reads what it was given rather than using <c>tmp</c> as a
+    /// temporary. With <c>a8</c> declared, the same lines make <c>tmp</c> a temporary.
+    /// </summary>
+    [Theory]
+    [InlineData("a?", "InOut")]
+    [InlineData("a8", "Temp")]
+    public void AnAccessOfUnknownWidthMayReachTheHighByte(string width, string role)
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Own hazard=False used=2 direct=2",
+                "  ◦ no config · layout guessed",
+                "  tmp +0 x2 .word Own Guessed",
+                $"    main {role} 2",
+            ],
+            Render("65816", $$"""
+                .segment ZEROPAGE
+                .data tmp: .word
+                .segment CODE
+                .export .proc main: {{width}}, i8, dp = 0, native {
+                    sta tmp
+                    lda tmp
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
     /// A constant address that an instruction reaches through the zero page takes those bytes as
     /// surely as a declaration does, so it is shown as a location named by its address. A pointer
     /// read through such an address takes both of its bytes. A constant with an index register
