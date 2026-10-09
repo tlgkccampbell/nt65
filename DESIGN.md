@@ -2153,7 +2153,9 @@ would say the routine is quicker than anything it could be built as.
 
 A routine is also shown what it costs **with what it calls**: a call costs the call and then
 whatever the routine it names costs, and a tail jump the same, since control comes back from it
-to this routine's caller. That is worked out across the program, so an edit to one file moves
+to this routine's caller. A `.next` under a call or a jump through a pointer names the routines
+it can reach, which are alternatives: the count adds the cheapest of them to its fewest and the
+dearest to its most, never their sum. That is worked out across the program, so an edit to one file moves
 what another file's lenses say. A call to a routine with no body, one through a pointer, and a
 routine that can reach itself leave no total to give, and the lens says the calls are not in
 the count rather than quietly leaving them out.

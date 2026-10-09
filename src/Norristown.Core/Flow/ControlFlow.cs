@@ -657,7 +657,7 @@ public sealed class ControlFlow
     {
         for (var i = 0; i < blocks.Count; i++)
         {
-            if (inside[i] && (blocks[i].Calls.Count > 0 || blocks[i].CallsUnknown))
+            if (inside[i] && (CallCosts.Onward(blocks[i]).Any() || blocks[i].CallsUnknown))
                 return true;
         }
         return false;
@@ -670,7 +670,7 @@ public sealed class ControlFlow
     /// count stops where that routine starts.
     /// </summary>
     private static bool Calls(IReadOnlyList<BasicBlock> blocks) =>
-        blocks.Any(block => block.Calls.Count > 0 || block.RunsInto is not null || block.CallsUnknown);
+        blocks.Any(block => CallCosts.Onward(block).Any() || block.CallsUnknown);
 
     private static bool IsInstruction(SyntaxNode statement, params ReadOnlySpan<MnemonicKind> mnemonics) =>
         statement is InstructionStatementSyntax instruction && mnemonics.Contains(instruction.MnemonicKind);

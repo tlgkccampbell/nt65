@@ -204,6 +204,73 @@ public sealed class CodeLensTests
     }
 
     /// <summary>
+    /// The routines a <c>.next</c> names under a call through a pointer are alternatives, and one
+    /// pass runs only one of them. So the cost with calls adds the cheapest of them at least and
+    /// the dearest at most, never their sum. A tail jump through a pointer with a <c>.next</c>
+    /// composes the same way as a tail jump to a routine named in its operand.
+    /// </summary>
+    [Fact]
+    public async Task ALensAddsOneOfTheRoutinesADispatchCanCall()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .proc dispatch {
+                jsr (table,x)
+                .next w1, w2
+                rts
+            }
+            .proc tail {
+                jmp (vector)
+                .next w1, w2
+            }
+            .proc either {
+                dex
+                beq @other
+                jmp (vector)
+                .next w1
+            @other:
+                jmp (vector)
+                .next w2
+            }
+            .proc w1 {
+                nop
+                rts
+            }
+            .proc w2 {
+                nop
+                nop
+                rts
+            }
+            .data table: .addr w1, w2
+            .data vector: .addr w1
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [
+                // The call costs 8 and the return 6. With w1 at 8 cycles and w2 at 10, one pass
+                // costs 14 + 8 = 22 at least and 14 + 10 = 24 at most.
+                "14 cycles, 22-24 with calls",
+
+                // The indirect jump costs 5, and control comes back from w1 or w2 to the caller.
+                "5 cycles, 13-15 with calls",
+
+                // Each block is charged the branch's whole interval of 2 to 4, so either way
+                // costs 2 + 2 + 5 = 9 to 11. The way to w1 adds 8 and the way to w2 adds 10.
+                "9-11 cycles, 17-21 with calls",
+                "8 cycles",
+                "10 cycles",
+            ],
+            Costs(lenses).Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
     /// The lens only has room to name what a cost with calls leaves out; the hover lists each
     /// thing with why nt65 cannot count it.
     /// </summary>

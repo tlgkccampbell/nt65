@@ -61,8 +61,9 @@ public sealed class BasicBlock
     /// <summary>
     /// Gets the places outside the routine that the block hands control to other than by a call
     /// or a tail call. They are the target of a conditional branch out of the routine, and the
-    /// labels outside it that a <c>.next</c> under a jump names. Unlike <see cref="Calls"/>, what
-    /// they cost is not counted with the routine's.
+    /// labels outside it that a <c>.next</c> under a jump names. What a branch out of the routine
+    /// reaches is not counted with the routine's cost. What a <c>.next</c> names is counted as a
+    /// tail jump's target is, because control comes back from it to the routine's caller.
     /// </summary>
     public IReadOnlyList<Symbol> Leaves => leaves;
 
