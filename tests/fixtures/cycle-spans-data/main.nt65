@@ -22,7 +22,14 @@
     .data given: .byte cycles
 }
 
+; A span held in a `.const` is a number of cycles, not an address, so it fits whatever slot its
+; value fits, as the span written inline does.
+.const fewest_cycles = .mincycles(either::start, either::done)
+.const most_cycles   = .maxcycles(either::start, either::done)
+
 .segment RODATA
 .export .data fewest: .byte .mincycles(either::start, either::done)
 .export .data most:   .word .maxcycles(either::start, either::done)
 budget!(.maxcycles(either::start, either::done))
+.export .data held_fewest: .byte fewest_cycles
+.export .data held_most:   .word most_cycles
