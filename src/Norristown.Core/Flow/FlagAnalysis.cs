@@ -967,12 +967,14 @@ internal sealed class FlagAnalysis
     /// <summary>
     /// Returns the registers whose new value an instruction sets N and Z from, or none where it
     /// sets them from anything else. An add or a subtract on the NMOS 6502 sets them from another
-    /// stage of the sum in decimal mode, so it counts only where D is known to be 0.
+    /// stage of the sum in decimal mode, so it counts only where D is known to be 0. A
+    /// <c>tdc</c> or a <c>tsc</c> sets them from all 16 bits whatever A's width, which a compare of
+    /// an 8-bit A does not test, and the width is not known here, so neither counts.
     /// </summary>
     private static Registers SetFrom(Cpu cpu, MnemonicKind mnemonic, AddressingMode? mode, FlagState state) => mnemonic switch
     {
         MnemonicKind.Lda or MnemonicKind.Pla or MnemonicKind.And or MnemonicKind.Ora or MnemonicKind.Eor
-            or MnemonicKind.Txa or MnemonicKind.Tya or MnemonicKind.Tdc or MnemonicKind.Tsc => Registers.A,
+            or MnemonicKind.Txa or MnemonicKind.Tya => Registers.A,
         MnemonicKind.Asl or MnemonicKind.Lsr or MnemonicKind.Rol or MnemonicKind.Ror or MnemonicKind.Inc or MnemonicKind.Dec
             when mode == AddressingMode.Accumulator => Registers.A,
         MnemonicKind.Adc or MnemonicKind.Sbc

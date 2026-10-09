@@ -262,6 +262,23 @@ public sealed class FlagHintsTests
     }
 
     /// <summary>
+    /// <c>tdc</c> and <c>tsc</c> set N and Z from all 16 bits they copy, whatever A's width. With
+    /// an 8-bit A a compare with zero tests only the low byte, so it stays.
+    /// </summary>
+    [Theory]
+    [InlineData("tdc")]
+    [InlineData("tsc")]
+    public void ACompareAfterASixteenBitTransferStays(string transfer)
+    {
+        var (analysis, path) = Analyzed(
+            $".export .proc main: a8, i16, native {{\n    {transfer}\n    cmp #0\n    beq @x\n    sta $11\n@x:\n    sec\n    rts\n}}\n",
+            "65816");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "zero-compare");
+    }
+
+    /// <summary>
     /// A routine that declares the flags it returns with promises nothing about the rest, so a
     /// return reads only those.
     /// </summary>
