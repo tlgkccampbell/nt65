@@ -63,6 +63,11 @@ internal sealed partial class Evaluator
     private List<(SyntaxNode Node, bool Elsewhere)>? unlinked;
     private SyntaxTree? linkedFrom;
 
+    // The calls of `.func` functions whose bodies evaluation is inside, outermost first, each with
+    // the function and the expression each parameter is given. A problem a body has with what a
+    // call gave it is reported at the outermost call, which is in the source being evaluated.
+    private readonly List<(CallExpressionSyntax Call, Symbol Function, IReadOnlyList<ExpressionSyntax> Given)> calls = [];
+
     // Whether a chain of definitions deeper than MaximumDepth has been reported.
     private bool tooDeep;
 

@@ -1447,9 +1447,11 @@ public static class Catalogue
         Area.Values,
         "switch-no-arm",
         Severity.Error,
-        "no arm of this `.switch` holds {0}, and it has no default result",
+        "no arm of {0} holds {1}, and it has no default result",
         "A `.switch` without a last result for otherwise must have an arm for every value it is given. Add the "
-            + "value to an arm's set, or end the `.switch` with a result for the values no arm holds.");
+            + "value to an arm's set, or end the `.switch` with a result for the values no arm holds. In a "
+            + "`.func` body the value usually comes from an argument, so the call is reported, naming the "
+            + "argument as it is written there, with the `.switch` as a note.");
 
     internal static DiagnosticDescriptor SetExpected { get; } = Entry(
         Area.Values,

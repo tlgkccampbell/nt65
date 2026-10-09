@@ -666,8 +666,16 @@ internal sealed partial class Evaluator
             Value result;
             try
             {
-                using (Evaluating(symbol))
-                    result = Evaluate(symbol.Items[0]);
+                calls.Add((call, symbol, given));
+                try
+                {
+                    using (Evaluating(symbol))
+                        result = Evaluate(symbol.Items[0]);
+                }
+                finally
+                {
+                    calls.RemoveAt(calls.Count - 1);
+                }
                 if (outermost && result.Kind == ValueKind.Unknown && unlinked is [var (first, elsewhere), ..])
                 {
                     Report(call, Catalogue.FuncNotLinkable.Message(symbol.Name, first.GetText().Trim(), elsewhere

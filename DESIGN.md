@@ -2872,8 +2872,9 @@ and anywhere else it is an error.
   `.assert main .in [$8000..$ffff]`, the output writes ca65's comparisons, one for each item.
 - **`.switch(v, set, result, ..., otherwise)`** is the result after the first set that holds
   `v`, and `otherwise` when none does. `otherwise` may be left out, and then a value that no set
-  holds is an error, which is how a `.switch` over an enum says it covers every member. `v` must
-  be a constant. Like `.select`, it reads only the result it chooses, and no set after the one
+  holds is an error, which is how a `.switch` over an enum says it covers every member. In a
+  `.func` body that error is reported at the call, naming the argument as the caller wrote it,
+  with the `.switch` as a note, as a macro body's is (§11.6). `v` must be a constant. Like `.select`, it reads only the result it chooses, and no set after the one
   that holds `v`, so those may name what this build does not declare.
 
 ```nt65
