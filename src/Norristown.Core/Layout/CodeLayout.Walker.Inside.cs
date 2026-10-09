@@ -104,6 +104,12 @@ public sealed partial class CodeLayout
         /// cannot follow them. The bytes have to be known to nt65, run as instructions the CPU has
         /// that neither move the stack nor change where control goes, and reach the start of an
         /// instruction of the same routine.
+        /// <para>
+        /// Each instruction is counted in the processor state and with the decimal flag that the
+        /// analyses found reaching the position, as an ordinary line is. None of the instructions
+        /// followed changes the widths or the mode, but <c>cld</c> and <c>sed</c> change the
+        /// decimal flag and <c>tcd</c> changes D, so the count follows those.
+        /// </para>
         /// </summary>
         private HiddenPath? Decode(InsideLabel inside, BytePosition from)
         {
@@ -115,6 +121,8 @@ public sealed partial class CodeLayout
                     starts.TryAdd(at.Offset, (step, at));
             }
 
+            var state = states?.Before(inside.Directive, inside.On);
+            var decimalMode = DecimalBefore(inside.Directive, inside.On);
             var decoded = new List<HiddenInstruction>();
             var offset = from.Offset;
             while (offset - from.Offset < MostHiddenBytes)
@@ -144,7 +152,15 @@ public sealed partial class CodeLayout
                         return Unfollowed(why!);
                     operand |= (long)value << (8 * (i - 1));
                 }
-                decoded.Add(new HiddenInstruction(mnemonic, mode, operand, Cycles.Of(cpu, mnemonic, mode)?.Count));
+                decoded.Add(new HiddenInstruction(mnemonic, mode, operand, Cycles.Of(cpu, mnemonic, mode, state, decimalMode)?.Count));
+                decimalMode = mnemonic switch
+                {
+                    MnemonicKind.Cld => false,
+                    MnemonicKind.Sed => true,
+                    _ => decimalMode,
+                };
+                if (mnemonic == MnemonicKind.Tcd && state is { } known)
+                    state = known with { D = StateValue.Unknown };
                 offset += length;
             }
             return Unfollowed("they do not reach the start of an instruction");

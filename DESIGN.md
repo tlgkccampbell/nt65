@@ -1727,7 +1727,9 @@ label:
   known before linking: an opcode, a constant operand, or a branch's distance within the same
   run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
   control goes, move the stack or change the widths; a run of more than 32 bytes, or one that
-  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). The
+  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). Each
+  decoded instruction is counted as a written one is, in the processor state and with the
+  decimal flag that reach the position, and a decoded `cld`, `sed` or `tcd` is followed. The
   output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there.
 - `.patch @op as dex, iny` also lists the instructions the store can turn the one at `@op`
   into. A variant replaces the opcode, so it keeps the instruction's addressing mode and
