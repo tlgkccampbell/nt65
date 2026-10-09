@@ -171,11 +171,11 @@ public sealed partial class CodeLayout
         var cycles = line?.Cycles ?? new CycleCount(0);
 
         // A `.next` under anything but a call replaces the operand as the source of the targets,
-        // as it does for the flow analysis, and control goes nowhere else. Which way a branch
-        // went is not known there, so each target costs anything the branch can.
+        // as it does for the flow analysis, and control goes nowhere else. A `.next` under a
+        // conditional branch says the branch is always taken, so each target costs the taken edge.
         if (next is not null && !calls)
         {
-            Declared(next, cycles, mnemonic);
+            Declared(next, transfer == Transfer.Branch ? Taken(cycles) : cycles, mnemonic);
             return (edges, lost, unbounded);
         }
         switch (transfer)
@@ -185,23 +185,30 @@ public sealed partial class CodeLayout
             case Transfer.Jump:
                 Target(cycles);
                 break;
-            case Transfer.Branch when cycles.IsExact:
-                Target(cycles);
-                Next(cycles);
-                break;
-            case Transfer.Branch when line?.Inverted == true:
-                Target(new CycleCount(cycles.Maximum));
-                Next(new CycleCount(cycles.Minimum, cycles.Maximum - 1));
-                break;
             case Transfer.Branch:
-                Target(new CycleCount(cycles.Minimum + 1, cycles.Maximum));
-                Next(new CycleCount(cycles.Minimum));
+                Target(Taken(cycles));
+                Next(NotTaken(cycles));
                 break;
             default:
                 Next(cycles);
                 break;
         }
         return (edges, lost, unbounded);
+
+        // A branch whose count is exact costs the same either way. Otherwise the taken edge costs
+        // at least one cycle more than the branch's least, and a far branch, which nt65 writes as
+        // the inverted branch over a jump, costs its most when it is taken.
+        CycleCount Taken(CycleCount branch) =>
+            branch.IsExact ? branch
+            : line?.Inverted == true ? new CycleCount(branch.Maximum)
+            : new CycleCount(branch.Minimum + 1, branch.Maximum);
+
+        // The edge that falls through costs the branch's least, except for a far branch, whose
+        // inverted branch over the jump is the one taken.
+        CycleCount NotTaken(CycleCount branch) =>
+            branch.IsExact ? branch
+            : line?.Inverted == true ? new CycleCount(branch.Minimum, branch.Maximum - 1)
+            : new CycleCount(branch.Minimum);
 
         void Next(CycleCount cost)
         {

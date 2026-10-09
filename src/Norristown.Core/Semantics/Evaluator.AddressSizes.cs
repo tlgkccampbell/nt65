@@ -65,10 +65,11 @@ internal sealed partial class Evaluator
                 return;
             }
 
-            // `.spanof` is the difference of two addresses, which is a number, so it adds no
-            // width. `.endof` needs no case, because it is an address as wide as the symbol it
-            // measures, which walking its argument finds.
-            if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Spanof })
+            // `.spanof` is the difference of two addresses, and a cycle span counts the cycles
+            // between two positions. Each is a number, so it adds no width. `.endof` needs no
+            // case, because it is an address as wide as the symbol it measures, which walking its
+            // argument finds.
+            if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Spanof or BuiltinKind.Mincycles or BuiltinKind.Maxcycles })
             {
                 return;
             }
@@ -149,6 +150,11 @@ internal sealed partial class Evaluator
     {
         if (node is CurrentAddressExpressionSyntax)
             return true;
+
+        // A cycle span names two positions in code, but its value is a count of cycles that nt65
+        // writes as a number, so the positions are no part of the value.
+        if (node is CallExpressionSyntax { BuiltinKind: BuiltinKind.Mincycles or BuiltinKind.Maxcycles })
+            return false;
         if (node is NameExpressionSyntax name)
             return SymbolOf(name) is { IsAddress: true };
         if (ChoiceArguments(node) is not null)

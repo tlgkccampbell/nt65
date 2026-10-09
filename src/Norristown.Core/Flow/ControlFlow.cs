@@ -1338,7 +1338,10 @@ public sealed class ControlFlow
             // The `.patch` names nothing the store writes where the bytes land only in an
             // instruction another `.patch` already names, so the fix removes it rather than
             // naming that instruction twice.
-            var landingLabel = namedAs ?? (index is { } found ? LabelOf(found) : null);
+            // A store into another routine's code is declared in that routine, so no label there
+            // is offered as a target here.
+            var elsewhere = landing is { } other && other.Routine != written.Routine;
+            var landingLabel = namedAs ?? (index is { } found && !elsewhere ? LabelOf(found, store.On) : null);
             var fix = namedAs is not null
                 ? new DiagnosticFix(FixKind.Redundant)
                 : landingLabel is not null && landing is { Statement: InstructionStatementSyntax } labelled
@@ -1346,23 +1349,32 @@ public sealed class ControlFlow
                     ? TargetFix(patch, landingLabel, outside)
                     : null;
             return new MissedPatch(
-                patch, store, written, label, length, offset < 0, landing, landingLabel, namedAs is not null, fix);
+                patch, store, written, label, length, offset < 0, landing, landingLabel, namedAs is not null,
+                elsewhere && index is { } first && StartsRoutine(first), fix);
         }
         return null;
     }
 
     /// <summary>
-    /// Returns the label that names the step at <paramref name="index"/> among the layout's
-    /// steps, or null where none does. That is the nearest label before it with no bytes between
-    /// them, in the same routine.
+    /// Returns the label that a <c>.patch</c> in <paramref name="from"/> can name the step at
+    /// <paramref name="index"/> among the layout's steps by, or null where there is none. That is
+    /// the nearest label before the step with no bytes between them, in the same routine. A
+    /// routine's own name is never such a label, and neither is a label that another expansion
+    /// declares, because the <c>.patch</c> cannot reach it.
     /// </summary>
-    private Symbol? LabelOf(int index)
+    /// <param name="index">The index of the step among the layout's steps.</param>
+    /// <param name="from">The expansion the <c>.patch</c> belongs to, or null outside every expansion.</param>
+    private Symbol? LabelOf(int index, Expansion? from)
     {
         for (var back = index - 1; back >= 0; back--)
         {
             var step = layout.Steps[back];
             if (step.Label is { } label)
-                return label;
+            {
+                return label.Signature is null && Expansion.Owning(step.On, label) == Expansion.Owning(from, label)
+                    ? label
+                    : null;
+            }
             if (step.Routine != layout.Steps[index].Routine
                 || layout.PositionOf(step.Statement, step.On) is { Length: > 0 })
             {
@@ -1370,6 +1382,22 @@ public sealed class ControlFlow
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether the step at <paramref name="index"/> among the layout's
+    /// steps is the first of its routine to take bytes.
+    /// </summary>
+    private bool StartsRoutine(int index)
+    {
+        var routine = layout.Steps[index].Routine;
+        for (var back = index - 1; back >= 0 && layout.Steps[back].Routine == routine; back--)
+        {
+            var step = layout.Steps[back];
+            if (layout.PositionOf(step.Statement, step.On) is { Length: > 0 })
+                return false;
+        }
+        return routine is not null;
     }
 
     /// <summary>

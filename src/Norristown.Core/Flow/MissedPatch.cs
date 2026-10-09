@@ -26,10 +26,14 @@ namespace Norristown.Flow;
 /// <paramref name="LandingLabel"/>. The store then misses this <c>.patch</c>'s instruction
 /// entirely, so this <c>.patch</c> names nothing the store writes.
 /// </param>
+/// <param name="StartsRoutine">
+/// Whether <paramref name="Landing"/> is the first instruction of a routine other than the one
+/// <paramref name="Written"/> is in.
+/// </param>
 /// <param name="Fix">The change that names the landing instruction with a <c>.patch</c>, or null where none is offered.</param>
 internal sealed record MissedPatch(
     PatchDirectiveSyntax Patch, Step Store, Step Written, Symbol Label, int Length, bool Before, Step? Landing,
-    Symbol? LandingLabel, bool AlreadyNamed, DiagnosticFix? Fix)
+    Symbol? LandingLabel, bool AlreadyNamed, bool StartsRoutine, DiagnosticFix? Fix)
 {
     /// <summary>
     /// Gets a value indicating whether <see cref="Landing"/> is code, an instruction or the
@@ -55,6 +59,13 @@ internal sealed record MissedPatch(
             {
                 return $"into `{text}` at `{named.DisplayName}` {side}, which `.patch {named.DisplayName}` already names: "
                     + "remove this `.patch`";
+            }
+            if (landing.Routine is { } routine && landing.Routine != Written.Routine)
+            {
+                var where = StartsRoutine
+                    ? $"`{text}`, the first instruction of routine `{routine.DisplayName}`,"
+                    : $"`{text}` in routine `{routine.DisplayName}`";
+                return $"into {where} {side}: a store into another routine's code is declared there";
             }
             return LandingLabel is { } label
                 ? $"into `{text}` at `{label.DisplayName}` {side}: name `{label.DisplayName}` with a `.patch`"

@@ -401,6 +401,23 @@ public sealed class FixesTests
     }
 
     /// <summary>
+    /// Checks that a store whose bytes land where the <c>.patch</c> cannot name them is offered
+    /// no <c>.patch</c> target. A label inside a macro's expansion is out of the routine's reach,
+    /// and the first instruction of the next routine is named by that routine's name.
+    /// </summary>
+    /// <param name="body">The program after the header.</param>
+    [Theory]
+    [InlineData(".macro load() {\n@op:\n    lda #0\n}\n.export .proc main: a8, i8 {\n    sta @op+2\n    .patch @op\n@op:\n    lda #0\n    load!()\n    rts\n}\n")]
+    [InlineData(".export .proc main: a8, i8 {\n    sta @op+3\n    .patch @op\n@op:\n    lda #0\n    rts\n}\n.export .proc next: a8, i8 {\n    lda #1\n    rts\n}\n")]
+    public void AStoreIntoCodeThePatchCannotNameIsOfferedNoTarget(string body)
+    {
+        var (analysis, model) = Analyzed(Header + body);
+
+        Assert.Contains(analysis.Diagnostics, diagnostic => diagnostic.Id == "patch-misses-store");
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.Contains("`.patch", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// An <c>.ensure</c> before a conditional branch would set the width on the path that falls
     /// through as well, so a branch to a routine that needs another width is offered no
     /// <c>.ensure</c>.

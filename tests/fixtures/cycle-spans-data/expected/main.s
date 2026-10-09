@@ -11,6 +11,8 @@
 .export main__either
 .export main__fewest
 .export main__most
+.export main__held_fewest
+.export main__held_most
 
 .segment "ZEROPAGE": zeropage
 color: .res 1
@@ -26,9 +28,14 @@ either__done:
     rts
 ; end of either
 
+fewest_cycles = $06
+most_cycles   = $07
+
 .segment "RODATA": absolute
 main__fewest: .byte $06
 main__most:   .word $07
-    ; budget!(.maxcycles(either::start, either::done))  main.nt65:28
+    ; budget!(.maxcycles(either::start, either::done))  main.nt65:33
 budget__given: .byte $07
     ; end of budget!
+main__held_fewest: .byte fewest_cycles
+main__held_most:   .word most_cycles
