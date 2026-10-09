@@ -69,8 +69,11 @@ public static class UnusedSymbols
                 continue;
             if (omitted.Count > 0 && omitted.Any(new Regex($@"(?<![\w@.]){Regex.Escape(symbol.DisplayName)}(?!\w)").IsMatch))
                 continue;
+            // Only a name a path reaches, in a file that names its module, can be exported. Anything
+            // else, such as a declaration in a repetition's body, is reported as never used alone.
+            var exportable = symbol is { IsCheapLocal: false, IsReachableByPath: true } && model.FileScope.Module is not null;
             yield return new Diagnostic(symbol.DeclarationSpan,
-                Catalogue.UnusedSymbol.Message(symbol.DisplayName))
+                Catalogue.UnusedSymbol.Message(symbol.DisplayName, exportable ? " or exported" : ""))
             {
                 Fix = new DiagnosticFix(FixKind.Unused, symbol.DisplayName),
                 IsUnnecessary = true,

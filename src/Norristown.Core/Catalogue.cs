@@ -1056,8 +1056,10 @@ public static class Catalogue
         Area.Names,
         "unused-symbol",
         Severity.Warning,
-        "`{0}` is never used or exported",
-        "Nothing in the program names the declaration and the file does not export it, so nothing reads it. Data "
+        "`{0}` is never used{1}",
+        "Nothing in the program names the declaration and the file does not export it, so nothing reads it. A "
+            + "declaration no path can reach, such as a cheap local or one in a `.repeat` or `.each` body, cannot be "
+            + "exported, so the message and the editor's fixes offer only removing it. Data "
             + "that holds values may be there for where it lands, so only a declaration that reserves storage is "
             + "reported. A declaration that another module names although it is not exported is "
             + "reported there instead, as an error.");

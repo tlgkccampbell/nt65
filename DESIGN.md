@@ -4425,7 +4425,8 @@ alone and without an assembler:
   declared name a misspelling is within a letter or two of, ca65's assertion level dropped, a
   `.res` as the `.byte[n]` that reserves the same room, an export widened to the address size it
   exports, the width item a routine assumes written into its signature, and the declaration or
-  `.use` item nothing names, taken out or exported. Where the fix is a name nobody but the
+  `.use` item nothing names, taken out or exported, where a path reaches it (a cheap local, or a
+  declaration in a repetition's body, is only taken out). Where the fix is a name nobody but the
   programmer can give — a name ca65 would read as an instruction (§4) — nothing is written: the
   caret goes on the name and a rename starts. Where a line has two readings — an expression that
   needs parentheses, a width the analysis cannot work out — each is offered and none is
@@ -4577,7 +4578,8 @@ process does.
 
 **Unused symbols** are warnings: a label, constant, macro, struct, union, enum, routine or data
 declaration that nothing names and the file does not export, since an export is what another
-file uses. A member of a named enum is one of a set and is not reported on its own, a label a
+file uses. A declaration no path reaches, such as a cheap local or one in a `.repeat` or `.each`
+body, cannot be exported, so its warning says only that it is never used. A member of a named enum is one of a set and is not reported on its own, a label a
 `.state` declares an entry point is reached from outside, and a label flow analysis reports as
 never reached is not reported twice. A routine nothing calls, jumps to or names — in data, in a
 `.next` or a `.fallthrough`, anywhere — and that the file does not export is a routine nothing
