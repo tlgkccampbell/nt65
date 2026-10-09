@@ -70,11 +70,13 @@ public sealed class UnpromisedKeepsTests
 
     /// <summary>
     /// A routine whose own <c>keeps</c> promise depends on a routine it calls relies on that
-    /// routine too, whether it returns after the call or hands control over in a tail call.
+    /// routine too, whether it returns after the call or hands control over in a tail call, made
+    /// by a jump or by a branch.
     /// </summary>
     [Theory]
     [InlineData(".export .proc main: keeps y {\n    jsr print_digit\n    rts\n}\n", "call")]
     [InlineData(".export .proc main: keeps y {\n    jmp print_digit\n}\n", "tail call")]
+    [InlineData(".export .proc main: keeps y {\n    lda $10\n    beq print_digit\n    rts\n}\n", "tail call")]
     public void AKeepsPromiseCanRelyOnACallee(string main, string how)
     {
         var diagnostic = Assert.Single(Diagnostics(PrintDigit + main));
@@ -172,6 +174,41 @@ public sealed class UnpromisedKeepsTests
 
         Assert.Equal("unpromised-keep", diagnostic.Id);
         Assert.Contains("`main` returns it here, promising `keeps`", diagnostic.Related.Select(related => related.Message));
+    }
+
+    /// <summary>
+    /// A call through a table to any of several routines relies on each of them keeping what the
+    /// code after it uses. Each routine that does not promise the register is warned about.
+    /// </summary>
+    [Fact]
+    public void ACallWithSeveralTargetsReliesOnEachOfThem()
+    {
+        const string Text = ".module main\n.cpu 65816\n.segment CODE\n"
+            + ".proc b: a8, i8, native, keeps x {\n    inc $10\n    rts\n}\n.proc b2: a8, i8, native, keeps x {\n    inc $11\n    rts\n}\n"
+            + ".export .proc main: a8, i8, native {\n    lda #1\n    ldx #0\n    jsr ($2000,x)\n    .next b, b2\n    sta $12\n    rts\n}\n";
+
+        var diagnostics = Analysis.Program(("main.nt65", Text)).Diagnostics;
+
+        Assert.Equal(
+            [
+                "this call relies on `b2` keeping A, which its `keeps x` does not promise",
+                "this call relies on `b` keeping A, which its `keeps x` does not promise",
+            ],
+            diagnostics.Select(diagnostic => diagnostic.Message).Order());
+    }
+
+    /// <summary>
+    /// A tail call through a vector to any of several routines relies on each of them keeping
+    /// what this routine promises to keep.
+    /// </summary>
+    [Fact]
+    public void ATailCallWithSeveralTargetsReliesOnEachOfThem()
+    {
+        const string Routines = ".proc b: keeps x {\n    inc $10\n    rts\n}\n.proc b2: keeps x, y {\n    inc $11\n    rts\n}\n";
+
+        var diagnostic = Assert.Single(Diagnostics(Routines + ".export .proc main: keeps y {\n    jmp ($20)\n    .next b, b2\n}\n"));
+
+        Assert.Equal("this tail call relies on `b` keeping Y, which its `keeps x` does not promise", diagnostic.Message);
     }
 
     /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/>.</summary>

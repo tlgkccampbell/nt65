@@ -4786,7 +4786,8 @@ Recorded so the reasoning survives. None is open.
 - **A declared `keeps` is a contract.** Where a routine with a body writes no `keeps`, what it
   keeps is inferred and callers use all of it. Where it writes one, the list is the whole
   promise: the body is checked against it, and a caller that relies on a register the list
-  leaves out is warned at its call or tail call, as `unpromised-keep`. The analysis still uses
+  leaves out is warned at its call or tail call, as `unpromised-keep`, once for each routine it
+  may reach that leaves the register out. The analysis still uses
   what the body keeps, so it stays accurate; the warning marks where a change to the routine's
   body would break its caller. A caller relies on a register when code after the call uses the
   value it held before, or when the caller's own `keeps` hands that value back. The 65816's high
