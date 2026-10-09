@@ -1,0 +1,28 @@
+; A cycle span that only data uses, with no assertion to evaluate it while the file is laid out,
+; is still counted and written as a number, because ca65 has no `.maxcycles` of its own.
+.module main
+
+.cpu 6502
+
+.segment ZEROPAGE
+.data color: .byte
+
+.segment CODE
+.export .proc either {
+    start:
+    lda color
+    beq done
+    nop
+    done:
+    rts
+}
+
+; A span given as a macro's argument counts too, although the body names only the parameter.
+.macro budget(cycles) {
+    .data given: .byte cycles
+}
+
+.segment RODATA
+.export .data fewest: .byte .mincycles(either::start, either::done)
+.export .data most:   .word .maxcycles(either::start, either::done)
+budget!(.maxcycles(either::start, either::done))

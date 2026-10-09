@@ -1159,11 +1159,11 @@ public static class Catalogue
         "cycles-span-has-no-bound",
         Severity.Error,
         "`{0}` cannot count these cycles: {1}",
-        "`.mincycles` and `.maxcycles` add up the cycles of the instructions between two positions, which gives a "
-            + "true count only when that code runs straight through once. A call takes as long as the routine it "
-            + "calls, a loop repeats its body an unknown number of times, and a jump nt65 cannot follow could go "
-            + "anywhere, so none of these may be inside the span. Both positions must also be in the same routine "
-            + "and the same segment block, with the start before the end.");
+        "`.mincycles` and `.maxcycles` follow every path from one position to another, which gives a true count "
+            + "only when each path runs once. A call takes as long as the routine it calls and a loop repeats its body "
+            + "an unknown number of times, so no path that arrives may make a call or loop. A jump nt65 cannot follow "
+            + "could go anywhere, so no pass may reach one. Both positions must also be in the same routine and the "
+            + "same segment block, and some path from the start must arrive at the end.");
 
     internal static DiagnosticDescriptor BuiltinArguments { get; } = Entry(
         Area.Values,

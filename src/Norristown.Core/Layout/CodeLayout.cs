@@ -180,58 +180,6 @@ public sealed partial class CodeLayout
     public long? SpanOf(Symbol symbol) => spans.TryGetValue(symbol, out var span) ? span : null;
 
     /// <summary>
-    /// Returns the cost in cycles of one pass from <paramref name="from"/> to
-    /// <paramref name="to"/>, as the lower bound or, when <paramref name="upperBound"/> is true, the
-    /// upper bound. The two must be positions in one routine. The span counts the instructions
-    /// from the first up to, but not including, the second, because <paramref name="to"/> is
-    /// where the pass arrives rather than an instruction it runs.
-    /// <para>
-    /// Summing a run of instructions bounds one pass only when the run executes straight through
-    /// once. A call takes as long as the called routine takes, and a loop runs its body as many
-    /// times as it iterates. A span that contains a call or a loop therefore has no count, and
-    /// the result gives the reason instead.
-    /// </para>
-    /// <para>
-    /// A layout that no cycle span asked about while it was laid out has no completed walk to
-    /// count over, and returns no count.
-    /// </para>
-    /// </summary>
-    public CycleSpan CyclesOf(Symbol from, Symbol to, bool upperBound)
-    {
-        if (counted is null)
-            return default;
-        if (At(from) is not { } start)
-            return new CycleSpan(null, $"`{from.DisplayName}` is not in any laid-out code");
-        if (At(to) is not { } end)
-            return new CycleSpan(null, $"`{to.DisplayName}` is not in any laid-out code");
-        if (counted[start].Routine is not { } routine || counted[end].Routine != routine)
-            return new CycleSpan(null, "the two positions are in different routines");
-        if (counted[start].Stream != counted[end].Stream)
-            return new CycleSpan(null, "the two positions are in different segment blocks");
-        if (end < start)
-            return new CycleSpan(null, $"`{to.DisplayName}` comes before `{from.DisplayName}`");
-
-        var total = new CycleCount(0);
-        for (var i = start; i < end; i++)
-        {
-            var step = counted[i];
-            if (step.IsMarker || step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax)
-                continue;
-            if (step.Statement is not InstructionStatementSyntax instruction)
-                continue;
-            var mnemonic = SyntaxFacts.TextOf(instruction.MnemonicKind);
-            if (Instructions.IsCall(instruction.MnemonicKind))
-                return new CycleSpan(null, $"the span contains a call, `{mnemonic}`, whose time depends on the routine it calls");
-            if (Backwards(instruction, step, start, i) is { } loop)
-                return new CycleSpan(null, loop);
-            if (Of(step.Statement, step.On)?.Cycles is not { } cycles)
-                return new CycleSpan(null, $"nt65 has no cycle count for `{mnemonic}`");
-            total += cycles;
-        }
-        return new CycleSpan(upperBound ? total.Maximum : total.Minimum, null);
-    }
-
-    /// <summary>
     /// Returns what runs from the position the <c>.label</c> at <paramref name="step"/> names inside
     /// an instruction, or null for any other step, and for a <c>.label</c> whose bytes nt65 could
     /// not follow.
@@ -282,41 +230,4 @@ public sealed partial class CodeLayout
     /// </summary>
     public BytePosition? PositionOf(Symbol label, Expansion? on = null) =>
         labels.TryGetValue((label, Expansion.Owning(on, label)), out var position) ? position : null;
-
-    /// <summary>
-    /// Returns why the transfer at step <paramref name="i"/> turns the span into a loop, or null
-    /// when it does not. A branch or jump back to a point between the span's start and itself
-    /// runs the code between them again. A transfer whose target nt65 cannot follow might go to
-    /// any such point, so it is treated the same way.
-    /// </summary>
-    private string? Backwards(InstructionStatementSyntax instruction, Step step, int start, int i)
-    {
-        var mode = Of(step.Statement, step.On)?.Mode;
-        var transfer = Transfers.Of(instruction, mode);
-        if (transfer is Transfer.Through or Transfer.Return)
-            return null;
-        var mnemonic = SyntaxFacts.TextOf(instruction.MnemonicKind);
-        if (transfer == Transfer.Elsewhere)
-            return $"the span contains `{mnemonic}`, whose target nt65 cannot follow";
-        if (Targets.Of(model, Transfers.TargetOf(instruction, mode), step.On) is not { } target)
-            return null;
-        return At(target.Symbol) is { } landing && landing >= start && landing <= i
-            ? $"`{mnemonic}` loops back to `{target.Symbol.DisplayName}`"
-            : null;
-    }
-
-    /// <summary>
-    /// Returns the index of the completed walk's step at which a symbol stands. That is the step
-    /// that declares it as a label or, for a routine's own name, the routine's first step. Returns
-    /// null for a symbol the walk did not reach.
-    /// </summary>
-    private int? At(Symbol symbol)
-    {
-        for (var i = 0; i < counted!.Count; i++)
-        {
-            if (counted[i].Label == symbol || (symbol.Kind == SymbolKind.Proc && counted[i].Routine == symbol))
-                return i;
-        }
-        return null;
-    }
 }

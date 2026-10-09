@@ -1,13 +1,14 @@
-; `.mincycles` and `.maxcycles` give the cost in cycles of one pass from one position to another.
-; A sum along a run of instructions bounds a pass only when the run is straight-line code, so the
-; span holds no call and no loop, and where every count is exact both answers are the same.
+; `.mincycles` and `.maxcycles` give the cost in cycles of a pass from one position to another.
+; A pass follows the code as it runs, so a branch may go either way and a jump goes to its
+; target. `.mincycles` is the cheapest pass that arrives at the end, and `.maxcycles` the most
+; expensive. Where every count is exact and there is one way through, both answers are the same.
 .module main
 
 .cpu 6502
 
 .segment ZEROPAGE
-.data colour: .byte
-.data next:   .byte
+.data color: .byte
+.data next:  .byte
 
 .segment CODE
 
@@ -15,10 +16,10 @@
 ; Every instruction here is exact, so the two answers are one number and the assertion says it.
 .export .proc raster {
     top:
-    lda colour
+    lda color
     sta $d020
     lda next
-    sta colour
+    sta color
     nop
     nop
     bottom:
@@ -30,19 +31,88 @@
 .assert .maxcycles(raster::top, raster::bottom) == 17, "the raster line moved"
 
 ; A branch takes 2 cycles not taken and 3 taken, and one more when a taken branch crosses a
-; page, so a span with one in it is a range rather than a number: `.mincycles` gives the
-; cheapest pass and `.maxcycles` the most expensive.
+; page. Taken, this branch skips the `nop`, so the pass costs 3 + 3 = 6 cycles, or 7 across a
+; page. Not taken, it costs 3 + 2 + 2 = 7.
 .export .proc either {
     start:
-    lda colour
+    lda color
     beq done
     nop
     done:
     rts
 }
 
-.assert .mincycles(either::start, either::done) == 7, "the short way changed"
-.assert .maxcycles(either::start, either::done) == 9, "the long way changed"
+.assert .mincycles(either::start, either::done) == 6, "the short way changed"
+.assert .maxcycles(either::start, either::done) == 7, "the long way changed"
+
+; A jump goes to its target, so the instructions it skips are no part of the pass. Nothing else
+; runs them, so nt65 warns that they are never reached.
+.export .proc skipping {
+    start:
+    jmp over
+    nop     ;! warning[code-unreachable]: this code is never reached: the statement above does not fall through, and nothing branches or jumps here
+    nop
+    nop
+    over:
+    rts
+}
+
+.assert .mincycles(skipping::start, skipping::over) == 3, "the jump changed"
+.assert .maxcycles(skipping::start, skipping::over) == 3, "the jump changed"
+
+; Two paths that cost the same are how a raster routine stays exact across a branch. Each way
+; costs 13 cycles, and the taken branch costs one more where it crosses a page.
+.export .proc balanced {
+    start:
+    lda color
+    bmi high
+    lda #1
+    jmp join
+    high:
+    lda #2
+    nop
+    join:
+    sta next
+    finish:
+    rts
+}
+
+.assert .mincycles(balanced::start, balanced::finish) == 13, "the balanced branch moved"
+.assert .maxcycles(balanced::start, balanced::finish) == 14, "the balanced branch moved"
+
+; A path that returns before it arrives at the end is not a pass, and costs nothing here, so the
+; call on that path does not matter either. Only the taken branch arrives, at 3 + 3 + 2 = 8
+; cycles, or 9 across a page.
+.export .proc guarded {
+    start:
+    lda color
+    bne busy
+    jsr raster
+    rts
+    busy:
+    nop
+    done:
+    rts
+}
+
+.assert .mincycles(guarded::start, guarded::done) == 8, "the guard changed"
+.assert .maxcycles(guarded::start, guarded::done) == 9, "the guard changed"
+
+; A branch past the end leaves the span and never arrives, so only the way that falls through
+; is a pass, at 3 + 2 + 2 = 7 cycles.
+.export .proc leaving {
+    start:
+    lda color
+    beq past
+    nop
+    done:
+    nop
+    past:
+    rts
+}
+
+.assert .mincycles(leaving::start, leaving::done) == 7, "the way through changed"
+.assert .maxcycles(leaving::start, leaving::done) == 7, "the way through changed"
 
 ; A routine's own name is its first position, which is what a span from the top is written as.
 .export .proc whole {

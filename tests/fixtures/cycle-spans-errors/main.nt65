@@ -1,6 +1,7 @@
-; A sum of cycles along a run of instructions bounds one pass only when the run is straight-line
-; code, so a span holding a call, a loop or an untraceable jump has no bound, and the error says
-; which it found. Both ends must be positions in one routine, the start before the end.
+; A pass from one position to another has a bound only when every path that arrives runs
+; straight through once. So a span has no bound where such a path makes a call or loops, or where
+; a pass can reach a jump nt65 cannot follow, and the error says which it found. Both ends must be
+; positions in one routine, and some path from the start must arrive at the end.
 .module main
 
 .cpu 6502
@@ -44,10 +45,10 @@
     rts
 }
 
-; A call takes as long as the routine it names, which is no part of this sum.
+; A call takes as long as the routine it names, which is no part of this count.
 .assert .mincycles(calling::before, calling::after) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span contains a call, `jsr`, whose time depends on the routine it calls
 
-; A loop runs its body once per iteration, and the sum would count the body only once.
+; A loop runs its body once per iteration, and a pass would count the body only once.
 .assert .maxcycles(looping::start, looping::done) == 0     ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: `bne` loops back to `again`
 
 ; A target nt65 cannot follow could be anywhere, this span included.
@@ -56,8 +57,8 @@
 ; Two positions in different routines are not a span at all.
 .assert .mincycles(calling::before, other::far_off) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the two positions are in different routines
 
-; The end position comes before the start, so the pass would run backwards.
-.assert .mincycles(calling::after, calling::before) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: `before` comes before `after`
+; A pass from `after` returns before it arrives at `before`, so no pass arrives at all.
+.assert .mincycles(calling::after, calling::before) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: no path from `after` arrives at `before`
 
 ; Neither end is a position in code.
 .const LIMIT = 4

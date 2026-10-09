@@ -10,38 +10,94 @@
 
 .export main__raster
 .export main__either
+.export main__skipping
+.export main__balanced
+.export main__guarded
+.export main__leaving
 .export main__whole
 .export main__budget
 
 .segment "ZEROPAGE": zeropage
-colour: .res 1
-next:   .res 1
+color: .res 1
+next:  .res 1
 
 .segment "CODE": absolute
-; .proc raster  main.nt65:16
+; .proc raster  main.nt65:17
 main__raster:
 raster__top:
-    lda z:colour
+    lda z:color
     sta a:$d020
     lda z:next
-    sta z:colour
+    sta z:color
     nop
     nop
 raster__bottom:
     rts
 ; end of raster
 
-; .proc either  main.nt65:35
+; .proc either  main.nt65:36
 main__either:
 either__start:
-    lda z:colour
+    lda z:color
     beq either__done
     nop
 either__done:
     rts
 ; end of either
 
-; .proc whole  main.nt65:48
+; .proc skipping  main.nt65:50
+main__skipping:
+skipping__start:
+    jmp skipping__over
+    nop
+    nop
+    nop
+skipping__over:
+    rts
+; end of skipping
+
+; .proc balanced  main.nt65:65
+main__balanced:
+balanced__start:
+    lda z:color
+    bmi balanced__high
+    lda #1
+    jmp balanced__join
+balanced__high:
+    lda #2
+    nop
+balanced__join:
+    sta z:next
+balanced__finish:
+    rts
+; end of balanced
+
+; .proc guarded  main.nt65:86
+main__guarded:
+guarded__start:
+    lda z:color
+    bne guarded__busy
+    jsr main__raster
+    rts
+guarded__busy:
+    nop
+guarded__done:
+    rts
+; end of guarded
+
+; .proc leaving  main.nt65:103
+main__leaving:
+leaving__start:
+    lda z:color
+    beq leaving__past
+    nop
+leaving__done:
+    nop
+leaving__past:
+    rts
+; end of leaving
+
+; .proc whole  main.nt65:118
 main__whole:
     nop
     nop
