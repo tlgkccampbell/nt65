@@ -27,6 +27,70 @@ public sealed class HoverTests
     }
 
     /// <summary>
+    /// The inferred row shows the program bank a routine was inferred to run in only where it is
+    /// not the bank its segment declares. <c>FAST</c> is in bank $00 and mirrored at $80.
+    /// <c>reset</c> jumps to <c>fast</c> through the mirror, so <c>fast</c> and <c>helper</c>,
+    /// which only <c>fast</c> calls, run in bank $80. <c>either</c> is also called from
+    /// <c>slow</c>, which runs in bank $00, so its bank is not known. <c>home</c> is called only
+    /// from <c>slow</c>, so it runs in its own bank and its row says nothing about the bank.
+    /// </summary>
+    [Fact]
+    public async Task TheInferredRowShowsABankOnlyWhereItIsNotTheHomeBank()
+    {
+        var timeout = TestTimeout.Token();
+        using var root = new TempFolder("nt65-hover-");
+        root.Write("nt65.json", """
+            { "cpu": "65816", "files": ["*.nt65"],
+              "segments": { "STUBS": { "size": "abs", "bank": 0 }, "FAST": { "size": "abs", "bank": 0, "mirrors": ["$80"] } } }
+            """);
+        const string Source = """
+            .module main
+            .export reset
+            .segment STUBS
+            .proc reset: emu, dp?, dbr?, noreturn {
+                clc
+                xce
+                jml ($80 << 16) | .loword(fast)
+            }
+            .segment FAST
+            .proc fast: noreturn {
+                jsr helper
+                jsr either
+            @forever:
+                bra @forever
+            }
+            .proc helper: a8 {
+                rts
+            }
+            .proc either: a8 {
+                rts
+            }
+            .proc home: a8 {
+                rts
+            }
+            .proc slow: a8, native, noreturn {
+                jsr either
+                jsr home
+            @forever:
+                bra @forever
+            }
+            """;
+        var source = Source.ReplaceLineEndings("\n");
+        root.Write("main.nt65", source);
+        var uri = new Uri(root.PathOf("main.nt65")).AbsoluteUri;
+        await using var client = await TestClient.StartAsync(new Uri(root.FullName).AbsoluteUri, null, timeout);
+        await client.OpenAsync(uri, source);
+
+        async Task<string> Inferred(string at) =>
+            (await client.HoverAsync(uri, Locate.At(source, at), timeout))?.Contents.Value ?? "";
+
+        Assert.Matches(@"inferred +.*pbr = \$80", await Inferred(".proc fa|st"));
+        Assert.Matches(@"inferred +.*pbr = \$80", await Inferred(".proc hel|per"));
+        Assert.Matches(@"inferred +.*pbr\?", await Inferred(".proc eit|her"));
+        Assert.DoesNotContain("pbr", await Inferred(".proc ho|me"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// An editor can be set to hide lenses, so which registers a routine or an inline
     /// <c>.scope</c> block preserves is shown on hover as well as in the lens above the line.
     /// </summary>

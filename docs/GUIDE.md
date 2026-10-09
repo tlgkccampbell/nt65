@@ -1510,8 +1510,10 @@ meet. `dbr` becomes one of the callers' banks, and every check of a bank is made
 `dp` becomes unknown, which is an error only where an operand needs it, such as a `d:` operand
 or a symbol in a segment that declares `dp`. The error names the callers.
 
-Hover over a routine's name to see what is inferred for it, on the `inferred` row. The
-refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
+Hover over a routine's name to see what is inferred for it, on the `inferred` row. The row
+names the program bank only where the routine runs somewhere other than its segment's bank:
+`pbr = $80` for a routine reached only through a mirror, and `pbr?` for one reached from
+several banks. The refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
 a contract. An exported routine whose bytes depend on an inferred width, mode or direct page,
 such as an immediate sized by an inferred `a8`, gets a hint, `export-state-inferred`, since a
 caller outside nt65 is not checked against it. Its fix declares those items.

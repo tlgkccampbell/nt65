@@ -538,7 +538,8 @@ internal static class Hovers
         if (analysis.Cpu == Cpu.Wdc65816 && symbol.Signature is { IsInterrupt: false } declared
             && flow.Signatures.Of(symbol) is { } inferred)
         {
-            var (entry, exit) = InferredState.Items(declared, inferred);
+            var home = symbol.Segment is { } segment ? analysis.ModelFor(symbol.Tree.Path)?.Segments.Find(segment)?.Bank : null;
+            var (entry, exit) = InferredState.Items(declared, inferred, home);
             card.Row("inferred", InferredState.Format(entry, exit));
         }
     }
