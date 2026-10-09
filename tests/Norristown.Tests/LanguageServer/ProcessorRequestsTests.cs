@@ -185,6 +185,41 @@ public sealed class ProcessorRequestsTests
         Assert.Equal(5, stack.Rows![1].Target?.Range.Start.Line);
     }
 
+    /// <summary>
+    /// A line in a repetition or a macro body runs once per expansion. Where the expansions reach
+    /// it in different states, the state row shows what they agree on, and the rows under it list
+    /// each state with how many expansions it reaches, as the hover does. The first pass through
+    /// the repetition is under <c>a8</c>, and its <c>rep #$20</c> makes A 16-bit for the second.
+    /// </summary>
+    [Fact]
+    public async Task TheStateRowListsTheExpansionsOfAMacroBodyThatDiffer()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In("""
+            .module main
+            .cpu 65816
+
+            .segment CODE
+            .export .proc main: a8, i8, native {
+                .repeat 2, i {
+                    l|da $1234
+                    rep #$20
+                }
+                sep #$20
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, text));
+
+        var result = await ProcessorAsync(client, position, [], timeout);
+        Assert.NotNull(result);
+        var state = result.Rows[0];
+        Assert.Equal(("state", "native, a?, i8", "2 expansions differ"), (state.Key, state.Value, state.Detail));
+        Assert.Equal(
+            [("×1", "native, a16, i8"), ("×1", "native, a8, i8")],
+            state.Rows!.Select(row => (row.Key, row.Value)));
+    }
+
     private static Task<ProcessorResult?> ProcessorAsync(
         TestClient client, Position position, IReadOnlyList<Location> callers, CancellationToken timeout) =>
         client.RequestAsync<ProcessorResult?>(

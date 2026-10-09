@@ -127,11 +127,18 @@ internal static class CodeLenses
 
     /// <summary>
     /// Formats the registers a routine returns holding the values it was entered with, or returns
-    /// null when no path through the routine, including its calls, returns.
+    /// null when no path through the routine, including its calls, returns. Where the routine
+    /// promises some of them with <c>keeps</c>, the promise is shown apart from the registers
+    /// that are only inferred.
     /// </summary>
-    private static string? Kept(FlowRegion region) => region.Total.Ends
-        ? Format(region.Registers.Kept, region.Registers.Complete)
-        : null;
+    private static string? Kept(FlowRegion region)
+    {
+        if (!region.Total.Ends)
+            return null;
+        return region.Routine.Signature?.Keeps is { } promised and not Registers.None
+            ? Hovers.Promised(region.Registers.Kept, region.Registers.Complete, promised, "also preserves")
+            : Format(region.Registers.Kept, region.Registers.Complete);
+    }
 
     /// <summary>
     /// Formats the preserved registers as the lens shows them. The hover formats the list the same

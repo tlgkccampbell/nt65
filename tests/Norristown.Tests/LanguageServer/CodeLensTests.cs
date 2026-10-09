@@ -410,6 +410,41 @@ public sealed class CodeLensTests
     }
 
     /// <summary>
+    /// A routine that promises registers with <c>keeps</c> shows the promise apart from the
+    /// registers the analysis only found unchanged, in the lens and in the hover. A caller may
+    /// rely only on the promise. <c>lda #0</c> changes A, Z and N, so <c>declared</c> returns X,
+    /// Y, C and V unchanged, of which it promises only X.
+    /// </summary>
+    [Fact]
+    public async Task ALensSetsAPromiseApartFromWhatIsInferred()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc declared: keeps x {
+                lda #0
+                rts
+            }
+            .proc exact: keeps x, y, c, v {
+                lda #0
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, ".proc decl|ared"), timeout);
+
+        Assert.Equal(
+            ["keeps X · also preserves Y, C, V (inferred)", "keeps X, Y, C, V"],
+            lenses.Where(lens => lens.Command.Title.StartsWith("keeps", StringComparison.Ordinal))
+                .Select(lens => lens.Command.Title));
+        Assert.Contains("preserves  keeps X · also Y, C, V (inferred)", hover?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Which registers a routine preserves, in a lens beside its cost. A routine whose calls
     /// nt65 cannot follow shows <c>preserves ?</c> rather than no lens, because a missing lens
     /// would read as though the routine were safe to call.
@@ -537,7 +572,7 @@ public sealed class CodeLensTests
         Assert.Equal(": reads a, c", Clicked(2, "reads A, C"));
         Assert.Equal(": keeps x, y", Clicked(2, "preserves X, Y"));
         Assert.Equal("", Clicked(7, "reads A, C"));
-        Assert.Equal("", Clicked(7, "preserves X, Y"));
+        Assert.Equal("", Clicked(7, "keeps X, Y"));
         Assert.Equal("", Clicked(13, "reads X, ?"));
     }
 

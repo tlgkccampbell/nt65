@@ -27,6 +27,106 @@ public sealed class HoverTests
     }
 
     /// <summary>
+    /// The inferred row shows the program bank a routine was inferred to run in only where it is
+    /// not the bank its segment declares. <c>FAST</c> is in bank $00 and mirrored at $80.
+    /// <c>reset</c> jumps to <c>fast</c> through the mirror, so <c>fast</c> and <c>helper</c>,
+    /// which only <c>fast</c> calls, run in bank $80. <c>either</c> is also called from
+    /// <c>slow</c>, which runs in bank $00, so its bank is not known. <c>home</c> is called only
+    /// from <c>slow</c>, so it runs in its own bank and its row says nothing about the bank.
+    /// </summary>
+    [Fact]
+    public async Task TheInferredRowShowsABankOnlyWhereItIsNotTheHomeBank()
+    {
+        var timeout = TestTimeout.Token();
+        using var root = new TempFolder("nt65-hover-");
+        root.Write("nt65.json", """
+            { "cpu": "65816", "files": ["*.nt65"],
+              "segments": { "STUBS": { "size": "abs", "bank": 0 }, "FAST": { "size": "abs", "bank": 0, "mirrors": ["$80"] } } }
+            """);
+        const string Source = """
+            .module main
+            .export reset
+            .segment STUBS
+            .proc reset: emu, dp?, dbr?, noreturn {
+                clc
+                xce
+                jml ($80 << 16) | .loword(fast)
+            }
+            .segment FAST
+            .proc fast: noreturn {
+                jsr helper
+                jsr either
+            @forever:
+                bra @forever
+            }
+            .proc helper: a8 {
+                rts
+            }
+            .proc either: a8 {
+                rts
+            }
+            .proc home: a8 {
+                rts
+            }
+            .proc slow: a8, native, noreturn {
+                jsr either
+                jsr home
+            @forever:
+                bra @forever
+            }
+            """;
+        var source = Source.ReplaceLineEndings("\n");
+        root.Write("main.nt65", source);
+        var uri = new Uri(root.PathOf("main.nt65")).AbsoluteUri;
+        await using var client = await TestClient.StartAsync(new Uri(root.FullName).AbsoluteUri, null, timeout);
+        await client.OpenAsync(uri, source);
+
+        async Task<string> Inferred(string at) =>
+            (await client.HoverAsync(uri, Locate.At(source, at), timeout))?.Contents.Value ?? "";
+
+        Assert.Matches(@"inferred +.*pbr = \$80", await Inferred(".proc fa|st"));
+        Assert.Matches(@"inferred +.*pbr = \$80", await Inferred(".proc hel|per"));
+        Assert.Matches(@"inferred +.*pbr\?", await Inferred(".proc eit|her"));
+        Assert.DoesNotContain("pbr", await Inferred(".proc ho|me"), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A line in a macro body runs once per call, and the hover covers every expansion rather
+    /// than the first one found. <c>bump!</c> is called under <c>a8</c> and again after
+    /// <c>rep #$20</c>. Its <c>lda $1234</c> takes 4 cycles 8-bit and 5 cycles 16-bit, so the
+    /// row spans 4-5 and says why. The block is the whole routine: 4 + 3 (<c>rep</c>) + 5 + 3
+    /// (<c>sep</c>) + 6 (<c>rts</c>) is 21 cycles. Each state is listed with how many
+    /// expansions it reaches.
+    /// </summary>
+    [Fact]
+    public async Task HoverInAMacroBodyCoversEveryExpansion()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .macro bump() {
+                lda $1234
+            }
+            .export .proc main: a8, i8, native {
+                bump!()
+                rep #$20
+                bump!()
+                sep #$20
+                rts
+            }
+            """;
+        var source = Source.ReplaceLineEndings("\n");
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, source));
+
+        var hover = (await client.HoverAsync(MainUri, Locate.At(source, "l|da $1234"), timeout))?.Contents.Value;
+
+        Assert.Matches(@"cycles +4-5 +block 21 +the expansions differ", hover);
+        Assert.Matches(@"state +a16, i8, native ×1\n +a8, i8, native ×1\n", hover);
+    }
+
+    /// <summary>
     /// An editor can be set to hide lenses, so which registers a routine or an inline
     /// <c>.scope</c> block preserves is shown on hover as well as in the lens above the line.
     /// </summary>

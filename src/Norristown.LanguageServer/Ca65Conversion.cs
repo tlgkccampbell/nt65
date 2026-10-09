@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.RegularExpressions;
 using Norristown.Semantics;
 
@@ -8,8 +7,8 @@ namespace Norristown.LanguageServer;
 /// Converts ca65 source in a selection to nt65, using only rewrites that concern a single line
 /// and keep its meaning. A block opened and closed by directives (<c>.proc</c> ...
 /// <c>.endproc</c>) is opened and closed by braces instead, segment and data directives are
-/// renamed to their nt65 forms, ca65's operator words become symbols, and directives that only
-/// ca65 needed are dropped.
+/// renamed to their nt65 forms, expressions are rewritten by <see cref="Ca65Expressions"/> so
+/// that they keep ca65's precedence, and directives that only ca65 needed are dropped.
 /// <para>
 /// A line that cannot be converted is left exactly as it was. An unnamed label, a macro call, an
 /// <c>.include</c> and anything else that needs a decision rather than a textual rewrite is left
@@ -40,26 +39,6 @@ internal static partial class Ca65Conversion
         [".bss"] = "BSS",
         [".data"] = "DATA",
         [".rodata"] = "RODATA",
-    };
-
-    /// <summary>
-    /// ca65's operator words, mapped to the symbols nt65 uses for them, and the ca65 directive
-    /// names that nt65 renames, mapped to their nt65 names.
-    /// </summary>
-    private static readonly Dictionary<string, string> operators = new(StringComparer.OrdinalIgnoreCase)
-    {
-        [".bitand"] = "&",
-        [".bitor"] = "|",
-        [".bitxor"] = "^",
-        [".and"] = "&&",
-        [".or"] = "||",
-        [".xor"] = "^^",
-        [".not"] = "!",
-        [".shl"] = "<<",
-        [".shr"] = ">>",
-        [".asciiz"] = ".strz",
-        [".dbyt"] = ".beword",
-        [".tag"] = ".type",
     };
 
     /// <summary>
@@ -113,7 +92,7 @@ internal static partial class Ca65Conversion
         else if (first is not null)
             converted = Opened(Renamed(code, first), first);
 
-        return indent + Operators(converted) + comment;
+        return indent + Ca65Expressions.Line(converted) + comment;
     }
 
     /// <summary>Returns the line with its leading directive rewritten in nt65's form.</summary>
@@ -208,49 +187,6 @@ internal static partial class Ca65Conversion
         return directive.Equals(".res", StringComparison.OrdinalIgnoreCase) && rest.Length > 0
             ? $".data {name}: .byte[{rest}]"
             : $".data {name}: {directive}{(rest.Length > 0 ? " " + rest : "")}";
-    }
-
-    /// <summary>Replaces ca65's operator words and directive names with their nt65 forms.</summary>
-    private static string Operators(string code)
-    {
-        var result = new StringBuilder();
-        var at = 0;
-        while (at < code.Length)
-        {
-            var c = code[at];
-            if (c is '"' or '\'')
-            {
-                var end = at + 1;
-                while (end < code.Length && code[end] != c)
-                    end += code[end] == '\\' ? 2 : 1;
-                end = Math.Min(end + 1, code.Length);
-                result.Append(code[at..end]);
-                at = end;
-                continue;
-            }
-            if (c == '.' || char.IsLetter(c))
-            {
-                var end = at + (c == '.' ? 1 : 0);
-                while (end < code.Length && (char.IsLetterOrDigit(code[end]) || code[end] == '_'))
-                    end++;
-                var word = code[at..end];
-                result.Append(operators.TryGetValue(word, out var symbol) ? symbol : word);
-                at = end;
-                continue;
-            }
-
-            // ca65 tests inequality with `<>`, which nt65 does not have. (ca65 also compares with
-            // `=`, which nt65 reads as assignment; that is not rewritten here.)
-            if (c == '<' && at + 1 < code.Length && code[at + 1] == '>')
-            {
-                result.Append("!=");
-                at += 2;
-                continue;
-            }
-            result.Append(c);
-            at++;
-        }
-        return result.ToString();
     }
 
     /// <summary>

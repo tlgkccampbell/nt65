@@ -1329,7 +1329,8 @@ ROM routine somewhere to live.
 A routine that writes no `keeps` promises whatever its body keeps, and its callers may rely on
 all of it. Once it writes `keeps`, the list is the whole promise. nt65 still uses what the body
 keeps, but a caller that relies on a register the list leaves out gets `unpromised-keep` at the
-call:
+call. The lens above such a routine shows the two apart, as `keeps X · also preserves Y, C, V
+(inferred)`, and so does its hover:
 
 ```text
 main.nt65:12:5: warning: this call relies on `print_digit` keeping Y, which it does but does not promise (it declares `keeps x`) [unpromised-keep]
@@ -1509,8 +1510,10 @@ meet. `dbr` becomes one of the callers' banks, and every check of a bank is made
 `dp` becomes unknown, which is an error only where an operand needs it, such as a `d:` operand
 or a symbol in a segment that declares `dp`. The error names the callers.
 
-Hover over a routine's name to see what is inferred for it, on the `inferred` row. The
-refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
+Hover over a routine's name to see what is inferred for it, on the `inferred` row. The row
+names the program bank only where the routine runs somewhere other than its segment's bank:
+`pbr = $80` for a routine reached only through a mirror, and `pbr?` for one reached from
+several banks. The refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
 a contract. An exported routine whose bytes depend on an inferred width, mode or direct page,
 such as an immediate sized by an inferred `a8`, gets a hint, `export-state-inferred`, since a
 caller outside nt65 is not checked against it. Its fix declares those items.
@@ -1650,7 +1653,9 @@ label's declaration. It is also what follows a `plp` of a value nt65 did not see
 }
 ```
 
-The editor's fixes write `.state` lines from what the analysis finds reaching a label.
+The editor's fixes write `.state` lines from what the analysis finds reaching a label. Where
+the label is also entered from somewhere nt65 cannot see, that state is only what the visible
+paths bring, so the fix says so, is not preferred, and is offered beside `.state ?`.
 
 ### The stack
 
@@ -2131,8 +2136,11 @@ everything below works across modules.
   the mode and the widths, D and B. On every processor it gives what A, X and Y hold, with the
   constant where the instructions give one and the line that set the value, the flags as `0`,
   `1` or `?`, and the stack top first. On the 65816 each push is keyed by the stack-relative
-  offset that reads it, such as `3,s`. A line with nothing that runs, such as the one that
-  opens a routine, shows the next line that does. A fact that is not known says `unknown`
+  offset that reads it, such as `3,s`. A line in a macro body or a repetition runs once per
+  expansion, and the view and the hover show what every expansion agrees on. Where the
+  expansions reach the line in different states, both list each state with how many expansions
+  it reaches, and the hover's cycles cover them all. A line with nothing that runs, such as the
+  one that opens a routine, shows the next line that does. A fact that is not known says `unknown`
   rather than being left out. The stack is known only from the routine's entry, so it ends at
   the stack the routine was entered with. *Choose the Caller the Processor View Shows*, or the
   view's last row, picks one `jsr` or `jsl` to the routine, and the stack then goes on through
@@ -2294,7 +2302,9 @@ form.
 | `.local` labels in a macro | nothing: every name in a body is local to its expansion |
 
 In the editor, paste ca65 in, select it and choose *Read the selection as nt65*: spellings,
-block words, segment directives and ca65's operator words are rewritten. What needs a decision
+block words, segment directives and ca65's operator words are rewritten. Each expression is read
+with ca65's precedence and given the parentheses nt65 needs to mean the same, so
+`.not N = 1` becomes `!(N == 1)` and `#<label+1` becomes `#(<label)+1`. What needs a decision
 rather than a new spelling, such as an unnamed label, a macro call or an `.include`, is left
 as it was for you and the diagnostics to work through.
 

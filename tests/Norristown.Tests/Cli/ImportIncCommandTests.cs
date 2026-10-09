@@ -40,8 +40,7 @@ public sealed class ImportIncCommandTests
 
     /// <summary>
     /// A line nt65 cannot read stays in the module as a comment and is counted. Such lines
-    /// include a ca65 directive, a ca65 operator nt65 does not have, and an expression in which
-    /// nt65 requires parentheses to make its order explicit.
+    /// include a ca65 directive and an expression nt65 cannot parse.
     /// </summary>
     [Fact]
     public void WhatItCannotConvertIsLeftAsAComment()
@@ -49,8 +48,7 @@ public sealed class ImportIncCommandTests
         var (text, refused) = ImportIncCommand.Convert(
             """
             .include "other.inc"
-            FLAGS = 1 .SHL 3
-            MIXED = 1 | 2 + 3
+            BROKEN = 1 +
             .struct Point
                     x       .word
             .endstruct
@@ -59,12 +57,38 @@ public sealed class ImportIncCommandTests
             "hw",
             "other.inc");
 
-        Assert.Equal([1, 2, 3, 4, 5, 6], refused.Select(line => line.Line));
+        Assert.Equal([1, 2, 3, 4, 5], refused.Select(line => line.Line));
         Assert.Contains("`.include` is a ca65 directive", refused[0].Why, StringComparison.Ordinal);
-        Assert.Contains("parentheses", refused[2].Why, StringComparison.Ordinal);
+        Assert.Contains("cannot parse", refused[1].Why, StringComparison.Ordinal);
         Assert.Contains("; not converted: .include \"other.inc\"", text, StringComparison.Ordinal);
-        Assert.Contains("; not converted: MIXED = 1 | 2 + 3", text, StringComparison.Ordinal);
+        Assert.Contains("; not converted: BROKEN = 1 +", text, StringComparison.Ordinal);
         Assert.Contains(".export OK", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// An expression is read with ca65's precedence and written with nt65's operators and the
+    /// parentheses that keep its meaning. ca65 binds <c>.SHL</c> as tightly as <c>*</c> and
+    /// <c>|</c> as tightly as <c>+</c>, both left to right, so <c>1 | 2 + 3</c> is
+    /// <c>(1 | 2) + 3</c>. Its <c>!</c> binds loosest of all, so <c>!OK + 1</c> is
+    /// <c>!(OK + 1)</c>, which nt65 would otherwise read as <c>(!OK) + 1</c>.
+    /// </summary>
+    [Fact]
+    public void ExpressionsKeepCa65sPrecedence()
+    {
+        var (text, refused) = ImportIncCommand.Convert(
+            """
+            OK    = 7
+            FLAGS = 1 .SHL 3
+            MIXED = 1 | 2 + 3
+            FLIP  = !OK + 1
+            """.ReplaceLineEndings("\n") + "\n",
+            "hw",
+            "other.inc");
+
+        Assert.Empty(refused);
+        Assert.Contains("= 1 << 3", text, StringComparison.Ordinal);
+        Assert.Contains("= (1 | 2) + 3", text, StringComparison.Ordinal);
+        Assert.Contains("= !(OK + 1)", text, StringComparison.Ordinal);
     }
 
     /// <summary>The file it writes is an nt65 module that parses and is in the standard layout.</summary>

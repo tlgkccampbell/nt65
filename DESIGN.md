@@ -832,9 +832,11 @@ own source from then on: a build reads no ca65, and a change to the include file
 over by running the command again. A `NAME = expr` or `NAME := expr` line whose expression nt65
 reads becomes a constant and is exported, a comment is carried over, and every other line is
 written out as a comment saying it was not converted and counted on standard error, so nothing
-in the file is dropped where nobody sees it. What nt65 reads is nt65's own reader, so a ca65
-operator nt65 does not have, and an expression whose order §9 asks to see in parentheses, are
-both left for a person rather than written out as something that will not build.
+in the file is dropped where nobody sees it. The expression is first read with ca65's
+precedence and written with nt65's operators and the parentheses that keep its meaning, as the
+editor's conversion does, so `1 .SHL 3` becomes `1 << 3` and `.NOT A = 1` becomes `!(A == 1)`.
+What nt65 then reads is nt65's own reader, so a ca65 construct nt65 does not have is left for a
+person rather than written out as something that will not build.
 
 **Explaining one.** `nt65 explain <name>` prints what the one line had no room for: what the
 diagnostic is about, and the line a project file would write to switch it. Named nothing, it

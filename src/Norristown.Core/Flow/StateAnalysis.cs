@@ -40,6 +40,7 @@ public sealed class StateAnalysis : IProcessorStates
     private readonly List<CallState> calls = [];
     private readonly Dictionary<Symbol, ProcessorState> left = [];
     private readonly Dictionary<StepKey, FlowState> reaching = [];
+    private readonly Dictionary<StepKey, FlowState> leaving = [];
     private readonly Dictionary<StepKey, int> slots = [];
 
     // The state at the start of each expansion of a macro with a signature, and of each block
@@ -47,10 +48,10 @@ public sealed class StateAnalysis : IProcessorStates
     // takes its unchanged parts from it.
     private readonly Dictionary<StepKey, ProcessorState> started = [];
 
-    // The first state in reaching for each line, built when an editor first asks. Inlay hints ask
-    // about every line of a file, so scanning reaching for each one would grow with the square of
-    // the file.
-    private Dictionary<(SyntaxTree Tree, int Position), FlowState>? anyExpansion;
+    // The keys in reaching of every expansion of each line, built when an editor first asks.
+    // Inlay hints ask about every line of a file, so scanning reaching for each one would grow
+    // with the square of the file.
+    private Dictionary<(SyntaxTree Tree, int Position), List<StepKey>>? expansions;
 
     // The block moves whose banks a `.patch` says the program writes, built when the analysis
     // first meets a block move.
@@ -156,24 +157,61 @@ public sealed class StateAnalysis : IProcessorStates
         slots.TryGetValue(StepKey.Of(statement, on), out var slot) ? slot : null;
 
     /// <summary>
-    /// Returns the state reaching a statement in any <see cref="Expansion"/> of it. An editor asks
-    /// about a line, and is shown the state that reaches the first expansion found. An expansion's
-    /// line belongs to the file that contains the body it expands. For a macro declared in another
-    /// file that is the other file, so the same position in two files is two lines.
+    /// Returns what every <see cref="Expansion"/> of a statement agrees reaches it, or null where
+    /// nothing reaches it. An editor asks about a line, and a line in a macro body runs once per
+    /// call, each copy with its own state. What they agree on is the one thing true of the line
+    /// itself, and a merge does not depend on which expansion is found first.
+    /// <para>
+    /// An expansion's line belongs to the file that contains the body it expands. For a macro
+    /// declared in another file that is the other file, so the same position in two files is two
+    /// lines.
+    /// </para>
     /// </summary>
-    public FlowState? AnyBefore(SyntaxNode statement)
+    public FlowState? AnyBefore(SyntaxNode statement) => Merged(KeysOf(statement), reaching);
+
+    /// <summary>
+    /// Returns what every <see cref="Expansion"/> of a statement agrees the statement itself
+    /// leaves, before any other path merges with it, or null where nothing reaches it.
+    /// </summary>
+    public FlowState? AnyAfter(SyntaxNode statement) => Merged(KeysOf(statement), leaving);
+
+    /// <summary>
+    /// Returns the state reaching a statement in each <see cref="Expansion"/> of it, in no
+    /// particular order. A statement outside every macro and repetition has one.
+    /// </summary>
+    public IReadOnlyList<FlowState> EachBefore(SyntaxNode statement) => [.. KeysOf(statement).Select(key => reaching[key])];
+
+    /// <summary>Returns the merge of the states <paramref name="keys"/> have in <paramref name="states"/>.</summary>
+    private static FlowState? Merged(IReadOnlyList<StepKey> keys, Dictionary<StepKey, FlowState> states)
+    {
+        FlowState? merged = null;
+        foreach (var key in keys)
+        {
+            if (states.TryGetValue(key, out var state))
+                merged = FlowState.Merge(merged, state);
+        }
+        return merged;
+    }
+
+    /// <summary>Returns the key of every expansion of <paramref name="statement"/> that the analysis reached.</summary>
+    private IReadOnlyList<StepKey> KeysOf(SyntaxNode statement)
     {
         // The analysis is complete before anyone asks, so the index never goes stale. Two threads
         // that build it at once build the same one.
-        var index = anyExpansion;
+        var index = expansions;
         if (index is null)
         {
             index = [];
-            foreach (var (key, state) in reaching)
-                index.TryAdd((key.On?.Body?.Tree ?? model.Tree, key.Position), state);
-            anyExpansion = index;
+            foreach (var key in reaching.Keys)
+            {
+                var line = (key.On?.Body?.Tree ?? model.Tree, key.Position);
+                if (!index.TryGetValue(line, out var keys))
+                    index[line] = keys = [];
+                keys.Add(key);
+            }
+            expansions = index;
         }
-        return index.GetValueOrDefault((statement.Tree, statement.Position));
+        return index.TryGetValue((statement.Tree, statement.Position), out var found) ? found : [];
     }
 
     /// <summary>
@@ -542,13 +580,16 @@ public sealed class StateAnalysis : IProcessorStates
             if (state.IsDead)
                 return state;
             var step = block.Steps[i];
-            if (report is not null && !step.Closes)
+            var records = report is not null && !step.Closes;
+            if (records)
                 reaching[step.Key] = state;
             Step? previous = i > 0 ? block.Steps[i - 1] : null;
             var last = i == block.Steps.Count - 1;
             var next = last ? block.Next : null;
             var end = last ? block.End : BlockEnd.Through;
             state = Explained(step, next, state, Through(step, previous, next, end, state, routine, report));
+            if (records)
+                leaving[step.Key] = state;
         }
         return state;
     }
