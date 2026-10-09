@@ -38,8 +38,12 @@ namespace Norristown.Layout;
 /// The opcode byte an <c>.encoded</c> gives the instruction, which is then written as bytes; null
 /// for a line written as nt65 reads it.
 /// </param>
+/// <param name="Branch">
+/// What a conditional branch costs on each way out of it, where it has a count; null for every
+/// other line.
+/// </param>
 public sealed record LineLayout(
     int Length, AddressingMode? Mode, string? Prefix, bool Inverted = false, CycleCount? Cycles = null,
     int? Bits = null, Ensured? Ensured = null, int? Slot = null, long? Direct = null,
-    IReadOnlyList<string>? Causes = null, int? Opcode = null);
+    IReadOnlyList<string>? Causes = null, int? Opcode = null, BranchCycles? Branch = null);
 

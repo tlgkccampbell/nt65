@@ -40,6 +40,11 @@ public sealed record ProgramAnalysis(
     // in one file.
     private readonly Lazy<IReadOnlySet<Symbol>> usedAsAddresses = new(() => Flow.AddressConstants.UsedAsAddresses(Files, Program.Current));
 
+    // The code bytes some operand or data value of the program names other than as where control
+    // goes, found the first time a file's suggestions are asked for, because the code that reads an
+    // instruction's bytes may be in another file.
+    private readonly Lazy<IReadOnlyList<Flow.Suggestions.NamedByte>> namedBytes = new(() => Flow.Suggestions.NamedBytes(Files, Program.Current));
+
     /// <summary>
     /// Gets what analyzing each file of <see cref="Program"/> on its own found, in the same order.
     /// It cannot be replaced, so that the lookups by path always agree with it.
@@ -101,15 +106,17 @@ public sealed record ProgramAnalysis(
         Asked().ByFile.Value.GetValueOrDefault(path) ?? [];
 
     /// <summary>
-    /// Returns the places in one file where the code could be smaller or faster, or where a constant
-    /// used as an address could be declared as data, for an editor to suggest. No build reports them.
-    /// Each file's are looked for once, the first time they are asked for.
+    /// Returns the places in one file where the code could be smaller or faster, where a constant
+    /// used as an address could be declared as data, or where an exported routine relies on an
+    /// inferred state, for an editor to suggest. No build reports them. Each file's are looked for
+    /// once, the first time they are asked for.
     /// </summary>
     public IReadOnlyList<Diagnostic> SuggestionsFor(string path) =>
         Asked().Suggestions.GetOrAdd(path, path => FileFor(path) is { } file
             ? Norristown.Diagnostics.Ordered([
-                .. Flow.Suggestions.For(file, Configuration.Omitted(file.Model.Tree), ReadsCallerStack),
-                .. Flow.AddressConstants.For(file, usedAsAddresses.Value)])
+                .. Flow.Suggestions.For(file, Configuration.Omitted(file.Model.Tree), ReadsCallerStack, namedBytes.Value),
+                .. Flow.AddressConstants.For(file, usedAsAddresses.Value),
+                .. file.State?.Exports ?? []])
             : []);
 
     /// <summary>

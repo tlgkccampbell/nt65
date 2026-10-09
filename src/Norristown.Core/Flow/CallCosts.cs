@@ -78,7 +78,10 @@ public static class CallCosts
         {
             if (!block.IsReached || block.Successors.Any(edge => edge.Kind != EdgeKind.Call))
                 continue;
-            var handsOff = Onward(block).Any(callee => regions.ContainsKey(RoutineKey.Of(callee))
+            // The routines an exit hands control to are alternatives, so control comes back
+            // through it when any one of them returns.
+            var onward = Onward(block).ToList();
+            var handsOff = onward.Count > 0 && onward.All(callee => regions.ContainsKey(RoutineKey.Of(callee))
                 ? !found.Contains(RoutineKey.Of(callee))
                 : callee.Signature is { NeverReturns: true });
             if (!handsOff)
@@ -135,57 +138,65 @@ public static class CallCosts
                     block.Steps[^1].Statement.GetText().Trim(), "nt65 cannot tell where it goes"));
             }
 
-            // A call inside a counted loop is made once per iteration, so its cost is counted
-            // as many times as the loop runs.
+            // The routines a block hands control to are alternatives, of which one pass runs only
+            // one, so the block adds the cheapest of them to the lower bound and the dearest to
+            // the upper. A call inside a counted loop is made once per iteration, so its cost is
+            // counted as many times as the loop runs.
+            int? added = block.CallsUnknown ? 0 : null;
             foreach (var callee in Onward(block))
             {
-                var name = RoutineKey.Of(callee);
-                if (!regions.TryGetValue(name, out var called))
-                {
-                    // A callee declared never to return ends the pass like any other.
-                    if (callee.Signature is { NeverReturns: true })
-                        continue;
-                    if (!forLowerBound)
-                        return null;
-                    Exclude(new Exclusion(callee.QualifiedName, "no code in the program"));
-                    continue;
-                }
-
-                // Control does not come back from a routine that never returns, so the pass
-                // ends where it is called and what it does is no part of this one.
-                if (!returns.Contains(name))
-                    continue;
-
-                // A routine that can reach itself goes round as many times as the program
-                // decides, so each time round is left out.
-                if (walking.Contains(name))
-                {
-                    if (!forLowerBound)
-                        return null;
-                    Exclude(new Exclusion("recursion", $"{callee.QualifiedName} can call itself"));
-                    continue;
-                }
-                var total = Total(called, regions, returns, totals, walking);
-                if (!forLowerBound)
-                {
-                    if (total.Maximum is not { } longest)
-                        return null;
-                    with += longest * (block.Iterations ?? 1);
-                    continue;
-                }
-
-                // A callee with no count of its own is left out whole. A callee whose calls leave
-                // something out still counts the rest, and this routine leaves out the same items.
-                if (total.Minimum is not { } shortest)
-                {
-                    Exclude(new Exclusion(callee.QualifiedName, called.Cost.Uncounted ?? "it has no count"));
-                    continue;
-                }
-                with += shortest * (block.Iterations ?? 1);
-                foreach (var exclusion in total.Excluded ?? [])
-                    Exclude(exclusion);
+                if (Callee(callee, forLowerBound) is not { } cost)
+                    return null;
+                added = added is not { } known ? cost : forLowerBound ? Math.Min(known, cost) : Math.Max(known, cost);
             }
+            with += (added ?? 0) * (block.Iterations ?? 1);
             return new CycleCount(with);
+        }
+
+        // Returns what one routine a block hands control to adds to the bound, or null where the
+        // upper bound has no value. What the lower bound cannot count adds nothing and is left out.
+        int? Callee(Symbol callee, bool forLowerBound)
+        {
+            var name = RoutineKey.Of(callee);
+            if (!regions.TryGetValue(name, out var called))
+            {
+                // A callee declared never to return ends the pass like any other.
+                if (callee.Signature is { NeverReturns: true })
+                    return 0;
+                if (!forLowerBound)
+                    return null;
+                Exclude(new Exclusion(callee.QualifiedName, "no code in the program"));
+                return 0;
+            }
+
+            // Control does not come back from a routine that never returns, so the pass ends
+            // where it is called and what it does is no part of this one.
+            if (!returns.Contains(name))
+                return 0;
+
+            // A routine that can reach itself goes round as many times as the program decides,
+            // so each time round is left out.
+            if (walking.Contains(name))
+            {
+                if (!forLowerBound)
+                    return null;
+                Exclude(new Exclusion("recursion", $"{callee.QualifiedName} can call itself"));
+                return 0;
+            }
+            var total = Total(called, regions, returns, totals, walking);
+            if (!forLowerBound)
+                return total.Maximum;
+
+            // A callee with no count of its own is left out whole. A callee whose calls leave
+            // something out still counts the rest, and this routine leaves out the same items.
+            if (total.Minimum is not { } shortest)
+            {
+                Exclude(new Exclusion(callee.QualifiedName, called.Cost.Uncounted ?? "it has no count"));
+                return 0;
+            }
+            foreach (var exclusion in total.Excluded ?? [])
+                Exclude(exclusion);
+            return shortest;
         }
 
         // The lower-bound walk weighs a block more than once, so each item is kept only the first time.
@@ -205,9 +216,19 @@ public static class CallCosts
 
     /// <summary>
     /// Returns the routines a block hands control to, whose cost is then part of this routine's.
-    /// They are the routines it calls or tail-jumps to, and the routine its <c>.fallthrough</c>
-    /// runs on into.
+    /// They are the routines it calls or tail-jumps to, the places outside the routine that a
+    /// <c>.next</c> under a jump names, and the routine its <c>.fallthrough</c> runs on into. Where
+    /// there are several, they are alternatives, and one pass runs only one of them.
     /// </summary>
-    private static IEnumerable<Symbol> Onward(BasicBlock block) =>
-        block.RunsInto is { } into ? block.Calls.Append(into) : block.Calls;
+    internal static IEnumerable<Symbol> Onward(BasicBlock block)
+    {
+        if (block.RunsInto is { } into)
+            return block.Calls.Append(into);
+
+        // A jump with a `.next` naming places outside the routine is a tail jump to each of them,
+        // as a jump naming one in its operand is.
+        if (block.End == BlockEnd.Declared)
+            return block.Calls.Concat(block.Leaves);
+        return block.Calls;
+    }
 }

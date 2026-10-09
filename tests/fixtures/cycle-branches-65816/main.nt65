@@ -1,0 +1,92 @@
+; On the 65816 a taken branch costs one more where it crosses a page only in emulation mode. In
+; native mode a taken branch costs 3 wherever its target is. A long branch is counted from the
+; same table, in the form it is laid out in. Every number below is worked out by hand: `dex`
+; costs 2, a branch 2 not taken and 3 taken, and `jmp` 3.
+.module main
+
+.cpu 65816
+
+.segment CODE
+
+; Only the taken branch arrives, at 2 + 3 = 5 cycles. In native mode that is the whole answer.
+.export .proc native_short: native {
+    start:
+    dex
+    beq done
+    rts
+    done:
+    rts
+}
+
+.assert .mincycles(native_short::start, native_short::done) == 5, "the native branch changed"
+.assert .maxcycles(native_short::start, native_short::done) == 5, "the native branch changed"
+
+; In emulation mode the taken branch costs one more across a page, so the pass is 5 or 6.
+.export .proc emulated_short: emu {
+    start:
+    dex
+    beq done
+    rts
+    done:
+    rts
+}
+
+.assert .mincycles(emulated_short::start, emulated_short::done) == 5, "the emulated branch changed"
+.assert .maxcycles(emulated_short::start, emulated_short::done) == 6, "the emulated branch changed"
+
+; A `jeq` to a near target is laid out as `beq`, and costs what `beq` costs in native mode. Only
+; the taken branch arrives, at 2 + 3 = 5 cycles.
+.export .proc native_long_short: native {
+    start:
+    dex
+    jeq done
+    rts
+    done:
+    rts
+}
+
+.assert .mincycles(native_long_short::start, native_long_short::done) == 5, "the short jeq changed"
+.assert .maxcycles(native_long_short::start, native_long_short::done) == 5, "the short jeq changed"
+
+; A `jeq` to a target out of reach is laid out as `bne` over a `jmp`. Where the condition fails,
+; the `bne` is taken past the `jmp`, which in native mode costs 3 wherever it lands. So the pass
+; to `next` is 2 + 3 = 5.
+.export .proc native_long_far: native {
+    start:
+    dex
+    jeq far_native
+    next:
+    rts
+}
+
+.assert .mincycles(native_long_far::start, native_long_far::next) == 5, "the far jeq changed"
+.assert .maxcycles(native_long_far::start, native_long_far::next) == 5, "the far jeq changed"
+
+; In emulation mode the `bne` taken past the `jmp` costs one more across a page, so the same pass
+; is 5 or 6.
+.export .proc emulated_long_far: emu {
+    start:
+    dex
+    jeq far_emulated
+    next:
+    rts
+}
+
+.assert .mincycles(emulated_long_far::start, emulated_long_far::next) == 5, "the far jeq changed"
+.assert .maxcycles(emulated_long_far::start, emulated_long_far::next) == 6, "the far jeq changed"
+
+; This routine puts the two targets below out of reach of a short branch from the routines above.
+.export .proc filler {
+    .repeat 130 {
+        nop
+    }
+    rts
+}
+
+.export .proc far_native: native {
+    rts
+}
+
+.export .proc far_emulated: emu {
+    rts
+}

@@ -717,10 +717,16 @@ public static class Compiler
         }
 
         // An `.ensure` that names a flag emits nothing where the flags already hold, which the
-        // flag analysis of the layout so far tells. What it emits changes no edge and no flag, so
-        // one more layout settles it. Only a file with such an `.ensure` pays for it.
+        // flag analysis of the layout so far tells. On the 65C02 that analysis also settles
+        // whether arithmetic pays the decimal-mode cycle. What either changes moves no edge and no
+        // flag, so one more layout settles it. Only a file with such a line pays for it.
         if (layout.Steps.Any(step => step.Statement is EnsureDirectiveSyntax ensure
-            && StateItem.Read(ensure).Any(item => item.Part == StatePart.Flag)))
+            && StateItem.Read(ensure).Any(item => item.Part == StatePart.Flag))
+            || (target is Cpu.Cmos65SC02 or Cpu.Rockwell65C02 or Cpu.Wdc65C02
+                && layout.Steps.Any(step => step.Statement is InstructionStatementSyntax
+                {
+                    MnemonicKind: MnemonicKind.Adc or MnemonicKind.Sbc,
+                })))
         {
             layout = CodeLayout.Create(model, target, state, flow.Flags!.Known);
             flow = Flow.ControlFlow.Of(model, layout, exits, signatures);

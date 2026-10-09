@@ -130,6 +130,10 @@ if__done_3:
 if__skip_3:
 if__done_5:
     ; end of if!
+
+    ply
+    plx
+    pla
     rts
 ; end of main
 
@@ -139,13 +143,13 @@ count: .res 1
 
 .segment "RODATA": absolute
 main__tune:
-    ; note!(C4, frames = 8)  main.nt65:152
+    ; note!(C4, frames = 8)  main.nt65:157
     .byte C4, 8
     ; end of note!
-    ; note!(E4)  main.nt65:153
+    ; note!(E4)  main.nt65:158
     .byte E4, 1
     ; end of note!
 main__greeting:
-    ; message!("HI")  main.nt65:156
+    ; message!("HI")  main.nt65:161
     .byte $48, $49, $00             ; "HI"
     ; end of message!

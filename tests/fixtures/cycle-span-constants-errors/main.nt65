@@ -1,0 +1,21 @@
+; A cycle span held in a `.const` is a number nt65 knows, so an assertion about the constant is
+; checked as soon as the span is, as the same assertion written with the span inline is, rather
+; than left for ld65.
+.module main
+
+.cpu 6502
+
+.export spanned
+
+.segment CODE
+.proc spanned {
+    start:
+    nop
+    done:
+    rts
+}
+
+.const SPAN = .mincycles(spanned::start, spanned::done)
+.assert SPAN == 3, "the span moved"     ;! error[assertion-failed]: the span moved
+.assert SPAN == 2, "the span is a nop"
+.assert .mincycles(spanned::start, spanned::done) == 3, "the inline span moved"  ;! error[assertion-failed]: the inline span moved

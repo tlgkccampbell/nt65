@@ -657,7 +657,7 @@ public sealed class ControlFlow
     {
         for (var i = 0; i < blocks.Count; i++)
         {
-            if (inside[i] && (blocks[i].Calls.Count > 0 || blocks[i].CallsUnknown))
+            if (inside[i] && (CallCosts.Onward(blocks[i]).Any() || blocks[i].CallsUnknown))
                 return true;
         }
         return false;
@@ -670,7 +670,7 @@ public sealed class ControlFlow
     /// count stops where that routine starts.
     /// </summary>
     private static bool Calls(IReadOnlyList<BasicBlock> blocks) =>
-        blocks.Any(block => block.Calls.Count > 0 || block.RunsInto is not null || block.CallsUnknown);
+        blocks.Any(block => CallCosts.Onward(block).Any() || block.CallsUnknown);
 
     private static bool IsInstruction(SyntaxNode statement, params ReadOnlySpan<MnemonicKind> mnemonics) =>
         statement is InstructionStatementSyntax instruction && mnemonics.Contains(instruction.MnemonicKind);
@@ -1002,6 +1002,7 @@ public sealed class ControlFlow
                 ? RoutineNamed(into, end.On)
                 : null;
             blocks[i].Cycles = Counted(blocks[i], skipped);
+            Branched(blocks[i]);
         }
         return blocks;
 
@@ -1144,6 +1145,24 @@ public sealed class ControlFlow
         // A block with nothing in it is the one a routine opens with when its first line is a
         // label, and running none of it takes no time at all.
         return total;
+    }
+
+    /// <summary>
+    /// Records what the conditional branch ending <paramref name="block"/> costs taken and not
+    /// taken, where the block ends in one and has a count.
+    /// </summary>
+    private void Branched(BasicBlock block)
+    {
+        if (block.Cycles is null)
+            return;
+        var at = block.Steps.ToList().FindLastIndex(step => step.Statement is InstructionStatementSyntax);
+        if (at < 0)
+            return;
+        var last = block.Steps[at];
+        if (layout.Of(last.Statement, last.On)?.Branch is not { } branch)
+            return;
+        block.Taken = branch.Taken;
+        block.NotTaken = branch.NotTaken;
     }
 
     /// <summary>

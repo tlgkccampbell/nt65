@@ -63,7 +63,9 @@ public sealed class CodeLensTests
         Assert.Equal(
             [
                 (2, "11 cycles"),
-                (7, "11-15 cycles"),
+                // Not taken, the branch costs 2 and the pass 3 + 2 + 2 + 6 = 13. Taken, it costs 3,
+                // or 4 across a page, and the pass 3 + 3 + 6 = 12 to 13.
+                (7, "12-13 cycles"),
                 (14, "11+ cycles, loops"),
                 (20, "12 cycles, 23 with calls"),
 
@@ -181,8 +183,9 @@ public sealed class CodeLensTests
                 // there, and the jump is not treated as a call the count could not follow.
                 "9 cycles, 17 with calls, then never returns",
 
-                // One of its paths returns, so it is not marked as never returning.
-                "8-13 cycles",
+                // One of its paths returns, so it is not marked as never returning. That path
+                // costs 3 + 2 + 6 = 11, and the one taken to the jump 3 + 3 + 3 = 9 to 10.
+                "9-11 cycles",
 
                 // It runs on into a routine that never returns, so it never returns either.
                 "2 cycles, then never returns",
@@ -199,6 +202,73 @@ public sealed class CodeLensTests
                 // routine with a body does, and is not something the count leaves out.
                 "3 cycles, then never returns",
                 "9 cycles, 9+ with calls, excluding CHROUT, then never returns",
+            ],
+            Costs(lenses).Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
+    /// The routines a <c>.next</c> names under a call through a pointer are alternatives, and one
+    /// pass runs only one of them. So the cost with calls adds the cheapest of them at least and
+    /// the dearest at most, never their sum. A tail jump through a pointer with a <c>.next</c>
+    /// composes the same way as a tail jump to a routine named in its operand.
+    /// </summary>
+    [Fact]
+    public async Task ALensAddsOneOfTheRoutinesADispatchCanCall()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .proc dispatch {
+                jsr (table,x)
+                .next w1, w2
+                rts
+            }
+            .proc tail {
+                jmp (vector)
+                .next w1, w2
+            }
+            .proc either {
+                dex
+                beq @other
+                jmp (vector)
+                .next w1
+            @other:
+                jmp (vector)
+                .next w2
+            }
+            .proc w1 {
+                nop
+                rts
+            }
+            .proc w2 {
+                nop
+                nop
+                rts
+            }
+            .data table: .addr w1, w2
+            .data vector: .addr w1
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [
+                // The call costs 8 and the return 6. With w1 at 8 cycles and w2 at 10, one pass
+                // costs 14 + 8 = 22 at least and 14 + 10 = 24 at most.
+                "14 cycles, 22-24 with calls",
+
+                // The indirect jump costs 5, and control comes back from w1 or w2 to the caller.
+                "5 cycles, 13-15 with calls",
+
+                // The way to w1 falls through the branch for 2 + 2 + 5 = 9 and adds 8. The way to
+                // w2 takes it for 2 + 3 + 5 = 10, or 11 across a page, and adds 10.
+                "9-11 cycles, 17-21 with calls",
+                "8 cycles",
+                "10 cycles",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
     }
@@ -553,6 +623,17 @@ public sealed class CodeLensTests
                 bpl @turn
                 rts
             }
+            .proc branching {
+                ldx #10
+            @turn:
+                lda $10
+                beq @skip
+                nop
+            @skip:
+                dex
+                bne @turn
+                rts
+            }
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
@@ -586,8 +667,15 @@ public sealed class CodeLensTests
                 "19+ cycles, loops",
 
                 // `bpl` tests the sign bit, and 199 has it set after the first `dex`, so the flag
-                // analysis proves the branch is never taken and the body runs once.
-                "17-19 cycles",
+                // analysis proves the branch is never taken and the body runs once. The branch
+                // costs 2 not taken, so the pass is 2 + 5 + 2 + 2 + 6 = 17.
+                "17 cycles",
+
+                // Short of the branch back, a turn costs 3 + 2 + 2 + 2 = 9 not taking the inner
+                // branch and 3 + 3 + 2 = 8 to 9 taking it. Ten turns with the branch back taken
+                // nine times, at 3 to 4, cost 2 + 80 + 27 + 2 + 6 = 117 at least and
+                // 2 + 90 + 36 + 2 + 6 = 136 at most.
+                "117-136 cycles",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
     }

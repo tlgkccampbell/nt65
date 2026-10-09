@@ -27,6 +27,15 @@ public sealed record Cause(string Reason, string Fix)
             + "leave the same number of bytes");
 
     /// <summary>
+    /// Returns the cause for a stack whose saved bytes the store <paramref name="store"/> may have
+    /// changed. nt65 does not follow which byte a store into the stack changes, so what a pull or
+    /// an <c>rti</c> restores after it is not known.
+    /// </summary>
+    public static Cause StackWritten(string store) => new(
+        $"{store} writes into the bytes on the stack",
+        "nt65 does not follow which byte it changes, so what a pull or an `rti` restores after it is not known");
+
+    /// <summary>
     /// Returns the cause for a stack that two paths leave unknown where they meet, because they
     /// pushed different things. <paramref name="depths"/> says whether they pushed different
     /// amounts, which is the usual reason.

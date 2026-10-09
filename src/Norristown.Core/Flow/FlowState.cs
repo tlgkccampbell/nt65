@@ -1,3 +1,4 @@
+using Norristown.Processor;
 using Norristown.Semantics;
 
 namespace Norristown.Flow;
@@ -28,6 +29,13 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
 
     /// <summary>Gets why D is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyD { get; init; }
+
+    /// <summary>
+    /// Gets the registers among A, X and Y that hold the stack pointer here, as X does after
+    /// <c>tsx</c>. A store indexed by one of them writes into the bytes on the stack, as
+    /// <see cref="StackWrites"/> tells.
+    /// </summary>
+    public Registers Pointing { get; init; }
 
     /// <summary>Gets a value indicating whether this is <see cref="Dead"/>, which no path goes on from.</summary>
     public bool IsDead { get; private init; }
@@ -62,6 +70,7 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
             WhyStack = stack is not null ? null
                 : known.Stack is null || arriving.Stack is null ? known.WhyStack ?? arriving.WhyStack
                 : Cause.StacksDiffer(known.Stack.Depth != arriving.Stack.Depth),
+            Pointing = known.Pointing & arriving.Pointing,
         };
     }
 

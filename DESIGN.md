@@ -1235,6 +1235,7 @@ items are:
 | `keeps a, x, y, c, z, n, v` | the registers and flags it hands back as it was entered with them (§7.7) | none |
 | `reads a, x, y, c, z, n, v`, `reads none` | the registers and flags whose values from its caller it uses (§7.7) | none |
 | `dp = e` `dp?` `dp*`, `dbr = e` `dbr?` `dbr*` | direct page and data bank (§7.5) | `dp*`, `dbr*` |
+| `pbr = e` `pbr?`, before `->` | the program bank the routine's code runs in (§7.5) | inferred, else the home bank |
 | `?` | every part above unknown (below) | none |
 | a signature set's name | the items the set declares (below) | none |
 
@@ -1252,8 +1253,11 @@ inferred from the program, across files:
   call, `.fallthrough` and `.next` that hands control to its start. Where they agree on a part,
   the routine is entered with it. Code outside nt65 that calls an exported routine is not
   checked, as nothing outside nt65 is; a routine such code calls declares the entry it expects,
-  which is the contract between the two. A routine whose address is taken, by any use of its
-  name other than as where control goes, may be called through it from anywhere, in either
+  which is the contract between the two. Where an exported routine's bytes depend on an inferred
+  width, mode or `dp`, through an immediate's size or a `d:` operand, the editor hints so,
+  `export-state-inferred`, with a fix that declares those items. A routine whose address is
+  taken, by any use of its name other than as where control goes, may be called through it
+  from anywhere, in either
   mode, and is entered with `a*, i*, e*, dp*, dbr*`: it assumes nothing; so is one nothing
   calls. A `rep` in it widens nothing until it declares `native` or enters native mode with
   `clc` and `xce`, as a reset handler does, and a declared `native` restores the old default.
@@ -1355,8 +1359,8 @@ says where it goes, and is not reported.
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near
 and three far, so a `.frame` can lay out both (below). At a call, where what the caller has
-pushed is known, it must be at least n bytes. The call leaves the stack as it found it: the
-caller removes the arguments.
+pushed is known, it must be at least n bytes, on every CPU. The call leaves the stack as it
+found it: the caller removes the arguments.
 
 Three kinds of routine carry a signature: a proc with a body, an extern proc
 (`.proc CHROUT = $FFD2: a8, i8`, §6.1) and an imported routine
@@ -1378,7 +1382,7 @@ that routine's signature.
 | `rep`, `sep`, in emulation mode | no change; widths are pinned at 8 |
 | `sep #const` with E unknown | the named widths become 8, which they are in either mode |
 | `rep #const` with E unknown | the named widths become unknown |
-| `rep`, `sep` with a non-constant operand | both widths unknown |
+| `rep`, `sep` with a non-constant operand, or one a store under a `.patch` may write (§7.4) | both widths unknown |
 | `.ensure a16, i8` | the named widths become known (below) |
 | `clc` immediately before `xce`, in the same basic block | from emulation: native, both widths 8; from native: no change; with E unknown: native, both widths unknown |
 | `sec` immediately before `xce`, in the same basic block | emulation mode, both widths 8 |
@@ -1387,6 +1391,7 @@ that routine's signature.
 | `plp` that pulls a P saved by `php`, in native mode | the widths saved at the `php` |
 | `plp` that pulls a P saved by `php`, in emulation mode | both widths 8 |
 | `plp` that pulls a P saved by `php`, with E unknown or `*` | a saved 8 is restored, and so is a saved `*` where E is `*`; any other saved width becomes unknown, as after `rep` |
+| a store into the bytes on the stack: relative to S, indexed by a register `tsx` or `tsc` filled, or to a fixed address from $0100 to $01FF | the analysis stack becomes unknown, so a `plp`, `pld` or `plb` after it restores nothing known; the register walk forgets what a pull or `rti` restores the same way (§16) |
 | any other `plp` | both widths unknown; E unchanged |
 | `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `noreturn` ends the path |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |
@@ -1448,7 +1453,7 @@ jump in has not, they disagree, and the stack after the label is one nothing is 
 nobody knows, and `keeps` cannot be shown. So a save and its restore belong on one side of such
 a label, and a second entry point that reads what its caller pushed says so with `args n`,
 which is on the stack there exactly as it is at the routine's own entry. Nothing carries a push
-across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
+or a `.frame` across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
 entered with the stack of a call to it, which is what makes each of them callable.
 
 **Setting widths.** `.ensure` takes width items, `a8`, `a16`, `i8` and `i16`, and makes
@@ -1464,9 +1469,11 @@ control flow.
 
 **Stack frames.** `.frame name: T` names the top `.sizeof(T)` bytes of the analysis stack
 as a frame laid out as the struct `T`, usually directly after the instructions that make
-room for it. If the analysis stack is unknown there, it becomes those bytes with nothing
-known beneath them; over an unknown base, as after `tcs`, the frame may reach beneath what is
-known. In a stack-relative operand, `name::member,s`
+room for it. Over an unknown base, as after `tcs` or `txs`, the frame may reach beneath what is
+known. Where the analysis stack is not known at all, as where paths that pushed different
+amounts meet or below a label another routine jumps into, the frame could name the return
+address on one of them, so it is an error, `frame-stack-unknown`. In a stack-relative
+operand, `name::member,s`
 and `(name::member,s),y` are that member's offset from the current stack pointer,
 computed from the pushes and pulls since the `.frame`, so a push between two reads cannot
 silently shift them:
@@ -1524,13 +1531,19 @@ analysis stack, so a frame reaches them:
   emitted in emulation mode;
 - every `rts`/`rtl` reaches the declared exit state and matches the proc's
   `near`/`far` attribute;
+- on every CPU, no `rts`/`rtl` without a `.next` returns with bytes the routine pushed still
+  above a return address no pull has reached, `return-past-pushes`, even where paths that pushed
+  different amounts meet. Once a pull has reached beneath the return address, the routine may
+  have pushed one back, and a routine entered by a jump may have been handed bytes above it, so
+  a return is not checked there;
 - every `.ensure` of a 16-bit width is reached in native mode, and every frame slot where
   the stack depth is known;
 - every `jsr`/`jmp` targets a `near` routine and every `jsl`/`jml` a `far` one;
 - every tail call matches the target's entry, and the target's exit and `near`/`far`
   match this proc's, because the target returns to this proc's caller, unless nothing
   returns: this proc never does or is an interrupt handler, or the target never returns;
-- every call to a routine that takes `args n` has n bytes pushed, where that is known;
+- on every CPU, every call to a routine that takes `args n` has n bytes pushed, where what the
+  caller pushed since it was entered is known;
 - no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
   with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
@@ -1763,7 +1776,11 @@ label:
   variant do: a register any of them writes is written, any of them may read one, and a flag
   none of them writes stays known. Where a store may write the operand, because it reaches past
   the opcode or its bytes are not known, the operand as written says nothing, so the flags and
-  the constants are unknown after the instruction, whatever stands there. In a program that
+  the constants are unknown after the instruction, whatever stands there. On a `rep` or `sep`
+  that operand is the mask, so both widths are unknown after it, as after a mask that is not a
+  constant, and code that relies on them is reported there. A store into `xce`, which has no
+  operand, writes its opcode, and no variant of an instruction that changes the widths is
+  accepted. In a program that
   already has a patch-variants-required error, the register and reads analyses take the
   instruction to use every register and leave each unknown. On the 65816 a store sized by a
   register reaches one byte where the processor state the file is laid out with shows that
@@ -1809,7 +1826,7 @@ The third directive is about the end of a routine rather than a statement:
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
 | interrupt handler | proc header | `interrupt`, so the first immediate before `rep`/`sep` is an error, and a call to it is too (§7.3) |
 | other external entry point | proc header | `a?, i?` entry, so the first immediate before `rep`/`sep` is an error |
-| self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`, or a `.patch` for each instruction the store's known bytes land in, with `as` and the variants where the store may write the opcode; widths of `@op` are analyzed as written |
+| self-modifying code: `sta @op+1` | store or read-modify-write whose operand references a code label | `.patch @op`, or a `.patch` for each instruction the store's known bytes land in, with `as` and the variants where the store may write the opcode; widths of `@op` are analyzed as written, except that a `rep` or `sep` whose mask the store may write leaves both unknown |
 
 Examples. A jump table inside a proc: the targets need no declarations because the
 `.next` edges carry the state at the jump.
@@ -1952,8 +1969,18 @@ through and which bank it lives in, in the segment table (§5.2, §5.3):
 ```
 
 `bank` and `dbr` are different words for different things: `bank` is where a segment lives,
-its home bank, and `dbr` is the value of the data bank register at a point in a routine. Code
-is taken to run in the home bank of its segment, even where a mirror maps it elsewhere too.
+its home bank, and `dbr` is the value of the data bank register at a point in a routine.
+
+**The program bank.** Code runs in the bank control reaches it in, which is K. No instruction
+inside a routine changes K, so it belongs to the routine's entry. A near call, jump, branch,
+`.next` or `.fallthrough` keeps the caller's K. A `jsl` or `jml` sets the bank of the address it
+names: a mirror address such as `(bank << 16) | .loword(f)` gives that bank, and any other gives
+the home bank of `f`'s segment. A routine whose callers agree runs in their bank, and one
+reached in two banks runs in one not known. A routine nothing in the program calls, one whose
+address is taken and an interrupt handler run in their home bank. `pbr = e` declares the bank
+instead, and every way in is checked against it; `pbr?` declares it unknown. K is never handed
+back, since a call returns to its caller's bank, so `pbr` is written only before `->`, has no `*`
+form, and is not a `.state` item. `?` leaves it alone.
 
 A routine's signature may carry the D and B values it assumes at entry and, after
 `->`, at exit: `.proc hud: a8, i16, dp = $2100, dbr = $7e {`. `dp?` and `dbr?` mean
@@ -1993,7 +2020,7 @@ idioms that load D and B from constants and treats everything else as unknown:
 | `lda #const` then `tcd`, with A 16-bit | D = const |
 | `pea const` then `pld` | D = const |
 | `lda #const`, `pha`, `plb`, with A 8-bit | B = const |
-| `phk` then `plb` | B = the home bank of the enclosing segment |
+| `phk` then `plb` | B = K, the bank the routine runs in (above) |
 | `pld`, `plb` that pull a D or B saved by `phd`, `phb` (the analysis stack, §7.3) | the saved value |
 | `mvn #s, #d`, `mvp #s, #d` | B = d; for `#^sym`, the home bank of `sym`'s segment, when it declares one; unknown when the move stands on a label a `.patch` names, whose banks the program writes |
 | calls, returns, merges, `xce` | as for widths (§7.3); `xce` leaves D and B alone |
@@ -2120,7 +2147,9 @@ routine is short with a region of another segment between them in the text, as i
 none. ca65's `longbranch` package can choose the short form only for
 a target it has already seen, so its forward branches are always long; here they are not.
 For the flow analysis a long branch is a conditional branch to its target, and a long
-branch to a routine is a tail call (§7.3). Its cycle count is that of the form chosen.
+branch to a routine is a tail call (§7.3). Its cycle count is that of the form chosen, taken from
+the short branch's count for the CPU and mode, so in native mode neither form pays for a page
+crossed, and its hover names the causes of its interval as a short branch's does.
 
 **Cycle counts.** Each instruction has a cycle interval [min, max] from the CPU's table
 for its addressing mode and, on the 65816, its widths. Where the count depends on
@@ -2129,19 +2158,22 @@ indexed or indirect-indexed read adds one to max (on the 65816 with a 16-bit ind
 extra cycle is always paid and the count is exact); a branch costs 2 not taken and 3
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
-nonzero, which is known when D is known (§7.5). Tooling shows the interval per
+nonzero, which is known when D is known (§7.5). On the 65C02 `adc` and `sbc` cost one more in
+decimal mode, which is known where the flag analysis knows the decimal flag. Tooling shows the interval per
 instruction and per basic block on hover, and beside an interval what its top would be paid
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
 cannot resolve tells them half of an answer, and above each routine, and each inline `.scope`
 block of one, what one pass through it costs: the shortest and the longest path from where it
-is entered to where its path ends. A routine no path leaves is shown as never returning,
+is entered to where its path ends. Each way out of a branch is charged what that way costs, as a
+span's is below, so both are costs of paths the code has. A routine no path leaves is shown as never returning,
 rather than as one nothing could be worked out for.
 
 A path that can come back on itself has no longest, and the count is a fewest with a `+`,
 except where the loop counts itself: a register loaded with an immediate, brought down by one
 or more `dex` or `dey` written in a row before the `bne` or `bpl` that takes the turn round
-again, with one way into the loop, one way out of it, and nothing else in it touching that
-register. The loop is found from the back edge and the blocks that dominate it, so a turn may
+again, with one way into the loop, one way out of it, and nothing else in it, nor any routine
+called between the load and the loop, touching that register. On the 65816 a change to the index
+width touches it too, since it clears the high byte. The loop is found from the back edge and the blocks that dominate it, so a turn may
 branch and may call; a loop inside one is counted first, and the turns multiply. `bne` needs
 the stride to divide the count, and `bpl` a count with the sign bit clear, or it is not
 counting down from that immediate at all. Every other loop keeps the `+`, because a loop
@@ -2153,7 +2185,9 @@ would say the routine is quicker than anything it could be built as.
 
 A routine is also shown what it costs **with what it calls**: a call costs the call and then
 whatever the routine it names costs, and a tail jump the same, since control comes back from it
-to this routine's caller. That is worked out across the program, so an edit to one file moves
+to this routine's caller. A `.next` under a call or a jump through a pointer names the routines
+it can reach, which are alternatives: the count adds the cheapest of them to its fewest and the
+dearest to its most, never their sum. That is worked out across the program, so an edit to one file moves
 what another file's lenses say. A call to a routine with no body, one through a pointer, and a
 routine that can reach itself leave no total to give, and the lens says the calls are not in
 the count rather than quietly leaving them out.
@@ -4734,7 +4768,11 @@ Recorded so the reasoning survives. None is open.
   touch part of the state should not erase what its caller knows, and the values of D
   and B belong on the routines that set them.
 - **A stack of saved state, not push and pull pairing.** Tracking saved P, D and B as
-  the analysis runs lets a save and restore span calls and labels.
+  the analysis runs lets a save and restore span calls and labels. A store into the stacked
+  bytes, relative to S, indexed by a register `tsx` or `tsc` filled, or to a fixed address from
+  $0100 to $01FF, leaves what a later pull or `rti` restores unknown, because which byte it
+  changed is not followed. So a handler that edits the pushed P to return a status, or any
+  routine that overwrites a saved register, cannot promise to keep it.
 - **A declared label anyone may jump into starts on the stack a call to the routine leaves.**
   Once such a label stopped assuming the widths its own routine's paths left, the analysis
   stack was the part still taken from them, and a `pla`, a `plp`, a `.frame` slot or a `keeps`
@@ -4786,7 +4824,8 @@ Recorded so the reasoning survives. None is open.
 - **A declared `keeps` is a contract.** Where a routine with a body writes no `keeps`, what it
   keeps is inferred and callers use all of it. Where it writes one, the list is the whole
   promise: the body is checked against it, and a caller that relies on a register the list
-  leaves out is warned at its call or tail call, as `unpromised-keep`. The analysis still uses
+  leaves out is warned at its call or tail call, as `unpromised-keep`, once for each routine it
+  may reach that leaves the register out. The analysis still uses
   what the body keeps, so it stays accurate; the warning marks where a change to the routine's
   body would break its caller. A caller relies on a register when code after the call uses the
   value it held before, or when the caller's own `keeps` hands that value back. The 65816's high
@@ -4828,8 +4867,13 @@ Recorded so the reasoning survives. None is open.
   are worked out, a file whose recorded answers differ is analyzed again, as one that took a stale
   stack effect is. The answers themselves are worked out after every file's analysis, from the
   blocks as they stand, so a change that touches no decision analyzes nothing again. An
-  `.ensure`, and the editor's hints, go only by values a routine promised, so neither relies on
-  another routine's body.
+  `.ensure`, and the editor's hints, go by the same answers the branches do: by what a routine
+  promises, and by what the body of a routine that declares no flags leaves, but never by a flag
+  a routine leaves out of what it names. An `.ensure` is worked out again on every build, so its
+  bytes follow the body. A hint, and the title of its fix, name a routine whose body it relies on
+  without a promise, as in "`g` leaves Z this way but does not promise it", because a line the
+  fix deletes stays deleted when that body changes. The flags a hint reads count as answers its
+  file depended on.
 - **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C, V, D and I as 0, 1 or
   unknown through each routine, before any other analysis reads its blocks. An immediate load,
   `clc`, `sec`, `clv`, `cld`, `sed`, `cli`, `sei`, and a `rep` or `sep` with a constant mask set a
@@ -4846,8 +4890,10 @@ Recorded so the reasoning survives. None is open.
   a jump or nothing, and the edge it never takes is removed. Only what the CPU defines is used, so
   nothing about memory is assumed. The same facts give the editor's flag hints: a `.next` the
   flags prove, a branch never taken, a `jmp` that can be a branch, a branch over a `jmp`, and
-  a `clc` or `sec` that is not needed or can be folded into an `adc #n-1` or `sbc #n-1`. A
-  line of a macro body serves every call, so code there is reported as never reached only
+  a `clc` or `sec` that is not needed or can be folded into an `adc #n-1` or `sbc #n-1`. No
+  hint that changes bytes touches an instruction a store rewrites, a `.label` enters, or an
+  operand or data value anywhere in the program names, as `lda @op+1` does, since code reads
+  those bytes. A line of a macro body serves every call, so code there is reported as never reached only
   where no call reaches it: a constant argument often decides a branch in one call and not in
   another.
 - **Register constants extend the flag analysis.** The same walk follows the constant each of
@@ -5033,7 +5079,11 @@ Recorded so the reasoning survives. None is open.
   push. Each routine, and each label another routine enters, now has an effect: it never
   returns, it leaves a known number of bytes (negative where it takes the caller's), or what it
   leaves is unknown. Effects are read off each exit by counting bytes, solved over the whole
-  program, and applied after every call by all three trackers, on every CPU. The 65816's
+  program, and applied after every call by all three trackers, on every CPU. A byte a routine
+  leaves holds nothing known and has no push of its own to match, so a pull of any size takes
+  it, and a save and its restore on either side of the call still pair up. A plain return with
+  the routine's own pushes still above its return address is an error rather than an effect
+  (§7.3), because the caller is not where it returns to. The 65816's
   processor-state analysis still runs on one file at a time, because layout depends on its
   widths; it takes each callee's effect as the program last worked it out, and a file that
   took one the program turns out to differ on is analyzed again. Moving the whole state
@@ -5546,7 +5596,7 @@ multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL bod
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
 state-item  := point-item | unchanged-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
-             | 'args' expr | 'interrupt' | 'noreturn' | keeps-item
+             | 'args' expr | 'interrupt' | 'noreturn' | keeps-item | 'pbr' '=' expr | 'pbr?'
              | path                                   ; a path names a signature set, first
 keeps-item  := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7.7)
 signature   := '.signature' ident '=' state

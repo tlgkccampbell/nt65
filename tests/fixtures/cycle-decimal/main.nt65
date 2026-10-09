@@ -1,0 +1,52 @@
+; On the 65C02, `adc` and `sbc` take one cycle more in decimal mode. Where the flag analysis
+; knows the decimal flag, the count is exact, and only where it does not is the cycle an
+; interval. Every number below is worked out by hand from the 65C02's table.
+.module main
+
+.cpu 65c02
+
+.segment ZEROPAGE
+.data total: .byte
+
+.segment CODE
+
+; After `cld` the decimal flag is clear, so `adc #1` costs its 2 cycles and no more. The pass
+; is 2 for `cld`, 2 for `adc` and 3 for `sta total`, which is 7.
+.export .proc binary {
+    start:
+    cld
+    adc #1
+    sta total
+    done:
+    rts
+}
+
+.assert .mincycles(binary::start, binary::done) == 7, "binary addition changed"
+.assert .maxcycles(binary::start, binary::done) == 7, "binary addition changed"
+
+; After `sed` the decimal flag is set, so `sbc #1` always pays the extra cycle. The pass is 2
+; for `sed`, 3 for `sbc` and 3 for `sta total`, which is 8.
+.export .proc decimal {
+    start:
+    sed
+    sbc #1
+    sta total
+    done:
+    rts
+}
+
+.assert .mincycles(decimal::start, decimal::done) == 8, "decimal subtraction changed"
+.assert .maxcycles(decimal::start, decimal::done) == 8, "decimal subtraction changed"
+
+; Nothing says what the caller left in the decimal flag, so `adc total` costs 3 cycles, or 4 in
+; decimal mode, and the pass costs 3 + 3 = 6 or 7.
+.export .proc unknown {
+    start:
+    adc total
+    sta total
+    done:
+    rts
+}
+
+.assert .mincycles(unknown::start, unknown::done) == 6, "the unknown flag changed"
+.assert .maxcycles(unknown::start, unknown::done) == 7, "the unknown flag changed"

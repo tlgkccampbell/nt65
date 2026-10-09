@@ -1,0 +1,59 @@
+; A store into the operand of `rep` or `sep` changes which widths it sets, so the widths after a
+; patched mask are not known. A store into `xce` can only write its opcode, and no variant of an
+; instruction that changes the widths is accepted.
+.module main
+
+.cpu 65816
+
+.export operand, opcode, either, exchange
+
+.segment CODE
+
+; The store writes the mask, so after `rep` neither width is known, and the immediate is not
+; sized. The routine declares its exit widths, and the return cannot show them.
+.proc operand: a8, i8, native {
+    lda #$30
+    sta @m+1
+    .patch @m
+@m:
+    rep #$20
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `rep #$20` changes flags nt65 cannot work out: an `.ensure` after it sets it
+    rts                     ;! error[return-state-mismatch]: `rts`: `operand` declares it returns with `a8`, but the width of A is not known here;! error[return-state-mismatch]: `rts`: `operand` declares it returns with `i8`, but the width of X and Y is not known here
+}
+
+; A store whose bytes are not known may write the opcode, so it has to list variants, and no
+; instruction can stand in for one that changes the widths. It may write the mask too, so the
+; widths after `sep` are not known either.
+.proc opcode: a8, i8, native {
+    ldx #0
+    sta @m,x
+    .patch @m as lda        ;! error[patch-variant-rejected]: `.patch` cannot list `lda` for `sep`: its immediate is not sized as the immediate of `sep` is
+@m:
+    sep #$20
+    rts                     ;! error[return-state-mismatch]: `rts`: `opcode` declares it returns with `a8`, but the width of A is not known here;! error[return-state-mismatch]: `rts`: `opcode` declares it returns with `i8`, but the width of X and Y is not known here
+}
+
+; Where the widths are set again before they are relied on, the patched mask costs nothing.
+.proc either: a8, i8, native {
+    lda #$10
+    sta @m+1
+    .patch @m
+@m:
+    sep #$20
+    sep #$30
+    lda #1
+    rts
+}
+
+; `xce` has no operand, so a store into it writes its opcode, which no variant may replace.
+.proc exchange: a8, i8, emu {
+    lda #.opcode(nop)
+    sta @x
+    .patch @x as nop        ;! error[patch-variant-rejected]: `.patch` cannot list `nop` for `xce`: `xce` moves the stack, changes the processor's widths or runs a handler
+    clc
+@x:
+    xce
+    sec
+    xce
+    rts
+}

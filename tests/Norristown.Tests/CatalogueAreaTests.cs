@@ -125,7 +125,7 @@ public sealed class CatalogueAreaTests
             "next-after-padding", "next-never-taken", "next-not-the-branch-target", "next-successors-known", "next-table-has-no-labels",
             "next-target-not-a-table", "next-target-not-code", "next-unknown-after-branch", "noreturn-returns", "patch-misses-store", "patch-variant-rejected", "patch-variants-required", "pushed-return-unchecked",
             "reads-undeclared", "return-after-call", "return-count-mismatch", "return-count-not-constant",
-            "return-flag-mismatch", "return-flag-not-set", "routine-runs-off-the-end", "rti-outside-handler", "runs-into-data",
+            "return-flag-mismatch", "return-flag-not-set", "return-past-pushes", "routine-runs-off-the-end", "rti-outside-handler", "runs-into-data",
             "saves-not-a-store",
             "self-modifying-unchecked",
             "state-flag-mismatch", "tail-call-distance-mismatch", "tail-call-to-handler", "unpromised-flag", "unpromised-keep",
@@ -136,7 +136,7 @@ public sealed class CatalogueAreaTests
             "call-state-mismatch", "call-target-not-a-routine", "call-target-unknown", "callers-disagree", "direct-page-mismatch",
             "direct-page-out-of-reach", "direct-page-unknown", "ensure-item-not-a-width", "ensure-needs-native",
             "frame-depth-unknown", "frame-gone", "frame-member-not-stack-relative", "frame-not-a-record",
-            "frame-past-the-stack", "immediate-in-emulation", "jump-across-banks", "jump-distance-mismatch",
+            "frame-past-the-stack", "frame-stack-unknown", "immediate-in-emulation", "jump-across-banks", "jump-distance-mismatch",
             "jump-leaves-bank", "mirror-bank-mismatch", "range-bank-mismatch", "relative-call-extra-phk",
             "relative-call-needs-phk", "return-distance-mismatch", "return-state-mismatch",
             "state-item-not-a-point", "state-mode-mismatch", "state-outside-a-routine", "state-value-mismatch",
@@ -174,7 +174,8 @@ public sealed class CatalogueAreaTests
         ("Suggestions",
         [
             "branch-never-taken", "branch-over-jump", "carry-already-set", "carry-folded", "constant-used-as-address",
-            "jump-as-branch", "load-already-held", "load-from-register", "next-proved", "tail-call", "width-already-set",
+            "export-state-inferred", "jump-as-branch", "load-already-held", "load-from-register", "next-proved", "tail-call",
+            "width-already-set",
             "zero-compare",
         ]),
     ];

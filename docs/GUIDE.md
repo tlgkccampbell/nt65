@@ -1090,6 +1090,9 @@ promise nt65 checks, and `.next .return ?` says it cannot be known. Labels may f
 `.next .return, step`, for a jump that goes back to the caller on some paths and to `step` on
 others.
 
+A plain `rts` or `rtl` is checked against the same count. One that would pull bytes the
+routine pushed in place of its return address, which nothing has pulled, is an error.
+
 The same annotation covers the `bit` skip trick, where one instruction's operand hides the
 next instruction:
 
@@ -1445,6 +1448,7 @@ The signature items are:
 | `native`, `emu` | the emulation flag; `native` is the default |
 | `near`, `far` | called with `jsr` and left with `rts`, or with `jsl` and `rtl`; `near` is the default |
 | `dp = e`, `dbr = e` | the direct page and data bank values |
+| `pbr = e` | the bank the routine's code runs in, before `->` only; inferred where not written |
 | `a*`, `i*`, `dp*`, `dbr*` | unchanged: the routine assumes nothing and hands the value back as it found it |
 | `a?`, `i?`, `e?`, `dp?`, `dbr?` | unknown |
 | `?` | everything unknown, for code entered from outside nt65 |
@@ -1507,7 +1511,9 @@ or a symbol in a segment that declares `dp`. The error names the callers.
 
 Hover over a routine's name to see what is inferred for it, on the `inferred` row. The
 refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
-a contract.
+a contract. An exported routine whose bytes depend on an inferred width, mode or direct page,
+such as an immediate sized by an inferred `a8`, gets a hint, `export-state-inferred`, since a
+caller outside nt65 is not checked against it. Its fix declares those items.
 
 **Signature sets.** Most routines of a program share a state, so name it once:
 
@@ -1683,8 +1689,14 @@ push and pull since the frame:
 }
 ```
 
+A frame may cover only what the routine has pushed, and nt65 must be able to count that where
+the `.frame` stands. Where paths that pushed different amounts meet, the frame is an error,
+because on one of them it would name the return address. After `tcs` or `txs` the program has
+placed the stack itself, and a frame may cover bytes nt65 knows nothing about.
+
 `args n` says the caller pushes n bytes before the call. A frame can then reach the
-arguments above the return address, and every call is checked for having pushed enough.
+arguments above the return address, and every call is checked for having pushed enough, on
+every CPU.
 
 ### Direct page and data bank
 
@@ -1705,7 +1717,10 @@ be a bank that cannot see it. Where B is unknown, nothing is reported. A routine
 them in its signature, `dp = 0, dbr = $7e`, makes them known. An interrupt handler starts with
 D unknown, because it runs with whatever D the code it interrupted held, so it sets D before
 it names a `HUD_DP` symbol. nt65 recognizes the usual idioms that set D and B: `pea $2100` then `pld`,
-`lda #$7e` / `pha` / `plb`, and `phk` / `plb`.
+`lda #$7e` / `pha` / `plb`, and `phk` / `plb`. `phk` pushes the bank the code runs in: its
+segment's home bank, unless every way in is a long jump or call through a mirror, as a FastROM
+reset stub's `jml ($80 << 16) | .loword(fast)` is. A routine can declare that bank with
+`pbr = $80`.
 
 A `jsr`, `jmp` or branch to a segment whose home bank is not the caller's is an error too: it
 is the same question as a switchable bank (see Segments), what the code can see, and here the
@@ -2147,7 +2162,9 @@ everything below works across modules.
   `adc #n-1`. The flag analysis also follows the constants A, X and Y hold, which brings a
   `cmp #0` straight after a `lda` or `dex` that already set N and Z, an `ldx #0` where X is
   already 0, as after a `dex` and `bne` loop, and an `ldx #0` where A is 0, which can be `tax`, a
-  byte shorter. A tail call is not suggested to a
+  byte shorter. A hint that relies on a flag a called routine's body leaves, where the routine
+  declares no flags, says so, as in "`g` leaves C this way but does not promise it", and so
+  does its fix. A tail call is not suggested to a
   routine that depends on how deep the stack is, such as one that pops its caller's return
   address, and a routine with a branch this configuration leaves out gets no suggestions.
 - **Refactorings** on a selection: bring a path in with `.use` or write it out in full; export

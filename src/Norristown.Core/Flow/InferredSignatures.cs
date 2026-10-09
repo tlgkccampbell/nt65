@@ -224,7 +224,7 @@ public sealed class InferredSignatures
 
     /// <summary>Returns the single parts of <paramref name="parts"/>.</summary>
     private static IEnumerable<StateParts> Parts(StateParts parts) =>
-        new[] { StateParts.A, StateParts.Index, StateParts.Mode, StateParts.DirectPage, StateParts.DataBank }
+        new[] { StateParts.A, StateParts.Index, StateParts.Mode, StateParts.DirectPage, StateParts.DataBank, StateParts.ProgramBank }
             .Where(part => (parts & part) != 0);
 
     /// <summary>Returns <paramref name="entry"/> with <paramref name="parts"/> taken from <paramref name="defaults"/>.</summary>
@@ -309,6 +309,10 @@ public sealed class InferredSignatures
     /// </summary>
     private sealed class Solver
     {
+        // The parts of a routine's entry that are inferred where the routine does not declare
+        // them: the state, and the program bank its code runs in.
+        private const StateParts Inferable = StateParts.All | StateParts.ProgramBank;
+
         private readonly Dictionary<RoutineKey, FlowRegion> regions;
         private readonly HashSet<RoutineKey> never;
 
@@ -316,6 +320,9 @@ public sealed class InferredSignatures
         // no value yet.
         private readonly Dictionary<RoutineKey, ProcessorState> entries = [];
         private readonly Dictionary<RoutineKey, StateParts> pending = [];
+
+        // The program bank each routine is analyzed with, where the calls to it give one.
+        private readonly Dictionary<RoutineKey, StateValue> banks = [];
 
         // What the callers of each routine agree on for each part so far.
         private readonly Dictionary<(RoutineKey, StateParts), Seen> answers = [];
@@ -338,7 +345,7 @@ public sealed class InferredSignatures
                 entries[key] = declared.Entry;
                 if (called.Contains(key) && !taken.Contains(key))
                 {
-                    pending[key] = StateParts.All & ~declared.Declared;
+                    pending[key] = Inferable & ~declared.Declared;
                 }
                 else if ((declared.Declared & StateParts.Mode) == 0)
                 {
@@ -365,6 +372,7 @@ public sealed class InferredSignatures
                 {
                     Entry = entries[key],
                     Exit = inferred ? exit : declared.Exit,
+                    ProgramBank = banks.TryGetValue(key, out var bank) ? bank : declared.ProgramBank,
                     NeverReturns = declared.NeverReturns || never.Contains(key),
                 };
             }
@@ -407,7 +415,7 @@ public sealed class InferredSignatures
             foreach (var (key, made) in calls)
             {
                 var declared = regions[key].Routine.Signature!;
-                foreach (var part in Parts(StateParts.All & ~declared.Declared))
+                foreach (var part in Parts(Inferable & ~declared.Declared))
                 {
                     var seen = made.Select(call => (Seen: Resolved(call, part), call.At)).Where(each => each.Seen.Kind != SeenKind.Pending).ToList();
                     if (seen.Count == 0)
@@ -417,7 +425,13 @@ public sealed class InferredSignatures
                         answer = Seen.Join(earlier, answer, part);
                     answers[(key, part)] = answer;
                     pending[key] &= ~part;
-                    entries[key] = With(entries[key], part, answer, declared.Entry);
+
+                    // A routine reached in one bank runs there, and one reached in several runs in a
+                    // bank that is not known.
+                    if (part == StateParts.ProgramBank)
+                        banks[key] = answer.Kind == SeenKind.Known ? StateValue.Of(answer.Value) : StateValue.Unknown;
+                    else
+                        entries[key] = With(entries[key], part, answer, declared.Entry);
                     if (answer.Kind == SeenKind.Disagree && part is StateParts.A or StateParts.Index or StateParts.DirectPage)
                     {
                         disagreements[(key, part)] = [.. seen
@@ -463,6 +477,8 @@ public sealed class InferredSignatures
         /// </summary>
         private Seen Resolved(CallState call, StateParts part)
         {
+            if (part == StateParts.ProgramBank)
+                return call.Bank.Kind == StateValueKind.Known ? new(SeenKind.Known, call.Bank.Value, default) : Seen.Unknown;
             var seen = Seen.Of(call.State, part);
             if (seen.Kind != SeenKind.Entered)
                 return seen;

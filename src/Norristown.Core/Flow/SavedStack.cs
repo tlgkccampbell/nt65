@@ -99,7 +99,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
         for (var i = 0; i < builder.Count; i++)
         {
             var (x, y) = (a.pushes[i], b.pushes[i]);
-            if (x.Size != y.Size || x.Width != y.Width)
+            if (x.Size != y.Size || x.Width != y.Width || x.IsLeft != y.IsLeft)
                 return null;
             builder[i] = x with { Value = RegisterValue.Merge(x.Value, y.Value), Flags = PushedFlags.Merge(x.Flags, y.Flags) };
         }
@@ -133,7 +133,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// <summary>
     /// Returns this stack as a call to a routine with <paramref name="effect"/> leaves it once the
     /// routine returns, or null where what it leaves is not known. Bytes the routine leaves hold
-    /// nothing known. Bytes it takes are taken from beneath what this routine pushed, so where
+    /// nothing known, and a pull of any size takes them (see <see cref="SavedPush.IsLeft"/>). Bytes it takes are taken from beneath what this routine pushed, so where
     /// this routine has pushed anything, the routine may have taken it and nothing is known.
     /// </summary>
     public SavedStack? AfterCall(StackEffect effect)
@@ -146,7 +146,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
             return new SavedStack(pushes, offset + effect.Bytes);
         var left = pushes.ToBuilder();
         for (var i = 0; i < effect.Bytes; i++)
-            left.Add(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Semantics.Width.Eight));
+            left.Add(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Semantics.Width.Eight) { IsLeft = true });
         return new SavedStack(left.ToImmutable(), offset);
     }
 
@@ -161,11 +161,27 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// that meet having pulled different amounts both hold nothing known, and every pull past
     /// what they push again gets back nothing known either.
     /// </para>
+    /// <para>
+    /// A pull whose top bytes a called routine left takes as many of them as it is wide. Where
+    /// they run out over a push of the routine's own, the pull takes part of that push, and
+    /// nothing is known about the stack.
+    /// </para>
     /// </summary>
-    public SavedStack? Pull(PushSize size, Semantics.Width width) =>
-        pushes.Length == 0 ? new SavedStack(pushes, offset - PushBytes.Of(size, width))
+    public SavedStack? Pull(PushSize size, Semantics.Width width)
+    {
+        if (pushes.Length > 0 && pushes[^1].IsLeft)
+        {
+            if (PushBytes.Of(size, width) is not { } bytes)
+                return null;
+            var below = pushes.Length;
+            while (bytes > 0 && below > 0 && pushes[below - 1].IsLeft)
+                (below, bytes) = (below - 1, bytes - 1);
+            return bytes == 0 || below == 0 ? new SavedStack(pushes[..below], offset - bytes) : null;
+        }
+        return pushes.Length == 0 ? new SavedStack(pushes, offset - PushBytes.Of(size, width))
             : pushes[^1].Size == size && pushes[^1].Width == width ? new SavedStack(pushes[..^1], offset)
             : null;
+    }
 
     /// <inheritdoc/>
     public bool Equals(SavedStack? other) =>
@@ -190,7 +206,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// </summary>
     private SavedPush? Top(PushSize size, Semantics.Width width) =>
         pushes.Length > 0 && pushes[^1].Size == size && pushes[^1].Width == width
-            && width != Semantics.Width.Unknown
+            && width != Semantics.Width.Unknown && !pushes[^1].IsLeft
             ? pushes[^1]
             : null;
 }

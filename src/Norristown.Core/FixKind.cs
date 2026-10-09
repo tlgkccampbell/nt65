@@ -242,4 +242,11 @@ public enum FixKind
     /// after the <c>.patch</c> reported.
     /// </summary>
     PatchTargetAdded,
+
+    /// <summary>
+    /// The items the fix's <see cref="DiagnosticFix.Text"/> gives, declared in the signature of the
+    /// routine at <see cref="DiagnosticFix.At"/>. The text is written as a signature is, with the
+    /// entry's items before any <c>-&gt;</c> and the exit's after it.
+    /// </summary>
+    Inferred,
 }

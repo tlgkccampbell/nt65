@@ -11,4 +11,5 @@ namespace Norristown.Flow;
 /// <param name="Target">The routine called.</param>
 /// <param name="State">The state where the call is made.</param>
 /// <param name="At">Where the call is made.</param>
-internal sealed record CallState(Symbol Caller, Symbol Target, ProcessorState State, Span At);
+/// <param name="Bank">The program bank control arrives in, or unknown where that is not known.</param>
+internal sealed record CallState(Symbol Caller, Symbol Target, ProcessorState State, Span At, StateValue Bank);

@@ -1,0 +1,72 @@
+; A store into the bytes on the stack may change a P, D or B saved there, and nt65 does not
+; follow which byte it changes. So after such a store a `plp` restores widths nt65 does not know,
+; as the register walk forgets the flags and registers a pull or an `rti` restores. A store
+; anywhere else leaves the saved values alone.
+.module main
+
+.cpu 65816
+
+.export indexed, relative, elsewhere, framed
+
+.struct Local {
+    count: .word
+}
+
+.segment ZEROPAGE
+.data v: .byte
+
+.segment CODE
+
+; `tsx` puts S in X, so `sta $0103,x` writes into the stack, where the `php` saved the widths.
+.proc indexed: a8, i8, native {
+    php
+    tsx
+    lda $0103,x
+    ora #$20
+    sta $0103,x
+    plp
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `sta $0103,x` writes into the bytes on the stack: nt65 does not follow which byte it changes, so what a pull or an `rti` restores after it is not known
+    rts                     ;! error[return-state-mismatch]: `rts`: `indexed` declares it returns with `a8`, but the width of A is not known here;! error[return-state-mismatch]: `rts`: `indexed` declares it returns with `i8`, but the width of X and Y is not known here
+}
+
+; A store relative to S writes into the stack too.
+.proc relative: a8, i8, native {
+    php
+    lda #0
+    sta 1,s
+    plp
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `sta 1,s` writes into the bytes on the stack: nt65 does not follow which byte it changes, so what a pull or an `rti` restores after it is not known
+    rts                     ;! error[return-state-mismatch]: `rts`: `relative` declares it returns with `a8`, but the width of A is not known here;! error[return-state-mismatch]: `rts`: `relative` declares it returns with `i8`, but the width of X and Y is not known here
+}
+
+; A store to a fixed address outside the stack page, even one indexed by the X that holds S,
+; leaves the saved widths alone.
+.proc elsewhere: a8, i8, native {
+    php
+    tsx
+    sta v
+    sta $0200,x
+    plp
+    lda #1
+    rts
+}
+
+; A store to a member of a `.frame` writes bytes the routine laid out for itself, so the P saved
+; beneath the frame, and the A saved beneath that, are still known when they are pulled. The
+; frame is reserved with two `pha` rather than a `pea`, so that the two `pla` that discard it pair
+; with pushes of their own size.
+.proc framed: a8, i8, native, keeps a {
+    pha
+    php
+    pha
+    pha
+    .frame locals: Local
+    lda #7
+    sta locals::count,s
+    pla
+    pla
+    plp
+    lda #1
+    pla
+    rts
+}

@@ -13,7 +13,8 @@ namespace Norristown.Flow;
 /// <para>
 /// Only one shape is recognised. Each iteration ends with a <c>dex</c> or <c>dey</c> and then a
 /// <c>bne</c> or <c>bpl</c> back to the top. Nothing else in the loop, and no routine it calls,
-/// writes that register.
+/// writes that register, and neither does a routine called after the load. On the 65816 a change
+/// to the index width counts as a write.
 /// There is one way in, which loads the immediate, and one way out, which is the branch itself.
 /// Every other loop is left uncounted, with no upper bound, because a loop counted wrongly is
 /// worse than one not counted at all.
@@ -103,7 +104,7 @@ internal static class CountedLoops
             {
                 if (i == loop.Latch && counting.Contains(step.Key))
                     continue;
-                if (Writes(Mnemonic(step), register))
+                if (WrittenBy(model, layout, step).HasFlag(register))
                     return null;
             }
         }
@@ -115,7 +116,8 @@ internal static class CountedLoops
             if (!loop.Inside[i] && blocks[i].Successors.Any(edge => edge.Kind != EdgeKind.Call && edge.To == loop.Header))
                 from.Add(i);
         }
-        if (from.Count != 1 || Started(model, layout, blocks[from[0]], counter == MnemonicKind.Dex ? MnemonicKind.Ldx : MnemonicKind.Ldy, register) is not { } start)
+        var load = counter == MnemonicKind.Dex ? MnemonicKind.Ldx : MnemonicKind.Ldy;
+        if (from.Count != 1 || Started(model, layout, blocks[from[0]], load, register, bodies) is not { } start)
             return null;
 
         // `bne` runs the count down to zero, so the stride has to divide it or the count skips
@@ -143,19 +145,24 @@ internal static class CountedLoops
     /// <summary>
     /// Returns the immediate the block before the loop leaves in the register, or null when it
     /// leaves anything else there. The last value the block writes to the register is what the
-    /// loop starts from.
+    /// loop starts from. A call that ends the block counts as writing the register unless the
+    /// routine it calls surely leaves it alone, as a call inside the loop does. A call to a label
+    /// of this routine always counts.
     /// </summary>
-    private static long? Started(SemanticModel model, CodeLayout layout, BasicBlock before, MnemonicKind load, Registers register)
+    private static long? Started(
+        SemanticModel model, CodeLayout layout, BasicBlock before, MnemonicKind load, Registers register,
+        IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies)
     {
         long? started = null;
         foreach (var step in InstructionsIn(before))
         {
             var mnemonic = Mnemonic(step);
-            if (!Writes(mnemonic, register))
+            if (!WrittenBy(model, layout, step).HasFlag(register))
                 continue;
             started = mnemonic == load ? StepOperands.Immediate(model, layout, step) : null;
         }
-        return started;
+        var calls = CallMayWrite(before, register, bodies) || before.Successors.Any(edge => edge.Kind == EdgeKind.Call);
+        return calls ? null : started;
     }
 
     /// <summary>
@@ -189,15 +196,15 @@ internal static class CountedLoops
         if (minimum is not { } low || maximum is not { } high)
             return null;
         var last = blocks[loop.Latch].Steps.LastOrDefault(step => !step.IsMarker);
-        if (layout.Of(last.Statement, last.On)?.Cycles is not { } branch)
+        if (layout.Of(last.Statement, last.On)?.Branch is not { } branch)
             return null;
 
-        // A branch costs its fewest cycles when it is not taken, and one more than that when it
-        // is taken. A taken branch that crosses a page costs its most cycles.
-        var taken = new CycleCount(branch.Minimum + 1, branch.Maximum);
+        // The walk leaves the loop by the latch's branch not taken, so each bound holds that once.
+        // Every iteration but the last takes the branch instead.
+        var (taken, notTaken) = branch;
         return new CycleCount(
-            ((low - branch.Minimum) * iterations) + (taken.Minimum * (iterations - 1)) + branch.Minimum,
-            ((high - branch.Maximum) * iterations) + (taken.Maximum * (iterations - 1)) + branch.Minimum);
+            ((low - notTaken.Minimum) * iterations) + (taken.Minimum * (iterations - 1)) + notTaken.Minimum,
+            ((high - notTaken.Maximum) * iterations) + (taken.Maximum * (iterations - 1)) + notTaken.Maximum);
     }
 
     /// <summary>
@@ -221,9 +228,18 @@ internal static class CountedLoops
     /// </summary>
     private static bool MayWrite(
         BasicBlock block, Loop loop, Registers register, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies) =>
-        block.CallsUnknown
-        || block.Calls.Any(callee => !LeftAlone(callee, bodies, []).HasFlag(register))
+        CallMayWrite(block, register, bodies)
         || block.Successors.Any(edge => edge.Kind == EdgeKind.Call && !loop.Inside[edge.To]);
+
+    /// <summary>
+    /// Returns whether a call that <paramref name="block"/> makes to another routine, or to a place
+    /// nt65 cannot name, may leave <paramref name="register"/> holding something else. A call to a
+    /// label of this routine is not counted here.
+    /// </summary>
+    private static bool CallMayWrite(
+        BasicBlock block, Registers register, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies) =>
+        block.CallsUnknown
+        || block.Calls.Any(callee => !LeftAlone(callee, bodies, []).HasFlag(register));
 
     /// <summary>
     /// Returns the index registers that a call to <paramref name="callee"/> surely leaves as they
@@ -261,6 +277,22 @@ internal static class CountedLoops
     }
 
     /// <summary>
+    /// Returns the index registers the instruction at <paramref name="step"/> may change. A
+    /// <c>rep</c> or <c>sep</c> whose immediate is known changes them only where it names the
+    /// index-width bit.
+    /// </summary>
+    private static Registers WrittenBy(SemanticModel model, CodeLayout layout, Step step)
+    {
+        var mnemonic = Mnemonic(step);
+        if (mnemonic is MnemonicKind.Rep or MnemonicKind.Sep
+            && StepOperands.Immediate(model, layout, step) is { } mask && (mask & (long)StatusFlags.X) == 0)
+        {
+            return Registers.None;
+        }
+        return WrittenBy(mnemonic);
+    }
+
+    /// <summary>
     /// Returns the index registers an instruction may change. Changing the index width on the
     /// 65816 clears their high bytes, so an instruction that may do that counts as writing both.
     /// </summary>
@@ -268,10 +300,6 @@ internal static class CountedLoops
         mnemonic is MnemonicKind.Rep or MnemonicKind.Sep or MnemonicKind.Plp or MnemonicKind.Xce or MnemonicKind.Rti
             ? Registers.X | Registers.Y
             : Instructions.Facts(mnemonic).Writes & (Registers.X | Registers.Y);
-
-    /// <summary>Returns whether a mnemonic may leave <paramref name="register"/> holding something else.</summary>
-    private static bool Writes(MnemonicKind mnemonic, Registers register) =>
-        Instructions.Facts(mnemonic).Writes.HasFlag(register);
 
     /// <summary>Returns the instructions in a block, leaving out markers and directives.</summary>
     private static List<Step> InstructionsIn(BasicBlock block) =>

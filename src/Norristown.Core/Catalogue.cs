@@ -2960,6 +2960,17 @@ public static class Catalogue
         "The block pushes an address and then executes a return, which jumps to that address (the \"RTS "
             + "trick\"), so nt65 cannot tell where it goes. A `.next` after it names the labels it may reach.");
 
+    internal static DiagnosticDescriptor ReturnPastPushes { get; } = Entry(
+        Area.ControlFlow,
+        "return-past-pushes",
+        Severity.Error,
+        "`{0}` returns through {1} this routine pushed rather than through its return address: pull them first, "
+            + "or add a `.next` naming where it goes",
+        "nt65 counts what a routine pushes and pulls from where it was called. Where nothing has pulled the return "
+            + "address, it is still beneath what the routine pushed, so a return with pushes left on the stack pulls "
+            + "them as the address to go to. A routine that pushes an address to jump through its return names where "
+            + "it goes with a `.next`.");
+
     internal static DiagnosticDescriptor JumpTargetNotALabel { get; } = Entry(
         Area.ControlFlow,
         "jump-target-not-a-label",
@@ -3537,6 +3548,17 @@ public static class Catalogue
             + "This one covers more, so its last members would name the return address or the caller's bytes. Push "
             + "the frame's bytes before the `.frame`, or use a smaller type.");
 
+    internal static DiagnosticDescriptor FrameStackUnknown { get; } = Entry(
+        Area.ProcessorState,
+        "frame-stack-unknown",
+        Severity.Error,
+        "frame `{0}` names the top {1} bytes of the stack, but how many bytes are pushed here is not known{2}",
+        "A `.frame` names bytes on top of the stack, so it can cover at most what this routine has pushed so far. "
+            + "Here nt65 cannot count that, because paths that pushed different amounts meet, another routine may "
+            + "jump in having pushed nothing, or something pushed a width that is not known. On one of those paths "
+            + "the frame would name the return address or the caller's bytes. After `tcs` or `txs` the program has "
+            + "moved the stack itself, and a frame may reach beneath what is known.");
+
     internal static DiagnosticDescriptor FrameDepthUnknown { get; } = Entry(
         Area.ProcessorState,
         "frame-depth-unknown",
@@ -4004,7 +4026,7 @@ public static class Catalogue
         Area.Signatures,
         "state-banks-not-dbr",
         Severity.Error,
-        "`{0}`: only `dbr` can be given a set of banks; `dp` takes one address",
+        "`{0}`: only `dbr` can be given a set of banks; {1}",
         "A routine that does not set B itself can run with any of several data banks that reach the same memory, "
             + "so `dbr = [...]` may list a set of banks. D decides where every direct-page operand lands, so `dp` "
             + "has to be a single value.");
@@ -4258,6 +4280,18 @@ public static class Catalogue
             + "Here the register already holds the constant the load gives it on every path. The load can go where N "
             + "and Z already say what it would set them to, or where nothing reads them before they change, which "
             + "saves 2 bytes and 2 cycles. Memory is never assumed to hold anything.");
+
+    internal static DiagnosticDescriptor ExportStateInferred { get; } = Entry(
+        Area.Suggestions,
+        "export-state-inferred",
+        Severity.Info,
+        "`{0}` is exported, and its bytes depend on {1}, which is inferred from its callers here: a caller outside "
+            + "nt65 is not checked against it, so the signature can declare it",
+        "nt65 infers each part of a routine's entry that its signature leaves out from the routine's callers in the "
+            + "program, and sizes immediates and writes `d:` operands from what it infers. A caller outside nt65 is "
+            + "not checked, so for an exported routine whose bytes depend on an inferred width, mode or direct page, "
+            + "nothing states what such a caller must hold. Declaring the items makes that the contract, which every "
+            + "caller in the program is then checked against. This is offered only where a byte depends on the part.");
 
     internal static DiagnosticDescriptor LoadFromRegister { get; } = Entry(
         Area.Suggestions,

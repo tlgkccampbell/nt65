@@ -73,6 +73,12 @@ public sealed class StateAnalysis : IProcessorStates
     public IReadOnlyList<Diagnostic> Diagnostics { get; private set; } = [];
 
     /// <summary>
+    /// Gets a hint for each exported routine of the file whose bytes depend on a part of its
+    /// entry that is inferred rather than declared, as <see cref="InferredExports"/> finds them.
+    /// </summary>
+    internal IReadOnlyList<Diagnostic> Exports { get; private set; } = [];
+
+    /// <summary>
     /// Gets the stack effect the analysis took for each routine a call in the file reaches. The
     /// effects are worked out across the program after each file is analyzed, so a file whose
     /// effects turn out different is analyzed again with them.
@@ -110,6 +116,7 @@ public sealed class StateAnalysis : IProcessorStates
         foreach (var region in flow.Regions)
             analysis.Analyze(region);
         analysis.checks.CheckOutsideRoutines();
+        analysis.Exports = InferredExports.Of(layout, flow, analysis.signatures, analysis, analysis.EnteredWith);
         analysis.Diagnostics = Norristown.Diagnostics.Ordered(
             analysis.checks.Found.Concat(analysis.UndeclaredExports()).DistinctBy(d => (d.Span, d.Id, d.Message)));
         return analysis;
@@ -329,7 +336,8 @@ public sealed class StateAnalysis : IProcessorStates
         var label = block.Label!;
         var a = given.Contains(StatePart.A) ? here.A : Met(here.A, outside.A);
         var index = given.Contains(StatePart.Index) ? here.Index : Met(here.Index, outside.Index);
-        var stack = AnalysisStack.Merge(reached.Stack, EntryStack(signature));
+        // A jump in never laid out the frames the path above named, so none of them is kept.
+        var stack = AnalysisStack.Merge(reached.Stack?.Unframed(), EntryStack(signature));
         return reached with
         {
             Processor = new ProcessorState(
@@ -376,7 +384,7 @@ public sealed class StateAnalysis : IProcessorStates
         if (report is not null)
         {
             report.CheckRelativeCall(step, mnemonic, call, callee, state);
-            Entering(step, routine, call.Routine, state);
+            Entering(step, routine, call.Routine, state, report);
         }
         return signatures.IsExitKnown(call.Routine) ? StateChecks.Exited(callee, state) : null;
     }
@@ -483,6 +491,42 @@ public sealed class StateAnalysis : IProcessorStates
                 checks.Unreached(block, region);
         }
         MaximumWalks = Math.Max(MaximumWalks, walks.DefaultIfEmpty().Max());
+    }
+
+    /// <summary>
+    /// Returns the processor state reaching each statement of <paramref name="region"/> where its
+    /// routine is entered with <paramref name="entry"/> in place of the entry its signature gives.
+    /// Nothing is reported or recorded, so the analysis's own answers stay as they were.
+    /// </summary>
+    private Dictionary<StepKey, ProcessorState> EnteredWith(FlowRegion region, ProcessorState entry)
+    {
+        var blocks = region.Blocks;
+        var signature = (SignatureOf(region.Routine) ?? Signature.Default) with { Entry = entry };
+        var solver = new Dataflow<FlowState>(
+            blocks, (block, state) => Walk(block, state, region, null), FlowState.Merge, block => ControlFlow.Onward(blocks, block));
+        solver.Enter(0, new FlowState(entry, EntryStack(signature)));
+        solver.EnterEntries(
+            outside,
+            declaredOnly: true,
+            new FlowState(Outside(signature), EntryStack(signature)),
+            (block, state) => Entered(block, state, signature, region.Routine));
+
+        var states = new Dictionary<StepKey, ProcessorState>();
+        foreach (var block in blocks)
+        {
+            if (solver.Reached[block.Index] is not { IsDead: false } state)
+                continue;
+            for (var i = 0; i < block.Steps.Count && !state.IsDead; i++)
+            {
+                var step = block.Steps[i];
+                states.TryAdd(step.Key, state.Processor);
+                var last = i == block.Steps.Count - 1;
+                state = Through(
+                    step, i > 0 ? block.Steps[i - 1] : null, last ? block.Next : null, last ? block.End : BlockEnd.Through, state,
+                    region.Routine, null);
+            }
+        }
+        return states;
     }
 
     /// <summary>
@@ -600,6 +644,14 @@ public sealed class StateAnalysis : IProcessorStates
         var mnemonic = statement.MnemonicKind;
         var mode = layout.Of(statement, step.On)?.Mode;
         var processor = state.Processor;
+
+        // A store into the bytes on the stack may change a P, D or B saved there, and nt65 does
+        // not follow which byte it changes, so nothing saved on the stack is known afterwards.
+        // The register walk forgets the flags and registers such a store may change the same way.
+        var pointing = StackWrites.Pointing(mnemonic, mode, StepOperands.Immediate(model, layout, step), state.Pointing);
+        state = Instructions.Facts(mnemonic).Stores && StackWrites.Into(model, step, mode, state.Pointing)
+            ? state with { Stack = null, WhyStack = Cause.StackWritten($"`{statement.GetText().Trim()}`"), Pointing = pointing }
+            : state with { Pointing = pointing };
         var stack = state.Stack;
         if (mode == AddressingMode.Immediate && Instructions.SizedBy(mnemonic) is { } register)
         {
@@ -677,7 +729,7 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Phb:
                 return state with { Stack = stack?.PushValue(InRoutine(processor, step.On).B, 1) };
             case MnemonicKind.Phk:
-                return state with { Stack = stack?.PushValue(checks.BankOf(step.Segment), 1) };
+                return state with { Stack = stack?.PushValue(ProgramBankAt(step, routine), 1) };
             case MnemonicKind.Phd:
                 return state with { Stack = stack?.PushValue(InRoutine(processor, step.On).D, 2) };
             case MnemonicKind.Pea:
@@ -821,7 +873,6 @@ public sealed class StateAnalysis : IProcessorStates
         if (transfer == Transfer.Call)
         {
             report?.CheckMirror(step, mode);
-            report?.CheckArguments(step, target, state.Stack, 0);
             // A call to a name that is no routine has already been reported, and leaves the stack
             // alone so that the one mistake is not reported again.
             if (Called(step, mnemonic, target, state.Processor, routine, report) is not { } called)
@@ -833,7 +884,6 @@ public sealed class StateAnalysis : IProcessorStates
         // any `phk` pushed.
         if (flow.RelativeCallAt(step) is { } relative)
         {
-            report?.CheckArguments(step, relative.Routine, state.Stack, relative.Pushed);
             if (RelativelyCalled(step, mnemonic, relative, state.Processor, routine, report) is not { } called)
                 return FlowState.Dead;
             return Returned(step, new FlowState(called, Pull(state.Stack, relative.Pushed)), EffectOf(relative.Routine));
@@ -924,7 +974,7 @@ public sealed class StateAnalysis : IProcessorStates
         if (report is not null)
         {
             report.CheckCall(step, mnemonic, target, callee, state);
-            Entering(step, routine, target, state);
+            Entering(step, routine, target, state, report);
         }
         return signatures.IsExitKnown(target) ? StateChecks.Exited(callee, state) : null;
     }
@@ -941,9 +991,49 @@ public sealed class StateAnalysis : IProcessorStates
         return signature;
     }
 
-    /// <summary>Records the state where <paramref name="caller"/> hands control to <paramref name="target"/>'s entry.</summary>
-    private void Entering(Step step, Symbol caller, Symbol target, ProcessorState state) =>
-        calls.Add(new CallState(caller, target, state, step.Statement.Tree.GetSpan(step.Statement.Span)));
+    /// <summary>
+    /// Records the state where <paramref name="caller"/> hands control to <paramref name="target"/>'s
+    /// entry, with the program bank control arrives in, and reports where that bank is not the one
+    /// <paramref name="target"/> declares with <c>pbr</c>.
+    /// </summary>
+    private void Entering(Step step, Symbol caller, Symbol target, ProcessorState state, StateChecks report)
+    {
+        var bank = ArrivingBank(step, caller, target);
+        if (SignatureOf(target) is { Declared: var declared, ProgramBank: { IsBounded: true } needed }
+            && (declared & StateParts.ProgramBank) != 0 && !bank.Meets(needed))
+        {
+            var register = StateRegister.ProgramBank;
+            report.Report(step, Catalogue.CallStateMismatch.Message(
+                $"`{step.Statement.GetText().Trim()}`",
+                needed.Format(register),
+                bank.IsBounded ? $"control reaches it in bank {bank.Describe(register.Digits)}" : "the bank control reaches it in is not known"));
+        }
+        calls.Add(new CallState(caller, target, state, step.Statement.Tree.GetSpan(step.Statement.Span), bank));
+    }
+
+    /// <summary>
+    /// Returns the program bank that the code at <paramref name="step"/> in <paramref name="routine"/>
+    /// runs in. That is the bank the routine is declared or inferred to run in, or the home bank of
+    /// the step's segment where nothing says otherwise.
+    /// </summary>
+    private StateValue ProgramBankAt(Step step, Symbol routine) =>
+        SignatureOf(routine)?.ProgramBank is { Kind: not StateValueKind.Unchanged } bank ? bank : checks.BankOf(step.Segment);
+
+    /// <summary>
+    /// Returns the program bank in which control reaches <paramref name="target"/> from the step.
+    /// A long jump or call lands in the bank of the address it names, which is the bank a mirror
+    /// address such as <c>($80 &lt;&lt; 16) | .loword(f)</c> gives, or the home bank of the target's
+    /// segment. Every other transfer stays in the bank the caller runs in.
+    /// </summary>
+    private StateValue ArrivingBank(Step step, Symbol caller, Symbol target)
+    {
+        if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jsl or MnemonicKind.Jml or MnemonicKind.Rtl })
+            return ProgramBankAt(step, caller);
+        var mode = layout.Of(step.Statement, step.On)?.Mode;
+        return Targets.MirrorOf(model, Transfers.TargetOf(step.Statement, mode), step.On) is { } mirror && mirror.Routine == target
+            ? StateValue.Of(mirror.Bank)
+            : checks.BankOf(target.Segment);
+    }
 
     /// <summary>Records the state that one of <paramref name="routine"/>'s returns leaves.</summary>
     private void Leaving(Symbol routine, ProcessorState state) =>
@@ -962,7 +1052,7 @@ public sealed class StateAnalysis : IProcessorStates
         report.CheckTailCall(step, via, mnemonic, target, callee, state, routine);
         if (callee.IsInterrupt)
             return;
-        Entering(step, routine, target, state);
+        Entering(step, routine, target, state, report);
         if (SignatureOf(routine) is not { HasNoCaller: true } && !callee.NeverReturns && signatures.IsExitKnown(target))
             Leaving(routine, StateChecks.Exited(callee, state));
     }
@@ -1008,7 +1098,8 @@ public sealed class StateAnalysis : IProcessorStates
     /// <summary>
     /// Returns the state after <c>rep #c</c> or <c>sep #c</c>. In native mode the widths it names
     /// become known. In emulation mode the widths are pinned at 8 and nothing changes. Where the
-    /// mode is not known, a <c>sep</c> still makes them 8, which they are in either mode.
+    /// mode is not known, a <c>sep</c> still makes them 8, which they are in either mode. A mask
+    /// that nt65 cannot work out, or that a store into the code may write, leaves both unknown.
     /// </summary>
     private ProcessorState Flags(Step step, bool reset, ProcessorState state)
     {
@@ -1017,7 +1108,10 @@ public sealed class StateAnalysis : IProcessorStates
         // the widths and then finding the mode would throw away what the mode already said.
         if (state.E == ProcessorMode.Emulation)
             return state;
-        if (StepOperands.Constant(model, step) is not { } flags)
+
+        // A store a `.patch` acknowledges may write the mask, and the mask as written then says
+        // only what the program starts from, as an operand nt65 cannot work out says nothing.
+        if (flow.RewrittenOperands.Contains(step.Key) || StepOperands.Constant(model, step) is not { } flags)
             return state with { A = Width.Unknown, Index = Width.Unknown };
 
         var width = reset
@@ -1082,7 +1176,7 @@ public sealed class StateAnalysis : IProcessorStates
         foreach (var item in StateItem.Read(step.Statement))
         {
             if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Arguments
-                or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set)
+                or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set or StatePart.ProgramBank)
             {
                 report?.ReportAt(item.Node, step, Catalogue.StateItemNotAPoint.Message(item.Text));
                 continue;
@@ -1161,7 +1255,7 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (register == StateRegister.DirectPage)
             {
-                report?.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Message(item.Text));
+                report?.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Message(item.Text, "`dp` takes one address"));
                 return StateValue.Unknown;
             }
             if (item.BanksOf(expression => model.ValueOf(expression, step.On).AsNumber(), out var invalid) is not { } banks)
@@ -1190,8 +1284,10 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns the state after <c>.frame name: T</c>, in which the top <c>.sizeof(T)</c> bytes of
-    /// the analysis stack become the frame. Where the stack is not known, as after <c>tcs</c>, it
-    /// becomes those bytes with nothing known beneath them.
+    /// the analysis stack become the frame. After <c>tcs</c> or <c>txs</c> the frame may reach beneath
+    /// what is known. Where the stack is not known at all, as where paths that pushed different
+    /// amounts meet, the frame may name the return address, so it is an error. The stack then
+    /// becomes the frame's bytes with nothing known beneath them, so its slots are not reported too.
     /// </summary>
     private FlowState Framed(Step step, FrameDirectiveSyntax directive, FlowState state, StateChecks? report)
     {
@@ -1204,7 +1300,10 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         }
         if (state.Stack is not { } stack)
+        {
+            report?.Report(step, Catalogue.FrameStackUnknown.Message(frame.DisplayName, size, Cause.Because(state.WhyStack)));
             return state with { Stack = AnalysisStack.OnlyFrame(frame, (int)size) };
+        }
         if (stack.Framed(frame, (int)size) is { } framed)
             return state with { Stack = framed };
         report?.Report(step, Catalogue.FramePastTheStack.Message(frame.DisplayName, size, stack.Depth));

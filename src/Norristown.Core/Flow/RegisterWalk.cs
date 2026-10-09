@@ -244,7 +244,7 @@ internal sealed class RegisterWalk
         {
             foreach (var instruction in hidden.Instructions)
                 state = Instruction(step, instruction.Mnemonic, instruction.Mode, Immediate(instruction), state, use, saved, null);
-            return state;
+            return state with { FromStackPointer = Registers.None };
         }
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
@@ -255,7 +255,7 @@ internal sealed class RegisterWalk
         {
             if (use is not null)
                 UsedByAnything(state, use);
-            return state.WithEach(Registers.All, RegisterValue.Unknown);
+            return state.WithEach(Registers.All, RegisterValue.Unknown) with { FromStackPointer = Registers.None };
         }
 
         // A store may turn the instruction into another, and then the registers hold what either
@@ -263,9 +263,13 @@ internal sealed class RegisterWalk
         var mode = layout.Of(statement, step.On)?.Mode;
         var immediate = StepOperands.Immediate(model, layout, step);
         var after = Instruction(step, statement.MnemonicKind, mode, immediate, state, use, saved, next);
+        var pointing = StackWrites.Pointing(statement.MnemonicKind, mode, immediate, state.FromStackPointer);
         foreach (var variant in VariantsOf(step))
+        {
             after = RegisterState.Merge(after, Instruction(step, variant, mode, immediate, state, use, saved, next));
-        return after;
+            pointing &= StackWrites.Pointing(variant, mode, immediate, state.FromStackPointer);
+        }
+        return after with { FromStackPointer = pointing };
     }
 
     /// <summary>Returns the value of an instruction's immediate, or null where it has none.</summary>
@@ -305,6 +309,12 @@ internal sealed class RegisterWalk
         // routine it reaches.
         if (Instructions.IsCall(mnemonic))
             return state;
+
+        // A store into the bytes on the stack may change a saved register or the flags an
+        // interrupt pushed, and nt65 does not follow which byte it changes. What a pull or an
+        // `rti` restores after it is then not known.
+        if (facts.Stores && StackWrites.Into(model, step, mode, state.FromStackPointer))
+            state = state with { Stack = null, WhyStack = Cause.StackWritten($"`{step.Statement.GetText().Trim()}`") };
 
         // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
         // back. A handler that has left the stack where it found it therefore hands the flags
