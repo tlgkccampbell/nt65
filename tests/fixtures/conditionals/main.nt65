@@ -196,5 +196,51 @@
     rts
 }
 
+; A struct, union or enum declared at file level, outside every block, has a shape the
+; configuration decides when every member is sized from literals and settings, so a condition
+; may measure it. `Rec` is 3 bytes in 2 members, and `Cell` is as big as `wide`, 3 bytes, in 4.
+; A setting sizes `Frame::lines`, so `Frame` is 7 bytes with `PLATFORM` 2 and 5 with 1, and
+; `Cmd` has 4 members with `DEBUG` and 3 without.
+.struct Rec {
+    kind:  .byte
+    where: .word
+}
+
+.union Cell {
+    whole: .word
+    .struct {
+        lo: .byte
+        hi: .byte
+    }
+    wide: .long
+}
+
+.struct Frame {
+    head:  .type Rec
+    lines: .byte[PLATFORM * 2]
+}
+
+.if .sizeof(Rec) == 3 && .countof(Rec) == 2 && .sizeof(Cell) == 3 && .countof(Cell) == 4 {
+    .const SHAPED = 1
+} .else {
+    .const SHAPED = 0
+}
+.if .sizeof(Frame) > 6 {
+    .const FRAME_BYTES = 7
+} .else {
+    .const FRAME_BYTES = 5
+}
+.if .countof(Cmd) == 4 {
+    .const COMMANDS = 4
+} .else {
+    .const COMMANDS = 3
+}
+
+; The binder measures the same shapes once the declarations are read, and agrees.
+.assert .sizeof(Frame) == FRAME_BYTES && .countof(Cmd) == COMMANDS, "the conditions measured the shapes"
+
+.segment RODATA
+.data shapes: .byte SHAPED, FRAME_BYTES, COMMANDS
+
 ; Exported, so that what the file only declares counts as used.
-.export bits, dispatch, commands, actions_table, grid
+.export bits, dispatch, commands, actions_table, grid, shapes

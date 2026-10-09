@@ -10,7 +10,8 @@ namespace Norristown.Semantics;
 /// <para>
 /// A condition tests what the configuration alone decides, and never the program. It may use
 /// literals, operators, the built-ins that measure nothing, settings, and the constants,
-/// functions and enum members declared at file level, outside every block, from those. This
+/// functions and enum members declared at file level, outside every block, from those. It may
+/// also measure a struct, union or enum declared there whose members are sized from those. This
 /// lets every condition be evaluated here, before any declaration has been collected. Which
 /// declarations exist follows from the configuration alone, so the same name may be declared
 /// under two conditions and only one of them is real. A check that depends on the program is an
@@ -374,9 +375,9 @@ public sealed class Configuration
     }
 
     /// <summary>
-    /// Represents what the configuration alone decides in a program: its settings, and the
-    /// constants, functions and enum members declared at file level, outside every block, from
-    /// them. It holds a symbol for every name at file level, so that a name a condition uses is
+    /// Represents what the configuration alone decides in a program: its settings, the constants,
+    /// functions and enum members declared at file level, outside every block, from them, and the
+    /// shapes of the structs, unions and enums declared there. It holds a symbol for every name at file level, so that a name a condition uses is
     /// looked up as the binder would look it up, and one the configuration does not decide is
     /// reported with the reason.
     /// <para>
@@ -412,6 +413,7 @@ public sealed class Configuration
         private readonly Dictionary<Symbol, Entry> entries;
         private readonly Dictionary<Symbol, long> given = [];
         private readonly Dictionary<Symbol, Decision> decided = [];
+        private readonly Dictionary<Symbol, Shape> shapes = [];
         private readonly HashSet<Symbol> evaluating = [];
         private readonly Dictionary<SyntaxTree, Reach> reached = [];
 
@@ -475,7 +477,8 @@ public sealed class Configuration
         public Evaluator ConditionEvaluator(List<Diagnostic> diagnostics) =>
             Evaluator.ForConditions(
                 new Conditions(
-                    cpu, name => Name(name, null, diagnostics), Call, (node, name, why) => diagnostics.Add(Undecided(node, name, why))),
+                    cpu, name => Name(name, null, diagnostics), Call, Measure,
+                    (node, name, why) => diagnostics.Add(Undecided(node, name, why))),
                 diagnostics);
 
         /// <summary>Determines whether the build gives the setting <paramref name="name"/> in <paramref name="tree"/> a value.</summary>
@@ -487,7 +490,7 @@ public sealed class Configuration
         {
             lock (gate)
             {
-                return decided.Keys.Any(symbol => symbol.Tree == tree);
+                return decided.Keys.Any(symbol => symbol.Tree == tree) || shapes.Keys.Any(symbol => symbol.Tree == tree);
             }
         }
 
@@ -545,16 +548,23 @@ public sealed class Configuration
 
         /// <summary>
         /// Returns the note that says what <paramref name="measurement"/> measures, as the reason
-        /// the configuration does not decide <paramref name="owner"/>.
+        /// the configuration does not decide <paramref name="owner"/>, which is declared at
+        /// <paramref name="at"/>.
         /// </summary>
-        private static RelatedSpan Measures(Symbol owner, SyntaxNode measurement)
+        private static RelatedSpan Measures(Span at, string owner, SyntaxNode measurement)
         {
             var (what, with) = measurement is CallExpressionSyntax { Function: { } function } call
                 ? (string.Join(", ", call.Arguments.Arguments.Select(argument => argument.GetText().Trim())), function.Text)
                 : (measurement.GetText().Trim(), "a measurement");
-            return new RelatedSpan(owner.DeclarationSpan,
-                $"`{owner.DisplayName}` measures `{what}` with `{with}`");
+            return new RelatedSpan(at, $"`{owner}` measures `{what}` with `{with}`");
         }
+
+        /// <summary>
+        /// Returns the note that says what <paramref name="symbol"/> is, from the text
+        /// <paramref name="note"/> its entry gives, at its declaration.
+        /// </summary>
+        private static RelatedSpan Noted(Symbol symbol, string note) =>
+            new(symbol.DeclarationSpan, $"`{symbol.DisplayName}` {note}");
 
         /// <summary>
         /// Returns what <paramref name="tree"/> declares at file level, with what is wrong with its
@@ -653,10 +663,10 @@ public sealed class Configuration
             var decision = entry switch
             {
                 Entry.Setting setting => Setting(symbol, setting),
-                Entry.Constant constant => Probe(constant.Value, symbol, null, null),
+                Entry.Constant constant => Probe(constant.Value, symbol.DeclarationSpan, symbol.DisplayName, null, null),
                 Entry.Member member => Member(symbol, member),
-                Entry.Marker marker => Decision.Not(new Undecided(
-                    marker.Cause, [new RelatedSpan(symbol.DeclarationSpan, $"`{symbol.DisplayName}` {marker.Note}")], symbol.DisplayName)),
+                Entry.Marker marker => Decision.Not(new Undecided(marker.Cause, [Noted(symbol, marker.Note)], symbol.DisplayName)),
+                Entry.Type type => Decision.Not(new Undecided(UndecidedCause.Place, [Noted(symbol, type.Note)], symbol.DisplayName)),
                 _ => Decision.Not(new Undecided(
                     UndecidedCause.Place,
                     [new RelatedSpan(symbol.DeclarationSpan, $"`{symbol.DisplayName}` is a function")],
@@ -674,7 +684,7 @@ public sealed class Configuration
         private Decision Setting(Symbol symbol, Entry.Setting setting)
         {
             var declaration = setting.Declaration;
-            var value = Probe(declaration.Value, symbol, null, problems);
+            var value = Probe(declaration.Value, symbol.DeclarationSpan, symbol.DisplayName, null, problems);
             var at = declaration.Tree.GetSpan(declaration.Value.Span);
             if (value.Why is { } why)
                 problems.Add(new Diagnostic(at, Severity.Error, Catalogue.SettingDefaultUndecided.Message(symbol.Name), why.Notes));
@@ -708,7 +718,7 @@ public sealed class Configuration
                     if (child is not LineSyntax { Statement: EnumMemberSyntax { Name: { IsMissing: false } name } line })
                         continue;
                     var at = member.Body.FindMember(name.Text) ?? symbol;
-                    var decision = line.Value is { } value ? Probe(value, at, null, null)
+                    var decision = line.Value is { } value ? Probe(value, at.DeclarationSpan, at.DisplayName, null, null)
                         : previous is not { } last ? Decision.Of(Value.Of(0))
                         : last.Why is { } why ? Decision.Not(why.Through(at.DeclarationSpan, at.DisplayName, before!.DisplayName))
                         : last.Value.AsNumber() is { } number and < long.MaxValue ? Decision.Of(Value.Of(number + 1))
@@ -733,27 +743,29 @@ public sealed class Configuration
                 return true;
             if (block.Opener.Statement is not ConditionalDirectiveSyntax { Condition: var condition })
                 return false;
-            var evaluator = Evaluator.ForConditions(new Conditions(cpu, name => Name(name, null, null), Call, (_, _, _) => { }), []);
+            var evaluator = Evaluator.ForConditions(
+                new Conditions(cpu, name => Name(name, null, null), Call, Measure, (_, _, _) => { }), []);
             return evaluator.Evaluate(condition).AsNumber() is { } number && number != 0;
         }
 
         /// <summary>
-        /// Evaluates <paramref name="expression"/>, the value of <paramref name="owner"/>, with the
-        /// names in it referring to this table and to <paramref name="parameters"/>. The first thing
-        /// the configuration does not decide becomes the reason <paramref name="owner"/> is not
-        /// decided. Problems are reported into <paramref name="report"/>, or dropped when it is
-        /// null, because the binder evaluates a constant again and reports them itself.
+        /// Evaluates <paramref name="expression"/>, the value of <paramref name="owner"/>, which is
+        /// declared at <paramref name="at"/>, with the names in it referring to this table and to
+        /// <paramref name="parameters"/>. The first thing the configuration does not decide becomes
+        /// the reason <paramref name="owner"/> is not decided. Problems are reported into
+        /// <paramref name="report"/>, or dropped when it is null, because the binder evaluates a
+        /// constant again and reports them itself.
         /// </summary>
         private Decision Probe(
-            ExpressionSyntax expression, Symbol owner, IReadOnlyDictionary<string, Value>? parameters, List<Diagnostic>? report)
+            ExpressionSyntax expression, Span at, string owner, IReadOnlyDictionary<string, Value>? parameters,
+            List<Diagnostic>? report)
         {
             Undecided? reason = null;
             void Undecided(SyntaxNode node, string? name, Undecided why) =>
-                reason ??= name is not null ? why.Through(owner.DeclarationSpan, owner.DisplayName, name)
-                    : why.Notes.IsEmpty ? why with { Notes = [Measures(owner, node)], Root = owner.DisplayName }
-                    : why;
+                reason ??= name is not null ? why.Through(at, owner, name)
+                    : why with { Notes = why.Notes.Insert(0, Measures(at, owner, node)), Root = why.Root ?? owner };
             var evaluator = Evaluator.ForConditions(
-                new Conditions(cpu, name => Name(name, parameters, null), Call, Undecided), report ?? []);
+                new Conditions(cpu, name => Name(name, parameters, null), Call, Measure, Undecided), report ?? []);
             var value = evaluator.Evaluate(expression);
             return reason is { } because ? Decision.Not(because) : Decision.Of(value);
         }
@@ -807,17 +819,213 @@ public sealed class Configuration
                         continue;
                     if (parameter.Default is not { } given)
                         return Decision.Of(Value.Unknown);
-                    var taken = Probe(given, symbol, null, null);
+                    var taken = Probe(given, symbol.DeclarationSpan, symbol.DisplayName, null, null);
                     if (taken.Why is not null)
                         return taken;
                     bound[parameter.Name.Text] = taken.Value;
                 }
-                return Probe(function.Declaration.Body, symbol, bound, null);
+                return Probe(function.Declaration.Body, symbol.DeclarationSpan, symbol.DisplayName, bound, null);
             }
             finally
             {
                 evaluating.Remove(symbol);
             }
+        }
+
+        /// <summary>
+        /// Returns what the configuration makes of a <c>.sizeof</c> or <c>.countof</c> call,
+        /// whichever <paramref name="kind"/> is, or null when a problem with its argument has been
+        /// reported. Only a struct, union or enum declared at file level, outside every block, has
+        /// a shape the configuration may decide. Anything else is measured only once the
+        /// declarations are read, and the note says what it is.
+        /// </summary>
+        private Decision? Measure(CallExpressionSyntax call, BuiltinKind kind)
+        {
+            if (call.Arguments.Arguments is not [NameExpressionSyntax { IsIndexed: false } argument])
+                return Decision.Not(Semantics.Undecided.Measured);
+            var (symbol, reported) = Find(argument, null);
+            if (reported)
+                return null;
+            switch (symbol is null ? null : entries.GetValueOrDefault(symbol))
+            {
+                case Entry.Type type:
+                    var shape = ShapeOf(symbol!, type);
+                    return kind == BuiltinKind.Sizeof ? shape.Size : shape.Count;
+                case Entry.Marker marker:
+                    return Decision.Not(new Undecided(UndecidedCause.Measurement, [Noted(symbol!, marker.Note)], symbol!.DisplayName));
+                default:
+                    return Decision.Not(Semantics.Undecided.Measured);
+            }
+        }
+
+        /// <summary>
+        /// Returns the size and count of the struct, union or enum <paramref name="symbol"/>,
+        /// working them out the first time they are asked for. A type declared under an
+        /// <c>.if</c> or inside a block exists only once the conditions are answered, so the
+        /// configuration decides neither. A type whose shape depends on itself is unknown here,
+        /// and the binder reports the cycle.
+        /// </summary>
+        private Shape ShapeOf(Symbol symbol, Entry.Type type)
+        {
+            if (shapes.TryGetValue(symbol, out var known))
+                return known;
+            if (type.Under != UndecidedCause.Measurement)
+            {
+                var where = type.Under == UndecidedCause.Conditional ? "is declared under an `.if`" : "is declared inside a block";
+                var placed = Decision.Not(new Undecided(UndecidedCause.Measurement, [Noted(symbol, where)], symbol.DisplayName));
+                return shapes[symbol] = new Shape(placed, placed);
+            }
+            if (!evaluating.Add(symbol))
+                return new Shape(Decision.Of(Value.Unknown), Decision.Of(Value.Unknown));
+            try
+            {
+                if (type.Block.BlockKind == BlockKind.Enum)
+                    return shapes[symbol] = EnumShape(symbol, type.Block);
+                long members = 0;
+                var size = Room(type.Block, symbol, ref members);
+                return shapes[symbol] = new Shape(size, Decision.Of(Value.Of(members)));
+            }
+            finally
+            {
+                evaluating.Remove(symbol);
+            }
+        }
+
+        /// <summary>
+        /// Returns the shape of an enum, whose count is its members in the branches the build
+        /// takes. An enum is a set of numbers, so it has no size.
+        /// </summary>
+        private Shape EnumShape(Symbol symbol, BlockSyntax block)
+        {
+            long members = 0;
+            void Walk(SyntaxNode container)
+            {
+                foreach (var (child, included) in ConditionChain.Walk(container.ChildNodes, 0, (branch, already) => !already && Holds(branch)))
+                {
+                    if (child is BlockSyntax { BlockKind: BlockKind.If } branch)
+                    {
+                        if (included)
+                            Walk(branch);
+                    }
+                    else if (child is LineSyntax { Statement: EnumMemberSyntax { Name.IsMissing: false } })
+                    {
+                        members++;
+                    }
+                }
+            }
+            Walk(block);
+            var size = Decision.Not(new Undecided(
+                UndecidedCause.Measurement, [Noted(symbol, "is an enum, which has members but no size")], symbol.DisplayName));
+            return new Shape(size, Decision.Of(Value.Of(members)));
+        }
+
+        /// <summary>
+        /// Returns the room that a struct or union, or an anonymous one inside it, takes, and adds
+        /// the number of its members to <paramref name="members"/>. A struct's members follow one
+        /// another, and a union is as big as its largest member. The room is unknown, with no
+        /// reason, when a member has a problem the binder reports.
+        /// </summary>
+        private Decision Room(BlockSyntax group, Symbol type, ref long members)
+        {
+            Int128 total = 0;
+            var known = true;
+            foreach (var child in group.ChildNodes)
+            {
+                Decision room;
+                if (child is LineSyntax { Statement: LabeledLineSyntax member })
+                {
+                    members++;
+                    room = MemberRoom(member, type);
+                }
+                else if (child is BlockSyntax { BlockKind: BlockKind.Struct or BlockKind.Union } inner
+                    && inner.Opener.Statement is TypeDeclarationSyntax { Name: null })
+                {
+                    room = Room(inner, type, ref members);
+                }
+                else
+                {
+                    continue;
+                }
+                if (room.Why is not null)
+                    return room;
+                if (room.Value.AsNumber() is not { } bytes)
+                    known = false;
+                else
+                    total = group.BlockKind == BlockKind.Union ? Int128.Max(total, bytes) : total + bytes;
+            }
+            return known && total <= long.MaxValue ? Decision.Of(Value.Of((long)total)) : Decision.Of(Value.Unknown);
+        }
+
+        /// <summary>
+        /// Returns the room that one member of <paramref name="type"/> reserves, which is its
+        /// element type's size times its count, or the count of its <c>.res</c>.
+        /// </summary>
+        private Decision MemberRoom(LabeledLineSyntax line, Symbol type)
+        {
+            var at = line.Tree.GetSpan(line.Label.Name.Span);
+            var member = $"{type.DisplayName}::{line.Label.Name.Text}";
+            var room = line.Statement switch
+            {
+                DataDirectiveSyntax { Tail: null } data when DataSyntax.IsElementType(data) => Elements(data, at, member),
+                DataDirectiveSyntax
+                {
+                    Directive.DirectiveKind: DirectiveKind.Res, Tail: InlineDataSyntax { Values: [ExpressionSyntax count, ..] },
+                } => Count(count, at, member),
+                _ => Decision.Of(Value.Unknown),
+            };
+            return room.Why is { } why ? Decision.Not(why.Through(type.DeclarationSpan, type.DisplayName, member)) : room;
+        }
+
+        /// <summary>
+        /// Returns the room that a member declared with an element type reserves. A record's
+        /// element is as big as its type, which the configuration has to decide too.
+        /// </summary>
+        private Decision Elements(DataDirectiveSyntax data, Span at, string member)
+        {
+            long width;
+            if (data.Type is { } named)
+            {
+                var (symbol, reported) = Find(named, null);
+                if (reported || symbol is null
+                    || entries.GetValueOrDefault(symbol) is not Entry.Type { Block.BlockKind: BlockKind.Struct or BlockKind.Union } type)
+                {
+                    return Decision.Of(Value.Unknown);
+                }
+                var size = ShapeOf(symbol, type).Size;
+                if (size.Why is { } why)
+                    return Decision.Not(why.Through(at, member, symbol.DisplayName));
+                if (size.Value.AsNumber() is not { } bytes)
+                    return size;
+                width = bytes;
+            }
+            else if (SyntaxFacts.ElementSize(data.Directive.DirectiveKind) is { } bytes)
+            {
+                width = bytes;
+            }
+            else
+            {
+                return Decision.Of(Value.Unknown);
+            }
+
+            if (data.Count is not { } counted)
+                return Decision.Of(Value.Of(width));
+            if (counted.Count is not { } expression)
+                return Decision.Of(Value.Unknown);
+            var count = Count(expression, at, member);
+            if (count.Why is not null || count.Value.AsNumber() is not { } many)
+                return count;
+            var total = (Int128)width * many;
+            return total <= long.MaxValue ? Decision.Of(Value.Of((long)total)) : Decision.Of(Value.Unknown);
+        }
+
+        /// <summary>
+        /// Returns the count a member gives in <c>[n]</c> or to <c>.res</c>, which is unknown when
+        /// it is negative, as the binder reports.
+        /// </summary>
+        private Decision Count(ExpressionSyntax expression, Span at, string member)
+        {
+            var count = Probe(expression, at, member, null, null);
+            return count.Value.AsNumber() is < 0 ? Decision.Of(Value.Unknown) : count;
         }
 
         /// <summary>
@@ -981,7 +1189,6 @@ public sealed class Configuration
             ProcDeclarationSyntax { Name: { IsMissing: false } name } => name,
             MacroDeclarationSyntax { Name: { IsMissing: false } name } => name,
             DataDeclarationSyntax { Name: { IsMissing: false } name } => name,
-            TypeDeclarationSyntax { Name: { IsMissing: false } name } => name,
             _ => null,
         };
 
@@ -990,7 +1197,6 @@ public sealed class Configuration
             BlockKind.Proc => "is a routine",
             BlockKind.Macro => "is a macro",
             BlockKind.Data => "is data",
-            BlockKind.Struct or BlockKind.Union => "is a type",
             BlockKind.Charmap => "is a charmap",
             BlockKind.List => "is a list",
             _ => null,
@@ -1036,6 +1242,9 @@ public sealed class Configuration
                 case BlockKind.Enum when opener is EnumDeclarationSyntax @enum:
                     Enum(block, @enum, scope, under);
                     break;
+                case BlockKind.Struct or BlockKind.Union when opener is TypeDeclarationSyntax { Name: { IsMissing: false } name } type:
+                    Declare(name, scope, type.IsExported, new Entry.Type(block, under, "is a type"));
+                    break;
                 case BlockKind.Scope when opener is ScopeDeclarationSyntax { Name: { IsMissing: false } name } named:
                     var body = new Scope(ScopeKind.Scope, name.Text, scope, null);
                     if (Declare(name, scope, named.IsExported, new Entry.Marker(UndecidedCause.Place, "is a scope")) is { } owner)
@@ -1062,7 +1271,7 @@ public sealed class Configuration
             if (@enum.Name is { IsMissing: false } name)
             {
                 body = new Scope(ScopeKind.Type, name.Text, scope, null);
-                if (Declare(name, scope, @enum.IsExported, new Entry.Marker(UndecidedCause.Place, "is an enum")) is { } owner)
+                if (Declare(name, scope, @enum.IsExported, new Entry.Type(block, under, "is an enum")) is { } owner)
                 {
                     owner.Body = body;
                     body.Owner = owner;
@@ -1093,7 +1302,8 @@ public sealed class Configuration
 
     /// <summary>
     /// Represents what the configuration may know of a name declared at file level: a setting,
-    /// a constant, a function or an enum member it may decide, or a marker that says why it cannot.
+    /// a constant, a function or an enum member it may decide, a type whose shape it may decide,
+    /// or a marker that says why it cannot.
     /// </summary>
     private abstract record Entry
     {
@@ -1108,6 +1318,14 @@ public sealed class Configuration
 
         /// <summary>Represents a member of the enum <paramref name="Enum"/>, whose members are declared in <paramref name="Body"/>.</summary>
         public sealed record Member(BlockSyntax Enum, Scope Body) : Entry;
+
+        /// <summary>
+        /// Represents a struct, union or enum declared in <paramref name="Block"/>. Its name is not a
+        /// value, and <paramref name="Note"/> says what it is. Its shape may be decided when
+        /// <paramref name="Under"/> is <see cref="UndecidedCause.Measurement"/>, which marks a
+        /// declaration at file level, outside every block.
+        /// </summary>
+        public sealed record Type(BlockSyntax Block, UndecidedCause Under, string Note) : Entry;
 
         /// <summary>Represents a name the configuration does not decide, with the reason and what the note says of it.</summary>
         public sealed record Marker(UndecidedCause Cause, string Note) : Entry;
@@ -1127,4 +1345,12 @@ public sealed class Configuration
     /// </summary>
     private sealed record FileDeclarations(
         ProgramSymbols.Module Module, Dictionary<Symbol, Entry> Entries, List<Diagnostic> Misplaced);
+
+    /// <summary>
+    /// Represents what the configuration alone makes of the size and the count of a struct, union
+    /// or enum, which are what <c>.sizeof</c> and <c>.countof</c> of it return.
+    /// </summary>
+    /// <param name="Size">What the configuration makes of the type's size.</param>
+    /// <param name="Count">What the configuration makes of the type's count of members.</param>
+    private sealed record Shape(Decision Size, Decision Count);
 }

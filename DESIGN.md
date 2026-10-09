@@ -3054,23 +3054,34 @@ exist, so nt65 answers it before it reads any declaration, and its condition may
 the configuration alone decides:
 
 - literals, operators, and every built-in that does not measure a declaration, which excludes
-  `.sizeof`, `.countof`, `.endof`, `.spanof`, `.loadof`, `.runof`, `.bankof`, `.mincycles`,
-  `.maxcycles` and the built-ins only a macro body has;
+  `.endof`, `.spanof`, `.loadof`, `.runof`, `.bankof`, `.mincycles`, `.maxcycles` and the
+  built-ins only a macro body has;
 - settings (below);
 - constants, functions and enum members declared at file level, outside every block, whose
-  values and bodies use only these.
+  values and bodies use only these;
+- `.sizeof` and `.countof` of a struct, union or enum declared at file level, outside every
+  block, whose members' element types, counts and `.res` sizes use only these.
+
+A type's shape is fixed by its text, the way a constant's value is, so measuring one decides
+nothing about which declarations exist. `.if .sizeof(Rec) == 3` is a condition, and so is one
+that measures a struct whose member is `.byte[LINES]` for a setting `LINES`. A struct declared
+under an `.if` is not measured there, because it exists only once that condition is answered,
+and neither is one with a member whose count measures data. `.sizeof` and `.countof` of data,
+and of a routine, are still measurements of the program: data is laid out from values, and a
+routine from code.
 
 Nothing marks a value the configuration decides: nt65 works it out from what the declaration
 uses, and the editor shows it on the name. A constant declared under an `.if` is not one,
 because whether it exists depends on a condition, but the same value declared once with
-`.select` is. A constant built from a measurement, such as a size, an offset or a distance
-inside data, is not one either, because a measurement is known only once the declarations
+`.select` is. A constant built from a measurement of data, such as its size, an offset or a distance
+inside it, is not one either, because such a measurement is known only once the declarations
 are read. A condition that uses such a value is an error that follows the chain to its cause:
 
 ```text
-sound.nt65:40:5: error: an `.if` cannot test `VOICES`, which uses a measurement of a declaration; check it with `.assert` [condition-uses-a-measurement]
+sound.nt65:40:5: error: an `.if` cannot test `VOICES`, which measures a declaration; check it with `.assert` [condition-uses-a-measurement]
 sound.nt65:12:1: note: `VOICES` uses `per_voice`
-sound.nt65:9:1: note: `per_voice` measures `Voice` with `.sizeof`
+sound.nt65:9:1: note: `per_voice` measures `voices` with `.sizeof`
+sound.nt65:4:1: note: `voices` is data
 ```
 
 Inside a macro body a condition may also use the macro's `const` and `one(...)` parameters,
@@ -3078,7 +3089,7 @@ Inside a macro body a condition may also use the macro's `const` and `one(...)` 
 inside an `.each` body a binding whose value is a constant or a word. nt65 therefore evaluates
 every condition outside those bodies before it looks up any declaration, and which
 declarations exist follows from the configuration alone. A check that depends on the program,
-such as `.sizeof(Player) <= 16`, is an `.assert`, which is evaluated last.
+such as `.sizeof(actors) <= 64`, is an `.assert`, which is evaluated last.
 
 The exceptions are safe because names declared in a macro body, a `.repeat` body or an
 `.each` body are local to the expansion or the iteration, so which names the program
@@ -3146,7 +3157,12 @@ with none is undefined. Both are reported for the configuration being built, as 
 the same way, and the members of the branches taken are the enum's, in the order they are
 written.
 
-`.repeat` counts may be any constant (no addresses).
+`.repeat` counts may be any constant (no addresses), a measurement of data included, which an
+`.if` may not test. The difference is deliberate. Every name a `.repeat` body declares is
+private to its turn, so however many turns there are, the names the program declares are the
+same, and the count can wait until the declarations are read. A `.repeat` whose count is a
+comparison, such as `.repeat .sizeof(table) == 3 { asl a }`, emits its body or not, and
+that is sound for the same reason.
 
 `.each` repeats its body once per item of a list (§6.4) or a `list` parameter (§11.2), or
 once per member of a named enum, in order:
@@ -5050,6 +5066,13 @@ Recorded so the reasoning survives. None is open.
   Swift do. A conditional that can test any program constant (ca65's `.if`, D's `static if`)
   makes which declarations exist depend on evaluating those declarations. Checks on program
   values are `.assert`.
+- **A condition may measure a type, and not data.** A struct, union or enum declared at file
+  level, outside every block, has a size and a count fixed by its text, as a constant's value
+  is, so `.if .sizeof(Rec) == 3` is answered with the configuration. Data is laid out from its
+  values, a routine from its code and an address by the linker, so those stay `.assert`. A
+  `.repeat` count may measure anything constant, because a turn's names are its own and so
+  cannot change which declarations exist. The asymmetry follows what each construct can
+  change, and an `.if` that needs a measurement of data has `.select` or `.assert`.
 - **What the configuration decides is worked out, not declared.** A constant a condition may
   test needs no marker, as a Zig `const` needs none to be known at compile time and D runs any
   function it can. C++'s `constexpr` and Rust's `const fn` are markers because a library

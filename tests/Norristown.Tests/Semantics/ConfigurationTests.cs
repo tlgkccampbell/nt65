@@ -207,29 +207,130 @@ public sealed class ConfigurationTests
     public void AConditionThatUsesAMeasurementFollowsTheChain()
     {
         var program = Built("""
-            .struct Voice {
-                pitch: .byte
-            }
-            .const per_voice = .sizeof(Voice)
+            .segment BSS
+            .data voices: .byte[3]
+            .const per_voice = .sizeof(voices)
             .const VOICES = per_voice * 2
             .if VOICES > 2 {
             .const ON = 1
             }
-            .if .sizeof(Voice) > 2 {
+            .if .sizeof(voices) > 2 {
             .const OFF = 1
             }
             """);
 
         Assert.Equal([
-            "main.nt65:7: an `.if` cannot test `VOICES`, which measures a declaration; check it with `.assert`",
-            "main.nt65:10: an `.if` cannot test `.sizeof(Voice)`, which measures a declaration; check it "
+            "main.nt65:6: an `.if` cannot test `VOICES`, which measures a declaration; check it with `.assert`",
+            "main.nt65:9: an `.if` cannot test `.sizeof(voices)`, which measures a declaration; check it "
                 + "with `.assert`",
         ], program.Problems());
         var chain = program.Diagnostics.First(diagnostic => diagnostic.Id == "condition-uses-a-measurement");
         Assert.Equal([
-            "6: `VOICES` uses `per_voice`",
-            "5: `per_voice` measures `Voice` with `.sizeof`",
+            "5: `VOICES` uses `per_voice`",
+            "4: `per_voice` measures `voices` with `.sizeof`",
+            "3: `voices` is data",
         ], chain.Related.Select(note => $"{note.Span.Line}: {note.Message}"));
+    }
+
+    /// <summary>
+    /// A condition may measure a struct, union or enum declared at file level, outside every
+    /// block, whose members are sized from what the configuration decides, such as a setting.
+    /// </summary>
+    [Theory]
+    [InlineData(".sizeof(Frame)", 1, 3)]
+    [InlineData(".sizeof(Frame)", 3, 5)]
+    [InlineData(".countof(Frame)", 3, 3)]
+    [InlineData(".sizeof(Cell)", 1, 3)]
+    [InlineData(".countof(Cell)", 1, 4)]
+    [InlineData(".countof(Mode)", 1, 3)]
+    [InlineData(".countof(Mode)", 0, 2)]
+    public void AConditionMayMeasureATypeTheConfigurationDecides(string measured, long lines, long expected)
+    {
+        var program = Built($$"""
+            .struct Rec {
+                kind: .byte
+            }
+            .struct Frame {
+                head: .type Rec
+                lines: .byte[LINES]
+                tail: .res 1
+            }
+            .union Cell {
+                whole: .word
+                .struct {
+                    lo: .byte
+                    hi: .byte
+                }
+                wide: .long
+            }
+            .enum Mode {
+                off
+                .if LINES > 0 {
+                    slow
+                }
+                fast
+            }
+            .if {{measured}} == {{expected}} {
+            .const RIGHT = 1
+            .export RIGHT
+            }
+            """, ("LINES", lines));
+
+        Assert.DoesNotContain(program.Diagnostics, diagnostic => diagnostic.Severity == Severity.Error);
+        Assert.Equal(1, program.File("main.nt65").Symbol("RIGHT").Value.Number);
+    }
+
+    /// <summary>
+    /// A measurement of a type the configuration does not decide is told so, with notes that
+    /// lead from the type to the first thing the configuration does not decide.
+    /// </summary>
+    [Theory]
+    [InlineData("""
+        .segment BSS
+        .data table: .byte[4]
+        .struct T {
+            items: .byte[.countof(table)]
+        }
+        """, "4: `T` uses `T::items`|5: `T::items` measures `table` with `.countof`|3: `table` is data")]
+    [InlineData("""
+        .if 1 {
+        .struct T {
+            x: .byte
+        }
+        }
+        """, "3: `T` is declared under an `.if`")]
+    [InlineData("""
+        .if 1 {
+        .struct Inner {
+            x: .byte
+        }
+        }
+        .struct T {
+            pos: .type Inner[2]
+        }
+        """, "7: `T` uses `T::pos`|8: `T::pos` uses `Inner`|3: `Inner` is declared under an `.if`")]
+    [InlineData("""
+        .scope s {
+        .struct Inner {
+            x: .byte
+        }
+        }
+        .struct T {
+            pos: .type s::Inner
+        }
+        """, "7: `T` uses `T::pos`|8: `T::pos` uses `Inner`|3: `Inner` is declared inside a block")]
+    [InlineData("""
+        .enum T {
+            a
+        }
+        """, "2: `T` is an enum, which has members but no size")]
+    public void AMeasuredTypeTheConfigurationDoesNotDecideFollowsTheChain(string declarations, string notes)
+    {
+        var program = Built(declarations + "\n.if .sizeof(T) > 2 {\n.const ON = 1\n}\n");
+
+        var refused = Assert.Single(program.Diagnostics, diagnostic => diagnostic.Id == "condition-uses-a-measurement");
+        Assert.Equal("an `.if` cannot test `.sizeof(T)`, which measures a declaration; check it with `.assert`", refused.Message);
+        Assert.Equal(notes.Split('|'), refused.Related.Select(note => $"{note.Span.Line}: {note.Message}"));
     }
 
     /// <summary>
