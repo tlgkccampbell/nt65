@@ -20,11 +20,14 @@ internal static class ReadsAnalysis
     /// collects the first statement found to use each register's entry value, and the routine it
     /// was used through, if any. <paramref name="solved"/>, where it is given, is what reaches
     /// each block from <paramref name="start"/>, in place of what the walk finds from there.
+    /// <paramref name="unfollowed"/>, where it is given, collects the first place where code nt65
+    /// cannot follow may see each register's entry value, and the routine that code is, if any.
     /// </summary>
     public static RoutineReads Of(
         RegisterWalk walk, FlowRegion region, Func<Symbol, RoutineRegisters> of, Func<Symbol, RoutineReads> reads,
         IReadOnlySet<RoutineKey> readers, Dictionary<Registers, (Step Step, Symbol? Through)>? sites = null,
-        int start = 0, RegisterState?[]? solved = null)
+        int start = 0, RegisterState?[]? solved = null,
+        Dictionary<Registers, (Step Step, Symbol? Through)>? unfollowed = null)
     {
         var blocks = region.Blocks;
         if (!region.IsEntered || blocks.Count == 0)
@@ -80,8 +83,8 @@ internal static class ReadsAnalysis
         // still holds one of this routine's entry values.
         void Given(RoutineReads callee, RegisterState state, BasicBlock block, Symbol through)
         {
-            if (!callee.Complete && Holds(state))
-                complete = false;
+            if (!callee.Complete)
+                Unfollowed(state, block, through);
             foreach (var register in RegisterEffects.Each(callee.Read))
                 Use(state.Whole(register).Entry, block.Steps[^1], through);
         }
@@ -96,8 +99,7 @@ internal static class ReadsAnalysis
             var pushed = state.Stack?.Entries ?? Registers.None;
             if (block.CallsUnknown || block.Calls.Count == 0)
             {
-                if (Holds(state))
-                    complete = false;
+                Unfollowed(state, block, null);
                 return;
             }
             foreach (var callee in block.Calls)
@@ -107,15 +109,35 @@ internal static class ReadsAnalysis
                     Use(pushed, block.Steps[^1], callee);
             }
         }
+
+        // Notes that control passes to code nt65 cannot follow at the end of a block. That leaves
+        // the answer incomplete only where the code may see one of this routine's entry values.
+        void Unfollowed(RegisterState state, BasicBlock block, Symbol? through)
+        {
+            var seen = Visible(state);
+            if (seen == Registers.None)
+                return;
+            complete = false;
+            if (unfollowed is null)
+                return;
+            foreach (var register in RegisterEffects.Each(seen))
+                unfollowed.TryAdd(register, (block.Steps[^1], through));
+        }
     }
 
     /// <summary>
-    /// Returns whether anything code nt65 cannot follow could read at a point may hold one of
-    /// the routine's entry values. Such code sees only the registers and the stack, so where
-    /// every register holds something else and nothing pushed holds an entry value, it cannot
-    /// read any of them. A stack whose contents are not known may hold anything.
+    /// Returns the registers whose entry values code nt65 cannot follow may read at a point.
+    /// Such code sees only the registers and the stack, so where every register holds something
+    /// else and nothing pushed holds an entry value, it cannot read any of them. A stack whose
+    /// contents are not known may hold anything.
     /// </summary>
-    private static bool Holds(RegisterState state) =>
-        state.Stack is not { } stack || stack.Entries != Registers.None
-        || RegisterEffects.Each(Registers.All).Any(register => state.Whole(register).Entry != Registers.None);
+    private static Registers Visible(RegisterState state)
+    {
+        if (state.Stack is not { } stack)
+            return Registers.All;
+        var seen = stack.Entries;
+        foreach (var register in RegisterEffects.Each(Registers.All))
+            seen |= state.Whole(register).Entry;
+        return seen;
+    }
 }

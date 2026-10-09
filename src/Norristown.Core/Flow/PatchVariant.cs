@@ -7,11 +7,11 @@ namespace Norristown.Flow;
 
 /// <summary>
 /// Represents one instruction a <c>.patch … as</c> says a store can turn the patched instruction
-/// into. The store writes only the opcode, so the variant takes the patched instruction's
-/// addressing mode and operand. The analyses take the union of what the written instruction and
-/// each variant do, so a variant must change nothing they cannot join: it may not move the stack,
-/// change the processor's widths or run a handler, and it goes where the written one goes, both
-/// running on or both branching.
+/// into. The store writes the opcode, so it has to be one known to start at the instruction's
+/// first byte. The variant takes the patched instruction's addressing mode and operand. The
+/// analyses take the union of what the written instruction and each variant do, so a variant
+/// must change nothing they cannot join: it may not move the stack, change the processor's widths
+/// or run a handler, and it goes where the written one goes, both running on or both branching.
 /// </summary>
 /// <param name="Name">The mnemonic as the <c>.patch</c> names it.</param>
 /// <param name="On">The expansion the <c>.patch</c> is in, or null outside every expansion.</param>
@@ -19,8 +19,13 @@ namespace Norristown.Flow;
 /// <param name="WrittenMnemonic">The patched instruction's mnemonic, as it is written.</param>
 /// <param name="Mode">The patched instruction's addressing mode, or null where layout gave it none.</param>
 /// <param name="Cpu">The CPU the program is built for.</param>
+/// <param name="AtOpcode">
+/// Whether the store the <c>.patch</c> follows is known to write from the patched instruction's
+/// first byte, its opcode.
+/// </param>
 internal sealed record PatchVariant(
-    NameExpressionSyntax Name, Expansion? On, Step Written, MnemonicKind WrittenMnemonic, AddressingMode? Mode, Cpu Cpu)
+    NameExpressionSyntax Name, Expansion? On, Step Written, MnemonicKind WrittenMnemonic, AddressingMode? Mode, Cpu Cpu,
+    bool AtOpcode)
 {
     /// <summary>Gets the variant's mnemonic, or <see cref="MnemonicKind.None"/> where the name is not one.</summary>
     public MnemonicKind Mnemonic => Name is { Names.Length: 1, GlobalToken: null, SimpleName: { Kind: SyntaxKind.Mnemonic } token }
@@ -40,6 +45,8 @@ internal sealed record PatchVariant(
             var written = SyntaxFacts.TextOf(WrittenMnemonic);
             if (mnemonic == MnemonicKind.None)
                 return "it is not a mnemonic";
+            if (!AtOpcode)
+                return "a variant replaces the opcode, and the store is not known to write it";
             if (!Instructions.Has(Cpu, mnemonic))
                 return $"the {CpuNames.Format(Cpu)} has no `{name}`";
             if (Mode is not { } mode || !Instructions.Modes(Cpu, mnemonic).Contains(mode))

@@ -1,0 +1,99 @@
+; Stores into code and calls nt65 cannot follow, under declared contracts. Each store has to
+; say what it writes, and each contract has to hold whatever that turns out to be.
+.module main
+
+.cpu 6502
+
+.export variant_in_operand, opcode_unknown, operand_only, reads_opcode, calls_out
+.export jumps_out, calls_out_cleanly, listed_variant, calls_declared
+
+.proc EXT = $FFD2
+.proc DECLARED = $FFE4: reads a
+
+.segment BSS
+.data vector: .addr
+
+.segment CODE
+
+; A variant replaces the opcode alone, so a store into the operand cannot list one.
+.proc variant_in_operand {
+    sta @op+1
+    .patch @op as and       ;! error[patch-variant-rejected]: `.patch` cannot list `and` for `lda`: a variant replaces the opcode, and the store is not known to write it
+@op:
+    lda #0
+    bne @skip
+    inx
+@skip:
+    rts
+}
+
+; A store into the opcode with no `as` may make the instruction anything.
+.proc opcode_unknown: keeps x {
+    lda #.opcode(ldx, imm)
+    sta @op
+    .patch @op
+@op:
+    lda #5
+    rts                     ;! error[keeps-broken]: `opcode_unknown` promises `keeps x`, but X is not the same as on entry here: restore it before returning, or add `.state keeps x` at the point where the entry value is restored
+}
+
+; A store into the operand alone leaves the instruction what it is.
+.proc operand_only: keeps x {
+    sta @op+1
+    .patch @op
+@op:
+    lda #5
+    rts
+}
+
+; An instruction a store may rewrite into anything may use any register.
+.proc reads_opcode: reads none {
+    lda #.opcode(adc, imm)
+    sta @op
+    .patch @op
+    ldx #0
+    ldy #0
+    clv
+@op:
+    lda #5                  ;! error[reads-undeclared]: `reads_opcode` declares `reads none`, but uses the value its caller left in C: add `c` to `reads`, or set the carry with `clc` or `sec` first
+    rts
+}
+
+; Listing what the store writes keeps the contract checkable.
+.proc listed_variant: keeps x, reads none {
+    lda #.opcode(ora, imm)
+    sta @op
+    .patch @op as ora
+@op:
+    lda #5
+    rts
+}
+
+; A routine with no body in the program may use any register its caller left a value in.
+.proc calls_out: reads none {
+    jsr EXT                 ;! error[reads-undeclared]: `calls_out` declares `reads none`, but uses the value its caller left in A, X, Y, C, Z, N, V through `EXT`, which nt65 cannot follow: add them to `reads`, give them values first, or declare what `EXT` reads
+    rts
+}
+
+; So may code an indirect jump reaches.
+.proc jumps_out: reads none {
+    jmp (vector)            ;! error[reads-undeclared]: `jumps_out` declares `reads none`, but uses the value its caller left in A, X, Y, C, Z, N, V where control passes to code nt65 cannot follow: add them to `reads`, or give them values first
+    .next ?
+}
+
+; Where nothing the caller left is still in a register, such a call can read none of it.
+.proc calls_out_cleanly: reads none {
+    lda #0
+    ldx #0
+    ldy #0
+    clc
+    clv
+    jsr EXT
+    rts
+}
+
+; A routine with no body that declares what it reads is taken at its word.
+.proc calls_declared: reads a {
+    jsr DECLARED
+    rts
+}

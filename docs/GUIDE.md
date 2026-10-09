@@ -1194,7 +1194,12 @@ store that turns one instruction into another can say which it writes:
 `as dex` lists what the store can turn the instruction into, and nt65 then follows both: after
 `@step`, X has been written either way, and the carry, which neither `inx` nor `dex` touches, is
 still known. A variant keeps the instruction's addressing mode and operand, and may not touch
-the stack or the widths; a branch may become another branch.
+the stack or the widths; a branch may become another branch. Only a store that addresses the
+label itself can list variants, because only that store is known to write the opcode.
+
+Without `as`, a store into the operand, such as `sta @op+1`, leaves the instruction as written,
+but nothing is known about its operand. A store into the opcode that lists nothing may make the
+instruction anything, so nt65 takes it to use every register and change each one.
 
 **Code inside an instruction.** Size-coded programs branch into the middle of an instruction, so
 its operand runs as other instructions. `.label` names such a position, a label at an
@@ -1352,7 +1357,9 @@ to the tail uses the caller's Y.
 
 A routine can declare what it reads with `reads`, and nt65 then checks its body against the
 declaration. A register the body uses without its being listed is an error where it is used,
-which is how a missing `clc` shows up. Callers go by the declaration. On an extern proc or an
+which is how a missing `clc` shows up. A call or a jump nt65 cannot follow may use every
+register that still holds what the caller left, so each one not listed is an error there.
+Callers go by the declaration. On an extern proc or an
 import it is trusted, which gives a ROM routine's inputs somewhere to live, and `reads none`
 says the routine reads nothing, which leaving `reads` out does not:
 
