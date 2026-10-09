@@ -411,13 +411,18 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// Reports a diagnostic for a call whose target is not a routine with a signature. A signature
-    /// is what would say what state the target takes and what it hands back.
+    /// Reports a diagnostic for a call whose target is neither a routine with a signature nor a
+    /// label inside one. A signature is what would say what state the target takes and what it
+    /// hands back. The message names the declaration that makes the target a routine.
     /// </summary>
     public void CheckCallTarget(Step step, MnemonicKind mnemonic, Symbol? target) =>
         Report(step, target is null
             ? Catalogue.CallTargetUnknown.Message(SyntaxFacts.TextOf(mnemonic))
-            : Catalogue.CallTargetNotARoutine.Message(target.DisplayName));
+            : Catalogue.CallTargetNotARoutine.Message(
+                target.DisplayName,
+                target.Kind == SymbolKind.ImportedAddress
+                    ? $"import `{target.DisplayName}` with `proc(...)`, which says what state it takes"
+                    : $"declare an extern proc at its address, `.proc name = {target.DisplayName}: ...`, which says what state it takes"));
 
     /// <summary>
     /// Reports a diagnostic where a call is not made the way the routine is reached, or not in the

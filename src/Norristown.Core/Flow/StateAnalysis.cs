@@ -1001,6 +1001,8 @@ public sealed class StateAnalysis : IProcessorStates
         // another processor's routine expects has no bearing on this processor's state.
         if (checks.InAnotherSpace(step, target))
             return state;
+        if (target is { Signature: null, Kind: SymbolKind.Label, Routine: { } owner } && SignatureOf(owner) is { } ownerSignature)
+            return CalledInto(step, mnemonic, target, owner, ownerSignature, state, report);
         if (target?.Signature is null || SignatureOf(target) is not { } callee)
         {
             report?.CheckCallTarget(step, mnemonic, target);
@@ -1018,6 +1020,31 @@ public sealed class StateAnalysis : IProcessorStates
             Entering(step, routine, target, state, report);
         }
         return signatures.IsExitKnown(target) ? StateChecks.Exited(callee, state) : null;
+    }
+
+    /// <summary>
+    /// Checks a call to <paramref name="label"/>, a label inside <paramref name="owner"/>, and
+    /// returns the state after it, or null where nothing returns to the call. The label is an
+    /// entry point, so its <c>.state</c> is the entry the call is checked against. The path from
+    /// the label leaves by <paramref name="owner"/>'s returns, so the call returns with what
+    /// <paramref name="owner"/> returns with, as a jump into the label hands back.
+    /// </summary>
+    private ProcessorState? CalledInto(
+        Step step, MnemonicKind mnemonic, Symbol label, Symbol owner, Signature callee, ProcessorState state, StateChecks? report)
+    {
+        if (report is not null)
+        {
+            if (label.StateDeclaration is null)
+            {
+                report.Report(step, Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
+                    new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
+            }
+            var declared = DeclaredElsewhere(label) ?? ProcessorState.Unknown;
+            report.CheckCall(step, mnemonic, label, new Signature(declared, declared, callee.IsFar), state);
+        }
+        if (callee.IsInterrupt)
+            return state;
+        return callee.NeverReturns || !signatures.IsExitKnown(owner) ? null : StateChecks.Exited(callee, state);
     }
 
     /// <summary>
@@ -1112,9 +1139,10 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// Returns what a <c>.state</c> declares at a label inside another routine, which a jump into
-    /// that routine has to meet, or null when the label declares nothing. Only the parts it gives are
-    /// checked. The declaration is read off the label, so the routine may be in another file.
+    /// Returns what a <c>.state</c> declares at a label inside a routine, which a jump into that
+    /// routine from another, or a call to the label from anywhere, has to meet. It returns null when
+    /// the label declares nothing. Only the parts it gives are checked. The declaration is read off
+    /// the label, so the routine may be in another file.
     /// </summary>
     private ProcessorState? DeclaredElsewhere(Symbol label)
     {

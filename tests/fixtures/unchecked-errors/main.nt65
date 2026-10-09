@@ -92,6 +92,31 @@
     jmp declared::entry     ;! error[return-state-mismatch]: `jmp entry` leaves `leaves_wrongly`: `leaves_wrongly` declares it returns with `a16`, but A is 8-bit when `declared` returns
 }
 
+; A call to a label inside another routine is checked as a jump into it is: the label declares
+; what it takes, and the call returns with what that routine returns with.
+.proc calls_inner: a8, i8 {
+    jsr owner::inner        ;! error[entry-not-declared]: `inner` is inside routine `owner`: mark it an entry point with a `.state` after the label
+    rts
+}
+
+.proc calls_wrongly: a8, i8, native {
+    jsr declared::entry     ;! error[call-state-mismatch]: `jsr entry` needs `a16`, but A is 8-bit here
+    lda #$12
+    rts
+}
+
+.proc far_owner: far, a8, i8, native {
+    rtl
+    inside:
+    .state a8, i8, native
+    rtl
+}
+
+.proc calls_far_label: a8, i8, native {
+    jsr far_owner::inside   ;! error[call-distance-mismatch]: `inside` is far, so call it with `jsl`
+    rts
+}
+
 ; A declared label is checked against for the parts its `.state` gives, so those are the only
 ; parts it may assume: what the routine's own path leaves is no promise to whoever jumps in.
 .proc partly: a8, i8 {

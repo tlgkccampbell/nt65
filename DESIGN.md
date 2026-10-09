@@ -1398,6 +1398,7 @@ that routine's signature.
 | a store into the bytes on the stack: relative to S, indexed by a register `tsx` or `tsc` filled, or to a fixed address from $0100 to $01FF | the analysis stack becomes unknown, so a `plp`, `pld` or `plb` after it restores nothing known; the register walk forgets what a pull or `rti` restores the same way (§16) |
 | any other `plp` | both widths unknown; E unchanged |
 | `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `noreturn` ends the path |
+| `jsr L`, `jsl L`, where L is a label inside a routine g, g's own or another's | state must match what L's `.state` declares, and the call must be `jsr` or `jsl` as g is `near` or `far`; becomes g's exit, with its `*` items taken from the state here, since the path from L leaves by g's returns |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |
 | `jmp f`, `jml f`, a branch or `.next` edge to f, or a `.fallthrough f`, where f is a routine (a tail call) | state must match f's entry; f's exit, with its `*` items taken from the state here, must match this proc's exit; f must be `near` or `far` as this proc is. Where this proc never returns or is an interrupt handler, or f never returns, only f's entry is checked. An unconditional transfer ends the path |
 | `jsr (t,x)` with `.next` naming routines | state must match every entry; becomes the merge of their exits |
@@ -1439,8 +1440,9 @@ known and differs, error; if it is unknown, this sets it. An item with `?` (`a?`
 `dp?`) deliberately forgets. `emu` also makes both widths 8, which is what emulation mode
 pins them at. Placed directly after a label, a `.state` is that label's declaration.
 
-Where such a label can also be entered from outside its routine — it is exported, or a path
-from another routine names it — the declaration is everything the label assumes: a part it does
+Where such a label can also be entered from outside its routine — it is exported, a path
+from another routine names it, or a call from anywhere names it — the declaration is everything
+the label assumes: a part it does
 not give is unknown there, whatever the routine's own paths leave, except a part the routine's
 signature says `*`, which stays unchanged there as it does at a label nothing reaches. The two
 sides meet in the middle, then: a jump in is checked for the parts the declaration gives, and
@@ -1551,12 +1553,14 @@ analysis stack, so a frame reaches them:
 - no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
   with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
-  import). A local subroutine is a separate proc, grouped with its callers in a
-  `.scope` when a shared namespace helps; procs do not nest (§6.1). A routine with
-  several entry points is written as adjacent procs, each ending in a `.fallthrough` into the
-  one written after it (§7.4). On the
-  6502 and its CMOS variants, where there is no state to contract, a call may target any address
-  expression.
+  import) or a label inside a routine, which declares its state with a `.state` (§7.4). Anything
+  else is `call-target-not-a-routine`, whose message names the declaration that makes the target a
+  routine: `proc(...)` on an import, or an extern proc at any other address. A local subroutine is
+  a separate proc, grouped with its callers in a `.scope` when a shared namespace helps; procs do
+  not nest (§6.1). A routine with several entry points is written as adjacent procs, each ending
+  in a `.fallthrough` into the one written after it (§7.4), or as one proc whose second entry is a
+  declared label. On the 6502 and its CMOS variants, where there is no state to contract, a call
+  may target any address expression.
 
 Outside any `.proc` there is no processor state: on the 65816 `rep`, `sep`, `xce`,
 `plp`, `.state`, `.ensure`, `.frame` and any width-dependent immediate are errors, since code that touches processor
@@ -1663,9 +1667,10 @@ tells the analysis what it cannot see. The annotations are claims: nt65 checks t
 claims and the code are consistent with each other, which is the same contract as the
 proc's own entry declaration. The annotations are required on every CPU, because what each
 routine reads and keeps (§7.5) depends on its paths on every CPU, and falling off the end of a
-proc is an error everywhere. The one exception is a jump into another proc's interior and an
-exported inner label. Only the 65816 has processor state that the code after the label depends
-on and that no jump can supply, so only there does the label need a declaration. On the other
+proc is an error everywhere. The one exception is a jump into another proc's interior, a call
+to a label inside a proc and an exported inner label. Only the 65816 has processor state that
+the code after the label depends on and that no jump or call can supply, so only there does the
+label need a declaration. On the other
 CPUs the label is an entry where nothing about the registers is known.
 
 Two annotations carry most of it. Each applies to the statement immediately above it (for
@@ -1828,7 +1833,7 @@ The third directive is about the end of a routine rather than a statement:
 | data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next. A routine that ends in such data is reported once, as running into it. A `.res` or `.align` takes the `.next` only when its fill runs on, which is when the fill byte is a one-byte instruction that does nothing on the program's CPU, such as `$ea` (`nop`). The fill is the padding's own constant fill byte, else what ld65 fills the segment's padding with: the segment's `fillval` in a linked config, else that of the memory area it loads into, else zero. A segment no linked config places, as in a project without `links`, has a fill nt65 cannot work out. Zero (`brk`), `$ff`, an unknown fill or any other byte makes the edge false, and the message names the fill and where it comes from and asks for a fill byte that runs on or a `jmp` over the padding. Padding whose fill runs on still needs the `.next`, since nt65 does not run flow through data |
 | a conditional branch that is always taken: `bcs` over inline text after a routine that returns with carry set | the flags are known where the branch stands from something the flag analysis does not follow, such as what a routine returns with where its signature does not say; a flag the routine's own instructions set, or a signature gives, is followed, and needs nothing | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
-| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7). On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
+| jump into another proc's interior, call to an inner label, exported inner label | scoped path to an inner label used as a target, a call to a label inside a proc, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7). Such a label may be a call target too, on every CPU, from any routine including its own: on the 65816 the call is checked against the declaration, made with `jsr` or `jsl` as the label's routine is near or far, and comes back with what that routine returns with. A label its own routine calls is an entry point like any other, so on the 65816 it needs the declaration as well. On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
 | falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; the fix writes the `.fallthrough` where the routine written next is known. Where the last statement is a conditional branch, the message offers first the `.next` naming the branch's own target, for a branch that is always taken, and no `.next ?`, which cannot follow a branch. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`. A segment block is not a routine, so this is a claim about where flow goes and nothing about what is written next, and `.fallthrough` does not stand there; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
@@ -2299,7 +2304,8 @@ taken at that word, since control does not come back from it. A jump into anothe
 interior (§7.4) is taken at what the path from that label hands back, worked out from the label
 with the registers a call would bring, alongside the routines. A `keeps` on the routine the label
 is in does not cover that path, because it is checked only from the routine's entry. The same
-holds for a call to such a label. Entered there, a routine may pull what its path from the top
+holds for a call to such a label, from any routine on every CPU, its own included: the call
+hands back what the path from the label hands back. Entered there, a routine may pull what its path from the top
 pushed, which is then what its caller pushed, so a label is also asked whether it reaches below
 its entry on the stack. A branch says the same on the path where it is taken, whether it names the
 routine or a label inside it, a `.next` says it for the statement it stands under, which is how

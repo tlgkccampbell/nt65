@@ -11,6 +11,8 @@
 .export main__dispatch
 .export main__set
 .export main__patching
+.export main__clear_screen
+.export main__clear_twice
 
 .segment "CODE": absolute
 ; .proc dispatch  main.nt65:16
@@ -50,6 +52,27 @@ patching__op:
     sta a:patching__op+1
     rts
 ; end of patching
+
+; .proc clear_screen  main.nt65:61
+main__clear_screen:
+    lda #0
+    ldx #0
+clear_screen__again:
+    sta a:$0400,x
+    inx
+    bne clear_screen__again
+    rts
+; end of clear_screen
+
+; .proc clear_twice  main.nt65:71
+main__clear_twice:
+    jsr clear_screen__again
+    jsr clear_twice__tail
+    rts
+clear_twice__tail:
+    ldx #0
+    jmp clear_screen__again
+; end of clear_twice
 
 .segment "BSS": absolute
 cmd:   .res 1

@@ -2999,10 +2999,11 @@ public static class Catalogue
         "entry-not-declared",
         Severity.Error,
         "`{0}` is inside routine `{1}`: mark it an entry point with a `.state` after the label",
-        "A jump into the middle of another routine arrives with a processor state that routine's own paths do not "
-            + "give, and the widths, mode and registers there cannot be inferred from the jump. A `.state` directly "
-            + "after the label declares it an entry point and what the processor state is there, and both the jump "
-            + "and the routine are then checked against it. Only 65816 code needs this, because only there does the "
+        "A jump into the middle of another routine, or a call to a label inside any routine, arrives with a "
+            + "processor state that routine's own paths do not give, and the widths, mode and registers there cannot "
+            + "be inferred from the jump or the call. A `.state` directly after the label declares it an entry point "
+            + "and what the processor state is there, and both the jump or call and the routine are then checked "
+            + "against it. Only 65816 code needs this, because only there does the "
             + "code after the label depend on the processor state.");
 
     internal static DiagnosticDescriptor ExportedEntryNotDeclared { get; } = Entry(
@@ -3385,10 +3386,12 @@ public static class Catalogue
         Area.ProcessorState,
         "call-target-not-a-routine",
         Severity.Error,
-        "`{0}` is not a routine: on the 65816, a call must target a `.proc`, an extern proc or a `proc(...)` import",
-        "On the 65816 every call is checked against the called routine's signature. What this call names has no "
-            + "signature, so there is nothing to check it against. Call a `.proc`, an extern proc or a `proc(...)` "
-            + "import instead.");
+        "`{0}` is not a routine: on the 65816, a call must target a routine or a label inside one, so {1}",
+        "On the 65816 every call is checked against the state the code it reaches expects. A routine's signature "
+            + "says what that is, and so does the `.state` after a label inside a routine. What this call names is "
+            + "neither, so there is nothing to check it against. An import becomes a routine when it is imported "
+            + "with `proc(...)`, and any other address becomes one when an extern proc, `.proc name = address: ...`, "
+            + "declares the signature of the code there.");
 
     internal static DiagnosticDescriptor CallDistanceMismatch { get; } = Entry(
         Area.ProcessorState,

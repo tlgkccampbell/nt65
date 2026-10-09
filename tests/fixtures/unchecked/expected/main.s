@@ -21,6 +21,7 @@
 .export main__patching
 .export main__enter
 .export main__jumper
+.export main__caller
 
 .import print: abs
 .import beep: abs
@@ -196,3 +197,10 @@ enter__into:
 main__jumper:
     jmp enter__into
 ; end of jumper
+
+; .proc caller: a8, i8, native  main.nt65:201
+main__caller:
+    jsr enter__into
+    lda #$34
+    rts
+; end of caller
