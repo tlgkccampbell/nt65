@@ -105,6 +105,21 @@ public sealed class ExportStateInferredTests
         Assert.DoesNotContain(analysis.SuggestionsFor(path), hint => hint.Id == "export-state-inferred");
     }
 
+    /// <summary>
+    /// On a CPU with one width, an immediate's size depends on nothing a caller brings, so an
+    /// exported 6502 routine is never reported.
+    /// </summary>
+    [Fact]
+    public void ARoutineOnACpuWithOneWidthIsNotReported()
+    {
+        var (analysis, path) = Analyzed(
+            ".export .proc main {\n    jsr ext\n    rts\n}\n.export .proc ext {\n    lda #$12\n    rts\n}\n",
+            ".module main\n.cpu 6502\n.segment CODE\n");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.DoesNotContain(analysis.SuggestionsFor(path), hint => hint.Id == "export-state-inferred");
+    }
+
     /// <summary>Returns the text of the program after the fix titled <paramref name="title"/> is applied.</summary>
     private static string Applied(ProgramAnalysis analysis, string path, Diagnostic hint, string title)
     {
@@ -119,10 +134,10 @@ public sealed class ExportStateInferredTests
         return applied[Header.Length..];
     }
 
-    private static (ProgramAnalysis Analysis, string Path) Analyzed(string body)
+    private static (ProgramAnalysis Analysis, string Path) Analyzed(string body, string header = Header)
     {
         var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Header + body));
+        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, header + body));
         var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
         return (analysis, document.Tree.Path);
     }
