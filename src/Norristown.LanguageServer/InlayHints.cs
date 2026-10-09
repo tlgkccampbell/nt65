@@ -57,9 +57,8 @@ internal static class InlayHints
         var flow = analysis.FlowFor(tree.Path);
         var states = analysis.StatesFor(tree.Path);
 
-        // The state after a line is the state before whatever runs next, and only the order in
-        // which layout walked the code says which statement that is.
-        var following = settings.StateChanges && states is not null ? Following(flow) : [];
+        // Only a line that control runs on from has a state after it worth showing.
+        var following = settings.StateChanges && states is not null ? FallingThrough(flow) : [];
         for (var i = Math.Max(first, 0); i <= last && i < tree.LineCount; i++)
         {
             cancellation.ThrowIfCancellationRequested();
@@ -85,7 +84,7 @@ internal static class InlayHints
     /// </summary>
     private static IEnumerable<Mark> Ending(
         ProgramAnalysis analysis, SemanticModel model, HintSettings settings, CodeLayout? layout,
-        ControlFlow? flow, StateAnalysis? states, IReadOnlyDictionary<int, SyntaxNode> following,
+        ControlFlow? flow, StateAnalysis? states, IReadOnlySet<int> following,
         LineSyntax line)
     {
         var statement = line.Statement;
@@ -127,16 +126,16 @@ internal static class InlayHints
         label.Length <= MaximumCharacters ? label : label[..(MaximumCharacters - 1)].TrimEnd() + "…";
 
     /// <summary>
-    /// Maps each statement to what runs after it. That is the next step of its basic block, or,
-    /// for the statement that ends a block, the first step of the block that control falls
-    /// through into. A call ends a block and returns into the next one, and a branch not taken
-    /// falls through into it. A statement that control never falls through — a return or a jump —
-    /// has no entry, because the code below it is reached by some other path, not by running on
-    /// from this line.
+    /// Returns the positions of the statements that control runs on from. That is every statement
+    /// but the last of its basic block, and the last where control falls through into the next
+    /// block. A call ends a block and returns into the next one, and a branch not taken falls
+    /// through into it. A statement that control never falls through — a return or a jump — is
+    /// left out, because the code below it is reached by some other path, not by running on from
+    /// this line.
     /// </summary>
-    private static Dictionary<int, SyntaxNode> Following(ControlFlow? flow)
+    private static HashSet<int> FallingThrough(ControlFlow? flow)
     {
-        var following = new Dictionary<int, SyntaxNode>();
+        var following = new HashSet<int>();
         foreach (var region in flow?.Regions ?? [])
         {
             var blocks = region.Blocks;
@@ -144,11 +143,11 @@ internal static class InlayHints
             {
                 var steps = blocks[b].Steps;
                 for (var i = 0; i + 1 < steps.Count; i++)
-                    following.TryAdd(steps[i].Statement.Position, steps[i + 1].Statement);
+                    following.Add(steps[i].Statement.Position);
                 if (steps.Count > 0 && b + 1 < blocks.Count && blocks[b + 1] is { IsFallenInto: true } after
                     && after.Steps.Count > 0)
                 {
-                    following.TryAdd(steps[^1].Statement.Position, after.Steps[0].Statement);
+                    following.Add(steps[^1].Statement.Position);
                 }
             }
         }
@@ -159,14 +158,18 @@ internal static class InlayHints
     /// Returns a hint listing the register widths, emulation flag, D or B that the line changes,
     /// with only the parts that differ. An <c>.ensure</c> or a <c>.state</c> already states its
     /// effect, so neither is hinted.
+    /// <para>
+    /// The state compared is the one the line's own instruction leaves. Where the next line is
+    /// a label that another path also reaches, the state there is the merge of both paths, which
+    /// says what the label is entered with rather than what this line did.
+    /// </para>
     /// </summary>
-    private static Mark? Changed(
-        StateAnalysis states, IReadOnlyDictionary<int, SyntaxNode> following, StatementSyntax statement)
+    private static Mark? Changed(StateAnalysis states, IReadOnlySet<int> following, StatementSyntax statement)
     {
         if (statement is EnsureDirectiveSyntax or StateDirectiveSyntax
-            || !following.TryGetValue(statement.Position, out var after)
+            || !following.Contains(statement.Position)
             || states.AnyBefore(statement)?.Processor is not { } was
-            || states.AnyBefore(after)?.Processor is not { } now)
+            || states.AnyAfter(statement) is not { IsDead: false, Processor: var now })
         {
             return null;
         }
