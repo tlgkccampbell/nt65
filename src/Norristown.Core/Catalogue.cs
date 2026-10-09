@@ -2640,11 +2640,26 @@ public static class Catalogue
         Area.ControlFlow,
         "runs-into-data",
         Severity.Error,
-        "the instruction above falls into this data: add a `.next` after the data saying where flow goes",
+        "the instruction above falls into this {0}: {1}",
         "Execution falls from the instruction above into these bytes, so the processor would run them as code, as "
             + "in the `.byte $2c` skip trick or an opcode given as bytes. nt65 cannot follow flow through "
             + "data, so add a `.next` after the data naming where flow really goes. If the instruction above is "
-            + "a conditional branch that is always taken, put a `.next` naming its target under the branch instead.");
+            + "a conditional branch that is always taken, put a `.next` naming its target under the branch instead. "
+            + "A `.res` or `.align` with no fill byte is filled by the linker with zero, which runs as `brk`, so "
+            + "flow cannot go through it. Give it a fill byte such as `$ea`, which is `nop`, and add the `.next`, "
+            + "or `jmp` over it.");
+
+    internal static DiagnosticDescriptor NextAfterPadding { get; } = Entry(
+        Area.ControlFlow,
+        "next-after-padding",
+        Severity.Error,
+        "`.next` cannot follow `{0}`, which has no fill byte: the linker fills it with zero, which runs as `brk`; "
+            + "give it a fill byte such as `$ea` (`nop`), or `jmp` over it",
+        "A `.next` after data says that execution runs through the data's bytes and on to the labels it names. "
+            + "A `.res` or `.align` with no fill byte leaves its bytes to the linker, which fills them with its "
+            + "memory area's fill value, zero by default, and zero is the `brk` opcode. Running into that padding "
+            + "breaks the program, so the claimed edge is false. Name a fill byte that runs on, such as `$ea`, "
+            + "which is `nop` on every CPU, or put a `jmp` before the padding to step over it.");
 
     internal static DiagnosticDescriptor RoutineRunsOffTheEnd { get; } = Entry(
         Area.ControlFlow,

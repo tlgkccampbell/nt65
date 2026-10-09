@@ -375,6 +375,7 @@
         "name-is-a-module-path",
         "nesting-too-deep",
         "never-written",
+        "next-after-padding",
         "next-never-taken",
         "next-not-the-branch-target",
         "next-proved",

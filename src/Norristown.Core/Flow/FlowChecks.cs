@@ -283,8 +283,14 @@ internal sealed class FlowChecks
             }
             if (data && fromCode && unit.Next is null)
             {
-                diagnostics.Add(new Diagnostic(
-                    unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), Catalogue.RunsIntoData)
+                // Padding with no fill byte holds zero, which is `brk`, so a `.next` after it would
+                // claim an edge that is not there.
+                var message = unit.Step.Statement is DataDirectiveSyntax padding && DataSyntax.IsUnfilledPadding(padding)
+                    ? Catalogue.RunsIntoData.Message("padding",
+                        "the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`) "
+                            + "and add a `.next` after it, or `jmp` over it")
+                    : Catalogue.RunsIntoData.Message("data", "add a `.next` after the data saying where flow goes");
+                diagnostics.Add(new Diagnostic(unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), message)
                 {
                     Fix = AlwaysTaken(before),
                 });

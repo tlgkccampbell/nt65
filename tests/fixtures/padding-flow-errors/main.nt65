@@ -1,0 +1,45 @@
+; Padding inside a routine that flow would run through with no fill byte. The linker fills it
+; with zero, which is `brk`, so a `.next` after it claims an edge that is not there, and code
+; that falls into it is told to give it a fill byte or jump over it.
+.module main
+
+.export falls_into_align, falls_into_res, next_after_align, next_after_res
+
+.segment CODE
+.proc falls_into_align {
+    ldx #0
+    .align 256  ;! error[runs-into-data]: the instruction above falls into this padding: the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`) and add a `.next` after it, or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.proc falls_into_res {
+    ldx #0
+    .res 3      ;! error[runs-into-data]: the instruction above falls into this padding: the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`) and add a `.next` after it, or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.proc next_after_align {
+    ldx #0
+    .align 256
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.align 256`, which has no fill byte: the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.proc next_after_res {
+    ldx #0
+    .res 3
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.res 3`, which has no fill byte: the linker fills it with zero, which runs as `brk`; give it a fill byte such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
