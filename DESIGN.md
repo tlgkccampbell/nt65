@@ -2264,7 +2264,9 @@ routine that can reach itself leave no total to give, and the lens says the call
 the count rather than quietly leaving them out.
 
 Control does not come back from a routine that never returns, so a call to one ends the pass
-where it is made and what that routine does is no part of this one's count. A routine every way
+where it is made and what that routine does is no part of this one's count. A call to a label
+inside a routine that declares `noreturn` ends the pass too; only the declaration counts for a
+label, as it does in the flow graph. A routine every way
 out of which hands off like that does not come back either, which is worked out over the whole
 call graph and shown as what it takes to get there and then never returning: the shape of every
 program's entry point, which sets up and hands over to a loop that runs for ever.
