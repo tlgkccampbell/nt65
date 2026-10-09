@@ -51,8 +51,13 @@ internal sealed record PatchVariant(
                 return $"the {CpuNames.Format(Cpu)} has no `{name}`";
             if (Mode is not { } mode || !Instructions.Modes(Cpu, mnemonic).Contains(mode))
                 return $"the {CpuNames.Format(Cpu)} has no `{name}` in the form `{written}` is written in";
-            if (mode == AddressingMode.Immediate && Instructions.SizedBy(mnemonic) != Instructions.SizedBy(WrittenMnemonic))
-                return $"its immediate is not sized as the immediate of `{written}` is";
+            // Only the 65816 sizes an immediate by a register's width. Elsewhere every immediate
+            // is one byte, so `lda #` and `ldx #` lay out alike.
+            if (Cpu == Cpu.Wdc65816 && mode == AddressingMode.Immediate
+                && Instructions.SizedBy(mnemonic) is var sized && sized != Instructions.SizedBy(WrittenMnemonic))
+            {
+                return $"the immediate of `{name}` is {Wide(sized)}, and that of `{written}` {Wide(Instructions.SizedBy(WrittenMnemonic))}";
+            }
             var control = Instructions.Facts(mnemonic).Control;
             var writtenControl = Instructions.Facts(WrittenMnemonic).Control;
             if (control != writtenControl || control is not (Control.Through or Control.Branches))
@@ -64,6 +69,17 @@ internal sealed record PatchVariant(
             return null;
         }
     }
+
+    /// <summary>
+    /// Returns how wide an immediate sized by <paramref name="register"/> is, in the words a
+    /// <see cref="Problem"/> uses.
+    /// </summary>
+    private static string Wide(WidthRegister? register) => register switch
+    {
+        WidthRegister.A => "as wide as A",
+        WidthRegister.Index => "as wide as X and Y",
+        _ => "always one byte",
+    };
 
     /// <summary>
     /// Returns a value indicating whether <paramref name="mnemonic"/> moves the stack, changes the

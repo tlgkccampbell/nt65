@@ -1780,7 +1780,9 @@ label:
   that operand is the mask, so both widths are unknown after it, as after a mask that is not a
   constant, and code that relies on them is reported there. A store into `xce`, which has no
   operand, writes its opcode, and no variant of an instruction that changes the widths is
-  accepted. In a program that
+  accepted. On the 65816 a variant's immediate must be sized by the same register as the
+  written one's, so `ldx #` cannot stand in for `lda #`; on any other CPU every immediate is one
+  byte, and it can. In a program that
   already has a patch-variants-required error, the register and reads analyses take the
   instruction to use every register and leave each unknown. On the 65816 a store sized by a
   register reaches one byte where the processor state the file is laid out with shows that

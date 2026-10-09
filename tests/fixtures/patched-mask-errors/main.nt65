@@ -27,7 +27,7 @@
 .proc opcode: a8, i8, native {
     ldx #0
     sta @m,x
-    .patch @m as lda        ;! error[patch-variant-rejected]: `.patch` cannot list `lda` for `sep`: its immediate is not sized as the immediate of `sep` is
+    .patch @m as lda        ;! error[patch-variant-rejected]: `.patch` cannot list `lda` for `sep`: the immediate of `lda` is as wide as A, and that of `sep` always one byte
 @m:
     sep #$20
     rts                     ;! error[return-state-mismatch]: `rts`: `opcode` declares it returns with `a8`, but the width of A is not known here;! error[return-state-mismatch]: `rts`: `opcode` declares it returns with `i8`, but the width of X and Y is not known here

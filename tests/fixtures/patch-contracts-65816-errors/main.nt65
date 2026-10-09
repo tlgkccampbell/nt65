@@ -9,6 +9,7 @@
 .cpu 65816
 
 .export wide_a, wide_x, narrow_a, wide_operand, wide_before, wide_straddle, wide_straddle_named
+.export load_variant
 
 .segment CODE
 
@@ -94,5 +95,16 @@
     ldx #1
 @next:
     inx
+    rts
+}
+
+; On the 65816 the immediate of `ldx` is as wide as X and that of `lda` as wide as A, so one
+; cannot stand in for the other.
+.proc load_variant: a8, i16 {
+    lda #.opcode(ldx, imm)
+    sta @op
+    .patch @op as ldx       ;! error[patch-variant-rejected]: `.patch` cannot list `ldx` for `lda`: the immediate of `ldx` is as wide as X and Y, and that of `lda` as wide as A
+@op:
+    lda #5
     rts
 }

@@ -2734,7 +2734,8 @@ public static class Catalogue
             + "in that form. A store known to write only the operand, as `sta @op+1` is, has no variant to list. The "
             + "analyses take the union of what the written instruction and each variant do, so a variant may not move "
             + "the stack, change the processor's widths or run a handler, and it must run on where the written "
-            + "instruction runs on and branch where it branches.");
+            + "instruction runs on and branch where it branches. On the 65816 a variant's immediate must be as wide "
+            + "as the written one's, sized by the same register.");
 
     internal static DiagnosticDescriptor PatchVariantsRequired { get; } = Entry(
         Area.ControlFlow,
