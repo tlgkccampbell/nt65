@@ -821,7 +821,6 @@ public sealed class StateAnalysis : IProcessorStates
         if (transfer == Transfer.Call)
         {
             report?.CheckMirror(step, mode);
-            report?.CheckArguments(step, target, state.Stack, 0);
             // A call to a name that is no routine has already been reported, and leaves the stack
             // alone so that the one mistake is not reported again.
             if (Called(step, mnemonic, target, state.Processor, routine, report) is not { } called)
@@ -833,7 +832,6 @@ public sealed class StateAnalysis : IProcessorStates
         // any `phk` pushed.
         if (flow.RelativeCallAt(step) is { } relative)
         {
-            report?.CheckArguments(step, relative.Routine, state.Stack, relative.Pushed);
             if (RelativelyCalled(step, mnemonic, relative, state.Processor, routine, report) is not { } called)
                 return FlowState.Dead;
             return Returned(step, new FlowState(called, Pull(state.Stack, relative.Pushed)), EffectOf(relative.Routine));

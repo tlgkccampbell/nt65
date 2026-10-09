@@ -1355,8 +1355,8 @@ says where it goes, and is not reported.
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near
 and three far, so a `.frame` can lay out both (below). At a call, where what the caller has
-pushed is known, it must be at least n bytes. The call leaves the stack as it found it: the
-caller removes the arguments.
+pushed is known, it must be at least n bytes, on every CPU. The call leaves the stack as it
+found it: the caller removes the arguments.
 
 Three kinds of routine carry a signature: a proc with a body, an extern proc
 (`.proc CHROUT = $FFD2: a8, i8`, §6.1) and an imported routine
@@ -1537,7 +1537,8 @@ analysis stack, so a frame reaches them:
 - every tail call matches the target's entry, and the target's exit and `near`/`far`
   match this proc's, because the target returns to this proc's caller, unless nothing
   returns: this proc never does or is an interrupt handler, or the target never returns;
-- every call to a routine that takes `args n` has n bytes pushed, where that is known;
+- on every CPU, every call to a routine that takes `args n` has n bytes pushed, where what the
+  caller pushed since it was entered is known;
 - no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
   with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`

@@ -548,28 +548,6 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// Reports a diagnostic for a call to a routine that takes <c>args n</c> when too few bytes are
-    /// pushed. The caller pushes those bytes first. Where what this routine pushed is known, there
-    /// have to be at least that many beneath the <paramref name="pushed"/> bytes a relative call
-    /// pushes for itself.
-    /// </summary>
-    public void CheckArguments(Step step, Symbol? target, AnalysisStack? stack, int pushed)
-    {
-        if (target?.Signature is not { Arguments: > 0 and var needed } || stack is not { IsAnchored: true } known
-            || known.Depth - pushed >= needed)
-        {
-            return;
-        }
-        var have = known.Depth - pushed;
-        Report(step, Catalogue.ArgsNotPushed.Message(
-            target.DisplayName,
-            needed,
-            have == 0
-                ? "nothing is pushed here"
-                : $"only {(have == 1 ? "1 byte is" : $"{have} bytes are")} pushed here"));
-    }
-
-    /// <summary>
     /// Reports each processor-state or <c>.frame</c> directive outside any routine. Outside a
     /// routine there is no processor state, so a directive that describes a point in a routine
     /// describes nothing. An instruction there has been reported already, because code belongs in

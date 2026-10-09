@@ -287,8 +287,8 @@ public sealed class StackEffects
     /// <summary>
     /// Returns the height after <paramref name="block"/>, from the <paramref name="height"/> that
     /// reaches it, with <paramref name="effects"/> giving what the call the block ends with leaves.
-    /// <paramref name="report"/>, where it is given, collects each
-    /// return through bytes that are not the return address.
+    /// <paramref name="report"/>, where it is given, collects each return through bytes that are
+    /// not the return address and each call with too few arguments.
     /// </summary>
     private static Height Through(
         RegisterWalk walk, BasicBlock block, Height height, StackEffects effects, List<Diagnostic>? report = null)
@@ -331,8 +331,11 @@ public sealed class StackEffects
 
         // A relative call pushes its return address with `per`, and `phk` where it is far, which
         // the routine's return pulls.
-        if (block.Steps.Count > 0 && walk.Flow.RelativeCallAt(block.Steps[^1]) is { } relative)
-            height = height with { Whole = height.Whole - relative.Pushed };
+        var relative = block.Steps.Count > 0 ? walk.Flow.RelativeCallAt(block.Steps[^1]) : null;
+        if (report is not null)
+            CheckArguments(block, relative, height, report);
+        if (relative is { } call)
+            height = height with { Whole = height.Whole - call.Pushed };
         var effect = effects.OfCallIn(block);
         return effect.KeepsTheStack ? height
             : effect.Kind == StackEffectKind.Unknown ? Height.Unknown
@@ -368,6 +371,31 @@ public sealed class StackEffects
         {
             report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
                 Catalogue.ReturnThroughCaller.Message(mnemonic, Bytes(callers))));
+        }
+    }
+
+    /// <summary>
+    /// Reports a diagnostic for a call to a routine that takes <c>args n</c> where fewer than n
+    /// bytes are pushed. Only what this routine pushed since it was entered counts, and only while
+    /// the stack has never been lower than its return address, because after that its own bytes
+    /// cannot be told apart from its caller's. A relative call's own pushes are not arguments.
+    /// </summary>
+    private static void CheckArguments(BasicBlock block, RelativeCall? relative, Height height, List<Diagnostic> report)
+    {
+        if (height is not { Bytes: { } bytes, KeepsTheReturn: true, Return: var returnSize } || block.Steps.Count == 0
+            || block.Steps[^1].Statement is not InstructionStatementSyntax statement)
+        {
+            return;
+        }
+        var have = bytes - returnSize - (relative?.Pushed ?? 0);
+        var callees = relative is { } call ? block.Calls.Append(call.Routine) : block.Calls;
+        foreach (var callee in callees.Distinct())
+        {
+            if (callee.Signature is not { Arguments: > 0 and var needed } || have >= needed)
+                continue;
+            var pushed = have <= 0 ? "nothing is pushed here" : $"only {(have == 1 ? "1 byte is" : $"{have} bytes are")} pushed here";
+            report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
+                Catalogue.ArgsNotPushed.Message(callee.DisplayName, needed, pushed)));
         }
     }
 
