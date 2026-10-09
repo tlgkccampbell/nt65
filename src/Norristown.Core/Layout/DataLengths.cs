@@ -409,7 +409,13 @@ public static class DataLengths
         var spelled = element.Directive.Text;
         if (given is not ValueListSyntax list)
         {
-            Report(given, model, diagnostics, on, Catalogue.MemberNeedsAList.Message(member.Name, member.Name));
+            // Text given for an array most likely means the member should hold text, which an
+            // array cannot, so the message also shows the `.res` member that would hold it, as
+            // `member-not-text` does.
+            var text = Bytes(given, model, on) is { Count: > 1 } bytes
+                ? $"; a member that holds text is reserved with `.res` and its length, as `{member.Name}: .res {Math.Max(member.Size ?? 0, bytes.Count)}`"
+                : "";
+            Report(given, model, diagnostics, on, Catalogue.MemberNeedsAList.Message(member.Name, member.Name, text));
             return;
         }
         var items = list.Values;

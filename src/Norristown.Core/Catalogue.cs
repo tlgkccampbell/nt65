@@ -2015,8 +2015,10 @@ public static class Catalogue
         Area.Data,
         "member-needs-a-list",
         Severity.Error,
-        "`{0}` is an array, which takes a braced list: `{1} = {{ … }}`",
-        "The member holds several elements, so its value is a braced list of them.");
+        "`{0}` is an array, which takes a braced list: `{1} = {{ … }}`{2}",
+        "The member holds several elements, so its value is a braced list of them. Where the value given is text, "
+            + "the message also says that a member that holds text is reserved with `.res` and its length, because "
+            + "each element of an array holds one value and none of them holds text.");
 
     internal static DiagnosticDescriptor MemberTakesOneValue { get; } = Entry(
         Area.Data,
