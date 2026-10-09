@@ -738,21 +738,41 @@ public static class Suggestions
     /// Returns each label an operand or a data value of <paramref name="file"/> names other than as
     /// where control goes, with the constant added to it. A name in a <c>.next</c>, a <c>.patch</c>
     /// or another annotation is not an operand, and is left out.
+    /// <para>
+    /// An address in an <c>.addr</c> or <c>.faraddr</c> value is where control goes, too, where it
+    /// names a routine or a label a <c>.next</c> of the file hands control to. A vector or a jump
+    /// table holds such addresses, and nothing reads the bytes they point at. The address may be
+    /// one less than such a label, as in an RTS dispatch table. Any other value, such as
+    /// <c>.byte &lt;w1</c> or <c>.word w1+1</c>, names bytes code may read.
+    /// </para>
     /// </summary>
     private static List<NamedByte> NamedIn(FileAnalysis file)
     {
         var model = file.Model;
+        var handed = new HashSet<(Symbol, Expansion?)>();
+        foreach (var step in file.Layout.Steps)
+        {
+            if (step.Statement is NextDirectiveSyntax next)
+                handed.UnionWith(file.Flow.Named(next, step.On));
+        }
+
         var named = new List<NamedByte>();
         foreach (var step in file.Layout.Steps)
         {
             SyntaxNode? target = null;
+            var addresses = false;
             if (step.Statement is InstructionStatementSyntax instruction)
             {
                 var mode = file.Layout.Of(instruction, step.On)?.Mode;
                 if (Transfers.Of(instruction, mode) is Transfer.Branch or Transfer.Jump or Transfer.Call)
                     target = Transfers.TargetOf(instruction, mode);
             }
-            else if (step.Statement is not (DataDirectiveSyntax or DataValuesSyntax))
+            else if (step.Statement is DataDirectiveSyntax or DataValuesSyntax)
+            {
+                var element = step.Statement as DataDirectiveSyntax ?? DataSyntax.DirectiveOfValues((DataValuesSyntax)step.Statement);
+                addresses = element?.Directive.DirectiveKind is DirectiveKind.Addr or DirectiveKind.FarAddr;
+            }
+            else
             {
                 continue;
             }
@@ -760,7 +780,11 @@ public static class Suggestions
             {
                 if ((target is not null && name.AncestorsAndSelf().Contains(target)) || Targets.Of(model, name, step.On) is not { } found)
                     continue;
-                named.Add(new NamedByte(found.Symbol, found.At, OffsetOf(model, name, step.On)));
+                var offset = OffsetOf(model, name, step.On);
+                var entered = handed.Contains((found.Symbol, found.At));
+                if (addresses && ((offset == 0 && (entered || found.Symbol.Signature is not null)) || (offset == -1 && entered)))
+                    continue;
+                named.Add(new NamedByte(found.Symbol, found.At, offset));
             }
         }
         return named;

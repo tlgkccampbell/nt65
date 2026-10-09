@@ -419,6 +419,45 @@ public sealed class FlagHintsTests
         Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == id);
     }
 
+    /// <summary>
+    /// A jump table that a <c>.next</c> hands control through holds where control goes, not bytes
+    /// code reads, so the first instruction of each entry keeps its hints. So does an RTS dispatch
+    /// table, whose addresses are one less than its labels. Here the branch over a <c>jmp</c>
+    /// that starts <c>@w1</c> keeps its hint.
+    /// </summary>
+    [Theory]
+    [InlineData("    jmp (table)\n    .next table\n.data table: .addr @w1, @w2\n")]
+    [InlineData("    ldx $10\n    lda table+1,x\n    pha\n    lda table,x\n    pha\n    rts\n    .next table\n.data table: .addr @w1-1, @w2-1\n")]
+    public void AnEntryOfATableControlGoesThroughKeepsItsHints(string dispatch)
+    {
+        var (analysis, path) = Analyzed(".export .proc main {\n" + dispatch
+            + "@w1:\n    bcc @w2\n    jmp done\n@w2:\n    rts\n}\n.export .proc done {\n    rts\n}\n");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "branch-over-jump");
+    }
+
+    /// <summary>
+    /// A routine named by an <c>.addr</c>, as in a vector table, is where control goes, so its first
+    /// instruction keeps its hints. A value that names a byte of it some other way, or a byte past
+    /// its start, may be read as data, and the instruction keeps its bytes.
+    /// </summary>
+    [Theory]
+    [InlineData(".addr main", true)]
+    [InlineData(".faraddr main", true)]
+    [InlineData(".addr main+1", false)]
+    [InlineData(".byte <main, >main", false)]
+    [InlineData(".word main", false)]
+    [InlineData(".word main+1", false)]
+    public void ARoutineAVectorNamesKeepsItsHints(string vector, bool suggested)
+    {
+        var (analysis, path) = Analyzed(
+            ".export .proc main {\n    jsr done\n    rts\n}\n.export .proc done {\n    rts\n}\n.data vectors: " + vector + "\n");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.Equal(suggested, analysis.SuggestionsFor(path).Any(suggestion => suggestion.Id == "tail-call"));
+    }
+
     /// <summary>A call to a routine that promises to keep a register keeps its constant.</summary>
     [Fact]
     public void ACallThatPromisesToKeepARegisterKeepsItsConstant()
