@@ -1938,7 +1938,8 @@ line is wrong.
 
 The warnings you will meet most are these. A declaration nothing uses and nothing exports is
 `unused-symbol`, and the editor fades it. A `.use` item nothing uses is `unused-use-item`. A
-label nothing reaches is `label-unreachable`. A name that is also an instruction, such as a
+label nothing reaches is `label-unreachable`; if something nt65 cannot see jumps there, a
+`.state` after the label declares it an entry point. A name that is also an instruction, such as a
 constant called `lda`, is legal but is `mnemonic-name`, because the next reader will take it
 for an instruction.
 
@@ -1954,11 +1955,13 @@ hover over the name:
 ```
 
 `.allow` applies to the statement below it. Before a line that opens a block, such as a
-`.proc`, it covers the whole block. It hides only a warning: an error cannot be allowed, and
-neither can a diagnostic whose fix is an annotation such as `.next` or `.patch`, because the
-analysis would go on following paths that are not there. An `.allow` that hides nothing is a
-warning of its own, `allow-unused`, so it goes when the code it was written for changes. The
-editor offers `.allow` as a fix on any warning it may hide.
+`.proc`, it covers the whole block. It hides only a warning, including one your project raises
+to an error. An error cannot be allowed, and neither can a diagnostic whose fix is an
+annotation such as `.next`, `.patch` or `.state`, because the analysis would go on following
+paths that are not there or leave one it cannot see unanalyzed. `label-unreachable` is such a
+warning. An `.allow` that hides nothing is a warning of its own, `allow-unused`, so it goes
+when the code it was written for changes. The editor offers `.allow` as a fix on any warning
+it may hide.
 
 ## In the editor
 

@@ -817,10 +817,16 @@ stack, and each applies to the next statement that is not itself an `.allow`. Th
 quotes, as in the project file, because a diagnostic's name is not an nt65 name: `-` is an
 operator, and `signature-item-needs-65816` ends in a number. A name nt65 has no entry for is an
 error, with the name it is nearly. `.allow` hides only what is reported as a warning, before
-the project's severities apply, so it still hides one a configuration raises to an error. It
-cannot name an error, and it cannot name a diagnostic whose fix is an annotation that tells nt65
-what really happens, such as `runs-into-data`: hiding it would leave the analysis following
-paths that are not there. An `.allow` that hides nothing is the warning `allow-unused`, as
+the project's severities apply, so it still hides one a configuration raises to an error, and
+an editor offers it there too. It cannot name an error, and it cannot name a diagnostic whose
+fix is an annotation that tells nt65 what really happens: hiding it would leave the analysis
+following paths that are not there, or leave a path it cannot see unanalyzed. Most such
+diagnostics are errors, such as `runs-into-data`, and naming one says which annotation answers
+it rather than only that it is an error. The one warning among them is `label-unreachable`,
+whose answer is a `.state` after the label where something nt65 cannot see jumps there, and
+otherwise removing the code. Code with no label that nothing reaches, `code-unreachable`, may
+still be allowed, since there is no label to declare an entry point at. An `.allow` that hides
+nothing is the warning `allow-unused`, as
 Rust's `#[expect]` is, so a suppression does not outlive the code it was written for. One in a branch the build configuration leaves out, or in a macro body,
 which another call may need, is not reported. A warning in another file's macro body is
 reported at the call, so an `.allow` before the call covers it, and so does one in the body.

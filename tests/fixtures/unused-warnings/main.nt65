@@ -41,7 +41,7 @@
     ldx #0
     rts
     ; An unreachable label is reported once, as unreachable, which says more than unused.
-@dead:                          ;! warning[label-unreachable]: `@dead` is never reached: no code falls into it and nothing refers to it
+@dead:                          ;! warning[label-unreachable]: `@dead` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
     rts
     ; An entry point nt65 cannot see the callers of declares its state, and is not reported.
 @hook:

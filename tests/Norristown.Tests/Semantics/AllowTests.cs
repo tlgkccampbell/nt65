@@ -32,7 +32,7 @@ public sealed class AllowTests
     public void AnAllowCoversTheStatementBelowAndItsBlock()
     {
         Assert.Empty(Problems(
-            ".export p\n.allow \"label-unreachable\"\n.proc p {\n    rts\n@dead:\n    rts\n}\n"));
+            ".export p\n.allow \"code-unreachable\"\n.proc p {\n    rts\n    nop\n    rts\n}\n"));
         Assert.Equal(["main.nt65:5: `other` is never used or exported"],
             Problems(".allow \"unused-symbol\"\n" + Unused + ".proc other {\n    rts\n}\n"));
     }
@@ -66,6 +66,8 @@ public sealed class AllowTests
     [InlineData(".allow \"not-declared\"\n" + Unused, "main.nt65:1: `not-declared` is an error, and `.allow` hides only warnings")]
     [InlineData(".allow \"runs-into-data\"\n" + Unused,
         "main.nt65:1: `.allow` cannot hide `runs-into-data`: add the annotation its message names, which tells nt65 what really happens")]
+    [InlineData(".allow \"label-unreachable\"\n" + Unused,
+        "main.nt65:1: `.allow` cannot hide `label-unreachable`: add the annotation its message names, which tells nt65 what really happens")]
     [InlineData(".proc helper {\n    rts\n    .allow \"unused-symbol\"\n}\n", "main.nt65:3: `.allow` applies to the statement below it, and there is none")]
     public void AnAllowIsRefused(string text, string problem) =>
         Assert.Contains(problem, Problems(text));

@@ -1310,8 +1310,9 @@ internal sealed partial class Binder
             return;
         }
 
-        // An annotation answers some diagnostics that a processor reports only as warnings, so
-        // those are checked for before the severity.
+        // A diagnostic an annotation answers is checked for before the severity, so that the
+        // refusal names the annotation even for an error. The severity is the catalogue's rather
+        // than the project's, because an `.allow` still hides a warning a project raises to an error.
         if (Catalogue.AnsweredByAnnotations.Contains(descriptor))
             Report(allow.Name.Span, Catalogue.AllowAnswered.Message(name));
         else if (descriptor.Severity == Severity.Error)

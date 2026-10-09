@@ -300,7 +300,10 @@ internal sealed class FlowChecks
             if (model.ReferencesTo(label).Any(reference => !reference.IsDeclaration))
                 continue;
             diagnostics.Add(new Diagnostic(label.DeclarationSpan,
-                Catalogue.LabelUnreachable.Message(label.DisplayName)));
+                Catalogue.LabelUnreachable.Message(label.DisplayName))
+            {
+                Fix = new DiagnosticFix(FixKind.State, At: label.DeclarationSpan),
+            });
         }
     }
 

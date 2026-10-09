@@ -255,7 +255,8 @@ public sealed class RegisterKeepsTests
         // never reached. A `.state` holding only `keeps` does not, and the label is reported.
         Assert.Empty(Wide(".proc p: a8, i8 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
         Assert.Equal(
-            ["main.nt65:3: `@entry` is never reached: no code falls into it and nothing refers to it"],
+            ["main.nt65:3: `@entry` is never reached: no code falls into it and nothing refers to it; "
+                + "if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it"],
             Wide(".proc p: a8, i8 {\n    rts\n@entry:\n    .state keeps x\n    rts\n}\n"));
 
         // A routine with no body that declares nothing about its state returns with it unknown.

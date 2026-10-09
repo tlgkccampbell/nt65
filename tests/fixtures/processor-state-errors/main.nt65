@@ -80,7 +80,7 @@
 ; A label nothing reaches has no state to size an immediate with.
 .proc orphan: a8, i8 {
     rts
-@lost:                      ;! warning[label-unreachable]: `@lost` is never reached: no code falls into it and nothing refers to it
+@lost:                      ;! warning[label-unreachable]: `@lost` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
     lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and no path from `orphan`'s entry reaches it. A `.state` after its label declares what the state is there
     rts
 }

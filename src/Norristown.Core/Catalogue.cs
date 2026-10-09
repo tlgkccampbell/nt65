@@ -2658,10 +2658,12 @@ public static class Catalogue
         Area.ControlFlow,
         "label-unreachable",
         Severity.Warning,
-        "`{0}` is never reached: no code falls into it and nothing refers to it",
+        "`{0}` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 "
+            + "cannot see, add a `.state` after it, and otherwise remove it",
         "The code above the label does not fall through into it, and nothing branches, jumps or calls to it or "
             + "takes its address. If it is reached in a way nt65 cannot see, add a `.state` after the label to "
-            + "declare it an entry point; otherwise the code is dead and can be removed.");
+            + "declare it an entry point; otherwise the code is dead and can be removed. `.allow` cannot hide this "
+            + "warning, because the code after the label would then run without being analyzed.");
 
     internal static DiagnosticDescriptor RunsIntoData { get; } = Entry(
         Area.ControlFlow,
@@ -4155,7 +4157,9 @@ public static class Catalogue
         "`.allow` cannot hide `{0}`: add the annotation its message names, which tells nt65 what really happens",
         "Some diagnostics say that the analysis cannot see where flow goes or what an instruction becomes, and "
             + "their fix is an annotation such as `.next`, `.patch` or `.state`. Hiding one would hide the message "
-            + "while the analysis went on following paths that are not there, so `.allow` refuses them.");
+            + "while the analysis went on following paths that are not there, or left a path it cannot see "
+            + "unanalyzed, so `.allow` refuses them. A label nothing reaches is one: if it is an entry point "
+            + "nt65 cannot see, a `.state` after it says so, and otherwise it is dead and can be removed.");
 
     internal static DiagnosticDescriptor AllowAboutNothing { get; } = Entry(
         Area.Allowing,
@@ -4326,19 +4330,27 @@ public static class Catalogue
     // Built on first use, like All, so that every entry exists before the set is made.
     private static readonly Lazy<FrozenSet<DiagnosticDescriptor>> answered = new(() => new[]
     {
+        LabelUnreachable,
         RunsIntoData, IndirectJumpUnchecked, ComputedJumpUnchecked, SelfModifyingUnchecked, CodeLabelAsData,
     }.ToFrozenSet());
 
     /// <summary>
     /// Gets the entries that <c>.allow</c> refuses to hide. The fix for each is an annotation that
-    /// tells nt65 what really happens, and hiding one would leave the analysis following paths that
-    /// are not there.
+    /// tells nt65 what really happens. Hiding one would leave the analysis following paths that
+    /// are not there, or leave a path it cannot see running unanalyzed.
     /// </summary>
+    /// <remarks>
+    /// Most entries are errors, which <c>.allow</c> could not name anyway, and are here so that
+    /// the refusal names the annotation. <see cref="LabelUnreachable"/> is a warning, and this set
+    /// is what keeps it from being hidden.
+    /// </remarks>
     internal static IReadOnlySet<DiagnosticDescriptor> AnsweredByAnnotations => answered.Value;
 
     /// <summary>
     /// Returns a value indicating whether <c>.allow</c> may hide the diagnostic named
-    /// <paramref name="id"/>. It may hide a warning that no annotation answers.
+    /// <paramref name="id"/>. It may hide a warning that no annotation answers. The severity is
+    /// the catalogue's, before the project's settings apply, so a warning a project raises to an
+    /// error may still be allowed.
     /// </summary>
     public static bool IsAllowable(string id) =>
         Find(id) is { Severity: Severity.Warning } descriptor && !AnsweredByAnnotations.Contains(descriptor);

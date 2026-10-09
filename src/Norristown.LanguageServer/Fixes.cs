@@ -39,9 +39,10 @@ internal static class Fixes
                 }
             }
 
-            // Any warning that `.allow` may hide can be allowed where it is reported. That
-            // records a decision rather than fixing anything, so it is never preferred.
-            if (diagnostic.Severity == Severity.Warning && Catalogue.IsAllowable(diagnostic.Id))
+            // Any warning that `.allow` may hide can be allowed where it is reported, including one
+            // the project raises to an error. That records a decision rather than fixing anything,
+            // so it is never preferred.
+            if (Catalogue.IsAllowable(diagnostic.Id))
             {
                 yield return Fix(diagnostic, $"Allow `{diagnostic.Id}` here with `.allow`",
                     [Edits.InsertBefore(model.Tree, diagnostic.Span.LineIndex, $".allow \"{diagnostic.Id}\"")],
