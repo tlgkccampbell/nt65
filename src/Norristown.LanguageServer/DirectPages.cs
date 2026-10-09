@@ -147,6 +147,7 @@ internal static class DirectPages
         SharedBytesKind.Deliberate => "deliberate",
         SharedBytesKind.Authored => "authored",
         SharedBytesKind.Collision => "collision",
+        SharedBytesKind.Unverified => "unverified",
         _ => "page",
     };
 

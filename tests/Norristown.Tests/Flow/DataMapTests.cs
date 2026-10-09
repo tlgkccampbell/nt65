@@ -12,6 +12,25 @@ namespace Norristown.Tests.Flow;
 /// </summary>
 public sealed class DataMapTests
 {
+    /// <summary>
+    /// A program with an address alias at $0080, where a zero page that starts there lays out
+    /// its first data.
+    /// </summary>
+    private const string AliasInsideSegment = """
+        .data ptr: .addr = $80
+        .segment ZEROPAGE
+        .data count: .byte
+        .data total: .word
+        .segment CODE
+        .export .proc main {
+            sta count
+            sta total
+            ldy #0
+            lda (ptr),y
+            rts
+        }
+        """;
+
     /// <summary>The sample program of the design, on the 65816, with three direct pages and the PPU's registers.</summary>
     private const string Snes = """
         .mmio INIDISP: .byte = $2100
@@ -1091,53 +1110,60 @@ public sealed class DataMapTests
     }
 
     /// <summary>
-    /// An address alias that falls inside a segment's predicted bytes takes the same bytes as the
-    /// data laid out there. The layout chose those addresses, so the two collide, and the page
-    /// notes each collision.
+    /// An address alias that falls inside a segment's predicted bytes may take the same bytes as
+    /// the data laid out there. Only a build can say where ld65 put the segment, so the overlap is
+    /// unverified, and the page notes it without calling it a collision.
     /// </summary>
     [Fact]
-    public void AnAliasInsideASegmentCollidesWithItsData()
+    public void AnAliasInsideAPredictedSegmentMayOverlapItsData()
     {
-        var project = Linked("""
-            MEMORY {
-                ZP:  start = $0080, size = $0080;
-                ROM: start = $8000, size = $1000;
-            }
-            SEGMENTS {
-                ZEROPAGE: load = ZP, type = zp;
-                CODE:     load = ROM, type = ro;
-            }
-            """);
         Assert.Equal(
             [
                 "page $0000 [ZEROPAGE] Own hazard=False used=3 direct=3",
-                "  ⧉ `count` and `ptr` share $0080 unintentionally",
-                "  ⧉ `ptr` and `total` share $0081 unintentionally",
+                "  ◦ `count` and `ptr` may both take $0080 · predicted, not verified",
+                "  ◦ `ptr` and `total` may both take $0081 · predicted, not verified",
                 "  count +128 x1 .byte Own Configured",
+                "    ⧉ Unverified ptr $0080-$0080",
+                "    main Out 1",
+                "  ptr +128 x2 .addr Own Fixed",
+                "    ⧉ Unverified count $0080-$0080",
+                "    ⧉ Unverified total $0081-$0081",
+                "    main In 1",
+                "  total +129 x2 .word Own Configured",
+                "    ⧉ Unverified ptr $0081-$0081",
+                "    main Out 1",
+            ],
+            Render(FlowFragment.Analyze(LinkedAt80(), "6502", (Analysis.Path, AliasInsideSegment))));
+    }
+
+    /// <summary>
+    /// Once the last build gives the segment's data its addresses, an address alias among them is
+    /// seen to take the same bytes, and the page notes that the two collide. Here the build puts
+    /// <c>count</c> at $0080 and <c>total</c> at $0081, where the config predicts them too.
+    /// </summary>
+    [Fact]
+    public void AnAliasInsideABuiltSegmentCollidesWithItsData()
+    {
+        var analysis = FlowFragment.Analyze(LinkedAt80(), "6502", (Analysis.Path, AliasInsideSegment));
+        var model = analysis.File(Analysis.Path);
+        var built = new Dictionary<Symbol, long> { [model.Symbol("count")] = 0x80, [model.Symbol("total")] = 0x81 };
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Own hazard=False used=3 direct=3",
+                "  ⧉ `count` and `ptr` both take $0080",
+                "  ⧉ `ptr` and `total` both take $0081",
+                "  count +128 x1 .byte Own Built",
                 "    ⧉ Collision ptr $0080-$0080",
                 "    main Out 1",
                 "  ptr +128 x2 .addr Own Fixed",
                 "    ⧉ Collision count $0080-$0080",
                 "    ⧉ Collision total $0081-$0081",
                 "    main In 1",
-                "  total +129 x2 .word Own Configured",
+                "  total +129 x2 .word Own Built",
                 "    ⧉ Collision ptr $0081-$0081",
                 "    main Out 1",
             ],
-            Render(FlowFragment.Analyze(project, "6502", (Analysis.Path, """
-                .data ptr: .addr = $80
-                .segment ZEROPAGE
-                .data count: .byte
-                .data total: .word
-                .segment CODE
-                .export .proc main {
-                    sta count
-                    sta total
-                    ldy #0
-                    lda (ptr),y
-                    rts
-                }
-                """))));
+            Render(analysis, built));
     }
 
     /// <summary>
@@ -1209,7 +1235,7 @@ public sealed class DataMapTests
         Assert.Equal(
             [
                 "page $0000 [ZEROPAGE,ZP2,ZP3,ZP4] Own hazard=False used=5 direct=4",
-                "  ⧉ `head` and `pinned` share $0002 unintentionally",
+                "  ⧉ `head` and `pinned` both take $0002",
                 "  head +0 x3 .byte[3] Own Configured",
                 "    ⧉ Collision pinned $0002-$0002",
                 "    main Out 1",
@@ -1565,6 +1591,21 @@ public sealed class DataMapTests
                 lines.Add($"      {note.Glyph} {note.Text} @ {note.At?.GetText().Trim()}");
         }
     }
+
+    /// <summary>
+    /// Returns the settings of a project whose zero page starts at $0080, where
+    /// <see cref="AliasInsideSegment"/> puts an alias.
+    /// </summary>
+    private static ProjectSettings LinkedAt80() => Linked("""
+        MEMORY {
+            ZP:  start = $0080, size = $0080;
+            ROM: start = $8000, size = $1000;
+        }
+        SEGMENTS {
+            ZEROPAGE: load = ZP, type = zp;
+            CODE:     load = ROM, type = ro;
+        }
+        """);
 
     /// <summary>
     /// Returns the settings of a project that links <paramref name="config"/>, with the project

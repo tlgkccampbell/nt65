@@ -1144,12 +1144,15 @@ public sealed class DataMap
                 }
                 foreach (var (here, there, first, last) in SamePage(locations))
                 {
-                    if (KindOf(here, there) != SharedBytesKind.Collision)
+                    var kind = KindOf(here, there);
+                    if (kind is not (SharedBytesKind.Collision or SharedBytesKind.Unverified))
                         continue;
                     var span = first == last
                         ? StateValue.Hex(page.Key + first, 4)
                         : $"{StateValue.Hex(page.Key + first, 4)}-{StateValue.Hex(page.Key + last, 4)}";
-                    pageNotes.Add(new DataNote("⧉", $"`{here.Name}` and `{there.Name}` share {span} unintentionally", null));
+                    pageNotes.Add(kind == SharedBytesKind.Collision
+                        ? new DataNote("⧉", $"`{here.Name}` and `{there.Name}` both take {span}", null)
+                        : new DataNote("◦", $"`{here.Name}` and `{there.Name}` may both take {span} · predicted, not verified", null));
                 }
                 pages.Add(new DirectPage(page.Key, named, hardware, locations, [], direct.GetValueOrDefault(page.Key), pageNotes));
             }
@@ -1330,8 +1333,10 @@ public sealed class DataMap
         /// <summary>
         /// Returns how two locations on one page come to take the same bytes. Two addresses the
         /// source fixes alias the bytes on purpose, as a program that names one byte two ways does.
-        /// A fixed address inside a segment's bytes is nearly always a mistake, so it collides. Two
-        /// laid-out locations share bytes because the configuration says so when it places both, as
+        /// A fixed address inside a segment's bytes collides with them where the last build placed
+        /// the segment, and may only where its place is predicted. Some programs mean that overlap
+        /// and some do not, so the map says what it sees rather than which. Two laid-out locations
+        /// share bytes because the configuration says so when it places both, as
         /// <see cref="SharedBytesKind.Authored"/> describes. Otherwise one segment's predicted
         /// bytes run on into the other's, and the two collide.
         /// </summary>
@@ -1340,7 +1345,7 @@ public sealed class DataMap
             if (here.Layout == DataLayout.Fixed && there.Layout == DataLayout.Fixed)
                 return SharedBytesKind.Deliberate;
             if (here.Layout == DataLayout.Fixed || there.Layout == DataLayout.Fixed)
-                return SharedBytesKind.Collision;
+                return (here.Layout == DataLayout.Fixed ? there : here).Layout == DataLayout.Built ? SharedBytesKind.Collision : SharedBytesKind.Unverified;
 
             // ld65 put both where the last build says, which is where the configuration told it to.
             if (here.Layout == DataLayout.Built && there.Layout == DataLayout.Built)

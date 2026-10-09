@@ -2076,7 +2076,11 @@ everything below works across modules.
   routine does with it: `↓` reads it first, `↑` only writes it, `↕` both, `◦` uses it as a
   temporary. `⧉` marks pages that overlap, and locations that take the same bytes. On one page,
   two addresses the source fixes are an alias, and a byte the layout also gives to another
-  location is a collision, which the page notes and the grid stripes. Two segments that the
+  location is a collision, which the page notes and the grid stripes. The map says that the two
+  take one byte, not whether the program means it: msbasic aliases bytes inside its segments on
+  purpose. An address the source fixes inside a segment whose place is only predicted *may
+  collide*, which the page notes as unverified and the grid marks with faint stripes and a `?`,
+  until a build says where the segment is. Two segments that the
   linked config places over the same bytes, by pinning both with `start` or `offset` or by
   running them in memory areas that overlap, share them *by config*, which is marked like an
   alias. A location that no

@@ -425,13 +425,15 @@ function locationTip(result, page, location, hazards) {
   for (const bytes of location.shared) {
     const at = location.address === null ? '' : `+${hex2(bytes.first - page.base)} `;
     // Two locations on this page that take one byte collide unless the source fixes both or the
-    // linked config places both so.
-    const here = bytes.kind === 'deliberate' || bytes.kind === 'authored' || bytes.kind === 'collision';
-    const phrase = bytes.kind === 'collision' ? `shared unintentionally with \`${bytes.there}\``
-      : bytes.kind === 'authored' ? `placed with \`${bytes.there}\`, by the config`
-        : bytes.kind === 'deliberate' ? `an alias of \`${bytes.there}\``
-          : `shared between pages with \`${bytes.there}\` on ${markdown(pageName(result, bytes.page))}`;
-    tip.row('⧉', bytes.kind === 'collision' || !here ? COLOUR.nested : COLOUR.dim, `${at}${phrase}`,
+    // linked config places both so. A fixed address among bytes whose place is only predicted
+    // may collide, and only a build can say. The rows say what the map sees, not what was meant.
+    const here = bytes.kind === 'deliberate' || bytes.kind === 'authored' || bytes.kind === 'collision' || bytes.kind === 'unverified';
+    const phrase = bytes.kind === 'collision' ? `also taken by \`${bytes.there}\``
+      : bytes.kind === 'unverified' ? `may also be taken by \`${bytes.there}\` · predicted, not verified`
+        : bytes.kind === 'authored' ? `placed with \`${bytes.there}\`, by the config`
+          : bytes.kind === 'deliberate' ? `an alias of \`${bytes.there}\``
+            : `shared between pages with \`${bytes.there}\` on ${markdown(pageName(result, bytes.page))}`;
+    tip.row(bytes.kind === 'unverified' ? '?' : '⧉', bytes.kind === 'collision' || !here ? COLOUR.nested : COLOUR.dim, `${at}${phrase}`,
       coloured(COLOUR.dim, addresses(bytes.first, bytes.last)));
   }
   return tip.build();
@@ -513,9 +515,12 @@ function noteRows(tip, notes) {
   }
 }
 
-// Returns the marks that end a description: ⧉ for an overlap and ⚠ for a hazard.
+// Returns the marks that end a description: ⧉ for an overlap, ⧉? for one that only a build can
+// verify, and ⚠ for a hazard. An overlap is given as the runs of shared bytes, or as true.
 function marks(overlap, hazard, hazards) {
-  return [overlap ? '⧉' : '', hazard && hazards ? '⚠' : ''].filter(Boolean).join(' ');
+  const unverified = Array.isArray(overlap) && overlap.every(bytes => bytes.kind === 'unverified');
+  const shared = Array.isArray(overlap) ? overlap.length > 0 : overlap;
+  return [shared ? (unverified ? '⧉?' : '⧉') : '', hazard && hazards ? '⚠' : ''].filter(Boolean).join(' ');
 }
 
 // Returns the parts of a description that are not empty, joined by spaces.
@@ -561,7 +566,7 @@ function itemOf(result, element, hazards) {
         ? location.address === null ? '' : hex4(location.address)
         : offsets(location);
       item = new vscode.TreeItem(location.name, state(page.locations.length <= OPEN_LOCATIONS));
-      item.description = joined(where, marks(location.shared.length > 0, location.hazard, hazards));
+      item.description = joined(where, marks(location.shared, location.hazard, hazards));
       item.iconPath = addressTaken(location) ? icon('target', COLOUR.referenced)
         : declaredOnly(location) ? icon('circle-outline', COLOUR.hw)
         : location.relation === 'unused' ? icon('circle-outline', COLOUR.unused)
