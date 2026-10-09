@@ -1260,11 +1260,12 @@ public static class Catalogue
         Area.Values,
         "bank-has-no-segment",
         Severity.Error,
-        "{0}, so `.bankof` cannot find its bank",
+        "{0}, so `.bankof` cannot find its bank{1}",
         "`.bankof(name)` is the `bank` attribute that the linker configuration gives the memory area the name's "
             + "segment runs in, which is the area ca65's `.bank` reads, not the one it is loaded from. ld65 finds "
             + "the area from the segment, so the argument must be a routine, a label or data in a segment, not a "
-            + "constant, a declaration at a constant address, a scope, an element or an expression.");
+            + "constant, a declaration at a constant address, a scope, an element or an expression. The bank byte "
+            + "of a constant, which is bits 16 to 23 of its value, is `^`, as in `^$7E1234`.");
 
     internal static DiagnosticDescriptor CountofHasNoElements { get; } = Entry(
         Area.Values,

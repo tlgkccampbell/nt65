@@ -567,7 +567,9 @@ in one area they are the same. ld65 works it out, so it is a link-time value lik
 an `.if` cannot test it. The output writes it as `.lobyte(.bank(x))`: ca65 gives `.bank(x)` the
 address size of `x`, which no byte holds, so the low byte is taken, as ca65's documentation does,
 and every mapper's bank numbers fit it. A constant, a declaration at a constant address, a scope,
-an element or an expression is in no segment, and naming one is `bank-has-no-segment`. Code that
+an element or an expression is in no segment, and naming one is `bank-has-no-segment`. Where it
+is a constant, the message offers its bank byte, `^$7E1234`, which is what such a call usually
+meant. Code that
 maps a switchable bank by writing its number to a register, such as the Commander X16's RAM bank
 at `$00` or an NES mapper's bank register, names what it is about to reach rather than a number
 kept in step with the config by hand:
