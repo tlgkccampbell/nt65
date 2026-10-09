@@ -150,3 +150,16 @@
     inc $10
     rts
 }
+
+; A handler that edits the flags the interrupt pushed, as `tsx` then a store indexed by X does,
+; changes what `rti` pulls. nt65 does not follow which stacked byte the store changes, so neither
+; the flags `rti` restores nor the A that `pla` pulls are known.
+.proc sets_stacked_carry: interrupt, keeps a, c {
+    pha
+    tsx
+    lda $0102,x
+    ora #1
+    sta $0102,x
+    pla
+    rti                     ;! error[keeps-broken]: `sets_stacked_carry` promises `keeps a, c`, but A, C are not the same as on entry here, because `sta $0102,x` writes into the bytes on the stack: nt65 does not follow which byte it changes, so what a pull or an `rti` restores after it is not known
+}

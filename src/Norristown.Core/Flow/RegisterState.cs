@@ -68,6 +68,12 @@ public sealed record RegisterState(
     public Cause? WhyStack { get; init; }
 
     /// <summary>
+    /// Gets the registers among A, X and Y that hold the stack pointer, as X does after
+    /// <c>tsx</c>. A store indexed by one of them writes into the bytes on the stack.
+    /// </summary>
+    public Registers FromStackPointer { get; init; }
+
+    /// <summary>
     /// Gets the registers that hold exactly their own entry value here without relying on a keep
     /// nobody promised. See <see cref="RoutineRegisters.Backed"/>.
     /// </summary>
@@ -123,6 +129,7 @@ public sealed record RegisterState(
             WhyStack = stack is not null ? null
                 : known.Stack is null || arriving.Stack is null ? known.WhyStack ?? arriving.WhyStack
                 : Cause.StacksDiffer(depths: true),
+            FromStackPointer = known.FromStackPointer & arriving.FromStackPointer,
         };
     }
 

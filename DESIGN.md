@@ -4734,7 +4734,11 @@ Recorded so the reasoning survives. None is open.
   touch part of the state should not erase what its caller knows, and the values of D
   and B belong on the routines that set them.
 - **A stack of saved state, not push and pull pairing.** Tracking saved P, D and B as
-  the analysis runs lets a save and restore span calls and labels.
+  the analysis runs lets a save and restore span calls and labels. A store into the stacked
+  bytes, relative to S, indexed by a register `tsx` or `tsc` filled, or to a fixed address from
+  $0100 to $01FF, leaves what a later pull or `rti` restores unknown, because which byte it
+  changed is not followed. So a handler that edits the pushed P to return a status, or any
+  routine that overwrites a saved register, cannot promise to keep it.
 - **A declared label anyone may jump into starts on the stack a call to the routine leaves.**
   Once such a label stopped assuming the widths its own routine's paths left, the analysis
   stack was the part still taken from them, and a `pla`, a `plp`, a `.frame` slot or a `keeps`
