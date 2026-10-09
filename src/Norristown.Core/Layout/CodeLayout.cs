@@ -25,6 +25,11 @@ public sealed partial class CodeLayout
     private readonly Dictionary<StepKey, BytePosition> positions = [];
     private readonly Dictionary<(Symbol Symbol, Expansion? At), BytePosition> labels = [];
 
+    // The 65816 instructions sized by a register that the processor state shows 8 bits wide
+    // where they stand, so that they reach one byte of memory. Every other such instruction may
+    // reach two, including each one in a layout made without the state.
+    private readonly HashSet<StepKey> narrow = [];
+
     // Every statement in the order its bytes are emitted. The flow analysis reads this list,
     // because the layout walk is the one that expands the macros and unrolls the repetitions.
     private readonly List<Step> steps = [];
@@ -204,6 +209,32 @@ public sealed partial class CodeLayout
             return false;
         return hidden.Values.Any(path => PositionOf(path.Label) is { } label
             && label.Stream == at.Stream && label.Offset > at.Offset && label.Offset < at.End);
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether the processor state this file was laid out with shows
+    /// that the 65816 instruction at <paramref name="step"/> reaches one byte of memory. The
+    /// register that sizes it is then 8 bits wide there.
+    /// </summary>
+    internal bool ReachesOneByte(Step step) => narrow.Contains(step.Key);
+
+    /// <summary>
+    /// Returns the index among <see cref="Steps"/> of the statement whose bytes cover
+    /// <paramref name="offset"/> in the run of bytes <paramref name="run"/>, or null where no
+    /// statement nt65 laid out covers it. A run is the one <see cref="BytePosition.Stream"/> names.
+    /// </summary>
+    internal int? StepCovering(int run, long offset)
+    {
+        for (var index = 0; index < steps.Count; index++)
+        {
+            var step = steps[index];
+            if (step.Label is null && PositionOf(step.Statement, step.On) is { Length: > 0 } at
+                && at.Stream == run && at.Offset <= offset && offset < at.End)
+            {
+                return index;
+            }
+        }
+        return null;
     }
 
     /// <summary>

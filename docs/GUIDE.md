@@ -1209,7 +1209,13 @@ it can write, and so must one whose bytes nt65 cannot tell, such as `sta @op,x` 
 through a pointer. Without the list nothing could be assumed after the instruction, so its
 absence is an error, and the fix adds `as` where an immediate load before the store shows the
 opcode. A store that may also reach the operand leaves the operand unknown. On the 65816 a store
-sized by a register is taken to write two bytes, so there `sta @op` reaches the operand too.
+sized by a register is taken to write two bytes unless the register is known to be 8 bits wide,
+so with a 16-bit A `sta @op` reaches the operand too.
+
+The bytes a store writes must lie inside the instruction its `.patch` names. `sta @op+2` on a
+two-byte `@op` rewrites the instruction after it, so it is an error that names that instruction.
+Label it and name it with a `.patch` of its own, in place of `.patch @op` or, where the store
+writes both, as well as it.
 
 **Code inside an instruction.** Size-coded programs branch into the middle of an instruction, so
 its operand runs as other instructions. `.label` names such a position, a label at an

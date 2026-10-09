@@ -421,6 +421,7 @@
         "parameter-kind-not-an-enum",
         "parameter-range-invalid",
         "parameter-unknown",
+        "patch-misses-store",
         "patch-variant-rejected",
         "patch-variants-required",
         "place-misplaced",

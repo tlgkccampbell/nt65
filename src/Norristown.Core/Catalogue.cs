@@ -2747,6 +2747,19 @@ public static class Catalogue
             + "become. That is what lets the width, stack and flow analyses go on trusting the shape of the written "
             + "instruction. Without them nothing could be assumed after the instruction.");
 
+    internal static DiagnosticDescriptor PatchMissesStore { get; } = Entry(
+        Area.ControlFlow,
+        "patch-misses-store",
+        Severity.Error,
+        "`{0}` writes {1} `{2}`, which is {3}, {4}",
+        "`.patch @op` says the store above it writes into the instruction at `@op`, so the bytes the store writes "
+            + "must lie inside that instruction. Where nt65 knows both where the store writes and where the "
+            + "instruction stands, as for `sta @op+3` and a two-byte `@op`, it checks this. A store that writes "
+            + "past the instruction rewrites whatever comes next, which the analyses would otherwise go on "
+            + "trusting as written. Label that instruction and name it with a `.patch` of its own, in place of the "
+            + "first or as well as it where the store writes both. A store that reaches into data needs no `.patch` for those bytes, because a `.patch` names an "
+            + "instruction.");
+
     internal static DiagnosticDescriptor NextTargetNotCode { get; } = Entry(
         Area.ControlFlow,
         "next-target-not-code",

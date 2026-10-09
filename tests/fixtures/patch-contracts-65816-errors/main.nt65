@@ -1,5 +1,5 @@
 ; Stores into code on the 65816, where a store sized by a register may write two bytes. nt65 takes
-; every such store as writing two, because the width is not settled when the stores are read.
+; such a store as writing two unless the processor state shows the register 8 bits wide.
 ; A store that may write the opcode has to list variants, which the analyses of registers follow.
 ; The store may also write the operand, so nothing is concluded from the operand as written. The
 ; flags then no longer show that `bpl` is always taken, and the data after it may be run into.
@@ -8,7 +8,7 @@
 
 .cpu 65816
 
-.export wide_a, wide_x, narrow_a, wide_operand, wide_before
+.export wide_a, wide_x, narrow_a, wide_operand, wide_before, wide_straddle, wide_straddle_named
 
 .segment CODE
 
@@ -36,18 +36,16 @@
     rts
 }
 
-; After `sep #$20` the store is known to write one byte, but nt65 still takes it as two. That is
-; the conservative rule, and it costs the flags here what a 16-bit store would.
+; After `sep #$20` the processor state shows A 8 bits wide, so the store writes one byte. From the
+; byte before the instruction that is the `nop` alone, which no `.patch` names. With a 16-bit A it
+; would reach the opcode as well, as in `wide_before`.
 .proc narrow_a: a16, i8 -> a8, i8 {
     sep #$20
-    lda #.opcode(and, imm)
-    sta @op
-    .patch @op as and
+    sta @op-1
+    .patch @op              ;! error[patch-misses-store]: `sta @op-1` writes before `@op`, which is 2 bytes, into `nop` before it: label that instruction and name it with a `.patch`
+    nop
 @op:
     lda #1
-    bpl @x
-    .byte 1                 ;! error[runs-into-data]: the instruction above falls into this data: add a `.next` after the data saying where flow goes
-@x:
     rts
 }
 
@@ -62,12 +60,39 @@
 }
 
 ; Two bytes from the byte before the instruction reach its opcode, so this store has to list
-; what the instruction can become. On the 6502 it would write one byte, outside the instruction.
+; what the instruction can become. Its first byte lands in `nop`, which no `.patch` names. On the
+; 6502 it would write one byte, outside the instruction.
 .proc wide_before: a16, i8 {
     sta @op-1
-    .patch @op              ;! error[patch-variants-required]: `sta @op-1` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`
+    .patch @op              ;! error[patch-variants-required]: `sta @op-1` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`;! error[patch-misses-store]: `sta @op-1` writes before `@op`, which is 3 bytes, into `nop` before it: label that instruction and name it with a `.patch`
     nop
 @op:
     lda #1
+    rts
+}
+
+; Two bytes from the last byte of a two-byte instruction reach the opcode of the one after it,
+; which the `.patch` does not name.
+.proc wide_straddle: a16, i8 {
+    sta @op+1
+    .patch @op              ;! error[patch-misses-store]: `sta @op+1` writes past `@op`, which is 2 bytes, into `inx` at `@next` after it: name `@next` with a `.patch`
+@op:
+    ldx #1
+@next:
+    inx
+    rts
+}
+
+; A `.patch` for each instruction makes the store a write of the first one's operand and of the
+; second one's opcode, which lists what it can become.
+.proc wide_straddle_named: a16, i8 {
+    lda #.opcode(dex)
+    sta @op+1
+    .patch @op
+    .patch @next as dex
+@op:
+    ldx #1
+@next:
+    inx
     rts
 }

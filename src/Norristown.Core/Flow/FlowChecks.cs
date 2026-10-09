@@ -138,6 +138,7 @@ internal sealed class FlowChecks
         CheckReturnsAndCalls(region.Routine, units);
         CheckPatchVariants(units);
         CheckUnlistedPatches(units);
+        CheckMissedPatches(units);
     }
 
     /// <summary>
@@ -180,6 +181,30 @@ internal sealed class FlowChecks
                 Fix = unlisted.Inferred == MnemonicKind.None
                     ? null
                     : new DiagnosticFix(FixKind.Variant, SyntaxFacts.TextOf(unlisted.Inferred)),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Reports each store whose bytes reach outside the instruction its <c>.patch</c> names, into
+    /// something that no other <c>.patch</c> under the store names. Where they land in a labeled
+    /// instruction, the fix names that label with a <c>.patch</c>.
+    /// </summary>
+    private void CheckMissedPatches(IReadOnlyList<ControlFlow.Unit> units)
+    {
+        if (flow.MissedPatches.Count == 0)
+            return;
+        var keys = units.Select(unit => unit.Step.Key).ToHashSet();
+        foreach (var missed in flow.MissedPatches)
+        {
+            if (!keys.Contains(missed.Written.Key))
+                continue;
+            var patch = missed.Patch;
+            diagnostics.Add(new Diagnostic(patch.Tree.GetSpan(patch.Span), Catalogue.PatchMissesStore.Message(
+                missed.Store.Statement.GetTextOnOneLine(), missed.Before ? "before" : "past", missed.Label.DisplayName,
+                missed.Length == 1 ? "1 byte" : $"{missed.Length} bytes", missed.Into))
+            {
+                Fix = missed.Fix,
             });
         }
     }
