@@ -55,10 +55,13 @@ internal sealed class RegisterWalk
     /// <summary>
     /// Returns the registers an instruction uses the value of, including the index register its
     /// mode adds, and the registers it certainly writes. A <c>rep</c> or <c>sep</c> whose mask
-    /// nt65 cannot work out certainly writes nothing.
+    /// nt65 cannot work out certainly writes nothing. An instruction in
+    /// <see cref="ControlFlow.RewrittenOpcodes"/> uses every register and certainly writes none.
     /// </summary>
     internal (Registers Read, Registers Written) EffectsOf(Step step, InstructionStatementSyntax instruction)
     {
+        if (flow.RewrittenOpcodes.Contains(step.Key))
+            return (Registers.All, Registers.None);
         var mnemonic = instruction.MnemonicKind;
         var mode = layout.Of(instruction, step.On)?.Mode;
         var constant = StepOperands.Immediate(model, layout, step);
@@ -245,6 +248,15 @@ internal sealed class RegisterWalk
         }
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
+
+        // A store may turn the instruction into one nothing lists, which may use every register
+        // and leave anything in each.
+        if (flow.RewrittenOpcodes.Contains(step.Key))
+        {
+            if (use is not null)
+                UsedByAnything(state, use);
+            return state.WithEach(Registers.All, RegisterValue.Unknown);
+        }
 
         // A store may turn the instruction into another, and then the registers hold what either
         // leaves, and either may use them.
@@ -604,23 +616,33 @@ internal sealed class RegisterWalk
     {
         // What a software interrupt's handler uses is not known, so every value is used. A
         // store that a `.state saves` marks does not use the register it saves.
-        var everything = mnemonic is MnemonicKind.Brk or MnemonicKind.Cop;
-        var read = everything ? Registers.All : RegisterEffects.Read(mnemonic, mode) & ~saved;
-        foreach (var register in RegisterEffects.Each(read))
+        if (mnemonic is MnemonicKind.Brk or MnemonicKind.Cop)
         {
-            use((everything ? state.Whole(register)
-                : register == Registers.A ? Taken(step, mnemonic, state)
-                : state.Of(register)).Entry);
+            UsedByAnything(state, use);
+            return;
         }
+        var read = RegisterEffects.Read(mnemonic, mode) & ~saved;
+        foreach (var register in RegisterEffects.Each(read))
+            use((register == Registers.A ? Taken(step, mnemonic, state) : state.Of(register)).Entry);
 
         // Reading the stack pointer, moving it, or addressing the stack by offset reaches the
         // pushes in some way other than pulling them back in order.
-        if (read == Registers.All
-            || RegisterEffects.ReadsStackPointer(mnemonic) || RegisterEffects.SetsStackPointer(mnemonic)
+        if (RegisterEffects.ReadsStackPointer(mnemonic) || RegisterEffects.SetsStackPointer(mnemonic)
             || mode is AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
         {
             use(state.Stack?.Entries ?? Registers.None);
         }
+    }
+
+    /// <summary>
+    /// Tells <paramref name="use"/> every entry value that code nt65 knows nothing about may use
+    /// at a point. Such code sees all of each register and every push on the stack.
+    /// </summary>
+    private static void UsedByAnything(RegisterState state, Action<Registers> use)
+    {
+        foreach (var register in RegisterEffects.Each(Registers.All))
+            use(state.Whole(register).Entry);
+        use(state.Stack?.Entries ?? Registers.None);
     }
 
     /// <summary>

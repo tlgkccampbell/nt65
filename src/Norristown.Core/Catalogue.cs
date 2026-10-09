@@ -2686,7 +2686,8 @@ public static class Catalogue
         "`.patch` cannot list `{0}` for `{1}`: {2}",
         "`.patch @op as dex` says the store above it can turn the instruction at `@op` into `dex`. The store writes "
             + "the opcode alone, so a variant keeps the instruction's addressing mode and operand, and the CPU must "
-            + "have it in that form. The analyses take the union of what the written instruction and each variant "
+            + "have it in that form. The store must address the label itself, as `sta @op` does, with no index or "
+            + "offset, or nothing shows that it writes the opcode. The analyses take the union of what the written instruction and each variant "
             + "do, so a variant may not move the stack, change the processor's widths or run a handler, and it must "
             + "run on where the written instruction runs on and branch where it branches.");
 

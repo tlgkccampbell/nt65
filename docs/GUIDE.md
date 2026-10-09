@@ -1194,7 +1194,12 @@ store that turns one instruction into another can say which it writes:
 `as dex` lists what the store can turn the instruction into, and nt65 then follows both: after
 `@step`, X has been written either way, and the carry, which neither `inx` nor `dex` touches, is
 still known. A variant keeps the instruction's addressing mode and operand, and may not touch
-the stack or the widths; a branch may become another branch.
+the stack or the widths; a branch may become another branch. Only a store that addresses the
+label itself can list variants, because only that store is known to write the opcode.
+
+Without `as`, a store into the operand, such as `sta @op+1`, leaves the instruction as written,
+but nothing is known about its operand. A store into the opcode that lists nothing may make the
+instruction anything, so nt65 takes it to use every register and change each one.
 
 **Code inside an instruction.** Size-coded programs branch into the middle of an instruction, so
 its operand runs as other instructions. `.label` names such a position, a label at an

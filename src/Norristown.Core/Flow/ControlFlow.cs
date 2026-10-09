@@ -33,6 +33,8 @@ public sealed class ControlFlow
     private HashSet<StepKey>? patched;
     private Dictionary<StepKey, IReadOnlyList<MnemonicKind>>? variants;
     private List<PatchVariant>? listedVariants;
+    private HashSet<StepKey>? rewrittenOpcodes;
+    private HashSet<StepKey>? rewrittenOperands;
 
     private ControlFlow(SemanticModel model, CodeLayout layout)
         : this(model, layout, [], [], [])
@@ -135,7 +137,8 @@ public sealed class ControlFlow
     /// <summary>
     /// Gets the instructions a <c>.patch … as</c> says each patched instruction can be turned
     /// into, in the addressing mode it is written in. A variant <see cref="PatchVariant.Problem"/>
-    /// rejects is left out, and an instruction with none is not listed.
+    /// rejects is left out, and an instruction with none is not listed. Neither is one in
+    /// <see cref="RewrittenOpcodes"/>, which may become anything.
     /// </summary>
     internal IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> Variants
     {
@@ -155,6 +158,35 @@ public sealed class ControlFlow
             if (listedVariants is null)
                 FindPatched();
             return listedVariants!;
+        }
+    }
+
+    /// <summary>
+    /// Gets each patched instruction whose opcode a store may write with something no
+    /// <c>.patch … as</c> lists. Such an instruction may run as any instruction at all, so it may
+    /// use and change every register.
+    /// </summary>
+    internal IReadOnlySet<StepKey> RewrittenOpcodes
+    {
+        get
+        {
+            if (rewrittenOpcodes is null)
+                FindPatched();
+            return rewrittenOpcodes!;
+        }
+    }
+
+    /// <summary>
+    /// Gets each patched instruction whose operand a store may write. Its operand as written says
+    /// only where the program starts from, so nothing may be concluded from its value.
+    /// </summary>
+    internal IReadOnlySet<StepKey> RewrittenOperands
+    {
+        get
+        {
+            if (rewrittenOperands is null)
+                FindPatched();
+            return rewrittenOperands!;
         }
     }
 
@@ -493,8 +525,12 @@ public sealed class ControlFlow
 
         // A branch the flags decide is a jump, or transfers nothing, before anything else reads
         // the blocks. Which instructions the program rewrites is known only once every routine's
-        // annotations have been gathered.
-        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, flow.Variants, exits ?? FlagExits.None);
+        // annotations have been gathered. The flags and the constants follow a variant only where
+        // its operand is the one written, because they depend on the operand's value.
+        var variants = flow.Variants
+            .Where(pair => !flow.RewrittenOperands.Contains(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, variants, exits ?? FlagExits.None);
         foreach (var (routine, units, blocks, _) in built)
             flow.Decide(routine, units, blocks);
 
@@ -1072,12 +1108,12 @@ public sealed class ControlFlow
     /// not expand to labels and so names only itself.
     /// </summary>
     /// <summary>
-    /// Finds each instruction that stands on a label a <c>.patch</c> names, and the variants
-    /// each <c>.patch … as</c> lists for it.
+    /// Finds each instruction that stands on a label a <c>.patch</c> names, the variants each
+    /// <c>.patch … as</c> lists for it, and which of its bytes the stores may write.
     /// </summary>
     private void FindPatched()
     {
-        var targets = new Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Expansion? On)>>();
+        var targets = new Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Step Store)>>();
         foreach (var step in layout.Steps)
         {
             foreach (var patch in AnnotationsOf(step).OfType<PatchDirectiveSyntax>())
@@ -1088,49 +1124,90 @@ public sealed class ControlFlow
                     {
                         if (!targets.TryGetValue(symbol, out var patches))
                             targets[symbol] = patches = [];
-                        patches.Add((patch, step.On));
+                        patches.Add((patch, step));
                     }
                 }
             }
         }
 
-        patched = [];
-        variants = [];
-        listedVariants = [];
-        List<(PatchDirectiveSyntax Patch, Expansion? On)>? naming = null;
+        // The sets are built in full before any is published, so a thread that finds one set
+        // never sees it half built.
+        var found = new HashSet<StepKey>();
+        var foundVariants = new Dictionary<StepKey, IReadOnlyList<MnemonicKind>>();
+        var listed = new List<PatchVariant>();
+        var opcodes = new HashSet<StepKey>();
+        var operands = new HashSet<StepKey>();
+        List<(PatchDirectiveSyntax Patch, Step Store, Symbol Label)>? naming = null;
         foreach (var step in layout.Steps)
         {
             if (step.Label is { } label)
             {
                 if (targets.TryGetValue(label, out var patches))
-                    (naming ??= []).AddRange(patches);
+                    (naming ??= []).AddRange(patches.Select(patch => (patch.Patch, patch.Store, label)));
                 continue;
             }
             if (naming is not null && step.Statement is InstructionStatementSyntax written)
             {
-                patched.Add(step.Key);
-                var mode = layout.Of(written, step.On)?.Mode;
+                found.Add(step.Key);
+                var line = layout.Of(written, step.On);
                 var kept = new List<MnemonicKind>();
+                var opcode = false;
                 var operand = false;
-                foreach (var (patch, on) in naming)
+                foreach (var (patch, store, named) in naming)
                 {
-                    operand |= patch.AsKeyword is null;
+                    // A variant replaces the opcode alone, so it is taken only from a store
+                    // known to start at the opcode. Any other store may write anything into the
+                    // bytes it reaches.
+                    var bytes = WrittenBytes(store, named);
+                    var atOpcode = bytes?.First == 0;
+                    var variant = false;
                     foreach (var name in patch.Variants)
                     {
-                        var variant = new PatchVariant(name, on, step, written.MnemonicKind, mode, layout.Cpu);
-                        listedVariants.Add(variant);
-                        if (variant.Problem is null && !kept.Contains(variant.Mnemonic))
-                            kept.Add(variant.Mnemonic);
+                        var listing = new PatchVariant(name, store.On, step, written.MnemonicKind, line?.Mode, layout.Cpu, atOpcode);
+                        listed.Add(listing);
+                        if (listing.Problem is not null)
+                            continue;
+                        variant = true;
+                        if (!kept.Contains(listing.Mnemonic))
+                            kept.Add(listing.Mnemonic);
                     }
+                    opcode |= !variant && (bytes is not { } reached || (reached.First <= 0 && reached.Last >= 0));
+                    operand |= bytes is not { } into || line is null || (into.Last >= 1 && into.First < line.Length);
                 }
-
-                // A `.patch` with no `as` may rewrite the operand too, and then the operand as
-                // written says nothing, whichever instruction stands there.
-                if (kept.Count > 0 && !operand)
-                    variants[step.Key] = kept;
+                if (opcode)
+                    opcodes.Add(step.Key);
+                else if (kept.Count > 0)
+                    foundVariants[step.Key] = kept;
+                if (operand)
+                    operands.Add(step.Key);
             }
             naming = null;
         }
+        patched = found;
+        variants = foundVariants;
+        listedVariants = listed;
+        rewrittenOpcodes = opcodes;
+        rewrittenOperands = operands;
+    }
+
+    /// <summary>
+    /// Returns the bytes the store at <paramref name="store"/> may write, as offsets from
+    /// <paramref name="label"/>, or null where they are not known. They are known only where the
+    /// store addresses the label directly, as <c>sta @op+1</c> does. On the 65816 a store sized by
+    /// a register is taken to be two bytes wide, because the width is not known yet.
+    /// </summary>
+    private (long First, long Last)? WrittenBytes(Step store, Symbol label)
+    {
+        if (store.Statement is not InstructionStatementSyntax instruction
+            || layout.Of(instruction, store.On)?.Mode is not (AddressingMode.Direct or AddressingMode.Absolute or AddressingMode.Long)
+            || StepOperands.Of(model, store) is not { } operand
+            || Location.Of(model, CodeLayout.Expression(operand), store.On) is not { Root: { } root } location
+            || root != label)
+        {
+            return null;
+        }
+        var width = layout.Cpu == Cpu.Wdc65816 && Instructions.MemorySizedBy(instruction.MnemonicKind) is not null ? 2 : 1;
+        return (location.Offset, location.Offset + width - 1);
     }
 
     private IEnumerable<(Symbol Symbol, Expansion? At)> Spread(Symbol target, Expansion? on)

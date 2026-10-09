@@ -61,6 +61,42 @@ public sealed class PatchVariantTests
         Assert.Equal(message, diagnostic.Message);
     }
 
+    /// <summary>
+    /// A variant replaces the opcode alone, so a store that is not known to start at the opcode
+    /// cannot list one. The operand it may write then says nothing about the flags.
+    /// </summary>
+    [Theory]
+    [InlineData("sta @op+1")]
+    [InlineData("sta @op,x")]
+    [InlineData("sta $10")]
+    public void AStoreNotKnownToWriteTheOpcodeCannotListAVariant(string store)
+    {
+        var diagnostics = Diagnostics(".export .proc main {\n    lda #0\n    ldx #0\n"
+            + $"    {store}\n    .patch @op as and\n@op:\n    lda #0\n    bne @x\n    .byte 1\n@x:\n    rts\n}}\n");
+        Assert.Contains(diagnostics, diagnostic => diagnostic is
+        {
+            Id: "patch-variant-rejected",
+            Message: "`.patch` cannot list `and` for `lda`: a variant replaces the opcode, and the store is not known to write it",
+        });
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "runs-into-data");
+    }
+
+    /// <summary>
+    /// A store into the opcode that lists nothing may make the instruction anything, which may use
+    /// and change every register. A store into the operand alone leaves the instruction as written.
+    /// </summary>
+    [Fact]
+    public void AnUnlistedOpcodeMayUseAndChangeEveryRegister()
+    {
+        static string Main(string store) => ".export .proc main: keeps x, reads a {\n    lda #.opcode(ldx, imm)\n"
+            + $"    {store}\n    .patch @op\n@op:\n    lda #5\n    rts\n}}\n";
+
+        Assert.Empty(Diagnostics(Main("sta @op+1")));
+        Assert.Equal(
+            ["keeps-broken", "reads-undeclared", "reads-undeclared", "reads-undeclared", "reads-undeclared"],
+            Diagnostics(Main("sta @op")).Select(d => d.Id).Order());
+    }
+
     private static IReadOnlyList<string> Problems(string text) =>
         Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Problems();
 
