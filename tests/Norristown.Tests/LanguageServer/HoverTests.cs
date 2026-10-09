@@ -91,6 +91,42 @@ public sealed class HoverTests
     }
 
     /// <summary>
+    /// A line in a macro body runs once per call, and the hover covers every expansion rather
+    /// than the first one found. <c>bump!</c> is called under <c>a8</c> and again after
+    /// <c>rep #$20</c>. Its <c>lda $1234</c> takes 4 cycles 8-bit and 5 cycles 16-bit, so the
+    /// row spans 4-5 and says why. The block is the whole routine: 4 + 3 (<c>rep</c>) + 5 + 3
+    /// (<c>sep</c>) + 6 (<c>rts</c>) is 21 cycles. Each state is listed with how many
+    /// expansions it reaches.
+    /// </summary>
+    [Fact]
+    public async Task HoverInAMacroBodyCoversEveryExpansion()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .macro bump() {
+                lda $1234
+            }
+            .export .proc main: a8, i8, native {
+                bump!()
+                rep #$20
+                bump!()
+                sep #$20
+                rts
+            }
+            """;
+        var source = Source.ReplaceLineEndings("\n");
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, source));
+
+        var hover = (await client.HoverAsync(MainUri, Locate.At(source, "l|da $1234"), timeout))?.Contents.Value;
+
+        Assert.Matches(@"cycles +4-5 +block 21 +the expansions differ", hover);
+        Assert.Matches(@"state +a16, i8, native ×1\n +a8, i8, native ×1\n", hover);
+    }
+
+    /// <summary>
     /// An editor can be set to hide lenses, so which registers a routine or an inline
     /// <c>.scope</c> block preserves is shown on hover as well as in the lens above the line.
     /// </summary>

@@ -2136,8 +2136,11 @@ everything below works across modules.
   the mode and the widths, D and B. On every processor it gives what A, X and Y hold, with the
   constant where the instructions give one and the line that set the value, the flags as `0`,
   `1` or `?`, and the stack top first. On the 65816 each push is keyed by the stack-relative
-  offset that reads it, such as `3,s`. A line with nothing that runs, such as the one that
-  opens a routine, shows the next line that does. A fact that is not known says `unknown`
+  offset that reads it, such as `3,s`. A line in a macro body or a repetition runs once per
+  expansion, and the view and the hover show what every expansion agrees on. Where the
+  expansions reach the line in different states, both list each state with how many expansions
+  it reaches, and the hover's cycles cover them all. A line with nothing that runs, such as the
+  one that opens a routine, shows the next line that does. A fact that is not known says `unknown`
   rather than being left out. The stack is known only from the routine's entry, so it ends at
   the stack the routine was entered with. *Choose the Caller the Processor View Shows*, or the
   view's last row, picks one `jsr` or `jsl` to the routine, and the stack then goes on through

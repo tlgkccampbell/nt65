@@ -250,6 +250,15 @@ public sealed partial class CodeLayout
     /// </summary>
     public LineLayout? AnyOf(StatementSyntax statement) => anyExpansion.GetValueOrDefault((statement.Tree, statement.Position));
 
+    /// <summary>
+    /// Returns what a statement assembles to in each <see cref="Expansion"/> of it, in no
+    /// particular order. A statement outside every macro and repetition has at most one.
+    /// </summary>
+    public IReadOnlyList<LineLayout> EachOf(StatementSyntax statement) =>
+        [.. lines
+            .Where(line => line.Key.Position == statement.Position && (line.Key.On?.Body?.Tree ?? model.Tree) == statement.Tree)
+            .Select(line => line.Value)];
+
     /// <summary>Returns where a statement's bytes land, or null when it generates none.</summary>
     public BytePosition? PositionOf(SyntaxNode statement, Expansion? on = null) =>
         positions.TryGetValue(StepKey.Of(statement, on), out var position) ? position : null;

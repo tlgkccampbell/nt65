@@ -557,6 +557,25 @@ internal static class Hovers
             : Format(region.Registers.Kept, region.Registers.Complete);
 
     /// <summary>
+    /// Returns each processor state that reaches a line, formatted by <paramref name="format"/>,
+    /// with the number of expansions it reaches, where the expansions of a macro body or a
+    /// repetition do not all agree. Returns an empty list where they agree, since the one state
+    /// is then shown as it is.
+    /// </summary>
+    /// <param name="each">The state reaching each expansion of the line.</param>
+    /// <param name="format">Formats one state.</param>
+    internal static IReadOnlyList<(string State, int Count)> ByExpansion(
+        IReadOnlyList<FlowState> each, Func<ProcessorState, string> format)
+    {
+        var counted = each
+            .GroupBy(state => format(state.Processor), StringComparer.Ordinal)
+            .Select(group => (State: group.Key, Count: group.Count()))
+            .OrderBy(group => group.State, StringComparer.Ordinal)
+            .ToList();
+        return counted.Count > 1 ? counted : [];
+    }
+
+    /// <summary>
     /// Adds one row to the grid, or one row per instance where the instances of a family (the
     /// routines a repetition declares) differ. Every instance is declared on the family's single
     /// line, so where they all agree the row is shown once.
@@ -673,8 +692,11 @@ internal static class Hovers
 
         // The line's cycles, the enclosing basic block's cycles and, where the line's count is
         // an interval, what causes the higher figure. These are three views of one question,
-        // read across one row rather than down three.
-        card.Row("cycles", Cost(cycles, Around(flow, statement)?.Cycles, laid.Causes));
+        // read across one row rather than down three. A line in a macro body counts once per
+        // expansion, and the row spans them all.
+        var counts = layout.EachOf(statement).Select(each => each.Cycles).OfType<CycleCount>().Distinct().ToList();
+        var causes = counts.Count > 1 ? [.. laid.Causes ?? [], "the expansions differ"] : laid.Causes;
+        card.Row("cycles", Cost(Spread(counts) ?? cycles, Spread(Around(flow, statement)), causes));
 
         // An `.ensure` emits whatever `rep`/`sep` the analysis found it needs; show what that is.
         if (laid.Ensured is { } ensured)
@@ -689,9 +711,14 @@ internal static class Hovers
         }
 
         // The processor state the analysis found on entry to the line, which determined the
-        // size of its immediate.
-        var state = analysis.StatesFor(model.Tree.Path)?.AnyBefore(statement);
-        if (state is not null)
+        // size of its immediate. Where the expansions of a macro body differ, each state is
+        // listed with how many expansions it reaches.
+        var states = analysis.StatesFor(model.Tree.Path);
+        var state = states?.AnyBefore(statement);
+        var each = states is null ? [] : ByExpansion(states.EachBefore(statement), processor => processor.ToString());
+        for (var i = 0; i < each.Count; i++)
+            card.Row(i == 0 ? "state" : "", $"{each[i].State} ×{each[i].Count}");
+        if (each.Count == 0 && state is not null)
             card.Row("state", state.Processor.ToString());
         if (mnemonic is { } flagged)
         {
@@ -747,10 +774,31 @@ internal static class Hovers
     private static StatementSyntax? Statement(SyntaxTree tree, int position) =>
         position < tree.Text.Length ? tree.GetLine(tree.GetLineIndex(position)).Statement : null;
 
-    /// <summary>Returns the basic block a statement is in, wherever in the file the statement is.</summary>
-    private static BasicBlock? Around(ControlFlow? flow, StatementSyntax statement) =>
-        flow?.Regions
+    /// <summary>
+    /// Returns the cycle counts of the basic blocks a statement is in, one for each expansion of it,
+    /// wherever in the file the statement is.
+    /// </summary>
+    private static IEnumerable<CycleCount> Around(ControlFlow? flow, StatementSyntax statement) =>
+        (flow?.Regions ?? [])
             .SelectMany(region => region.Blocks)
-            .FirstOrDefault(block => block.Steps.Any(step =>
-                step.Statement.Tree == statement.Tree && step.Statement.Position == statement.Position));
+            .Where(block => block.Steps.Any(step =>
+                step.Statement.Tree == statement.Tree && step.Statement.Position == statement.Position))
+            .Select(block => block.Cycles)
+            .OfType<CycleCount>();
+
+    /// <summary>
+    /// Returns the interval that covers every count in <paramref name="counts"/>, or null when
+    /// there are none.
+    /// </summary>
+    private static CycleCount? Spread(IEnumerable<CycleCount> counts)
+    {
+        CycleCount? spread = null;
+        foreach (var count in counts)
+        {
+            spread = spread is { } known
+                ? new CycleCount(Math.Min(known.Minimum, count.Minimum), Math.Max(known.Maximum, count.Maximum))
+                : count;
+        }
+        return spread;
+    }
 }
