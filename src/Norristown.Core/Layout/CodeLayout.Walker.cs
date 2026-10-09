@@ -534,9 +534,12 @@ public sealed partial class CodeLayout
             CheckIndirectJumpWrap(statement, operand, mode);
             var timing = Cycles.Of(cpu, statement.MnemonicKind, mode, state, DecimalBefore(statement));
             IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
+            BranchCycles? edges = timing is { } branch && Transfers.Of(statement, mode) == Transfer.Branch
+                ? Cycles.EdgesOf(branch.Count)
+                : null;
             Laid(statement, new LineLayout(
                 length, mode, prefix, false, timing?.Count, bits,
-                Slot: states?.SlotAt(statement, expansion), Direct: direct, Causes: causes, Opcode: opcode));
+                Slot: states?.SlotAt(statement, expansion), Direct: direct, Causes: causes, Opcode: opcode, Branch: edges));
             Place(statement, length);
             layout.steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
 
@@ -629,8 +632,9 @@ public sealed partial class CodeLayout
             var length = Instructions.Length(AddressingMode.Relative)
                 + (over ? Instructions.Length(AddressingMode.Absolute) : 0);
             branches.Add(new Branch(statement, expansion, target, Long: true));
+            var (timing, edges) = Cycles.OfLongBranch(cpu, states?.Before(statement, expansion), over);
             Laid(statement, new LineLayout(
-                length, AddressingMode.Relative, null, over, Cycles.OfLongBranch(over)));
+                length, AddressingMode.Relative, null, over, timing.Count, Causes: timing.Causes, Branch: edges));
             Place(statement, length);
             layout.steps.Add(new Step(statement, expansion, routine, Stream, segment, null));
         }

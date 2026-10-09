@@ -195,9 +195,10 @@ public sealed partial class CodeLayout
         }
         return (edges, lost, unbounded);
 
-        CycleCount Taken(CycleCount branch) => Cycles.WhenTaken(branch, line?.Inverted == true);
+        // A branch's layout says what each way out of it costs.
+        CycleCount Taken(CycleCount branch) => line?.Branch?.Taken ?? branch;
 
-        CycleCount NotTaken(CycleCount branch) => Cycles.WhenNotTaken(branch, line?.Inverted == true);
+        CycleCount NotTaken(CycleCount branch) => line?.Branch?.NotTaken ?? branch;
 
         void Next(CycleCount cost)
         {

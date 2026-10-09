@@ -42,6 +42,18 @@ public static class Cycles
     /// </summary>
     private const string Crosses = "+1 when it crosses a page";
 
+    /// <summary>
+    /// The cause shown for a long branch laid out as the inverted branch over a <c>jmp</c>, whose
+    /// condition holding runs the <c>jmp</c>.
+    /// </summary>
+    private const string Jumped = "+2 when taken, which runs the `jmp`";
+
+    /// <summary>
+    /// The cause shown for a long branch laid out as the inverted branch over a <c>jmp</c>, whose
+    /// inverted branch may cross a page skipping the <c>jmp</c>.
+    /// </summary>
+    private const string Skipped = "+1 when not taken and the skip crosses a page";
+
     /// <summary>The cause shown for a direct-page operand on a 65816 whose D the analysis could not follow.</summary>
     private const string DirectPage = "+1 when the low byte of D is not zero";
 
@@ -109,37 +121,44 @@ public static class Cycles
     }
 
     /// <summary>
-    /// Returns what a long branch costs in the form it was laid out in. The short form costs what the
-    /// branch costs. In the long form the branch is inverted to skip over a <c>jmp</c>: when
-    /// the original condition holds, execution falls through into the <c>jmp</c>, and when it
-    /// does not, the inverted branch is taken over it.
+    /// Returns what a long branch costs in the form it was laid out in, and what each way out of
+    /// it costs. Both forms are counted from the short branch's timing on <paramref name="cpu"/>
+    /// in <paramref name="state"/>, so a taken branch pays for crossing a page only where the
+    /// short branch would.
+    /// <para>
+    /// The short form costs what the branch costs. In the long form the branch is inverted to skip
+    /// over a <c>jmp</c>. When the original condition holds, execution falls through into the
+    /// <c>jmp</c>, and when it does not, the inverted branch is taken over it.
+    /// </para>
     /// </summary>
-    public static CycleCount OfLongBranch(bool inverted) => inverted
-        ? new CycleCount(3, 5)
-        : new CycleCount(2, 4);
+    /// <param name="cpu">The CPU the branch runs on.</param>
+    /// <param name="state">On the 65816, the processor state reaching the branch, where known.</param>
+    /// <param name="inverted">Whether the branch is laid out as the inverted branch over a <c>jmp</c>.</param>
+    public static (Timing Timing, BranchCycles Edges) OfLongBranch(Cpu cpu, ProcessorState? state, bool inverted)
+    {
+        var branch = Of(cpu, MnemonicKind.Beq, AddressingMode.Relative, state)!.Value;
+        var edges = EdgesOf(branch.Count);
+        if (!inverted)
+            return (branch, edges);
+
+        // Where the condition holds, the inverted branch is not taken and the `jmp` runs. Where it
+        // fails, the inverted branch is taken over the `jmp`, and may cross a page doing so.
+        var holds = edges.NotTaken + new CycleCount(3);
+        var fails = edges.Taken;
+        var count = new CycleCount(Math.Min(holds.Minimum, fails.Minimum), Math.Max(holds.Maximum, fails.Maximum));
+        string[] causes = fails.IsExact ? [Jumped] : [Jumped, Skipped];
+        return (new Timing(count, [.. causes]), new BranchCycles(holds, fails));
+    }
 
     /// <summary>
-    /// Returns what a conditional branch whose whole count is <paramref name="branch"/> costs where
-    /// it is taken. That is at least one cycle more than its least, because only a taken branch
-    /// can cross a page. A long branch laid out as the inverted branch over a <c>jmp</c>, which
-    /// <paramref name="inverted"/> says, costs its most when it is taken. An exact count costs the
-    /// same either way.
+    /// Returns what each way out of a short conditional branch whose whole count is
+    /// <paramref name="branch"/> costs. Not taken, it costs its least. Taken, it costs at least
+    /// one cycle more, and its most where it crosses a page. An exact count costs the same either
+    /// way.
     /// </summary>
-    public static CycleCount WhenTaken(CycleCount branch, bool inverted) =>
-        branch.IsExact ? branch
-        : inverted ? new CycleCount(branch.Maximum)
-        : new CycleCount(branch.Minimum + 1, branch.Maximum);
-
-    /// <summary>
-    /// Returns what a conditional branch whose whole count is <paramref name="branch"/> costs where
-    /// it is not taken. That is its least, except for a long branch laid out as the inverted branch
-    /// over a <c>jmp</c>, which <paramref name="inverted"/> says, whose inverted branch is then the
-    /// one taken.
-    /// </summary>
-    public static CycleCount WhenNotTaken(CycleCount branch, bool inverted) =>
-        branch.IsExact ? branch
-        : inverted ? new CycleCount(branch.Minimum, branch.Maximum - 1)
-        : new CycleCount(branch.Minimum);
+    public static BranchCycles EdgesOf(CycleCount branch) => branch.IsExact
+        ? new BranchCycles(branch, branch)
+        : new BranchCycles(new CycleCount(branch.Minimum + 1, branch.Maximum), new CycleCount(branch.Minimum));
 
     /// <summary>
     /// Returns the timing of a 65816 instruction. The table counts the 8-bit form. A 16-bit

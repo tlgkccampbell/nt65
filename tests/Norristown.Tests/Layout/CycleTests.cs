@@ -297,15 +297,30 @@ public sealed class CycleTests
     }
 
     /// <summary>
-    /// A long branch costs what the form chosen for it costs. Short, it is the branch.
-    /// Long, it is the inverted branch, which falls through into a <c>jmp</c> when the original
-    /// condition holds.
+    /// A long branch costs what the form chosen for it costs, on its CPU and in its mode. Short, it
+    /// is the branch, with the branch's causes. Long, it is the inverted branch, which falls
+    /// through into a <c>jmp</c> when the original condition holds and is taken over it when the
+    /// condition fails. Only where a short branch pays for crossing a page does the skip.
     /// </summary>
-    [Fact]
-    public void ALongBranchCostsWhatItsFormCosts()
+    [Theory]
+    [InlineData(Cpu.Mos6502, ProcessorMode.Unknown, false, "2-4", "3-4", "2", "+1 when taken, +1 when that crosses a page")]
+    [InlineData(Cpu.Mos6502, ProcessorMode.Unknown, true, "3-5", "5", "3-4", "+2 when taken, which runs the `jmp`, +1 when not taken and the skip crosses a page")]
+    [InlineData(Cpu.Wdc65C02, ProcessorMode.Unknown, true, "3-5", "5", "3-4", "+2 when taken, which runs the `jmp`, +1 when not taken and the skip crosses a page")]
+    [InlineData(Cpu.Wdc65816, ProcessorMode.Native, false, "2-3", "3", "2", "+1 when taken")]
+    [InlineData(Cpu.Wdc65816, ProcessorMode.Native, true, "3-5", "5", "3", "+2 when taken, which runs the `jmp`")]
+    [InlineData(Cpu.Wdc65816, ProcessorMode.Emulation, false, "2-4", "3-4", "2", "+1 when taken, +1 when that crosses a page")]
+    [InlineData(Cpu.Wdc65816, ProcessorMode.Unknown, true, "3-5", "5", "3-4", "+2 when taken, which runs the `jmp`, +1 when not taken and the skip crosses a page")]
+    public void ALongBranchCostsWhatItsFormCosts(
+        Cpu cpu, ProcessorMode mode, bool inverted, string cycles, string taken, string notTaken, string causes)
     {
-        Assert.Equal("2-4", Cycles.OfLongBranch(inverted: false).ToString());
-        Assert.Equal("3-5", Cycles.OfLongBranch(inverted: true).ToString());
+        var state = ProcessorState.Default with { E = mode };
+
+        var (timing, edges) = Cycles.OfLongBranch(cpu, state, inverted);
+
+        Assert.Equal(cycles, timing.Count.ToString());
+        Assert.Equal(taken, edges.Taken.ToString());
+        Assert.Equal(notTaken, edges.NotTaken.ToString());
+        Assert.Equal(causes, string.Join(", ", timing.Causes));
     }
 
     /// <summary>A block runs all of it or none, so what it costs is the sum of its statements.</summary>

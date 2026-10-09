@@ -2120,7 +2120,9 @@ routine is short with a region of another segment between them in the text, as i
 none. ca65's `longbranch` package can choose the short form only for
 a target it has already seen, so its forward branches are always long; here they are not.
 For the flow analysis a long branch is a conditional branch to its target, and a long
-branch to a routine is a tail call (§7.3). Its cycle count is that of the form chosen.
+branch to a routine is a tail call (§7.3). Its cycle count is that of the form chosen, taken from
+the short branch's count for the CPU and mode, so in native mode neither form pays for a page
+crossed, and its hover names the causes of its interval as a short branch's does.
 
 **Cycle counts.** Each instruction has a cycle interval [min, max] from the CPU's table
 for its addressing mode and, on the 65816, its widths. Where the count depends on

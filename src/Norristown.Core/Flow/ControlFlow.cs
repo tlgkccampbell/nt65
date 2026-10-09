@@ -1159,13 +1159,10 @@ public sealed class ControlFlow
         if (at < 0)
             return;
         var last = block.Steps[at];
-        if (layout.Of(last.Statement, last.On) is not { Cycles: { } branch } line
-            || Transfers.Of(last.Statement, line.Mode) != Transfer.Branch)
-        {
+        if (layout.Of(last.Statement, last.On)?.Branch is not { } branch)
             return;
-        }
-        block.Taken = Cycles.WhenTaken(branch, line.Inverted);
-        block.NotTaken = Cycles.WhenNotTaken(branch, line.Inverted);
+        block.Taken = branch.Taken;
+        block.NotTaken = branch.NotTaken;
     }
 
     /// <summary>

@@ -196,14 +196,12 @@ internal static class CountedLoops
         if (minimum is not { } low || maximum is not { } high)
             return null;
         var last = blocks[loop.Latch].Steps.LastOrDefault(step => !step.IsMarker);
-        if (layout.Of(last.Statement, last.On)?.Cycles is not { } branch)
+        if (layout.Of(last.Statement, last.On)?.Branch is not { } branch)
             return null;
 
         // The walk leaves the loop by the latch's branch not taken, so each bound holds that once.
-        // Every iteration but the last takes the branch instead, which costs one more than its
-        // least and its most where it crosses a page.
-        var taken = Cycles.WhenTaken(branch, inverted: false);
-        var notTaken = Cycles.WhenNotTaken(branch, inverted: false);
+        // Every iteration but the last takes the branch instead.
+        var (taken, notTaken) = branch;
         return new CycleCount(
             ((low - notTaken.Minimum) * iterations) + (taken.Minimum * (iterations - 1)) + notTaken.Minimum,
             ((high - notTaken.Maximum) * iterations) + (taken.Maximum * (iterations - 1)) + notTaken.Maximum);
