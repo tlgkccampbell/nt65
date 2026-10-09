@@ -39,6 +39,10 @@ public sealed class WorkspaceRequestsTests
         }
         """;
 
+    // The server's wait before it publishes the rest of the program is held, so that the
+    // publish it ends in runs when a test releases it and never lands between a test's steps.
+    private readonly HeldDelay held = new();
+
     [Fact]
     public async Task DefinitionCrossesIntoTheModuleThatDeclaresTheName()
     {
@@ -153,9 +157,11 @@ public sealed class WorkspaceRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        // `.export clear, SCREEN` becomes `.export SCREEN`.
+        // `.export clear, SCREEN` becomes `.export SCREEN`. The edit publishes gfx.nt65 at once
+        // and main.nt65 once typing stops, which the release stands for.
         await client.ChangeAsync(GfxUri, 2,
             new TextDocumentContentChangeEvent(Locate.Span(Gfx, ".export |clear, "), ""));
+        await held.ReleaseAsync(timeout);
 
         var published = await NextForAsync(client, MainUri, timeout);
         Assert.Equal("`gfx::clear` is not exported by module `gfx`",
@@ -234,16 +240,26 @@ public sealed class WorkspaceRequestsTests
         throw new InvalidOperationException($"nothing was published for {uri}");
     }
 
-    private static Task<TestClient> OpenAsync(CancellationToken cancellation) => OpenAsync(Gfx, Main, cancellation);
+    private Task<TestClient> OpenAsync(CancellationToken cancellation) => OpenAsync(Gfx, Main, cancellation);
 
-    /// <summary>Opens <paramref name="gfx"/> as gfx.nt65 and <paramref name="main"/> as main.nt65.</summary>
-    private static async Task<TestClient> OpenAsync(string gfx, string main, CancellationToken cancellation)
+    /// <summary>
+    /// Opens <paramref name="gfx"/> as gfx.nt65 and <paramref name="main"/> as main.nt65, and waits
+    /// for everything that opening them publishes, so that a test starts from a program with
+    /// nothing left to arrive.
+    /// </summary>
+    private async Task<TestClient> OpenAsync(string gfx, string main, CancellationToken cancellation)
     {
-        var client = await TestClient.StartAsync(cancellation);
-        await client.OpenAsync(GfxUri, gfx);
-        await client.NextDiagnosticsAsync(cancellation);
-        await client.OpenAsync(MainUri, main);
-        await NextForAsync(client, MainUri, cancellation);
+        var client = await TestClient.StartAsync(TestClient.Capable(refreshesTokens: true), cancellation, delay: held.Wait);
+        foreach (var (uri, text) in new[] { (GfxUri, gfx), (MainUri, main) })
+        {
+            await client.OpenAsync(uri, text);
+            await NextForAsync(client, uri, cancellation);
+
+            // Opening a file publishes it at once and the rest of the program once typing stops,
+            // which ends by asking the client to fetch its tokens again. Both are waited for here.
+            await held.ReleaseAsync(cancellation);
+            await client.NextTokensRefreshAsync(cancellation);
+        }
         return client;
     }
 }
