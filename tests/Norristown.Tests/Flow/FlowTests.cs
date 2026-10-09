@@ -401,6 +401,44 @@ public sealed class FlowTests
     }
 
     /// <summary>
+    /// Checks that a call between the load of the counter and the loop is trusted only as far as
+    /// a call inside the loop is. A routine that may write the counter leaves the loop starting
+    /// from something other than the immediate.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc f {\n    nop\n    rts\n}\n", true)]
+    [InlineData(".proc f {\n    inx\n    rts\n}\n", false)]
+    [InlineData(".import f: proc\n", false)]
+    [InlineData(".import f: proc(keeps x)\n", true)]
+    public void ACallBeforeTheLoopThatMayWriteTheCounterStopsTheLoopBeingCounted(string callee, bool counted)
+    {
+        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n"
+            + callee + ".proc p {\n    ldx #10\n    jsr f\n@loop:\n    dex\n    bne @loop\n    rts\n}\n"));
+        Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
+        var p = analysis.Files.Single().Flow.Regions.Single(region => region.Routine.Name == "p");
+
+        Assert.Equal(counted, p.Cost.Maximum is not null);
+    }
+
+    /// <summary>
+    /// Checks that on the 65816 an instruction that may change the index width counts as writing
+    /// the counter, because it clears the high byte. A <c>rep</c> or <c>sep</c> that leaves the
+    /// index width alone does not.
+    /// </summary>
+    [Theory]
+    [InlineData("    sep #$10\n", false)]
+    [InlineData("    sep #$30\n", false)]
+    [InlineData("    sep #$20\n", true)]
+    [InlineData("    php\n    plp\n", false)]
+    public void AWidthChangeInsideTheLoopStopsItBeingCounted(string body, bool counted)
+    {
+        var region = Region(
+            ".cpu 65816\n.proc p: a8, i8 {\n    ldx #4\n@loop:\n" + body + "    dex\n    bne @loop\n    rts\n}\n");
+
+        Assert.Equal(counted, region.Cost.Maximum is not null);
+    }
+
+    /// <summary>
     /// Checks that a branch to another routine is a way out of the routine, so the shortest pass
     /// can end there. A loop that such a branch can leave is not counted.
     /// </summary>

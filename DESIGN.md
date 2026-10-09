@@ -2140,8 +2140,9 @@ rather than as one nothing could be worked out for.
 A path that can come back on itself has no longest, and the count is a fewest with a `+`,
 except where the loop counts itself: a register loaded with an immediate, brought down by one
 or more `dex` or `dey` written in a row before the `bne` or `bpl` that takes the turn round
-again, with one way into the loop, one way out of it, and nothing else in it touching that
-register. The loop is found from the back edge and the blocks that dominate it, so a turn may
+again, with one way into the loop, one way out of it, and nothing else in it, nor any routine
+called between the load and the loop, touching that register. On the 65816 a change to the index
+width touches it too, since it clears the high byte. The loop is found from the back edge and the blocks that dominate it, so a turn may
 branch and may call; a loop inside one is counted first, and the turns multiply. `bne` needs
 the stride to divide the count, and `bpl` a count with the sign bit clear, or it is not
 counting down from that immediate at all. Every other loop keeps the `+`, because a loop
