@@ -39,7 +39,7 @@
     rts
 }
 
-.proc after_widen: a8, i8 -> a16, i8 {
+.proc after_widen: a8, i8, native -> a16, i8 {
     lda #0
     jsr widen
     cmp #0

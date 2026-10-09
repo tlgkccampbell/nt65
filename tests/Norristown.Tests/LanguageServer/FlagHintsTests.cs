@@ -263,7 +263,7 @@ public sealed class FlagHintsTests
     public void ACallKeepsAConstantOnlyAtItsWidth(string signature, string body, string exit, bool kept)
     {
         var (analysis, path) = Analyzed(
-            $".export .proc main: a8, i8 -> a8, {exit} {{\n    ldx #0\n    jsr other\n    ldx #0\n    stx $10\n    lda #1\n    rts\n}}\n"
+            $".export .proc main: a8, i8, native -> a8, {exit} {{\n    ldx #0\n    jsr other\n    ldx #0\n    stx $10\n    lda #1\n    rts\n}}\n"
             + $".proc other: {signature} {{\n{body}    rts\n}}\n",
             "65816");
 

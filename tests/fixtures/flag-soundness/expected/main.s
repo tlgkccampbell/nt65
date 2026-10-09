@@ -46,7 +46,7 @@ widen:
     rts
 ; end of widen
 
-; .proc after_widen: a8, i8 -> a16, i8  main.nt65:42
+; .proc after_widen: a8, i8, native -> a16, i8  main.nt65:42
 main__after_widen:
     lda #0
     jsr widen

@@ -701,8 +701,9 @@ internal sealed class ExpressionWriter(
         else if (LinkTime(call, null, [], []) is { } linked)
         {
             // ca65 refuses an absolute address in a one-byte slot whatever the value comes to, so
-            // a value that always fits a byte is written as its low byte, which loses nothing.
-            if (LinkRange.Of(model, call, Expansion) is { Low: >= 0, High: <= 0xff })
+            // a value that always fits a byte, signed or unsigned, is written as its low byte,
+            // which loses nothing.
+            if (LinkRange.Of(model, call, Expansion) is { Low: >= -0x80, High: <= 0xff })
                 linked = IsWrapped(linked) ? $".lobyte{linked}" : $".lobyte({linked})";
 
             // A parenthesis first in an operand would read as indirection, which a unary `+` prevents.
