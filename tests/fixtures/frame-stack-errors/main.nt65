@@ -1,0 +1,49 @@
+; A `.frame` names the top bytes of the stack, which must be bytes the routine pushed. Where
+; nt65 cannot count them, because paths that pushed different amounts meet or because another
+; routine may jump in, the frame cannot be laid out. After `tcs` the programmer has said where
+; the stack is, and a frame may reach beneath what is known.
+.module main
+
+.cpu 65816
+
+.export merged, entered, enters, moved
+
+.struct Word {
+    v: .word
+}
+
+; On the path that skips the `pea`, the frame's bytes would be the return address.
+.segment CODE
+.proc merged: a16, i16 {
+    lda $10
+    beq @x
+    pea 0
+@x:
+    .frame f: Word          ;! error[frame-stack-unknown]: frame `f` names the top 2 bytes of the stack, but how many bytes are pushed here is not known, because two paths meet above it having pushed different amounts: pulling on each path what it pushed before they meet keeps the stack known
+    lda f::v,s
+    rts
+}
+
+; A jump to `inside` has pushed nothing, so the frame below it has nothing to name.
+.proc entered: a16, i16 {
+    pea 0
+    inside:
+    .state a16, i16, native
+    .frame g: Word          ;! error[frame-stack-unknown]: frame `g` names the top 2 bytes of the stack, but how many bytes are pushed here is not known, because `inside` can be entered from outside `entered`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `inside` to the same side of it as the code that reads them; `args n` on `entered` declares what the caller of a second entry point pushed
+    lda g::v,s
+    pla
+    rts                     ;! error[return-through-caller]: `rts` returns through 2 bytes of its caller's stack, because this routine has pulled more than it pushed
+}
+
+.proc enters: a16, i16, native {
+    jmp entered::inside
+}
+
+; A stack the program moved itself may hold a frame over bytes nt65 knows nothing about.
+.proc moved: a16, i16 {
+    tsc
+    tcs
+    .frame h: Word
+    lda h::v,s
+    rts
+}

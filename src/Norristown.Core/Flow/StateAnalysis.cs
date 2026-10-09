@@ -329,7 +329,8 @@ public sealed class StateAnalysis : IProcessorStates
         var label = block.Label!;
         var a = given.Contains(StatePart.A) ? here.A : Met(here.A, outside.A);
         var index = given.Contains(StatePart.Index) ? here.Index : Met(here.Index, outside.Index);
-        var stack = AnalysisStack.Merge(reached.Stack, EntryStack(signature));
+        // A jump in never laid out the frames the path above named, so none of them is kept.
+        var stack = AnalysisStack.Merge(reached.Stack?.Unframed(), EntryStack(signature));
         return reached with
         {
             Processor = new ProcessorState(
@@ -1188,8 +1189,10 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns the state after <c>.frame name: T</c>, in which the top <c>.sizeof(T)</c> bytes of
-    /// the analysis stack become the frame. Where the stack is not known, as after <c>tcs</c>, it
-    /// becomes those bytes with nothing known beneath them.
+    /// the analysis stack become the frame. After <c>tcs</c> or <c>txs</c> the frame may reach beneath
+    /// what is known. Where the stack is not known at all, as where paths that pushed different
+    /// amounts meet, the frame may name the return address, so it is an error. The stack then
+    /// becomes the frame's bytes with nothing known beneath them, so its slots are not reported too.
     /// </summary>
     private FlowState Framed(Step step, FrameDirectiveSyntax directive, FlowState state, StateChecks? report)
     {
@@ -1202,7 +1205,10 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         }
         if (state.Stack is not { } stack)
+        {
+            report?.Report(step, Catalogue.FrameStackUnknown.Message(frame.DisplayName, size, Cause.Because(state.WhyStack)));
             return state with { Stack = AnalysisStack.OnlyFrame(frame, (int)size) };
+        }
         if (stack.Framed(frame, (int)size) is { } framed)
             return state with { Stack = framed };
         report?.Report(step, Catalogue.FramePastTheStack.Message(frame.DisplayName, size, stack.Depth));

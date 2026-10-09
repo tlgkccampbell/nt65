@@ -1448,7 +1448,7 @@ jump in has not, they disagree, and the stack after the label is one nothing is 
 nobody knows, and `keeps` cannot be shown. So a save and its restore belong on one side of such
 a label, and a second entry point that reads what its caller pushed says so with `args n`,
 which is on the stack there exactly as it is at the routine's own entry. Nothing carries a push
-across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
+or a `.frame` across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
 entered with the stack of a call to it, which is what makes each of them callable.
 
 **Setting widths.** `.ensure` takes width items, `a8`, `a16`, `i8` and `i16`, and makes
@@ -1464,9 +1464,11 @@ control flow.
 
 **Stack frames.** `.frame name: T` names the top `.sizeof(T)` bytes of the analysis stack
 as a frame laid out as the struct `T`, usually directly after the instructions that make
-room for it. If the analysis stack is unknown there, it becomes those bytes with nothing
-known beneath them; over an unknown base, as after `tcs`, the frame may reach beneath what is
-known. In a stack-relative operand, `name::member,s`
+room for it. Over an unknown base, as after `tcs` or `txs`, the frame may reach beneath what is
+known. Where the analysis stack is not known at all, as where paths that pushed different
+amounts meet or below a label another routine jumps into, the frame could name the return
+address on one of them, so it is an error, `frame-stack-unknown`. In a stack-relative
+operand, `name::member,s`
 and `(name::member,s),y` are that member's offset from the current stack pointer,
 computed from the pushes and pulls since the `.frame`, so a push between two reads cannot
 silently shift them:

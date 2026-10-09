@@ -1687,8 +1687,14 @@ push and pull since the frame:
 }
 ```
 
+A frame may cover only what the routine has pushed, and nt65 must be able to count that where
+the `.frame` stands. Where paths that pushed different amounts meet, the frame is an error,
+because on one of them it would name the return address. After `tcs` or `txs` the program has
+placed the stack itself, and a frame may cover bytes nt65 knows nothing about.
+
 `args n` says the caller pushes n bytes before the call. A frame can then reach the
-arguments above the return address, and every call is checked for having pushed enough.
+arguments above the return address, and every call is checked for having pushed enough, on
+every CPU.
 
 ### Direct page and data bank
 

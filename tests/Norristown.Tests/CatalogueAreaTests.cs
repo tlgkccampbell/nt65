@@ -136,7 +136,7 @@ public sealed class CatalogueAreaTests
             "call-state-mismatch", "call-target-not-a-routine", "call-target-unknown", "callers-disagree", "direct-page-mismatch",
             "direct-page-out-of-reach", "direct-page-unknown", "ensure-item-not-a-width", "ensure-needs-native",
             "frame-depth-unknown", "frame-gone", "frame-member-not-stack-relative", "frame-not-a-record",
-            "frame-past-the-stack", "immediate-in-emulation", "jump-across-banks", "jump-distance-mismatch",
+            "frame-past-the-stack", "frame-stack-unknown", "immediate-in-emulation", "jump-across-banks", "jump-distance-mismatch",
             "jump-leaves-bank", "mirror-bank-mismatch", "range-bank-mismatch", "relative-call-extra-phk",
             "relative-call-needs-phk", "return-distance-mismatch", "return-state-mismatch",
             "state-item-not-a-point", "state-mode-mismatch", "state-outside-a-routine", "state-value-mismatch",

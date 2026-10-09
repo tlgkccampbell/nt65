@@ -282,6 +282,7 @@
         "frame-member-not-stack-relative",
         "frame-not-a-record",
         "frame-past-the-stack",
+        "frame-stack-unknown",
         "func-not-linkable",
         "function-parameter-kind",
         "handler-assumes-state",

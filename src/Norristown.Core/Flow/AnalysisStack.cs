@@ -186,6 +186,17 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     }
 
     /// <summary>
+    /// Returns this stack with no bytes named as any frame, for a place that a path which never
+    /// named them reaches too.
+    /// </summary>
+    public AnalysisStack Unframed()
+    {
+        if (entries.All(entry => entry.Frame is null))
+            return this;
+        return new AnalysisStack([.. entries.Select(entry => entry with { Frame = null })], IsAnchored, offset);
+    }
+
+    /// <summary>
     /// Returns how many bytes are above the lowest byte of <paramref name="frame"/>, or null when
     /// the frame is not on the stack.
     /// </summary>

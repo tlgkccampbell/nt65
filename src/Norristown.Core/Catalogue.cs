@@ -3559,6 +3559,17 @@ public static class Catalogue
             + "This one covers more, so its last members would name the return address or the caller's bytes. Push "
             + "the frame's bytes before the `.frame`, or use a smaller type.");
 
+    internal static DiagnosticDescriptor FrameStackUnknown { get; } = Entry(
+        Area.ProcessorState,
+        "frame-stack-unknown",
+        Severity.Error,
+        "frame `{0}` names the top {1} bytes of the stack, but how many bytes are pushed here is not known{2}",
+        "A `.frame` names bytes on top of the stack, so it can cover at most what this routine has pushed so far. "
+            + "Here nt65 cannot count that, because paths that pushed different amounts meet, another routine may "
+            + "jump in having pushed nothing, or something pushed a width that is not known. On one of those paths "
+            + "the frame would name the return address or the caller's bytes. After `tcs` or `txs` the program has "
+            + "moved the stack itself, and a frame may reach beneath what is known.");
+
     internal static DiagnosticDescriptor FrameDepthUnknown { get; } = Entry(
         Area.ProcessorState,
         "frame-depth-unknown",
