@@ -1055,7 +1055,9 @@ public sealed class StateAnalysis : IProcessorStates
     /// returns the state after it, or null where nothing returns to the call. The label is an
     /// entry point, so its <c>.state</c> is the entry the call is checked against. The path from
     /// the label leaves by <paramref name="owner"/>'s returns, so the call returns with what
-    /// <paramref name="owner"/> returns with, as a jump into the label hands back.
+    /// <paramref name="owner"/> returns with, as a jump into the label hands back. Only a declared
+    /// <c>noreturn</c> ends the path, because an inferred one is worked out from the routine's
+    /// own entry and says nothing about the path from the label.
     /// </summary>
     private ProcessorState? CalledInto(
         Step step, MnemonicKind mnemonic, Symbol label, Symbol owner, Signature callee, ProcessorState state, StateChecks? report)
@@ -1073,7 +1075,7 @@ public sealed class StateAnalysis : IProcessorStates
         }
         if (callee.IsInterrupt)
             return state;
-        return callee.NeverReturns || !signatures.IsExitKnown(owner) ? null : StateChecks.Exited(callee, state);
+        return owner.Signature?.NeverReturns == true || !signatures.IsExitKnown(owner) ? null : StateChecks.Exited(callee, state);
     }
 
     /// <summary>
@@ -1156,14 +1158,16 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Checks a jump from <paramref name="routine"/> to a label inside <paramref name="owner"/>,
-    /// and records what that routine returns with, where it returns.
+    /// and records what that routine returns with, where it returns. Only a declared
+    /// <c>noreturn</c> on <paramref name="owner"/> says the path from the label never returns.
     /// </summary>
     private void JumpedInto(
         Step step, string via, Symbol label, Symbol owner, ProcessorState state, Symbol routine, StateChecks report)
     {
         report.CheckJumpInto(step, via, label, owner, state, routine);
         var callee = SignatureOf(owner) ?? Signature.Default;
-        if (SignatureOf(routine) is not { HasNoCaller: true } && !callee.NeverReturns && !callee.IsInterrupt && signatures.IsExitKnown(owner))
+        if (SignatureOf(routine) is not { HasNoCaller: true } && owner.Signature?.NeverReturns != true && !callee.IsInterrupt
+            && signatures.IsExitKnown(owner))
             Leaving(routine, StateChecks.Exited(callee, state));
     }
 
