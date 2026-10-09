@@ -1065,8 +1065,27 @@ internal sealed partial class Evaluator
     private Value ValueOfSymbol(Symbol symbol)
     {
         EnsureEvaluated(symbol);
+
+        // A constant that holds a span or a cycle count was evaluated before layout, which alone
+        // knows them, so a query that layout answers evaluates it again with those answers. An
+        // assertion about the constant is then checked as the same assertion written inline is.
+        if (mode == EvaluationMode.Query && (spans is not null || cycles is not null)
+            && symbol is { Kind: SymbolKind.Constant, ValueExpression: { } expression }
+            && symbol.Value.AsNumber() is null && !evaluating.Contains(symbol) && Measures(expression))
+        {
+            using (Evaluating(symbol, context with { Written = null }))
+                return Evaluate(expression);
+        }
         return symbol.Value;
     }
+
+    /// <summary>
+    /// Returns whether <paramref name="expression"/> measures the laid-out program, with
+    /// <c>.spanof</c>, <c>.mincycles</c> or <c>.maxcycles</c>, whose values only layout gives.
+    /// </summary>
+    private static bool Measures(SyntaxNode expression) =>
+        expression.DescendantNodes().Prepend(expression).OfType<CallExpressionSyntax>().Any(call =>
+            call.BuiltinKind is BuiltinKind.Spanof or BuiltinKind.Mincycles or BuiltinKind.Maxcycles);
 
     private Value Unary(SyntaxToken op, Value operand)
     {
