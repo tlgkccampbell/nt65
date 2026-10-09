@@ -3,7 +3,7 @@
 
 .cpu 65816
 
-.export restores_status, state_item
+.export restores_status, state_item, far_one_path
 
 .segment CODE
 .proc restores_status: a8, i8, pulls 1 {
@@ -16,4 +16,13 @@
 .proc state_item: a8, i8 {
     .state pulls 1          ;! error[state-item-not-a-point]: `pulls 1` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`
     rts
+}
+
+; A far routine's return address is 3 bytes, and one path still holds the 2 handed bytes at the return.
+.proc far_one_path: far, a8, i8, pulls 2 {
+    bcc done
+    pla
+    pla
+    done:
+    rtl                     ;! error[return-past-handed-bytes]: `rtl` returns through up to 2 bytes of the bytes `pulls 2` declares above the return address: pull them first, or correct the count
 }

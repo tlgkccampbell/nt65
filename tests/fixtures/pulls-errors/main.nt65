@@ -6,7 +6,7 @@
 .cpu 6502
 
 .export pulls_too_many, leaves_handed, pushes_more, called, called_inside, data_after
-.export varied, wide, twice, entered_only
+.export varied, wide, twice, entered_only, one_path_leaves, one_path_pushes, every_path_pulls
 
 .segment CODE
 ; The routine pulls more than it was handed.
@@ -28,6 +28,38 @@
     pha
     pha
     rts                     ;! error[return-past-pushes]: `rts` returns through 2 bytes this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+}
+
+; One path pulls both handed bytes and the other pulls neither, so the return may go through them.
+.proc one_path_leaves: pulls 2 {
+    bne done
+    pla
+    pla
+    done:
+    rts                     ;! error[return-past-handed-bytes]: `rts` returns through up to 2 bytes of the bytes `pulls 2` declares above the return address: pull them first, or correct the count
+}
+
+; One path pushes a byte after pulling the handed one, and the other pulls it alone.
+.proc one_path_pushes: pulls 1 {
+    pla
+    bne done
+    pha
+    done:
+    rts                     ;! error[return-past-pushes]: `rts` returns through up to 1 byte this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+}
+
+; Each path pulls the handed byte in its own way, so the return finds its address.
+.proc every_path_pulls: pulls 1 {
+    bne other
+    pla
+    rts
+    other:
+    pla
+    beq done
+    pha
+    pla
+    done:
+    rts
 }
 
 ; A call to such a routine, by its name or at a label in it.

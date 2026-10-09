@@ -1587,8 +1587,10 @@ analysis stack, so a frame reaches them:
   `near`/`far` attribute;
 - on every CPU, every `rts`/`rtl` without a `.next` finds the return address on top of the
   stack. A return with bytes the routine pushed still above a return address no pull has
-  reached is `return-past-pushes`, even where paths that pushed different amounts meet. One
-  with bytes `pulls n` declares still on the stack is `return-past-handed-bytes`. One after the
+  reached is `return-past-pushes`. One with bytes `pulls n` declares still on the stack is
+  `return-past-handed-bytes`. Where paths that hold different amounts meet, the return is
+  reported if any one of them goes through such bytes, and the count says "at least" or
+  "up to". One after the
   routine has pulled more than it pushed and was handed, so that the return goes through bytes
   that were beneath the return address, is `return-beneath-entry`. Each entry of the routine
   is checked on its own, so the message names a label the routine was entered at. A routine

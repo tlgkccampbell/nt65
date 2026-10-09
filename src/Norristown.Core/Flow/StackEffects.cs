@@ -216,7 +216,7 @@ public sealed class StackEffects
         var blocks = region.Blocks;
         var solver = new Dataflow<Height>(
             blocks, (block, height) => Through(walk, block, height, effects), Height.Merge, block => ControlFlow.Onward(blocks, block));
-        solver.Enter(start, new Height(returnSize, 0, 0, true, returnSize, returnSize, Handed: signature.Pulls));
+        solver.Enter(start, new Height(returnSize, 0, 0, true, returnSize, returnSize, Handed: signature.Pulls, Highest: returnSize));
         var effect = StackEffect.NeverReturns;
         foreach (var block in blocks)
         {
@@ -375,16 +375,29 @@ public sealed class StackEffects
     /// </list>
     /// A routine that has pulled its return address may have pushed another one back. So once the
     /// stack has been beneath the return address, a return is not reported where the routine has
-    /// pushed at least an address's worth of bytes since, wherever the stack then stands.
+    /// pushed at least an address's worth of bytes since, wherever the stack then stands. Where
+    /// paths that hold different amounts meet, a return is reported if any of them returns through
+    /// bytes, and the count says "up to" or "at least".
     /// <paramref name="entry"/> is the label the routine was entered at, or null for its own name.
     /// </summary>
     private static void CheckReturn(InstructionStatementSyntax statement, Height height, Symbol? entry, List<Diagnostic> report)
     {
-        if (height.Least is not { } least || least == height.Floor)
+        if (height.Least is not { } least)
             return;
         var returned = SyntaxFacts.TextOf(statement.MnemonicKind);
         DiagnosticMessage message;
-        if (least > height.Floor && height is { KeepsTheReturn: true, Lowest: { } lowest })
+        if (least == height.Floor)
+        {
+            // Every path that meets here holds at least the return address, and one that holds more
+            // returns through it. The bytes on that path are ones it was handed where some path may
+            // not have pulled them all, and ones it pushed otherwise.
+            if (height is not { AtLeast: true, KeepsTheReturn: true, Most: { } most } || most <= height.Floor)
+                return;
+            message = height is { Handed: > 0, Highest: { } highest } && highest > height.Floor
+                ? Catalogue.ReturnPastHandedBytes.Message(returned, "up to " + Bytes(highest - height.Floor), $"pulls {height.Handed}")
+                : Catalogue.ReturnPastPushes.Message(returned, "up to " + Bytes(most - height.Floor));
+        }
+        else if (least > height.Floor && height is { KeepsTheReturn: true, Lowest: { } lowest })
         {
             // Every byte above the lowest point is one the routine pushed. Beneath that, down to
             // the return address, are bytes it was handed and has not pulled.
@@ -472,9 +485,23 @@ public sealed class StackEffects
     /// declares. They are beneath where the height starts, as the bytes a routine that jumps in
     /// hands over are, so the return address is that many bytes lower.
     /// </param>
+    /// <param name="Spread">
+    /// How many more bytes than <paramref name="Whole"/> the path that holds the most may hold, or
+    /// null where that is more than <see cref="MostSpread"/>. It is 0 where only one height reaches here.
+    /// </param>
+    /// <param name="Highest">
+    /// The highest the lowest point of any one path here may be, or null where that is not known.
+    /// Where it is above the return address, a path may still hold bytes it was handed.
+    /// </param>
     private sealed record Height(
-        int Whole, int Accumulator, int Index, bool IsKnown, int? Lowest, int Return, bool AtLeast = false, int Handed = 0)
+        int Whole, int Accumulator, int Index, bool IsKnown, int? Lowest, int Return, bool AtLeast = false, int Handed = 0,
+        int? Spread = 0, int? Highest = null)
     {
+        // The most bytes one path may hold above another before the difference is taken to be
+        // unknown. A loop that pushes on every pass would otherwise widen it without end, and no
+        // routine pushes a whole page of its own.
+        private const int MostSpread = 256;
+
         /// <summary>Gets a height about which nothing is known.</summary>
         public static Height Unknown { get; } = new(0, 0, 0, false, null, 0);
 
@@ -486,6 +513,11 @@ public sealed class StackEffects
         /// known, or null where not even that is known.
         /// </summary>
         public int? Least => IsKnown && Accumulator == 0 && Index == 0 ? Whole : null;
+
+        /// <summary>
+        /// Gets the most bytes the stack may hold on any path here, or null where that is not known.
+        /// </summary>
+        public int? Most => Least is { } least && Spread is { } spread ? least + spread : null;
 
         /// <summary>
         /// Gets a value indicating whether no path here has been lower than the return address, so
@@ -502,26 +534,35 @@ public sealed class StackEffects
         /// <summary>
         /// Returns what is known where <paramref name="arriving"/> meets the height
         /// <paramref name="known"/> already at a block. Where they differ only in how low they have
-        /// been, the lower of the two is kept. Where they hold different amounts above a return
-        /// address neither has gone beneath, the fewer is kept as a least. Otherwise nothing is known.
+        /// been, the lower of the two is kept as <see cref="Lowest"/> and the higher as
+        /// <see cref="Highest"/>. Where they hold different amounts above a return address neither
+        /// has gone beneath, the fewer is kept as a least and the more as <see cref="Most"/>.
+        /// Otherwise nothing is known.
         /// </summary>
         public static Height Merge(Height? known, Height arriving)
         {
             if (known is null || known == arriving)
                 return arriving;
-            if (known with { Lowest = arriving.Lowest } == arriving)
-                return arriving with { Lowest = known.Lowest is { } a && arriving.Lowest is { } b ? Math.Min(a, b) : null };
+            var lowest = Lower(known.Lowest, arriving.Lowest);
+            var highest = known.Highest is { } x && arriving.Highest is { } y ? Math.Max(x, y) : (int?)null;
+            if (known with { Lowest = arriving.Lowest, Highest = arriving.Highest } == arriving)
+                return arriving with { Lowest = lowest, Highest = highest };
             if (known is { Least: { } before, KeepsTheReturn: true } && arriving is { Least: { } now, KeepsTheReturn: true })
-                return arriving with { Whole = Math.Min(before, now), Lowest = Math.Min(known.Lowest!.Value, arriving.Lowest!.Value), AtLeast = true };
+            {
+                var whole = Math.Min(before, now);
+                var most = known.Most is { } a && arriving.Most is { } b ? Math.Max(a, b) : (int?)null;
+                var spread = most - whole <= MostSpread ? most - whole : null;
+                return arriving with { Whole = whole, Lowest = lowest, AtLeast = true, Spread = spread, Highest = highest };
+            }
             return Unknown;
         }
 
         /// <summary>
-        /// Returns this height with <see cref="Lowest"/> brought down to it, after a pull or a call
-        /// that may have lowered it.
+        /// Returns this height with <see cref="Lowest"/> brought down to it, and <see cref="Highest"/>
+        /// down to <see cref="Most"/>, after a pull or a call that may have lowered it.
         /// </summary>
         public Height Lowered() =>
-            !IsKnown ? this : this with { Lowest = Lowest is { } lowest && Least is { } least ? Math.Min(lowest, least) : null };
+            !IsKnown ? this : this with { Lowest = Lower(Lowest, Least), Highest = Most is { } most ? Lower(Highest, most) : Highest };
 
         /// <summary>
         /// Returns this height after a push, where <paramref name="sign"/> is 1, or a pull, where it
@@ -537,5 +578,10 @@ public sealed class StackEffects
             (PushSize.Index, Width.Unchanged) => this with { Index = Index + sign },
             _ => Unknown,
         };
+
+        /// <summary>
+        /// Returns the lower of <paramref name="a"/> and <paramref name="b"/>, or null where either is not known.
+        /// </summary>
+        private static int? Lower(int? a, int? b) => a is { } x && b is { } y ? Math.Min(x, y) : null;
     }
 }

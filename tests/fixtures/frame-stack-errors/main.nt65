@@ -21,7 +21,7 @@
 @x:
     .frame f: Word          ;! error[frame-stack-unknown]: frame `f` names the top 2 bytes of the stack, but how many bytes are pushed here is not known, because two paths meet above it having pushed different amounts: pulling on each path what it pushed before they meet keeps the stack known
     lda f::v,s
-    rts
+    rts                     ;! error[return-past-pushes]: `rts` returns through up to 2 bytes this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
 }
 
 ; A jump to `inside` has pushed nothing, so the frame below it has nothing to name.

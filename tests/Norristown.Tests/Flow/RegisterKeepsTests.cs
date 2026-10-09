@@ -292,7 +292,9 @@ public sealed class RegisterKeepsTests
         Assert.Equal(
             ["main.nt65:7: `p` promises `keeps a`, but A is not the same as on entry here, because two paths meet "
                 + "above it having pushed different amounts: pulling on each path what it pushed before they meet "
-                + "keeps the stack known"],
+                + "keeps the stack known",
+                "main.nt65:7: `rts` returns through up to 1 byte this routine pushed rather than through its return address: "
+                + "pull them first, or add a `.next` naming where it goes"],
             Problems(".proc p: keeps a {\n    pha\n    beq @skip\n    pha\n@skip:\n    pla\n    rts\n}\n"));
     }
 
