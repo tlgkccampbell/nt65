@@ -15,6 +15,7 @@ public sealed class BasicBlock
     private readonly List<FlowEdge> successors = [];
     private readonly List<int> predecessors = [];
     private readonly List<Symbol> calls = [];
+    private readonly List<Symbol> leaves = [];
 
     internal BasicBlock(int index, Symbol? label, Expansion? on, int stream)
     {
@@ -56,6 +57,14 @@ public sealed class BasicBlock
     /// own cost rather than this block's.
     /// </summary>
     public IReadOnlyList<Symbol> Calls => calls;
+
+    /// <summary>
+    /// Gets the places outside the routine that the block hands control to other than by a call
+    /// or a tail call. They are the target of a conditional branch out of the routine, and the
+    /// labels outside it that a <c>.next</c> under a jump names. Unlike <see cref="Calls"/>, what
+    /// they cost is not counted with the routine's.
+    /// </summary>
+    public IReadOnlyList<Symbol> Leaves => leaves;
 
     /// <summary>Gets how control leaves the block after its last statement.</summary>
     public BlockEnd End { get; internal set; }
@@ -169,6 +178,12 @@ public sealed class BasicBlock
     internal void Add(Step step) => steps.Add(step);
 
     internal void Called(Symbol routine) => calls.Add(routine);
+
+    internal void Left(Symbol target)
+    {
+        if (!leaves.Contains(target))
+            leaves.Add(target);
+    }
 
     /// <summary>
     /// Records a call whose target may not have resolved to any routine. An unresolved target

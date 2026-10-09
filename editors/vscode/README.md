@@ -65,6 +65,9 @@ build tasks and a schema for the project file.
   and brighter the more they are used, what is free, and what the page shares with others,
   with a legend under it. With the caret in a routine, both views mark the locations it uses,
   and the one under the caret more strongly.
+- **What runs under an interrupt.** The outline says which handlers reach a routine, as
+  `under nmi` or `under nmi and main`, the hover says the same, and the routine's name is
+  colored wherever it appears, through the `interrupt` semantic token modifier.
 - **The processor at the caret.** The **Processor** view in the nt65 activity bar keeps the
   instruction hover's lower half in view for the caret's line: the mode, widths, D and B on the
   65816, what A, X and Y hold, with the constant and the line that set it, the flags, and the

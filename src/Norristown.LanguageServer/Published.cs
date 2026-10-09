@@ -22,8 +22,12 @@ namespace Norristown.LanguageServer;
 /// lines of branches it omits.
 /// </param>
 /// <param name="Model">
-/// The file's model, which is all its semantic tokens are worked out from, or null for a project
-/// file.
+/// The file's model, which its semantic tokens are worked out from with <paramref name="Marked"/>,
+/// or null for a project file.
+/// </param>
+/// <param name="Marked">
+/// The routines the file names that its semantic tokens mark as running under an interrupt, as
+/// <see cref="RunsFrom.Marked"/> gives them, or null for a project file.
 /// </param>
 internal readonly record struct Published(
     string Uri,
@@ -31,4 +35,5 @@ internal readonly record struct Published(
     SyntaxTree? Tree,
     IReadOnlyList<Diagnostic> Diagnostics,
     Configuration Configuration,
-    SemanticModel? Model);
+    SemanticModel? Model,
+    string? Marked);

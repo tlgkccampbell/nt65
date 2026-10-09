@@ -546,7 +546,9 @@ internal sealed class Server : IDisposable
 
     /// <summary>
     /// Returns the file's outline, which is a tree of its segments and scopes for a client that
-    /// supports one, or the protocol's older flat list otherwise.
+    /// supports one, or the protocol's older flat list otherwise. The outline comes from the
+    /// file's syntax, so it is answered without waiting for an analysis. Which routines run
+    /// under an interrupt is taken from the last analysis that finished.
     /// </summary>
     [JsonRpcMethod("textDocument/documentSymbol")]
     public object DocumentSymbols(DocumentSymbolParams request, CancellationToken cancellation)
@@ -554,7 +556,9 @@ internal sealed class Server : IDisposable
         cancellation.ThrowIfCancellationRequested();
         return outgoing.ToClient(
             request.TextDocument.Uri,
-            workspace.Find(request.TextDocument.Uri) is { } document ? Lsp.ToSymbols(document.Tree) : []);
+            workspace.Find(request.TextDocument.Uri) is { } document
+                ? Lsp.ToSymbols(document.Tree, workspace.LatestFor(document.Tree.Path))
+                : []);
     }
 
     [JsonRpcMethod("textDocument/foldingRange")]
@@ -833,8 +837,9 @@ internal sealed class Server : IDisposable
         SemanticTokensRangeParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        return await ModelAsync(request.TextDocument.Uri, cancellation).ConfigureAwait(false) is { } model
-            ? NameHighlighting.In(model, request.Range.Start.Line, request.Range.End.Line)
+        var (analysis, model) = await AnalysisAndModelAsync(request.TextDocument.Uri, cancellation).ConfigureAwait(false);
+        return model is not null
+            ? NameHighlighting.In(model, UnderInterrupt(analysis), request.Range.Start.Line, request.Range.End.Line)
             : new Protocol.SemanticTokens([]);
     }
 
@@ -1049,9 +1054,10 @@ internal sealed class Server : IDisposable
     /// </summary>
     private async Task<Protocol.SemanticTokens> ClassifiedAsync(string uri, CancellationToken cancellation)
     {
-        if (await ModelAsync(uri, cancellation).ConfigureAwait(false) is not { } model)
+        var (analysis, model) = await AnalysisAndModelAsync(uri, cancellation).ConfigureAwait(false);
+        if (model is null)
             return new Protocol.SemanticTokens([]);
-        var data = NameHighlighting.In(model).Data;
+        var data = NameHighlighting.In(model, UnderInterrupt(analysis)).Data;
         var id = Interlocked.Increment(ref classifiedId)
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
         classified[uri] = (id, data);
@@ -1061,10 +1067,28 @@ internal sealed class Server : IDisposable
     /// <summary>
     /// Returns the semantic model of the file a URI names, or null when no program holds it.
     /// </summary>
-    private async Task<SemanticModel?> ModelAsync(string uri, CancellationToken cancellation)
+    private async Task<SemanticModel?> ModelAsync(string uri, CancellationToken cancellation) =>
+        (await AnalysisAndModelAsync(uri, cancellation).ConfigureAwait(false)).Model;
+
+    /// <summary>
+    /// Returns the analysis of the program that holds the file a URI names, with the file's
+    /// semantic model, which is null when no program holds the file.
+    /// </summary>
+    private async Task<(ProgramAnalysis Analysis, SemanticModel? Model)> AnalysisAndModelAsync(string uri, CancellationToken cancellation)
     {
         var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
-        return (await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false)).ModelFor(path);
+        var analysis = await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false);
+        return (analysis, analysis.ModelFor(path));
+    }
+
+    /// <summary>
+    /// Returns the test of whether a routine of <paramref name="analysis"/>'s program runs under an
+    /// interrupt, which the semantic tokens mark.
+    /// </summary>
+    private static Func<Symbol, bool> UnderInterrupt(ProgramAnalysis analysis)
+    {
+        var contexts = analysis.Contexts();
+        return routine => RunsFrom.IsUnderInterrupt(contexts, analysis.Program.Current(routine));
     }
 
     /// <summary>

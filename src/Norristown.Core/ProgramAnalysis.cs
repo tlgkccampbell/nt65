@@ -113,6 +113,12 @@ public sealed record ProgramAnalysis(
             : []);
 
     /// <summary>
+    /// Returns where each routine of the program runs from: under an interrupt, in the rest of the
+    /// program, or both. They are worked out once, the first time they are asked for.
+    /// </summary>
+    public RoutineContexts Contexts() => Asked().Contexts.Value;
+
+    /// <summary>
     /// Returns whether a routine depends on the depth of the stack it was entered with, which a
     /// tail call to it would change.
     /// </summary>
@@ -203,6 +209,9 @@ public sealed record ProgramAnalysis(
             }
             return byFile;
         });
+
+        /// <summary>Gets where each routine of the program runs from.</summary>
+        public Lazy<RoutineContexts> Contexts { get; } = new(() => RoutineContexts.Of(analysis));
 
         /// <summary>Gets the suggestions found so far, by the path of their file.</summary>
         public ConcurrentDictionary<string, IReadOnlyList<Diagnostic>> Suggestions { get; } = new(StringComparer.Ordinal);

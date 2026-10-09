@@ -100,6 +100,12 @@ internal sealed class WorkspaceProject
     }
 
     /// <summary>
+    /// Gets the last analysis of the project that finished, which may be of files that have
+    /// changed since, or null when none has.
+    /// </summary>
+    public ProgramAnalysis? Latest => analysis.Latest;
+
+    /// <summary>
     /// Returns whether the last analysis included <paramref name="path"/> through an
     /// <c>.incbin</c>.
     /// </summary>

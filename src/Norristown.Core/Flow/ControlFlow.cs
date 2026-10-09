@@ -983,6 +983,8 @@ public sealed class ControlFlow
                         Edge(i, to, EdgeKind.Declared);
                     if (makesCall || IsCall(tail.Step.Statement))
                         blocks[i].Called(named.Symbol);
+                    else if (!found.ContainsKey(named))
+                        blocks[i].Left(named.Symbol);
                 }
                 continue;
             }
@@ -1002,6 +1004,8 @@ public sealed class ControlFlow
                 Edge(i, landing, makesCall ? EdgeKind.Call : EdgeKind.Taken);
             }
             blocks[i].BranchesOut = transfer == Transfer.Branch && !inside && relative is null;
+            if (blocks[i].BranchesOut && target is { } outside)
+                blocks[i].Left(outside.Symbol);
 
             // What a call reaches costs what that routine costs, and so does what a tail jump
             // reaches, since control comes back from it to this routine's caller. A target

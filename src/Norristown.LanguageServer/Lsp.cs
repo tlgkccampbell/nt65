@@ -72,9 +72,28 @@ internal static class Lsp
         }
     }
 
-    /// <summary>Returns the file's outline, nested the way its blocks are.</summary>
-    public static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree) =>
-        ToSymbols(tree, Outline.Build(tree));
+    /// <summary>
+    /// Returns the file's outline, nested the way its blocks are. A routine that runs under an
+    /// interrupt in <paramref name="analysis"/> says so after its signature.
+    /// </summary>
+    /// <param name="tree">The file.</param>
+    /// <param name="analysis">
+    /// An analysis of the program that holds the file, which may be of an earlier version of it,
+    /// or null for an outline that says nothing about interrupts.
+    /// </param>
+    public static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree, ProgramAnalysis? analysis = null)
+    {
+        // The analysis may be of the file before the latest edits, so its routines are matched by
+        // name rather than by position. A name that two routines of the file share is not marked.
+        var marked = new Dictionary<string, string?>(StringComparer.Ordinal);
+        if (analysis?.FlowFor(tree.Path) is { } flow)
+        {
+            var contexts = analysis.Contexts();
+            foreach (var routine in flow.Regions.Select(region => analysis.Program.Current(region.Routine)).Distinct())
+                marked[routine.Name] = marked.ContainsKey(routine.Name) ? null : RunsFrom.Outline(contexts, routine);
+        }
+        return ToSymbols(tree, Outline.Build(tree), item => item.Kind == OutlineKind.Proc ? marked.GetValueOrDefault(item.Name) : null);
+    }
 
     /// <summary>Returns one foldable range per block.</summary>
     public static IReadOnlyList<Protocol.FoldingRange> ToFoldingRanges(SyntaxTree tree) =>
@@ -209,15 +228,19 @@ internal static class Lsp
         _ => Protocol.SymbolKind.Field,
     };
 
-    /// <summary>Returns the outline items and their children as protocol symbols.</summary>
-    private static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(SyntaxTree tree, IReadOnlyList<OutlineItem> items) =>
+    /// <summary>
+    /// Returns the outline items and their children as protocol symbols, with the words
+    /// <paramref name="more"/> gives for an item added after its detail.
+    /// </summary>
+    private static IReadOnlyList<Protocol.DocumentSymbol> ToSymbols(
+        SyntaxTree tree, IReadOnlyList<OutlineItem> items, Func<OutlineItem, string?> more) =>
         [.. items.Select(item => new Protocol.DocumentSymbol(
             item.Name,
-            item.Detail,
+            more(item) is { } added ? string.IsNullOrEmpty(item.Detail) ? added : $"{item.Detail} · {added}" : item.Detail,
             ToSymbolKind(item.Kind),
             ToRange(tree, item.Span),
             ToRange(tree, item.NameSpan),
-            item.Children.Count == 0 ? null : ToSymbols(tree, item.Children)))];
+            item.Children.Count == 0 ? null : ToSymbols(tree, item.Children, more)))];
 
     /// <summary>Returns every reference in this file to the symbol at <paramref name="position"/>.</summary>
     private static IReadOnlyList<SymbolReference> Occurrences(SemanticModel model, int position) =>

@@ -164,6 +164,26 @@ public sealed class PublishingTests
     }
 
     /// <summary>
+    /// An edit that makes a routine a handler changes which routines run under an interrupt in
+    /// another file, whose names are colored for it, so the client is asked to fetch tokens again
+    /// even though that file's model is unchanged.
+    /// </summary>
+    [Fact]
+    public async Task AnEditThatMovesARoutineUnderAnInterruptAsksForTokensAgain()
+    {
+        var timeout = TestTimeout.Token();
+        var held = new HeldDelay();
+        await using var client = await OpenBothAsync(held, timeout, refreshesTokens: true);
+
+        var signature = Locate.At(Main, ".proc main| {");
+        await client.ChangeAsync(MainUri, 2, new TextDocumentContentChangeEvent(new Range(signature, signature), ": interrupt"));
+        await client.NextDiagnosticsAsync(MainUri, timeout);
+        await held.ReleaseAsync(timeout);
+
+        await client.NextTokensRefreshAsync(timeout);
+    }
+
+    /// <summary>
     /// A diagnostic that moves its end, changes its code or gains a tag is published again, even
     /// where its start and message stay the same, because the client shows each of those.
     /// </summary>

@@ -672,9 +672,25 @@
         }
       }
     ],
+    "semanticTokenModifiers": [
+      {
+        "id": "interrupt",
+        "description": "A routine that is an interrupt handler or that an interrupt handler reaches."
+      }
+    ],
     "configurationDefaults": {
       "[nt65]": {
         "editor.semanticHighlighting.enabled": true
+      },
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "function.interrupt:nt65": "#F48771"
+        },
+        "[*Light*]": {
+          "rules": {
+            "function.interrupt:nt65": "#B5200D"
+          }
+        }
       },
       "files.associations": {
         "nt65.json": "jsonc"

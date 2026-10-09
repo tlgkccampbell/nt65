@@ -64,9 +64,10 @@ internal sealed class DiagnosticsPublisher : IDisposable
     // 1 for true, so that it can be read and cleared in one step.
     private int opened;
 
-    // The model each file's semantic tokens were last worked out from, by URI, as of the last
-    // publish of the whole program.
-    private IReadOnlyDictionary<string, SemanticModel?> models = new Dictionary<string, SemanticModel?>();
+    // The model each file's semantic tokens were last worked out from, with the routines they
+    // marked as running under an interrupt, by URI, as of the last publish of the whole program.
+    private IReadOnlyDictionary<string, (SemanticModel? Model, string? Marked)> models =
+        new Dictionary<string, (SemanticModel? Model, string? Marked)>();
 
     // The binaries and linker configs the client has been asked to watch. The editor watches the
     // sources and the project files by itself, but which files `.incbin` directives include and
@@ -277,12 +278,12 @@ internal sealed class DiagnosticsPublisher : IDisposable
     private async Task PublishEverythingLockedAsync(string? changed, bool refresh, CancellationToken cancellation)
     {
         var current = new HashSet<string>(StringComparer.Ordinal);
-        var now = new Dictionary<string, SemanticModel?>(StringComparer.Ordinal);
+        var now = new Dictionary<string, (SemanticModel? Model, string? Marked)>(StringComparer.Ordinal);
         foreach (var file in await workspace.ToPublishAsync(cancellation).ConfigureAwait(false))
         {
             cancellation.ThrowIfCancellationRequested();
             current.Add(file.Uri);
-            now[file.Uri] = file.Model;
+            now[file.Uri] = (file.Model, file.Marked);
             _ = await SendAsync(file, always: false, cancellation).ConfigureAwait(false);
         }
 
@@ -315,13 +316,16 @@ internal sealed class DiagnosticsPublisher : IDisposable
         // its calls and what the registers hold come from those answers, so the client is asked
         // to fetch again once they are worked out, whether or not the edit reached past its file.
         //
-        // Semantic tokens come from a file's model alone, which working those answers out never
-        // changes, and the client fetches the edited document's tokens by itself. So after an
-        // edit it is asked for tokens only where another file's model has changed since the last
-        // publish, which covers every edit made meanwhile. A file that an edit does not analyze
-        // again keeps its model, and an edit that changes how another file's names are coloured
-        // changes what that file sees, so that file is analyzed again. Tokens that came to read
-        // anything besides the model would need this check to change with them.
+        // Semantic tokens come from a file's model and from which routines run under an
+        // interrupt, neither of which working those answers out changes, and the client fetches
+        // the edited document's tokens by itself. So after an edit it is asked for tokens only
+        // where another file's model, or the routines its tokens mark, have changed since the
+        // last publish, which covers every edit made meanwhile. A file that an edit does not
+        // analyze again keeps its model, and an edit that changes how another file's names are
+        // coloured changes what that file sees, so that file is analyzed again. An edit that adds
+        // or removes a call can still change which routines run under an interrupt in a file it
+        // does not analyze again, which is why the marked routines are compared as well. Tokens
+        // that came to read anything else would need this check to change with them.
         var wasOpened = Interlocked.Exchange(ref opened, 0) == 1;
         var before = models;
         models = now;
@@ -331,13 +335,16 @@ internal sealed class DiagnosticsPublisher : IDisposable
 
     /// <summary>
     /// Determines whether a file other than <paramref name="changed"/> has a model in
-    /// <paramref name="now"/> other than the one it had <paramref name="before"/>, or has joined
-    /// the files published since.
+    /// <paramref name="now"/> other than the one it had <paramref name="before"/>, marks other
+    /// routines as running under an interrupt, or has joined the files published since.
     /// </summary>
     private static bool OthersChanged(
-        IReadOnlyDictionary<string, SemanticModel?> before, Dictionary<string, SemanticModel?> now, string changed) =>
+        IReadOnlyDictionary<string, (SemanticModel? Model, string? Marked)> before,
+        Dictionary<string, (SemanticModel? Model, string? Marked)> now,
+        string changed) =>
         now.Any(file => file.Key != changed
-            && (!before.TryGetValue(file.Key, out var had) || !ReferenceEquals(had, file.Value)));
+            && (!before.TryGetValue(file.Key, out var had) || !ReferenceEquals(had.Model, file.Value.Model)
+                || had.Marked != file.Value.Marked));
 
     /// <summary>
     /// Publishes one file's diagnostics, unless they match what was published last time or the

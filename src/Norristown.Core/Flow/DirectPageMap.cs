@@ -66,7 +66,6 @@ public sealed class DirectPageMap
         private readonly Dictionary<Symbol, (FlowRegion Region, FileAnalysis File)> routines = [];
         private readonly List<PageCall> calls = [];
         private readonly Dictionary<Symbol, List<Symbol>> callees = [];
-        private readonly HashSet<Symbol> hasCaller = [];
 
         // The locations that live on a page, by key, before their uses are known.
         private readonly Dictionary<LocationKey, Home> homes = [];
@@ -125,8 +124,6 @@ public sealed class DirectPageMap
                                 callees[caller] = list = [];
                             if (!list.Contains(callee))
                                 list.Add(callee);
-                            if (callee != caller)
-                                hasCaller.Add(callee);
                         }
                     }
                 }
@@ -135,35 +132,15 @@ public sealed class DirectPageMap
 
         /// <summary>
         /// Returns the routines that interrupt handlers reach and the routines that the rest of the
-        /// program reaches. A routine nothing calls is where the rest of the program starts, unless
-        /// it is a handler.
+        /// program reaches, as <see cref="RoutineContexts"/> finds them.
         /// </summary>
         private (HashSet<Symbol> Interrupt, HashSet<Symbol> Main) Contexts()
         {
-            var handlers = routines.Keys.Where(IsHandler);
-            var starts = routines.Keys.Where(routine => !IsHandler(routine) && !hasCaller.Contains(routine));
-            return (Reach(handlers), Reach(starts));
+            var contexts = analysis.Contexts();
+            return (Where(RoutineContext.Interrupt), Where(RoutineContext.Main));
 
-            HashSet<Symbol> Reach(IEnumerable<Symbol> from)
-            {
-                var reached = new HashSet<Symbol>();
-                var pending = new Stack<Symbol>(from);
-                while (pending.TryPop(out var routine))
-                {
-                    if (!reached.Add(routine))
-                        continue;
-                    foreach (var callee in callees.GetValueOrDefault(routine) ?? [])
-                    {
-                        if (!IsHandler(callee))
-                            pending.Push(callee);
-                    }
-                }
-                return reached;
-            }
+            HashSet<Symbol> Where(RoutineContext context) => [.. routines.Keys.Where(routine => contexts.Of(routine).HasFlag(context))];
         }
-
-        /// <summary>Returns whether <paramref name="routine"/> is an interrupt handler.</summary>
-        private static bool IsHandler(Symbol routine) => routine.Signature?.IsInterrupt == true;
 
         /// <summary>
         /// Collects the locations that live on a page: the data declared in a zero-page segment, and
@@ -716,7 +693,7 @@ public sealed class DirectPageMap
                 cancellation.ThrowIfCancellationRequested();
                 var routine = Current(region.Routine);
                 var hazards = Walk(region, byStep, tracked, roles).Hazards;
-                var handler = IsHandler(routine);
+                var handler = RoutineContexts.IsHandler(routine);
                 var inInterrupt = handler || interrupt.Contains(routine);
                 var inMain = InMain(routine);
                 foreach (var location in accesses.GroupBy(access => (access.Location, access.Unknown)))
@@ -739,7 +716,7 @@ public sealed class DirectPageMap
 
             // A routine that neither the program's starts nor a handler reaches, such as one
             // only a loop of calls reaches, is taken as the rest of the program's.
-            bool InMain(Symbol routine) => !IsHandler(routine) && (main.Contains(routine) || !interrupt.Contains(routine));
+            bool InMain(Symbol routine) => !RoutineContexts.IsHandler(routine) && (main.Contains(routine) || !interrupt.Contains(routine));
         }
 
         /// <summary>

@@ -507,6 +507,15 @@ internal static class Hovers
         Rows(card, "reads", found.Select(region => (region.Name, (string?)region.Read)));
         Rows(card, "preserves", found.Select(region => (region.Name, region.Kept)));
 
+        // The name a family binds is not a routine, and its instances are reached each on its
+        // own, so it has no one context to show.
+        if (symbol.Kind != SymbolKind.Binding)
+        {
+            var contexts = analysis.Contexts();
+            card.Row("context", RunsFrom.Hover(contexts, symbol));
+            card.Row("not followed", RunsFrom.Unfollowed(contexts, symbol));
+        }
+
         // The parts of the state a routine leaves to be inferred are what it is entered with
         // and leaves without saying so, which the signature on its line does not show.
         if (analysis.Cpu == Cpu.Wdc65816 && symbol.Signature is { IsInterrupt: false } declared

@@ -14,6 +14,7 @@ internal static class NameHighlighting
 {
     private const int Declaration = 1;
     private const int ReadOnly = 2;
+    private const int Interrupt = 4;
 
     /// <summary>
     /// The token types and modifiers as the client is told them. The numbers in the tokens index
@@ -21,14 +22,22 @@ internal static class NameHighlighting
     /// </summary>
     public static readonly Protocol.SemanticTokensLegend Legend = new(
         ["namespace", "type", "enum", "struct", "enumMember", "property", "function", "macro", "parameter", "variable", "label"],
-        ["declaration", "readonly"]);
+        ["declaration", "readonly", "interrupt"]);
 
     /// <summary>
     /// Returns the tokens for the names in <paramref name="model"/>'s file, encoded as the protocol
     /// requires. When the client asked about part of a long file, only the names on lines
     /// <paramref name="first"/> to <paramref name="last"/> are included.
     /// </summary>
-    public static Protocol.SemanticTokens In(SemanticModel model, int first = 0, int last = int.MaxValue)
+    /// <param name="model">The model of the file.</param>
+    /// <param name="underInterrupt">
+    /// The test of whether a routine runs under an interrupt, whose name then has the
+    /// <c>interrupt</c> modifier, or null to give no name that modifier.
+    /// </param>
+    /// <param name="first">The first line asked about.</param>
+    /// <param name="last">The last line asked about.</param>
+    public static Protocol.SemanticTokens In(
+        SemanticModel model, Func<Symbol, bool>? underInterrupt = null, int first = 0, int last = int.MaxValue)
     {
         var tree = model.Tree;
         var data = new List<int>();
@@ -41,6 +50,8 @@ internal static class NameHighlighting
         var names = model.References.Select(reference =>
         {
             var (type, modifiers) = Classify(reference.Symbol);
+            if (underInterrupt is not null && reference.Symbol.Signature is not null && underInterrupt(reference.Symbol))
+                modifiers |= Interrupt;
             return (reference.Span, Type: type, Modifiers: modifiers | (reference.IsDeclaration ? Declaration : 0));
         });
 

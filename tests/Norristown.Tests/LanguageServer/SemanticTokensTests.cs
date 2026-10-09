@@ -211,7 +211,7 @@ public sealed class SemanticTokensTests
     }
 
     /// <summary>Returns each token as its text, its type and its modifiers.</summary>
-    private static List<string> Decode(SemanticTokensLegend legend, string source, SemanticTokens tokens)
+    internal static List<string> Decode(SemanticTokensLegend legend, string source, SemanticTokens tokens)
     {
         var lines = source.ReplaceLineEndings("\n").Split('\n');
         var decoded = new List<string>();

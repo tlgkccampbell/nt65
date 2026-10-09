@@ -2057,6 +2057,15 @@ everything below works across modules.
   segment. Overlaps and shared bytes between pages are reported only for addresses the map
   trusts, never for guessed ones. Like the input sources, the map only shows what the analysis
   found and never reports a problem.
+- **Interrupt context.** A routine that an interrupt handler reaches says so after its
+  signature in the outline, as `under nmi`, or `under nmi and main` where the rest of the
+  program reaches it too. Its hover has the same as a `context` row, and its name carries the
+  `interrupt` semantic token modifier, which colors it wherever it appears. A theme or
+  `editor.semanticTokenColorCustomizations` can recolor `function.interrupt`. A routine is
+  reached by the calls, tail calls, branches, `.next` targets and `.fallthrough` that lead out
+  of a handler, but not into another handler. A transfer nt65 cannot follow, such as one under
+  `.next ?`, stops the walk, and the hover of a routine under an interrupt lists the lines where
+  it does so in a `not followed` row. The direct page map uses the same walk.
 - **The Processor view**, in the nt65 view of the activity bar, shows what the instruction
   hover shows below its rule for the caret's line, and follows the caret. On the 65816 it gives
   the mode and the widths, D and B. On every processor it gives what A, X and Y hold, with the

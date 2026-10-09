@@ -342,6 +342,20 @@ internal sealed class Workspace
     }
 
     /// <summary>
+    /// Returns the last analysis that finished of the program <paramref name="path"/> belongs to,
+    /// without waiting for one. It may be of files that have changed since, and it is null when
+    /// no analysis of that program has finished.
+    /// </summary>
+    /// <param name="path">The logical path of a file of the program.</param>
+    public ProgramAnalysis? LatestFor(string path)
+    {
+        lock (gate)
+        {
+            return Owner(path) is { } project ? project.Latest : loose.Latest;
+        }
+    }
+
+    /// <summary>
     /// Returns the analysis of every program that <paramref name="path"/> belongs to. A file that
     /// several projects name, such as a library they share, belongs to each of them, and a file
     /// no project names belongs to the program of the open documents that no project names.
@@ -486,9 +500,10 @@ internal sealed class Workspace
         }
         var analysis = await analyzing.ConfigureAwait(false);
         var path = document.Tree.Path;
+        var model = analysis.ModelFor(path);
         return new Published(
             UriOf(path), document.Version, document.Tree, [.. analysis.DiagnosticsFor(path), .. analysis.SuggestionsFor(path)],
-            analysis.Configuration, analysis.ModelFor(path));
+            analysis.Configuration, model, model is null ? null : RunsFrom.Marked(analysis, model));
     }
 
     /// <summary>
@@ -577,13 +592,20 @@ internal sealed class Workspace
         }
         return [.. found
             .OrderBy(file => file.Key, StringComparer.Ordinal)
-            .Select(file => new Published(
-                UriOf(file.Key),
-                versions.TryGetValue(file.Key, out var version) ? version : null,
-                file.Value.Tree,
-                now[file.Key].Diagnostics,
-                file.Value.Analysis.Configuration,
-                file.Value.Tree is null ? null : file.Value.Analysis.ModelFor(file.Key)))];
+            .Select(file => Publish(file.Key, file.Value.Analysis, file.Value.Tree))];
+
+        Published Publish(string path, ProgramAnalysis analysis, SyntaxTree? tree)
+        {
+            var model = tree is null ? null : analysis.ModelFor(path);
+            return new Published(
+                UriOf(path),
+                versions.TryGetValue(path, out var version) ? version : null,
+                tree,
+                now[path].Diagnostics,
+                analysis.Configuration,
+                model,
+                model is null ? null : RunsFrom.Marked(analysis, model));
+        }
     }
 
     /// <summary>
