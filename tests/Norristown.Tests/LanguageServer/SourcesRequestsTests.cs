@@ -15,6 +15,32 @@ public sealed class SourcesRequestsTests
     private const string Uri = "file:///c:/work/main.nt65";
 
     /// <summary>
+    /// A routine with two stores into the instruction at <c>@step</c>. The first store, on line 6,
+    /// lists what it writes, and the second, on line 11, does not. The instruction is on line 15.
+    /// </summary>
+    private const string PatchedProgram = """
+        .module main
+        .segment ZEROPAGE
+        .data count: .byte[1]
+        .segment CODE
+        .export .proc main {
+            ldy #.opcode(inx)
+            sty @step
+            .patch @step as inx
+            ldx count
+            bne @go
+            ldy #.opcode(dex)
+            sty @step
+            .patch @step
+        @go:
+        @step:
+            dex
+            stx count
+            rts
+        }
+        """;
+
+    /// <summary>
     /// On a call, the inputs are what the routine called reads. Each source is the line that set
     /// the value, and a value that reaches the call along two paths has two sources.
     /// </summary>
@@ -274,6 +300,73 @@ public sealed class SourcesRequestsTests
             [(7, "instruction", "bestEffort"), (8, "exit", "bestEffort")],
             count.Readers.Select(reader => (reader.Range.Start.Line, reader.Kind, reader.Confidence)));
     }
+
+    /// <summary>
+    /// On a store with a <c>.patch</c>, the answer links the store to the instruction it writes
+    /// into, with the instructions the <c>.patch</c> lists. Only the caret's store is linked.
+    /// </summary>
+    [Fact]
+    public async Task AStoreIsLinkedToTheInstructionItPatches()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In(CaretAt(PatchedProgram.IndexOf("sty @step", StringComparison.Ordinal) + 2));
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        var link = Assert.Single(result.Patches);
+        Assert.Equal((6, 15, "@step"), (link.Store.Start.Line, link.Target.Start.Line, link.Name));
+        Assert.Equal(["inx"], link.Variants);
+    }
+
+    /// <summary>
+    /// On a <c>.patch</c> line, which is no instruction, the answer still links the store above
+    /// it, and opens the routine the store is in.
+    /// </summary>
+    [Fact]
+    public async Task APatchLineIsLinkedLikeItsStore()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In(CaretAt(PatchedProgram.LastIndexOf(".patch", StringComparison.Ordinal) + 4));
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        Assert.Equal(4, result.Routine.Start.Line);
+        Assert.Empty(result.Inputs);
+        var link = Assert.Single(result.Patches);
+        Assert.Equal((11, 15), (link.Store.Start.Line, link.Target.Start.Line));
+        Assert.Empty(link.Variants);
+    }
+
+    /// <summary>On a patched instruction, the answer links every store that writes into it, in order.</summary>
+    [Fact]
+    public async Task APatchedInstructionIsLinkedToEachStore()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In(CaretAt(PatchedProgram.LastIndexOf("dex", StringComparison.Ordinal) + 2));
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        Assert.Equal([(6, 15), (11, 15)], result.Patches.Select(link => (link.Store.Start.Line, link.Target.Start.Line)));
+    }
+
+    /// <summary>An instruction that takes no part in a store into code has no links.</summary>
+    [Fact]
+    public async Task AnUnpatchedInstructionHasNoLinks()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In(CaretAt(PatchedProgram.IndexOf("stx count", StringComparison.Ordinal) + 2));
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        Assert.Empty(result.Patches);
+    }
+
+    /// <summary>Returns <see cref="PatchedProgram"/> with the caret marked at <paramref name="offset"/>.</summary>
+    private static string CaretAt(int offset) => PatchedProgram.Insert(offset, "|");
 
     private static Task<SourcesResult?> SourcesAsync(TestClient client, Position position, CancellationToken timeout) =>
         client.RequestAsync<SourcesResult?>("nt65/sources",

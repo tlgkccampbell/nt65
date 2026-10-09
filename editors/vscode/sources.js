@@ -3,7 +3,8 @@
 // tint, a bar and a tag on each line that set a value or reads one, a dotted bar on each line a
 // value passed through or leaves the routine by, and a chip per input and per output on the caret
 // line. A reader's tag starts with `→` and an exit's ends with `↱`, so that a line that reads the
-// caret's value is told apart from one that set a value the caret reads. Meaning is carried by colour and short glyphs, and anything longer goes in the
+// caret's value is told apart from one that set a value the caret reads. A store into code and the
+// instruction it patches are linked the same way, in the memory colour. Meaning is carried by colour and short glyphs, and anything longer goes in the
 // hover, because lines crowded with inlays are hard to read.
 const vscode = require('vscode');
 
@@ -244,9 +245,24 @@ function guessed(source) {
   return source.reason ? ` (inferred), ${source.reason}` : ' (inferred)';
 }
 
+// Returns what a patched instruction can run as, given the instructions a `.patch` lists, as
+// `runs as dex or inx`. A `.patch` that lists none says nothing about what is written.
+function runsAs(document, link) {
+  if (link.variants.length === 0) return 'rewritten';
+  const written = document.lineAt(link.target.start.line).text.trim().split(/\s+/)[0].toLowerCase();
+  return `runs as ${[written, ...link.variants.filter(name => name !== written)].join(' or ')}`;
+}
+
+// Returns whether the caret is on the instruction that every link patches, rather than on a store
+// or a `.patch`.
+function onPatched(result, line) {
+  const patches = result.patches || [];
+  return patches.length > 0 && patches.every(link => link.target.start.line === line);
+}
+
 // The hover on the caret line: each input, each line that set it with the code on that line, and
 // for a value the analysis lost track of, the line that stopped it and why.
-function hoverOf(document, result) {
+function hoverOf(document, result, line) {
   const hover = new vscode.MarkdownString();
   for (const input of result.inputs) {
     hover.appendMarkdown(`**${input.name}**\n\n`);
@@ -296,6 +312,20 @@ function hoverOf(document, result) {
       }
     }
     hover.appendMarkdown('\n');
+  }
+  const patches = result.patches || [];
+  if (onPatched(result, line)) {
+    hover.appendMarkdown('**Patched** by\n\n');
+    for (const link of patches) {
+      const at = link.store.start.line;
+      const what = link.variants.length > 0 ? `, so it ${runsAs(document, link)}` : '';
+      hover.appendMarkdown(`- line ${at + 1} ${code(document, at)}${what}\n`);
+    }
+  } else {
+    for (const link of patches) {
+      const at = link.target.start.line;
+      hover.appendMarkdown(`**Patches** ${link.name}, line ${at + 1} ${code(document, at)}, which then ${runsAs(document, link)}\n\n`);
+    }
   }
   return hover;
 }
@@ -370,7 +400,7 @@ class Sources {
       || vscode.window.activeTextEditor !== editor || editor.selection.active.line !== position.line) {
       return;
     }
-    if (!result || result.inputs.length + (result.outputs || []).length === 0) {
+    if (!result || result.inputs.length + (result.outputs || []).length + (result.patches || []).length === 0) {
       this.clear();
       return;
     }
@@ -419,6 +449,22 @@ class Sources {
         }
         chips.push([group, outputChipOf(output)]);
       }
+      // A store into code and the instruction it patches are linked like a source and its reader.
+      // The caret's chip names what it patches, or says how many stores patch it, and goes first
+      // so that the length limit never hides it.
+      if (group === 'memory') {
+        const patches = result.patches || [];
+        if (onPatched(result, line)) {
+          for (const link of patches) addLabel(sources, link.store.start.line, `patches ${link.name}`);
+          chips.unshift([group, patches.length > 1 ? `patched ×${patches.length}` : 'patched']);
+        } else {
+          for (const link of patches) {
+            addLabel(sources, link.target.start.line, runsAs(document, link));
+            const chip = `patches ${link.name}`;
+            if (!chips.some(([, text]) => text === chip)) chips.unshift([group, chip]);
+          }
+        }
+      }
       const types = this.types[group];
       editor.setDecorations(types.source, labelled(document, sources));
       editor.setDecorations(types.guess, labelled(document, guesses));
@@ -445,7 +491,7 @@ class Sources {
       ...(onCaret.hidden > 0 ? boxes(at(caretEnd), [`+${onCaret.hidden}`]) : []),
       ...(onOpener.hidden > 0 ? boxes(at(openerEnd), [`+${onOpener.hidden}`]) : []),
     ]);
-    editor.setDecorations(this.types.hover, [{ range: document.lineAt(line).range, hoverMessage: hoverOf(document, result) }]);
+    editor.setDecorations(this.types.hover, [{ range: document.lineAt(line).range, hoverMessage: hoverOf(document, result, line) }]);
   }
 
   clear() {
@@ -479,6 +525,11 @@ class Sources {
     for (const output of this.shown.result.outputs || []) {
       for (const reader of output.readers) lines.add(reader.range.start.line);
     }
+    for (const link of this.shown.result.patches || []) {
+      lines.add(link.store.start.line);
+      lines.add(link.target.start.line);
+    }
+    lines.delete(this.shown.line);
     return [...lines].sort((a, b) => a - b);
   }
 

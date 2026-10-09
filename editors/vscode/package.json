@@ -778,7 +778,7 @@
         "nt65.sources.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show, when the caret is on an instruction, where each value it reads was set: the lines are tinted in the value's colour, and the caret line gets a chip per value. On a call, the values are the ones the routine called reads. The lines that read the values it writes are highlighted too, with tags such as `→Y`, and where a value leaves the routine with a hollow tag such as `Y↱`. `nt65: Toggle Input Sources` turns this on and off."
+          "description": "Show, when the caret is on an instruction, where each value it reads was set: the lines are tinted in the value's colour, and the caret line gets a chip per value. On a call, the values are the ones the routine called reads. The lines that read the values it writes are highlighted too, with tags such as `→Y`, and where a value leaves the routine with a hollow tag such as `Y↱`. A store with a `.patch` and the instruction it writes into are linked the same way. `nt65: Toggle Input Sources` turns this on and off."
         }
       }
     }

@@ -34,7 +34,9 @@ build tasks and a schema for the project file.
   **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
   The same caret shows where its own values go: each line that reads a value it writes is
   highlighted in that value's colour with a tag such as `→Y`, each place the value leaves the
-  routine gets a hollow `Y↱`, and the caret line's chip counts the readers, as `Y→3`.
+  routine gets a hollow `Y↱`, and the caret line's chip counts the readers, as `Y→3`. On a
+  store with a `.patch`, the instruction it writes into is highlighted with what it can run as,
+  such as `runs as dex or inx`, and on a patched instruction every store that writes into it is.
 - **Loops and where control goes.** Set `nt65.margin` to `loops` and each loop of every
   routine has a bracket in front of its lines, nested where loops nest, and its trip count
   after its last line: `×16` for a loop that counts a register down from 16, `×?` where the

@@ -5,26 +5,27 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Answers the <c>nt65/sources</c> request. It converts what <see cref="InputSources"/> finds for
-/// the caret, and what <see cref="OutputReaders"/> finds, into whole-line ranges, which is what the
-/// client highlights.
+/// Answers the <c>nt65/sources</c> request. It converts what <see cref="InputSources"/>,
+/// <see cref="OutputReaders"/> and <see cref="PatchLinks"/> find for the caret into whole-line
+/// ranges, which is what the client highlights.
 /// </summary>
 internal static class CaretSources
 {
     /// <summary>
     /// Returns where each input of the instruction on the line at <paramref name="position"/> was
-    /// set and where each of its outputs is read, or null where there is no instruction there or
-    /// the analysis has no answer.
+    /// set, where each of its outputs is read and which stores into code the line takes part in.
+    /// It returns null where the analysis has no answer about the line.
     /// </summary>
     public static Protocol.SourcesResult? At(ProgramAnalysis analysis, SemanticModel model, int position)
     {
         var found = InputSources.At(analysis, model, position);
         var read = OutputReaders.At(analysis, model, position);
-        if (found is null && read is null)
+        var patches = PatchLinks.At(analysis, model, position);
+        if (found is null && read is null && patches is null)
             return null;
         var tree = model.Tree;
         return new Protocol.SourcesResult(
-            Line(tree, (found?.Routine ?? read!.Routine).Start),
+            Line(tree, (found?.Routine ?? read?.Routine ?? patches!.Routine).Start),
             [.. (found?.Inputs ?? []).Select(input => new Protocol.SourcesInput(
                 input.Name,
                 input.Group,
@@ -44,7 +45,9 @@ internal static class CaretSources
                 [.. output.Readers.Select(reader => new Protocol.ReaderSpan(
                     Line(tree, reader.Line.Start),
                     reader.Kind.ToString().ToLowerInvariant(),
-                    Confidence(reader.Confidence)))]))]);
+                    Confidence(reader.Confidence)))]))],
+            [.. (patches?.Links ?? []).Select(link => new Protocol.PatchSpan(
+                Line(tree, link.Store.Start), Line(tree, link.Target.Start), link.Name, link.Variants))]);
     }
 
     /// <summary>Returns how a confidence is written in the protocol.</summary>

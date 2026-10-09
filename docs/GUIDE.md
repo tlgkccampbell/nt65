@@ -1971,7 +1971,14 @@ everything below works across modules.
   the readers, as `Y→3`, or is `Y↱` where the value only leaves. A value nothing reads gets no
   chip. The hover lists every reader.
 
-  **Shift+Alt+PageDown** and **Shift+Alt+PageUp** move the caret through the sources and readers and back,
+  Self-modifying code is linked the same way, in the memory color. On a store with a `.patch`,
+  or on the `.patch` itself, the instruction it writes into is highlighted with a tag that says
+  what it can run as, such as `runs as dex or inx`, or `rewritten` where the `.patch` lists
+  nothing. The caret line's chip is `patches @step`. On the patched instruction, every store that
+  writes into it is highlighted with a `patches @step` tag, and the chip is `patched`, or
+  `patched ×2` for two stores. Every link is declared, so none is a guess.
+
+  **Shift+Alt+PageDown** and **Shift+Alt+PageUp** move the caret through the sources, readers and patch links and back,
   leaving the highlights in place, and *Peek Input Sources* lists them all. The setting
   `nt65.sources.enabled`, or *Toggle Input Sources*, turns the feature off. It only shows what
   the analysis found and never reports a problem.
