@@ -13,16 +13,16 @@ namespace Norristown.Flow;
 /// <para>
 /// The map is only for showing, so it may track memory on a best-effort basis. Where data lands is
 /// decided by ld65, which nt65 does not run, so each location says where its address comes from as
-/// a <see cref="PageLayout"/>. An address that neither the source nor the last build fixes is
+/// a <see cref="DataLayout"/>. An address that neither the source nor the last build fixes is
 /// predicted. A segment starts where its linked configuration puts it, or at the start of its page
 /// without one, and the files' bytes follow in the order the program lists the files. Pages are
 /// found to share bytes only through addresses the map trusts, which excludes guessed ones. Nothing
 /// warns or errors because of the map.
 /// </para>
 /// </summary>
-public sealed class DirectPageMap
+public sealed class DataMap
 {
-    private DirectPageMap(IReadOnlyList<DirectPage> pages, IReadOnlyList<PageCall> calls)
+    private DataMap(IReadOnlyList<DirectPage> pages, IReadOnlyList<DataCall> calls)
     {
         Pages = pages;
         Calls = calls;
@@ -35,7 +35,7 @@ public sealed class DirectPageMap
     public IReadOnlyList<DirectPage> Pages { get; }
 
     /// <summary>Gets every call in the program that names a routine, in the order the files list them.</summary>
-    public IReadOnlyList<PageCall> Calls { get; }
+    public IReadOnlyList<DataCall> Calls { get; }
 
     /// <summary>Returns the map of <paramref name="analysis"/>'s program.</summary>
     /// <param name="analysis">The analysis of the program.</param>
@@ -44,7 +44,7 @@ public sealed class DirectPageMap
     /// zero-page data symbol found here is laid out at that address rather than at a predicted one.
     /// </param>
     /// <param name="cancellation">The token that cancels the work.</param>
-    public static DirectPageMap Of(
+    public static DataMap Of(
         ProgramAnalysis analysis, IReadOnlyDictionary<Symbol, long>? built = null, CancellationToken cancellation = default) =>
         new Builder(analysis, built, cancellation).Build();
 
@@ -57,14 +57,14 @@ public sealed class DirectPageMap
     /// iteration counts nt65 knows. It is 1 outside every counted loop.
     /// </param>
     /// <param name="InUncountedLoop">Whether the call is inside a loop whose iteration count nt65 does not know.</param>
-    public sealed record PageCall(Symbol Caller, Symbol Callee, SyntaxNode At, long Times, bool InUncountedLoop);
+    public sealed record DataCall(Symbol Caller, Symbol Callee, SyntaxNode At, long Times, bool InUncountedLoop);
 
     /// <summary>Builds a map from one analysis.</summary>
     private sealed class Builder(ProgramAnalysis analysis, IReadOnlyDictionary<Symbol, long>? built, CancellationToken cancellation)
     {
         // The routines by their canonical symbols, each with its region and its file.
         private readonly Dictionary<Symbol, (FlowRegion Region, FileAnalysis File)> routines = [];
-        private readonly List<PageCall> calls = [];
+        private readonly List<DataCall> calls = [];
         private readonly Dictionary<Symbol, List<Symbol>> callees = [];
 
         // The locations that live on a page, by key, before their uses are known.
@@ -80,10 +80,10 @@ public sealed class DirectPageMap
         private readonly Dictionary<LocationKey, List<SyntaxNode>> references = [];
 
         // The notes about each page's layout, by the page's base.
-        private readonly Dictionary<long, List<PageNote>> notes = [];
+        private readonly Dictionary<long, List<DataNote>> notes = [];
 
         /// <summary>Returns the map.</summary>
-        public DirectPageMap Build()
+        public DataMap Build()
         {
             CollectRoutines();
             var (interrupt, main) = Contexts();
@@ -94,7 +94,7 @@ public sealed class DirectPageMap
             var uses = Uses(interrupt, main);
             var pages = Pages(uses);
             Overlap(pages);
-            return new DirectPageMap(pages, calls);
+            return new DataMap(pages, calls);
         }
 
         /// <summary>Returns the canonical symbol for <paramref name="symbol"/>, the one every file's model agrees on.</summary>
@@ -119,7 +119,7 @@ public sealed class DirectPageMap
                         foreach (var target in block.Calls)
                         {
                             var callee = Current(RegisterWalk.Owner(target) ?? target);
-                            calls.Add(new PageCall(caller, callee, at, block.Iterations ?? 1, uncounted[block.Index]));
+                            calls.Add(new DataCall(caller, callee, at, block.Iterations ?? 1, uncounted[block.Index]));
                             if (!callees.TryGetValue(caller, out var list))
                                 callees[caller] = list = [];
                             if (!list.Contains(callee))
@@ -199,7 +199,7 @@ public sealed class DirectPageMap
                     if (symbol.Kind == SymbolKind.AddressAlias && symbol.ValueExpression?.Parent is DataDeclarationSyntax declaration
                         && symbol.Value.AsNumber() is { } address and >= 0 and < 0x100)
                     {
-                        homes.TryAdd(Key(symbol), new Home(0, address, symbol.Size, PageLayout.Fixed, TypeOf(declaration), IsMmio(declaration)));
+                        homes.TryAdd(Key(symbol), new Home(0, address, symbol.Size, DataLayout.Fixed, TypeOf(declaration), IsMmio(declaration)));
                     }
                 }
             }
@@ -216,9 +216,9 @@ public sealed class DirectPageMap
                 {
                     // The last build says where ld65 put the symbol, which no prediction can better.
                     var (address, layout) = built is not null && (built.TryGetValue(symbol, out var at) || built.TryGetValue(Current(symbol), out at))
-                        ? (at, PageLayout.Built)
+                        ? (at, DataLayout.Built)
                         : (start.Address + offset, start.Layout);
-                    predicted |= layout != PageLayout.Built;
+                    predicted |= layout != DataLayout.Built;
 
                     // A symbol the page cannot reach has no offset from D to show.
                     var fromPage = address - page;
@@ -230,14 +230,14 @@ public sealed class DirectPageMap
 
                 if (outside.First <= outside.Last)
                 {
-                    Note(page, new PageNote(
+                    Note(page, new DataNote(
                         "?", $"`{name}` is placed at {StateValue.Hex(outside.First, 4)}-{StateValue.Hex(outside.Last, 4)}, outside this page", null));
                 }
 
                 // The order of the object files on ld65's command line decides the order of their
                 // bytes in a segment, and nt65 does not run ld65.
                 if (predicted && files.GetValueOrDefault(name) > 1)
-                    Note(page, new PageNote("◦", $"`{name}` has data in several files, whose order is a guess", null));
+                    Note(page, new DataNote("◦", $"`{name}` has data in several files, whose order is a guess", null));
             }
 
             static void Grow(Dictionary<string, List<(int Stream, long Length)>> runs, string name, int stream, long end)
@@ -264,9 +264,9 @@ public sealed class DirectPageMap
         /// it, and the segments after it follow on from there. Without a configuration, the
         /// segments of one page follow one another from the page's base, <c>ZEROPAGE</c> first.
         /// </remarks>
-        private Dictionary<string, (long Address, PageLayout Layout)> SegmentStarts(Dictionary<string, long> lengths)
+        private Dictionary<string, (long Address, DataLayout Layout)> SegmentStarts(Dictionary<string, long> lengths)
         {
-            var starts = new Dictionary<string, (long, PageLayout)>(StringComparer.Ordinal);
+            var starts = new Dictionary<string, (long, DataLayout)>(StringComparer.Ordinal);
             var zeroPage = analysis.Program.Segments.Segments.Where(segment => segment.Size == AddressSize.ZeroPage).ToList();
             var linked = zeroPage.Where(segment => segment.Runs.Count > 0)
                 .GroupBy(segment => (segment.Runs[0].Config, segment.Runs[0].Area));
@@ -279,21 +279,21 @@ public sealed class DirectPageMap
                     at = segment.Start ?? (segment.Offset is { } offset ? first + offset : at);
                     if (segment.Align is { } align and > 0 && at % align != 0)
                         at += align - (at % align);
-                    starts[segment.Name] = (at, PageLayout.Configured);
+                    starts[segment.Name] = (at, DataLayout.Configured);
                     at += lengths.GetValueOrDefault(segment.Name);
                 }
             }
 
             // A segment whose area nt65 cannot work out can still give its own start.
             foreach (var segment in zeroPage.Where(segment => segment.Runs.Count == 0 && segment.Start is not null))
-                starts[segment.Name] = (segment.Start!.Value, PageLayout.Configured);
+                starts[segment.Name] = (segment.Start!.Value, DataLayout.Configured);
 
             foreach (var page in zeroPage.Where(segment => segment.Runs.Count == 0 && segment.Start is null).GroupBy(BaseOf))
             {
                 var at = page.Key;
                 foreach (var segment in page.OrderBy(segment => segment.Name == "ZEROPAGE" ? 0 : 1).ThenBy(segment => segment.Name, StringComparer.Ordinal))
                 {
-                    starts[segment.Name] = (at, PageLayout.Guessed);
+                    starts[segment.Name] = (at, DataLayout.Guessed);
                     at += lengths.GetValueOrDefault(segment.Name);
                 }
             }
@@ -301,7 +301,7 @@ public sealed class DirectPageMap
         }
 
         /// <summary>Adds a note about the layout of the page at <paramref name="page"/>.</summary>
-        private void Note(long page, PageNote note)
+        private void Note(long page, DataNote note)
         {
             if (!notes.TryGetValue(page, out var list))
                 notes[page] = list = [];
@@ -405,7 +405,7 @@ public sealed class DirectPageMap
                     {
                         if (address - page is >= 0 and <= 0xff)
                         {
-                            homes[Key(symbol)] = new Home(page, address - page, symbol.Size, PageLayout.Fixed, TypeOf(declaration), true);
+                            homes[Key(symbol)] = new Home(page, address - page, symbol.Size, DataLayout.Fixed, TypeOf(declaration), true);
                             break;
                         }
                     }
@@ -561,7 +561,7 @@ public sealed class DirectPageMap
                         return null;
                     }
                     var declaration = target.Symbol.ValueExpression?.Parent as DataDeclarationSyntax;
-                    homes[key] = new Home(at, address - at, target.Symbol.Size, PageLayout.Fixed, TypeOf(declaration), IsMmio(declaration));
+                    homes[key] = new Home(at, address - at, target.Symbol.Size, DataLayout.Fixed, TypeOf(declaration), IsMmio(declaration));
                 }
             }
             else if (!indexed && Anonymous(file.Model, operand, expression, step.On, page, width) is { } anonymous)
@@ -601,7 +601,7 @@ public sealed class DirectPageMap
                 return null;
             var key = new LocationKey(null, at + offset);
             if (!homes.TryGetValue(key, out var home) || home.Size < size)
-                homes[key] = new Home(at, offset, size, PageLayout.Fixed, "", false);
+                homes[key] = new Home(at, offset, size, DataLayout.Fixed, "", false);
             return key;
         }
 
@@ -662,7 +662,7 @@ public sealed class DirectPageMap
         /// The roles are worked out for every routine before any hazard is, because whether a call
         /// clobbers a location depends on the role the routines it reaches give it.
         /// </remarks>
-        private Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), PageUse> Uses(HashSet<Symbol> interrupt, HashSet<Symbol> main)
+        private Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), DataUse> Uses(HashSet<Symbol> interrupt, HashSet<Symbol> main)
         {
             var regions = found.GroupBy(access => access.Region).Select(group => (
                 Region: group.Key!,
@@ -671,7 +671,7 @@ public sealed class DirectPageMap
                 Tracked: group.Where(access => !access.Unknown).Select(access => access.Location).ToHashSet())).ToList();
 
             // The role each routine gives each location it reaches while D is known.
-            var roles = new Dictionary<(Symbol Routine, LocationKey Location), PageRole>();
+            var roles = new Dictionary<(Symbol Routine, LocationKey Location), DataRole>();
             var readsFirst = new Dictionary<FlowRegion, HashSet<LocationKey>>();
             foreach (var (region, accesses, byStep, tracked) in regions)
             {
@@ -687,7 +687,7 @@ public sealed class DirectPageMap
             var held = found.Where(access => access is { Unknown: false, Page: not null } && InMain(access.Routine!))
                 .Select(access => access.Page!.Value).Distinct().Order().ToList();
 
-            var uses = new Dictionary<(Symbol, LocationKey, bool), PageUse>();
+            var uses = new Dictionary<(Symbol, LocationKey, bool), DataUse>();
             foreach (var (region, accesses, byStep, tracked) in regions)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -704,9 +704,9 @@ public sealed class DirectPageMap
                         ? UnknownNotes(inInterrupt, location.Key.Location, list[0].Line, held)
                         : hazards.GetValueOrDefault(location.Key.Location) ?? [];
                     notes = [.. notes, .. Strays(list)];
-                    var use = new PageUse(
+                    var use = new DataUse(
                         routine, role,
-                        [.. list.Select(access => new PageAccess(access.Line, access.Reads, access.Writes, access.Times, access.InUncountedLoop))],
+                        [.. list.Select(access => new DataAccess(access.Line, access.Reads, access.Writes, access.Times, access.InUncountedLoop))],
                         notes, handler, inInterrupt, inMain, location.Key.Unknown);
                     uses[(routine, location.Key.Location, location.Key.Unknown)] = use;
                 }
@@ -736,7 +736,7 @@ public sealed class DirectPageMap
         /// </remarks>
         /// <param name="uses">The uses, by routine and location, which this replaces with ones that carry the new notes.</param>
         /// <param name="held">The pages the interruptible code holds D at.</param>
-        private void InterruptHazards(Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), PageUse> uses, List<long> held)
+        private void InterruptHazards(Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), DataUse> uses, List<long> held)
         {
             foreach (var location in uses.GroupBy(item => item.Key.Location).ToList())
             {
@@ -750,7 +750,7 @@ public sealed class DirectPageMap
                     if (mains.FirstOrDefault(other => Clobbers(use.Role, other.Role)) is not { } victim)
                         continue;
                     var name = use.Routine.DisplayName;
-                    var what = use.Role == PageRole.Temp ? $"`{name}` uses it as a temporary" : $"`{name}` writes it without reading it first";
+                    var what = use.Role == DataRole.Temp ? $"`{name}` uses it as a temporary" : $"`{name}` writes it without reading it first";
                     var whom = victim == use
                         ? "and can interrupt itself between its own write and read"
                         : $"and can interrupt `{victim.Routine.DisplayName}` between its write and its read";
@@ -759,17 +759,17 @@ public sealed class DirectPageMap
                         Hazards =
                         [
                             .. use.Hazards,
-                            new PageNote("⚠", what, use.Accesses.FirstOrDefault(access => access.Writes).Line),
-                            new PageNote("⚠", whom, victim.Accesses.FirstOrDefault(access => access.Reads).Line),
+                            new DataNote("⚠", what, use.Accesses.FirstOrDefault(access => access.Writes).Line),
+                            new DataNote("⚠", whom, victim.Accesses.FirstOrDefault(access => access.Reads).Line),
                         ],
                     };
                 }
             }
 
-            static bool Clobbers(PageRole interrupting, PageRole interrupted) => interrupting switch
+            static bool Clobbers(DataRole interrupting, DataRole interrupted) => interrupting switch
             {
-                PageRole.Temp => interrupted is PageRole.In or PageRole.InOut or PageRole.Temp,
-                PageRole.Out => interrupted is PageRole.InOut or PageRole.Temp,
+                DataRole.Temp => interrupted is DataRole.In or DataRole.InOut or DataRole.Temp,
+                DataRole.Out => interrupted is DataRole.InOut or DataRole.Temp,
                 _ => false,
             };
         }
@@ -778,17 +778,17 @@ public sealed class DirectPageMap
         /// Returns the role a routine gives a location, from the routine's accesses to it and the
         /// locations it reads before it writes them.
         /// </summary>
-        private PageRole RoleOf(List<Found> accesses, LocationKey location, bool unknown, HashSet<LocationKey> readsFirst)
+        private DataRole RoleOf(List<Found> accesses, LocationKey location, bool unknown, HashSet<LocationKey> readsFirst)
         {
             var reads = accesses.Any(access => access.Reads);
             var writes = accesses.Any(access => access.Writes);
             if (homes[location].IsMmio)
-                return writes ? PageRole.Write : PageRole.Read;
+                return writes ? DataRole.Write : DataRole.Read;
             var first = unknown ? accesses[0].Reads : readsFirst.Contains(location) || (reads && !writes);
-            return first && writes ? PageRole.InOut
-                : first ? PageRole.In
-                : reads ? PageRole.Temp
-                : PageRole.Out;
+            return first && writes ? DataRole.InOut
+                : first ? DataRole.In
+                : reads ? DataRole.Temp
+                : DataRole.Out;
         }
 
         /// <summary>
@@ -800,11 +800,11 @@ public sealed class DirectPageMap
         /// <param name="location">The location the operand names.</param>
         /// <param name="at">The routine's first instruction that names the location.</param>
         /// <param name="held">The pages the interruptible code holds D at.</param>
-        private List<PageNote> UnknownNotes(bool inInterrupt, LocationKey location, SyntaxNode at, List<long> held)
+        private List<DataNote> UnknownNotes(bool inInterrupt, LocationKey location, SyntaxNode at, List<long> held)
         {
             if (!inInterrupt)
                 return [];
-            List<PageNote> notes = [new PageNote("⚠", "D is left as the interrupted code had it", null)];
+            List<DataNote> notes = [new DataNote("⚠", "D is left as the interrupted code had it", null)];
             if (homes[location] is not { Offset: { } offset } home)
                 return notes;
             foreach (var page in held)
@@ -813,16 +813,16 @@ public sealed class DirectPageMap
                 var reaches = $"with D = {StateValue.Hex(page, 4)} it reaches {StateValue.Hex(address, 4)}";
                 if (page == home.Page)
                 {
-                    notes.Add(new PageNote("◦", $"{reaches}, `{location.Name}`", at));
+                    notes.Add(new DataNote("◦", $"{reaches}, `{location.Name}`", at));
                     continue;
                 }
                 if (LocationAt(address, page) is not { } landed)
                 {
-                    notes.Add(new PageNote("◦", $"{reaches}, free", at));
+                    notes.Add(new DataNote("◦", $"{reaches}, free", at));
                     continue;
                 }
                 var into = address - landed.Start;
-                notes.Add(new PageNote(
+                notes.Add(new DataNote(
                     landed.Name == location.Name ? "◦" : "⚠", $"{reaches}, `{landed.Name}`{(into > 0 ? $"+{into}" : "")}", at));
             }
             return notes;
@@ -863,13 +863,13 @@ public sealed class DirectPageMap
         /// Returns a note for each access that reaches a location through a page other than its own,
         /// which lands on whatever that page holds there.
         /// </summary>
-        private IEnumerable<PageNote> Strays(IEnumerable<Found> accesses)
+        private IEnumerable<DataNote> Strays(IEnumerable<Found> accesses)
         {
             foreach (var access in accesses)
             {
                 if (access.Page is not { } page || homes[access.Location] is not { } home || home.Page == page || home.Offset is not { } offset)
                     continue;
-                yield return new PageNote(
+                yield return new DataNote(
                     "⚠", $"D is {StateValue.Hex(page, 4)} here, so this reaches {StateValue.Hex(page + offset, 4)} instead of `{access.Location.Name}`", access.Line);
             }
         }
@@ -884,16 +884,16 @@ public sealed class DirectPageMap
         /// <param name="roles">
         /// The role each routine gives each location, or null to look for no hazards. A call
         /// clobbers a location only when it writes the location without reading it first, and
-        /// the callee or a routine it reaches gives the location the <see cref="PageRole.Temp"/>
+        /// the callee or a routine it reaches gives the location the <see cref="DataRole.Temp"/>
         /// role. A call that only sets the location is how a routine returns a value, which is
         /// no hazard.
         /// </param>
-        private (HashSet<LocationKey> ReadsFirst, Dictionary<LocationKey, List<PageNote>> Hazards) Walk(
+        private (HashSet<LocationKey> ReadsFirst, Dictionary<LocationKey, List<DataNote>> Hazards) Walk(
             FlowRegion region, ILookup<StepKey, Found> byStep, HashSet<LocationKey> tracked,
-            Dictionary<(Symbol Routine, LocationKey Location), PageRole>? roles)
+            Dictionary<(Symbol Routine, LocationKey Location), DataRole>? roles)
         {
             var readsFirst = new HashSet<LocationKey>();
-            var hazards = new Dictionary<LocationKey, List<PageNote>>();
+            var hazards = new Dictionary<LocationKey, List<DataNote>>();
             var blocks = region.Blocks;
             if (blocks.Count == 0)
                 return (readsFirst, hazards);
@@ -973,9 +973,9 @@ public sealed class DirectPageMap
                 var callText = call.At.GetText().Trim();
                 if (notes.Any(note => note.At == call.At))
                     return;
-                notes.Add(new PageNote("⚠", $"`{callText}` runs between a write and a read of it", call.At));
-                notes.Add(new PageNote("⚠", $"`{call.Temp.DisplayName}` uses it as a temporary", WriteIn(call.Temp, location)));
-                notes.Add(new PageNote("◦", "read again here, after the call", read));
+                notes.Add(new DataNote("⚠", $"`{callText}` runs between a write and a read of it", call.At));
+                notes.Add(new DataNote("⚠", $"`{call.Temp.DisplayName}` uses it as a temporary", WriteIn(call.Temp, location)));
+                notes.Add(new DataNote("◦", "read again here, after the call", read));
             }
         }
 
@@ -1010,10 +1010,10 @@ public sealed class DirectPageMap
 
         /// <summary>
         /// Returns the first of <paramref name="routine"/> and the routines it reaches through its
-        /// calls that gives <paramref name="location"/> the <see cref="PageRole.Temp"/> role, or
+        /// calls that gives <paramref name="location"/> the <see cref="DataRole.Temp"/> role, or
         /// null when none does.
         /// </summary>
-        private Symbol? TempBelow(Symbol routine, LocationKey location, Dictionary<(Symbol Routine, LocationKey Location), PageRole> roles)
+        private Symbol? TempBelow(Symbol routine, LocationKey location, Dictionary<(Symbol Routine, LocationKey Location), DataRole> roles)
         {
             var seen = new HashSet<Symbol>();
             var pending = new Stack<Symbol>([routine]);
@@ -1021,7 +1021,7 @@ public sealed class DirectPageMap
             {
                 if (!seen.Add(next))
                     continue;
-                if (roles.GetValueOrDefault((next, location), PageRole.In) == PageRole.Temp)
+                if (roles.GetValueOrDefault((next, location), DataRole.In) == DataRole.Temp)
                     return next;
                 foreach (var callee in callees.GetValueOrDefault(next) ?? [])
                     pending.Push(callee);
@@ -1030,7 +1030,7 @@ public sealed class DirectPageMap
         }
 
         /// <summary>Returns the pages, each with its locations and their uses.</summary>
-        private List<DirectPage> Pages(Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), PageUse> uses)
+        private List<DirectPage> Pages(Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), DataUse> uses)
         {
             var segments = analysis.Program.Segments.Segments
                 .Where(segment => segment.Size == AddressSize.ZeroPage)
@@ -1039,36 +1039,36 @@ public sealed class DirectPageMap
             var pages = new List<DirectPage>();
             foreach (var page in homes.GroupBy(home => home.Value.Page).OrderBy(page => page.All(home => home.Value.IsMmio)).ThenBy(page => page.Key))
             {
-                var locations = new List<PageLocation>();
+                var locations = new List<DataLocation>();
                 foreach (var (key, home) in page.OrderBy(home => home.Value.Offset ?? long.MaxValue).ThenBy(home => home.Key.DisplayName, StringComparer.Ordinal))
                 {
                     var routineUses = reached[key].Select(access => (access.Routine, access.Unknown)).Distinct()
-                        .Select(use => uses.GetValueOrDefault((use.Routine!, key, use.Unknown))).OfType<PageUse>().ToList();
-                    var location = new PageLocation(key.Symbol, key.Name, home.Offset, home.Size, home.Layout, home.Type, routineUses)
+                        .Select(use => uses.GetValueOrDefault((use.Routine!, key, use.Unknown))).OfType<DataUse>().ToList();
+                    var location = new DataLocation(key.Symbol, key.Name, home.Offset, home.Size, home.Layout, home.Type, routineUses)
                     {
                         References = references.GetValueOrDefault(key) ?? [],
                     };
                     location.Relation = RelationOf(location, home);
                     locations.Add(location);
                 }
-                var hardware = locations.Count > 0 && locations.All(location => location.Relation == PageRelation.Hardware);
+                var hardware = locations.Count > 0 && locations.All(location => location.Relation == DataRelation.Hardware);
                 var named = segments[page.Key].Where(name => locations.Any(location => location.Symbol?.Segment == name)).ToList();
-                List<PageNote> pageNotes = [.. notes.GetValueOrDefault(page.Key) ?? []];
-                if (locations.Any(location => location.Layout == PageLayout.Guessed))
+                List<DataNote> pageNotes = [.. notes.GetValueOrDefault(page.Key) ?? []];
+                if (locations.Any(location => location.Layout == DataLayout.Guessed))
                 {
                     // A guess comes from having no linked configuration, or from one that does not
                     // place the segment.
-                    var unplaced = locations.Where(location => location.Layout == PageLayout.Guessed)
+                    var unplaced = locations.Where(location => location.Layout == DataLayout.Guessed)
                         .Select(location => location.Symbol?.Segment).OfType<string>().Distinct().Select(name => $"`{name}`");
                     var configured = analysis.Program.Segments.Segments.Any(segment => segment.Placements.Count > 0);
-                    pageNotes.Add(new PageNote(
+                    pageNotes.Add(new DataNote(
                         "◦", configured ? $"config does not place {string.Join(", ", unplaced)} · layout guessed" : "no config · layout guessed", null));
                 }
 
                 // The 6502's stack lives at $0100-$01FF, and so does the 65816's in emulation mode.
                 if (page.Key <= 0x1ff && page.Key + 0xff >= 0x100)
                 {
-                    pageNotes.Add(new PageNote(
+                    pageNotes.Add(new DataNote(
                         "◦", HasDirectPage ? "covers $0100-$01FF, the stack page in emulation mode" : "covers the stack page, $0100-$01FF", null));
                 }
                 foreach (var (here, there, first, last) in SamePage(locations))
@@ -1078,7 +1078,7 @@ public sealed class DirectPageMap
                     var span = first == last
                         ? StateValue.Hex(page.Key + first, 4)
                         : $"{StateValue.Hex(page.Key + first, 4)}-{StateValue.Hex(page.Key + last, 4)}";
-                    pageNotes.Add(new PageNote("⧉", $"`{here.Name}` and `{there.Name}` share {span} unintentionally", null));
+                    pageNotes.Add(new DataNote("⧉", $"`{here.Name}` and `{there.Name}` share {span} unintentionally", null));
                 }
                 pages.Add(new DirectPage(page.Key, named, hardware, locations, [], direct.GetValueOrDefault(page.Key), pageNotes));
             }
@@ -1103,20 +1103,20 @@ public sealed class DirectPageMap
         }
 
         /// <summary>Returns how the routines that use a location share it.</summary>
-        private static PageRelation RelationOf(PageLocation location, Home home)
+        private static DataRelation RelationOf(DataLocation location, Home home)
         {
             if (home.IsMmio)
-                return PageRelation.Hardware;
+                return DataRelation.Hardware;
             var uses = location.Uses;
             if (uses.Count == 0)
-                return PageRelation.Unused;
+                return DataRelation.Unused;
             if (uses.Any(use => use.Hazards.Any(note => note.Text.EndsWith("runs between a write and a read of it", StringComparison.Ordinal))))
-                return PageRelation.Nested;
+                return DataRelation.Nested;
             // One routine reached from both is enough, because the interrupt can stop the
             // routine part-way through its use and run it again.
             if (uses.Any(use => use.InInterrupt) && uses.Any(use => use.InMain))
-                return PageRelation.Interrupt;
-            return uses.Count > 1 ? PageRelation.Shared : PageRelation.Own;
+                return DataRelation.Interrupt;
+            return uses.Count > 1 ? DataRelation.Shared : DataRelation.Own;
         }
 
         /// <summary>
@@ -1129,7 +1129,7 @@ public sealed class DirectPageMap
         {
             var based = pages.Where(page => page.Base is not null && page.Locations.Any(Trusted)).ToList();
             var overlaps = pages.Where(page => page.Base is not null).ToDictionary(page => page, _ => new List<PageOverlap>());
-            var shared = new Dictionary<PageLocation, List<SharedBytes>>();
+            var shared = new Dictionary<DataLocation, List<SharedBytes>>();
             foreach (var page in based)
             {
                 foreach (var (here, there, first, last) in SamePage(page.Locations))
@@ -1175,12 +1175,12 @@ public sealed class DirectPageMap
             foreach (var (location, list) in shared)
                 location.Shared = list;
 
-            static (long First, long Last)? Range(DirectPage page, PageLocation location) =>
+            static (long First, long Last)? Range(DirectPage page, DataLocation location) =>
                 location.Offset is { } offset && location.Size is { } size and > 0
                     ? (page.Base!.Value + offset, page.Base.Value + offset + size - 1)
                     : null;
 
-            static void Add(Dictionary<PageLocation, List<SharedBytes>> shared, PageLocation location, SharedBytes bytes)
+            static void Add(Dictionary<DataLocation, List<SharedBytes>> shared, DataLocation location, SharedBytes bytes)
             {
                 if (!shared.TryGetValue(location, out var list))
                     shared[location] = list = [];
@@ -1189,13 +1189,13 @@ public sealed class DirectPageMap
         }
 
         /// <summary>Returns whether the map trusts <paramref name="location"/>'s address enough to find shared bytes with it.</summary>
-        private static bool Trusted(PageLocation location) => location.Layout != PageLayout.Guessed;
+        private static bool Trusted(DataLocation location) => location.Layout != DataLayout.Guessed;
 
         /// <summary>
         /// Returns each pair of trusted locations among <paramref name="locations"/>, which are on
         /// one page, that take some of the same bytes, with the first and last offset both take.
         /// </summary>
-        private static IEnumerable<(PageLocation Here, PageLocation There, long First, long Last)> SamePage(IReadOnlyList<PageLocation> locations)
+        private static IEnumerable<(DataLocation Here, DataLocation There, long First, long Last)> SamePage(IReadOnlyList<DataLocation> locations)
         {
             var placed = locations.Where(location => Trusted(location) && location.Offset is not null && location.Size is > 0).ToList();
             for (var i = 0; i < placed.Count; i++)
@@ -1219,15 +1219,15 @@ public sealed class DirectPageMap
         /// <see cref="SharedBytesKind.Authored"/> describes. Otherwise one segment's predicted
         /// bytes run on into the other's, and the two collide.
         /// </summary>
-        private SharedBytesKind KindOf(PageLocation here, PageLocation there)
+        private SharedBytesKind KindOf(DataLocation here, DataLocation there)
         {
-            if (here.Layout == PageLayout.Fixed && there.Layout == PageLayout.Fixed)
+            if (here.Layout == DataLayout.Fixed && there.Layout == DataLayout.Fixed)
                 return SharedBytesKind.Deliberate;
-            if (here.Layout == PageLayout.Fixed || there.Layout == PageLayout.Fixed)
+            if (here.Layout == DataLayout.Fixed || there.Layout == DataLayout.Fixed)
                 return SharedBytesKind.Collision;
 
             // ld65 put both where the last build says, which is where the configuration told it to.
-            if (here.Layout == PageLayout.Built && there.Layout == PageLayout.Built)
+            if (here.Layout == DataLayout.Built && there.Layout == DataLayout.Built)
                 return SharedBytesKind.Authored;
             if (SegmentOf(here) is not { } a || SegmentOf(there) is not { } b || a.Name == b.Name)
                 return SharedBytesKind.Collision;
@@ -1244,7 +1244,7 @@ public sealed class DirectPageMap
         }
 
         /// <summary>Returns the segment <paramref name="location"/> is declared in, or null when it is in none.</summary>
-        private Segment? SegmentOf(PageLocation location) =>
+        private Segment? SegmentOf(DataLocation location) =>
             location.Symbol?.Segment is { } name ? analysis.Program.Segments.Find(name) : null;
 
         /// <summary>Returns the element a data declaration names, such as <c>.word</c>, without any values it gives.</summary>
@@ -1282,7 +1282,7 @@ public sealed class DirectPageMap
         /// <param name="Layout">Where the address comes from.</param>
         /// <param name="Type">The element it is declared with.</param>
         /// <param name="IsMmio">Whether it is a hardware register.</param>
-        private sealed record Home(long Page, long? Offset, long? Size, PageLayout Layout, string Type, bool IsMmio);
+        private sealed record Home(long Page, long? Offset, long? Size, DataLayout Layout, string Type, bool IsMmio);
 
         /// <summary>
         /// Represents the key of a location in the builder. A location that a symbol names is keyed

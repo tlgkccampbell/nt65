@@ -1,7 +1,7 @@
 namespace Norristown.Flow;
 
 /// <summary>
-/// Represents one direct page of a <see cref="DirectPageMap"/>: the 256 bytes that start at one
+/// Represents one direct page of a <see cref="DataMap"/>: the 256 bytes that start at one
 /// value of D, with the locations the program reaches there. On the processors without a D register
 /// the only page is the zero page. One page of a map stands for every access made while D was not
 /// known, and has no base.
@@ -21,17 +21,17 @@ namespace Norristown.Flow;
 /// layout shown.
 /// </param>
 public sealed record DirectPage(
-    long? Base, IReadOnlyList<string> Segments, bool IsHardware, IReadOnlyList<PageLocation> Locations,
-    IReadOnlyList<UnknownPageUse> Unknown, int Direct, IReadOnlyList<PageNote> Notes)
+    long? Base, IReadOnlyList<string> Segments, bool IsHardware, IReadOnlyList<DataLocation> Locations,
+    IReadOnlyList<UnknownPageUse> Unknown, int Direct, IReadOnlyList<DataNote> Notes)
 {
     /// <summary>Gets the pages that cover some of the same addresses as this one.</summary>
     public IReadOnlyList<PageOverlap> Overlaps { get; internal set; } = [];
 
     /// <summary>
     /// Gets the strongest way that any location on the page is shared, or
-    /// <see cref="PageRelation.Unused"/> for a page without locations.
+    /// <see cref="DataRelation.Unused"/> for a page without locations.
     /// </summary>
-    public PageRelation Relation => Locations.Count == 0 ? PageRelation.Unused : Locations.Min(location => location.Relation);
+    public DataRelation Relation => Locations.Count == 0 ? DataRelation.Unused : Locations.Min(location => location.Relation);
 
     /// <summary>Gets a value indicating whether a use of some location on the page is a hazard.</summary>
     public bool IsHazard => Locations.Any(location => location.IsHazard) || Unknown.Any(use => use.Use.Hazards.Count > 0);

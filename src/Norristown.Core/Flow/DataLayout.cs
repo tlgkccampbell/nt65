@@ -1,11 +1,11 @@
 namespace Norristown.Flow;
 
 /// <summary>
-/// Says where the address of a <see cref="PageLocation"/> comes from, and so how far a
-/// <see cref="DirectPageMap"/> can trust it. Where data lands is decided by ld65, which nt65 does
+/// Says where the address of a <see cref="DataLocation"/> comes from, and so how far a
+/// <see cref="DataMap"/> can trust it. Where data lands is decided by ld65, which nt65 does
 /// not run, so the address of data in a segment is either read from the last build or predicted.
 /// </summary>
-public enum PageLayout
+public enum DataLayout
 {
     /// <summary>The source fixes the address, as an address alias, <c>.mmio</c> or a constant operand does.</summary>
     Fixed,

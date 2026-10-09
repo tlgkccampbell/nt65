@@ -4,7 +4,7 @@ namespace Norristown.Flow;
 /// Specifies what one routine does with one location on a <see cref="DirectPage"/>, from its own
 /// instructions alone.
 /// </summary>
-public enum PageRole
+public enum DataRole
 {
     /// <summary>The routine reads the location before it writes it, and never writes it.</summary>
     In,

@@ -2,10 +2,10 @@ namespace Norristown.Flow;
 
 /// <summary>
 /// Specifies how the routines of a program share one location on a <see cref="DirectPage"/>, as
-/// <see cref="DirectPageMap"/> works it out. The members are in order of strength, so the strongest
+/// <see cref="DataMap"/> works it out. The members are in order of strength, so the strongest
 /// relation among a page's locations is the one with the lowest value.
 /// </summary>
-public enum PageRelation
+public enum DataRelation
 {
     /// <summary>
     /// A routine relies on the location across a call to a routine that uses it as a temporary

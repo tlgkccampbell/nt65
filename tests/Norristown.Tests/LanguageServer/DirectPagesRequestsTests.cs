@@ -5,7 +5,7 @@ namespace Norristown.Tests.LanguageServer;
 /// <summary>
 /// Tests the <c>nt65/directPages</c> request, which says how the program's routines share the
 /// zero page and the direct pages. These tests check the shape the client draws from. The map's
-/// own findings are checked in <see cref="Flow.DirectPageMapTests"/>.
+/// own findings are checked in <see cref="Flow.DataMapTests"/>.
 /// </summary>
 public sealed class DirectPagesRequestsTests
 {

@@ -8,4 +8,4 @@ namespace Norristown.Flow;
 /// <param name="Offset">The location's offset on its own page, or null when it is not known.</param>
 /// <param name="Use">What the routine does with the location there.</param>
 /// <param name="Reason">Why D is not known.</param>
-public sealed record UnknownPageUse(Symbol Location, DirectPage? Home, long? Offset, PageUse Use, UnknownPageReason Reason);
+public sealed record UnknownPageUse(Symbol Location, DirectPage? Home, long? Offset, DataUse Use, UnknownPageReason Reason);

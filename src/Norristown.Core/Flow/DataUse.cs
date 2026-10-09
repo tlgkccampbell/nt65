@@ -20,6 +20,6 @@ namespace Norristown.Flow;
 /// Whether the routine reaches the location through the direct page while D is not known, so that
 /// it may reach some other address instead.
 /// </param>
-public sealed record PageUse(
-    Symbol Routine, PageRole Role, IReadOnlyList<PageAccess> Accesses, IReadOnlyList<PageNote> Hazards, bool IsHandler, bool InInterrupt, bool InMain,
+public sealed record DataUse(
+    Symbol Routine, DataRole Role, IReadOnlyList<DataAccess> Accesses, IReadOnlyList<DataNote> Hazards, bool IsHandler, bool InInterrupt, bool InMain,
     bool IsUnknownPage = false);

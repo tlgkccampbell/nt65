@@ -1,6 +1,6 @@
 namespace Norristown.Flow;
 
-/// <summary>Represents the addresses that two pages of a <see cref="DirectPageMap"/> both cover.</summary>
+/// <summary>Represents the addresses that two pages of a <see cref="DataMap"/> both cover.</summary>
 /// <param name="Page">The other page.</param>
 /// <param name="First">The first address both cover.</param>
 /// <param name="Last">The last address both cover.</param>

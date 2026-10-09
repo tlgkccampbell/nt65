@@ -10,7 +10,7 @@ namespace Norristown.Tests.Flow;
 /// is only for showing, so these tests check what an editor draws: the pages, the locations on
 /// each, which routines use them and how, and the hazards.
 /// </summary>
-public sealed class DirectPageMapTests
+public sealed class DataMapTests
 {
     /// <summary>The sample program of the design, on the 65816, with three direct pages and the PPU's registers.</summary>
     private const string Snes = """
@@ -1108,9 +1108,9 @@ public sealed class DirectPageMapTests
             .Order(StringComparer.Ordinal)
             .Select(path => new SourceFile(path, Repo.ReadText(Path.GetFullPath(path, directory))))
             .ToList();
-        var map = DirectPageMap.Of(Compiler.Analyze(sources, project, _ => null), null, TestContext.Current.CancellationToken);
+        var map = DataMap.Of(Compiler.Analyze(sources, project, _ => null), null, TestContext.Current.CancellationToken);
         var zero = Assert.Single(map.Pages, page => page.Base == 0);
-        var laid = zero.Locations.Where(location => location.Layout != PageLayout.Fixed).ToDictionary(location => location.Name);
+        var laid = zero.Locations.Where(location => location.Layout != DataLayout.Fixed).ToDictionary(location => location.Name);
         var shared = laid.Values.SelectMany(location => location.Shared).Where(bytes => laid.ContainsKey(bytes.There)).ToList();
         Assert.NotEmpty(shared);
         Assert.All(shared, bytes => Assert.Equal(SharedBytesKind.Authored, bytes.Kind));
@@ -1205,7 +1205,7 @@ public sealed class DirectPageMapTests
     private static List<string> Render(ProgramAnalysis analysis, IReadOnlyDictionary<Symbol, long>? built = null)
     {
         Assert.Equal([], analysis.Problems());
-        var map = DirectPageMap.Of(analysis, built, TestContext.Current.CancellationToken);
+        var map = DataMap.Of(analysis, built, TestContext.Current.CancellationToken);
         var lines = new List<string>();
         foreach (var page in map.Pages)
         {

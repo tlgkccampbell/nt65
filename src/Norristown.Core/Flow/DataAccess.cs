@@ -17,4 +17,4 @@ namespace Norristown.Flow;
 /// Whether the instruction is inside a loop whose iteration count nt65 does not know, so that it
 /// may run any number of times more than <paramref name="Times"/> says.
 /// </param>
-public readonly record struct PageAccess(SyntaxNode Line, bool Reads, bool Writes, long Times, bool InUncountedLoop);
+public readonly record struct DataAccess(SyntaxNode Line, bool Reads, bool Writes, long Times, bool InUncountedLoop);

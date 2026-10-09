@@ -8,7 +8,7 @@ using Norristown.Syntax;
 namespace Norristown.LanguageServer;
 
 /// <summary>
-/// Answers the <c>nt65/directPages</c> request. It converts the <see cref="DirectPageMap"/> of a
+/// Answers the <c>nt65/directPages</c> request. It converts the <see cref="DataMap"/> of a
 /// program into what the client's tree and grid show. Under each location, it arranges the
 /// routines that reach it into call trees, from the outermost callers down.
 /// </summary>
@@ -28,7 +28,7 @@ internal static class DirectPages
     public static Protocol.DirectPagesResult Of(
         ProgramAnalysis analysis, BuiltAddresses? built, Func<string, string> uriOf, CancellationToken cancellation)
     {
-        var map = DirectPageMap.Of(analysis, built?.Addresses, cancellation);
+        var map = DataMap.Of(analysis, built?.Addresses, cancellation);
         var graph = new Graph(map.Calls, uriOf);
         var cpu = analysis.Files.Count > 0 ? analysis.Files[0].Layout.Cpu : analysis.Cpu;
         return new Protocol.DirectPagesResult(
@@ -70,7 +70,7 @@ internal static class DirectPages
                         use.Use.Hazards.Count > 0,
                         [.. use.Use.Hazards.Select(note => Note(note, uriOf))]))]))]))]);
 
-    private static Protocol.DirectPageLocation Location(DirectPage page, PageLocation location, Graph graph, Func<string, string> uriOf)
+    private static Protocol.DirectPageLocation Location(DirectPage page, DataLocation location, Graph graph, Func<string, string> uriOf)
     {
         var trees = graph.Trees(location.Uses);
         var (perPass, uncounted) = (0L, 0);
@@ -117,13 +117,13 @@ internal static class DirectPages
     /// <summary>Returns a page's name, such as <c>$0080</c>, or <c>?</c> for the page whose D is not known.</summary>
     private static string Id(DirectPage page) => page.Base is { } at ? $"${at:X4}" : "?";
 
-    private static string Name(PageRelation relation) => relation switch
+    private static string Name(DataRelation relation) => relation switch
     {
-        PageRelation.Nested => "nested",
-        PageRelation.Interrupt => "irq",
-        PageRelation.Shared => "shared",
-        PageRelation.Own => "own",
-        PageRelation.Hardware => "hw",
+        DataRelation.Nested => "nested",
+        DataRelation.Interrupt => "irq",
+        DataRelation.Shared => "shared",
+        DataRelation.Own => "own",
+        DataRelation.Hardware => "hw",
         _ => "unused",
     };
 
@@ -135,31 +135,31 @@ internal static class DirectPages
         _ => "page",
     };
 
-    private static string Name(PageLayout layout) => layout switch
+    private static string Name(DataLayout layout) => layout switch
     {
-        PageLayout.Fixed => "fixed",
-        PageLayout.Built => "built",
-        PageLayout.Configured => "configured",
+        DataLayout.Fixed => "fixed",
+        DataLayout.Built => "built",
+        DataLayout.Configured => "configured",
         _ => "guessed",
     };
 
-    private static string Name(PageRole role) => role switch
+    private static string Name(DataRole role) => role switch
     {
-        PageRole.In => "in",
-        PageRole.Out => "out",
-        PageRole.InOut => "inout",
-        PageRole.Temp => "temp",
-        PageRole.Read => "read",
+        DataRole.In => "in",
+        DataRole.Out => "out",
+        DataRole.InOut => "inout",
+        DataRole.Temp => "temp",
+        DataRole.Read => "read",
         _ => "write",
     };
 
     private static Protocol.Location Declaration(Symbol symbol, Func<string, string> uriOf) =>
         new(uriOf(symbol.Tree.Path), Lsp.ToRange(symbol.Tree, symbol.NameSpan));
 
-    private static Protocol.DirectPageAccess Access(PageAccess access, Func<string, string> uriOf) =>
+    private static Protocol.DirectPageAccess Access(DataAccess access, Func<string, string> uriOf) =>
         new(Line(access.Line, uriOf), access.Reads, access.Writes, access.Times, access.InUncountedLoop);
 
-    private static Protocol.DirectPageNote Note(PageNote note, Func<string, string> uriOf) =>
+    private static Protocol.DirectPageNote Note(DataNote note, Func<string, string> uriOf) =>
         new(note.Glyph, note.Text, note.At is { } at ? Line(at, uriOf) : null);
 
     /// <summary>
@@ -184,7 +184,7 @@ internal static class DirectPages
         private readonly Dictionary<Symbol, HashSet<Symbol>> callers = [];
         private readonly Func<string, string> uriOf;
 
-        public Graph(IReadOnlyList<DirectPageMap.PageCall> calls, Func<string, string> uriOf)
+        public Graph(IReadOnlyList<DataMap.DataCall> calls, Func<string, string> uriOf)
         {
             this.uriOf = uriOf;
             foreach (var call in calls)
@@ -214,7 +214,7 @@ internal static class DirectPages
         /// starts at a routine that no other routine on the way calls, and holds only the routines
         /// that lead to a use.
         /// </summary>
-        public IReadOnlyList<Protocol.DirectPageRoutine> Trees(IReadOnlyList<PageUse> uses)
+        public IReadOnlyList<Protocol.DirectPageRoutine> Trees(IReadOnlyList<DataUse> uses)
         {
             var byRoutine = uses.GroupBy(use => use.Routine).ToDictionary(group => group.Key, group => group.ToList());
             var leading = new HashSet<Symbol>();
