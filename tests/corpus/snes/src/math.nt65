@@ -66,7 +66,7 @@
 
 ; Unsigned 16/16. The caller pushes the dividend, then the divisor, and pulls both after.
 ; Quotient in A, remainder in X.
-.proc div16: a16, i16, args 4 {
+.proc div16: a16, i16, pushed 4 {
     pea 0
     .frame f: DivFrame
     ldx #16

@@ -77,19 +77,19 @@
     nop
 }
 
-; The caller pushes what `args` counts.
-.proc takes: std, a16, args 4 {
+; The caller pushes what `pushed` counts.
+.proc takes: std, a16, pushed 4 {
     rts
 }
 
 .proc short: std, a16, native {
     pea 1
-    jsr takes                   ;! error[args-not-pushed]: `takes` declares `args 4`, bytes the caller pushes before the call, but only 2 bytes are pushed here
+    jsr takes                   ;! error[pushed-too-few]: `takes` declares `pushed 4`, bytes the caller pushes before the call, but only 2 bytes are pushed here
     pla
     rts
 }
 
-.proc pointed: std, args LIMIT + counter { ;! error[args-not-constant]: `args LIMIT + counter` needs a constant byte count
+.proc pointed: std, pushed LIMIT + counter { ;! error[stack-count-not-constant]: `pushed LIMIT + counter` needs a constant byte count
     rts
 }
 

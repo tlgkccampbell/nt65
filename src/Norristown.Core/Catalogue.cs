@@ -3306,7 +3306,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`",
         "A `.state` declares the processor state at one line: register widths, mode, D and B. Items that describe "
-            + "the routine as a whole, such as `near`, `far`, `args`, `inline`, `interrupt`, `noreturn`, `reads`, a "
+            + "the routine as a whole, such as `near`, `far`, `pushed`, `inline`, `interrupt`, `noreturn`, `reads`, a "
             + "signature set, or a `*` item meaning unchanged since entry, belong in the signature after the "
             + "routine's name.");
 
@@ -3500,12 +3500,12 @@ public static class Catalogue
         "A near routine returns with `rts`, which pulls only the two-byte return address that `per` pushed. The "
             + "byte `phk` pushed would be left on the stack. Remove the `phk`, or make the routine `far`.");
 
-    internal static DiagnosticDescriptor ArgsNotPushed { get; } = Entry(
+    internal static DiagnosticDescriptor PushedTooFew { get; } = Entry(
         Area.ProcessorState,
-        "args-not-pushed",
+        "pushed-too-few",
         Severity.Error,
-        "`{0}` declares `args {1}`, bytes the caller pushes before the call, but {2}",
-        "`args n` in a routine's signature states that the caller pushes n bytes of arguments before calling it, and the "
+        "`{0}` declares `pushed {1}`, bytes the caller pushes before the call, but {2}",
+        "`pushed n` in a routine's signature states that the caller pushes n bytes of arguments before calling it, and the "
             + "routine reads or pulls exactly that many. At this call fewer bytes are on the stack than that, "
             + "counting what the calling routine has pushed since its entry. Push the arguments before the call.");
 
@@ -3942,21 +3942,22 @@ public static class Catalogue
             + "declares something different from the routine would check the same code two different ways. Give it "
             + "the routine's signature, or leave its signature out to take the routine's.");
 
-    internal static DiagnosticDescriptor ArgsNotConstant { get; } = Entry(
+    internal static DiagnosticDescriptor StackCountNotConstant { get; } = Entry(
         Area.Signatures,
-        "args-not-constant",
+        "stack-count-not-constant",
         Severity.Error,
         "`{0}` needs a constant byte count",
-        "`args n` states how many bytes the caller pushes before the call. The analysis uses it to check every call "
+        "`pushed n` states how many bytes the caller pushes before the call. The analysis uses it to check every call "
             + "and to work out where the routine finds its arguments on the stack, so n has to be a constant "
             + "expression that nt65 can evaluate while it builds.");
 
-    internal static DiagnosticDescriptor ArgsOutOfRange { get; } = Entry(
+    internal static DiagnosticDescriptor StackCountOutOfRange { get; } = Entry(
         Area.Signatures,
-        "args-out-of-range",
+        "stack-count-out-of-range",
         Severity.Error,
         "`{0}` is out of range: the byte count must be from 0 to $ffff",
-        "`args n` counts bytes on the stack, so n has to be from 0 to $ffff, the largest amount the 65816's stack can hold.");
+        "`pushed n` counts bytes on the stack, so n has to be from 0 to $ffff, the largest amount the 65816's stack "
+            + "can hold.");
 
     internal static DiagnosticDescriptor NoreturnDeclaresAnExit { get; } = Entry(
         Area.Signatures,
@@ -4010,7 +4011,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` describes how a routine is called, and an interrupt handler is never called: the processor enters "
             + "it and `rti` leaves it",
-        "`near`, `far`, `inline` and `args` describe how a caller calls a routine and how it returns. An interrupt "
+        "`near`, `far`, `inline` and `pushed` describe how a caller calls a routine and how it returns. An interrupt "
             + "handler has no caller: the processor enters it through a vector, and `rti` leaves it. Remove the "
             + "item.");
 
@@ -4115,7 +4116,7 @@ public static class Catalogue
         Severity.Error,
         "`{0}` does not apply to a macro: it describes how a routine is called, and a macro is expanded in place",
         "A macro is not called and does not return: its body is expanded where it is used. `near`, `far`, "
-            + "`inline`, `args` and `interrupt` describe how a routine is called, entered or left, so they do not "
+            + "`inline`, `pushed` and `interrupt` describe how a routine is called, entered or left, so they do not "
             + "apply to it. Remove the item.");
 
     internal static DiagnosticDescriptor DistanceDisagrees { get; } = Entry(

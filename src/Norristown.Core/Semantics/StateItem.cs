@@ -195,7 +195,7 @@ public readonly record struct StateItem(
             "e" or "native" or "emu" => StatePart.E,
             "near" or "far" => StatePart.Distance,
             "inline" => StatePart.Inline,
-            "args" => StatePart.Arguments,
+            "pushed" => StatePart.Pushed,
             "interrupt" => StatePart.Interrupt,
             "noreturn" => StatePart.NoReturn,
             "keeps" => StatePart.Keeps,

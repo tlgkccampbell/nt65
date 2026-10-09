@@ -1458,7 +1458,7 @@ The signature items are:
 | `keeps a, x, y, c, z, n, v` | registers and flags handed back unchanged (see [What a routine preserves](#what-a-routine-preserves)) |
 | `reads a, x, y, c, z, n, v`, `reads none` | registers and flags whose values from the caller it uses (see [What a routine preserves](#what-a-routine-preserves)) |
 | `inline n`, `inline .strz` | returns past data after each call |
-| `args n` | the caller pushes n bytes before the call |
+| `pushed n` | the caller pushes n bytes before the call |
 | `interrupt`, `noreturn` | an interrupt handler; a routine that never returns |
 
 **What a routine leaves out is inferred.** The state has five parts: A's width, the index
@@ -1702,7 +1702,7 @@ the `.frame` stands. Where paths that pushed different amounts meet, the frame i
 because on one of them it would name the return address. After `tcs` or `txs` the program has
 placed the stack itself, and a frame may cover bytes nt65 knows nothing about.
 
-`args n` says the caller pushes n bytes before the call. A frame can then reach the
+`pushed n` says the caller pushes n bytes before the call. A frame can then reach the
 arguments above the return address, and every call is checked for having pushed enough, on
 every CPU.
 

@@ -216,7 +216,7 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns a routine's state when it is entered. That is its entry, declared or inferred, with
-    /// nothing pushed except, for a routine that takes <c>args n</c>, the arguments and the return
+    /// nothing pushed except, for a routine that declares <c>pushed n</c>, the arguments and the return
     /// address above them. Where the callers disagree on D, the cause names them.
     /// </summary>
     private static FlowState Entry(Signature signature, Symbol routine, InferredSignatures signatures) => new(signature.Entry, EntryStack(signature))
@@ -243,11 +243,11 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns the analysis stack where a routine is entered. It is empty except, for a routine
-    /// that takes <c>args n</c>, the arguments and the return address above them. Either way its
+    /// that declares <c>pushed n</c>, the arguments and the return address above them. Either way its
     /// height starts at the return address, because the arguments belong to the caller.
     /// </summary>
     private static AnalysisStack EntryStack(Signature signature) =>
-        AnalysisStack.Entered(signature.ReturnSize, signature.Arguments);
+        AnalysisStack.Entered(signature.ReturnSize, signature.Pushed);
 
     private static Cause EntryCause(Signature signature, Symbol routine, string item) => signature.IsInterrupt
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
@@ -1263,7 +1263,7 @@ public sealed class StateAnalysis : IProcessorStates
         var processor = state.Processor;
         foreach (var item in StateItem.Read(step.Statement))
         {
-            if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Arguments
+            if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Pushed
                 or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set or StatePart.ProgramBank)
             {
                 report?.ReportAt(item.Node, step, Catalogue.StateItemNotAPoint.Message(item.Text));

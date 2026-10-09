@@ -333,7 +333,7 @@ public sealed class StackEffects
         // the routine's return pulls.
         var relative = block.Steps.Count > 0 ? walk.Flow.RelativeCallAt(block.Steps[^1]) : null;
         if (report is not null)
-            CheckArguments(block, relative, height, report);
+            CheckPushed(block, relative, height, report);
         if (relative is { } call)
             height = height with { Whole = height.Whole - call.Pushed };
         var effect = effects.OfCallIn(block);
@@ -364,12 +364,12 @@ public sealed class StackEffects
     }
 
     /// <summary>
-    /// Reports a diagnostic for a call to a routine that takes <c>args n</c> where fewer than n
+    /// Reports a diagnostic for a call to a routine that declares <c>pushed n</c> where fewer than n
     /// bytes are pushed. Only what this routine pushed since it was entered counts, and only while
     /// the stack has never been lower than its return address, because after that its own bytes
     /// cannot be told apart from its caller's. A relative call's own pushes are not arguments.
     /// </summary>
-    private static void CheckArguments(BasicBlock block, RelativeCall? relative, Height height, List<Diagnostic> report)
+    private static void CheckPushed(BasicBlock block, RelativeCall? relative, Height height, List<Diagnostic> report)
     {
         if (height is not { Bytes: { } bytes, KeepsTheReturn: true, Return: var returnSize } || block.Steps.Count == 0
             || block.Steps[^1].Statement is not InstructionStatementSyntax statement)
@@ -380,11 +380,11 @@ public sealed class StackEffects
         var callees = relative is { } call ? block.Calls.Append(call.Routine) : block.Calls;
         foreach (var callee in callees.Distinct())
         {
-            if (callee.Signature is not { Arguments: > 0 and var needed } || have >= needed)
+            if (callee.Signature is not { Pushed: > 0 and var needed } || have >= needed)
                 continue;
             var pushed = have <= 0 ? "nothing is pushed here" : $"only {(have == 1 ? "1 byte is" : $"{have} bytes are")} pushed here";
             report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
-                Catalogue.ArgsNotPushed.Message(callee.DisplayName, needed, pushed)));
+                Catalogue.PushedTooFew.Message(callee.DisplayName, needed, pushed)));
         }
     }
 

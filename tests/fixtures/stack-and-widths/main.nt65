@@ -87,7 +87,7 @@
     rts
 }
 
-; A second entry point, reached with only the caller's pushes on the stack. `args 2` says the
+; A second entry point, reached with only the caller's pushes on the stack. `pushed 2` says the
 ; caller pushes a word, so a frame over it reaches the argument at the declared label just as
 ; it does at the routine's own entry, whichever way control arrived.
 .struct Call {
@@ -95,7 +95,7 @@
     value: .word
 }
 
-.proc twice: a16, i16, args 2 {
+.proc twice: a16, i16, pushed 2 {
     .frame call: Call
     lda call::value,s       ; 3,s
     sta total

@@ -280,7 +280,7 @@ internal static class UnpromisedKeeps
         if (push is not { } saving || !Instructions.Has(walk.Cpu, saving)
             || call.On is not null || call.Statement.Parent is LabeledLineSyntax
             || call.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jsr or MnemonicKind.Jsl }
-            || callee.Signature is { Arguments: > 0 } or { Inline: not null } || readers.Contains(RoutineKey.Of(callee))
+            || callee.Signature is { Pushed: > 0 } or { Inline: not null } || readers.Contains(RoutineKey.Of(callee))
             || following.Steps.Count == 0)
         {
             return null;

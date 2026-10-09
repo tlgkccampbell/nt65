@@ -63,7 +63,7 @@
     halfway:
     .state ?
     pla
-    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `halfway` to the same side of it as the code that reads them; `args n` on `saves_across` declares what the caller of a second entry point pushed
+    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `halfway` to the same side of it as the code that reads them; `pushed n` on `saves_across` declares what the caller of a second entry point pushed
 }
 
 .proc jumps_in {

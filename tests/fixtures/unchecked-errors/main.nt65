@@ -141,7 +141,7 @@
     resumed:
     .state a16, i16, native
     plp
-    lda #$12                ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `resumed` can be entered from outside `saved_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `resumed` to the same side of it as the code that reads them; `args n` on `saved_across` declares what the caller of a second entry point pushed
+    lda #$12                ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `resumed` can be entered from outside `saved_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `resumed` to the same side of it as the code that reads them; `pushed n` on `saved_across` declares what the caller of a second entry point pushed
     sep #$30
     rts
 }
@@ -161,7 +161,7 @@
     .frame local: Local
     laid_out:
     .state a16, i16, native
-    lda local::count,s      ;! error[frame-depth-unknown]: `local::count` is an offset from the stack pointer, but how many bytes are pushed here is not known, because `laid_out` can be entered from outside `framed`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `laid_out` to the same side of it as the code that reads them; `args n` on `framed` declares what the caller of a second entry point pushed
+    lda local::count,s      ;! error[frame-depth-unknown]: `local::count` is an offset from the stack pointer, but how many bytes are pushed here is not known, because `laid_out` can be entered from outside `framed`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `laid_out` to the same side of it as the code that reads them; `pushed n` on `framed` declares what the caller of a second entry point pushed
     pla
     rts
 }

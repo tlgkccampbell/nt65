@@ -1238,7 +1238,7 @@ items are:
 | `native` `emu` `e?` `e*` | emulation flag | `native` |
 | `near` `far` | entered by `jsr`/`jmp` and left by `rts`, or by `jsl`/`jml` and `rtl` | `near` |
 | `inline n`, `inline .strz` | the routine returns past data written after each call: n bytes, or one `.strz` (§7.4) | none |
-| `args n` | the caller pushes n bytes before the call (below) | none |
+| `pushed n` | the caller pushes n bytes before the call (below) | none |
 | `interrupt` | an interrupt handler (below) | none |
 | `noreturn` | the routine never returns (below) | none |
 | `c = 0` `c = 1`, and the same for `z` `n` `v` `d` `i`; `cz = 0` for several | before `->`, the flag's value at every call; after it, its value at every return (below) | none |
@@ -1343,7 +1343,7 @@ A set's name comes first in its list, and the items after it take the place of t
 for the same part. A set may start from another set, but not reach itself. It is declared
 where a constant may be, is exported and brought in with `.use` like one, and writes nothing.
 After `->`, and in a macro's signature, a set gives only its state: `near`, `far`, `inline`,
-`args`, `interrupt` and `noreturn` describe how a routine is called, entered or left, and are
+`pushed`, `interrupt` and `noreturn` describe how a routine is called, entered or left, and are
 left out there. There are no defaults per file or per segment: the built-in defaults above stay
 what a signature that says nothing means.
 
@@ -1372,7 +1372,7 @@ says where it goes, and is not reported. A routine that nothing calls and that r
 is still shown as the handler it is, in where routines run from and in the Data view (§14),
 while the warning stands.
 
-**Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
+**Arguments.** `pushed n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near
 and three far, so a `.frame` can lay out both (below). At a call, where what the caller has
 pushed is known, it must be at least n bytes, on every CPU. The call leaves the stack as it
@@ -1447,7 +1447,7 @@ the known top gets a value nothing is known of. The whole stack becomes unknown 
 or pull whose size is unknown, and at a merge where the incoming stacks differ in depth.
 
 **Assertions.** `.state` takes the same items as a signature, except those that describe a
-routine rather than a point in it: `near`, `far`, `inline`, `args`, `interrupt`, `noreturn`,
+routine rather than a point in it: `near`, `far`, `inline`, `pushed`, `interrupt`, `noreturn`,
 the `*` items, and a signature set, which stands for items of its own. `keeps` is the one item
 that is about a routine and is written at a point too, because a routine's promise is its
 point fact asked at every way out of it (§7.7):
@@ -1465,7 +1465,7 @@ sides meet in the middle, then: a jump in is checked for the parts the declarati
 the code after the label assumes no more than those.
 
 The analysis stack at such a label is **what entering the routine leaves**: nothing, or, for a
-routine that takes `args n`, the arguments and the return address above them. Whoever jumps in
+routine that declares `pushed n`, the arguments and the return address above them. Whoever jumps in
 is taken to have arrived as a call would, which is the word a tail call to a routine is taken
 at too, and it is the only thing either side can be held to: a `.state` says what the processor
 state at the label is and has no way to say what is on the stack, so there is nothing for the
@@ -1473,7 +1473,7 @@ two of them to meet in the middle over. Where the path above the label has pushe
 jump in has not, they disagree, and the stack after the label is one nothing is known of: a
 `pla` there matches no `pha`, a `plp` finds no saved P, a `.frame` counts from a stack pointer
 nobody knows, and `keeps` cannot be shown. So a save and its restore belong on one side of such
-a label, and a second entry point that reads what its caller pushed says so with `args n`,
+a label, and a second entry point that reads what its caller pushed says so with `pushed n`,
 which is on the stack there exactly as it is at the routine's own entry. Nothing carries a push
 or a `.frame` across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
 entered with the stack of a call to it, which is what makes each of them callable.
@@ -1526,7 +1526,7 @@ A slot is an error where the stack depth is unknown, once the analysis stack no 
 contains the frame, and anywhere other than a stack-relative operand. A `.frame` larger than
 what the proc has pushed since it was entered is an error. A frame ends with its proc.
 
-A routine that takes `args n` starts with its arguments and return address on the
+A routine that declares `pushed n` starts with its arguments and return address on the
 analysis stack, so a frame reaches them:
 
 ```nt65
@@ -1537,7 +1537,7 @@ analysis stack, so a frame reaches them:
     dividend:  .word
 }
 
-.proc div16: a16, i16, args 4 {
+.proc div16: a16, i16, pushed 4 {
     pea 0
     .frame f: DivFrame          ; the local, the return address, the caller's two words
     lda f::dividend,s
@@ -1564,7 +1564,7 @@ analysis stack, so a frame reaches them:
 - every tail call matches the target's entry, and the target's exit and `near`/`far`
   match this proc's, because the target returns to this proc's caller, unless nothing
   returns: this proc never does or is an interrupt handler, or the target never returns;
-- on every CPU, every call to a routine that takes `args n` has n bytes pushed, where what the
+- on every CPU, every call to a routine that declares `pushed n` has n bytes pushed, where what the
   caller pushed since it was entered is known;
 - no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
   with `rts` or `rtl`, on every CPU;
@@ -2345,7 +2345,7 @@ so the list needs no brackets; a signature set may give one, and a signature tha
 own takes the place of what the set gives.
 
 This makes a signature mean something on every CPU, where until now only the 65816 read one.
-`near`, `far`, `inline`, `args` and the state items stay what they were.
+`near`, `far`, `inline`, `pushed` and the state items stay what they were.
 
 **`reads a, c` is the declaration of what a routine takes in.** Without it, what a routine reads
 is worked out, and shown, but promises nothing. With it, the body is checked: a register the
@@ -3607,7 +3607,7 @@ condition may test it:
 ### 11.5 State signatures
 
 On the 65816 a macro may declare the processor state it expects and leaves, with
-the items of a proc signature other than `near`, `far`, `inline`, `args`, `interrupt` and
+the items of a proc signature other than `near`, `far`, `inline`, `pushed`, `interrupt` and
 `noreturn` (§7.3), and it may name a signature set, whose state it takes. Unlike a
 proc's, a macro's items default to `*`: a macro assumes and changes nothing it does not
 declare.
@@ -4830,10 +4830,10 @@ Recorded so the reasoning survives. None is open.
   the pushes the path above the label made puts a requirement on a jump into a label that a
   tail call to a whole routine does not carry, and there is nothing in the language for either
   side to write it down in. So the label assumes what a call to the routine assumes — nothing,
-  or the `args n` the signature names — and where its own path has pushed more, the stack below
+  or the `pushed n` the signature names — and where its own path has pushed more, the stack below
   it is unknown rather than either side's guess. What that costs is that a save may not span a
   second entry point, which is right: the two ways in genuinely arrive on different stacks, and
-  a routine whose second entry point reads what its caller pushed has `args n` to say so. The
+  a routine whose second entry point reads what its caller pushed has `pushed n` to say so. The
   message on whatever then fails names the label and says both.
 - **A jump into another routine's interior is an exit, taken at what the path from the label
   hands back.** It looks like a jump within a body and behaves like a tail call: control lands
@@ -5316,10 +5316,14 @@ Recorded so the reasoning survives. None is open.
   `txs` lost `phk`, `plb` straight after it. Tracking pushes over a base nothing is known of
   keeps every idiom that pushes and pulls its own values, and is the model `.frame` already
   used after `tcs`.
-- **`args n` for arguments the caller pushes.** A frame could not reach past the return
+- **`pushed n` for arguments the caller pushes.** A frame could not reach past the return
   address, so routines forgot their stack with `tsc`, `tcs` to reach their arguments. The
   item puts the arguments and the return address on the analysis stack at entry and checks
-  callers push them. Arguments the callee removes are not in version 1.
+  callers push them. Arguments the callee removes are not in version 1. The item was first
+  spelled `args n` and was renamed: nt65 passes arguments three ways, in registers through
+  `reads`, in bytes after the call through `inline n`, and on the stack, and `args` was the
+  only one of the three that named the concept rather than its mechanism. `pushed n` names
+  the mechanism, as `inline n` does.
 - **A mirror address is an expression.** `(bank << 16) | .loword(f)` says which bank a long
   transfer lands in, and is checked as a transfer to `f`; a prefix or a rule of its own would
   hide that bank.
@@ -5651,7 +5655,7 @@ multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL bod
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
 state-item  := point-item | unchanged-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
-             | 'args' expr | 'interrupt' | 'noreturn' | keeps-item | 'pbr' '=' expr | 'pbr?'
+             | 'pushed' expr | 'interrupt' | 'noreturn' | keeps-item | 'pbr' '=' expr | 'pbr?'
              | path                                   ; a path names a signature set, first
 keeps-item  := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7.7)
 signature   := '.signature' ident '=' state
@@ -5675,7 +5679,7 @@ segment     := '.segment' ident '{' NL (item* | body) '}'
 body        := (item | label-line | instr | data | macro-call | assertion | ensure | frame
              | annotation | splice)*                  ; no proc inside a proc
 splice      := ident                                  ; block parameter, in macros only
-assertion   := '.state' state                         ; not near, far, inline, args,
+assertion   := '.state' state                         ; not near, far, inline, pushed,
                                                       ; interrupt, noreturn, a signature set
                                                       ; or the * items
 ensure      := '.ensure' width (',' width)*           ; other state items parse, and are errors

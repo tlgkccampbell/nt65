@@ -105,7 +105,7 @@ internal static class ReadsAnalysis
             foreach (var callee in block.Calls)
             {
                 Given(reads(callee), state, block, callee);
-                if (tail || callee.Signature is { Arguments: > 0 } || readers.Contains(RoutineKey.Of(callee)))
+                if (tail || callee.Signature is { Pushed: > 0 } || readers.Contains(RoutineKey.Of(callee)))
                     Use(pushed, block.Steps[^1], callee);
             }
         }
