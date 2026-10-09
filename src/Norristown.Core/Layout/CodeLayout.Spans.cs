@@ -37,6 +37,12 @@ public sealed partial class CodeLayout
     /// without a count as well. The result gives the reason instead.
     /// </para>
     /// <para>
+    /// Flow does not run through data, so a path that arrives through data, padding included, has
+    /// no count. A <c>.next</c> says where control goes from the statement above it, in place of
+    /// the operand, and data with no <c>.next</c> goes nowhere. A pass that can reach a position a
+    /// <c>.label</c> names inside an instruction has no count either.
+    /// </para>
+    /// <para>
     /// A layout that no cycle span asked about while it was laid out has no completed walk to
     /// count over, and returns no count.
     /// </para>
@@ -46,9 +52,17 @@ public sealed partial class CodeLayout
         if (counted is null)
             return default;
         if (At(from) is not { } start)
-            return new CycleSpan(null, $"`{from.DisplayName}` is not in any laid-out code");
+        {
+            return new CycleSpan(null, IsInsideLabel(from)
+                ? $"`{from.DisplayName}` is a position inside an instruction, not a span start"
+                : $"`{from.DisplayName}` is not in any laid-out code");
+        }
         if (At(to) is not { } end)
-            return new CycleSpan(null, $"`{to.DisplayName}` is not in any laid-out code");
+        {
+            return new CycleSpan(null, IsInsideLabel(to)
+                ? $"`{to.DisplayName}` is a position inside an instruction, not a span end"
+                : $"`{to.DisplayName}` is not in any laid-out code");
+        }
         if (counted[start].Routine is not { } routine || counted[end].Routine != routine)
             return new CycleSpan(null, "the two positions are in different routines");
         if (counted[start].Stream != counted[end].Stream)
@@ -121,6 +135,18 @@ public sealed partial class CodeLayout
         var step = counted![i];
         var line = Of(step.Statement, step.On);
         var edges = new List<SpanEdge>();
+        string? lost = null;
+        var next = step.Label is null ? NextOf(i) : null;
+
+        // Flow does not run through data, padding included, so nt65 does not count what data
+        // would cost if it ran. Control leaves data only where its `.next` says, and data with
+        // no `.next` has no way on.
+        if (step.Statement is DataDirectiveSyntax or DataValuesSyntax && step.Label is null)
+        {
+            if (next is not null)
+                Declared(next, new CycleCount(0), Quoted(step.Statement));
+            return (edges, lost, $"the span runs through data at `{Quoted(step.Statement)}`, whose cost nt65 does not count");
+        }
         if (step.Statement is not InstructionStatementSyntax instruction || step.Label is not null)
         {
             // Labels and markers take no time. A statement that is no instruction costs what its
@@ -133,15 +159,25 @@ public sealed partial class CodeLayout
         var mode = line?.Mode;
         var transfer = Transfers.Of(instruction, mode);
         var mnemonic = SyntaxFacts.TextOf(instruction.MnemonicKind);
+        var calls = Instructions.IsCall(instruction.MnemonicKind);
         string? unbounded = null;
-        if (Instructions.IsCall(instruction.MnemonicKind))
+        if (calls)
             unbounded = $"the span contains a call, `{mnemonic}`, whose time depends on the routine it calls";
-        else if (transfer == Transfer.Elsewhere)
+        else if (transfer == Transfer.Elsewhere && next is null)
             return (edges, $"the span contains `{mnemonic}`, whose target nt65 cannot follow", null);
         else if (line?.Cycles is null)
             unbounded = $"nt65 has no cycle count for `{mnemonic}`";
 
         var cycles = line?.Cycles ?? new CycleCount(0);
+
+        // A `.next` under anything but a call replaces the operand as the source of the targets,
+        // as it does for the flow analysis, and control goes nowhere else. Which way a branch
+        // went is not known there, so each target costs anything the branch can.
+        if (next is not null && !calls)
+        {
+            Declared(next, cycles, mnemonic);
+            return (edges, lost, unbounded);
+        }
         switch (transfer)
         {
             case Transfer.Return:
@@ -165,7 +201,7 @@ public sealed partial class CodeLayout
                 Next(cycles);
                 break;
         }
-        return (edges, null, unbounded);
+        return (edges, lost, unbounded);
 
         void Next(CycleCount cost)
         {
@@ -175,12 +211,90 @@ public sealed partial class CodeLayout
 
         void Target(CycleCount cost)
         {
-            if (Targets.Of(model, Transfers.TargetOf(instruction, mode), step.On) is { } target
-                && labelled.TryGetValue(target, out var to))
-            {
+            if (Targets.Of(model, Transfers.TargetOf(instruction, mode), step.On) is { } target)
+                Reach(target, cost);
+        }
+
+        // A target in this routine's part of the stream is a step a pass goes on to. A position
+        // inside an instruction runs as instructions this count does not hold, so a pass that
+        // reaches one has no count. Any other target is somewhere the pass leaves for.
+        void Reach((Symbol Symbol, Expansion? At) target, CycleCount cost)
+        {
+            if (labelled.TryGetValue(target, out var to))
                 edges.Add(new SpanEdge(to, cost));
+            else if (IsInsideLabel(target.Symbol))
+                lost ??= $"a pass can reach `{target.Symbol.DisplayName}`, a position inside an instruction, whose instructions nt65 does not count here";
+        }
+
+        // A `.next ?` withholds where control goes, so a pass that reaches it could go anywhere.
+        // A `.next .return` ends the pass, as a return does. A routine or a label outside this
+        // routine is somewhere the pass leaves for. A table stands for the labels it holds,
+        // which a span does not look into, so it is not followed either.
+        void Declared(NextDirectiveSyntax next, CycleCount cost, string what)
+        {
+            if (next.QuestionToken is not null)
+                lost ??= $"the span contains `{what}`, whose `.next ?` withholds where control goes";
+            foreach (var name in next.Targets)
+            {
+                if (Targets.Of(model, name, step.On) is not { } target)
+                    lost ??= $"the `.next` under `{what}` names `{name.GetText().Trim()}`, which nt65 cannot follow";
+                else if (IsTable(target.Symbol))
+                    lost ??= $"the `.next` under `{what}` names `{target.Symbol.DisplayName}`, a table whose labels a span does not follow";
+                else
+                    Reach(target, cost);
             }
         }
+    }
+
+    /// <summary>
+    /// Returns the <c>.next</c> under step <paramref name="i"/>, or null where it has none. An
+    /// annotation is about the statement above it, so it follows that statement among the steps,
+    /// after any marker where an expansion ends.
+    /// </summary>
+    private NextDirectiveSyntax? NextOf(int i)
+    {
+        for (var j = i + 1; j < counted!.Count; j++)
+        {
+            var step = counted[j];
+            if (step.Statement is NextDirectiveSyntax next)
+                return next;
+            if (!step.IsMarker && !(step.Statement is StatementSyntax annotation && Annotations.Is(annotation)))
+                break;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether a <c>.next</c> target is a table rather than a label of
+    /// code. That is anything other than a label or a routine, and a label whose line holds data.
+    /// </summary>
+    private bool IsTable(Symbol symbol)
+    {
+        if (symbol.Kind == SymbolKind.Proc)
+            return false;
+        if (symbol.Kind != SymbolKind.Label)
+            return true;
+        for (var i = 0; i + 1 < counted!.Count; i++)
+        {
+            if (counted[i].Label == symbol)
+                return counted[i + 1].Statement is DataDirectiveSyntax or DataValuesSyntax;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="symbol"/> is a position a <c>.label</c>
+    /// names inside an instruction.
+    /// </summary>
+    private static bool IsInsideLabel(Symbol symbol) =>
+        symbol.Kind == SymbolKind.Label && symbol.Tree.Root.FindToken(symbol.NameSpan.Start).Parent is LabelDirectiveSyntax;
+
+    /// <summary>Returns the first line of a statement's text, as a message quotes it.</summary>
+    private static string Quoted(SyntaxNode statement)
+    {
+        var text = statement.GetText().Trim();
+        var end = text.IndexOfAny(['\r', '\n']);
+        return end < 0 ? text : text[..end].TrimEnd();
     }
 
     /// <summary>

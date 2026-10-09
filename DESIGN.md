@@ -2164,6 +2164,15 @@ found: a call takes as long as the routine it names, and a loop takes its body a
 as it turns. A jump nt65 cannot follow could go anywhere, `to` included, so one that a pass from
 `from` can reach is an error too. The ends being in two routines is an error of the same kind.
 
+A `.next` says where control goes from the statement above it, in place of the operand, as it
+does for the flow analysis: `jmp (vector)` / `.next done` goes on to `done`, a `.next .return`
+ends the path, a `.next` naming a routine leaves, and a `.next ?` is a jump nt65 cannot follow.
+**Flow does not run through data**, so nt65 does not count what bytes would cost if they ran: a
+path that arrives through data, padding included, is an error naming the data. Control leaves
+data only where its `.next` says, and data with no `.next` has no way on. A position a `.label`
+names inside an instruction runs as instructions a span does not count, so a pass that can reach
+one is an error, and such a position is not an end.
+
 Like `.endof` and `.spanof`, a cycle span describes layout rather than a shape: it is usable in
 operands, data and `.assert`, and not where a constant is required (`.res`, `.repeat`, an
 element count), because what it is worth depends on how the file was laid out and how much room
