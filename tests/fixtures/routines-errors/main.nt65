@@ -5,7 +5,7 @@
 .cpu 65816
 
 .export late, wrong, stop, crowded, late_never, doubly, handler, closed, calls, tail, takes, short, pointed
-.export near_std, far_jump, wrong_mirror, far_near, reads
+.export near_std, far_jump, wrong_mirror, far_near, reads, resumable, calls_inside
 
 .const LIMIT = 3
 
@@ -66,6 +66,20 @@
 .proc calls: std {
     jsr handler                 ;! error[handler-called]: `handler` is an interrupt handler and cannot be called: it returns with `rti`, which would not return to the caller
     .state std                  ;! error[state-item-not-a-point]: `std` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`
+    rts
+}
+
+; The path from a label inside a handler leaves by the handler's `rti` as well, so the label
+; cannot be called either.
+.proc resumable: interrupt, native {
+    rep #$30
+    resume:
+    .state a16, i16, native
+    rti
+}
+
+.proc calls_inside: a16, i16, native {
+    jsr resumable::resume       ;! error[handler-called]: `resume` is inside interrupt handler `resumable` and cannot be called: the path from it returns with `rti`, which would not return to the caller
     rts
 }
 

@@ -1566,8 +1566,8 @@ analysis stack, so a frame reaches them:
   returns: this proc never does or is an interrupt handler, or the target never returns;
 - on every CPU, every call to a routine that takes `args n` has n bytes pushed, where what the
   caller pushed since it was entered is known;
-- no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
-  with `rts` or `rtl`, on every CPU;
+- no interrupt handler, and no label inside one, is called, and no routine that says `noreturn`
+  or `interrupt` returns with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
   import) or a label inside a routine, which declares its state with a `.state` (§7.4). Anything
   else is `call-target-not-a-routine`, whose message names the declaration that makes the target a

@@ -3057,11 +3057,11 @@ public static class Catalogue
         Area.ControlFlow,
         "handler-called",
         Severity.Error,
-        "`{0}` is an interrupt handler and cannot be called: it returns with `rti`, which would not return to the "
-            + "caller",
+        "{0} and cannot be called: {1} with `rti`, which would not return to the caller",
         "The processor enters an interrupt handler by pushing the return address and the status flags, and the "
             + "handler leaves with `rti`, which pulls both. A call pushes only the return address, so the `rti` "
-            + "would pull the wrong bytes and not return to the caller.");
+            + "would pull the wrong bytes and not return to the caller. The same holds for a call to a label "
+            + "inside a handler, because the path from the label leaves by the handler's `rti`.");
 
     internal static DiagnosticDescriptor HandlerReturnsNotRti { get; } = Entry(
         Area.ControlFlow,

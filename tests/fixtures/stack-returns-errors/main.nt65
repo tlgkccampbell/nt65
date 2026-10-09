@@ -6,6 +6,7 @@
 .cpu 6502
 
 .export pushed, one_path, looped, entered, discards, leaves1, takes1, adjusts, enters
+.export irq, calls_irq_label
 
 ; The return address is still beneath the pushed byte.
 .segment CODE
@@ -92,5 +93,20 @@
     clc
     adc #2
     pha
+    rts
+}
+
+; An interrupt handler's `rti` pulls the flags as well as the return address, but a call
+; pushes only the return address. The path from a label inside a handler leaves by that `rti`,
+; so a call to the label returns through the wrong bytes, as a call to the handler would.
+.proc irq: interrupt {
+    pha
+    pla
+    resume:
+    rti
+}
+
+.proc calls_irq_label {
+    jsr irq::resume             ;! error[handler-called]: `resume` is inside interrupt handler `irq` and cannot be called: the path from it returns with `rti`, which would not return to the caller
     rts
 }

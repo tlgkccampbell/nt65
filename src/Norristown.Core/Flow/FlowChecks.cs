@@ -409,9 +409,9 @@ internal sealed class FlowChecks
 
     /// <summary>
     /// Reports each <c>rts</c> or <c>rtl</c> in a routine that never returns or in an interrupt
-    /// handler, and each call to an interrupt handler. Neither kind of routine returns with
-    /// <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by <c>rti</c>, is never
-    /// called. It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which
+    /// handler, and each call to an interrupt handler or to a label inside one. Neither kind of
+    /// routine returns with <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by
+    /// <c>rti</c>, is never called. It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which
     /// the processor may enter in any state. These rules hold on every CPU.
     /// </summary>
     private void CheckReturnsAndCalls(Symbol routine, IReadOnlyList<ControlFlow.Unit> units)
@@ -438,9 +438,19 @@ internal sealed class FlowChecks
                     // no instruction to replace.
                     own.IsInterrupt && unit.Next is null ? new DiagnosticFix(FixKind.Return, "rti") : null);
             }
-            if (flow.CalledAt(unit.Step) is { Signature.IsInterrupt: true } handler)
+            switch (flow.CalledAt(unit.Step))
             {
-                Report(statement, unit.Step.On, Catalogue.HandlerCalled.Message(handler.DisplayName));
+                case { Signature.IsInterrupt: true } handler:
+                    Report(statement, unit.Step.On,
+                        Catalogue.HandlerCalled.Message($"`{handler.DisplayName}` is an interrupt handler", "it returns"));
+                    break;
+
+                // The path from a label inside a handler leaves by the handler's `rti`, so a call
+                // to the label is as wrong as a call to the handler.
+                case { Kind: SymbolKind.Label, Signature: null, Routine: { Signature.IsInterrupt: true } owner } label:
+                    Report(statement, unit.Step.On, Catalogue.HandlerCalled.Message(
+                        $"`{label.DisplayName}` is inside interrupt handler `{owner.DisplayName}`", "the path from it returns"));
+                    break;
             }
 
             // An `rti` with a `.next` is a computed jump that says where it goes, and is not a
