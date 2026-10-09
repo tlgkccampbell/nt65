@@ -146,3 +146,78 @@
     ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `xce` follows neither `clc` nor `sec`: a `.state` after it declares what it is
     .next ?
 }
+
+; A `clc` before `xce` enters native mode from either mode. Where the mode before it is not
+; known, an 8-bit width stays 8, which it is in either, and only a 16-bit width is lost.
+.proc either_mode: a8, i16, native {
+    .state e?
+    clc
+    xce
+    lda #1
+    ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `xce` enters native mode from a mode that is not known, and a 16-bit width is 8 bits if that was emulation mode: a `.state` before it declares which mode it is
+    rep #$10
+    rts
+}
+
+; A `*` a routine writes is what it declares, and one it leaves out is a default it takes.
+.proc by_default {
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and `by_default` takes the default `a*`, which assumes nothing about it
+    lda d:$10               ;! error[direct-page-unknown]: `d:$0010` is reached through the direct page, and `by_default` takes the default `dp*`, which assumes nothing about D
+    rts
+}
+
+.proc declared_star: dp* {
+    lda d:$10               ;! error[direct-page-unknown]: `d:$0010` is reached through the direct page, and `declared_star` declares `dp*`, which assumes nothing about D
+    rts
+}
+
+.segment RODATA
+.data defaults: .addr by_default, declared_star
+
+; A routine that declares nothing about the mode is entered in native mode by default where
+; a caller's mode is not known, and the message says it is a default.
+.segment CODE
+.proc native_by_default {
+    rts
+}
+
+.export .proc unknown_mode: a8, i8, e? {
+    jsr native_by_default   ;! error[call-state-mismatch]: `jsr native_by_default` needs `native`, which `native_by_default` takes by default, but the mode is not known here
+    .next ?
+}
+
+; A recursive call is one of a routine's callers, so a call to itself in another width
+; disagrees with the others where the body depends on the width.
+.proc recurse {             ;! error[callers-disagree]: `recurse` is called with `a16` by some callers and `a8` by others, and `lda #` depends on the width of A
+    lda #1
+    cmp value
+    bcs @done
+    rep #$20
+    jsr recurse
+@done:
+    sep #$20
+    rts
+}
+
+.export .proc recurse_caller: a8, native {
+    jsr recurse
+    sep #$20
+    rts
+}
+
+; Callers that disagree on the mode leave it `*`, which a body that needs native mode says.
+.proc needs_native {
+    .ensure a16             ;! error[ensure-needs-native]: `.ensure a16` needs native mode, and the mode is not known here, because `needs_native` is called with `emu` and `native`
+    sep #$20
+    rts
+}
+
+.export .proc from_native: a8, i8, native {
+    jsr needs_native
+    rts
+}
+
+.export .proc from_emulation: emu {
+    jsr needs_native
+    rts
+}

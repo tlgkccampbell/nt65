@@ -253,6 +253,13 @@ public sealed class StateAnalysis : IProcessorStates
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
         : new($"`{routine.DisplayName}` declares `{item}` at entry", "an `.ensure` sets it");
 
+    /// <summary>Returns whether <paramref name="previous"/> is a <c>clc</c>.</summary>
+    private static bool FollowsClc(Step? previous) =>
+        previous is { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc } };
+
+    /// <summary>Returns <paramref name="width"/> where it is 8 bits, and unknown otherwise.</summary>
+    private static Width EightOrUnknown(Width width) => width == Width.Eight ? Width.Eight : Width.Unknown;
+
     /// <summary>
     /// Returns how many bytes a push or pull of a register this wide moves, or null when that is
     /// not known.
@@ -451,7 +458,7 @@ public sealed class StateAnalysis : IProcessorStates
                     item.Text,
                     processor.E == ProcessorMode.Emulation
                         ? "the processor is in emulation mode here, where both widths are 8 bits"
-                        : "the mode is not known here"));
+                        : report.ModeUnknown(step, processor)));
             }
             // Emulation mode pins both widths at 8, whatever is emitted to change them.
             if (processor.E == ProcessorMode.Emulation)
@@ -587,7 +594,7 @@ public sealed class StateAnalysis : IProcessorStates
             var last = i == block.Steps.Count - 1;
             var next = last ? block.Next : null;
             var end = last ? block.End : BlockEnd.Through;
-            state = Explained(step, next, state, Through(step, previous, next, end, state, routine, report));
+            state = Explained(step, previous, next, state, Through(step, previous, next, end, state, routine, report));
             if (records)
                 leaving[step.Key] = state;
         }
@@ -598,17 +605,17 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns the state after <paramref name="step"/>, with a cause for each width it made
     /// unknown, and the earlier cause kept for each width it left unknown.
     /// </summary>
-    private FlowState Explained(Step step, NextDirectiveSyntax? next, FlowState before, FlowState after) => after with
+    private FlowState Explained(Step step, Step? previous, NextDirectiveSyntax? next, FlowState before, FlowState after) => after with
     {
-        WhyA = Why(step, next, before, before.Processor.A, after.Processor.A, before.WhyA),
-        WhyIndex = Why(step, next, before, before.Processor.Index, after.Processor.Index, before.WhyIndex),
+        WhyA = Why(step, previous, next, before, before.Processor.A, after.Processor.A, before.WhyA),
+        WhyIndex = Why(step, previous, next, before, before.Processor.Index, after.Processor.Index, before.WhyIndex),
         WhyD = after.Processor.D.Kind == StateValueKind.Unknown && before.Processor.D.Kind == StateValueKind.Unknown
             ? before.WhyD
             : null,
     };
 
     private Cause? Why(
-        Step step, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? inherited)
+        Step step, Step? previous, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? inherited)
     {
         if (after != Width.Unknown)
             return null;
@@ -635,6 +642,8 @@ public sealed class StateAnalysis : IProcessorStates
             MnemonicKind.Plp when state.Stack?.Top is { IsStatus: true }
                 => new($"{quoted} restores a width that is not known here", "an `.ensure` after it sets it"),
             MnemonicKind.Plp => new($"{quoted} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
+            MnemonicKind.Xce when FollowsClc(previous)
+                => new($"{quoted} enters native mode from a mode that is not known, and a 16-bit width is 8 bits if that was emulation mode", "a `.state` before it declares which mode it is"),
             MnemonicKind.Xce => new($"{quoted} follows neither `clc` nor `sec`", "a `.state` after it declares what it is"),
             MnemonicKind.Rep when mode != ProcessorMode.Native && StepOperands.Constant(model, step) is not null
                 => new($"{quoted} widens nothing in emulation mode, and the mode is not known", "a `.state` before it declares which mode it is"),
@@ -711,9 +720,11 @@ public sealed class StateAnalysis : IProcessorStates
 
             // `clc` then `xce` enters native mode, and `sec` then `xce` emulation mode. Any
             // other `xce` swaps in an unknown carry, so the mode becomes unknown.
-            // D and B are unaffected.
+            // D and B are unaffected. Where the mode is not known before `clc` and `xce`, an
+            // 8-bit width stays 8, which it is after either mode. Any other width becomes
+            // unknown, because a 16-bit width is 8 bits if the processor was in emulation mode.
             case MnemonicKind.Xce:
-                if (previous is { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc } })
+                if (FollowsClc(previous))
                 {
                     return state with
                     {
@@ -721,7 +732,7 @@ public sealed class StateAnalysis : IProcessorStates
                         {
                             ProcessorMode.Emulation => processor with { A = Width.Eight, Index = Width.Eight, E = ProcessorMode.Native },
                             ProcessorMode.Native => processor,
-                            _ => processor with { A = Width.Unknown, Index = Width.Unknown, E = ProcessorMode.Native },
+                            _ => processor with { A = EightOrUnknown(processor.A), Index = EightOrUnknown(processor.Index), E = ProcessorMode.Native },
                         },
                     };
                 }
@@ -1040,7 +1051,8 @@ public sealed class StateAnalysis : IProcessorStates
                     new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
             }
             var declared = DeclaredElsewhere(label) ?? ProcessorState.Unknown;
-            report.CheckCall(step, mnemonic, label, new Signature(declared, declared, callee.IsFar), state);
+            var entry = new Signature(declared, declared, callee.IsFar) { Declared = StateParts.All, Written = StateParts.All };
+            report.CheckCall(step, mnemonic, label, entry, state);
         }
         if (callee.IsInterrupt)
             return state;
@@ -1073,7 +1085,7 @@ public sealed class StateAnalysis : IProcessorStates
             var register = StateRegister.ProgramBank;
             report.Report(step, Catalogue.CallStateMismatch.Message(
                 $"`{step.Statement.GetText().Trim()}`",
-                needed.Format(register),
+                $"`{needed.Format(register)}`",
                 bank.IsBounded ? $"control reaches it in bank {bank.Describe(register.Digits)}" : "the bank control reaches it in is not known"));
         }
         calls.Add(new CallState(caller, target, state, step.Statement.Tree.GetSpan(step.Statement.Span), bank));

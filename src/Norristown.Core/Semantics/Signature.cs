@@ -55,6 +55,15 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     public StateParts Declared { get; init; }
 
     /// <summary>
+    /// Gets the parts of the state the signature's items name, at entry or at exit, directly or
+    /// through a signature set. For a routine these are the parts it <see cref="Declared"/>. A
+    /// macro declares every part, and a part its items leave out is <c>*</c> by default, which a
+    /// message says rather than that the macro declares it. Two signatures that differ only here
+    /// mean the same, so <see cref="Equals(Signature?)"/> does not compare it.
+    /// </summary>
+    public StateParts Written { get; init; }
+
+    /// <summary>
     /// Gets the program bank K the routine's code runs in, which <c>pbr = e</c> declares and the
     /// analysis otherwise infers from how control reaches the routine. A near transfer keeps the
     /// caller's bank, and a long one sets the bank of the address it names, which may be a mirror.
@@ -467,6 +476,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             return new(entered, exited, entry.Far?.IsFar ?? false, entry.Inline)
             {
                 Declared = forMacro ? StateParts.All : DeclaredParts(),
+                Written = DeclaredParts(),
                 ProgramBank = ProgramBankOf(entry),
                 Arguments = arguments,
                 Keeps = keeps,
@@ -542,6 +552,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             {
                 IsInterrupt = true,
                 Declared = StateParts.All | (entry.K is null ? StateParts.None : StateParts.ProgramBank),
+                Written = StateParts.All,
                 ProgramBank = ProgramBankOf(entry),
                 Keeps = Promised(entry),
                 Reads = Declared(entry),

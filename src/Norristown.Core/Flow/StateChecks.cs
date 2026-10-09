@@ -97,6 +97,22 @@ internal sealed class StateChecks
         segment is not null && model.Segments.Find(segment)?.Bank is { } bank ? StateValue.Of(bank) : StateValue.Unknown;
 
     /// <summary>
+    /// Returns the words a message uses for a mode that is not known at <paramref name="step"/>.
+    /// Where the mode is the one the routine was entered with and its callers disagree on it,
+    /// the words name what they call it with.
+    /// </summary>
+    public string ModeUnknown(Step step, ProcessorState state)
+    {
+        if (state.E != ProcessorMode.Unchanged || step.Routine is not { } routine || Owner(step, routine) != routine.DisplayName
+            || signatures.DisagreementOn(routine, StateParts.Mode) is not { } callers)
+        {
+            return "the mode is not known here";
+        }
+        var modes = callers.Select(caller => $"`{caller.State}`").Distinct().Order(StringComparer.Ordinal);
+        return $"the mode is not known here, because `{routine.DisplayName}` is called with {string.Join(" and ", modes)}";
+    }
+
+    /// <summary>
     /// Reports a diagnostic for a width-dependent immediate whose width is not known here, or that
     /// is 16-bit in emulation mode. ca65 sizes such an immediate from the width it is told, and it
     /// is this analysis that tells it, so the width has to be known here.
@@ -117,7 +133,8 @@ internal sealed class StateChecks
             Report(step, Catalogue.WidthUnknown.Message(
                 text,
                 Format(register),
-                $"`{Owner(step, routine)}` declares `{item}*`, which assumes nothing about it"), Declares(step, item, routine));
+                $"{Assumes(step, routine, register == WidthRegister.A ? StateParts.A : StateParts.Index, item + "*")}, which assumes nothing about it"),
+                Declares(step, item, routine));
         }
         else if (!IsKnown(width))
         {
@@ -197,7 +214,7 @@ internal sealed class StateChecks
                 if (state.D.Kind == StateValueKind.Unchanged)
                 {
                     Report(step, Catalogue.DirectPageUnknown.Message(
-                        what, $"`{Owner(step, routine)}` declares `dp*`, which assumes nothing about D"));
+                        what, $"{Assumes(step, routine, StateParts.DirectPage, "dp*")}, which assumes nothing about D"));
                 }
                 else if (!state.D.IsKnown)
                 {
@@ -243,42 +260,49 @@ internal sealed class StateChecks
 
     /// <summary>
     /// Reports a diagnostic for each part of the state here that does not match what a routine's
-    /// entry declares.
+    /// entry needs. Where <paramref name="target"/> is given and its signature does not write a
+    /// part, the message says that the routine takes that part by default.
     /// </summary>
-    public void CheckEntry(Step step, string what, Signature callee, ProcessorState state)
+    public void CheckEntry(Step step, string what, Signature callee, ProcessorState state, Symbol? target = null)
     {
-        Width(StateRegister.A, callee.Entry.A, state.A);
-        Width(StateRegister.Index, callee.Entry.Index, state.Index);
+        Width(StateRegister.A, StateParts.A, callee.Entry.A, state.A);
+        Width(StateRegister.Index, StateParts.Index, callee.Entry.Index, state.Index);
         if (IsKnown(callee.Entry.E) && callee.Entry.E != state.E)
         {
             Report(step, Catalogue.CallStateMismatch.Message(
                 what,
-                ProcessorState.Format(callee.Entry.E),
-                IsKnown(state.E) ? $"the processor is in {Mode(state.E)} here" : "the mode is not known here"));
+                Needs(StateParts.Mode, ProcessorState.Format(callee.Entry.E)),
+                IsKnown(state.E) ? $"the processor is in {Mode(state.E)} here" : ModeUnknown(step, state)));
         }
-        Value(StateRegister.DirectPage, callee.Entry.D, state.D);
-        Value(StateRegister.DataBank, callee.Entry.B, state.B);
+        Value(StateRegister.DirectPage, StateParts.DirectPage, callee.Entry.D, state.D);
+        Value(StateRegister.DataBank, StateParts.DataBank, callee.Entry.B, state.B);
 
-        void Value(StateRegister register, StateValue needed, StateValue here)
+        // An item the routine's signature writes is what it declares. Any other is a default.
+        string Needs(StateParts part, string item) =>
+            target is not null && (callee.Written & part) == 0
+                ? $"`{item}`, which `{target.DisplayName}` takes by default"
+                : $"`{item}`";
+
+        void Value(StateRegister register, StateParts part, StateValue needed, StateValue here)
         {
             if (!needed.IsBounded || here.Meets(needed))
                 return;
             Report(step, Catalogue.CallStateMismatch.Message(
                 what,
-                needed.Format(register),
+                Needs(part, needed.Format(register)),
                 here.IsBounded
                     ? $"{register.Name} is {here.Describe(register.Digits)} here"
                     : $"{register.Name} is not known here"));
         }
 
-        void Width(StateRegister register, Width needed, Width here)
+        void Width(StateRegister register, StateParts part, Width needed, Width here)
         {
             if (!IsKnown(needed) || needed == here)
                 return;
             var item = ProcessorState.Format(register, needed);
             Report(step, Catalogue.CallStateMismatch.Message(
                 what,
-                item,
+                Needs(part, item),
                 IsKnown(here)
                     ? $"{register.Name} {register.Is} {Format(here)} here"
                     : $"the width of {register.Name} is not known here"),
@@ -436,7 +460,7 @@ internal sealed class StateChecks
         else if (mnemonic == MnemonicKind.Jsl && !callee.IsFar)
             Report(step, Catalogue.CallDistanceMismatch.Message(
                 target.DisplayName, "near", "jsr"), Mnemonic(step, "jsr"));
-        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state);
+        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state, target);
     }
 
     /// <summary>
@@ -450,7 +474,7 @@ internal sealed class StateChecks
             Report(step, Catalogue.RelativeCallNeedsPhk.Message(target.DisplayName), BankPush(step, call.Push, "phk"));
         else if (!callee.IsFar && call.IsFar && call.Bank is { } bank)
             Report(step, Catalogue.RelativeCallExtraPhk.Message(target.DisplayName), BankPush(step, bank, null));
-        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state);
+        CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state, target);
     }
 
     /// <summary>
@@ -491,7 +515,7 @@ internal sealed class StateChecks
             Report(step, Catalogue.JumpDistanceMismatch.Message(target.DisplayName, "far", "jml", target.DisplayName),
                 Mnemonic(step, "jml"));
         }
-        CheckEntry(step, what, callee, state);
+        CheckEntry(step, what, callee, state, target);
         if (!returns)
             return;
 
@@ -693,7 +717,7 @@ internal sealed class StateChecks
         if (state.D.Kind == StateValueKind.Unchanged)
         {
             Report(step, Catalogue.DirectPageUnknown.Message(
-                what, $"`{Owner(step, routine)}` declares `dp*`, which assumes nothing about D"));
+                what, $"{Assumes(step, routine, StateParts.DirectPage, "dp*")}, which assumes nothing about D"));
         }
         else if (!state.D.IsKnown)
         {
@@ -732,16 +756,36 @@ internal sealed class StateChecks
 
     /// <summary>
     /// Returns the name of whatever declares the <c>*</c> items in force at a step. That is the
-    /// innermost macro with a signature that the step was expanded from, or else the routine.
+    /// innermost macro with a signature whose body the step is part of, or else the routine. A
+    /// block given to a macro is its caller's code, so that macro is passed over.
     /// </summary>
-    private string Owner(Step step, Symbol routine)
+    private string Owner(Step step, Symbol routine) => OwnerOf(step, routine).Name;
+
+    /// <summary>
+    /// Returns the name and signature of whatever declares the <c>*</c> items in force at a step,
+    /// as <see cref="Owner"/> finds it.
+    /// </summary>
+    private (string Name, Signature? Signature) OwnerOf(Step step, Symbol routine)
     {
-        for (var level = step.On; level is not null; level = level.Outer)
+        foreach (var level in Expansion.Enclosing(step.On))
         {
-            if (level.Call is { } call && model.MacroAt(call) is { MacroSignature: not null } macro)
-                return macro.DisplayName + "!";
+            if (level.Call is { } call && model.MacroAt(call) is { MacroSignature: { } signature } macro)
+                return (macro.DisplayName + "!", signature);
         }
-        return routine.DisplayName;
+        return (routine.DisplayName, signatureOf(routine));
+    }
+
+    /// <summary>
+    /// Returns how a message says that the <c>*</c> item <paramref name="item"/> for
+    /// <paramref name="part"/> is in force at a step. It is declared where the owner's signature
+    /// writes the part, and is otherwise the default the owner takes.
+    /// </summary>
+    private string Assumes(Step step, Symbol routine, StateParts part, string item)
+    {
+        var (name, signature) = OwnerOf(step, routine);
+        return signature is not null && (signature.Written & part) != 0
+            ? $"`{name}` declares `{item}`"
+            : $"`{name}` takes the default `{item}`";
     }
 
     /// <summary>

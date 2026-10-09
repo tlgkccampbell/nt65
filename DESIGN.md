@@ -1252,7 +1252,8 @@ inferred from the program, across files:
   disagree on is unknown after a call, an error only where a caller then needs it. A tail call
   returns with what the routine it calls leaves.
 - The entry comes from the routine's callers in the program, in any module: every call, tail
-  call, `.fallthrough` and `.next` that hands control to its start. Where they agree on a part,
+  call, `.fallthrough` and `.next` that hands control to its start, the routine's own calls to
+  itself included once the other callers have given its entry. Where they agree on a part,
   the routine is entered with it. Code outside nt65 that calls an exported routine is not
   checked, as nothing outside nt65 is; a routine such code calls declares the entry it expects,
   which is the contract between the two. Where an exported routine's bytes depend on an inferred
@@ -1280,8 +1281,10 @@ The parts fall into two classes, treated differently where callers disagree:
   on a width the body depends on, through an immediate before anything sets it, are an error
   at the routine, `callers-disagree`, listing the callers, with fixes that declare either
   width. Where the body does not depend on it, the part stays `*`: the routine runs with
-  either and hands it back. Where callers disagree on the mode, it stays `native`, the default,
-  which the callers in emulation mode are then reported against.
+  either and hands it back. The mode is treated the same way: where callers disagree on it, it
+  is `e*`, so a routine that does not depend on the mode serves callers in both. Where the body does depend on it, through an `.ensure` of a
+  16-bit width or a call that needs one mode, the error there says the mode is not known and
+  names the callers that disagree.
 - **`dp` and `dbr` decide only which memory an operand reaches**, and a routine may be meant
   to run with several. Callers that disagree combine as two paths do where they meet: `dbr`
   becomes one of the callers' banks, and `dp` becomes unknown, an error only where an operand
@@ -1388,7 +1391,7 @@ that routine's signature.
 | `rep #const` with E unknown | the named widths become unknown |
 | `rep`, `sep` with a non-constant operand, or one a store under a `.patch` may write (§7.4) | both widths unknown |
 | `.ensure a16, i8` | the named widths become known (below) |
-| `clc` immediately before `xce`, in the same basic block | from emulation: native, both widths 8; from native: no change; with E unknown: native, both widths unknown |
+| `clc` immediately before `xce`, in the same basic block | from emulation: native, both widths 8; from native: no change; with E unknown or `*`: native, an 8-bit width stays 8, which it is after either mode, and any other width becomes unknown |
 | `sec` immediately before `xce`, in the same basic block | emulation mode, both widths 8 |
 | any other `xce` | E unknown, both widths unknown |
 | `php`, and every other push or pull | moves the analysis stack (below) |

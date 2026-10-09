@@ -3223,10 +3223,10 @@ public static class Catalogue
         "`{0} #` needs the width of {1}, and {2}",
         "On the 65816 an immediate operand such as `lda #` or `ldx #` is one byte or two depending on the M or X "
             + "flag, so nt65 has to know how wide A, or X and Y, is on that line. Here it does not: the paths that "
-            + "reach the line disagree, something the analysis cannot follow changed the flags, the routine's "
-            + "signature declares `a*` or `i*`, or no path reaches the line at all. Put `.ensure a8`, `a16`, `i8` or "
-            + "`i16` before the line to set the width, add a `.state` after a label to declare it, or give the "
-            + "width in the routine's signature.");
+            + "reach the line disagree, something the analysis cannot follow changed the flags, the routine "
+            + "declares `a*` or `i*` or takes it by default, or no path reaches the line at all. Put `.ensure a8`, "
+            + "`a16`, `i8` or `i16` before the line to set the width, add a `.state` after a label to declare it, or "
+            + "give the width in the routine's signature.");
 
     internal static DiagnosticDescriptor CallersDisagree { get; } = Entry(
         Area.ProcessorState,
@@ -3347,7 +3347,7 @@ public static class Catalogue
         Area.ProcessorState,
         "call-state-mismatch",
         Severity.Error,
-        "{0} needs `{1}`, but {2}",
+        "{0} needs {1}, but {2}",
         "Every call is checked against the entry state in the called routine's signature, not against its body. "
             + "Here the state at the call differs from what that signature requires. Change the state before the "
             + "call, for example with `.ensure a16`, or correct the callee's signature if it is wrong.");
