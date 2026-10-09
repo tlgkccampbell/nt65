@@ -3396,11 +3396,11 @@ public static class Catalogue
         Area.ProcessorState,
         "call-target-unknown",
         Severity.Error,
-        "`{0}` must call a routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import",
+        "`{0}` must target a routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import",
         "On the 65816 every call is checked against the called routine's signature, which declares what register "
-            + "widths, mode, D and B it expects. A call to a bare address, or to anything else without a "
-            + "signature, cannot be checked, so the target has to be a `.proc`, an extern proc or a `proc(...)` "
-            + "import.");
+            + "widths, mode, D and B it expects, and a jump to a constant address is a tail call to the code "
+            + "there. A call or such a jump to a bare address, or to anything else without a signature, cannot "
+            + "be checked, so the target has to be a `.proc`, an extern proc or a `proc(...)` import.");
 
     internal static DiagnosticDescriptor SignatureRequired { get; } = Entry(
         Area.ProcessorState,
@@ -3418,10 +3418,10 @@ public static class Catalogue
         Area.ProcessorState,
         "call-target-not-a-routine",
         Severity.Error,
-        "`{0}` is not a routine: on the 65816, a call must target a routine or a label inside one, so {1}",
-        "On the 65816 every call is checked against the state the code it reaches expects. A routine's signature "
-            + "says what that is, and so does the `.state` after a label inside a routine. What this call names is "
-            + "neither, so there is nothing to check it against. An import becomes a routine when it is imported "
+        "`{0}` is not a routine: on the 65816, a call or a jump to an address must target a routine or a label inside one, so {1}",
+        "On the 65816 every call, and every jump to a constant address, is checked against the state the code it "
+            + "reaches expects. A routine's signature says what that is, and so does the `.state` after a label "
+            + "inside a routine. What this transfer names is neither, so there is nothing to check it against. An import becomes a routine when it is imported "
             + "with `proc(...)`, and any other address becomes one when an extern proc, `.proc name = address: ...`, "
             + "declares the signature of the code there.");
 

@@ -265,7 +265,7 @@ internal sealed class Requirements
         // A jump to a constant address, such as a ROM entry point, is a tail call to a routine
         // nothing is known about, as a call to one is a call to such a routine. The flow analysis
         // already ends the path there and keeps nothing across it, so it needs no annotation.
-        if (!calls && !branch && IsConstantAddress(targetExpression, step.On))
+        if (!calls && !branch && Targets.IsConstantAddress(model, targetExpression, step.On))
             return;
 
         // A name that resolves to nothing has already been reported where it appears. A call to
@@ -304,17 +304,6 @@ internal sealed class Requirements
             Report(statement, step.On, Catalogue.JumpIntoData.Message(symbol.DisplayName));
         }
     }
-
-    /// <summary>
-    /// Returns whether a transfer's target is a constant address. It is one where its value is a
-    /// number and no name in it is a label, a routine or data, so that nothing places it inside
-    /// the program. <c>jmp $FFD2</c> and <c>jmp KERNAL + 3</c> are such transfers, and
-    /// <c>jmp table + 3</c> is not.
-    /// </summary>
-    private bool IsConstantAddress(SyntaxNode expression, Expansion? on) =>
-        model.ValueOf(expression, on).AsNumber() is not null
-        && !expression.DescendantNodes().Prepend(expression).OfType<NameExpressionSyntax>()
-            .Any(name => Targets.Of(model, name, on) is { Symbol.IsAddress: true });
 
     /// <summary>
     /// Returns whether a block pushes the address of code, which is what a return used as a jump

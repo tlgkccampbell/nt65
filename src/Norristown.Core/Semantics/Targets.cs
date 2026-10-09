@@ -28,6 +28,17 @@ public static class Targets
     }
 
     /// <summary>
+    /// Returns whether a transfer's target is a constant address. It is one where its value is a
+    /// number and no name in it is a label, a routine or data, so that nothing places it inside
+    /// the program. <c>jmp $FFD2</c> and <c>jmp KERNAL + 3</c> are such transfers, and
+    /// <c>jmp table + 3</c> is not.
+    /// </summary>
+    public static bool IsConstantAddress(SemanticModel model, SyntaxNode expression, Expansion? on) =>
+        model.ValueOf(expression, on).AsNumber() is not null
+        && !expression.DescendantNodes().Prepend(expression).OfType<NameExpressionSyntax>()
+            .Any(name => Of(model, name, on) is { Symbol.IsAddress: true });
+
+    /// <summary>
     /// Recognizes a routine's address in a chosen bank, <c>(bank &lt;&lt; 16) | .loword(f)</c>,
     /// which is how a long jump or call reaches a routine in one of its segment's mirrors. Returns
     /// the routine, the <see cref="Expansion"/> it belongs to, and the bank, or null for any other

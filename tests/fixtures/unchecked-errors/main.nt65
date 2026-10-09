@@ -232,6 +232,27 @@
     rts
 }
 
+; A jump to a constant address is a tail call to the code there. On the 6502 it needs nothing,
+; and on the 65816 that code has to be a routine with a signature, as the target of a call has
+; to be, so that what it hands back is known. An extern proc at the address says what it is.
+.const ROM = $E000
+.proc CHROUT = $FFD2: ?
+.proc to_a_number: a8, i8 {
+    jmp $FFD2               ;! error[call-target-unknown]: `jmp` must target a routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import
+}
+
+.proc to_a_sum: a8, i8 {
+    jmp ROM + 4             ;! error[call-target-unknown]: `jmp` must target a routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import
+}
+
+.proc to_a_constant: a8, i8 {
+    jmp ROM                 ;! error[call-target-not-a-routine]: `ROM` is not a routine: on the 65816, a call or a jump to an address must target a routine or a label inside one, so declare an extern proc at its address, `.proc name = ROM: ...`, which says what state it takes
+}
+
+.proc to_an_extern: a8, i8 -> ? {
+    jmp CHROUT
+}
+
 ; An exported label inside a routine is another way in.
 .proc exported_inner: a8, i8 {
     rts

@@ -891,6 +891,13 @@ public sealed class StateAnalysis : IProcessorStates
             if (report is not null)
                 JumpedInto(step, SyntaxFacts.TextOf(mnemonic), target, owner, state.Processor, routine, report);
         }
+        else if (transfer == Transfer.Jump && next is null && report is not null
+            && Transfers.TargetOf(statement, mode) is { } operand && Targets.IsConstantAddress(model, operand, step.On))
+        {
+            // A jump to a constant address is a tail call to the code there, which has to be a
+            // routine with a signature for what it hands back to be known, as a call's target has.
+            report.CheckCallTarget(step, mnemonic, target);
+        }
         if (report is not null && next is not null)
             CheckNamed(step, next, state, routine, report);
 

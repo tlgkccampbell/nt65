@@ -435,9 +435,10 @@ internal sealed class StateChecks
     }
 
     /// <summary>
-    /// Reports a diagnostic for a call whose target is neither a routine with a signature nor a
-    /// label inside one. A signature is what would say what state the target takes and what it
-    /// hands back. The message names the declaration that makes the target a routine.
+    /// Reports a diagnostic for a call, or a jump to a constant address, whose target is neither
+    /// a routine with a signature nor a label inside one. A signature is what would say what
+    /// state the target takes and what it hands back. The message names the declaration that
+    /// makes the target a routine.
     /// </summary>
     public void CheckCallTarget(Step step, MnemonicKind mnemonic, Symbol? target) =>
         Report(step, target is null
