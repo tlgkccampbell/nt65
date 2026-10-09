@@ -118,6 +118,23 @@ internal static class Hovers
         return names.Count == 0 ? "none" : string.Join(", ", names);
     }
 
+    /// <summary>
+    /// Formats the registers a routine preserves where its signature promises some of them with
+    /// <c>keeps</c>, such as <c>keeps X · also preserves Y, C, V (inferred)</c>. The promise comes
+    /// first. The registers the analysis only found unchanged follow, marked as inferred, because
+    /// a caller may not rely on them and an edit to the routine can change them.
+    /// </summary>
+    /// <param name="kept">The registers the analysis found the routine returns unchanged.</param>
+    /// <param name="complete">A value indicating whether the analysis followed every call.</param>
+    /// <param name="promised">The registers the routine's <c>keeps</c> promises.</param>
+    /// <param name="also">The words in front of the inferred registers.</param>
+    internal static string Promised(Registers kept, bool complete, Registers promised, string also)
+    {
+        var observed = kept & ~promised;
+        var text = $"keeps {Format(promised, true)}";
+        return observed == Registers.None && complete ? text : $"{text} · {also} {Format(observed, complete)} (inferred)";
+    }
+
     /// <summary>Formats a cycle count as it is shown, such as <c>4 cycles</c> or <c>4-5 cycles</c>.</summary>
     internal static string Format(CycleCount cycles) =>
         cycles is { IsExact: true, Minimum: 1 } ? "1 cycle" : $"{cycles} cycles";
@@ -495,7 +512,7 @@ internal static class Hovers
                 Cost: CodeLenses.Format(region.Cost, region.Total, "never returns", false),
                 Excluded: region.Cost.IsKnown ? region.Total.Excluded ?? [] : [],
                 Read: Format(region.Reads.Read, region.Reads.Complete),
-                Kept: region.Total.Ends ? Format(region.Registers.Kept, region.Registers.Complete) : null))
+                Kept: region.Total.Ends ? Preserved(region, "also") : null))
             .ToList();
         Rows(card, "cost", found.Select(region => (region.Name, region.Cost)));
 
@@ -525,6 +542,18 @@ internal static class Hovers
             card.Row("inferred", InferredState.Format(entry, exit));
         }
     }
+
+    /// <summary>
+    /// Formats the registers a routine preserves as the hover's <c>preserves</c> row and the
+    /// lens show them. The registers its <c>keeps</c> promises are set apart from the ones that
+    /// are only inferred.
+    /// </summary>
+    /// <param name="region">The routine's region.</param>
+    /// <param name="also">The words in front of the inferred registers where some are promised.</param>
+    internal static string Preserved(FlowRegion region, string also) =>
+        region.Routine.Signature?.Keeps is { } promised and not Registers.None
+            ? Promised(region.Registers.Kept, region.Registers.Complete, promised, also)
+            : Format(region.Registers.Kept, region.Registers.Complete);
 
     /// <summary>
     /// Adds one row to the grid, or one row per instance where the instances of a family (the

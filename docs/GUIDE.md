@@ -1329,7 +1329,8 @@ ROM routine somewhere to live.
 A routine that writes no `keeps` promises whatever its body keeps, and its callers may rely on
 all of it. Once it writes `keeps`, the list is the whole promise. nt65 still uses what the body
 keeps, but a caller that relies on a register the list leaves out gets `unpromised-keep` at the
-call:
+call. The lens above such a routine shows the two apart, as `keeps X · also preserves Y, C, V
+(inferred)`, and so does its hover:
 
 ```text
 main.nt65:12:5: warning: this call relies on `print_digit` keeping Y, which it does but does not promise (it declares `keeps x`) [unpromised-keep]
