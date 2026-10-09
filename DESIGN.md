@@ -2497,6 +2497,13 @@ is meant. In the same way an absolute or far address in a `.byte` or a one-byte 
 and a far one in a two-byte immediate, is an error that ca65 would otherwise report as a
 range error: `<x` and `.loword(x)` say which part is meant.
 
+Any other value in a one-byte slot that names an absolute or far address, such as `main / 256`
+or `'0' + main .mod 10`, has a value only ld65 knows. ca65 refuses it there whatever it comes
+to, unless `<`, `>`, `^`, `.lobyte`, `.hibyte` or `.bankbyte` takes one byte of the address. nt65
+bounds the value from its operators and the sizes of the addresses in it. Where the value always
+fits a byte, the output writes it inside `.lobyte()`, which loses nothing. Where nt65 cannot show
+that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`.
+
 **Elements.** `name[i]` is the element at `i` of a declaration that has a count:
 `buffer[3]`, `handlers[2]`, `actors[1]`. It is `name` plus `i` times the size of one element
 — a record's being its type's size — and is as wide an address as `name` is. A member path
@@ -2815,10 +2822,9 @@ A call given an address, such as the decimal digits of a routine's address that 
 ```
 
 ld65 works out the operators, so a part of the body that uses such a parameter in anything
-else, such as a built-in function or `.in`, is an error. ca65 refuses an absolute address in a
-one-byte slot whatever the value comes to. A call that nt65 can show always fits a byte is
-therefore written as its `.lobyte`, which loses nothing, and one in a byte that nt65 cannot show
-fits is an error that asks for `<`.
+else, such as a built-in function or `.in`, is an error. In a one-byte slot the call follows the
+rule for any value that names an address (§8): one that nt65 can show always fits a byte is
+written inside `.lobyte()`, and one that it cannot is an error that asks for `<`.
 
 **Defaults and named arguments** work as a macro's do (§11.2). A parameter may have a default,
 whose names resolve where the function is declared, so a caller in another module gets the
@@ -4046,13 +4052,14 @@ generated ca65, which is what ld65 wrote and is still true.
 | `.type T { ... }`, `.type T[] { ... }` | a data directive per member of each record, each with a comment naming it |
 | `.data name { }` | `name:` and its contents; a member `name::sub` is `name__sub`, and an `@` position gets a generated name |
 | `.list` | nothing by itself; its items where it is used |
-| a `.func` call | its value where nt65 has one, else its body, with each parameter replaced by its parenthesized argument, inside `.lobyte()` where nt65 can show the value always fits a byte |
+| a `.func` call | its value where nt65 has one, else its body, with each parameter replaced by its parenthesized argument |
 | a `.func` call, `.strsub`, `.strcat` or `.select` that is text | its bytes, with the source expression in a comment, as a literal's are |
 | `Player::pos::y`, `player::hp` | `2`, `player+4`, each with a comment naming the path |
 | `'c'`, `"text"`, `screen("HELLO")` | byte values, with the source text in a comment |
 | `.strz "s"`, `.strz TEXT` | `.byte` with those values and a terminating `$00`: the text is bytes by then |
 | a text constant | its bytes where it is used, and nothing where it is declared |
 | a negative constant in a number slot | its two's complement at the slot's width, with the source in a comment |
+| a value in a one-byte slot that names an absolute or far address, `main / 256` | inside `.lobyte()`, where nt65 can show it always fits a byte (§8) |
 | `.long`, `.beword` | `.faraddr`, `.dbyt` |
 | `.belong`, `.bedword` | `.byte` with the bytes high first: the values of a constant, or `.bankbyte(e)`, `.hibyte(e)`, `.lobyte(e)` |
 | `.select(c, a, b)` | the chosen value |

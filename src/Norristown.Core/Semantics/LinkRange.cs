@@ -8,9 +8,10 @@ namespace Norristown.Semantics;
 /// address is somewhere in the space its address size reaches, and each operator narrows or
 /// widens that range, so <c>'0' + (main / 10) .mod 10</c> is always a digit wherever
 /// <c>main</c> lands. A call to a <c>.func</c> takes the range of its body, with each parameter
-/// taking the range of what it is given. ca65 refuses an expression that names an absolute
-/// address in a one-byte slot, whatever its value, so the output narrows a call whose range
-/// fits a byte, and the analysis refuses one whose range it cannot show fits.
+/// taking the range of what it is given. ca65 refuses an expression that names an absolute or
+/// far address in a one-byte slot, whatever its value, unless a byte operator takes one byte of
+/// the address. The output therefore narrows such an expression whose range fits a byte, and
+/// the analysis refuses one whose range it cannot show fits.
 /// </summary>
 internal static class LinkRange
 {
@@ -22,21 +23,77 @@ internal static class LinkRange
         Range(model, expression, on, null, []);
 
     /// <summary>
-    /// Returns whether <paramref name="expression"/> holds a call to a <c>.func</c> that is given
-    /// an address, whose value only the linker knows, and that the output therefore writes as
-    /// the function's body.
+    /// Returns whether ca65 would refuse <paramref name="expression"/> in a one-byte slot because
+    /// of its address size. That is the case when nt65 does not know its value and it names an
+    /// absolute or far address outside every byte operator, directly or through the body of a
+    /// <c>.func</c> it calls. <paramref name="on"/> is the expansion the expression is in.
     /// </summary>
-    public static bool HasLinkedCall(SemanticModel model, SyntaxNode expression, Expansion? on) =>
-        expression.DescendantNodes().Prepend(expression).OfType<CallExpressionSyntax>().Any(call =>
-            call.Callee is { } callee && model.SymbolOf(callee, on) is { Kind: SymbolKind.Func, Items: [var body, ..] } function
-            && FunctionArguments.Match(function, call) is { } arguments
-            && model.ValueOf(call, on).Kind == ValueKind.Unknown
-            && arguments.Cast<SyntaxNode>().Append(body).Any(part => NamesAnAddress(model, part, on)));
+    public static bool NamesWideAddress(SemanticModel model, SyntaxNode expression, Expansion? on) =>
+        model.ValueOf(expression, on).AsNumber() is null && NamesWide(model, expression, on, []);
 
-    /// <summary>Returns whether an expression names an address anywhere in it.</summary>
-    private static bool NamesAnAddress(SemanticModel model, SyntaxNode expression, Expansion? on) =>
-        expression.DescendantNodes().Prepend(expression).OfType<NameExpressionSyntax>()
-            .Any(name => model.SymbolOf(name, on) is { IsAddress: true });
+    /// <summary>
+    /// Returns whether the output writes <paramref name="expression"/>, the value of a one-byte
+    /// slot, inside <c>.lobyte()</c>. That is the case when ca65 would refuse it for its address
+    /// size, as <see cref="NamesWideAddress"/> decides, and its range always fits a byte, signed
+    /// or unsigned, so that keeping the low byte loses nothing.
+    /// </summary>
+    public static bool NarrowsToByte(SemanticModel model, SyntaxNode expression, Expansion? on) =>
+        NamesWideAddress(model, expression, on) && FitsByte(Of(model, expression, on));
+
+    /// <summary>Returns whether a range, where there is one, lies within -128 to 255.</summary>
+    public static bool FitsByte((long Low, long High)? range) => range is { Low: >= -0x80, High: <= 0xff };
+
+    /// <summary>
+    /// Returns whether part of an expression names an absolute or far address outside every byte
+    /// operator. A part whose value nt65 knows is written as that value, so it names nothing. A
+    /// call to a <c>.func</c> names what its arguments and its body name, and
+    /// <paramref name="visiting"/> holds the functions already entered, so a recursive body ends.
+    /// </summary>
+    private static bool NamesWide(SemanticModel model, SyntaxNode node, Expansion? on, HashSet<Symbol> visiting)
+    {
+        if (node is ExpressionSyntax && model.ValueOf(node, on).AsNumber() is not null)
+            return false;
+        switch (node)
+        {
+            case UnaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret }:
+            case CallExpressionSyntax { BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte or BuiltinKind.Bankof }:
+                return false;
+
+            case NameExpressionSyntax bound when model.BoundItemOf(bound, on) is { } item:
+                return NamesWide(model, item, on, visiting);
+
+            case NameExpressionSyntax name:
+                return model.SymbolOf(name, on) is { IsAddress: true }
+                    && model.AddressSizeOf(name, null, on) is AddressSize.Absolute or AddressSize.Far;
+
+            case CallExpressionSyntax { Callee: { } callee } call
+                when model.SymbolOf(callee, on) is { Kind: SymbolKind.Func, Items: [var body, ..] } function:
+                if (!visiting.Add(function))
+                    return false;
+                try
+                {
+                    return call.Arguments.ChildNodes.Append(body).Any(part => NamesWide(model, part, on, visiting));
+                }
+                finally
+                {
+                    visiting.Remove(function);
+                }
+
+            // The output writes `.loword`, `.hiword` and `.endof` around the names they are given,
+            // and a `.select` or a `.switch` as the value it chooses. Every other built-in is
+            // written as its value or stands for no address.
+            case CallExpressionSyntax { Callee: null, BuiltinKind: BuiltinKind.Loword or BuiltinKind.Hiword or BuiltinKind.Endof } builtin:
+                return builtin.Arguments.ChildNodes.Any(argument => NamesWide(model, argument, on, visiting));
+            case CallExpressionSyntax { Callee: null } chooser:
+                return model.ChosenBy(chooser, on) is { } chosen && NamesWide(model, chosen, on, visiting);
+
+            case ParenthesizedExpressionSyntax or UnaryExpressionSyntax or BinaryExpressionSyntax or ArgumentListSyntax:
+                return node.ChildNodes.Any(child => NamesWide(model, child, on, visiting));
+
+            default:
+                return false;
+        }
+    }
 
     /// <summary>
     /// Returns the range of a part of an expression, with each parameter in
@@ -57,6 +114,10 @@ internal static class LinkRange
         {
             case ParenthesizedExpressionSyntax parenthesized:
                 return Range(model, parenthesized.Expression, on, parameters, visiting);
+
+            // A name a macro call or a repetition binds to an expression takes that expression's range.
+            case NameExpressionSyntax bound when model.BoundItemOf(bound, on) is { } item:
+                return Range(model, item, on, parameters, visiting);
 
             case NameExpressionSyntax name when model.SymbolOf(name, on) is { } symbol:
                 if (parameters is not null && parameters.TryGetValue(symbol, out var given))
@@ -82,7 +143,17 @@ internal static class LinkRange
                     _ => null,
                 };
 
-            case BinaryExpressionSyntax binary when !Evaluator.IsIn(binary.OperatorToken):
+            // A byte or a word of a value is bounded by its width, whatever the value is.
+            case CallExpressionSyntax { BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte or BuiltinKind.Bankof }:
+                return (0, 0xff);
+            case CallExpressionSyntax { BuiltinKind: BuiltinKind.Loword or BuiltinKind.Hiword }:
+                return (0, 0xffff);
+
+            // Membership is 1 or 0, as a comparison is.
+            case BinaryExpressionSyntax membership when Evaluator.IsIn(membership.OperatorToken):
+                return (0, 1);
+
+            case BinaryExpressionSyntax binary:
                 return Binary(binary.OperatorToken,
                     Range(model, binary.Left, on, parameters, visiting), Range(model, binary.Right, on, parameters, visiting));
 

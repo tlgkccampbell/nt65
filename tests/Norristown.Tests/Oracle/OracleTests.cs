@@ -428,6 +428,70 @@ public sealed partial class OracleTests
         Assert.Equal(expected, linked.Binary);
     }
 
+    /// <summary>
+    /// An expression that names an address and always fits a byte is written as its low byte,
+    /// which ca65 takes in a <c>.byte</c> and in a one-byte immediate where it would refuse the
+    /// address. ld65 then works out the same bytes the expression stands for.
+    /// </summary>
+    [Fact]
+    public void AByteThatNamesAnAddressIsWorkedOutByLd65()
+    {
+        const string Nt65 = """
+            .module main
+            .segment CODE
+            .data parts {
+                .byte main / 256, main .mod 10, (main >> 8) & $0f
+            }
+            .export .proc main {
+                lda #main / 256
+                ldx #main .mod 10
+                rts
+            }
+            """;
+
+        var generated = Compiler.Compile(
+            [new SourceFile("main.nt65", Nt65)], ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
+        Assert.Empty(generated.Diagnostics);
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var linked = Ca65Oracle.Pinned.Link(config, [.. generated.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))]);
+        Assert.True(linked.Succeeded, linked.Messages);
+
+        // CODE starts at $0200, and the three bytes of `parts` put `main` at $0203, which is 515.
+        byte[] expected = [0x02, 0x05, 0x02, 0xa9, 0x02, 0xa2, 0x05, 0x60];
+        Assert.Equal(expected, linked.Binary);
+    }
+
+    /// <summary>
+    /// On the 65816, an immediate for an 8-bit register is a one-byte slot like any other, and a
+    /// value there that names an address is written as its low byte. A 16-bit immediate holds the
+    /// address as it stands.
+    /// </summary>
+    [Fact]
+    public void An8BitImmediateThatNamesAnAddressIsWorkedOutByLd65()
+    {
+        const string Nt65 = """
+            .module main
+            .segment CODE
+            .export .proc main: a8, i16, native {
+                lda #main / 256
+                lda #(main >> 8) .mod 10
+                ldx #main / 2
+                rts
+            }
+            """;
+
+        var generated = Compiler.Compile(
+            [new SourceFile("main.nt65", Nt65)], ProjectSettings.None with { Cpu = Processor.Cpu.Wdc65816 });
+        Assert.Empty(generated.Diagnostics);
+        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var linked = Ca65Oracle.Pinned.Link(config, [.. generated.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))]);
+        Assert.True(linked.Succeeded, linked.Messages);
+
+        // CODE starts at $0200, so `main` is $0200.
+        byte[] expected = [0xa9, 0x02, 0xa9, 0x02, 0xa2, 0x00, 0x01, 0x60];
+        Assert.Equal(expected, linked.Binary);
+    }
+
     [Fact]
     public void RefusesABuildThatIsNotThePinnedCommit()
     {

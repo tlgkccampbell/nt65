@@ -2090,9 +2090,10 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is worked out by the linker from an address, and {1}, which nt65 cannot show it fits: use `<({0})` "
             + "for its low byte",
-        "A `.func` given an address is written for ld65 to work out, and ca65 refuses an address in a one-byte slot "
-            + "whatever the value comes to. Where nt65 can show the value always fits a byte, as it can for "
-            + "`'0' + (n / 10) .mod 10`, the output keeps only the low byte, which loses nothing. Where it cannot, "
+        "A value that names an absolute or far address is written for ld65 to work out, and ca65 refuses it in a "
+            + "one-byte slot whatever it comes to, unless a byte operator such as `<` takes one byte of the address. "
+            + "Where nt65 can show the value always fits a byte, as it can for `main / 256` or "
+            + "`'0' + (main / 10) .mod 10`, the output keeps only the low byte, which loses nothing. Where it cannot, "
             + "`<` says that the low byte is what is meant.");
 
     internal static DiagnosticDescriptor AddressNegative { get; } = Entry(
