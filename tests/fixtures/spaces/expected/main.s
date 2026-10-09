@@ -45,7 +45,7 @@ boot__next:
 ; end of boot
 
 .segment "DRIVE": absolute
-; .proc drive_main: a8, i8  main.nt65:43
+; .proc drive_main: a8, i8, native  main.nt65:43
 main__drive_main:
     jsr drive_next
     rts

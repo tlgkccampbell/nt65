@@ -24,7 +24,7 @@ Mode__idle = $00
 Mode__busy = $01
 
 .segment "CODE": absolute
-; .proc main: a8, i8  main.nt65:37
+; .proc main: a8, i8, native  main.nt65:37
 main__main:
     jsr other__work
     .a8

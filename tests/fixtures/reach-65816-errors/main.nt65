@@ -17,7 +17,7 @@
 }
 
 .segment CODE
-.proc start: a8, i8 {
+.proc start: a8, i8, native {
     jsl far_routine
     jsr near_routine        ;! error[jump-leaves-bank]: `near_routine` is in bank $81, and `jsr` cannot leave bank $80: use `jsl`
     jeq near_routine        ;! error[jump-leaves-bank]: `near_routine` is in bank $81, and `jeq` cannot leave bank $80: branch the other way around a `jml` to it

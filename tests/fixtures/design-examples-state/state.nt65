@@ -147,7 +147,7 @@
 }
 
 ; A routine that runs in any bank that sees the registers.
-.proc draw_bg: far, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16 {
+.proc draw_bg: far, native, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16 {
     sep #$20
     rep #$10
     sta $2100

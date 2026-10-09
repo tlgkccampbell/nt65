@@ -35,7 +35,7 @@
 
 ; `.ensure` writes nothing where the widths already hold, and the `rep` or `sep` that sets
 ; them where they do not.
-.proc setup: a8, i8 -> a16, i16 {
+.proc setup: a8, i8, native -> a16, i16 {
     .ensure a8, i8          ; already so: nothing
     .ensure a16             ; rep #$20
     lda #$1234
@@ -44,7 +44,7 @@
     rts
 }
 
-.proc mixed: a16, i8 -> a8, i16 {
+.proc mixed: a16, i8, native -> a8, i16 {
     .ensure a8, i16         ; both: rep #$10 and sep #$20
     lda #$12
     ldx #$1234
@@ -107,7 +107,7 @@
     rts
 }
 
-.proc reenter: a16, i16 {
+.proc reenter: a16, i16, native {
     pea 0
     jmp twice::again
 }

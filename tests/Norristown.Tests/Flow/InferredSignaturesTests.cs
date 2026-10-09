@@ -19,7 +19,7 @@ public sealed class InferredSignaturesTests
     [Fact]
     public void AnExitComesFromTheBody()
     {
-        const string Text = ".proc narrow {\n    sep #$20\n    rts\n}\n.export .proc main: a16 -> a8 {\n    jsr narrow\n    lda #1\n    rts\n}\n";
+        const string Text = ".proc narrow {\n    sep #$20\n    rts\n}\n.export .proc main: a16, native -> a8 {\n    jsr narrow\n    lda #1\n    rts\n}\n";
 
         var analysis = FlowFragment.Analyze("65816", Text);
 
@@ -35,7 +35,7 @@ public sealed class InferredSignaturesTests
     public void AnEntryComesFromCallersThatAgree()
     {
         const string Text = ".proc draw {\n    lda #$12\n    ldx #$34\n    rts\n}\n"
-            + ".export .proc main: a8, i16 {\n    jsr draw\n    jsr draw\n    rts\n}\n";
+            + ".export .proc main: a8, i16, native {\n    jsr draw\n    jsr draw\n    rts\n}\n";
 
         var analysis = FlowFragment.Analyze("65816", Text);
 
@@ -53,7 +53,7 @@ public sealed class InferredSignaturesTests
     {
         const string Text = ".proc even {\n    lda $10\n    beq @done\n    dec $10\n    jsr odd\n@done:\n    rts\n}\n"
             + ".proc odd {\n    lda #1\n    jsr even\n    rts\n}\n"
-            + ".export .proc main: a16 {\n    jsr even\n    rts\n}\n";
+            + ".export .proc main: a16, native {\n    jsr even\n    rts\n}\n";
 
         var analysis = FlowFragment.Analyze("65816", Text);
 
@@ -69,7 +69,7 @@ public sealed class InferredSignaturesTests
     public void CallersThatDisagreeOnAWidthTheBodyNeedsAreAnError()
     {
         const string Text = ".proc draw {\n    lda #$12\n    lda #$34\n    rts\n}\n"
-            + ".export .proc main: a8 {\n    jsr draw\n    rep #$20\n    jsr draw\n    sep #$20\n    rts\n}\n";
+            + ".export .proc main: a8, native {\n    jsr draw\n    rep #$20\n    jsr draw\n    sep #$20\n    rts\n}\n";
 
         var problem = Assert.Single(FlowFragment.Analyze("65816", Text).Diagnostics);
 
@@ -88,7 +88,7 @@ public sealed class InferredSignaturesTests
     public void CallersThatDisagreeOnAWidthTheBodyDoesNotNeedAreFine()
     {
         const string Text = ".proc bump {\n    inc $10\n    rts\n}\n"
-            + ".export .proc main: a8 {\n    jsr bump\n    rep #$20\n    jsr bump\n    lda #$1234\n    sep #$20\n    rts\n}\n";
+            + ".export .proc main: a8, native {\n    jsr bump\n    rep #$20\n    jsr bump\n    lda #$1234\n    sep #$20\n    rts\n}\n";
 
         Assert.Empty(FlowFragment.Problems("65816", Text));
     }
@@ -100,11 +100,41 @@ public sealed class InferredSignaturesTests
     [Fact]
     public void ARoutineWhoseAddressIsTakenKeepsTheDefaultEntry()
     {
-        const string Text = ".proc draw {\n    lda #$12\n    rts\n}\n.export .proc main: a8 {\n    jsr draw\n    rts\n}\n"
+        const string Text = ".proc draw {\n    lda #$12\n    rts\n}\n.export .proc main: a8, native {\n    jsr draw\n    rts\n}\n"
             + ".segment RODATA\n.data table: .addr draw\n";
 
         Assert.Contains(FlowFragment.Problems("65816", Text),
             problem => problem.Contains("`draw` declares `a*`, which assumes nothing about it", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A routine whose address is taken, or that nothing calls, may be entered in either mode, so
+    /// a <c>rep</c> in it widens nothing nt65 can rely on until the routine declares its mode.
+    /// </summary>
+    [Theory]
+    [InlineData(".proc handler {\n    rep #$20\n    lda #$1234\n    sep #$20\n    rts\n}\n.segment RODATA\n.data vectors: .addr handler\n")]
+    [InlineData(".export .proc handler {\n    rep #$20\n    lda #$1234\n    sep #$20\n    rts\n}\n")]
+    public void ARoutineSomeOfWhoseCallersCannotBeSeenAssumesNothingAboutTheMode(string text)
+    {
+        Assert.Equal(
+            ["main.nt65:3: `lda #` needs the width of A, and it is not known here, because `rep #$20` widens nothing in "
+                + "emulation mode, and the mode is not known: a `.state` before it declares which mode it is"],
+            FlowFragment.Problems("65816", text));
+        Assert.Empty(FlowFragment.Problems("65816", text.Replace(".proc handler {", ".proc handler: native {", StringComparison.Ordinal)));
+    }
+
+    /// <summary>
+    /// A routine whose address is taken and that is also called hands back the mode it was
+    /// entered with, so its caller keeps the mode it knew across the call.
+    /// </summary>
+    [Fact]
+    public void ACallerKeepsItsModeAcrossARoutineWhoseAddressIsTaken()
+    {
+        const string Text = ".proc bump {\n    inc $10\n    rts\n}\n"
+            + ".export .proc main: a8, native {\n    jsr bump\n    rep #$20\n    lda #$1234\n    sep #$20\n    rts\n}\n"
+            + ".segment RODATA\n.data table: .addr bump\n";
+
+        Assert.Empty(FlowFragment.Problems("65816", Text));
     }
 
     /// <summary>
@@ -119,7 +149,7 @@ public sealed class InferredSignaturesTests
     {
         var lib = ".module lib\n.cpu 65816\n.segment CODE\n" + draw;
         const string Main = ".module main\n.cpu 65816\n.use lib::draw\n.segment CODE\n"
-            + ".export .proc main: a16 {\n    jsr draw\n    rts\n}\n";
+            + ".export .proc main: a16, native {\n    jsr draw\n    rts\n}\n";
 
         Assert.Empty(Analysis.Program(Analysis.Fragment, ("main.nt65", Main), ("lib.nt65", lib)).Problems());
         Assert.Empty(Analysis.Program(Analysis.Fragment, ("lib.nt65", lib), ("main.nt65", Main)).Problems());
@@ -137,8 +167,8 @@ public sealed class InferredSignaturesTests
     public void TheDirectPageComesFromCallersThatAgree(string other, bool reported)
     {
         var text = ".proc poke {\n    lda d:$0010\n    rts\n}\n"
-            + ".export .proc first: a8, dp = $0000 {\n    jsr poke\n    rts\n}\n"
-            + $".export .proc second: a8, dp = {other} {{\n    jsr poke\n    rts\n}}\n";
+            + ".export .proc first: a8, dp = $0000, native {\n    jsr poke\n    rts\n}\n"
+            + $".export .proc second: a8, dp = {other}, native {{\n    jsr poke\n    rts\n}}\n";
 
         var problems = FlowFragment.Problems("65816", text);
 
@@ -152,8 +182,8 @@ public sealed class InferredSignaturesTests
     public void TheDataBankIsOneOfTheCallers()
     {
         const string Text = ".proc peek {\n    lda $10\n    rts\n}\n"
-            + ".export .proc first: a8, dbr = $7e {\n    jsr peek\n    rts\n}\n"
-            + ".export .proc second: a8, dbr = $7f {\n    jsr peek\n    rts\n}\n";
+            + ".export .proc first: a8, dbr = $7e, native {\n    jsr peek\n    rts\n}\n"
+            + ".export .proc second: a8, dbr = $7f, native {\n    jsr peek\n    rts\n}\n";
 
         var analysis = FlowFragment.Analyze("65816", Text);
 
@@ -170,7 +200,7 @@ public sealed class InferredSignaturesTests
     [InlineData("65816")]
     public void ARoutineThatNeverReturnsIsInferred(string cpu)
     {
-        const string Text = ".proc fatal {\n@spin:\n    jmp @spin\n}\n.export .proc main {\n    jsr fatal\n    .byte 1\n}\n";
+        const string Text = ".proc fatal {\n@spin:\n    jmp @spin\n}\n.export .proc main: native {\n    jsr fatal\n    .byte 1\n}\n";
 
         Assert.Empty(FlowFragment.Problems(cpu, Text));
     }

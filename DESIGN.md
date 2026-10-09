@@ -1253,8 +1253,12 @@ inferred from the program, across files:
   the routine is entered with it. Code outside nt65 that calls an exported routine is not
   checked, as nothing outside nt65 is; a routine such code calls declares the entry it expects,
   which is the contract between the two. A routine whose address is taken, by any use of its
-  name other than as where control goes, may be called through it from anywhere, and keeps the
-  default entry, `a*, i*, native, dp*, dbr*`; so does one nothing calls.
+  name other than as where control goes, may be called through it from anywhere, in either
+  mode, and is entered with `a*, i*, e*, dp*, dbr*`: it assumes nothing; so is one nothing
+  calls. A `rep` in it widens nothing until it declares `native` or enters native mode with
+  `clc` and `xce`, as a reset handler does, and a declared `native` restores the old default.
+  It still hands back the mode it was entered with, unless it changes it, so a caller
+  that also calls it directly keeps its mode across the call.
 
 This is sound where an assumed width was not. nt65 sizes every immediate from the state the
 processor will be in, so an inferred width describes what the CPU does, and the bytes follow
@@ -1343,7 +1347,10 @@ after `->`, and an `rts` or `rtl` in it is an error. It is neither near nor far:
 `jsr`, `jsl` or a relative call, is an error, while its address in data, a vector, is what it
 is for. A jump from it checks only the target's entry, and a jump to it is allowed only from
 another interrupt handler or a routine that never returns. On the 6502 and its CMOS variants it is
-accepted with the same `rti` and call checks.
+accepted with the same `rti` and call checks. An `rti` in a routine not marked `interrupt` is a
+warning, `rti-outside-handler`, whose fix adds the item: leaving the mark off would otherwise
+earn the routine more trust than writing it. An `rti` with a `.next` is a computed jump that
+says where it goes, and is not reported.
 
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near
@@ -1377,7 +1384,9 @@ that routine's signature.
 | `sec` immediately before `xce`, in the same basic block | emulation mode, both widths 8 |
 | any other `xce` | E unknown, both widths unknown |
 | `php`, and every other push or pull | moves the analysis stack (below) |
-| `plp` that pulls a P saved by `php` | the widths saved at the `php` |
+| `plp` that pulls a P saved by `php`, in native mode | the widths saved at the `php` |
+| `plp` that pulls a P saved by `php`, in emulation mode | both widths 8 |
+| `plp` that pulls a P saved by `php`, with E unknown or `*` | a saved 8 is restored, and so is a saved `*` where E is `*`; any other saved width becomes unknown, as after `rep` |
 | any other `plp` | both widths unknown; E unchanged |
 | `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `noreturn` ends the path |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |
@@ -1834,13 +1843,13 @@ that is not the next one written, which is a jump there, checked as a tail call;
 in between runs into it and says so with `.fallthrough`:
 
 ```nt65
-.proc set_one: a8 {
+.proc set_one: a8, native {
     lda #1
     .byte $2c           ; bit abs: swallows the `lda #2` of `set_two`
     .next store
 }
 
-.proc set_two: a8 {
+.proc set_two: a8, native {
     lda #2
     .fallthrough store
 }
@@ -1855,7 +1864,7 @@ A routine whose body ends in an `.if` chain, taken or not, runs into the next ro
 every branch, and the `.fallthrough` after the chain says so for all of them:
 
 ```nt65
-.proc prepare: a8 {
+.proc prepare: a8, native {
     lda #0
     .if FAST {
         asl a
@@ -1926,7 +1935,7 @@ one of the banks that can see what they reach. `dbr` may name that set, written 
 writes banks:
 
 ```nt65
-.proc draw_bg: far, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16 {
+.proc draw_bg: far, native, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16 {
     ...
     sta $2100               ; checked against every bank of the set
     ...
@@ -3477,7 +3486,12 @@ match the entry and becomes the exit. Each expansion is checked against the sign
 with errors reported at the body line and naming the call, so a caller in the wrong
 state gets "`add16!` needs `a8`" at the call rather than an unknown width inside the
 body. A block spliced into a macro with a signature must leave the state as it found it.
-Without a signature, an expansion is analyzed inline as the code it contains. On the
+In the body, and in a block spliced into it, a `*` item means the state at the call, not at
+the routine's entry. What a `php`, `phd` or `phb` there saves is kept in the routine's terms,
+the state at the call standing in for each `*`, so a pull after the body reads back the
+width or value that was pushed. A pull in the body gets back a `*` item only where what it
+pulls is what that item means; anything else known comes back as it is, and the rest is
+unknown. Without a signature, an expansion is analyzed inline as the code it contains. On the
 6502 and its CMOS variants, signatures on macros are accepted and have no effect.
 
 This is the checked replacement for macros that test ca65's `.asize` and `.isize`. A macro
@@ -3668,7 +3682,7 @@ and are never visible any other way:
 .use snd::init as snd_init          ; a name of this module's choosing
 .use very::long::path as p          ; a module, named p::thing
 
-.proc main: a8, i8 {
+.proc main: a8, i8, native {
     jsr gfx::init                   ; qualified
     jsr snd_init
     lda p::thing

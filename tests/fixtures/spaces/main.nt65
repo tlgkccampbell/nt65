@@ -40,7 +40,7 @@
 
 ; A space that runs this program's processor holds routines, checked as any are.
 .segment DRIVE
-.proc drive_main: a8, i8 {
+.proc drive_main: a8, i8, native {
     jsr drive_next
     rts
 }

@@ -32,7 +32,7 @@ public sealed class DataMapTests
         .segment BSS
         .data map:    .word[1024]
         .segment CODE
-        .proc main: a8, i16, dp = 0, noreturn {
+        .proc main: a8, i16, dp = 0, noreturn, native {
             jsr clear_map
             jsr copy_title
             rep #$20
@@ -546,7 +546,7 @@ public sealed class DataMapTests
                 .data pair: .word
                 .data one:  .byte
                 .segment CODE
-                .export .proc main: a16, i16, dp = 0 {
+                .export .proc main: a16, i16, dp = 0, native {
                     lda #0
                     sta buf
                     lda buf + 1
@@ -661,7 +661,7 @@ public sealed class DataMapTests
                 .segment ZEROPAGE
                 .data tmp: .word
                 .segment CODE
-                .export .proc main: a16, i16, dp = 0 {
+                .export .proc main: a16, i16, dp = 0, native {
                     jsr fill
                     sep #$20
                     lda tmp + 1

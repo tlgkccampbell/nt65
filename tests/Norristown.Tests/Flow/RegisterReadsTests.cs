@@ -255,14 +255,14 @@ public sealed class RegisterReadsTests
         Assert.Equal(
             ["main.nt65:1: `saves x` says what one store does, so it belongs in a `.state` directly under that "
                 + "store, not in a signature"],
-            Problems(".proc p: saves x {\n    rts\n}\n"));
+            Problems(".proc p: saves x, native {\n    rts\n}\n"));
         Assert.Equal(
             ["main.nt65:2: `reads a` describes a whole routine, not one point in it: put it in the routine's "
                 + "signature, not in `.state`"],
-            Problems(".proc p {\n    .state reads a\n    rts\n}\n"));
+            Problems(".proc p: native {\n    .state reads a\n    rts\n}\n"));
         Assert.Equal(
             ["main.nt65:1: `reads a` belongs before `->`"],
-            FlowFragment.Problems("65816", ".proc p: a8 -> a16, reads a {\n    rep #$20\n    rts\n}\n"));
+            FlowFragment.Problems("65816", ".proc p: a8, native -> a16, reads a {\n    rep #$20\n    rts\n}\n"));
     }
 
     /// <summary>

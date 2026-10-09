@@ -27,7 +27,7 @@
 }
 
 .segment CODE
-.proc main: a8, i8 {
+.proc main: a8, i8, native {
     lda #table              ;! error[address-does-not-fit]: `table` is an absolute address, and an immediate is one byte: use `<table` for its low byte
     lda #<table
     rep #$20

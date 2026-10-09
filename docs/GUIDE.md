@@ -1458,7 +1458,7 @@ calls and at its returns. A part it writes nothing for is inferred:
     rts                     ; inferred exit: a8
 }
 
-.export .proc main: a16 -> a8 {
+.export .proc main: a16, native -> a8 {
     jsr draw
     rts
 }
@@ -1467,9 +1467,10 @@ calls and at its returns. A part it writes nothing for is inferred:
 Only callers in the program count. C code or a ca65 object that calls an exported routine is
 not checked, as nothing outside nt65 is, so a routine such code calls declares the entry it
 expects. A routine whose address is taken, as `.addr`, `pea` and `#<` take it, may be called
-through it from anywhere, and keeps the default entry, `a*, i*, native, dp*, dbr*`. So does a
-routine nothing calls, such as a reset handler. A width-dependent immediate in such a routine
-needs a width the signature writes:
+through it from anywhere, in either mode, so it is entered with `a*, i*, e*, dp*, dbr*`: it
+assumes nothing. So is a routine nothing calls, such as a reset handler. A width-dependent
+immediate in such a routine needs a width the signature writes, and a `rep` in it widens nothing
+until the signature writes `native` or the code enters native mode with `clc` and `xce`:
 
 ```text
 main.nt65:4:5: error: `lda #` needs the width of A, and `f` declares `a*`, which assumes nothing about it [width-unknown]
@@ -1495,7 +1496,7 @@ a contract.
 **Signature sets.** Most routines of a program share a state, so name it once:
 
 ```nt65
-.signature std = a8, i16, dbr = $80
+.signature std = a8, i16, native, dbr = $80
 
 .proc clear_line: std {
     rep #$20

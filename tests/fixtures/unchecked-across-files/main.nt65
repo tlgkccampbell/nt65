@@ -5,11 +5,11 @@
 .cpu 65816
 
 .segment CODE
-.proc right: a8, i8 {
+.proc right: a8, i8, native {
     jmp owner::owner::entry
 }
 
-.proc wrong: a16, i8 -> a8 {
+.proc wrong: a16, i8, native -> a8 {
     jmp owner::owner::entry     ;! error[call-state-mismatch]: `jmp entry` needs `a8`, but A is 16-bit here
 }
 

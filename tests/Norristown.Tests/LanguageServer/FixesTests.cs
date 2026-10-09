@@ -35,6 +35,16 @@ public sealed class FixesTests
             $".export .proc main: a8, i8 {{\n    jne @done\n{Far}@done:\n    rts\n}}\n"
         },
         {
+            "Mark the routine `interrupt`",
+            ".proc irq: native {\n    rti\n}\n.segment RODATA\n.data vectors: .addr irq\n",
+            ".proc irq: native, interrupt {\n    rti\n}\n.segment RODATA\n.data vectors: .addr irq\n"
+        },
+        {
+            "Mark the routine `interrupt`",
+            ".proc irq {\n    rti\n}\n.segment RODATA\n.data vectors: .addr irq\n",
+            ".proc irq: interrupt {\n    rti\n}\n.segment RODATA\n.data vectors: .addr irq\n"
+        },
+        {
             "Leave with `rti`",
             ".proc irq: interrupt {\n    rts\n}\n",
             ".proc irq: interrupt {\n    rti\n}\n"
@@ -106,18 +116,18 @@ public sealed class FixesTests
         },
         {
             "Remove it",
-            ".export .proc main: a8, i8 {\n    sep #$20\n    lda #1\n    rts\n}\n",
-            ".export .proc main: a8, i8 {\n    lda #1\n    rts\n}\n"
+            ".export .proc main: a8, i8, native {\n    sep #$20\n    lda #1\n    rts\n}\n",
+            ".export .proc main: a8, i8, native {\n    lda #1\n    rts\n}\n"
         },
         {
             "Change it to `#$20`",
-            ".export .proc main: a8, i16 {\n    rep #$30\n    lda #$1234\n    sep #$20\n    rts\n}\n",
-            ".export .proc main: a8, i16 {\n    rep #$20\n    lda #$1234\n    sep #$20\n    rts\n}\n"
+            ".export .proc main: a8, i16, native {\n    rep #$30\n    lda #$1234\n    sep #$20\n    rts\n}\n",
+            ".export .proc main: a8, i16, native {\n    rep #$20\n    lda #$1234\n    sep #$20\n    rts\n}\n"
         },
         {
             "Jump with `jmp` as a tail call",
-            ".proc helper {\n    rts\n}\n.export .proc main {\n    jsr helper\n    rts\n}\n",
-            ".proc helper {\n    rts\n}\n.export .proc main {\n    jmp helper\n}\n"
+            ".proc helper {\n    rts\n}\n.export .proc main: native {\n    jsr helper\n    rts\n}\n",
+            ".proc helper {\n    rts\n}\n.export .proc main: native {\n    jmp helper\n}\n"
         },
         {
             "Add `c` to `reads`",
@@ -131,8 +141,8 @@ public sealed class FixesTests
         },
         {
             "Jump with `jml` as a tail call",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jsl helper\n    rtl\n}\n",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far, native {\n    jsl helper\n    rtl\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far, native {\n    jml helper\n}\n"
         },
         {
             "Leave with `rtl`",
@@ -141,23 +151,23 @@ public sealed class FixesTests
         },
         {
             "Jump with `jml`",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jmp helper\n}\n",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far, native {\n    jmp helper\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far, native {\n    jml helper\n}\n"
         },
         {
             "Jump with `jmp`",
-            ".proc helper {\n    rts\n}\n.export .proc main {\n    jml helper\n}\n",
-            ".proc helper {\n    rts\n}\n.export .proc main {\n    jmp helper\n}\n"
+            ".proc helper {\n    rts\n}\n.export .proc main: native {\n    jml helper\n}\n",
+            ".proc helper {\n    rts\n}\n.export .proc main: native {\n    jmp helper\n}\n"
         },
         {
             "Push the bank with `phk`",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main {\n    per back-1\n    brl helper\nback:\n    rts\n}\n",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main {\n    phk\n    per back-1\n    brl helper\nback:\n    rts\n}\n"
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: native {\n    per back-1\n    brl helper\nback:\n    rts\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: native {\n    phk\n    per back-1\n    brl helper\nback:\n    rts\n}\n"
         },
         {
             "Remove the `phk`",
-            ".proc helper {\n    rts\n}\n.export .proc main {\n    phk\n    per back-1\n    brl helper\nback:\n    rts\n}\n",
-            ".proc helper {\n    rts\n}\n.export .proc main {\n    per back-1\n    brl helper\nback:\n    rts\n}\n"
+            ".proc helper {\n    rts\n}\n.export .proc main: native {\n    phk\n    per back-1\n    brl helper\nback:\n    rts\n}\n",
+            ".proc helper {\n    rts\n}\n.export .proc main: native {\n    per back-1\n    brl helper\nback:\n    rts\n}\n"
         },
         {
             "Remove `keeps x`",
@@ -171,8 +181,8 @@ public sealed class FixesTests
         },
         {
             "Remove it",
-            ".next ?\n.export .proc main {\n    rts\n}\n",
-            ".export .proc main {\n    rts\n}\n"
+            ".next ?\n.export .proc main: native {\n    rts\n}\n",
+            ".export .proc main: native {\n    rts\n}\n"
         },
         {
             "Remove `far`",
@@ -181,13 +191,13 @@ public sealed class FixesTests
         },
         {
             "Move `keeps x` before `->`",
-            ".export .proc main: a8 -> a16, keeps x {\n    rep #$20\n    rts\n}\n",
-            ".export .proc main: a8, keeps x -> a16 {\n    rep #$20\n    rts\n}\n"
+            ".export .proc main: a8, native -> a16, keeps x {\n    rep #$20\n    rts\n}\n",
+            ".export .proc main: a8, native, keeps x -> a16 {\n    rep #$20\n    rts\n}\n"
         },
         {
             "Move `keeps x` before `->`",
-            ".export .proc main: a8 -> keeps x {\n    rts\n}\n",
-            ".export .proc main: a8, keeps x {\n    rts\n}\n"
+            ".export .proc main: a8, native -> keeps x {\n    rts\n}\n",
+            ".export .proc main: a8, native, keeps x {\n    rts\n}\n"
         },
         {
             "Remove the block and keep its contents",
@@ -196,38 +206,38 @@ public sealed class FixesTests
         },
         {
             "Branch with `beq` around a `jml helper`",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    bne helper\n    rtl\n}\n",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    beq @skip\n    jml helper\n@skip:\n    rtl\n}\n"
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far, native {\n    bne helper\n    rtl\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far, native {\n    beq @skip\n    jml helper\n@skip:\n    rtl\n}\n"
         },
         {
             "Jump with `jml`",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    bra helper\n}\n",
-            ".proc helper: far {\n    rtl\n}\n.export .proc main: far {\n    jml helper\n}\n"
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far, native {\n    bra helper\n}\n",
+            ".proc helper: far {\n    rtl\n}\n.export .proc main: far, native {\n    jml helper\n}\n"
         },
         {
             "Add `.ensure a16`",
-            ".proc helper: a16, i8 -> a8 {\n    sep #$20\n    rts\n}\n.export .proc main: a8, i8 {\n    jsr helper\n    rts\n}\n",
-            ".proc helper: a16, i8 -> a8 {\n    sep #$20\n    rts\n}\n.export .proc main: a8, i8 {\n    .ensure a16\n    jsr helper\n    rts\n}\n"
+            ".proc helper: a16, i8 -> a8 {\n    sep #$20\n    rts\n}\n.export .proc main: a8, i8, native {\n    jsr helper\n    rts\n}\n",
+            ".proc helper: a16, i8 -> a8 {\n    sep #$20\n    rts\n}\n.export .proc main: a8, i8, native {\n    .ensure a16\n    jsr helper\n    rts\n}\n"
         },
         {
             "Add `.ensure a16`",
-            ".macro wide(): a16 -> a8 {\n    lda #$1234\n    sep #$20\n}\n.export .proc main: a8, i8 {\n    wide!()\n    rts\n}\n",
-            ".macro wide(): a16 -> a8 {\n    lda #$1234\n    sep #$20\n}\n.export .proc main: a8, i8 {\n    .ensure a16\n    wide!()\n    rts\n}\n"
+            ".macro wide(): a16 -> a8 {\n    lda #$1234\n    sep #$20\n}\n.export .proc main: a8, i8, native {\n    wide!()\n    rts\n}\n",
+            ".macro wide(): a16 -> a8 {\n    lda #$1234\n    sep #$20\n}\n.export .proc main: a8, i8, native {\n    .ensure a16\n    wide!()\n    rts\n}\n"
         },
         {
             "Add `.ensure a8`",
-            ".export .proc main: a8, i8 {\n    rep #$20\n    rts\n}\n",
-            ".export .proc main: a8, i8 {\n    rep #$20\n    .ensure a8\n    rts\n}\n"
+            ".export .proc main: a8, i8, native {\n    rep #$20\n    rts\n}\n",
+            ".export .proc main: a8, i8, native {\n    rep #$20\n    .ensure a8\n    rts\n}\n"
         },
         {
             "Declare that `main` returns with `a16`",
-            ".export .proc main: a8, i8 {\n    rep #$20\n    rts\n}\n",
-            ".export .proc main: a8, i8 -> a16 {\n    rep #$20\n    rts\n}\n"
+            ".export .proc main: a8, i8, native {\n    rep #$20\n    rts\n}\n",
+            ".export .proc main: a8, i8, native -> a16 {\n    rep #$20\n    rts\n}\n"
         },
         {
             "Declare that `main` returns with `a16`",
-            ".export .proc main: a8, i8 -> i8 {\n    rep #$20\n    rts\n}\n",
-            ".export .proc main: a8, i8 -> i8, a16 {\n    rep #$20\n    rts\n}\n"
+            ".export .proc main: a8, i8, native -> i8 {\n    rep #$20\n    rts\n}\n",
+            ".export .proc main: a8, i8, native -> i8, a16 {\n    rep #$20\n    rts\n}\n"
         },
         {
             "Declare that `main` returns with `emu`",
@@ -328,7 +338,7 @@ public sealed class FixesTests
     [Fact]
     public void AReturnInTheWrongStateOffersBothReadings()
     {
-        var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8 {\n    rep #$20\n    rts\n}\n");
+        var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8, native {\n    rep #$20\n    rts\n}\n");
 
         var actions = CodeActions.In(analysis, model, Whole).Where(action => action.Kind == "quickfix").ToList();
 

@@ -58,7 +58,7 @@ voice__dispatch:
     .addr play__noise
 
 .segment "CODE": absolute
-; .proc run: a8, i8  voice.nt65:39
+; .proc run: a8, i8, native  voice.nt65:39
 voice__run:
     jsr play__triangle
     rts

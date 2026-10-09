@@ -38,7 +38,7 @@
 
 ; An interrupt handler: nothing is known on entry, so the widths are set before any
 ; immediate needs them.
-.proc nmi: a?, i? {
+.proc nmi: interrupt {
     rep #$30
     pha
     sep #$20
@@ -139,14 +139,14 @@
 
 ; Relative calls: `per` pushes the return address and a branch goes to the routine. With
 ; `phk` before them, the bank is pushed too, and the call is far.
-.proc relative: a8, i8 {
+.proc relative: a8, i8, native {
     per @back - 1
     brl talk
 @back:
     rts
 }
 
-.proc far_relative: far {
+.proc far_relative: far, native {
     phk
     per @back - 1
     brl far_target
@@ -160,7 +160,7 @@
 
 ; One routine running into the next: the `.fallthrough` is checked as a tail call, and the two
 ; have to be written one after the other.
-.proc first: a16 -> a8 {
+.proc first: a16, native -> a8 {
     lda #$1234
     sep #$20
     .fallthrough second
@@ -192,6 +192,6 @@
     rts
 }
 
-.proc jumper: a8, i8 {
+.proc jumper: a8, i8, native {
     jmp enter::into
 }

@@ -36,7 +36,7 @@ main__render:
     rts
 ; end of render
 
-; .proc fill: a16  main.nt65:24
+; .proc fill: a16, native  main.nt65:24
 main__fill:
     sep #$20
     bra fill__b
@@ -101,7 +101,7 @@ main__after_it:
     rts
 ; end of after_it
 
-; .proc save: a8, i8  main.nt65:89
+; .proc save: a8, i8, native  main.nt65:89
 main__save:
     php
     rep #$30
@@ -132,7 +132,7 @@ merge__done:
     rts
 ; end of merge
 
-; .proc tail: a16 -> a8  main.nt65:119
+; .proc tail: a16, native -> a8  main.nt65:119
 main__tail:
     sep #$20
     jmp render_again
@@ -144,7 +144,7 @@ render_again:
     rts
 ; end of render_again
 
-; .proc handler: a?, i?  main.nt65:130
+; .proc handler: interrupt, native  main.nt65:130
 main__handler:
     rep #$30
     .a16

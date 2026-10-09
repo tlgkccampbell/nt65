@@ -21,7 +21,7 @@
 
 ; A label reached by a jump from further down the file is sized by the width that arrives
 ; there, not by the code above it, so the output's `.a16` goes at the label.
-.proc fill: a16 {
+.proc fill: a16, native {
     sep #$20
     bra @b
 @a:
@@ -86,7 +86,7 @@
 
 ; A save and a restore around a call: `plp` finds the status `php` saved, so the widths
 ; after it are the widths before it, and the call in between changes nothing about that.
-.proc save: a8, i8 {
+.proc save: a8, i8, native {
     php
     rep #$30
     jsr keep
@@ -116,7 +116,7 @@
 }
 
 ; A jump to another routine is a tail call: that routine's return is this one's.
-.proc tail: a16 -> a8 {
+.proc tail: a16, native -> a8 {
     sep #$20
     jmp render_again
 }
@@ -126,8 +126,8 @@
     rts
 }
 
-; An entry point reached from somewhere nt65 cannot see declares its state.
-.export .proc handler: a?, i? {
+; An interrupt handler is entered from anywhere, so it declares the mode it is entered in.
+.export .proc handler: interrupt, native {
     rep #$30
     lda #$1234
     rti

@@ -219,12 +219,12 @@ public sealed class RefactorsTests
     [Fact]
     public void WhatARoutineLeavesIsDeclared()
     {
-        const string Main = ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 {\n    rep #$20\n    rts\n}\n";
+        const string Main = ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8, native {\n    rep #$20\n    rts\n}\n";
 
         var action = Single(Main, ".proc widen", "Declare what `widen` leaves: `-> a16, i8, native`");
 
         Assert.Equal(
-            ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8 -> a16, i8, native {\n    rep #$20\n    rts\n}\n",
+            ".module main\n.cpu 65816\n.segment CODE\n.proc widen: a8, i8, native -> a16, i8, native {\n    rep #$20\n    rts\n}\n",
             Editing.Apply(Main, action.Edit!.Changes[Uri]));
     }
 

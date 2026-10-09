@@ -150,7 +150,7 @@ public sealed class StateAnalysisTests
                 rtl
             }
 
-            .proc p: a8, i8, far {
+            .proc p: a8, i8, far, native {
                 beq target
                 bra target
             }
@@ -227,12 +227,12 @@ public sealed class StateAnalysisTests
     public void AnIndirectCallReturnsWithTheMergeOfItsRoutinesExits()
     {
         const string Text = """
-            .proc wide: a8 -> a16 {
+            .proc wide: a8, native -> a16 {
                 rep #$20
                 rts
             }
 
-            .proc narrow: a8, i16 -> a8, i16 {
+            .proc narrow: a8, i16, native -> a8, i16 {
                 rts
             }
 
@@ -240,7 +240,7 @@ public sealed class StateAnalysisTests
             .data table: .addr wide, narrow
             .segment CODE
 
-            .proc p: a8, i8 {
+            .proc p: a8, i8, native {
                 jsr (table,x)
                 .next wide, narrow
                 nop
@@ -263,7 +263,7 @@ public sealed class StateAnalysisTests
                 rts
             }
 
-            .proc p: a8, i8 {
+            .proc p: a8, i8, native {
                 lda $10
                 beq wide
                 lda #1
@@ -325,7 +325,7 @@ public sealed class StateAnalysisTests
     public void AMergeReportsNothing()
     {
         const string Text = """
-            .proc p: a16, i8 {
+            .proc p: a16, i8, native {
                 lda #1
                 beq @done
                 sep #$20
@@ -436,21 +436,21 @@ public sealed class StateAnalysisTests
 
     [Theory]
     // The idioms that load D and B from constants.
-    [InlineData(".proc p: a16, i8 {\n    lda #$2100\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp = $2100")]
-    [InlineData(".proc p: a8, i8 {\n    pea $2100\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp = $2100")]
-    [InlineData(".proc p: a8, i8 {\n    lda #$7e\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr = $7e")]
+    [InlineData(".proc p: a16, i8, native {\n    lda #$2100\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp = $2100")]
+    [InlineData(".proc p: a8, i8, native {\n    pea $2100\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp = $2100")]
+    [InlineData(".proc p: a8, i8, native {\n    lda #$7e\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr = $7e")]
 
     // With A 8 bits wide, `lda #c` then `tcd` transfers a high byte that is not known.
-    [InlineData(".proc p: a8, i8 {\n    lda #$21\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
+    [InlineData(".proc p: a8, i8, native {\n    lda #$21\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
 
     // Any instruction between the load and the transfer loses the known value.
-    [InlineData(".proc p: a16, i8 {\n    lda #$2100\n    tay\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp?")]
+    [InlineData(".proc p: a16, i8, native {\n    lda #$2100\n    tay\n    tcd\n    nop\n    .state dp?\n    rts\n}\n", "a16, i8, native, dp?")]
 
     // Pulling a value that was not pushed as a constant loads an unknown value.
-    [InlineData(".proc p: a8, i8 {\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr?")]
+    [InlineData(".proc p: a8, i8, native {\n    pha\n    plb\n    nop\n    .state dbr?\n    rts\n}\n", "a8, i8, native, dbr?")]
 
     // Two paths that pushed different constants agree on the depth, not on the value.
-    [InlineData(".proc p: a8, i8 {\n    beq @a\n    pea 1\n    bra @b\n@a:\n    pea 2\n@b:\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
+    [InlineData(".proc p: a8, i8, native {\n    beq @a\n    pea 1\n    bra @b\n@a:\n    pea 2\n@b:\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "a8, i8, native, dp?")]
     public void DAndBAreLoadedOnlyByTheIdiomsThatLoadThemFromConstants(string text, string state)
     {
         Assert.Equal(state, StateAt(text, "nop").Processor.ToString());
@@ -465,7 +465,7 @@ public sealed class StateAnalysisTests
     public void AnUnbracedOperandArgumentIsTheWholeExpression()
     {
         var state = StateAt(".const BASE = $2000\n.macro pushed(slot: operand) {\n    pea slot\n}\n"
-            + ".proc main: a8, i8 {\n    pushed!(BASE + 2)\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "nop");
+            + ".proc main: a8, i8, native {\n    pushed!(BASE + 2)\n    pld\n    nop\n    .state dp?\n    rts\n}\n", "nop");
 
         Assert.Equal("a8, i8, native, dp = $2002", state.Processor.ToString());
     }

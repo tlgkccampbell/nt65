@@ -16,13 +16,13 @@
 .data value: .byte
 
 .segment CODE
-.proc set_one: a8 {
+.proc set_one: a8, native {
     lda #1
     .byte $2c           ; bit abs: swallows the `lda #2` of `set_two`
     .next store
 }
 
-.proc set_two: a8 {
+.proc set_two: a8, native {
     lda #2
     .fallthrough store
 }
@@ -33,7 +33,7 @@
 }
 
 ; An `.if` chain with no `.else` ends the body whether or not its branch is taken.
-.proc prepare: a8 {
+.proc prepare: a8, native {
     lda #0
     .if FAST {
         asl a
@@ -47,7 +47,7 @@
 }
 
 ; After a call: the call comes back, and what follows it is the next routine.
-.proc after_call: a8 {
+.proc after_call: a8, native {
     jsr draw
     .fallthrough after_else
 }
@@ -76,13 +76,13 @@
 
 ; A `bit` skip that lands not on the next routine but on the one after it: the `.next` is a
 ; jump there, checked as a tail call, and nothing requires the two to be adjacent.
-.proc skips: a8, i8 {
+.proc skips: a8, i8, native {
     lda #1
     .byte $2c           ; bit abs: swallows the `ldx #2` of `skipped`
     .next landing
 }
 
-.proc skipped: a8, i8 {
+.proc skipped: a8, i8, native {
     ldx #2
     .fallthrough landing
 }
@@ -94,7 +94,7 @@
 
 ; A routine entered 16 bits wide that narrows A on the way into the next, which takes it 8 bits
 ; wide: the fall-through is a tail call, checked against the next routine's entry and exit.
-.proc wide: a16 -> a8 {
+.proc wide: a16, native -> a8 {
     lda #$1234
     sep #$20
     .fallthrough narrow

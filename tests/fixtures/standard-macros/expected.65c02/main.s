@@ -22,7 +22,7 @@ sign:  .res 1
 table: .res 16
 
 .segment "CODE": absolute
-; .proc run: a8, i8  main.nt65:24
+; .proc run: a8, i8, native  main.nt65:24
 main__run:
     ; mov!(ptr, {#$1234})  main.nt65:25
     lda #$34

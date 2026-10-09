@@ -50,7 +50,7 @@
     body
 }
 
-.proc macros: a16 {
+.proc macros: a16, native {
     load8!(1)               ;! error[call-state-mismatch]: `load8!` needs `a8`, but A is 16-bit here
     sep #$20
     widen!()                ;! error[return-state-mismatch]: `widen!` declares it returns with `a16`, but A is 8-bit at the end of its body

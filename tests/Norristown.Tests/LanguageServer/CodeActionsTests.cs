@@ -34,18 +34,18 @@ public sealed class CodeActionsTests
         },
         {
             "Add `y` to the `keeps` of `print_digit`",
-            ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr print_digit\n    sty $11\n    rts\n}\n",
-            ".proc print_digit: a8, i8, keeps x, y {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr print_digit\n    sty $11\n    rts\n}\n"
+            ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8, native {\n    ldy #1\n    jsr print_digit\n    sty $11\n    rts\n}\n",
+            ".proc print_digit: a8, i8, keeps x, y {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8, native {\n    ldy #1\n    jsr print_digit\n    sty $11\n    rts\n}\n"
         },
         {
             "Add `y` to the `keeps` of `c`",
-            ".proc c: a8, i8, keeps x {\n    inc $10\n    rts\n}\n.proc b: a8, i8 {\n    jsr c\n    nop\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n",
-            ".proc c: a8, i8, keeps x, y {\n    inc $10\n    rts\n}\n.proc b: a8, i8 {\n    jsr c\n    nop\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n"
+            ".proc c: a8, i8, keeps x {\n    inc $10\n    rts\n}\n.proc b: a8, i8 {\n    jsr c\n    nop\n    rts\n}\n.export .proc main: a8, i8, native {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n",
+            ".proc c: a8, i8, keeps x, y {\n    inc $10\n    rts\n}\n.proc b: a8, i8 {\n    jsr c\n    nop\n    rts\n}\n.export .proc main: a8, i8, native {\n    ldy #1\n    jsr b\n    sty $11\n    rts\n}\n"
         },
         {
             "Save it around the call with `phy` and `ply`",
-            ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    jsr print_digit\n    tya\n    sta $11\n    rts\n}\n",
-            ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8 {\n    ldy #1\n    phy\n    jsr print_digit\n    ply\n    tya\n    sta $11\n    rts\n}\n"
+            ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8, native {\n    ldy #1\n    jsr print_digit\n    tya\n    sta $11\n    rts\n}\n",
+            ".proc print_digit: a8, i8, keeps x {\n    lda #1\n    sta $10\n    rts\n}\n.export .proc main: a8, i8, native {\n    ldy #1\n    phy\n    jsr print_digit\n    ply\n    tya\n    sta $11\n    rts\n}\n"
         },
         {
             "Add `.ensure c = 0`",
@@ -59,23 +59,23 @@ public sealed class CodeActionsTests
         },
         {
             "Change to `.fallthrough`",
-            ".export .proc main {\n    jsr after\n    .next after\n}\n.export .proc after {\n    rts\n}\n",
-            ".export .proc main {\n    jsr after\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
+            ".export .proc main: native {\n    jsr after\n    .next after\n}\n.export .proc after {\n    rts\n}\n",
+            ".export .proc main: native {\n    jsr after\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
         },
         {
             "Call with `jsl`",
-            ".proc far_one: far {\n    rtl\n}\n.export .proc main {\n    JSR far_one\n    rts\n}\n",
-            ".proc far_one: far {\n    rtl\n}\n.export .proc main {\n    JSL far_one\n    rts\n}\n"
+            ".proc far_one: far {\n    rtl\n}\n.export .proc main: native {\n    JSR far_one\n    rts\n}\n",
+            ".proc far_one: far {\n    rtl\n}\n.export .proc main: native {\n    JSL far_one\n    rts\n}\n"
         },
         {
             "Declare `@here` with `.state a8, i8, native`",
-            ".export .proc main: a8, i8 {\n    lda #<@here\n@here:\n    rts\n}\n",
-            ".export .proc main: a8, i8 {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
+            ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    rts\n}\n",
+            ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
         },
         {
             "Declare `@here` with `.state a8, i8, native`",
-            ".export .proc main: a8, i8 {\n    lda #<@here\n@here: rts\n}\n",
-            ".export .proc main: a8, i8 {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
+            ".export .proc main: a8, i8, native {\n    lda #<@here\n@here: rts\n}\n",
+            ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
         },
         {
             "Make `table` a `.data` declaration",

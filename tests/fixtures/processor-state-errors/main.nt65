@@ -25,7 +25,7 @@
 }
 
 ; Two paths that disagree meet at a label, and the use after it is what is reported.
-.proc merged: a8, i8 {
+.proc merged: a8, i8, native {
     lda value
     beq @done
     rep #$20
@@ -66,7 +66,7 @@
 }
 
 ; A tail call's return is this routine's return, so it must reach this routine's exit state.
-.proc tail: a16, i8 -> a8 {
+.proc tail: a16, i8, native -> a8 {
     jmp wrong_entry         ;! error[return-state-mismatch]: `jmp wrong_entry` is a tail call: `tail` declares it returns with `i8`, but X and Y are 16-bit when `wrong_entry` returns
 }
 

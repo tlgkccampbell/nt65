@@ -439,7 +439,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestTimeout.Token();
         const string Text =
-            ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a16, i8 {\n"
+            ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a16, i8, native {\n"
                 + "    php\n    lda #$1234\n    plp\n    rts\n}\n";
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Text);
@@ -563,7 +563,7 @@ public sealed class SymbolRequestsTests
     {
         var timeout = TestTimeout.Token();
         const string Text =
-            ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8 -> a16, i8 {\n"
+            ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8, native -> a16, i8 {\n"
                 + "    .ensure a16, i8\n    rts\n}\n";
         await using var client = await TestClient.StartAsync(timeout);
         await client.OpenAsync(Uri, Text);

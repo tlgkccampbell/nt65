@@ -10,7 +10,7 @@
 .data ptr: .word
 
 .segment CODE
-.proc run: a8, i8 {
+.proc run: a8, i8, native {
     add!(ptr, {#1}, bytes = 5)          ;! error[const-argument-out-of-range]: `bytes` takes a constant from 2 to 4, and this is 5
     inc!({(ptr),y})                     ;! error[operand-argument-mode]: `dest` takes one of `zp`, `zpx`, `abs`, `absx`, and this is `indy`
     mov!({#1}, ptr)                     ;! error[operand-argument-mode]: `dest` takes one of `zp`, `zpx`, `abs`, `absx`, `absy`, and this is `imm`

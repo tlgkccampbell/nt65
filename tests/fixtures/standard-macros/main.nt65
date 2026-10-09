@@ -21,7 +21,7 @@
 .data table: .word[8]
 
 .segment CODE
-.proc run: a8, i8 {
+.proc run: a8, i8, native {
     mov!(ptr, {#$1234})
     mov!(total, {table,x}, bytes = 4)
     add!(ptr, other)

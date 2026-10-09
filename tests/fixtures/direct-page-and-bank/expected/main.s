@@ -117,7 +117,7 @@ main__from_k:
 ; end of from_k
 
 .segment "CODE": absolute
-; .proc caller: a16, i8 -> a16, i8, dp = $2100, dbr = $7e  main.nt65:107
+; .proc caller: a16, i8, native -> a16, i8, dp = $2100, dbr = $7e  main.nt65:107
 main__caller:
     jsr main__setup
     lda z:ptr
@@ -158,7 +158,7 @@ main__fast:
     rts
 ; end of fast
 
-; .proc tail: a8, i16, dp = $2100, dbr = $7e  main.nt65:150
+; .proc tail: a8, i16, dp = $2100, dbr = $7e, native  main.nt65:150
 main__tail:
     jmp main__hud
 ; end of tail
@@ -177,7 +177,7 @@ main__anywhere:
     rts
 ; end of anywhere
 
-; .proc from_one: a8, i8, dbr = $80  main.nt65:170
+; .proc from_one: a8, i8, dbr = $80, native  main.nt65:170
 main__from_one:
     jsr main__anywhere
     jsr fewer

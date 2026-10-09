@@ -1,0 +1,54 @@
+; A routine whose address is taken, or that nothing calls, may be entered in either mode, so it
+; assumes nothing about the mode until it declares one. A routine that leaves by `rti` is an
+; interrupt handler, and says so with `interrupt`.
+.module main
+
+.cpu 65816
+
+.segment RODATA
+.data vectors {
+    .addr unmarked
+    .addr declared
+    .addr marked
+    .addr jumps
+}
+
+; An unmarked handler is entered in whatever mode the processor is in, so `rep` widens nothing
+; that nt65 can rely on.
+.segment CODE
+.proc unmarked {
+    rep #$20
+    lda #$1234              ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `rep #$20` widens nothing in emulation mode, and the mode is not known: a `.state` before it declares which mode it is
+    rti                     ;! warning[rti-outside-handler]: `unmarked` returns with `rti`, but it is not marked `interrupt`: mark it so that it is checked as one
+}
+
+; A declared mode is trusted, as it was before, and the `rti` is still reported.
+.proc declared: native {
+    rep #$20
+    lda #$1234
+    rti                     ;! warning[rti-outside-handler]: `declared` returns with `rti`, but it is not marked `interrupt`: mark it so that it is checked as one
+}
+
+.proc marked: interrupt, native {
+    rep #$20
+    lda #$1234
+    rti
+}
+
+; An `rti` with a `.next` is a jump that says where it goes.
+.proc jumps: native {
+    rti
+    .next marked
+}
+
+; An exported routine that nothing in the program calls is entered the same way.
+.export .proc reset {
+    rep #$10
+    ldx #$1234              ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `rep #$10` widens nothing in emulation mode, and the mode is not known: a `.state` before it declares which mode it is
+    clc
+    xce
+    rep #$10
+    ldx #$1234
+    sep #$10
+    rts
+}

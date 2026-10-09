@@ -23,7 +23,7 @@ far_table: .res 16
 vector: .addr forms
 
 .segment "CODE": absolute
-; .proc forms: a16, i8  main.nt65:22
+; .proc forms: a16, i8, native  main.nt65:22
 forms:
     lda f:far_table
     sta f:far_table,x
@@ -78,7 +78,7 @@ main__long_jumps:
     jml [vector]
 ; end of long_jumps
 
-; .proc tail: far  main.nt65:74
+; .proc tail: far, native  main.nt65:74
 main__tail:
     jml far_routine
 ; end of tail

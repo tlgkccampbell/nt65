@@ -19,7 +19,7 @@
 .import far_routine: proc(a*, i*, far)
 
 .segment CODE
-.proc forms: a16, i8 {
+.proc forms: a16, i8, native {
     lda far_table           ; a far symbol takes the long form
     sta far_table,x
     lda f:vector            ; a prefix widens it
@@ -71,6 +71,6 @@
     .next ?
 }
 
-.export .proc tail: far {
+.export .proc tail: far, native {
     jml far_routine
 }

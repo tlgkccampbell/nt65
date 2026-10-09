@@ -40,7 +40,7 @@ xba__dea:
     rts
 ; end of xba
 
-; .proc main  main.nt65:44
+; .proc main: native  main.nt65:44
 main__main:
     jsr main__dea
     jsr main__xba

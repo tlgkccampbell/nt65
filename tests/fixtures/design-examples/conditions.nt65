@@ -19,7 +19,7 @@
     rts
 }
 
-.proc run: a8, i8 {
+.proc run: a8, i8, native {
     .if DEBUG {
         jsr trace
     } .elseif LEVEL > 2 {

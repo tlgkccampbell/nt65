@@ -19,7 +19,7 @@
 .proc CHROUT = $FFD2: a8, i8        ; a routine at a fixed address; emitted as a constant
 
 .segment CODE
-.proc print: a8, i16 {
+.proc print: a8, i16, native {
     lda zp_scratch
     sta VIC_BORDER
     lda f:far_table

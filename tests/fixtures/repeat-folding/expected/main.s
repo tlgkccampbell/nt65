@@ -60,7 +60,7 @@ main__spaced:
     rts
 ; end of spaced
 
-; .proc widths_alike: a16, i16  main.nt65:61
+; .proc widths_alike: a16, i16, native  main.nt65:61
 main__widths_alike:
     .repeat 3
         .a16
@@ -73,7 +73,7 @@ main__widths_alike:
     rts
 ; end of widths_alike
 
-; .proc widths_differ: a8, i16  main.nt65:73
+; .proc widths_differ: a8, i16, native  main.nt65:73
 main__widths_differ:
     rep #$20
     .a16

@@ -2971,6 +2971,15 @@ public static class Catalogue
         "The processor pushed the status flags when it entered the handler, and only `rti` pulls them. An `rts` or "
             + "`rtl` would leave the flags on the stack and return to the wrong address.");
 
+    internal static DiagnosticDescriptor RtiOutsideHandler { get; } = Entry(
+        Area.ControlFlow,
+        "rti-outside-handler",
+        Severity.Warning,
+        "`{0}` returns with `rti`, but it is not marked `interrupt`: mark it so that it is checked as one",
+        "A routine that leaves by `rti` is entered by the processor from anywhere, with whatever widths, direct page "
+            + "and data bank the interrupted code had. Marking it `interrupt` makes nt65 assume nothing about them at "
+            + "its entry, and reports a call to it, which an `rti` would not return from.");
+
     internal static DiagnosticDescriptor NoreturnReturns { get; } = Entry(
         Area.ControlFlow,
         "noreturn-returns",

@@ -1,0 +1,98 @@
+; What a push saves is kept as the routine sees it. In the body of a macro with a signature,
+; a `*` item means the state at the call rather than at the routine's entry, so a pull on the
+; other side of the body reads back what was pushed, not what `*` means there.
+.module main
+
+.cpu 65816
+
+.macro savep(): a8 {
+    php
+}
+
+.macro restorep(): a8 {
+    plp
+}
+
+.macro saved(): a16 {
+    phd
+}
+
+.macro saveb(): a8 {
+    phb
+}
+
+.macro guarded(): a8 {
+    php
+    sep #$10
+    plp
+}
+
+; A status pushed in the body holds 16-bit X and Y, so the `plp` after it does not restore
+; the width the routine was entered with.
+.segment CODE
+.proc wide_index: a8, i* {
+    rep #$10
+    savep!()
+    plp
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `wide_index` declares `i*`, so X and Y must be as wide as they were on entry, but here it may not be
+}
+
+; A status pushed before the call holds the width at the routine's entry, which is not the
+; 8-bit width at the call.
+.proc narrow_index: a8, i* {
+    php
+    sep #$10
+    restorep!()             ;! error[asserted-item-not-restored]: `restorep!` declares `i*`, so X and Y must be as wide as they were on entry, but at the end of its body it may not be
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `narrow_index` declares `i*`, so X and Y must be as wide as they were on entry, but here it may not be
+}
+
+; The direct page and the data bank pushed in the body are the ones set before the call.
+.proc moved_page: a16, dp* {
+    lda #$2100
+    tcd
+    saved!()
+    pld
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `moved_page` declares `dp*`, so D must be what it was on entry, but here it may not be
+}
+
+.proc moved_bank: a8, dbr* {
+    lda #$7e
+    pha
+    plb
+    saveb!()
+    plb
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `moved_bank` declares `dbr*`, so B must be what it was on entry, but here it may not be
+}
+
+; A push and a pull that both hold what `*` means are a save and a restore, inside a body or
+; across one.
+.proc kept_index: a8, i*, dp*, dbr* {
+    guarded!()
+    php
+    restorep!()
+    phd
+    phb
+    saveb!()
+    plb
+    plb
+    pld
+    rts
+}
+
+; A `plp` restores a 16-bit width only in native mode. Where the mode is not known, a saved 16
+; comes back unknown, as it does after `rep`, while a saved 8 comes back as it was.
+.proc lost_mode: a16, i16, native -> a?, i?, e? {
+    php
+    xce
+    plp
+    lda #$1234              ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `plp` restores a 16-bit width only in native mode, and the mode is not known: a `.state` before it declares which mode it is
+    rts
+}
+
+.proc kept_eight: a8, i8, native -> a?, i?, e? {
+    php
+    xce
+    plp
+    lda #$12
+    rts
+}

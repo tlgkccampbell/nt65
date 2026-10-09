@@ -221,6 +221,11 @@ internal static class Fixes
                 }
                 break;
 
+            case FixKind.Interrupt when fix is { At: { } routine }
+                && Edits.SignatureItem(tree, routine.LineIndex, "interrupt") is { } marked:
+                yield return Fix(diagnostic, "Mark the routine `interrupt`", [marked]);
+                break;
+
             case FixKind.Reads when fix is { Text: { } register, At: { } routine }
                 && Edits.AddedRegister(tree, routine.LineIndex, "reads", register) is { } added:
                 yield return Fix(diagnostic, $"Add `{register}` to `reads`", [added]);

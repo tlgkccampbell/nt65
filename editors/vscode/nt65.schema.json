@@ -461,6 +461,7 @@
         "return-flag-not-set",
         "return-state-mismatch",
         "routine-runs-off-the-end",
+        "rti-outside-handler",
         "runs-into-data",
         "saves-in-signature",
         "saves-not-a-store",
