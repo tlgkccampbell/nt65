@@ -142,7 +142,9 @@ public static class ImportIncCommand
                 body.Add(bare);
                 continue;
             }
-            if (Constant(bare) is var (name, value, comment) && Reads($".const {name} = {value}"))
+            if (Constant(bare) is var (name, ca65, comment)
+                && Ca65Expressions.Expression(ca65) is var value
+                && Reads($".const {name} = {value}"))
             {
                 names.Add(name);
                 body.Add(comment is null ? $".const {name} = {value}" : $".const {name} = {value}{comment}");
@@ -197,10 +199,10 @@ public static class ImportIncCommand
 
     /// <summary>
     /// Returns a value indicating whether nt65's own parser reads <paramref name="line"/>, without
-    /// errors, as a constant declaration. A ca65 construct that nt65 does not have, such as
-    /// <c>.LOBYTE</c>, <c>.SHL</c> or a local label, is rejected here. So is an expression in
-    /// which nt65 requires parentheses to make its order explicit. Both are rejected rather than
-    /// written out as source that will not build.
+    /// errors, as a constant declaration. The expression has already been rewritten with
+    /// <see cref="Ca65Expressions"/>, so a ca65 construct that is left, such as <c>.LOBYTE</c>
+    /// or a local label, is one nt65 does not have. It is rejected here rather than written out as
+    /// source that will not build.
     /// </summary>
     private static bool Reads(string line)
     {
@@ -220,8 +222,7 @@ public static class ImportIncCommand
         if (code.StartsWith('.'))
             return $"`{code.Split(' ', '\t')[0]}` is a ca65 directive; `import-inc` converts only `NAME = value` constants";
         return code.Contains('=', StringComparison.Ordinal)
-            ? "nt65 cannot parse this definition: it may use ca65-only syntax (such as `.LOBYTE`, `.SHL` or a local label), "
-                + "or need parentheses that nt65 requires to make the order of operations explicit"
+            ? "nt65 cannot parse this definition: it may use ca65-only syntax, such as `.LOBYTE` or a local label"
             : "the line defines no constant";
     }
 

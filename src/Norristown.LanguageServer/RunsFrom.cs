@@ -12,13 +12,16 @@ internal static class RunsFrom
 {
     /// <summary>
     /// Returns the words the outline adds after a routine's signature, or null where the routine
-    /// does not run under an interrupt. A handler gets none, because its signature already says
-    /// <c>interrupt</c>.
+    /// does not run under an interrupt. A handler marked <c>interrupt</c> gets none, because its
+    /// signature already says so, and one walked as a handler without the mark gets
+    /// <c>interrupt handler</c>.
     /// </summary>
     /// <param name="contexts">The contexts of the program.</param>
     /// <param name="routine">The routine, as the program has it now.</param>
     public static string? Outline(RoutineContexts contexts, Symbol routine) =>
-        RoutineContexts.IsHandler(routine) ? null : Under(contexts, routine);
+        RoutineContexts.IsHandler(routine) ? null
+            : contexts.IsUnmarkedHandler(routine) ? "interrupt handler"
+            : Under(contexts, routine);
 
     /// <summary>
     /// Returns the value of the hover's <c>context</c> row for a routine, or null where it does not
@@ -28,7 +31,9 @@ internal static class RunsFrom
     /// <param name="contexts">The contexts of the program.</param>
     /// <param name="routine">The routine, as the program has it now.</param>
     public static string? Hover(RoutineContexts contexts, Symbol routine) =>
-        RoutineContexts.IsHandler(routine) ? "interrupt handler" : Under(contexts, routine);
+        RoutineContexts.IsHandler(routine) ? "interrupt handler"
+            : contexts.IsUnmarkedHandler(routine) ? "interrupt handler, by its `rti`; not marked `interrupt`"
+            : Under(contexts, routine);
 
     /// <summary>
     /// Returns the value of the hover's <c>not followed</c> row, which lists the routine's lines

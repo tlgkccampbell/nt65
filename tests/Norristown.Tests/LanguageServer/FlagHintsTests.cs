@@ -15,6 +15,9 @@ public sealed class FlagHintsTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
+    /// <summary>The words a jump-as-branch message ends with where a taken branch may cross a page.</summary>
+    private const string Page = "; a taken branch may cost one more cycle across a page";
+
     private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     /// <summary>
@@ -135,11 +138,12 @@ public sealed class FlagHintsTests
 
     /// <summary>
     /// A <c>jmp</c> where a flag is known can be the branch on that flag, which is a byte shorter.
-    /// On the 65C02 it can be <c>bra</c>, which needs no flag.
+    /// On the 65C02 it can be <c>bra</c>, which needs no flag. Either way the message says that a
+    /// taken branch may cost a cycle more than the jump across a page.
     /// </summary>
     [Theory]
-    [InlineData("6502", "`jmp main` can be `bcs main`, which saves a byte, because C is 1 here", "bcs")]
-    [InlineData("65C02", "`jmp main` can be `bra main`, which saves a byte", "bra")]
+    [InlineData("6502", "`jmp main` can be `bcs main`, which saves a byte, because C is 1 here" + Page, "bcs")]
+    [InlineData("65C02", "`jmp main` can be `bra main`, which saves a byte" + Page, "bra")]
     public void AJumpCanBeABranch(string cpu, string message, string branch)
     {
         const string Body = ".export .proc main {\n    lda $10\n    bne @x\n    sec\n    jmp main\n@x:\n    rts\n}\n";
@@ -150,6 +154,24 @@ public sealed class FlagHintsTests
         Assert.Equal(Body.Replace("jmp main", $"{branch} main", StringComparison.Ordinal), text);
     }
 
+    /// <summary>
+    /// On the 65816 a taken branch pays for a page only in emulation mode, so in native mode the
+    /// message leaves the page out. Where the mode is not known it may be emulation mode.
+    /// </summary>
+    [Theory]
+    [InlineData(": native", "")]
+    [InlineData(": emu", Page)]
+    [InlineData(": e*", Page)]
+    public void AJumpAsABranchSaysThePageOnlyWhereItCosts(string signature, string page)
+    {
+        var (analysis, path) = Analyzed(
+            $".export .proc main{signature} {{\n    lda $10\n    bne @x\n    jmp main\n@x:\n    rts\n}}\n", "65816");
+
+        Assert.Empty(analysis.Diagnostics);
+        var suggestion = Assert.Single(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "jump-as-branch");
+        Assert.Equal("`jmp main` can be `bra main`, which saves a byte" + page, suggestion.Message);
+    }
+
     /// <summary>A jump to a target past a branch's reach stays a jump.</summary>
     [Fact]
     public void AJumpPastABranchsReachStays()
@@ -158,6 +180,26 @@ public sealed class FlagHintsTests
             ".export .proc main {\n    sec\n    jmp far\n}\n.data pad: .byte[200]\n.proc far {\n    rts\n}\n");
 
         Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "jump-as-branch");
+    }
+
+    /// <summary>
+    /// A routine with a line that does not parse gets no suggestions, whether the broken line is
+    /// the one suggested or another line of the routine. Another routine of the file still gets
+    /// its own.
+    /// </summary>
+    [Theory]
+    [InlineData("    jmp main::\n", "")]
+    [InlineData("    jmp main\n", "    lda #\n")]
+    public void ARoutineWithASyntaxErrorGetsNoSuggestions(string jump, string broken)
+    {
+        var (analysis, path) = Analyzed(
+            ".export .proc main {\n    lda $10\n    bne @x\n" + broken + "    sec\n" + jump + "@x:\n    rts\n}\n"
+            + ".export .proc other {\n    lda $10\n    bne @x\n    jmp other\n@x:\n    rts\n}\n",
+            "65C02");
+
+        Assert.NotEmpty(analysis.Diagnostics);
+        var suggestion = Assert.Single(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "jump-as-branch");
+        Assert.Equal("`jmp other` can be `bra other`, which saves a byte" + Page, suggestion.Message);
     }
 
     /// <summary>
@@ -375,6 +417,45 @@ public sealed class FlagHintsTests
             .Replace("lda @x-5", "lda $13", StringComparison.Ordinal).Replace("lda @skip-2", "lda $13", StringComparison.Ordinal);
         (analysis, path) = Analyzed(".export .proc main {\n" + elsewhere + "}\n.export .proc done {\n    rts\n}\n");
         Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == id);
+    }
+
+    /// <summary>
+    /// A jump table that a <c>.next</c> hands control through holds where control goes, not bytes
+    /// code reads, so the first instruction of each entry keeps its hints. So does an RTS dispatch
+    /// table, whose addresses are one less than its labels. Here the branch over a <c>jmp</c>
+    /// that starts <c>@w1</c> keeps its hint.
+    /// </summary>
+    [Theory]
+    [InlineData("    jmp (table)\n    .next table\n.data table: .addr @w1, @w2\n")]
+    [InlineData("    ldx $10\n    lda table+1,x\n    pha\n    lda table,x\n    pha\n    rts\n    .next table\n.data table: .addr @w1-1, @w2-1\n")]
+    public void AnEntryOfATableControlGoesThroughKeepsItsHints(string dispatch)
+    {
+        var (analysis, path) = Analyzed(".export .proc main {\n" + dispatch
+            + "@w1:\n    bcc @w2\n    jmp done\n@w2:\n    rts\n}\n.export .proc done {\n    rts\n}\n");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "branch-over-jump");
+    }
+
+    /// <summary>
+    /// A routine named by an <c>.addr</c>, as in a vector table, is where control goes, so its first
+    /// instruction keeps its hints. A value that names a byte of it some other way, or a byte past
+    /// its start, may be read as data, and the instruction keeps its bytes.
+    /// </summary>
+    [Theory]
+    [InlineData(".addr main", true)]
+    [InlineData(".faraddr main", true)]
+    [InlineData(".addr main+1", false)]
+    [InlineData(".byte <main, >main", false)]
+    [InlineData(".word main", false)]
+    [InlineData(".word main+1", false)]
+    public void ARoutineAVectorNamesKeepsItsHints(string vector, bool suggested)
+    {
+        var (analysis, path) = Analyzed(
+            ".export .proc main {\n    jsr done\n    rts\n}\n.export .proc done {\n    rts\n}\n.data vectors: " + vector + "\n");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.Equal(suggested, analysis.SuggestionsFor(path).Any(suggestion => suggestion.Id == "tail-call"));
     }
 
     /// <summary>A call to a routine that promises to keep a register keeps its constant.</summary>

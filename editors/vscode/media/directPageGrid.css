@@ -130,16 +130,21 @@ body.vscode-high-contrast-light {
    source aliases the byte on purpose, or the linked config places both there, it only carries a mark. */
 .cell.twin { background-color: transparent;
   background-image: repeating-linear-gradient(135deg, var(--nested) 0 3px, color-mix(in srgb, var(--nested) 45%, transparent) 3px 6px); }
+/* A byte that a fixed address and a segment whose place is only predicted may both take has thin,
+   faint amber stripes and a question mark, since only a build can say whether they overlap. */
+.cell.maybe { background-color: transparent;
+  background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--nested) 45%, transparent) 0 1px, transparent 1px 6px); }
 /* A striped cell shows its window onto one pattern laid over the whole grid, which is 16 columns
    of 24px by 16 rows of 22px, so the stripes run on from cell to cell. */
-.cell.other, .cell.otherused, .cell.twin { background-size: 384px 352px; background-position: calc(-1 * var(--x, 0px)) calc(-1 * var(--y, 0px)); }
+.cell.other, .cell.otherused, .cell.twin, .cell.maybe { background-size: 384px 352px; background-position: calc(-1 * var(--x, 0px)) calc(-1 * var(--y, 0px)); }
 /* The marks are set large in the middle of the cell, so they read over any colour or stripes. */
-.cell.clash::after, .cell.twin::after, .cell.alias::after {
+.cell.clash::after, .cell.twin::after, .cell.alias::after, .cell.maybe::after {
   position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none;
 }
 .cell.clash::after { content: "⧉"; color: var(--on-amber); }
 .cell.twin::after { content: "="; color: var(--on-amber); }
 .cell.alias::after { content: "="; color: var(--fg); opacity: 0.8; text-shadow: 0 0 2px var(--cut); }
+.cell.maybe::after { content: "?"; color: var(--fg); opacity: 0.7; text-shadow: 0 0 2px var(--cut); }
 .cell.hot, .cell.peek { --edge: var(--edge-hot) !important; }
 .cell.peek:not(.hot) { filter: brightness(1.2); }
 

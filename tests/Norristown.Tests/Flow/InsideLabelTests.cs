@@ -1,6 +1,8 @@
 using Norristown.LanguageServer;
+using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Project;
+using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
@@ -94,6 +96,54 @@ public sealed class InsideLabelTests
             + ".segment RODATA\n.data table: .byte[2] {\n    1, 2\n}\n");
 
         Assert.Contains(message, diagnostics.Select(d => d.Message));
+    }
+
+    /// <summary>
+    /// On the 65816 the hidden instructions are counted in the processor state that reaches the
+    /// position. The bytes from <c>@top + 1</c> of <c>lda $10A5</c> run as <c>lda $10</c>, a direct
+    /// read. The table gives it 3 cycles, plus 1 for a 16-bit A, and with D declared 0 nothing for
+    /// the direct page. Without the state it was 3 to 5.
+    /// </summary>
+    [Theory]
+    [InlineData("a8", 3)]
+    [InlineData("a16", 4)]
+    public void TheHiddenInstructionsAreCountedInTheProcessorState(string width, int cycles)
+    {
+        var text = ".module main\n.cpu 65816\n.segment CODE\n"
+            + $".export .proc main: native, {width}, i8, dp = 0 {{\n    clc\n    bcc in\n@top:\n    lda $10A5\n"
+            + "    .label in = @top + 1\n    rts\n}\n";
+
+        Assert.Equal(new CycleCount(cycles), HiddenCycles(Cpu.Wdc65816, text));
+    }
+
+    /// <summary>
+    /// On the 65C02 hidden arithmetic pays the decimal-mode cycle only where the decimal flag may
+    /// be set. The bytes from <c>@top + 1</c> of <c>lda $69D8</c> and the <c>nop</c> after it run
+    /// as <c>cld</c> and <c>adc #$EA</c>, 2 cycles each, because the <c>cld</c> clears D first. From
+    /// <c>@top + 2</c> they run as <c>adc #$EA</c> alone, which costs 2 after a <c>cld</c> before the
+    /// branch and 3 after a <c>sed</c>. Without the flag it was 2 to 3.
+    /// </summary>
+    [Theory]
+    [InlineData("cld", "@top + 1", 4)]
+    [InlineData("cld", "@top + 2", 2)]
+    [InlineData("sed", "@top + 2", 3)]
+    public void HiddenArithmeticFollowsTheDecimalFlag(string flag, string position, int cycles)
+    {
+        var text = ".module main\n.cpu 65c02\n.segment CODE\n"
+            + $".export .proc main {{\n    {flag}\n    clc\n    bcc in\n@top:\n    lda $69D8\n"
+            + $"    .label in = {position}\n    nop\n    sta $10\n    rts\n}}\n";
+
+        Assert.Equal(new CycleCount(cycles), HiddenCycles(Cpu.Wdc65C02, text));
+    }
+
+    /// <summary>Returns what the bytes from the one <c>.label</c> of <paramref name="text"/> cost to run.</summary>
+    private static CycleCount? HiddenCycles(Cpu cpu, string text)
+    {
+        var analysis = Analysis.Program(Analysis.Fragment with { Cpu = cpu }, ("main.nt65", text));
+        Assert.Empty(analysis.Diagnostics);
+        var tree = analysis.File("main.nt65").Tree;
+        var label = tree.Root.DescendantNodes().OfType<LabelDirectiveSyntax>().Single();
+        return analysis.LayoutFor("main.nt65")!.Of(label)!.Cycles;
     }
 
     private static IReadOnlyList<Diagnostic> Diagnostics(string text) =>

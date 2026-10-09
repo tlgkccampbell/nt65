@@ -346,6 +346,31 @@ public sealed class FixesTests
     }
 
     /// <summary>
+    /// A label entered from where nt65 cannot see, here through its address, gets a
+    /// <c>.state</c> only as a choice. Declaring the state the visible path brings asserts it of
+    /// the unseen entrants too, so that fix says where its state came from and is not preferred.
+    /// <c>.state ?</c>, which assumes nothing, is offered beside it.
+    /// </summary>
+    [Fact]
+    public void AnEntryNt65CannotSeeOffersTheInferredStateAndUnknown()
+    {
+        const string Body = ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    rts\n}\n";
+        var (analysis, model) = Analyzed(Header + Body);
+
+        var actions = CodeActions.In(analysis, model, Whole)
+            .Where(action => action.Title.StartsWith("Declare `@here`", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Equal(
+            ["Declare `@here` with the state the visible paths bring (`.state a8, i8, native`)", "Declare `@here` with `.state ?`"],
+            actions.Select(action => action.Title));
+        Assert.All(actions, action => Assert.False(action.IsPreferred));
+        Assert.Equal(
+            Header + ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    .state ?\n    rts\n}\n",
+            Editing.Apply(Header + Body, actions[1].Edit!.Changes[Uri]));
+    }
+
+    /// <summary>
     /// A return that leaves a width other than the one its routine declares has two readings. The
     /// routine may need to set the width it declares, or it may declare the wrong one. Both fixes
     /// are offered, and neither is preferred.

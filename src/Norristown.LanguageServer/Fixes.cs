@@ -163,8 +163,8 @@ internal static class Fixes
                 break;
 
             case FixKind.State when fix.At is { } label && analysis.ModelFor(label.File) is { } labelled:
-                if (StateAfter(analysis, labelled, label) is { } state)
-                    yield return Fix(diagnostic, state.Title, state.Edits);
+                foreach (var state in StatesAfter(analysis, labelled, label))
+                    yield return Fix(diagnostic, state.Title, state.Edits, preferred: false);
                 break;
 
             case FixKind.DataDeclaration:
@@ -628,11 +628,16 @@ internal static class Fixes
     }
 
     /// <summary>
-    /// Returns a fix that adds a <c>.state</c> after a label. The <c>.state</c> gives the
-    /// processor state the analysis finds on entry to the line below the label, or the routine's
-    /// entry state where the analysis found nothing.
+    /// Returns the fixes that add a <c>.state</c> after a label that is entered from somewhere
+    /// nt65 cannot see. The first gives the processor state the visible paths bring to the line
+    /// below the label, or the routine's entry state where the analysis found nothing. The second
+    /// gives <c>.state ?</c>, which assumes nothing.
     /// </summary>
-    private static (string Title, IReadOnlyList<Edit> Edits)? StateAfter(
+    /// <remarks>
+    /// Neither fix is preferred. A <c>.state</c> is a contract about every entrant, including the
+    /// ones nt65 cannot see, so the inferred one says in its title where its state came from.
+    /// </remarks>
+    private static IEnumerable<(string Title, IReadOnlyList<Edit> Edits)> StatesAfter(
         ProgramAnalysis analysis, SemanticModel model, Span label)
     {
         var tree = model.Tree;
@@ -644,25 +649,30 @@ internal static class Fixes
         var reaching = block is { Steps: [var first, ..] }
             ? analysis.StatesFor(tree.Path)?.AnyBefore(first.Statement)?.Processor
             : null;
-        if ((reaching ?? symbol?.Routine?.Signature?.Entry) is not { } state)
-            return null;
-
-        var items = Edits.FormatState(state);
         var name = symbol?.DisplayName ?? "the label";
-        var title = $"Declare `{name}` with `.state {items}`";
-
-        // A label with a statement after it on its line is split there, because a `.state`
-        // declares a label only directly after it.
-        var tokens = LineContext.TokensOf(tree, line);
-        var colon = tokens.FindIndex(token => token.Kind == SyntaxKind.Colon);
-        var body = Edits.BodyIndent(tree, line);
-        if (colon >= 0 && colon + 1 < tokens.Count)
+        if ((reaching ?? symbol?.Routine?.Signature?.Entry) is { } state)
         {
-            var from = tokens[colon].Start + 1;
-            var to = tokens[colon + 1].Start;
-            return (title, [new Edit(tree, new TextSpan(from, to - from), $"\n{body}.state {items}\n{body}")]);
+            var items = Edits.FormatState(state);
+            var source = reaching is not null ? "the state the visible paths bring" : "its routine's entry state";
+            yield return ($"Declare `{name}` with {source} (`.state {items}`)", Declared(items));
         }
-        return (title, [Edits.InsertAfter(tree, line, $"{body}.state {items}")]);
+        yield return ($"Declare `{name}` with `.state ?`", Declared("?"));
+
+        IReadOnlyList<Edit> Declared(string items)
+        {
+            // A label with a statement after it on its line is split there, because a `.state`
+            // declares a label only directly after it.
+            var tokens = LineContext.TokensOf(tree, line);
+            var colon = tokens.FindIndex(token => token.Kind == SyntaxKind.Colon);
+            var body = Edits.BodyIndent(tree, line);
+            if (colon >= 0 && colon + 1 < tokens.Count)
+            {
+                var from = tokens[colon].Start + 1;
+                var to = tokens[colon + 1].Start;
+                return [new Edit(tree, new TextSpan(from, to - from), $"\n{body}.state {items}\n{body}")];
+            }
+            return [Edits.InsertAfter(tree, line, $"{body}.state {items}")];
+        }
     }
 
     /// <summary>

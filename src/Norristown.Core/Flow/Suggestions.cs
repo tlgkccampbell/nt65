@@ -16,6 +16,11 @@ namespace Norristown.Flow;
 /// The analysis sees only the branches this build takes. A routine with a branch this build
 /// leaves out gets no suggestions, because another build may take that branch and need the code.
 /// </para>
+/// <para>
+/// A routine with a line that does not parse gets no suggestions either. What the analysis knows
+/// at one line depends on every line before it, and a half-typed line may stand for code that
+/// would change it.
+/// </para>
 /// </summary>
 public static class Suggestions
 {
@@ -38,10 +43,9 @@ public static class Suggestions
         FileAnalysis file, IReadOnlyList<TextSpan> omitted, Func<Symbol, bool> readsCallerStack,
         IReadOnlyCollection<NamedByte> named)
     {
-        // Every routine of a file whose branches the build all takes is unconditional.
-        List<FlowRegion> regions = omitted.Count == 0
-            ? [.. file.Flow.Regions]
-            : [.. file.Flow.Regions.Where(region => Unconditional(region, omitted))];
+        // Only a routine whose branches the build all takes, and whose lines all parse, is asked.
+        List<FlowRegion> regions = [.. file.Flow.Regions.Where(region =>
+            (omitted.Count == 0 || Unconditional(region, omitted)) && !Broken(region))];
         var readAsData = ReadAsData(file, named);
         return Norristown.Diagnostics.Ordered(
             [.. TailCalls(file, readAsData, regions, readsCallerStack), .. OfTheFile(file, readAsData, regions, omitted)]);
@@ -120,6 +124,23 @@ public static class Suggestions
         var start = own.Min(span => span.Start);
         var end = own.Max(span => span.End);
         return !omitted.Any(span => span.Start < end && span.End > start);
+    }
+
+    /// <summary>
+    /// Returns whether a line of the routine's own, from its first statement to its last, has a
+    /// syntax error.
+    /// </summary>
+    private static bool Broken(FlowRegion region)
+    {
+        var tree = region.Routine.Tree;
+        if (!tree.Root.ContainsDiagnostics)
+            return false;
+        var own = region.Blocks.SelectMany(block => block.Steps)
+            .Where(step => step.On is null && step.Statement.Tree == tree)
+            .Select(step => step.Statement.LineIndex)
+            .ToList();
+        return own.Count > 0
+            && Enumerable.Range(own.Min(), own.Max() - own.Min() + 1).Any(line => tree.GetLine(line).ContainsDiagnostics);
     }
 
     /// <summary>
@@ -348,7 +369,8 @@ public static class Suggestions
     /// <summary>
     /// Returns a suggestion for each <c>jmp</c> to a label that a branch could reach, which saves a
     /// byte. On a CPU with <c>bra</c> that branch is <c>bra</c>. On any other it is a branch on a
-    /// flag known on every path to the <c>jmp</c>, the carry first.
+    /// flag known on every path to the <c>jmp</c>, the carry first. The message adds that a taken
+    /// branch may cost one more cycle across a page, wherever that can happen.
     /// </summary>
     private static IEnumerable<Diagnostic> JumpsAsBranches(
         FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
@@ -391,9 +413,14 @@ public static class Suggestions
             {
                 continue;
             }
+
+            // A taken branch costs a cycle more than the jump where it crosses a page, except in
+            // native mode. A target right after the branch is on the page the branch counts from.
+            var native = file.State?.Before(jump, step.On)?.Processor is { E: ProcessorMode.Native };
+            var page = native || reach == 0 ? "" : "; a taken branch may cost one more cycle across a page";
             var operand = jump.Operand!.GetText().Trim();
             yield return new Diagnostic(jump.Tree.GetSpan(jump.Span),
-                Catalogue.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why) + unpromised)
+                Catalogue.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why, page) + unpromised)
             {
                 Fix = new DiagnosticFix(FixKind.Branch, branch, Caveat: unpromised?.Caveat),
             };
@@ -711,21 +738,41 @@ public static class Suggestions
     /// Returns each label an operand or a data value of <paramref name="file"/> names other than as
     /// where control goes, with the constant added to it. A name in a <c>.next</c>, a <c>.patch</c>
     /// or another annotation is not an operand, and is left out.
+    /// <para>
+    /// An address in an <c>.addr</c> or <c>.faraddr</c> value is where control goes, too, where it
+    /// names a routine or a label a <c>.next</c> of the file hands control to. A vector or a jump
+    /// table holds such addresses, and nothing reads the bytes they point at. The address may be
+    /// one less than such a label, as in an RTS dispatch table. Any other value, such as
+    /// <c>.byte &lt;w1</c> or <c>.word w1+1</c>, names bytes code may read.
+    /// </para>
     /// </summary>
     private static List<NamedByte> NamedIn(FileAnalysis file)
     {
         var model = file.Model;
+        var handed = new HashSet<(Symbol, Expansion?)>();
+        foreach (var step in file.Layout.Steps)
+        {
+            if (step.Statement is NextDirectiveSyntax next)
+                handed.UnionWith(file.Flow.Named(next, step.On));
+        }
+
         var named = new List<NamedByte>();
         foreach (var step in file.Layout.Steps)
         {
             SyntaxNode? target = null;
+            var addresses = false;
             if (step.Statement is InstructionStatementSyntax instruction)
             {
                 var mode = file.Layout.Of(instruction, step.On)?.Mode;
                 if (Transfers.Of(instruction, mode) is Transfer.Branch or Transfer.Jump or Transfer.Call)
                     target = Transfers.TargetOf(instruction, mode);
             }
-            else if (step.Statement is not (DataDirectiveSyntax or DataValuesSyntax))
+            else if (step.Statement is DataDirectiveSyntax or DataValuesSyntax)
+            {
+                var element = step.Statement as DataDirectiveSyntax ?? DataSyntax.DirectiveOfValues((DataValuesSyntax)step.Statement);
+                addresses = element?.Directive.DirectiveKind is DirectiveKind.Addr or DirectiveKind.FarAddr;
+            }
+            else
             {
                 continue;
             }
@@ -733,7 +780,11 @@ public static class Suggestions
             {
                 if ((target is not null && name.AncestorsAndSelf().Contains(target)) || Targets.Of(model, name, step.On) is not { } found)
                     continue;
-                named.Add(new NamedByte(found.Symbol, found.At, OffsetOf(model, name, step.On)));
+                var offset = OffsetOf(model, name, step.On);
+                var entered = handed.Contains((found.Symbol, found.At));
+                if (addresses && ((offset == 0 && (entered || found.Symbol.Signature is not null)) || (offset == -1 && entered)))
+                    continue;
+                named.Add(new NamedByte(found.Symbol, found.At, offset));
             }
         }
         return named;

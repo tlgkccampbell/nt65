@@ -30,6 +30,11 @@ namespace Norristown.Flow;
 /// </summary>
 public sealed class DataMap
 {
+    // The endings of the note that marks a call between a routine's use of a location and its
+    // read of it again, where the call uses the location as a temporary.
+    private const string NestedAfterWrite = "runs between a write and a read of it";
+    private const string NestedAfterRead = "runs between two reads of it";
+
     private DataMap(IReadOnlyList<DirectPage> pages, IReadOnlyList<DataSegment> segments, IReadOnlyList<DataCall> calls)
     {
         Pages = pages;
@@ -95,6 +100,9 @@ public sealed class DataMap
         private readonly Dictionary<long, int> direct = [];
         private readonly MemoryInference memory = new(analysis);
 
+        // Where each routine runs from, and which routines are walked as interrupt handlers.
+        private readonly RoutineContexts contexts = analysis.Contexts();
+
         // The statements that take each location's address without reaching it, in the order the
         // walk found them.
         private readonly Dictionary<LocationKey, List<DataReference>> references = [];
@@ -156,7 +164,6 @@ public sealed class DataMap
         /// </summary>
         private (HashSet<Symbol> Interrupt, HashSet<Symbol> Main) Contexts()
         {
-            var contexts = analysis.Contexts();
             return (Where(RoutineContext.Interrupt), Where(RoutineContext.Main));
 
             HashSet<Symbol> Where(RoutineContext context) => [.. routines.Keys.Where(routine => contexts.Of(routine).HasFlag(context))];
@@ -563,11 +570,17 @@ public sealed class DataMap
                 or AddressingMode.AbsoluteY or AddressingMode.LongX or AddressingMode.DirectIndirectX or AddressingMode.AbsoluteIndirectX;
 
             // An indirect access reaches its pointer, which is 3 bytes for the long forms and 2 for
-            // the others. Any other access reaches as many bytes as its register holds.
+            // the others. Any other access reaches as many bytes as its register holds. While that
+            // width is not known, it is sure of one byte and may reach the next, as the memory guess
+            // takes it.
             var state = file.Layout.Cpu == Cpu.Wdc65816 ? file.State?.Before(step.Statement, step.On)?.Processor : null;
+            var sized = file.Layout.Cpu == Cpu.Wdc65816 && !indirect && Instructions.MemorySizedBy(mnemonic) is { } register
+                ? state?.Of(register) ?? Width.Unknown
+                : Width.Eight;
             var width = indirect
                 ? mode is AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY or AddressingMode.AbsoluteIndirectLong ? 3 : 2
-                : state is { } processor && Instructions.MemorySizedBy(mnemonic) is { } register && processor.Of(register) == Width.Sixteen ? 2 : 1;
+                : sized == Width.Sixteen ? 2 : 1;
+            var wider = sized is not (Width.Eight or Width.Sixteen);
             var page = (long?)null;
             var unknown = false;
             if (throughPage && state?.D is { } d)
@@ -620,7 +633,7 @@ public sealed class DataMap
             if (throughPage && page is { } reached)
                 direct[reached] = direct.GetValueOrDefault(reached) + 1;
 
-            return new Found(key, page, unknown, Shown(step, file.Model.Tree), step, reads, writes, indexed, offset, width);
+            return new Found(key, page, unknown, Shown(step, file.Model.Tree), step, reads, writes, indexed, offset, width, wider);
         }
 
         /// <summary>
@@ -735,7 +748,7 @@ public sealed class DataMap
                 cancellation.ThrowIfCancellationRequested();
                 var routine = Current(region.Routine);
                 var hazards = Walk(region, byStep, tracked, roles).Hazards;
-                var handler = RoutineContexts.IsHandler(routine);
+                var handler = contexts.Handles(routine);
                 var inInterrupt = handler || interrupt.Contains(routine);
                 var inMain = InMain(routine);
                 foreach (var location in accesses.GroupBy(access => (access.Location, access.Unknown)))
@@ -758,7 +771,7 @@ public sealed class DataMap
 
             // A routine that neither the program's starts nor a handler reaches, such as one
             // only a loop of calls reaches, is taken as the rest of the program's.
-            bool InMain(Symbol routine) => !RoutineContexts.IsHandler(routine) && (main.Contains(routine) || !interrupt.Contains(routine));
+            bool InMain(Symbol routine) => !contexts.Handles(routine) && (main.Contains(routine) || !interrupt.Contains(routine));
         }
 
         /// <summary>
@@ -771,10 +784,14 @@ public sealed class DataMap
         /// first and then writes it either counts something the interrupted code reads, or saves
         /// and restores it, and the roles do not tell those apart, so neither is a hazard. A use as
         /// a temporary is a hazard to interrupted code that reads the location, and a use that
-        /// only writes it is a hazard to interrupted code that both writes and reads it. A routine
-        /// that runs in both contexts can interrupt itself part-way through its own use, so its use
-        /// is on both sides. A use through the interrupted code's D counts only when that code
-        /// holds D at the location's own page.
+        /// only writes it is a hazard to interrupted code that both writes and reads it. The
+        /// interrupted code's write and read may be in different routines, so where no one routine
+        /// both writes and reads the location, the program's uses are pooled: one routine that
+        /// writes it and another that reads it stand for code that does both. A routine that runs
+        /// in both contexts can interrupt itself part-way through its own use, so its use is on
+        /// both sides. A use in the program while D is not known names the location as any other
+        /// does, so it can be interrupted as well. A handler's use through the interrupted code's D
+        /// counts only when that code holds D at the location's own page.
         /// </remarks>
         /// <param name="uses">The uses, by routine and location, which this replaces with ones that carry the new notes.</param>
         /// <param name="held">The pages the interruptible code holds D at.</param>
@@ -784,25 +801,40 @@ public sealed class DataMap
             {
                 if (homes[location.Key].IsMmio)
                     continue;
-                var mains = location.Where(item => item.Value is { InMain: true, IsUnknownPage: false }).Select(item => item.Value).ToList();
+                var mains = location.Where(item => item.Value.InMain).Select(item => item.Value).ToList();
+                var writer = mains.FirstOrDefault(other => other.Accesses.Any(access => access.Writes));
+                var reader = mains.FirstOrDefault(other => other.Routine != writer?.Routine && other.Accesses.Any(access => access.Reads));
                 foreach (var (key, use) in location.Where(item => item.Value.InInterrupt).ToList())
                 {
                     if (use.IsUnknownPage && (homes[location.Key].Page is not { } home || !held.Contains(home)))
                         continue;
-                    if (mains.FirstOrDefault(other => Clobbers(use.Role, other.Role)) is not { } victim)
-                        continue;
                     var name = use.Routine.DisplayName;
+                    DataNote whom;
+                    if (mains.FirstOrDefault(other => Clobbers(use.Role, other.Role)) is { } victim)
+                    {
+                        whom = new DataNote("⚠", victim == use
+                            ? "and can interrupt itself between its own write and read"
+                            : $"and can interrupt `{victim.Routine.DisplayName}` between its write and its read",
+                            victim.Accesses.FirstOrDefault(access => access.Reads).Line);
+                    }
+                    else if (writer is not null && reader is not null && Clobbers(use.Role, DataRole.InOut))
+                    {
+                        whom = new DataNote("⚠",
+                            $"and can interrupt the program between `{writer.Routine.DisplayName}`'s write and `{reader.Routine.DisplayName}`'s read",
+                            reader.Accesses.FirstOrDefault(access => access.Reads).Line);
+                    }
+                    else
+                    {
+                        continue;
+                    }
                     var what = use.Role == DataRole.Temp ? $"`{name}` uses it as a temporary" : $"`{name}` writes it without reading it first";
-                    var whom = victim == use
-                        ? "and can interrupt itself between its own write and read"
-                        : $"and can interrupt `{victim.Routine.DisplayName}` between its write and its read";
                     uses[key] = use with
                     {
                         Hazards =
                         [
                             .. use.Hazards,
                             new DataNote("⚠", what, use.Accesses.FirstOrDefault(access => access.Writes).Line),
-                            new DataNote("⚠", whom, victim.Accesses.FirstOrDefault(access => access.Reads).Line),
+                            whom,
                         ],
                     };
                 }
@@ -918,7 +950,9 @@ public sealed class DataMap
 
         /// <summary>
         /// Walks one routine's blocks and returns the locations it reads before it writes them, and
-        /// the hazards where it relies on a location across a call that uses it as a temporary.
+        /// the hazards where it relies on a location across a call that uses it as a temporary. A
+        /// routine relies on a location it has written or read before the call and reads again
+        /// after it.
         /// </summary>
         /// <param name="region">The routine's region.</param>
         /// <param name="byStep">The routine's accesses, by the step that makes them.</param>
@@ -966,11 +1000,20 @@ public sealed class DataMap
                                 readsFirst.Add(location);
                             if (collect && held.Clobbered.TryGetValue(location, out var call))
                                 Hazard(location, call, access.Line);
+
+                            // A value read is held as well as one written, since the routine may
+                            // read it again after a call and rely on it being the same.
+                            held = held with { Read = held.Read.Add(location) };
                         }
                         if (access.Writes && !access.Indexed)
                         {
                             var must = held.Must.Union(Bytes(location, access.Offset, access.Width));
-                            held = new Held(must, held.May.Add(location), Covered(must, location) ? held.Clobbered.Remove(location) : held.Clobbered);
+                            held = held with
+                            {
+                                Must = must,
+                                May = held.May.Add(location),
+                                Clobbered = Covered(must, location) ? held.Clobbered.Remove(location) : held.Clobbered,
+                            };
                         }
                         else if (access.Writes)
                         {
@@ -990,12 +1033,12 @@ public sealed class DataMap
                         var callee = Current(RegisterWalk.Owner(target) ?? target);
                         var reads = memory.ReadsOf(target).Select(location => location.Root).OfType<Symbol>().Select(Key).ToHashSet();
                         var writes = memory.WritesOf(target).Select(location => location.Root).OfType<Symbol>().Select(Key).ToHashSet();
-                        foreach (var location in held.May)
+                        foreach (var location in held.May.Union(held.Read))
                         {
                             if (tracked.Contains(location) && writes.Contains(location) && !reads.Contains(location) && !clobbered.ContainsKey(location)
                                 && TempBelow(callee, location, roles) is { } temp)
                             {
-                                clobbered = clobbered.Add(location, (callee, temp, at));
+                                clobbered = clobbered.Add(location, (callee, temp, at, held.May.Contains(location)));
                             }
                         }
                     }
@@ -1005,17 +1048,18 @@ public sealed class DataMap
                         .Select(location => (Key(location.Root!), location.Offset)).ToImmutableHashSet();
                     always = always is null ? stored : always.Intersect(stored);
                 }
-                return new Held(block.CallsUnknown || always is null ? held.Must : held.Must.Union(always), held.May, clobbered);
+                return held with { Must = block.CallsUnknown || always is null ? held.Must : held.Must.Union(always), Clobbered = clobbered };
             }
 
-            void Hazard(LocationKey location, (Symbol Callee, Symbol Temp, SyntaxNode At) call, SyntaxNode read)
+            void Hazard(LocationKey location, (Symbol Callee, Symbol Temp, SyntaxNode At, bool Written) call, SyntaxNode read)
             {
                 if (!hazards.TryGetValue(location, out var notes))
                     hazards[location] = notes = [];
                 var callText = call.At.GetText().Trim();
                 if (notes.Any(note => note.At == call.At))
                     return;
-                notes.Add(new DataNote("⚠", $"`{callText}` runs between a write and a read of it", call.At));
+                var between = call.Written ? NestedAfterWrite : NestedAfterRead;
+                notes.Add(new DataNote("⚠", $"`{callText}` {between}", call.At));
                 notes.Add(new DataNote("⚠", $"`{call.Temp.DisplayName}` uses it as a temporary", WriteIn(call.Temp, location)));
                 notes.Add(new DataNote("◦", "read again here, after the call", read));
             }
@@ -1031,9 +1075,13 @@ public sealed class DataMap
                 yield return (location, offset + i);
         }
 
-        /// <summary>Returns whether <paramref name="must"/> holds every byte that <paramref name="access"/> reaches.</summary>
+        /// <summary>
+        /// Returns whether <paramref name="must"/> holds every byte that <paramref name="access"/>
+        /// reaches or may reach. A read whose width is not known may read a byte the routine never
+        /// wrote, so that byte counts as read.
+        /// </summary>
         private static bool Covers(ImmutableHashSet<(LocationKey, long)> must, Found access) =>
-            Bytes(access.Location, access.Offset, access.Width).All(must.Contains);
+            Bytes(access.Location, access.Offset, access.Width + (access.Wider ? 1 : 0)).All(must.Contains);
 
         /// <summary>
         /// Returns whether <paramref name="must"/> holds every byte of <paramref name="location"/>.
@@ -1106,12 +1154,15 @@ public sealed class DataMap
                 }
                 foreach (var (here, there, first, last) in SamePage(locations))
                 {
-                    if (KindOf(here, there) != SharedBytesKind.Collision)
+                    var kind = KindOf(here, there);
+                    if (kind is not (SharedBytesKind.Collision or SharedBytesKind.Unverified))
                         continue;
                     var span = first == last
                         ? StateValue.Hex(page.Key + first, 4)
                         : $"{StateValue.Hex(page.Key + first, 4)}-{StateValue.Hex(page.Key + last, 4)}";
-                    pageNotes.Add(new DataNote("⧉", $"`{here.Name}` and `{there.Name}` share {span} unintentionally", null));
+                    pageNotes.Add(kind == SharedBytesKind.Collision
+                        ? new DataNote("⧉", $"`{here.Name}` and `{there.Name}` both take {span}", null)
+                        : new DataNote("◦", $"`{here.Name}` and `{there.Name}` may both take {span} · predicted, not verified", null));
                 }
                 pages.Add(new DirectPage(page.Key, named, hardware, locations, [], direct.GetValueOrDefault(page.Key), pageNotes));
             }
@@ -1187,7 +1238,8 @@ public sealed class DataMap
             var uses = location.Uses;
             if (uses.Count == 0)
                 return DataRelation.Unused;
-            if (uses.Any(use => use.Hazards.Any(note => note.Text.EndsWith("runs between a write and a read of it", StringComparison.Ordinal))))
+            if (uses.Any(use => use.Hazards.Any(note => note.Text.EndsWith(NestedAfterWrite, StringComparison.Ordinal)
+                || note.Text.EndsWith(NestedAfterRead, StringComparison.Ordinal))))
                 return DataRelation.Nested;
             // One routine reached from both is enough, because the interrupt can stop the
             // routine part-way through its use and run it again.
@@ -1291,8 +1343,10 @@ public sealed class DataMap
         /// <summary>
         /// Returns how two locations on one page come to take the same bytes. Two addresses the
         /// source fixes alias the bytes on purpose, as a program that names one byte two ways does.
-        /// A fixed address inside a segment's bytes is nearly always a mistake, so it collides. Two
-        /// laid-out locations share bytes because the configuration says so when it places both, as
+        /// A fixed address inside a segment's bytes collides with them where the last build placed
+        /// the segment, and may only where its place is predicted. Some programs mean that overlap
+        /// and some do not, so the map says what it sees rather than which. Two laid-out locations
+        /// share bytes because the configuration says so when it places both, as
         /// <see cref="SharedBytesKind.Authored"/> describes. Otherwise one segment's predicted
         /// bytes run on into the other's, and the two collide.
         /// </summary>
@@ -1301,7 +1355,7 @@ public sealed class DataMap
             if (here.Layout == DataLayout.Fixed && there.Layout == DataLayout.Fixed)
                 return SharedBytesKind.Deliberate;
             if (here.Layout == DataLayout.Fixed || there.Layout == DataLayout.Fixed)
-                return SharedBytesKind.Collision;
+                return (here.Layout == DataLayout.Fixed ? there : here).Layout == DataLayout.Built ? SharedBytesKind.Collision : SharedBytesKind.Unverified;
 
             // ld65 put both where the last build says, which is where the configuration told it to.
             if (here.Layout == DataLayout.Built && there.Layout == DataLayout.Built)
@@ -1394,11 +1448,17 @@ public sealed class DataMap
         /// </param>
         /// <param name="Offset">The offset from the location's first byte to the first byte it reaches.</param>
         /// <param name="Width">
-        /// The number of bytes it reaches from <paramref name="Offset"/>. That is the pointer for an
-        /// indirect access, and otherwise 2 for a 16-bit register on the 65816 and 1 for the rest.
+        /// The number of bytes it is sure to reach from <paramref name="Offset"/>. That is the
+        /// pointer for an indirect access, and otherwise 2 for a 16-bit register on the 65816 and 1
+        /// for the rest.
+        /// </param>
+        /// <param name="Wider">
+        /// Whether it may reach one byte more than <paramref name="Width"/>, because on the 65816 the
+        /// width of the register that sizes it is not known.
         /// </param>
         private sealed record Found(
-            LocationKey Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Indexed, long Offset, long Width)
+            LocationKey Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Indexed, long Offset, long Width,
+            bool Wider)
         {
             public Symbol? Routine { get; init; }
 
@@ -1413,8 +1473,8 @@ public sealed class DataMap
 
         /// <summary>
         /// Represents what a point in a routine has stored: the bytes every path has written, the
-        /// locations some path has written, and those a call has since overwritten, with the call
-        /// and the routine below it that uses the location as a temporary.
+        /// locations some path has written or read, and those a call has since overwritten, with
+        /// the call and the routine below it that uses the location as a temporary.
         /// </summary>
         /// <remarks>
         /// Written bytes are kept one by one, each as its location and its offset in it, because
@@ -1423,22 +1483,27 @@ public sealed class DataMap
         /// </remarks>
         /// <param name="Must">The bytes every path has written, each as its location and its offset in it.</param>
         /// <param name="May">The locations some path has written, in whole or in part.</param>
-        /// <param name="Clobbered">The locations a call has since overwritten, with the call.</param>
+        /// <param name="Read">The locations some path has read.</param>
+        /// <param name="Clobbered">
+        /// The locations a call has since overwritten, with the call, and whether the routine had
+        /// written the location before it rather than only read it.
+        /// </param>
         private sealed record Held(
-            ImmutableHashSet<(LocationKey Location, long Byte)> Must, ImmutableHashSet<LocationKey> May,
-            ImmutableDictionary<LocationKey, (Symbol Callee, Symbol Temp, SyntaxNode At)> Clobbered)
+            ImmutableHashSet<(LocationKey Location, long Byte)> Must, ImmutableHashSet<LocationKey> May, ImmutableHashSet<LocationKey> Read,
+            ImmutableDictionary<LocationKey, (Symbol Callee, Symbol Temp, SyntaxNode At, bool Written)> Clobbered)
         {
-            public static Held Nothing { get; } = new([], [], ImmutableDictionary<LocationKey, (Symbol, Symbol, SyntaxNode)>.Empty);
+            public static Held Nothing { get; } = new([], [], [], ImmutableDictionary<LocationKey, (Symbol, Symbol, SyntaxNode, bool)>.Empty);
 
             public static Held Merge(Held? known, Held arriving) =>
                 known is null ? arriving : new Held(
-                    known.Must.Intersect(arriving.Must), known.May.Union(arriving.May), known.Clobbered.SetItems(arriving.Clobbered.Where(item => !known.Clobbered.ContainsKey(item.Key))));
+                    known.Must.Intersect(arriving.Must), known.May.Union(arriving.May), known.Read.Union(arriving.Read),
+                    known.Clobbered.SetItems(arriving.Clobbered.Where(item => !known.Clobbered.ContainsKey(item.Key))));
 
             public bool Equals(Held? other) =>
-                other is not null && Must.SetEquals(other.Must) && May.SetEquals(other.May)
+                other is not null && Must.SetEquals(other.Must) && May.SetEquals(other.May) && Read.SetEquals(other.Read)
                 && Clobbered.Count == other.Clobbered.Count && Clobbered.Keys.All(other.Clobbered.ContainsKey);
 
-            public override int GetHashCode() => HashCode.Combine(Must.Count, May.Count, Clobbered.Count);
+            public override int GetHashCode() => HashCode.Combine(Must.Count, May.Count, Read.Count, Clobbered.Count);
         }
     }
 }

@@ -8,7 +8,7 @@
 .export jumps_out, calls_out_cleanly, listed_variant, calls_declared, indexed_listed
 .export through_name, through_name_listed, two_stores, past_into_next, past_into_data
 .export before_into_previous, patches_next, patches_nothing, into_expansion_label
-.export into_next_routine, after_next_routine
+.export into_next_routine, after_next_routine, load_variant
 
 .proc EXT = $FFD2
 .proc DECLARED = $FFE4: reads a
@@ -74,6 +74,17 @@
 @op:
     lda #5
     rts
+}
+
+; On the 6502 every immediate is one byte, so `ldx #` can stand in for `lda #`. The registers
+; follow the variant, so the routine no longer keeps X.
+.proc load_variant: keeps x {
+    lda #.opcode(ldx, imm)
+    sta @op
+    .patch @op as ldx
+@op:
+    lda #5
+    rts                     ;! error[keeps-broken]: `load_variant` promises `keeps x`, but X is not the same as on entry here: restore it before returning, or add `.state keeps x` at the point where the entry value is restored
 }
 
 ; An indexed store may write any byte of the instruction, the opcode among them, so it lists

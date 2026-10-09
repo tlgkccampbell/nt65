@@ -30,7 +30,7 @@ internal static class DirectPages
         ProgramAnalysis analysis, BuiltAddresses? built, Func<string, string> uriOf, CancellationToken cancellation)
     {
         var map = DataMap.Of(analysis, built?.Addresses, cancellation);
-        var graph = new Graph(map.Calls, uriOf);
+        var graph = new Graph(map.Calls, analysis.Contexts(), uriOf);
         var cpu = analysis.Files.Count > 0 ? analysis.Files[0].Layout.Cpu : analysis.Cpu;
         return new Protocol.DirectPagesResult(
             CpuNames.Format(cpu),
@@ -147,6 +147,7 @@ internal static class DirectPages
         SharedBytesKind.Deliberate => "deliberate",
         SharedBytesKind.Authored => "authored",
         SharedBytesKind.Collision => "collision",
+        SharedBytesKind.Unverified => "unverified",
         _ => "page",
     };
 
@@ -199,10 +200,12 @@ internal static class DirectPages
         private readonly Dictionary<Symbol, List<Callee>> callees = [];
         private readonly Dictionary<Symbol, HashSet<Symbol>> callers = [];
         private readonly Func<string, string> uriOf;
+        private readonly RoutineContexts contexts;
 
-        public Graph(IReadOnlyList<DataMap.DataCall> calls, Func<string, string> uriOf)
+        public Graph(IReadOnlyList<DataMap.DataCall> calls, RoutineContexts contexts, Func<string, string> uriOf)
         {
             this.uriOf = uriOf;
+            this.contexts = contexts;
             foreach (var call in calls)
             {
                 if (!callees.TryGetValue(call.Caller, out var list))
@@ -274,7 +277,7 @@ internal static class DirectPages
                 return new Protocol.DirectPageRoutine(
                     routine.Name,
                     Declaration(routine, uriOf),
-                    first?.IsHandler ?? routine.Signature?.IsInterrupt == true,
+                    first?.IsHandler ?? contexts.Handles(routine),
                     first?.InInterrupt ?? false,
                     first?.InMain ?? false,
                     use?.IsUnknownPage ?? false,

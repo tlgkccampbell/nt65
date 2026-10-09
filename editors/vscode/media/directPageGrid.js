@@ -22,6 +22,11 @@
     shared: 'shared', nested: 'temp clobbered by a call', irq: 'interrupt', own: 'one owner', unused: 'unused', hw: 'hardware',
   };
 
+  // The ways two of a page's own locations come to take one byte, each with how much it weighs
+  // when a byte has more than one: a collision outweighs an unverified overlap, which outweighs
+  // an alias or a placement the config wrote.
+  const SAME_PAGE = { collision: 3, unverified: 2, deliberate: 1, authored: 1 };
+
   // Returns an address as `$` and four hexadecimal digits.
   const hex4 = value => `$${(value & 0xFFFF).toString(16).toUpperCase().padStart(4, '0')}`;
 
@@ -112,7 +117,8 @@
   // of them apart; how two of them share it, if they do; and the other page that covers it with
   // that page's location there, if any. Two own locations on one byte are `collision` unless the
   // source fixes both, which makes them `deliberate`, or the linked config places both, which
-  // makes them `authored`. A collision on a byte outweighs the other kinds.
+  // makes them `authored`. A fixed address among bytes whose place is only predicted is
+  // `unverified`. A collision on a byte outweighs an unverified overlap, which outweighs the rest.
   function model(page) {
     const own = new Array(256).fill(null);
     const owners = Array.from({ length: 256 }, () => []);
@@ -126,10 +132,10 @@
         owners[at].push(location);
       }
       for (const bytes of location.shared || []) {
-        if (bytes.kind !== 'collision' && bytes.kind !== 'deliberate' && bytes.kind !== 'authored') continue;
+        if (!SAME_PAGE[bytes.kind]) continue;
         for (let address = bytes.first; address <= bytes.last; address++) {
           const at = address - page.base;
-          if (at >= 0 && at < 256 && same[at] !== 'collision') same[at] = bytes.kind;
+          if (at >= 0 && at < 256 && (!same[at] || SAME_PAGE[bytes.kind] > SAME_PAGE[same[at]])) same[at] = bytes.kind;
         }
       }
     }
@@ -330,13 +336,14 @@
         const clash = !!(mine && theirs && theirs.location);
         if (mine && declared(mine)) {
           cell.classList.add('declared');
-        } else if (mine && mine.relation !== 'unused' && !clash && same[at] !== 'collision') {
+        } else if (mine && mine.relation !== 'unused' && !clash && same[at] !== 'collision' && same[at] !== 'unverified') {
           const share = Math.round(30 + 70 * heatOf(mine) / maxHeat);
           cell.style.background = `color-mix(in srgb, ${colourOf(mine)} ${share}%, transparent)`;
         }
         if (mine && never(mine)) cell.classList.add('unused');
         else if (mine && taken(mine)) cell.classList.add('taken');
         if (same[at] === 'collision') cell.classList.add('twin');
+        else if (same[at] === 'unverified') cell.classList.add('maybe');
         else if (same[at] === 'deliberate' || same[at] === 'authored') cell.classList.add('alias');
         if (clash) cell.classList.add('clash');
         else if (!mine && theirs && theirs.location) cell.classList.add('otherused');
@@ -362,8 +369,10 @@
             rows.push([glyphOf(location), never(location) || declared(location) ? 'var(--dim)' : colourOf(location), name]);
             rows.push(['#', 'var(--dim)', heatText(location)]);
           } else {
-            rows.push(['=', same[at] === 'collision' ? 'var(--nested)' : 'var(--dim)',
-            same[at] === 'collision' ? `shared unintentionally with ${name}` : same[at] === 'authored' ? `${name} is placed here too, by the config` : `${name} is an alias of this byte`]);
+            rows.push([same[at] === 'unverified' ? '?' : '=', same[at] === 'collision' ? 'var(--nested)' : 'var(--dim)',
+              same[at] === 'collision' ? `also taken by ${name}`
+                : same[at] === 'unverified' ? `may also be taken by ${name} · predicted, not verified`
+                  : same[at] === 'authored' ? `${name} is placed here too, by the config` : `${name} is an alias of this byte`]);
           }
         });
         if (theirs && theirs.location) {
@@ -468,9 +477,9 @@
         ? [['⧉', 'var(--dim)', `used by another page, ${pageName(entry.page)}`]]
         : [[glyphOf(location), 'var(--dim)', taken(location) ? 'address taken' : declared(location) ? 'hardware · declared, not reached' : RELATIONS[location.relation] || location.relation],
           ['#', 'var(--dim)', heatText(location)],
-          ...(location.shared || []).filter(bytes => bytes.kind === 'collision' || bytes.kind === 'deliberate' || bytes.kind === 'authored')
-            .map(bytes => ['=', bytes.kind === 'collision' ? 'var(--nested)' : 'var(--dim)',
-              `${bytes.kind === 'collision' ? 'shared unintentionally with' : bytes.kind === 'authored' ? 'placed with' : 'an alias of'} \`${bytes.there}\` at ${offsets(bytes.first - page.base, bytes.last - page.base)}${bytes.kind === 'authored' ? ', by the config' : ''}`])];
+          ...(location.shared || []).filter(bytes => SAME_PAGE[bytes.kind])
+            .map(bytes => [bytes.kind === 'unverified' ? '?' : '=', bytes.kind === 'collision' ? 'var(--nested)' : 'var(--dim)',
+              `${bytes.kind === 'collision' ? 'also taken by' : bytes.kind === 'unverified' ? 'may also be taken by' : bytes.kind === 'authored' ? 'placed with' : 'an alias of'} \`${bytes.there}\` at ${offsets(bytes.first - page.base, bytes.last - page.base)}${bytes.kind === 'authored' ? ', by the config' : bytes.kind === 'unverified' ? ' · predicted, not verified' : ''}`])];
       row.addEventListener('mouseenter', () => {
         peek(row.dataset.key);
         showTip(row, location.name, meta, rows);
@@ -596,7 +605,8 @@
     key('never accessed', 'declared, but nothing reaches it or takes its address', classes('neverkey'));
     group('bytes two locations take');
     key('alias', 'two names for one byte, on purpose: the source fixes both addresses, or the config places both', classes('cell', 'alias'));
-    key('shared unintentionally', 'two of this page’s locations take the byte, and the layout did not place them there on purpose', classes('cell', 'twin'));
+    key('collide', 'two of this page’s locations take the byte, and neither the source nor the config places both there', classes('cell', 'twin'));
+    key('may collide', 'an address the source fixes falls among bytes whose place is only predicted from the config, so only a build can say whether they overlap', classes('cell', 'maybe'));
     key('shared between pages', 'a location on this page and one on another page both take the byte', classes('cell', 'clash'));
     key('used by another page', 'a location on another page takes the byte, and none of this page’s does', classes('cell', 'otherused'));
     group('the rest of the page');

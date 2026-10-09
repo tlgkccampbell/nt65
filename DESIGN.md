@@ -832,9 +832,11 @@ own source from then on: a build reads no ca65, and a change to the include file
 over by running the command again. A `NAME = expr` or `NAME := expr` line whose expression nt65
 reads becomes a constant and is exported, a comment is carried over, and every other line is
 written out as a comment saying it was not converted and counted on standard error, so nothing
-in the file is dropped where nobody sees it. What nt65 reads is nt65's own reader, so a ca65
-operator nt65 does not have, and an expression whose order §9 asks to see in parentheses, are
-both left for a person rather than written out as something that will not build.
+in the file is dropped where nobody sees it. The expression is first read with ca65's
+precedence and written with nt65's operators and the parentheses that keep its meaning, as the
+editor's conversion does, so `1 .SHL 3` becomes `1 << 3` and `.NOT A = 1` becomes `!(A == 1)`.
+What nt65 then reads is nt65's own reader, so a ca65 construct nt65 does not have is left for a
+person rather than written out as something that will not build.
 
 **Explaining one.** `nt65 explain <name>` prints what the one line had no room for: what the
 diagnostic is about, and the line a project file would write to switch it. Named nothing, it
@@ -1354,7 +1356,9 @@ another interrupt handler or a routine that never returns. On the 6502 and its C
 accepted with the same `rti` and call checks. An `rti` in a routine not marked `interrupt` is a
 warning, `rti-outside-handler`, whose fix adds the item: leaving the mark off would otherwise
 earn the routine more trust than writing it. An `rti` with a `.next` is a computed jump that
-says where it goes, and is not reported.
+says where it goes, and is not reported. A routine that nothing calls and that returns with `rti`
+is still shown as the handler it is, in where routines run from and in the Data view (§14),
+while the warning stands.
 
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near
@@ -1727,7 +1731,9 @@ label:
   known before linking: an opcode, a constant operand, or a branch's distance within the same
   run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
   control goes, move the stack or change the widths; a run of more than 32 bytes, or one that
-  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). The
+  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). Each
+  decoded instruction is counted as a written one is, in the processor state and with the
+  decimal flag that reach the position, and a decoded `cld`, `sed` or `tcd` is followed. The
   output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there.
 - `.patch @op as dex, iny` also lists the instructions the store can turn the one at `@op`
   into. A variant replaces the opcode, so it keeps the instruction's addressing mode and
@@ -1780,7 +1786,9 @@ label:
   that operand is the mask, so both widths are unknown after it, as after a mask that is not a
   constant, and code that relies on them is reported there. A store into `xce`, which has no
   operand, writes its opcode, and no variant of an instruction that changes the widths is
-  accepted. In a program that
+  accepted. On the 65816 a variant's immediate must be sized by the same register as the
+  written one's, so `ldx #` cannot stand in for `lda #`; on any other CPU every immediate is one
+  byte, and it can. In a program that
   already has a patch-variants-required error, the register and reads analyses take the
   instruction to use every register and leave each unknown. On the 65816 a store sized by a
   register reaches one byte where the processor state the file is laid out with shows that
@@ -2159,7 +2167,8 @@ extra cycle is always paid and the count is exact); a branch costs 2 not taken a
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
 nonzero, which is known when D is known (§7.5). On the 65C02 `adc` and `sbc` cost one more in
-decimal mode, which is known where the flag analysis knows the decimal flag. Tooling shows the interval per
+decimal mode, which is known where the flag analysis knows the decimal flag. Cycles are processor
+cycles; memory speed is the board's. Tooling shows the interval per
 instruction and per basic block on hover, and beside an interval what its top would be paid
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
 cannot resolve tells them half of an answer, and above each routine, and each inline `.scope`
@@ -4364,7 +4373,10 @@ alone and without an assembler:
   location when some path through it loads the location by name before storing to it; the
   source of the location's value is the last store to the same name on each path; and the
   hover names what else might have changed it since: a store through a pointer or an index, a
-  call that may write it, or a store to another name for the same address. A hardware register
+  call that may write it, or a store to another name for the same address. A call to a routine
+  whose body is not in the program, or one that stores through a pointer, may write anything; a
+  store indexed from one location may reach any other in its segment; and an alias that names
+  another location is another name for its address. A hardware register
   that `.mmio` declares (§8) is not followed at all, because the hardware sets what it holds.
   This does not go back on memory being the programmer's word (§7.7). Nothing warns, errors or checks a promise
   because of it, and it is wrong in exactly the cases a guess from names can be;
@@ -4893,7 +4905,9 @@ Recorded so the reasoning survives. None is open.
   a `clc` or `sec` that is not needed or can be folded into an `adc #n-1` or `sbc #n-1`. No
   hint that changes bytes touches an instruction a store rewrites, a `.label` enters, or an
   operand or data value anywhere in the program names, as `lda @op+1` does, since code reads
-  those bytes. A line of a macro body serves every call, so code there is reported as never reached only
+  those bytes. An `.addr` or `.faraddr` value that names a routine, or a label a `.next` of the
+  same file hands control to, is where control goes, as in a vector or a jump table, and so is
+  one less than such a label, as in an RTS dispatch table. A line of a macro body serves every call, so code there is reported as never reached only
   where no call reaches it: a constant argument often decides a branch in one call and not in
   another.
 - **Register constants extend the flag analysis.** The same walk follows the constant each of

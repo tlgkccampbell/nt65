@@ -45,7 +45,9 @@ internal static class CaretSources
                 [.. output.Readers.Select(reader => new Protocol.ReaderSpan(
                     Line(tree, reader.Line.Start),
                     reader.Kind.ToString().ToLowerInvariant(),
-                    Confidence(reader.Confidence)))]))],
+                    Confidence(reader.Confidence),
+                    reader.Reason))],
+                [.. output.Possibly.Select(span => Line(tree, span.Start))]))],
             [.. (patches?.Links ?? []).Select(link => new Protocol.PatchSpan(
                 Line(tree, link.Store.Start), Line(tree, link.Target.Start), link.Name, link.Variants))]);
     }

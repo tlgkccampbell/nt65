@@ -255,9 +255,8 @@ internal static class Refactors
     /// <summary>
     /// Offers to declare the parts of a routine's state that it leaves to be inferred, as they
     /// are inferred: what its callers agree it is entered with, and what its returns leave. Once
-    /// declared, they are a contract that the routine and its callers are held to. A part
-    /// inferred to be as the routine was entered with, or not known, is left out, since there is
-    /// nothing to say about it.
+    /// declared, they are a contract that the routine and its callers are held to. The parts are
+    /// those <see cref="InferredState.Items"/> gives, which the hover shows.
     /// </summary>
     private static IEnumerable<Change> Inferred(ProgramAnalysis analysis, SemanticModel model, int line)
     {
@@ -268,7 +267,8 @@ internal static class Refactors
         {
             yield break;
         }
-        var (entry, exit) = InferredState.Items(declared, inferred);
+        var home = routine.Segment is { } segment ? model.Segments.Find(segment)?.Bank : null;
+        var (entry, exit) = InferredState.Items(declared, inferred, home);
         if (InferredState.Format(entry, exit) is not { } shown || Edits.DeclaredItems(tree, line, entry, exit) is not { } edit)
             yield break;
         yield return new Change($"Declare the state `{routine.Name}` is inferred with: `{shown}`", CodeActionKinds.Rewrite, [edit]);

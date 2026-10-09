@@ -1329,7 +1329,8 @@ ROM routine somewhere to live.
 A routine that writes no `keeps` promises whatever its body keeps, and its callers may rely on
 all of it. Once it writes `keeps`, the list is the whole promise. nt65 still uses what the body
 keeps, but a caller that relies on a register the list leaves out gets `unpromised-keep` at the
-call:
+call. The lens above such a routine shows the two apart, as `keeps X · also preserves Y, C, V
+(inferred)`, and so does its hover:
 
 ```text
 main.nt65:12:5: warning: this call relies on `print_digit` keeping Y, which it does but does not promise (it declares `keeps x`) [unpromised-keep]
@@ -1509,8 +1510,10 @@ meet. `dbr` becomes one of the callers' banks, and every check of a bank is made
 `dp` becomes unknown, which is an error only where an operand needs it, such as a `d:` operand
 or a symbol in a segment that declares `dp`. The error names the callers.
 
-Hover over a routine's name to see what is inferred for it, on the `inferred` row. The
-refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
+Hover over a routine's name to see what is inferred for it, on the `inferred` row. The row
+names the program bank only where the routine runs somewhere other than its segment's bank:
+`pbr = $80` for a routine reached only through a mirror, and `pbr?` for one reached from
+several banks. The refactoring "Declare the state … is inferred with" writes it into the signature, which makes it
 a contract. An exported routine whose bytes depend on an inferred width, mode or direct page,
 such as an immediate sized by an inferred `a8`, gets a hint, `export-state-inferred`, since a
 caller outside nt65 is not checked against it. Its fix declares those items.
@@ -1650,7 +1653,9 @@ label's declaration. It is also what follows a `plp` of a value nt65 did not see
 }
 ```
 
-The editor's fixes write `.state` lines from what the analysis finds reaching a label.
+The editor's fixes write `.state` lines from what the analysis finds reaching a label. Where
+the label is also entered from somewhere nt65 cannot see, that state is only what the visible
+paths bring, so the fix says so, is not preferred, and is offered beside `.state ?`.
 
 ### The stack
 
@@ -1990,7 +1995,10 @@ everything below works across modules.
   A line that might also have changed the value since, such as a store through a pointer or a
   call that may write the location, is drawn as a doubt rather than a source: a thin dashed bar
   with no tint and no scrollbar mark, and a faded tag such as `ptr?`. The hover names those
-  lines too.
+  lines too. A call to a routine whose body is not in the program, such as one in ROM, may write
+  any location, and so may a routine that stores through a pointer. A store such as
+  `sta buf,x` may reach any location in the segment `buf` is in, or only `buf+2` where X is
+  known to hold 2.
 
   The caret line gets one chip per value. `A` means every line that set it is on screen;
   `A↑12` and `A↓3` give the distance to the nearest one, above or round a loop below; `A ×2`
@@ -2006,9 +2014,10 @@ everything below works across modules.
   instruction writes, before anything writes it again, is tinted and barred in the value's
   colour like a source, and its tag starts with an arrow, as `→Y`. A call is such a line where
   the routine it calls reads the value, and a store to a named location is read by the lines that
-  load it, as a best guess drawn dashed. Where the value leaves the routine, by a return, a tail
-  call or a run into the next routine, the line gets a dotted bar and a hollow tag such as `Y↱`,
-  because the caller may read it. So nothing is ever shown as dead. The caret line's chip counts
+  load it, as a best guess drawn dashed. A line that might change the value before it is read,
+  such as `sta (ptr),y`, is drawn as the same doubt it is for a source. Where the value leaves
+  the routine, by a return, a tail call or a run into the next routine, the line gets a dotted
+  bar and a hollow tag such as `Y↱`, because the caller may read it. So nothing is ever shown as dead. The caret line's chip counts
   the readers, as `Y→3`, or is `Y↱` where the value only leaves. A value nothing reads gets no
   chip. The hover lists every reader.
 
@@ -2072,7 +2081,11 @@ everything below works across modules.
   routine does with it: `↓` reads it first, `↑` only writes it, `↕` both, `◦` uses it as a
   temporary. `⧉` marks pages that overlap, and locations that take the same bytes. On one page,
   two addresses the source fixes are an alias, and a byte the layout also gives to another
-  location is a collision, which the page notes and the grid stripes. Two segments that the
+  location is a collision, which the page notes and the grid stripes. The map says that the two
+  take one byte, not whether the program means it: msbasic aliases bytes inside its segments on
+  purpose. An address the source fixes inside a segment whose place is only predicted *may
+  collide*, which the page notes as unverified and the grid marks with faint stripes and a `?`,
+  until a build says where the segment is. Two segments that the
   linked config places over the same bytes, by pinning both with `start` or `offset` or by
   running them in memory areas that overlap, share them *by config*, which is marked like an
   alias. A location that no
@@ -2084,7 +2097,10 @@ everything below works across modules.
   such as a handler after it gives D back, is listed under `D = ?`, with where each access
   lands on every page the interrupted code holds D at. A handler that uses a location as a
   temporary, or only writes one that the code it interrupts writes and reads back, is marked
-  `⚠`; one that counts or flags something for that code is not. A constant address that an
+  `⚠`, even where one routine of that code writes it and another reads it, or where that code
+  reaches it while D is not known; one that counts or flags something for that code is not. A
+  routine that reads a location before a call and again after it relies on it just as one that
+  wrote it does, so a call that uses it as a temporary is marked there too. A constant address that an
   instruction reaches through the page, such as `lda $FB`, is shown as a location named by its
   address, `$00FB`; a constant with an index register added, such as `lda 1,x`, is an offset from
   wherever the register points and is not. Selecting a row marks the
@@ -2125,14 +2141,20 @@ everything below works across modules.
   reached by the calls, tail calls, branches, `.next` targets and `.fallthrough` that lead out
   of a handler, but not into another handler. A transfer nt65 cannot follow, such as one under
   `.next ?`, stops the walk, and the hover of a routine under an interrupt lists the lines where
-  it does so in a `not followed` row. The Data view uses the same walk.
+  it does so in a `not followed` row. The Data view uses the same walk. A routine that nothing
+  calls and that returns with `rti`, such as one only a vector table names, is walked as a
+  handler before it is marked `interrupt`: the outline says `interrupt handler` after it, and the
+  warning `rti-outside-handler` still asks for the mark.
 - **The Processor view**, in the nt65 view of the activity bar, shows what the instruction
   hover shows below its rule for the caret's line, and follows the caret. On the 65816 it gives
   the mode and the widths, D and B. On every processor it gives what A, X and Y hold, with the
   constant where the instructions give one and the line that set the value, the flags as `0`,
   `1` or `?`, and the stack top first. On the 65816 each push is keyed by the stack-relative
-  offset that reads it, such as `3,s`. A line with nothing that runs, such as the one that
-  opens a routine, shows the next line that does. A fact that is not known says `unknown`
+  offset that reads it, such as `3,s`. A line in a macro body or a repetition runs once per
+  expansion, and the view and the hover show what every expansion agrees on. Where the
+  expansions reach the line in different states, both list each state with how many expansions
+  it reaches, and the hover's cycles cover them all. A line with nothing that runs, such as the
+  one that opens a routine, shows the next line that does. A fact that is not known says `unknown`
   rather than being left out. The stack is known only from the routine's entry, so it ends at
   the stack the routine was entered with. *Choose the Caller the Processor View Shows*, or the
   view's last row, picks one `jsr` or `jsl` to the routine, and the stack then goes on through
@@ -2166,7 +2188,8 @@ everything below works across modules.
   declares no flags, says so, as in "`g` leaves C this way but does not promise it", and so
   does its fix. A tail call is not suggested to a
   routine that depends on how deep the stack is, such as one that pops its caller's return
-  address, and a routine with a branch this configuration leaves out gets no suggestions.
+  address. A routine with a branch this configuration leaves out gets no suggestions, and
+  neither does one with a line that does not parse.
 - **Refactorings** on a selection: bring a path in with `.use` or write it out in full; export
   or stop exporting a declaration; declare what a 65816 routine leaves; turn `rep #$20` into
   `.ensure a16` and back; give a number a name; turn a label into a cheap local or the other
@@ -2293,7 +2316,9 @@ form.
 | `.local` labels in a macro | nothing: every name in a body is local to its expansion |
 
 In the editor, paste ca65 in, select it and choose *Read the selection as nt65*: spellings,
-block words, segment directives and ca65's operator words are rewritten. What needs a decision
+block words, segment directives and ca65's operator words are rewritten. Each expression is read
+with ca65's precedence and given the parentheses nt65 needs to mean the same, so
+`.not N = 1` becomes `!(N == 1)` and `#<label+1` becomes `#(<label)+1`. What needs a decision
 rather than a new spelling, such as an unnamed label, a macro call or an `.include`, is left
 as it was for you and the diagnostics to work through.
 

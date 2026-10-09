@@ -68,12 +68,12 @@ public sealed class CodeActionsTests
             ".proc far_one: far {\n    rtl\n}\n.export .proc main: native {\n    JSL far_one\n    rts\n}\n"
         },
         {
-            "Declare `@here` with `.state a8, i8, native`",
+            "Declare `@here` with the state the visible paths bring (`.state a8, i8, native`)",
             ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    rts\n}\n",
             ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
         },
         {
-            "Declare `@here` with `.state a8, i8, native`",
+            "Declare `@here` with the state the visible paths bring (`.state a8, i8, native`)",
             ".export .proc main: a8, i8, native {\n    lda #<@here\n@here: rts\n}\n",
             ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    .state a8, i8, native\n    rts\n}\n"
         },

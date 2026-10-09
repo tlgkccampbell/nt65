@@ -21,9 +21,17 @@ public enum SharedBytesKind
     Authored,
 
     /// <summary>
-    /// The locations are on one page, and one of them lands there by accident of the layout. That
-    /// is a segment whose predicted bytes run on into another segment's, or an address the source
-    /// fixes inside a segment's bytes.
+    /// The locations are on one page, and neither the source nor the configuration places both
+    /// there. That is a segment whose predicted bytes run on into another segment's, or an address
+    /// the source fixes inside bytes the last build gave a segment. Whether the program means it
+    /// is not something the map can tell.
     /// </summary>
     Collision,
+
+    /// <summary>
+    /// The locations are on one page, and one is an address the source fixes inside a segment's
+    /// bytes whose addresses are only predicted from the configuration. The two may take the same
+    /// bytes, but only a build can say whether they do.
+    /// </summary>
+    Unverified,
 }

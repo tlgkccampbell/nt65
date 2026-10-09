@@ -559,8 +559,15 @@ public sealed partial class CodeLayout
         /// Returns whether the flag analysis found the decimal flag set before
         /// <paramref name="statement"/>, or null where it does not know or has not run.
         /// </summary>
-        private bool? DecimalBefore(StatementSyntax statement) =>
-            flags?.Invoke(statement, expansion) is { } known && known.Known.HasFlag(StatusFlags.Decimal)
+        private bool? DecimalBefore(StatementSyntax statement) => DecimalBefore(statement, expansion);
+
+        /// <summary>
+        /// Returns whether the flag analysis found the decimal flag set before
+        /// <paramref name="statement"/> in the expansion <paramref name="on"/>, or null where it
+        /// does not know or has not run.
+        /// </summary>
+        private bool? DecimalBefore(StatementSyntax statement, Expansion? on) =>
+            flags?.Invoke(statement, on) is { } known && known.Known.HasFlag(StatusFlags.Decimal)
                 ? known.Set.HasFlag(StatusFlags.Decimal)
                 : null;
 

@@ -68,6 +68,48 @@ public sealed class InterruptContextRequestsTests
     }
 
     /// <summary>
+    /// A routine that only a vector table names and that returns with <c>rti</c> is walked as a
+    /// handler without the mark. The hover and the outline say so, and the registers the hover
+    /// says it preserves are those a marked handler with the same body preserves, since
+    /// <c>rti</c> gives back the flags either way.
+    /// </summary>
+    [Fact]
+    public async Task AnUnmarkedHandlerIsShownAsOne()
+    {
+        const string Vectored = """
+            .module main
+            .cpu 6502
+            .segment ZEROPAGE
+            .data count: .byte
+            .segment CODE
+            .export .proc main {
+                rts
+            }
+            .export .data vectors: .addr[2] = nmi, irq
+            .proc nmi: interrupt {
+                inc count
+                rti
+            }
+            .proc irq {
+                inc count
+                rti
+            }
+            """;
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Vectored));
+
+        var marked = (await client.HoverAsync(Uri, Locate.At(Vectored, ".proc n|mi"), timeout))?.Contents.Value ?? "";
+        var unmarked = (await client.HoverAsync(Uri, Locate.At(Vectored, ".proc i|rq"), timeout))?.Contents.Value ?? "";
+        Assert.Matches(@"context +interrupt handler, by its `rti`; not marked `interrupt`", unmarked);
+        var preserves = System.Text.RegularExpressions.Regex.Match(marked, @"preserves +([^\n|]*)");
+        Assert.True(preserves.Success && preserves.Groups[1].Value.Trim().Length > 0, marked);
+        Assert.Contains(preserves.Value, unmarked, StringComparison.Ordinal);
+        var symbols = await client.SymbolsAsync(Uri, timeout);
+        Assert.Contains("irq interrupt handler",
+            Flatten(symbols).Where(symbol => symbol.Kind == SymbolKind.Function).Select(symbol => $"{symbol.Name} {symbol.Detail}"));
+    }
+
+    /// <summary>
     /// The names of routines that run under an interrupt carry the <c>interrupt</c> modifier,
     /// wherever they appear, so that a theme can color them.
     /// </summary>

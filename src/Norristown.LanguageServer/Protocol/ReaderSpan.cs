@@ -7,4 +7,8 @@ namespace Norristown.LanguageServer.Protocol;
 /// where the value leaves the routine and what it returns to may read it.
 /// </param>
 /// <param name="Confidence">How sure the analysis is: <c>proven</c>, or <c>bestEffort</c> for a guess about memory.</param>
-internal sealed record ReaderSpan(Range Range, string Kind, string Confidence);
+/// <param name="Reason">
+/// A short phrase saying what might have changed a value in memory between the caret and this
+/// reader, which starts <c>or possibly</c>, or null.
+/// </param>
+internal sealed record ReaderSpan(Range Range, string Kind, string Confidence, string? Reason);

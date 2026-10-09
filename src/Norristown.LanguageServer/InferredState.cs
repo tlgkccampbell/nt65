@@ -13,8 +13,17 @@ internal static class InferredState
     /// <paramref name="declared"/> leaves out. The entry's items are what the routine's callers
     /// agree on, and the exit's are what its returns leave. A part that is as the routine was
     /// entered with, or not known, has no item, since there is nothing to say about it.
+    /// <para>
+    /// The program bank is the exception. Nearly every routine runs in the bank its segment
+    /// declares, so the bank has an item only where it was inferred to be another bank, or not
+    /// known although the segment declares one.
+    /// </para>
     /// </summary>
-    public static (IReadOnlyList<string> Entry, IReadOnlyList<string> Exit) Items(Signature declared, Signature inferred)
+    /// <param name="declared">The routine's declared signature.</param>
+    /// <param name="inferred">The routine's inferred signature.</param>
+    /// <param name="home">The bank the routine's segment declares, or null if it declares none.</param>
+    public static (IReadOnlyList<string> Entry, IReadOnlyList<string> Exit) Items(
+        Signature declared, Signature inferred, long? home)
     {
         var undeclared = StateParts.All & ~declared.Declared;
         var entry = new List<string>();
@@ -46,6 +55,8 @@ internal static class InferredState
             AddValue(inferred.Entry.B, entry, StateRegister.DataBank);
             AddValue(inferred.Exit.B, exit, StateRegister.DataBank);
         }
+        if ((declared.Declared & StateParts.ProgramBank) == 0 && Away(inferred.ProgramBank, home))
+            entry.Add(inferred.ProgramBank.Format(StateRegister.ProgramBank));
         return (entry, inferred.NeverReturns ? [] : exit);
     }
 
@@ -61,6 +72,17 @@ internal static class InferredState
             (0, _) => "-> " + string.Join(", ", exit),
             _ => $"{string.Join(", ", entry)} -> {string.Join(", ", exit)}",
         };
+
+    /// <summary>
+    /// Returns a value indicating whether an inferred program bank differs from the bank the
+    /// routine's segment declares. A bank that is not known differs only from a declared one.
+    /// </summary>
+    private static bool Away(StateValue bank, long? home) => bank.Kind switch
+    {
+        StateValueKind.Unchanged => false,
+        StateValueKind.Known => bank.Value != home,
+        _ => home is not null,
+    };
 
     private static void AddWidth(Width width, List<string> items, StateRegister register)
     {

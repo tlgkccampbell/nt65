@@ -726,7 +726,7 @@ public static class Compiler
                 && layout.Steps.Any(step => step.Statement is InstructionStatementSyntax
                 {
                     MnemonicKind: MnemonicKind.Adc or MnemonicKind.Sbc,
-                })))
+                } || layout.HiddenPathAt(step)?.Instructions.Any(hidden => hidden.Mnemonic is MnemonicKind.Adc or MnemonicKind.Sbc) == true)))
         {
             layout = CodeLayout.Create(model, target, state, flow.Flags!.Known);
             flow = Flow.ControlFlow.Of(model, layout, exits, signatures);

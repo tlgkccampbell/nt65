@@ -145,6 +145,40 @@ public sealed class InlayHintsTests
     }
 
     /// <summary>
+    /// The state-change hint says what the line's own instruction leaves, not what a label below
+    /// it is entered with. <c>@join</c> is reached from the <c>rep #$20</c> with A 16-bit and from
+    /// the <c>bra</c> with A 8-bit, so A is not known there, but the <c>rep</c> still makes it
+    /// 16-bit.
+    /// </summary>
+    [Fact]
+    public async Task AStateChangeBeforeAJoinSaysWhatTheLineLeaves()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .export .proc main: a8, i8, native {
+                bcc @wide
+                lda #1
+                bra @join
+            @wide:
+                rep #$20
+            @join:
+                sep #$20
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, Source.ReplaceLineEndings("\n")));
+
+        var hint = (await client.InlayHintsAsync(Uri, 0, 20, timeout)).Single(hint => hint.Position.Line == 8);
+        Assert.Equal("a16", hint.Label);
+        Assert.Equal(
+            "The processor state changes from `a8, i8, native` to `a16, i8, native` after this line.",
+            hint.Tooltip!.Value);
+    }
+
+    /// <summary>
     /// Each hint's tooltip explains it in a sentence, naming the declaration that decided it where
     /// there is one, because a hint a few characters long cannot say that itself.
     /// </summary>
@@ -250,13 +284,13 @@ public sealed class InlayHintsTests
         await client.OpenAsync(uri, text);
         await client.NextDiagnosticsAsync(uri, timeout);
 
-        // There are seventeen hints in a hundred and seventy-four lines. They fall on the lines
+        // There are sixteen hints in a hundred and seventy-four lines. They fall on the lines
         // that change the processor state where nothing else in the source says so, the calls
-        // that return a width other than the one they were called with, the one constant worked
-        // out from the settings, and the store before the loop head. At that store, the widths
-        // from the first pass and from the loop's own back edge meet, and A's width becomes
-        // unknown. Nothing else in the file gets a hint, because its data is declared and not
-        // laid out, and every branch reaches its target.
+        // that return a width other than the one they were called with, and the one constant
+        // worked out from the settings. The store before the loop head gets none: A's width is
+        // unknown at the head, where the first pass and the loop's back edge meet, but the store
+        // itself changes nothing. Nothing else in the file gets a hint, because its data is
+        // declared and not laid out, and every branch reaches its target.
         Assert.Equal(
             [
                 "23: .const PPURES_BITS = .select(USE_PSEUDOHIRES, SUB_HIRES, 0) | .select(USE_INTERLACE, INTERLACE, 0) = 0",
@@ -270,7 +304,6 @@ public sealed class InlayHintsTests
                 "88: jsl load_player_tiles → a16",
                 "91: sep #$20 a8",
                 "133: rep #$30 a16",
-                "136: sta player_xlo a?",
                 "139: jsl move_player → a8 i8",
                 "142: rep #$30 a16 i16",
                 "144: jsl draw_player_sprite → a8",

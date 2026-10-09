@@ -63,11 +63,15 @@ internal static class CaretProcessor
         // Only the 65816 has widths, a mode, a direct page register and a data bank.
         if (analysis.Cpu == Cpu.Wdc65816)
         {
+            // Where the expansions of a macro body differ, the row shows what they agree on, and
+            // the rows under it list each state with how many expansions it reaches, as the hover
+            // does.
             var processor = state?.Processor ?? ProcessorState.Unknown;
-            rows.Add(Row("state", string.Join(", ",
-                ProcessorState.Format(processor.E),
-                ProcessorState.Format(StateRegister.A, processor.A),
-                ProcessorState.Format(StateRegister.Index, processor.Index))));
+            var each = file.State is { } states ? Hovers.ByExpansion(states.EachBefore(statement), Widths) : [];
+            rows.Add(each.Count == 0
+                ? Row("state", Widths(processor))
+                : new Protocol.ProcessorRow("state", Widths(processor), $"{each.Sum(one => one.Count)} expansions differ", null,
+                    [.. each.Select(one => Row($"×{one.Count}", one.State))]));
             rows.Add(Row("D", Describe(processor.D, 4)));
             rows.Add(Row("B", Describe(processor.B, 2)));
         }
@@ -353,6 +357,12 @@ internal static class CaretProcessor
     /// <summary>Checks whether two locations name the same call, which is one line of one document.</summary>
     private static bool Same(Protocol.Location a, Protocol.Location b) =>
         a.Uri == b.Uri && a.Range.Start.Line == b.Range.Start.Line;
+
+    /// <summary>Formats the mode and the widths of a state as the <c>state</c> row shows them.</summary>
+    private static string Widths(ProcessorState processor) => string.Join(", ",
+        ProcessorState.Format(processor.E),
+        ProcessorState.Format(StateRegister.A, processor.A),
+        ProcessorState.Format(StateRegister.Index, processor.Index));
 
     /// <summary>Returns a row with no detail, no target and no rows under it.</summary>
     private static Protocol.ProcessorRow Row(string key, string value, string? detail = null) =>

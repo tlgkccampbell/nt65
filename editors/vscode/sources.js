@@ -174,7 +174,7 @@ function groupedOutputs(outputs) {
     const name = output.group || output.name;
     const known = merged.get(name);
     if (!known) {
-      merged.set(name, { ...output, name, readers: [...output.readers] });
+      merged.set(name, { ...output, name, readers: [...output.readers], possibly: [...(output.possibly || [])] });
       continue;
     }
     for (const reader of output.readers) {
@@ -182,6 +182,7 @@ function groupedOutputs(outputs) {
         known.readers.push(reader);
       }
     }
+    known.possibly.push(...(output.possibly || []));
   }
   return [...merged.values()];
 }
@@ -238,8 +239,9 @@ function code(document, line) {
   return `${fence}${text}${fence}`;
 }
 
-// What the hover adds after a best-effort source: that it was inferred, and what else might have
-// changed the value since, where something might, as the server words it ("or possibly ...").
+// What the hover adds after a best-effort source or reader: that it was inferred, and what else
+// might have changed the value in between, where something might, as the server words it
+// ("or possibly ...").
 function guessed(source) {
   if (source.confidence !== 'bestEffort') return '';
   return source.reason ? ` (inferred), ${source.reason}` : ' (inferred)';
@@ -296,7 +298,7 @@ function hoverOf(document, result, line) {
     for (const reader of output.readers) {
       const line = reader.range.start.line;
       const where = `line ${line + 1} ${code(document, line)}`;
-      const inferred = reader.confidence === 'bestEffort' ? ' (inferred)' : '';
+      const inferred = guessed(reader);
       switch (reader.kind) {
         case 'exit':
           hover.appendMarkdown(`- whatever the routine returns to, after ${where}${inferred}\n`);
@@ -440,13 +442,15 @@ class Sources {
       }
 
       // Where the caret's values go: a reader is tagged like a source, with a `→` in front, and an
-      // exit like a through line, with a `↱` after.
+      // exit like a through line, with a `↱` after. A line that might change a value in memory on
+      // its way to a reader is drawn as the same doubt an input's is.
       for (const output of groupedOutputs((result.outputs || []).filter(item => groupOf(item) === group))) {
         for (const reader of output.readers) {
           const at = reader.range.start.line;
           if (reader.kind === 'exit') addLabel(through, at, `${output.name}↱`);
           else addLabel(reader.confidence === 'bestEffort' ? guesses : sources, at, `→${output.name}`);
         }
+        for (const range of output.possibly) addLabel(possible, range.start.line, `${output.name}?`);
         chips.push([group, outputChipOf(output)]);
       }
       // A store into code and the instruction it patches are linked like a source and its reader.
