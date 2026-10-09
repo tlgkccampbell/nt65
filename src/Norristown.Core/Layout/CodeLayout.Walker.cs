@@ -128,8 +128,8 @@ public sealed partial class CodeLayout
         public CodeLayout Layout => layout;
 
         /// <summary>
-        /// Gets a value indicating whether anything asked for a cycle span while there was no
-        /// completed walk to count over. When it is set, the file is laid out once more, with this
+        /// Gets a value indicating whether a statement named a cycle span, or anything asked for
+        /// one, while there was no completed walk to count over. When it is set, the file is laid out once more, with this
         /// walk's steps to count over.
         /// </summary>
         public bool WantsCycles { get; private set; }
@@ -388,7 +388,26 @@ public sealed partial class CodeLayout
                 layout.steps.Add(new Step(statement, outer, routine, Stream, segment, null, Closes: true));
         }
 
-        private void Statement(StatementSyntax statement) => statements.Visit(statement);
+        /// <summary>
+        /// Lays out one statement. A statement that names a cycle span asks for the walk that counts
+        /// it, whether or not anything evaluates the span while the file is laid out. A span in a
+        /// data initializer is evaluated only when the output is written, and a macro call's
+        /// arguments only where the body uses them.
+        /// </summary>
+        private void Statement(StatementSyntax statement)
+        {
+            if (layout.counted is null && !WantsCycles && NamesACycleSpan(statement))
+                WantsCycles = true;
+            statements.Visit(statement);
+        }
+
+        /// <summary>
+        /// Returns a value indicating whether <paramref name="statement"/> calls <c>.mincycles</c>
+        /// or <c>.maxcycles</c> anywhere in it.
+        /// </summary>
+        private static bool NamesACycleSpan(StatementSyntax statement) =>
+            statement.DescendantNodes().OfType<CallExpressionSyntax>()
+                .Any(call => call.BuiltinKind is BuiltinKind.Mincycles or BuiltinKind.Maxcycles);
 
         /// <summary>Marks the routine being walked as one in which an instruction could not be laid out.</summary>
         private void Unlayable()
