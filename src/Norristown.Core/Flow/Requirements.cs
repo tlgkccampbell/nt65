@@ -28,8 +28,9 @@ internal sealed class Requirements
     // The labels a `.next` names, keyed by the routine the `.next` is in.
     private readonly HashSet<(Symbol Routine, Symbol Label)> named = [];
 
-    // Where data that code runs into is already reported. A routine that ends in such data is
-    // not reported as running off its end too, because the two describe the same edge.
+    // Where data that code runs into is already reported, and the body line beside a report at a
+    // macro call. A routine that ends in such data is not reported as running off its end too,
+    // because the two describe the same edge.
     private readonly HashSet<Span> runIntoData;
 
     private Requirements(SemanticModel model, CodeLayout layout, ControlFlow flow, HashSet<Span> runIntoData)
@@ -47,7 +48,8 @@ internal sealed class Requirements
     public static void Check(SemanticModel model, CodeLayout layout, ControlFlow flow, List<Diagnostic> diagnostics)
     {
         var requirements = new Requirements(model, layout, flow,
-            [.. diagnostics.Where(d => d.Id == Catalogue.RunsIntoData.Id).Select(d => d.Span)]);
+            [.. diagnostics.Where(d => d.Id == Catalogue.RunsIntoData.Id)
+                .SelectMany(d => d.Related.Select(related => related.Span).Prepend(d.Span))]);
         requirements.Collect();
         foreach (var region in flow.Regions)
         {
@@ -222,15 +224,15 @@ internal sealed class Requirements
         switch (Transfers.Of(statement, mode))
         {
             case Transfer.Elsewhere when Instructions.IsCall(statement.MnemonicKind):
-                Report(statement, Catalogue.IndirectCallUnchecked.Message(Quoted(statement)));
+                Report(statement, step.On, Catalogue.IndirectCallUnchecked.Message(Quoted(statement)));
                 break;
 
             case Transfer.Elsewhere:
-                Report(statement, Catalogue.IndirectJumpUnchecked.Message(Quoted(statement)), EndPath(step));
+                Report(statement, step.On, Catalogue.IndirectJumpUnchecked.Message(Quoted(statement)), EndPath(step));
                 break;
 
             case Transfer.Return when statement.MnemonicKind is MnemonicKind.Rts or MnemonicKind.Rtl && PushesCode(block):
-                Report(statement, Catalogue.PushedReturnUnchecked.Message(SyntaxFacts.TextOf(statement.MnemonicKind)));
+                Report(statement, step.On, Catalogue.PushedReturnUnchecked.Message(SyntaxFacts.TextOf(statement.MnemonicKind)));
                 break;
 
             case Transfer.Jump or Transfer.Branch when flow.RelativeCallAt(step) is null:
@@ -273,9 +275,9 @@ internal sealed class Requirements
             if (!calls && targetExpression is not NameExpressionSyntax)
             {
                 if (branch)
-                    Report(statement, Catalogue.ComputedBranchUnchecked.Message(Quoted(statement)));
+                    Report(statement, step.On, Catalogue.ComputedBranchUnchecked.Message(Quoted(statement)));
                 else
-                    Report(statement, Catalogue.ComputedJumpUnchecked.Message(Quoted(statement)), EndPath(step));
+                    Report(statement, step.On, Catalogue.ComputedJumpUnchecked.Message(Quoted(statement)), EndPath(step));
             }
             return;
         }
@@ -284,7 +286,7 @@ internal sealed class Requirements
         {
             if (!calls)
             {
-                Report(statement, Catalogue.JumpTargetNotALabel.Message(
+                Report(statement, step.On, Catalogue.JumpTargetNotALabel.Message(
                     Quoted(statement), symbol.DisplayName, symbol.KindPhrase,
                     branch ? "write the label it goes to as its operand"
                         : "add a `.next` naming the labels it reaches, or `.next ?` where they cannot be named"),
@@ -299,7 +301,7 @@ internal sealed class Requirements
         if (!labelled.IsCode && DataAt(labelled) is { } data
             && (!labelled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a is not NextDirectiveSyntax)))
         {
-            Report(statement, Catalogue.JumpIntoData.Message(symbol.DisplayName));
+            Report(statement, step.On, Catalogue.JumpIntoData.Message(symbol.DisplayName));
         }
     }
 
@@ -398,7 +400,14 @@ internal sealed class Requirements
             && Transfers.TargetOf(statement, mode) is { } target
                 ? new DiagnosticFix(FixKind.AlwaysTaken, target.GetText().Trim(), statement.Tree.GetSpan(statement.Span))
                 : null;
-        diagnostics.Add(new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), RunsOff(routine, own, branch))
+
+        // Where the last statement is a line of a macro body, the call that ends the routine is
+        // what runs off, and the `.fallthrough` the fix adds still goes at the routine's end.
+        var found = Expansion.BodyLine(step.Statement, step.On, model.Tree) is var (call, _, _)
+            ? new Diagnostic(call.Tree.GetSpan(call.Span), RunsOff(routine, own, branch),
+                [new RelatedSpan(step.Statement.Tree.GetSpan(step.Statement.Span), "in the macro body")])
+            : new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), RunsOff(routine, own, branch));
+        diagnostics.Add(found with
         {
             Fix = taken ?? runsInto ?? (branch ? null : EndPath(step)),
             Also = taken is null ? null : runsInto,
@@ -455,7 +464,7 @@ internal sealed class Requirements
                         .Any(target => Targets.Of(model, target, step.On)?.Symbol == symbol);
                     if (!patched && !flow.CoveredStores.Contains(step.Key))
                     {
-                        Report(statement, Catalogue.SelfModifyingUnchecked.Message(
+                        Report(statement, step.On, Catalogue.SelfModifyingUnchecked.Message(
                             Quoted(statement), symbol.DisplayName, symbol.DisplayName));
                     }
                     continue;
@@ -467,7 +476,7 @@ internal sealed class Requirements
                     continue;
                 if (labelled.Block.IsDeclared || named.Contains((labelled.Region.Routine, symbol)))
                     continue;
-                Report(name, Catalogue.CodeLabelAsData.Message(symbol.DisplayName, labelled.Region.Routine.DisplayName),
+                Report(name, step.On, Catalogue.CodeLabelAsData.Message(symbol.DisplayName, labelled.Region.Routine.DisplayName),
                     new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
             }
         }
@@ -488,12 +497,26 @@ internal sealed class Requirements
                 continue;
             }
             foreach (var next in flow.AnnotationsOf(step).OfType<NextDirectiveSyntax>())
-                Report(next, Catalogue.NextAfterPadding.Message(padding.GetText().Trim(), fill.WhyNot()));
+                Report(next, step.On, Catalogue.NextAfterPadding.Message(padding.GetText().Trim(), fill.WhyNot()));
         }
     }
 
-    private void Report(SyntaxNode node, DiagnosticMessage message, DiagnosticFix? fix = null) =>
+    /// <summary>
+    /// Reports a problem with <paramref name="node"/>, found in the expansion <paramref name="on"/>.
+    /// A line of a macro body is reported at the call that expanded it, which is the side that
+    /// chose to expand it there, with the body line as a note. Such a report has no fix, since a
+    /// fix would change a line that every call expands.
+    /// </summary>
+    private void Report(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null)
+    {
+        if (Expansion.BodyLine(node, on, model.Tree) is var (call, _, _))
+        {
+            diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
+                [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")]));
+            return;
+        }
         diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
+    }
 
     /// <summary>
     /// Returns a fix that adds a <c>.next ?</c> after the step's statement, or null where the

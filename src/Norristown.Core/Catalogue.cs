@@ -2667,14 +2667,16 @@ public static class Catalogue
         Area.ControlFlow,
         "runs-into-data",
         Severity.Error,
-        "the instruction above falls into this {0}: {1}",
+        "{0} falls into {1}: {2}",
         "Execution falls from the instruction above into these bytes, so the processor would run them as code, as "
             + "in the `.byte $2c` skip trick or an opcode given as bytes. nt65 cannot follow flow through "
             + "data, so add a `.next` after the data naming where flow really goes. If the instruction above is "
             + "a conditional branch that is always taken, put a `.next` naming its target under the branch instead. "
             + "Padding from a `.res` or `.align` is data too, so falling into it needs the `.next` even where its "
             + "fill byte runs on. Where the fill does not run on, the `.next` is refused as `next-after-padding`, "
-            + "so give the padding a fill byte such as `$ea`, which is `nop`, or `jmp` over it.");
+            + "so give the padding a fill byte such as `$ea`, which is `nop`, or `jmp` over it. Data in a macro body "
+            + "is reported at the call, with the body line as a note. Where the data is the last thing the call "
+            + "expands to, the `.next` goes after the call; anywhere else in the body, it goes in the body.");
 
     internal static DiagnosticDescriptor NextAfterPadding { get; } = Entry(
         Area.ControlFlow,
