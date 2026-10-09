@@ -1253,8 +1253,12 @@ inferred from the program, across files:
   the routine is entered with it. Code outside nt65 that calls an exported routine is not
   checked, as nothing outside nt65 is; a routine such code calls declares the entry it expects,
   which is the contract between the two. A routine whose address is taken, by any use of its
-  name other than as where control goes, may be called through it from anywhere, and keeps the
-  default entry, `a*, i*, native, dp*, dbr*`; so does one nothing calls.
+  name other than as where control goes, may be called through it from anywhere, in either
+  mode, and is entered with `a*, i*, e*, dp*, dbr*`: it assumes nothing; so is one nothing
+  calls. A `rep` in it widens nothing until it declares `native` or enters native mode with
+  `clc` and `xce`, as a reset handler does, and a declared `native` restores the old default.
+  It still hands back the mode it was entered with, unless it changes it, so a caller
+  that also calls it directly keeps its mode across the call.
 
 This is sound where an assumed width was not. nt65 sizes every immediate from the state the
 processor will be in, so an inferred width describes what the CPU does, and the bytes follow
@@ -1343,7 +1347,10 @@ after `->`, and an `rts` or `rtl` in it is an error. It is neither near nor far:
 `jsr`, `jsl` or a relative call, is an error, while its address in data, a vector, is what it
 is for. A jump from it checks only the target's entry, and a jump to it is allowed only from
 another interrupt handler or a routine that never returns. On the 6502 and its CMOS variants it is
-accepted with the same `rti` and call checks.
+accepted with the same `rti` and call checks. An `rti` in a routine not marked `interrupt` is a
+warning, `rti-outside-handler`, whose fix adds the item: leaving the mark off would otherwise
+earn the routine more trust than writing it. An `rti` with a `.next` is a computed jump that
+says where it goes, and is not reported.
 
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near
@@ -1825,13 +1832,13 @@ that is not the next one written, which is a jump there, checked as a tail call;
 in between runs into it and says so with `.fallthrough`:
 
 ```nt65
-.proc set_one: a8 {
+.proc set_one: a8, native {
     lda #1
     .byte $2c           ; bit abs: swallows the `lda #2` of `set_two`
     .next store
 }
 
-.proc set_two: a8 {
+.proc set_two: a8, native {
     lda #2
     .fallthrough store
 }
@@ -1846,7 +1853,7 @@ A routine whose body ends in an `.if` chain, taken or not, runs into the next ro
 every branch, and the `.fallthrough` after the chain says so for all of them:
 
 ```nt65
-.proc prepare: a8 {
+.proc prepare: a8, native {
     lda #0
     .if FAST {
         asl a
@@ -1917,7 +1924,7 @@ one of the banks that can see what they reach. `dbr` may name that set, written 
 writes banks:
 
 ```nt65
-.proc draw_bg: far, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16 {
+.proc draw_bg: far, native, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16 {
     ...
     sta $2100               ; checked against every bank of the set
     ...
@@ -3645,7 +3652,7 @@ and are never visible any other way:
 .use snd::init as snd_init          ; a name of this module's choosing
 .use very::long::path as p          ; a module, named p::thing
 
-.proc main: a8, i8 {
+.proc main: a8, i8, native {
     jsr gfx::init                   ; qualified
     jsr snd_init
     lda p::thing

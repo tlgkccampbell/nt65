@@ -10,7 +10,7 @@
     rts                             ; checked: A must be 8-bit here
 }
 
-.signature std = a8, i16, dbr = $80
+.signature std = a8, i16, native, dbr = $80
 
 .proc clear_line: std {
     rep #$20
@@ -38,7 +38,7 @@
 
 .export COP_HANDLER
 
-.proc calls: a16, i16 {
+.proc calls: a16, i16, native {
     jsr _memset
     rts
 }

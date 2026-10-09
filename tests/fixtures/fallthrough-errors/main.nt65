@@ -27,7 +27,7 @@
     rts
 }
 
-.proc not_adjacent: a8 {
+.proc not_adjacent: a8, native {
     lda #1
     .fallthrough second ;! error[fallthrough-not-adjacent]: `second` does not start where this routine ends: `.fallthrough` names the routine directly after it
 }
@@ -59,7 +59,7 @@
 
 ; A `.next` ending the body where nt65 already knows where flow goes: after an ordinary
 ; instruction or a direct call, the error says to write `.fallthrough` instead.
-.proc after_lda: a8 {
+.proc after_lda: a8, native {
     lda #4
     .next after_call    ;! error[next-successors-known]: `.next` is not needed: `lda #4` already continues with the next statement; if this routine runs into the one after it, use `.fallthrough`
 }
@@ -117,7 +117,7 @@
 
 ; What a branch the build takes names is checked as any `.fallthrough` is; the one it does not
 ; take is not read.
-.proc taken_not_adjacent: a8 {
+.proc taken_not_adjacent: a8, native {
     lda #7
     .if 1 {
         .fallthrough narrows    ;! error[fallthrough-not-adjacent]: `narrows` does not start where this routine ends: `.fallthrough` names the routine directly after it

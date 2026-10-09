@@ -30,7 +30,7 @@ main__init:
     rts
 ; end of init
 
-; .proc update: a8, i8  main.nt65:29
+; .proc update: a8, i8, native  main.nt65:29
 main__update:
     lda a:frame
     ora f:timer

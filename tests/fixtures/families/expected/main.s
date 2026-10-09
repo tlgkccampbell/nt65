@@ -23,7 +23,7 @@ main__playing:
     .addr snd__play__extra
 
 .segment "CODE": absolute
-; .proc main: a8, i8, dbr = 0  main.nt65:17
+; .proc main: a8, i8, dbr = 0, native  main.nt65:17
 main__main:
     jsr snd__play__lo
     jsr snd__stop__hi

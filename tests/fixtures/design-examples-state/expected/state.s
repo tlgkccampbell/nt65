@@ -154,7 +154,7 @@ skip__store:
     rts
 ; end of skip
 
-; .proc draw_bg: far, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16  state.nt65:150
+; .proc draw_bg: far, native, dp = 0, dbr = [$00..$3f, $80..$bf] -> a8, i16  state.nt65:150
 state__draw_bg:
     sep #$20
     rep #$10

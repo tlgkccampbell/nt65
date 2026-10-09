@@ -9,7 +9,7 @@
     rts                     ; inferred exit: a8
 }
 
-.export .proc main: a16 -> a8 {
+.export .proc main: a16, native -> a8 {
     jsr draw
     rts
 }

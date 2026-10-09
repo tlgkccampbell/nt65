@@ -109,7 +109,7 @@ public sealed class DirectPagesRequestsTests
             .segment HIGH
             .data high: .word
             .segment CODE
-            .export .proc main: a8, dp = 0 {
+            .export .proc main: a8, dp = 0, native {
                 lda frames
                 stz low
                 jsr other

@@ -41,7 +41,7 @@
     rts
 }
 
-.proc main {
+.proc main: native {
     jsr dea
     jsr xba
     jsr other::tsa

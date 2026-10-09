@@ -22,7 +22,7 @@
 imports__CHROUT = $ffd2
 
 .segment "CODE": absolute
-; .proc print: a8, i16  imports.nt65:22
+; .proc print: a8, i16, native  imports.nt65:22
 imports__print:
     lda z:zp_scratch
     sta a:$d020                     ; VIC_BORDER

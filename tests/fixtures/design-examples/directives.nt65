@@ -18,7 +18,7 @@
     rts
 }
 
-.proc irq: a8, i8 {
+.proc irq: interrupt {
     rti
 }
 

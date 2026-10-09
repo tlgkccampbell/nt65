@@ -24,7 +24,7 @@ trace:
     rts
 ; end of trace
 
-; .proc run: a8, i8  conditions.nt65:22
+; .proc run: a8, i8, native  conditions.nt65:22
 conditions__run:
     jsr trace
     rts

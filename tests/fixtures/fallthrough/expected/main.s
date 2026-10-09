@@ -26,14 +26,14 @@
 value: .res 1
 
 .segment "CODE": absolute
-; .proc set_one: a8  main.nt65:19
+; .proc set_one: a8, native  main.nt65:19
 main__set_one:
     .a8
     lda #1
     .byte $2c
 ; end of set_one
 
-; .proc set_two: a8  main.nt65:25
+; .proc set_two: a8, native  main.nt65:25
 main__set_two:
     lda #2
 ; end of set_two
@@ -44,7 +44,7 @@ main__store:
     rts
 ; end of store
 
-; .proc prepare: a8  main.nt65:36
+; .proc prepare: a8, native  main.nt65:36
 main__prepare:
     lda #0
     asl a
@@ -56,7 +56,7 @@ main__draw:
     rts
 ; end of draw
 
-; .proc after_call: a8  main.nt65:50
+; .proc after_call: a8, native  main.nt65:50
 main__after_call:
     jsr main__draw
 ; end of after_call
@@ -78,13 +78,13 @@ main__labelled:
     rts
 ; end of labelled
 
-; .proc skips: a8, i8  main.nt65:79
+; .proc skips: a8, i8, native  main.nt65:79
 main__skips:
     lda #1
     .byte $2c
 ; end of skips
 
-; .proc skipped: a8, i8  main.nt65:85
+; .proc skipped: a8, i8, native  main.nt65:85
 main__skipped:
     .i8
     ldx #2
@@ -96,7 +96,7 @@ main__landing:
     rts
 ; end of landing
 
-; .proc wide: a16 -> a8  main.nt65:97
+; .proc wide: a16, native -> a8  main.nt65:97
 main__wide:
     .a16
     lda #$1234

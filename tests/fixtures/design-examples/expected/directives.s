@@ -30,7 +30,7 @@ directives__reloc:
 directives__reloc__end:
 ; end of reloc
 
-; .proc irq: a8, i8  directives.nt65:21
+; .proc irq: interrupt  directives.nt65:21
 directives__irq:
     rti
 directives__irq__end:

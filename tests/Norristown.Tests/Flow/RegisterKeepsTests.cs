@@ -271,11 +271,11 @@ public sealed class RegisterKeepsTests
     [Fact]
     public void AWidthThatChangesBetweenAPushAndItsPullBreaksTheSave()
     {
-        Assert.Empty(Wide(".proc p: a8, keeps a {\n    pha\n    lda #1\n    pla\n    rts\n}\n"));
+        Assert.Empty(Wide(".proc p: a8, keeps a, native {\n    pha\n    lda #1\n    pla\n    rts\n}\n"));
         Assert.Equal(
             ["main.nt65:5: `p` promises `keeps a`, but A is not the same as on entry here: "
                 + "restore it before returning, or add `.state keeps a` at the point where the entry value is restored"],
-            Wide(".proc p: a8, keeps a -> a16 {\n    pha\n    rep #$20\n    pla\n    rts\n}\n"));
+            Wide(".proc p: a8, keeps a, native -> a16 {\n    pha\n    rep #$20\n    pla\n    rts\n}\n"));
     }
 
     /// <summary>

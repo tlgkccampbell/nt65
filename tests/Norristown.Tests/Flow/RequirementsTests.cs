@@ -201,7 +201,7 @@ public sealed class RequirementsTests
             .proc wide: a16 {
                 rts
             }
-            .proc p: a8 -> a16 {
+            .proc p: a8, native -> a16 {
                 phk
                 per @back - 1
                 brl far_wide
@@ -263,15 +263,15 @@ public sealed class RequirementsTests
     public void ANextNamingRoutinesInAListCallsEachOfThem(string handlers)
     {
         var text = """
-            .proc wide: a8 -> a16 {
+            .proc wide: a8, native -> a16 {
                 rep #$20
                 rts
             }
-            .proc wider: a8 -> a16, i16 {
+            .proc wider: a8, native -> a16, i16 {
                 rep #$30
                 rts
             }
-            .proc p: a16 -> a16, i? {
+            .proc p: a16, native -> a16, i? {
                 jsr (handlers,x)
                 .next handlers
                 tax
@@ -298,7 +298,7 @@ public sealed class RequirementsTests
     public void AJumpIntoANestedSegmentBlockPropagatesTheState()
     {
         const string Text = """
-            .proc p: a16, i8 {
+            .proc p: a16, i8, native {
                 jmp @away
             @back:
                 lda #$1234
@@ -356,7 +356,7 @@ public sealed class RequirementsTests
                 rts
                 .next ?
             }
-            .proc p: a8, i8 -> i16 {
+            .proc p: a8, i8, native -> i16 {
                 jmp owner::inner
             }
             """;
@@ -380,7 +380,7 @@ public sealed class RequirementsTests
                 rts
                 .next ?
             }
-            .proc p: a8, i8 {
+            .proc p: a8, i8, native {
                 jmp owner::inner
             }
             """;

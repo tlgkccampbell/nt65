@@ -80,13 +80,13 @@
     rts
 }
 
-.proc beside: a8, i8, dbr = [$00..$3f, $7e] -> a8, i8, dbr = [$00..$3f] {
+.proc beside: a8, i8, dbr = [$00..$3f, $7e], native -> a8, i8, dbr = [$00..$3f] {
     sta $2100               ;! error[range-bank-mismatch]: $2100 is reachable only from banks $00-$3f, $80-$bf, but B is one of $00-$3f, $7e here
     jsr anywhere            ;! error[call-state-mismatch]: `jsr anywhere` needs `dbr = [$00..$3f, $80..$bf]`, but B is one of $00-$3f, $7e here
     rts                     ;! error[return-state-mismatch]: `rts`: `beside` declares it returns with `dbr = [$00..$3f]`, but B is one of $00-$3f, $7e here
 }
 
-.proc from_wram: a8, i8, dbr = $7e -> a8, i8, dbr? {
+.proc from_wram: a8, i8, dbr = $7e, native -> a8, i8, dbr? {
     jsr anywhere            ;! error[call-state-mismatch]: `jsr anywhere` needs `dbr = [$00..$3f, $80..$bf]`, but B is $7e here
     .state dbr = [$00..$3f] ;! error[state-value-mismatch]: `.state dbr = [$00..$3f]` does not match: B is $7e here
     rts
@@ -151,7 +151,7 @@
     rts
 }
 
-.proc calls: a8, i8 -> a8, i8, dp? {
+.proc calls: a8, i8, native -> a8, i8, dp? {
     jsr needs               ;! error[call-state-mismatch]: `jsr needs` needs `dp = $2100`, but D is not known here
     rts
 }
@@ -190,14 +190,14 @@
 }
 
 .segment BANK2
-.proc high: a8, i8 {
+.proc high: a8, i8, native {
     jsr low                 ;! error[jump-leaves-bank]: `low` is in bank $01, and `jsr` cannot leave bank $02: use `jsl`
     rts
 }
 
 ; A conditional branch has no long form to suggest instead, so reaching the other bank takes
 ; a `jml`, skipped over by the opposite branch.
-.proc branches: a8, i8 {
+.proc branches: a8, i8, native {
     beq low                 ;! error[jump-leaves-bank]: `low` is in bank $01, and `beq` cannot leave bank $02: branch the other way around a `jml` to it
     rts
 }

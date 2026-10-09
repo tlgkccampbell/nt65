@@ -28,7 +28,7 @@ public sealed class SuggestionsTests
     [Fact]
     public void ASuggestionIsAHintNoBuildReports()
     {
-        var (analysis, path) = Analyzed(".proc helper {\n    rts\n}\n.export .proc main {\n    jsr helper\n    rts\n}\n");
+        var (analysis, path) = Analyzed(".proc helper {\n    rts\n}\n.export .proc main: native {\n    jsr helper\n    rts\n}\n");
 
         var suggestion = Assert.Single(analysis.SuggestionsFor(path));
         Assert.Equal("tail-call", suggestion.Id);

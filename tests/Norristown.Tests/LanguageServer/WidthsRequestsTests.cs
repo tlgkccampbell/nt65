@@ -24,7 +24,7 @@ public sealed class WidthsRequestsTests
             .cpu 65816
 
             .segment CODE
-            .export .proc update: a8, i16 {
+            .export .proc update: a8, i16, native {
                 rep #$20
                 lda #$1234
                 sta $10
@@ -84,7 +84,7 @@ public sealed class WidthsRequestsTests
             .cpu 65816
 
             .segment CODE
-            .export .proc pick: a8, i8 {
+            .export .proc pick: a8, i8, native {
                 rep #$20
                 ; A is 16 bits from here
                 bcc @wide
@@ -120,7 +120,7 @@ public sealed class WidthsRequestsTests
             }
 
             .segment CODE
-            .export .proc main: a8, i8 -> a16 {
+            .export .proc main: a8, i8, native -> a16 {
                 wide!()
                 sta $10
                 rts

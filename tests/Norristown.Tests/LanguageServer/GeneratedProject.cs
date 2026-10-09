@@ -48,7 +48,7 @@ internal static class GeneratedProject
             }
 
             .segment CODE
-            .proc m{{i}}_init: a8, i8 {
+            .proc m{{i}}_init: a8, i8, native {
                 ldx #0
             @loop:
                 lda m{{i}}_table,x

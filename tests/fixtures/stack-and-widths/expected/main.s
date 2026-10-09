@@ -39,7 +39,7 @@ main__copy:
     rts
 ; end of copy
 
-; .proc setup: a8, i8 -> a16, i16  main.nt65:38
+; .proc setup: a8, i8, native -> a16, i16  main.nt65:38
 main__setup:
     rep #$20
     lda #$1234
@@ -48,7 +48,7 @@ main__setup:
     rts
 ; end of setup
 
-; .proc mixed: a16, i8 -> a8, i16  main.nt65:47
+; .proc mixed: a16, i8, native -> a8, i16  main.nt65:47
 main__mixed:
     rep #$10
     sep #$20
@@ -101,7 +101,7 @@ twice__again:
     rts
 ; end of twice
 
-; .proc reenter: a16, i16  main.nt65:110
+; .proc reenter: a16, i16, native  main.nt65:110
 main__reenter:
     pea 0
     jmp twice__again

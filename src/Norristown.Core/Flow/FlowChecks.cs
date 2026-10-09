@@ -318,7 +318,8 @@ internal sealed class FlowChecks
     /// Reports each <c>rts</c> or <c>rtl</c> in a routine that never returns or in an interrupt
     /// handler, and each call to an interrupt handler. Neither kind of routine returns with
     /// <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by <c>rti</c>, is never
-    /// called. These rules hold on every CPU.
+    /// called. It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which
+    /// the processor may enter in any state. These rules hold on every CPU.
     /// </summary>
     private void CheckReturnsAndCalls(Symbol routine, IReadOnlyList<ControlFlow.Unit> units)
     {
@@ -348,10 +349,19 @@ internal sealed class FlowChecks
             {
                 Report(statement, Catalogue.HandlerCalled.Message(handler.DisplayName));
             }
+
+            // An `rti` with a `.next` is a computed jump that says where it goes, and is not a
+            // handler's return.
+            if (statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rti } && unit.Next is null
+                && routine.Signature is { IsInterrupt: false })
+            {
+                Report(statement, Catalogue.RtiOutsideHandler.Message(routine.DisplayName),
+                    routine.Tree == model.Tree ? new DiagnosticFix(FixKind.Interrupt, At: routine.DeclarationSpan) : null);
+            }
         }
 
         void Report(SyntaxNode node, DiagnosticMessage message, DiagnosticFix? fix = null) =>
-            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
+            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), message.Descriptor.Severity, message) { Fix = fix });
     }
 
     /// <summary>

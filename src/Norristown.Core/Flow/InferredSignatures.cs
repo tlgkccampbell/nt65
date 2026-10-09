@@ -25,7 +25,8 @@ namespace Norristown.Flow;
 /// outside nt65 that calls an exported routine is not checked, as nothing outside nt65 is, and a
 /// routine it calls declares its entry where the two have to agree. A routine whose address is
 /// taken, and one that nothing calls, keep the default entry, because some of their callers
-/// cannot be seen.
+/// cannot be seen. Their mode is <c>*</c> rather than the default <c>native</c>, since the
+/// processor may enter them in either mode.
 /// </description>
 /// </item>
 /// </list>
@@ -336,7 +337,16 @@ public sealed class InferredSignatures
                 var declared = routine.Signature!;
                 entries[key] = declared.Entry;
                 if (called.Contains(key) && !taken.Contains(key))
+                {
                     pending[key] = StateParts.All & ~declared.Declared;
+                }
+                else if ((declared.Declared & StateParts.Mode) == 0)
+                {
+                    // A routine some of whose callers cannot be seen may be entered in either
+                    // mode, so it assumes nothing about the mode, as it assumes nothing about the
+                    // widths. It still hands the mode back unless it changes it.
+                    entries[key] = declared.Entry with { E = ProcessorMode.Unchanged };
+                }
             }
         }
 

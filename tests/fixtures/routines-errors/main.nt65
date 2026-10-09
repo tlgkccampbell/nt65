@@ -66,7 +66,7 @@
     rts
 }
 
-.proc tail: std {
+.proc tail: std, native {
     jmp handler                 ;! error[tail-call-to-handler]: `jmp handler` is a tail call into interrupt handler `handler`, whose `rti` would not return to this routine's caller
 }
 
@@ -79,7 +79,7 @@
     rts
 }
 
-.proc short: std, a16 {
+.proc short: std, a16, native {
     pea 1
     jsr takes                   ;! error[args-not-pushed]: `takes` declares `args 4`, bytes the caller pushes before the call, but only 2 bytes are pushed here
     pla
@@ -97,16 +97,16 @@
 ; A long jump to a near routine enters another bank, which only a routine nothing returns
 ; to may do; and a routine's address in a bank is in its home bank or a mirror.
 .segment STUBS
-.proc far_jump: std {
+.proc far_jump: std, native {
     jml near_std                ;! error[jump-across-banks]: `near_std` is near and in another bank: after this `jml` its `rts` would return inside its own bank, not to `far_jump`'s caller
 }
 
-.proc wrong_mirror: std, noreturn {
+.proc wrong_mirror: std, noreturn, native {
     jml ($81 << 16) | .loword(near_std) ;! error[mirror-bank-mismatch]: `near_std` is in segment `CODE0`, in bank $80 and mirrored in banks $00-$3f, but this reaches it through bank $81
 }
 
 .segment CODE0
-.proc far_near: std, noreturn {
+.proc far_near: std, noreturn, native {
     jml near_std                ;! error[jump-distance-mismatch]: `near_std` is near: jump to it with `jmp near_std`
 }
 

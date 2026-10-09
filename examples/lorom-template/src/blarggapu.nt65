@@ -109,7 +109,7 @@
 }
 
 ; Writes high byte of X to SPC-700 DSP register in low byte of X
-.proc spc_write_dsp: io, i16, far -> a8, i16 {
+.proc spc_write_dsp: io, i16, native, far -> a8, i16 {
     phx
     ; Just do a two-byte upload to $00F2-$00F3, so we set the DSP address, then write the
     ; byte into that.

@@ -57,7 +57,7 @@ state__long_work:
 
 state__COP_HANDLER = $00ff00
 
-; .proc calls: a16, i16  state.nt65:41
+; .proc calls: a16, i16, native  state.nt65:41
 state__calls:
     jsr _memset
     rts

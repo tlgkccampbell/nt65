@@ -104,7 +104,7 @@
 
 ; A call hands back what the routine returns with, so D and B are known after it.
 .segment CODE
-.proc caller: a16, i8 -> a16, i8, dp = $2100, dbr = $7e {
+.proc caller: a16, i8, native -> a16, i8, dp = $2100, dbr = $7e {
     jsr setup
     lda ptr
     sta score
@@ -147,7 +147,7 @@
 }
 
 ; A tail call is checked against the routine it jumps to, D and B included.
-.proc tail: a8, i16, dp = $2100, dbr = $7e {
+.proc tail: a8, i16, dp = $2100, dbr = $7e, native {
     jmp hud
 }
 
@@ -167,7 +167,7 @@
 }
 
 ; A caller whose B is one of those banks meets it, and so does one whose set is a subset.
-.proc from_one: a8, i8, dbr = $80 {
+.proc from_one: a8, i8, dbr = $80, native {
     jsr anywhere
     jsr fewer
     rts

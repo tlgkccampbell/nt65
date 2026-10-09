@@ -23,7 +23,7 @@ public sealed class ProcessorRequestsTests
             .cpu 65816
 
             .segment CODE
-            .export .proc copy: a16, i16 {
+            .export .proc copy: a16, i16, native {
                 pea $1234
                 lda #8
                 pha

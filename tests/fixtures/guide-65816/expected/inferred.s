@@ -19,7 +19,7 @@ draw:
     rts
 ; end of draw
 
-; .proc main: a16 -> a8  inferred.nt65:12
+; .proc main: a16, native -> a8  inferred.nt65:12
 inferred__main:
     jsr draw
     rts

@@ -51,7 +51,7 @@ public sealed class FlagAnalysisTests
     public void RepAndSepSetTheFlagsTheyName()
     {
         var program = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n"
-            + ".proc p: a8, i8 {\n    sep #$01\n    bcs q\n}\n.proc q: a8, i8 {\n    rts\n}\n"));
+            + ".proc p: a8, i8, native {\n    sep #$01\n    bcs q\n}\n.proc q: a8, i8 {\n    rts\n}\n"));
 
         Assert.Empty(program.Problems());
     }

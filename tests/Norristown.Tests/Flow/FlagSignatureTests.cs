@@ -137,13 +137,13 @@ public sealed class FlagSignatureTests
     [Fact]
     public void AnEnsureSetsAFlagOnlyWhereItIsNotAlreadySo()
     {
-        Assert.Contains("    clc\n", Output("6502", ".export .proc p {\n    lda $10\n    .ensure c = 0\n    adc #1\n    rts\n}\n"));
+        Assert.Contains("    clc\n", Output("6502", ".export .proc p: native {\n    lda $10\n    .ensure c = 0\n    adc #1\n    rts\n}\n"));
         Assert.Single(
-            Output("6502", ".export .proc p {\n    clc\n    lda $10\n    .ensure c = 0\n    adc #1\n    rts\n}\n").Split('\n'),
+            Output("6502", ".export .proc p: native {\n    clc\n    lda $10\n    .ensure c = 0\n    adc #1\n    rts\n}\n").Split('\n'),
             line => line.Trim() == "clc");
-        Assert.Contains("    sed\n    cli\n", Output("6502", ".export .proc p {\n    .ensure d = 1, i = 0\n    rts\n}\n"));
+        Assert.Contains("    sed\n    cli\n", Output("6502", ".export .proc p: native {\n    .ensure d = 1, i = 0\n    rts\n}\n"));
 
-        var wide = Output("65816", ".export .proc p: a8 -> a16 {\n    .ensure a16, c = 0\n    rts\n}\n");
+        var wide = Output("65816", ".export .proc p: a8, native -> a16 {\n    .ensure a16, c = 0\n    rts\n}\n");
         Assert.Contains("rep #$21", wide, StringComparison.Ordinal);
         Assert.DoesNotContain("clc", wide, StringComparison.Ordinal);
     }

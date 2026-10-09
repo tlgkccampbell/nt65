@@ -34,7 +34,7 @@
 }
 
 .segment CODE
-.export .proc main: a8, i8 {
+.export .proc main: a8, i8, native {
     jsr work
     lda #Mode::busy
 @unnamed:                       ;! warning[unused-symbol]: `@unnamed` is never used or exported

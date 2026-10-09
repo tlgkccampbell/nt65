@@ -74,6 +74,12 @@ public enum FixKind
     /// <summary>The width item added to the signature of the routine that contains the immediate.</summary>
     Signature,
 
+    /// <summary>
+    /// The <c>interrupt</c> item added to the signature of the routine at the fix's
+    /// <see cref="DiagnosticFix.At"/>, whose <c>rti</c> is reported.
+    /// </summary>
+    Interrupt,
+
     /// <summary>The declaration nothing names, removed, or exported so that another module may name it.</summary>
     Unused,
 

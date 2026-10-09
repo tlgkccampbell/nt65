@@ -50,7 +50,7 @@ dispatch__fire:
     rts
 ; end of dispatch
 
-; .proc nmi: a?, i?  main.nt65:41
+; .proc nmi: interrupt  main.nt65:41
 main__nmi:
     rep #$30
     pha
@@ -138,7 +138,7 @@ talk:
     rts
 ; end of talk
 
-; .proc relative: a8, i8  main.nt65:142
+; .proc relative: a8, i8, native  main.nt65:142
 main__relative:
     per relative__back - 1
     brl talk
@@ -146,7 +146,7 @@ relative__back:
     rts
 ; end of relative
 
-; .proc far_relative: far  main.nt65:149
+; .proc far_relative: far, native  main.nt65:149
 main__far_relative:
     phk
     per far_relative__back - 1
@@ -160,7 +160,7 @@ far_target:
     rtl
 ; end of far_target
 
-; .proc first: a16 -> a8  main.nt65:163
+; .proc first: a16, native -> a8  main.nt65:163
 main__first:
     lda #$1234
     sep #$20
@@ -192,7 +192,7 @@ enter__into:
     rts
 ; end of enter
 
-; .proc jumper: a8, i8  main.nt65:195
+; .proc jumper: a8, i8, native  main.nt65:195
 main__jumper:
     jmp enter__into
 ; end of jumper
