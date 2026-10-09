@@ -87,6 +87,7 @@ internal sealed class SourceStack : IEquatable<SourceStack>
     /// </summary>
     public SourcePush? Pulled(PushSize size, Semantics.Width width) =>
         pushes.Length > 0 && pushes[^1].Size == size && pushes[^1].Width == width && width != Semantics.Width.Unknown
+            && !pushes[^1].IsLeft
             ? pushes[^1]
             : null;
 
@@ -94,7 +95,7 @@ internal sealed class SourceStack : IEquatable<SourceStack>
     /// Returns this stack as a call to a routine with <paramref name="effect"/> leaves it once the
     /// routine returns, or null where what it leaves is not known. It follows
     /// <see cref="SavedStack.AfterCall"/>, and bytes the routine leaves saved nothing that can be
-    /// followed.
+    /// followed. A pull of any size takes them.
     /// </summary>
     public SourceStack? AfterCall(StackEffect effect)
     {
@@ -106,19 +107,30 @@ internal sealed class SourceStack : IEquatable<SourceStack>
             return new SourceStack(pushes, offset + effect.Bytes);
         var left = pushes.ToBuilder();
         for (var i = 0; i < effect.Bytes; i++)
-            left.Add(new SourcePush([], PushSize.OneByte, Semantics.Width.Eight));
+            left.Add(new SourcePush([], PushSize.OneByte, Semantics.Width.Eight) { IsLeft = true });
         return new SourceStack(left.ToImmutable(), offset);
     }
 
     /// <summary>
     /// Returns this stack with its top push taken off, or null where the pull does not match that
     /// push. As with <see cref="SavedStack.Pull"/>, a pull from an empty stack leaves it empty and
-    /// lowers its height.
+    /// lowers its height. A pull takes as many of the bytes a called routine left as it is wide.
     /// </summary>
-    public SourceStack? Pull(PushSize size, Semantics.Width width) =>
-        pushes.Length == 0 ? new SourceStack(pushes, offset - PushBytes.Of(size, width))
+    public SourceStack? Pull(PushSize size, Semantics.Width width)
+    {
+        if (pushes.Length > 0 && pushes[^1].IsLeft)
+        {
+            if (PushBytes.Of(size, width) is not { } bytes)
+                return null;
+            var below = pushes.Length;
+            while (bytes > 0 && below > 0 && pushes[below - 1].IsLeft)
+                (below, bytes) = (below - 1, bytes - 1);
+            return bytes == 0 || below == 0 ? new SourceStack(pushes[..below], offset - bytes) : null;
+        }
+        return pushes.Length == 0 ? new SourceStack(pushes, offset - PushBytes.Of(size, width))
             : pushes[^1].Size == size && pushes[^1].Width == width ? new SourceStack(pushes[..^1], offset)
             : null;
+    }
 
     /// <inheritdoc/>
     public bool Equals(SourceStack? other) =>

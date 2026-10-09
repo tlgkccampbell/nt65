@@ -20,6 +20,12 @@ public readonly record struct SavedPush(RegisterValue Value, PushSize Size, Widt
     /// </summary>
     public PushedFlags? Flags { get; init; }
 
+    /// <summary>
+    /// Gets a value indicating whether this is one byte a called routine left on the stack. Such a
+    /// byte has no push of its own to match, so a pull of any size takes it, one byte at a time.
+    /// </summary>
+    public bool IsLeft { get; init; }
+
     /// <summary>Gets the registers whose entry values the push may hold.</summary>
     public Registers Entries =>
         Value.Entry | (Flags is { } flags ? flags.Z.Entry | flags.N.Entry | flags.V.Entry : Registers.None);

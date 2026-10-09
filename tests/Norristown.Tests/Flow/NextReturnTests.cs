@@ -1,4 +1,5 @@
 using Norristown.Flow;
+using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
@@ -72,17 +73,23 @@ public sealed class NextReturnTests
     }
 
     /// <summary>
-    /// A caller's tracked stack holds what the routine left once the call returns, so a pull after
-    /// the call takes that byte.
+    /// Each of the caller's tracked stacks holds what the routine left once the call returns, so a
+    /// pull after the call takes that byte, and the pull after it takes back what the caller saved.
     /// </summary>
-    [Fact]
-    public void ACallerSeesWhatTheReturnLeft()
+    [Theory]
+    [InlineData("65816", ".proc p: a8, i8 {", ".proc c: a8, i8 {")]
+    [InlineData("6502", ".proc p {", ".proc c {")]
+    public void ACallerSeesWhatTheReturnLeft(string cpu, string callee, string caller)
     {
-        var analysis = FlowFragment.Analyze("65816",
-            Slot + ".proc p: a8, i8 {\n    pla\n    pla\n    lda #0\n    pha\n    jmp (slot)\n    .next .return\n}\n"
-                + ".proc c: a8, i8 {\n    jsr p\n    nop\n    pla\n    rts\n}\n");
+        var analysis = FlowFragment.Analyze(cpu,
+            Slot + callee + "\n    pla\n    pla\n    lda #0\n    pha\n    jmp (slot)\n    .next .return\n}\n"
+                + caller + "\n    lda #1\n    pha\n    jsr p\n    nop\n    pla\n    pla\n    sta slot\n    rts\n}\n");
 
-        Assert.Equal(1, FlowFragment.StateAt(analysis, "nop").Stack?.Depth);
+        if (cpu == "65816")
+            Assert.Equal(2, FlowFragment.StateAt(analysis, "nop").Stack?.Depth);
+        Assert.Equal(2, RegistersAt(analysis, "nop").Stack?.Depth);
+        Assert.Equal(2, RegistersAt(analysis, "sta slot").Stack?.Height);
+        Assert.Equal(["A: lda #1 via pla"], FlowFragment.SourcesAt(analysis, "sta slot"));
     }
 
     /// <summary>
@@ -117,6 +124,17 @@ public sealed class NextReturnTests
             ".segment RODATA\n.data table: .addr q\n.segment CODE\n.proc q {\n    rts\n}\n.proc p {\n" + body + "}\n");
 
         Assert.Contains(problems, found => found.Contains(problem, StringComparison.Ordinal));
+    }
+
+    private static RegisterState RegistersAt(ProgramAnalysis analysis, string line)
+    {
+        var statement = analysis.File(Analysis.Path).Tree.Root.DescendantNodes()
+            .OfType<LineSyntax>()
+            .Select(node => node.Statement)
+            .First(statement => statement.GetText().Trim() == line);
+        var state = analysis.FlowFor(Analysis.Path)?.Registers?.Before(statement);
+        Assert.NotNull(state);
+        return state;
     }
 
     private static StackEffect EffectOf(ProgramAnalysis analysis, string routine)

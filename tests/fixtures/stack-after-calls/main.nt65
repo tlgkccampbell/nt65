@@ -1,0 +1,32 @@
+; A pull after a call takes the bytes the routine left on the caller's stack, whatever size
+; the pull is, so a save and its restore still pair up around such a call.
+.module main
+
+.cpu 6502
+
+.export leave1, keeper
+
+.segment BSS
+.data slot: .addr
+
+; The routine pulls its return address, pushes one byte for its caller, and jumps back.
+.segment CODE
+.proc leave1 {
+    pla
+    sta slot
+    pla
+    sta slot+1
+    lda #0
+    pha
+    jmp (slot)
+    .next .return
+}
+
+; The first `pla` takes the byte `leave1` left, and the second takes back the saved A.
+.proc keeper: keeps a {
+    pha
+    jsr leave1
+    pla
+    pla
+    rts
+}

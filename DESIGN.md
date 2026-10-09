@@ -5033,7 +5033,9 @@ Recorded so the reasoning survives. None is open.
   push. Each routine, and each label another routine enters, now has an effect: it never
   returns, it leaves a known number of bytes (negative where it takes the caller's), or what it
   leaves is unknown. Effects are read off each exit by counting bytes, solved over the whole
-  program, and applied after every call by all three trackers, on every CPU. The 65816's
+  program, and applied after every call by all three trackers, on every CPU. A byte a routine
+  leaves holds nothing known and has no push of its own to match, so a pull of any size takes
+  it, and a save and its restore on either side of the call still pair up. The 65816's
   processor-state analysis still runs on one file at a time, because layout depends on its
   widths; it takes each callee's effect as the program last worked it out, and a file that
   took one the program turns out to differ on is analyzed again. Moving the whole state
