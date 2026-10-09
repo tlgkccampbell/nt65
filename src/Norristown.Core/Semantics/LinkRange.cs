@@ -108,7 +108,7 @@ internal static class LinkRange
             ? model.ValueOf(node, on)
             : model.ValueOf(node, parameters.ToDictionary(pair => pair.Key, pair => pair.Value.Value), on);
         if (value.AsNumber() is { } number)
-            return (number, number);
+            return Within(number, number);
 
         switch (node)
         {
@@ -186,7 +186,8 @@ internal static class LinkRange
     /// Returns the range of a binary operation on operands with the ranges
     /// <paramref name="left"/> and <paramref name="right"/>, or null where it is not bounded.
     /// Division, <c>.mod</c> and the shifts are bounded only by a constant that is not negative,
-    /// on an operand that is not negative.
+    /// on an operand that is not negative. A shift is bounded only by fewer than 32 places, since
+    /// C leaves a shift as wide as ld65's 32-bit <c>long</c> undefined.
     /// </summary>
     private static (long Low, long High)? Binary(SyntaxToken op, (long Low, long High)? left, (long Low, long High)? right)
     {
@@ -214,9 +215,9 @@ internal static class LinkRange
                 return (a.Low / divisor, a.High / divisor);
             case SyntaxKind.Directive when positive && constant is > 0 and var modulus:
                 return a.High < modulus ? a : (0, modulus - 1);
-            case SyntaxKind.GreaterGreater when positive && constant is >= 0 and < 64 and var count:
+            case SyntaxKind.GreaterGreater when positive && constant is >= 0 and < 32 and var count:
                 return (a.Low >> (int)count, a.High >> (int)count);
-            case SyntaxKind.LessLess when positive && constant is >= 0 and < 64 and var count:
+            case SyntaxKind.LessLess when positive && constant is >= 0 and < 32 and var count:
                 return Within((Int128)a.Low << (int)count, (Int128)a.High << (int)count);
             case SyntaxKind.Ampersand when positive && b.Low >= 0:
                 return (0, Math.Min(a.High, b.High));
@@ -229,7 +230,12 @@ internal static class LinkRange
         }
     }
 
-    /// <summary>Returns a range when both of its ends fit in 64 bits, or null when either does not.</summary>
+    /// <summary>
+    /// Returns a range when both of its ends fit in 32 bits, signed, or null when either does not.
+    /// ld65 works an expression out in C's <c>long</c>, which is 32 bits on Windows and 64 on
+    /// Linux. A value past 32 bits would therefore differ by platform, so nt65 bounds only a
+    /// range whose every step stays within 32 bits.
+    /// </summary>
     private static (long Low, long High)? Within(Int128 low, Int128 high) =>
-        low >= long.MinValue && high <= long.MaxValue ? ((long)low, (long)high) : null;
+        low >= int.MinValue && high <= int.MaxValue ? ((long)low, (long)high) : null;
 }

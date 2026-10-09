@@ -5,12 +5,13 @@
 ; byte, which loses nothing.
 .module main
 
-.export main, basic, more, parts
+.export main, basic, more, parts, shifted
 
 .func digit(n, place) = '0' + (n / place) .mod 10
 .func after(n) = n + 1
 .func triple(n) = n * 3
 .func entry(n) = after(n) - 1
+.func scaled(n) = (n << 15) .mod 10
 
 .segment CODE
 
@@ -24,6 +25,10 @@
     .word after(main), entry(main)
     .byte <triple(main), digit(main, 1) - '0'
 }
+
+; ld65 works a value out in C's `long`, which is 32 bits on Windows. Shifted 15 places, an
+; absolute address stays below $7fff8000, inside those 32 bits, so the `.mod` bounds it to a digit.
+.data shifted: .byte scaled(main)
 
 ; Operators on an address with no function involved, and a byte operator, which needs nothing.
 .data parts {

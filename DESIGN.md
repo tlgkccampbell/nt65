@@ -2511,7 +2511,10 @@ or `'0' + main .mod 10`, has a value only ld65 knows. ca65 refuses it there what
 to, unless `<`, `>`, `^`, `.lobyte`, `.hibyte` or `.bankbyte` takes one byte of the address. nt65
 bounds the value from its operators and the sizes of the addresses in it. Where the value always
 fits a byte, the output writes it inside `.lobyte()`, which loses nothing. Where nt65 cannot show
-that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`.
+that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`. The bound
+respects ld65's arithmetic, which is C's `long`: 32 bits on Windows and 64 on Linux. So nt65
+bounds a value only where every step of it stays within 32 bits, signed, and `(main << 16) .mod 10`
+is an error, since the shift can leave 32 bits before the `.mod` brings it back.
 
 **Elements.** `name[i]` is the element at `i` of a declaration that has a count:
 `buffer[3]`, `handlers[2]`, `actors[1]`. It is `name` plus `i` times the size of one element
