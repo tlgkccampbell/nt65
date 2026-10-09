@@ -42,13 +42,18 @@
 }
 
 .segment RODATA
-.data hero: .type Named { name = "HERO", count = 300, title = "LONG" }  ;! error[member-not-text]: `name` is one `.addr` and cannot hold text: reserve a text member with `.res`;! error[value-too-wide]: $012c does not fit in `count`, a `.byte`;! error[member-text-too-long]: `title` has room for 3 bytes, and this text is 4 bytes
+.data hero: .type Named { name = "HERO", count = 300, title = "LONG" }  ;! error[member-not-text]: `name` is one `.addr` and cannot hold text: a member that holds text is reserved with `.res` and its length, as `name: .res 4`;! error[value-too-wide]: $012c does not fit in `count`, a `.byte`;! error[member-text-too-long]: `title` has room for 3 bytes, and this text is 4 bytes
 .data boss: .type Named {
     at    = { x = 1, z = 2 }        ;! error[member-unknown]: `Point` has no member `z`
     count = 1
     level = 1                       ;! error[member-unknown]: `Named` has no member `level`
     count = 2                       ;! error[member-given-twice]: `count` is given a value twice
 }
+; Each element of an array member holds one value, so text goes in a member reserved with `.res`.
+.struct Tag {
+    code: .byte[4]
+}
+.data tag: .type Tag { code = { "AB", 0, 0, 0 } }  ;! error[member-not-text]: each element of `code` is one `.byte` and cannot hold text: a member that holds text is reserved with `.res` and its length, as `code: .res 4`
 .data flat: .type Named { at = 3 }        ;! error[member-needs-a-record]: `at` is a `Point` record, so its value goes in braces: `{ member = value }`
 .data both: .type Value { b = 1, w = 2 }  ;! error[union-many-members-given]: `Value` is a union, so it takes a value for only one member
 .data mistakes {

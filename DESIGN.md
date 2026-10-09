@@ -1077,8 +1077,9 @@ record macros are written for in ca65, and `.type T[] { ... }` an array of them:
 Each value names its member, so the struct decides the layout and reordering its members
 cannot misplace a value. A member is named at most once, and a member not named is
 zero. A value must fit its member as it would fit the matching data directive, and a
-member of one element takes one value, so text longer than a byte is not one; a `.res n`
-member takes a string of at most n bytes, padded with its pad; a record member takes a
+member of one element takes one value, so text longer than a byte is not one, and each element
+of an array member is one value in the same way; a `.res n` member, which is how a member that
+holds text is declared, takes a string of at most n bytes, padded with its pad; a record member takes a
 nested one-line initializer, `pos = { x = 1, y = 2 }`; an array member always takes a
 braced list of exactly its count, `colors = { $7fff, $001f, 0, 0 }`, in both forms; and a
 union takes at most one member. The one-line form balances its braces on its line, and the

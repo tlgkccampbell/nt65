@@ -2034,8 +2034,10 @@ public static class Catalogue
         Area.Data,
         "member-not-text",
         Severity.Error,
-        "`{0}` is one `{1}` and cannot hold text: reserve a text member with `.res`",
-        "A member of a plain type holds one value. Room for text is reserved with `.res`, which states how much.");
+        "{0} and cannot hold text: a member that holds text is reserved with `.res` and its length, as `{1}: .res {2}`",
+        "A member of a plain type holds one value, and each element of an array member holds one value too, so "
+            + "neither holds text longer than a byte. Room for text is reserved with `.res`, which states how "
+            + "many bytes, and `.res n, pad` pads the text with something other than zero.");
 
     internal static DiagnosticDescriptor StrzNotText { get; } = Entry(
         Area.Data,

@@ -432,14 +432,17 @@ public static class DataLengths
                 Report(item, model, diagnostics, on, Catalogue.ElementIsOneValue.Message(member.Name, spelled));
                 continue;
             }
-            Scalar(member, element.Directive.DirectiveKind, item, member.Name, model, diagnostics, on);
+            Scalar(member, element.Directive.DirectiveKind, item, member.Name, model, diagnostics, on, inArray: true);
         }
     }
 
-    /// <summary>Checks one value for a one-element member, or for one element of an array member.</summary>
+    /// <summary>
+    /// Checks one value for a one-element member, or for one element of an array member, which
+    /// <paramref name="inArray"/> says.
+    /// </summary>
     private static void Scalar(
         Symbol member, DirectiveKind element, SyntaxNode given, string name, SemanticModel model, List<Diagnostic>? diagnostics,
-        Expansion? on)
+        Expansion? on, bool inArray = false)
     {
         var bytes = Bytes(given, model, on);
         if (element == DirectiveKind.Res)
@@ -451,8 +454,12 @@ public static class DataLengths
         }
         if (bytes is { Count: > 1 })
         {
-            Report(given, model, diagnostics, on,
-                Catalogue.MemberNotText.Message(name, SyntaxFacts.TextOf(element), bytes.Count));
+            // Text goes in a member reserved with `.res`, so the message shows the one that would
+            // hold this text and keep at least the room the member has now.
+            var type = SyntaxFacts.TextOf(element);
+            Report(given, model, diagnostics, on, Catalogue.MemberNotText.Message(
+                inArray ? $"each element of `{name}` is one `{type}`" : $"`{name}` is one `{type}`",
+                name, Math.Max(member.Size ?? 0, bytes.Count)));
             return;
         }
         if (bytes is null && Holds(element) is { } range)
