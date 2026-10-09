@@ -24,54 +24,84 @@ public static class Suggestions
     // are not looked for again unless what they depend on has changed.
     private static readonly ConditionalWeakTable<CodeLayout, Found> foundByLayout = new();
 
+    // The code bytes each file names, by the layout they were found in.
+    private static readonly ConditionalWeakTable<CodeLayout, Named> namedByLayout = new();
+
     /// <summary>
     /// Returns the suggestions for <paramref name="file"/>, in the order they are reported.
     /// <paramref name="omitted"/> holds the branches of the file that this build leaves out, and
     /// <paramref name="readsCallerStack"/> says whether a routine depends on the depth of the stack
-    /// it was entered with.
+    /// it was entered with. <paramref name="named"/> holds the code bytes the program names other
+    /// than as where control goes, as <see cref="NamedBytes"/> finds them.
     /// </summary>
     public static IReadOnlyList<Diagnostic> For(
-        FileAnalysis file, IReadOnlyList<TextSpan> omitted, Func<Symbol, bool> readsCallerStack)
+        FileAnalysis file, IReadOnlyList<TextSpan> omitted, Func<Symbol, bool> readsCallerStack,
+        IReadOnlyCollection<NamedByte> named)
     {
         // Every routine of a file whose branches the build all takes is unconditional.
         List<FlowRegion> regions = omitted.Count == 0
             ? [.. file.Flow.Regions]
             : [.. file.Flow.Regions.Where(region => Unconditional(region, omitted))];
-        return Norristown.Diagnostics.Ordered([.. TailCalls(file, regions, readsCallerStack), .. OfTheFile(file, regions, omitted)]);
+        var readAsData = ReadAsData(file, named);
+        return Norristown.Diagnostics.Ordered(
+            [.. TailCalls(file, readAsData, regions, readsCallerStack), .. OfTheFile(file, readAsData, regions, omitted)]);
+    }
+
+    /// <summary>
+    /// Returns each code byte that an operand or a data value of <paramref name="files"/> names
+    /// other than as where control goes, as in <c>lda @op+1</c>. A suggestion that changed the
+    /// instruction holding such a byte would change what that code reads. Each label is the one
+    /// <paramref name="current"/> gives, as for a file not analyzed again after an edit.
+    /// </summary>
+    public static IReadOnlyList<NamedByte> NamedBytes(IReadOnlyList<FileAnalysis> files, Func<Symbol, Symbol> current)
+    {
+        var named = new List<NamedByte>();
+        foreach (var file in files)
+        {
+            if (!namedByLayout.TryGetValue(file.Layout, out var found) || found.Model != file.Model)
+            {
+                found = new Named(file.Model, NamedIn(file));
+                namedByLayout.AddOrUpdate(file.Layout, found);
+            }
+            named.AddRange(found.Bytes.Select(each => each with { Label = current(each.Label) }));
+        }
+        return named;
     }
 
     /// <summary>
     /// Returns the suggestions for <paramref name="file"/> other than tail calls, looking for them
     /// again only where something they depend on has changed. They depend on the file's own
-    /// analysis, the branches the build leaves out, and the flags each routine the file calls
-    /// reads. A tail call depends on more of the program than that, so it is always looked for.
+    /// analysis, the branches the build leaves out, the flags each routine the file calls reads,
+    /// and which of its instructions the program reads as data. A tail call depends on more of the
+    /// program than that, so it is always looked for.
     /// </summary>
     private static IReadOnlyList<Diagnostic> OfTheFile(
-        FileAnalysis file, IReadOnlyList<FlowRegion> regions, IReadOnlyList<TextSpan> omitted)
+        FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, IReadOnlyList<TextSpan> omitted)
     {
         var read = FlagLiveness.ReadByCalls(file.Flow, regions);
         if (foundByLayout.TryGetValue(file.Layout, out var known)
             && known.Model == file.Model && known.State == file.State && known.Flags == file.Flow.Flags
             && known.Omitted.SequenceEqual(omitted)
-            && (known.Read is null ? read is null : read is not null && known.Read.SequenceEqual(read)))
+            && (known.Read is null ? read is null : read is not null && known.Read.SequenceEqual(read))
+            && known.ReadAsData.SetEquals(readAsData))
         {
             return known.Suggestions;
         }
 
         var found = new List<Diagnostic>();
         if (file.State is { } states)
-            found.AddRange(RedundantWidths(file, regions, states));
+            found.AddRange(RedundantWidths(file, readAsData, regions, states));
         if (file.Flow.Flags is { } flags)
         {
-            found.AddRange(ProvedBranches(file, regions, flags));
-            found.AddRange(JumpsAsBranches(file, regions, flags));
-            found.AddRange(CarrySetups(file, regions, flags));
+            found.AddRange(ProvedBranches(file, readAsData, regions, flags));
+            found.AddRange(JumpsAsBranches(file, readAsData, regions, flags));
+            found.AddRange(CarrySetups(file, readAsData, regions, flags));
             var liveness = FlagLiveness.Of(file.Model, file.Layout, file.Flow, regions);
-            found.AddRange(ZeroCompares(file, regions, flags, liveness));
-            found.AddRange(Loads(file, regions, flags, liveness));
+            found.AddRange(ZeroCompares(file, readAsData, regions, flags, liveness));
+            found.AddRange(Loads(file, readAsData, regions, flags, liveness));
         }
-        found.AddRange(BranchesOverJumps(file, regions));
-        foundByLayout.AddOrUpdate(file.Layout, new Found(file.Model, file.State, file.Flow.Flags, omitted, read, found));
+        found.AddRange(BranchesOverJumps(file, readAsData, regions));
+        foundByLayout.AddOrUpdate(file.Layout, new Found(file.Model, file.State, file.Flow.Flags, omitted, read, readAsData, found));
         return found;
     }
 
@@ -104,7 +134,7 @@ public static class Suggestions
     /// </para>
     /// </summary>
     private static IEnumerable<Diagnostic> TailCalls(
-        FileAnalysis file, IReadOnlyList<FlowRegion> regions, Func<Symbol, bool> readsCallerStack)
+        FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, Func<Symbol, bool> readsCallerStack)
     {
         var model = file.Model;
         foreach (var region in regions)
@@ -115,7 +145,7 @@ public static class Suggestions
                 if (!block.IsReached || block.Next is not null || block.CallsUnknown
                     || block.Calls is not [{ Signature: { } callee } target]
                     || block.Steps is not [.., { Statement: InstructionStatementSyntax call } calling]
-                    || !Own(model, calling)
+                    || !Own(model, calling) || Fixed(file, calling, readAsData)
                     || JumpFor(call.MnemonicKind) is not { } jump
                     || callee is { IsInterrupt: true } or { NeverReturns: true } or { Inline: not null } or { Arguments: > 0 }
                     || callee.IsFar != (call.MnemonicKind == MnemonicKind.Jsl)
@@ -129,7 +159,7 @@ public static class Suggestions
                 var after = blocks[block.Index + 1];
                 if (!after.IsFallenInto || after.Next is not null
                     || after.Steps.FirstOrDefault(step => step.Label is null) is not { Statement: InstructionStatementSyntax returned } returning
-                    || !Own(model, returning)
+                    || !Own(model, returning) || Fixed(file, returning, readAsData)
                     || returned.MnemonicKind != (call.MnemonicKind == MnemonicKind.Jsl ? MnemonicKind.Rtl : MnemonicKind.Rts)
                     || !Adjacent(call, returned))
                 {
@@ -188,14 +218,14 @@ public static class Suggestions
     /// share is suggested only where the width is already set in every one of them.
     /// </summary>
     private static IEnumerable<Diagnostic> RedundantWidths(
-        FileAnalysis file, IReadOnlyList<FlowRegion> regions, StateAnalysis states)
+        FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, StateAnalysis states)
     {
         var model = file.Model;
         var redundant = new Dictionary<InstructionStatementSyntax, (long Flags, StatusFlags Unneeded)>();
         foreach (var step in regions.SelectMany(region => region.Blocks).SelectMany(block => block.Steps))
         {
             if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rep or MnemonicKind.Sep } statement
-                || !Own(model, step)
+                || !Own(model, step) || Fixed(file, step, readAsData)
                 || StepOperands.Immediate(model, file.Layout, step) is not { } flags)
             {
                 continue;
@@ -279,7 +309,7 @@ public static class Suggestions
     /// where the flags prove it, and a branch that is never taken is usually a mistake.
     /// </summary>
     private static IEnumerable<Diagnostic> ProvedBranches(
-        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
+        FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
     {
         var model = file.Model;
         var seen = new HashSet<SyntaxNode>();
@@ -303,7 +333,7 @@ public static class Suggestions
                     IsUnnecessary = true,
                 };
             }
-            else if (!proved.Taken && block.Next is null)
+            else if (!proved.Taken && block.Next is null && !Fixed(file, step, readAsData))
             {
                 yield return new Diagnostic(branch.Tree.GetSpan(branch.Span),
                     Catalogue.BranchNeverTaken.Message(text, proved.Why) + unpromised)
@@ -321,7 +351,7 @@ public static class Suggestions
     /// flag known on every path to the <c>jmp</c>, the carry first.
     /// </summary>
     private static IEnumerable<Diagnostic> JumpsAsBranches(
-        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
+        FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
     {
         var model = file.Model;
         var layout = file.Layout;
@@ -330,7 +360,7 @@ public static class Suggestions
         foreach (var step in regions.SelectMany(region => region.Blocks).SelectMany(block => block.Steps))
         {
             if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jmp } jump
-                || !Own(model, step) || !seen.Add(jump) || file.Flow.Patched.Contains(step.Key)
+                || !Own(model, step) || !seen.Add(jump) || Fixed(file, step, readAsData)
                 || layout.Of(jump, step.On)?.Mode != AddressingMode.Absolute
                 || Targets.Of(model, Transfers.TargetOf(jump, AddressingMode.Absolute), step.On) is not { Symbol.IsAddress: true } target
                 || layout.PositionOf(jump) is not { } from
@@ -387,7 +417,7 @@ public static class Suggestions
     /// one less. That holds only where the operand's sign and decimal digits come out the same.
     /// </summary>
     private static IEnumerable<Diagnostic> CarrySetups(
-        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
+        FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
     {
         var model = file.Model;
         var layout = file.Layout;
@@ -398,7 +428,7 @@ public static class Suggestions
             {
                 var step = block.Steps[i];
                 if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc or MnemonicKind.Sec } setup
-                    || !Own(model, step) || !seen.Add(setup) || file.Flow.Patched.Contains(step.Key)
+                    || !Own(model, step) || !seen.Add(setup) || Fixed(file, step, readAsData)
                     || flags.Before(step) is not { } before || !before.IsBacked(StatusFlags.Carry)
                     || before.ValueOf(StatusFlags.Carry) is not { } carry)
                 {
@@ -420,7 +450,7 @@ public static class Suggestions
 
                 var uses = sets ? MnemonicKind.Sbc : MnemonicKind.Adc;
                 if (RegisterWalk.NextOf(block, i) is not { Statement: InstructionStatementSyntax arithmetic } next
-                    || arithmetic.MnemonicKind != uses || !Own(model, next) || file.Flow.Patched.Contains(next.Key)
+                    || arithmetic.MnemonicKind != uses || !Own(model, next) || Fixed(file, next, readAsData)
                     || !Adjacent(setup, arithmetic)
                     || StepOperands.Immediate(model, layout, next) is not { } value
                     || CodeLayout.Expression(arithmetic.Operand!) is not { } expression
@@ -481,7 +511,7 @@ public static class Suggestions
     /// go where C is already 1 or nothing reads C before it changes.
     /// </summary>
     private static IEnumerable<Diagnostic> ZeroCompares(
-        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags, FlagLiveness liveness)
+        FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags, FlagLiveness liveness)
     {
         var model = file.Model;
         var seen = new HashSet<SyntaxNode>();
@@ -489,7 +519,7 @@ public static class Suggestions
         {
             if (step.Statement is not InstructionStatementSyntax compare
                 || FlagAnalysis.Compared(compare.MnemonicKind) is not { } register
-                || !Removable(file, step) || !seen.Add(compare)
+                || !Removable(file, step, readAsData) || !seen.Add(compare)
                 || StepOperands.Immediate(model, file.Layout, step) != 0
                 || flags.Before(step) is not { } before || (before.Held.NzFrom & register) == 0)
             {
@@ -526,7 +556,7 @@ public static class Suggestions
     /// decrement, which is a byte shorter and sets N and Z the same way.
     /// </summary>
     private static IEnumerable<Diagnostic> Loads(
-        FileAnalysis file, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags, FlagLiveness liveness)
+        FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags, FlagLiveness liveness)
     {
         var model = file.Model;
         var layout = file.Layout;
@@ -535,7 +565,7 @@ public static class Suggestions
         {
             if (step.Statement is not InstructionStatementSyntax load
                 || Loaded(load.MnemonicKind) is not { } register
-                || !Removable(file, step) || !seen.Add(load)
+                || !Removable(file, step, readAsData) || !seen.Add(load)
                 || StepOperands.Immediate(model, layout, step) is not { } immediate
                 || flags.Before(step) is not { } before)
             {
@@ -636,15 +666,102 @@ public static class Suggestions
     /// <paramref name="step"/>. It has to be a line of the file itself, one no store rewrites,
     /// and one no <c>.label</c> names a position inside.
     /// </summary>
-    private static bool Removable(FileAnalysis file, Step step) =>
-        Own(file.Model, step) && !file.Flow.Patched.Contains(step.Key) && !file.Layout.IsEnteredInside(step);
+    private static bool Removable(FileAnalysis file, Step step, IReadOnlySet<StepKey> readAsData) =>
+        Own(file.Model, step) && !Fixed(file, step, readAsData);
+
+    /// <summary>
+    /// Returns a value indicating whether a suggestion must leave the bytes of the instruction at
+    /// <paramref name="step"/> as they are. That holds where a store rewrites it, where a
+    /// <c>.label</c> names a position inside it, and where <paramref name="readAsData"/> says code
+    /// reads its bytes.
+    /// </summary>
+    private static bool Fixed(FileAnalysis file, Step step, IReadOnlySet<StepKey> readAsData) =>
+        file.Flow.Patched.Contains(step.Key) || file.Layout.IsEnteredInside(step) || readAsData.Contains(step.Key);
+
+    /// <summary>
+    /// Returns the instructions of <paramref name="file"/> that hold a byte <paramref name="named"/>
+    /// names. Where the constant added to a label is not known, the instruction at the label is
+    /// the one taken.
+    /// </summary>
+    private static HashSet<StepKey> ReadAsData(FileAnalysis file, IReadOnlyCollection<NamedByte> named)
+    {
+        var layout = file.Layout;
+        var bytes = new List<(int Stream, long Offset)>();
+        foreach (var each in named)
+        {
+            if (layout.PositionOf(each.Label, each.At) is { } label)
+                bytes.Add((label.Stream, label.Offset + (each.Offset ?? 0)));
+        }
+        var read = new HashSet<StepKey>();
+        if (bytes.Count == 0)
+            return read;
+        foreach (var step in file.Flow.Regions.SelectMany(region => region.Blocks).SelectMany(block => block.Steps))
+        {
+            if (step.Statement is InstructionStatementSyntax
+                && layout.PositionOf(step.Statement, step.On) is { } at
+                && bytes.Any(each => each.Stream == at.Stream && each.Offset >= at.Offset && each.Offset < at.End))
+            {
+                read.Add(step.Key);
+            }
+        }
+        return read;
+    }
+
+    /// <summary>
+    /// Returns each label an operand or a data value of <paramref name="file"/> names other than as
+    /// where control goes, with the constant added to it. A name in a <c>.next</c>, a <c>.patch</c>
+    /// or another annotation is not an operand, and is left out.
+    /// </summary>
+    private static List<NamedByte> NamedIn(FileAnalysis file)
+    {
+        var model = file.Model;
+        var named = new List<NamedByte>();
+        foreach (var step in file.Layout.Steps)
+        {
+            SyntaxNode? target = null;
+            if (step.Statement is InstructionStatementSyntax instruction)
+            {
+                var mode = file.Layout.Of(instruction, step.On)?.Mode;
+                if (Transfers.Of(instruction, mode) is Transfer.Branch or Transfer.Jump or Transfer.Call)
+                    target = Transfers.TargetOf(instruction, mode);
+            }
+            else if (step.Statement is not (DataDirectiveSyntax or DataValuesSyntax))
+            {
+                continue;
+            }
+            foreach (var name in step.Statement.DescendantNodes().OfType<NameExpressionSyntax>())
+            {
+                if ((target is not null && name.AncestorsAndSelf().Contains(target)) || Targets.Of(model, name, step.On) is not { } found)
+                    continue;
+                named.Add(new NamedByte(found.Symbol, found.At, OffsetOf(model, name, step.On)));
+            }
+        }
+        return named;
+    }
+
+    /// <summary>
+    /// Returns the constant added to or taken from <paramref name="name"/> where it stands in an
+    /// expression such as <c>@op+1</c>, 0 where it stands alone, or null where it is not known.
+    /// </summary>
+    private static long? OffsetOf(SemanticModel model, NameExpressionSyntax name, Expansion? on)
+    {
+        SyntaxNode node = name;
+        while (node.Parent is ParenthesizedExpressionSyntax parenthesized)
+            node = parenthesized;
+        if (node.Parent is not BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } binary)
+            return node.Parent is ExpressionSyntax ? null : 0;
+        var minus = binary.OperatorToken.Kind == SyntaxKind.Minus;
+        if (binary.Left == node)
+            return model.ValueOf(binary.Right, on).AsNumber() is { } right ? (minus ? -right : right) : null;
+        return !minus && model.ValueOf(binary.Left, on).AsNumber() is { } left ? left : null;
+    }
 
     /// <summary>
     /// Returns a suggestion for each conditional branch over a <c>jmp</c>, where the opposite
     /// branch to the jump's target can do both in one instruction. The <c>jmp</c> has to stand
     /// alone between the branch and the label the branch goes to, with nothing else reaching it.
     /// </summary>
-    private static IEnumerable<Diagnostic> BranchesOverJumps(FileAnalysis file, IReadOnlyList<FlowRegion> regions)
+    private static IEnumerable<Diagnostic> BranchesOverJumps(FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions)
     {
         var model = file.Model;
         var layout = file.Layout;
@@ -656,7 +773,7 @@ public static class Suggestions
                 var block = blocks[i];
                 if (block.End != BlockEnd.Branch || block.Next is not null
                     || block.Steps is not [.., { Statement: InstructionStatementSyntax branch } branching]
-                    || !Own(model, branching) || file.Flow.Patched.Contains(branching.Key)
+                    || !Own(model, branching) || Fixed(file, branching, readAsData)
                     || FlagAnalysis.Tested(branch.MnemonicKind) is not { } tested
                     || SyntaxFacts.IsLongBranch(branch.MnemonicKind)
                     || layout.Of(branch) is not { Length: 2, Inverted: false }
@@ -667,7 +784,7 @@ public static class Suggestions
                 var over = blocks[i + 1];
                 if (over.Label is not null || over.Predecessors.Count != 1 || over.Next is not null
                     || over.Steps is not [{ Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jmp } jump } jumping]
-                    || !Own(model, jumping) || file.Flow.Patched.Contains(jumping.Key)
+                    || !Own(model, jumping) || Fixed(file, jumping, readAsData)
                     || layout.Of(jump)?.Mode != AddressingMode.Absolute
                     || Targets.Of(model, Transfers.TargetOf(jump, AddressingMode.Absolute), null) is not { Symbol.IsAddress: true } target
                     || layout.PositionOf(target.Symbol, target.At) is not { } to || to.Stream != from.Stream
@@ -710,6 +827,15 @@ public static class Suggestions
     /// only kind of line a suggestion can change.
     /// </summary>
     private static bool Own(SemanticModel model, Step step) => step.On is null && step.Statement.Tree == model.Tree;
+
+    /// <summary>
+    /// Represents a code byte that an operand or a data value names other than as where control
+    /// goes, as the label it names and the constant added to it.
+    /// </summary>
+    /// <param name="Label">The label the operand or value names.</param>
+    /// <param name="At">The <see cref="Expansion"/> the label belongs to, for a label a macro body declares.</param>
+    /// <param name="Offset">The constant added to the label, or null where it is not known.</param>
+    public readonly record struct NamedByte(Symbol Label, Expansion? At, long? Offset);
 
     /// <summary>
     /// Represents the words a suggestion adds where it relies on what a called routine's body
@@ -777,5 +903,9 @@ public static class Suggestions
         FlagAnalysis? Flags,
         IReadOnlyList<TextSpan> Omitted,
         List<StatusFlags>? Read,
+        IReadOnlySet<StepKey> ReadAsData,
         List<Diagnostic> Suggestions);
+
+    /// <summary>The code bytes one file names, with the model they were found under.</summary>
+    private sealed record Named(SemanticModel Model, IReadOnlyList<NamedByte> Bytes);
 }

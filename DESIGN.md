@@ -4856,8 +4856,10 @@ Recorded so the reasoning survives. None is open.
   a jump or nothing, and the edge it never takes is removed. Only what the CPU defines is used, so
   nothing about memory is assumed. The same facts give the editor's flag hints: a `.next` the
   flags prove, a branch never taken, a `jmp` that can be a branch, a branch over a `jmp`, and
-  a `clc` or `sec` that is not needed or can be folded into an `adc #n-1` or `sbc #n-1`. A
-  line of a macro body serves every call, so code there is reported as never reached only
+  a `clc` or `sec` that is not needed or can be folded into an `adc #n-1` or `sbc #n-1`. No
+  hint that changes bytes touches an instruction a store rewrites, a `.label` enters, or an
+  operand or data value anywhere in the program names, as `lda @op+1` does, since code reads
+  those bytes. A line of a macro body serves every call, so code there is reported as never reached only
   where no call reaches it: a constant argument often decides a branch in one call and not in
   another.
 - **Register constants extend the flag analysis.** The same walk follows the constant each of

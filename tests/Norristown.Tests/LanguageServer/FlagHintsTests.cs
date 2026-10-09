@@ -350,6 +350,33 @@ public sealed class FlagHintsTests
         Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id is "load-already-held" or "load-from-register");
     }
 
+    /// <summary>
+    /// An instruction whose bytes code reads, as <c>lda @op+1</c> reads the operand of the
+    /// instruction at <c>@op</c>, keeps its bytes, so no suggestion changes it.
+    /// </summary>
+    [Theory]
+    [InlineData("    lda #5\n    sta $10\n@op:\n    ldx #5\n    stx $11\n    lda @op+1\n    sta $12\n    rts\n", "load-from-register")]
+    [InlineData("    ldx #0\n    stx $10\n@op:\n    ldx #0\n    stx $11\n    lda @op\n    sta $12\n    rts\n", "load-already-held")]
+    [InlineData("    lda $10\n    bcc @x\n@op:\n    sec\n    sbc #1\n    sta $11\n@x:\n    lda @op\n    sta $12\n    rts\n", "carry-already-set")]
+    [InlineData("    lda $10\n    cmp #0\n    beq @x\n    sta $11\n@x:\n    sec\n    lda @x-5\n    sta $12\n    rts\n", "zero-compare")]
+    [InlineData("    lda $10\n    bne @x\n    sec\n@op:\n    jmp main\n@x:\n    lda @op+2\n    sta $12\n    rts\n", "jump-as-branch")]
+    [InlineData("    lda $10\n    bcc @skip\n    jmp done\n@skip:\n    lda @skip-2\n    sta $12\n    rts\n", "branch-over-jump")]
+    [InlineData("    lda @op\n    sta $12\n    jsr done\n@op:\n    rts\n", "tail-call")]
+    public void AnInstructionReadAsDataKeepsItsBytes(string lines, string id)
+    {
+        var (analysis, path) = Analyzed(".export .proc main {\n" + lines + "}\n.export .proc done {\n    rts\n}\n");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.DoesNotContain(analysis.SuggestionsFor(path), suggestion => suggestion.Id == id);
+
+        // Read from elsewhere, the same instruction is suggested.
+        var elsewhere = lines.Replace("lda @op+2", "lda $13", StringComparison.Ordinal)
+            .Replace("lda @op+1", "lda $13", StringComparison.Ordinal).Replace("lda @op", "lda $13", StringComparison.Ordinal)
+            .Replace("lda @x-5", "lda $13", StringComparison.Ordinal).Replace("lda @skip-2", "lda $13", StringComparison.Ordinal);
+        (analysis, path) = Analyzed(".export .proc main {\n" + elsewhere + "}\n.export .proc done {\n    rts\n}\n");
+        Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == id);
+    }
+
     /// <summary>A call to a routine that promises to keep a register keeps its constant.</summary>
     [Fact]
     public void ACallThatPromisesToKeepARegisterKeepsItsConstant()
